@@ -11,7 +11,9 @@ import {
   componentBreadcrumbAtom, filePathToAbPagePath,
 } from '../code/project/active-file-store';
 import { createTemplate, validateTemplateName } from '../code/project/template-ops';
-import { createCmsIndexPageFile, createCmsDetailPageFile, findCmsPageFile } from '../code/project/cms-page-ops';
+import { createCmsIndexPageFile, createCmsDetailPageFile, findCmsPageFile, prettyCollectionName } from '../code/project/cms-page-ops';
+import { rootMountedCollection, isRootSlugPage } from '../code/project/cms-root-mount';
+import { parseCmsPageMeta } from '../code/project/cms-page-meta';
 import { collectionSchemasAtom } from '../code/stores/cms-store';
 import { projectFS, projectVersionAtom, stableProjectVersionAtom } from '../code/project/project-fs';
 import { selectedIdsAtom, updatingFromCanvasAtom } from '../code/stores/store';
@@ -815,11 +817,22 @@ export default function FileExplorer() {
     trace.action('FileExplorer.addNotFoundPage', { filePath });
   }, [setActiveFile, setSelectedIds, setVersion]);
 
-  const addCmsPage = useCallback((slug: string, mode: 'index' | 'detail') => {
+  const addCmsPage = useCallback((slug: string, mode: 'index' | 'detail' | 'detail-root') => {
     flushNow();
     const filePath = mode === 'index'
       ? createCmsIndexPageFile(slug)
-      : createCmsDetailPageFile(slug);
+      : createCmsDetailPageFile(slug, { atRoot: mode === 'detail-root' });
+    // Only one collection can own the site root: two would leave
+    // `/amara-okeke` with nothing in the URL to say which collection to
+    // resolve it against. Name the one in the way — "already taken" with no
+    // culprit is the kind of error people re-trigger three times.
+    if (!filePath) {
+      const owner = rootMountedCollection();
+      alert(`The root URL is already used by the "${prettyCollectionName(owner ?? '')}" collection.`
+        + ' Only one collection can own it — give this one a path of its own.');
+      setShowAddMenu(false);
+      return;
+    }
     setVersion(v => v + 1); bumpTreeNow();
     setSelectedIds([]);
     setActiveFile(filePath);
@@ -1132,7 +1145,23 @@ export default function Page() {
       }
       if (projectFS.exists(newPath)) {
         trace.action('FileExplorer.dragBail', { reason: 'conflict', from: oldPath, to: newPath });
+        alert(`A page already lives at that path (${newPath.replace(/^app\//, '/').replace(/\/page\.client\.tsx$/, '')}).`);
         return;
+      }
+      // Dragging a detail page to the root gives its collection the site's
+      // own `[slug]`, and only one collection can hold it: `/amara-okeke`
+      // with two owners has nothing in the URL saying which to resolve it
+      // against. The drop used to bail in silence here, which reads as the
+      // drag simply not working.
+      if (isRootSlugPage(newPath)) {
+        const meta = parseCmsPageMeta(projectFS.readFile(oldPath) ?? '');
+        const owner = rootMountedCollection();
+        if (owner && owner !== meta?.collection) {
+          trace.action('FileExplorer.dragBail', { reason: 'root-slug-taken', owner, from: oldPath });
+          alert(`The root URL is already used by the "${prettyCollectionName(owner)}" collection.`
+            + ' Only one collection can own it.');
+          return;
+        }
       }
 
       trace.action('FileExplorer.drop', {
@@ -1251,6 +1280,9 @@ export default function Page() {
                     const indexExists = !!findCmsPageFile(slug, 'index');
                     const detailExists = !!findCmsPageFile(slug, 'detail');
                     const bothExist = indexExists && detailExists;
+                    // Whoever holds `app/[slug]`, so the root entry can grey
+                    // out instead of failing after the click.
+                    const rootOwner = rootMountedCollection();
                     return {
                       id: `cms-collection-${slug}`,
                       label: schema.name ?? slug,
@@ -1273,6 +1305,14 @@ export default function Page() {
                           icon: <PageDocumentIcon size={14} />,
                           disabled: detailExists,
                           onClick: () => addCmsPage(slug, 'detail'),
+                        },
+                        {
+                          id: `cms-${slug}-detail-root`,
+                          label: 'Detail Page (at root)',
+                          icon: <PageDocumentIcon size={14} />,
+                          // Free only while no other collection owns `/`.
+                          disabled: detailExists || (!!rootOwner && rootOwner !== slug),
+                          onClick: () => addCmsPage(slug, 'detail-root'),
                         },
                       ],
                     };
@@ -1520,6 +1560,15 @@ export default function Page() {
               // the corresponding page.tsx wrapper automatically.
               if (entry.type === 'page') {
                 const oldPath = entry.filePath;
+                // A `[slug]` segment is a ROUTE, not a name: the sluggifier
+                // below strips the brackets, so renaming a detail page would
+                // quietly turn `/[slug]` into `/slug` and every item URL
+                // would 404. The collection names that page.
+                if (/\[[^/\]]+\]/.test(oldPath)) {
+                  trace.action('FileExplorer.renamePage-bail', { reason: 'dynamic-segment', oldPath });
+                  alert('A collection detail page is named by its collection — its [slug] is the route itself.');
+                  return;
+                }
                 const m = oldPath.match(/^(app(?:\/\([^)]+\))?)\/([^/]+)\/page\.client\.tsx$/);
                 if (!m) return;  // home page (app/page.client.tsx) doesn't have a slug to rename
                 const prefix = m[1];

@@ -26,6 +26,8 @@ import { uniqueRouteSlug, slugToFilePath } from './active-file-store';
 import { getCollectionSchema } from './cms-ops';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
+import { rootMountBlockedBy } from './cms-root-mount';
+import { cmsNavHrefExpr } from '@/code/generation/map-gen';
 
 // ─── Field selection ────────────────────────────────────────────────────────
 
@@ -369,7 +371,7 @@ export default function Page() {
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px'
       }}>
       {${varName}.map((item, idx) => (
-        <Link data-id="card" data-name="Card" key={idx} data-cms-nav="row" href={\`/${slug}/\${item?._slug ?? ''}\`} style={{
+        <Link data-id="card" data-name="Card" key={idx} data-cms-nav="row" href={${cmsNavHrefExpr(slug, collectionVarName(slug), 'row')}} style={{
           position: 'relative',
           display: 'flex', flexDirection: 'column', gap: '12px',
           padding: '20px',
@@ -419,7 +421,14 @@ ${cardFieldsJsx}
  *
  * Returns the CLIENT path so the caller can route the editor to it.
  */
-export function createCmsDetailPageFile(slug: string): string {
+export function createCmsDetailPageFile(
+  slug: string,
+  /** Mount it at the site ROOT — `app/[slug]`, serving `/amara-okeke` — the
+   *  shape a site uses when its collection has no section in front of it.
+   *  Refused, with the owner named, when another collection is already
+   *  there: two root collections make a slug ambiguous. */
+  opts: { atRoot?: boolean } = {},
+): string {
   // ONE detail page per collection. If one already exists — in a route group,
   // co-located under an index folder, or a bumped folder — return it instead
   // of scaffolding a second route nothing links to. The Pages menu greys the
@@ -448,7 +457,18 @@ export function createCmsDetailPageFile(slug: string): string {
   const baseDir = projectFS.exists(baseFile) ? baseFile.replace(/\/page\.(client\.)?tsx$/, '') : '';
   let serverPath: string;
   let clientPath: string;
-  if (baseDir && !projectFS.exists(`${baseDir}/[slug]/page.client.tsx`)) {
+  const blockedBy = opts.atRoot ? rootMountBlockedBy(slug) : null;
+  if (blockedBy) {
+    // The caller decides how to tell the user; returning '' rather than
+    // scaffolding a nested page keeps a refusal from quietly succeeding
+    // somewhere the user never asked for.
+    trace.action('cms-page-ops:create-detail-root-taken', { slug, owner: blockedBy });
+    return '';
+  }
+  if (opts.atRoot) {
+    serverPath = 'app/[slug]/page.tsx';
+    clientPath = 'app/[slug]/page.client.tsx';
+  } else if (baseDir && !projectFS.exists(`${baseDir}/[slug]/page.client.tsx`)) {
     serverPath = `${baseDir}/[slug]/page.tsx`;
     clientPath = `${baseDir}/[slug]/page.client.tsx`;
   } else {

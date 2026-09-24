@@ -45,6 +45,7 @@ vi.mock('./cms-ops', () => ({
 }));
 
 import { createCmsIndexPageFile, createCmsDetailPageFile, parseCmsPageMeta, findCmsPageFile } from './cms-page-ops';
+import { rootMountedCollection } from './cms-root-mount';
 
 beforeEach(() => { fsStore.clear(); vi.clearAllMocks(); });
 
@@ -192,5 +193,61 @@ export default function Page() { return <div data-id="root" />; }`);
     const path = createCmsDetailPageFile('collection-1');
     expect(path).toBe('app/(Body)/collection-1/[slug]/page.client.tsx');
     expect(new Set(fsStore.keys())).toEqual(before); // nothing new created
+  });
+});
+
+// ── A collection mounted at the ROOT ────────────────────────────────────────
+//
+// A collection's items usually sit under its own name (`/blog/my-post`), but
+// plenty of real sites publish them at the root: a team directory answering
+// at `/amara-okeke`, with nothing in front of it. Only ONE collection can own
+// that, because `/amara-okeke` carries nothing to say which collection to
+// resolve the slug against — the same reason the reference builder refuses a
+// second one.
+
+describe('createCmsDetailPageFile at the root', () => {
+  test('owns app/[slug] instead of nesting under the collection', () => {
+    const ret = createCmsDetailPageFile('blog', { atRoot: true });
+    expect(ret).toBe('app/[slug]/page.client.tsx');
+    expect(fsStore.has('app/[slug]/page.tsx')).toBe(true);
+  });
+
+  test('still nests when not asked for the root', () => {
+    expect(createCmsDetailPageFile('blog')).toBe('app/blog/[slug]/page.client.tsx');
+    expect(fsStore.has('app/[slug]/page.client.tsx')).toBe(false);
+  });
+
+  test('is still a detail page, annotation and item lookup intact', () => {
+    createCmsDetailPageFile('blog', { atRoot: true });
+    const code = fsStore.get('app/[slug]/page.client.tsx')!;
+    expect(parseCmsPageMeta(code)).toEqual({ collection: 'blog', kind: 'detail' });
+    expect(code).toContain('const item = blog.find((i) => i._slug === params?.slug)');
+  });
+
+  test('is found again by collection, wherever it sits', () => {
+    createCmsDetailPageFile('blog', { atRoot: true });
+    expect(findCmsPageFile('blog', 'detail')).toBe('app/[slug]/page.client.tsx');
+  });
+
+  test('refuses a SECOND collection at the root and writes nothing', () => {
+    createCmsDetailPageFile('blog', { atRoot: true });
+    expect(rootMountedCollection()).toBe('blog');
+    const ret = createCmsDetailPageFile('team', { atRoot: true });
+    expect(ret).toBe('');
+    // The refusal must not fall back to scaffolding a page somewhere else —
+    // a user who asked for the root and silently got `/team/[slug]` has to
+    // find and delete it before trying again.
+    expect(fsStore.has('app/team/[slug]/page.client.tsx')).toBe(false);
+  });
+
+  test('lets the OWNER ask again without refusing itself', () => {
+    createCmsDetailPageFile('blog', { atRoot: true });
+    expect(createCmsDetailPageFile('blog', { atRoot: true })).toBe('app/[slug]/page.client.tsx');
+  });
+
+  test('an empty [slug] folder left by a delete owns nothing', () => {
+    fsStore.set('app/[slug]/some-leftover.txt', 'x');
+    expect(rootMountedCollection()).toBeNull();
+    expect(createCmsDetailPageFile('team', { atRoot: true })).toBe('app/[slug]/page.client.tsx');
   });
 });

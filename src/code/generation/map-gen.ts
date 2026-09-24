@@ -10,6 +10,7 @@ import { findTagClose, findMatchingCloseTagIndex } from './generator-utils';
 import { findMatchingParen } from '../parsing/parse-utils';
 import { COLLECTION_MAP_CALL_RE, extractCollectionSlugSpan, itemVarFromCallbackParam } from './cms-gen';
 import { parseJSXToNodes } from '../parsing/parser';
+import { isRootMounted } from '@/code/project/cms-root-mount';
 
 /**
  * Wrap a single element in a `.map()` bound to a CMS collection (in
@@ -748,16 +749,21 @@ export function bindCmsFieldOnDropInCode(code: string, nodeId: string): string {
  *     `collectionList.itemVar` by the caller).
  */
 export function cmsNavHrefExpr(collection: string, colVar: string, mode: 'self' | 'prev' | 'next' | 'row', itemVar?: string): string {
+  // A collection mounted at the ROOT has no segment in front of its slugs:
+  // its detail page IS `/amara-okeke`. Asked here rather than passed in so
+  // the oracle, which imports this very function to recompute the expected
+  // href, can never disagree with what the generator wrote.
+  const base = isRootMounted(collection) ? '`/' : '`/' + collection + '/';
   if (mode === 'self') {
-    return '`/' + collection + "/${params?.slug ?? ''}`";
+    return base + "${params?.slug ?? ''}`";
   }
   if (mode === 'row') {
-    // Falls back gracefully to "/<col>/" if the item happens to be missing
-    // a slug — symmetric with the prev/next out-of-bounds behavior.
-    return '`/' + collection + '/${' + (itemVar || 'item') + "?._slug ?? ''}`";
+    // Falls back gracefully to the collection's own root if the item happens
+    // to be missing a slug — symmetric with prev/next out-of-bounds.
+    return base + '${' + (itemVar || 'item') + "?._slug ?? ''}`";
   }
   const offset = mode === 'prev' ? '- 1' : '+ 1';
-  return '`/' + collection + '/${' + colVar + '['
+  return base + '${' + colVar + '['
     + colVar + ".findIndex((i) => i._slug === params?.slug) " + offset
     + "]?._slug ?? ''}`";
 }
