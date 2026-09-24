@@ -2,7 +2,7 @@
 // Watches nodesAtom for Code component instances, compiles their source, and renders them.
 
 import { useEffect, useRef, useCallback, useMemo } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, getDefaultStore } from 'jotai';
 import { nodesAtom, codeAtom } from '@/code/stores/store';
 import { coerceScalar } from '@/code/values/value-eval';
 import { projectFS } from '@/code/project/project-fs';
@@ -22,6 +22,19 @@ import { projectVersionAtom } from '@/code/project/project-fs';
 import { parseProjectFile } from '@/code/parsing/project-parser';
 
 import { getCdnComponent, loadCdnComponent } from '@/cloud/components/cdn-component-cache';
+import { previewModeAtom } from '@/code/stores/editor-store';
+
+/**
+ * A code component is CANVAS-STATIC only while the canvas is the canvas.
+ *
+ * `useStaticCanvas()` is how a component knows to paint one representative
+ * still instead of running a rAF loop, and the loader hard-wires it to `true`
+ * for everything it compiles. Preview is not the canvas, though: it is the
+ * site. Left unsaid, a preview ran every component in its frozen pose — the
+ * nexora hero's cursor reveal answered no pointer at all, because its own
+ * handlers return early when they believe they are being drawn on a canvas.
+ */
+const liveCompileOpts = () => ({ previewMode: getDefaultStore().get(previewModeAtom) });
 
 /**
  * CodeComponentHost — mounts live React components for Code component nodes on the canvas.
@@ -251,7 +264,7 @@ export function renderCodeComponentDirect(
     } else {
       const componentCode = projectFS.readFile(node.componentFile);
       if (componentCode) {
-        Component = compileCodeComponent(componentCode, node.type);
+        Component = compileCodeComponent(componentCode, node.type, liveCompileOpts());
       }
     }
     if (Component) {
@@ -443,7 +456,7 @@ export default function CodeComponentHost() {
           trace.error('code-component-host:source-not-found', { nodeId: node.id, file: node.componentFile });
           continue;
         }
-        Component = compileCodeComponent(componentCode, node.type);
+        Component = compileCodeComponent(componentCode, node.type, liveCompileOpts());
         if (!Component) {
           trace.error('code-component-host:compile-failed', { nodeId: node.id, component: node.type });
           continue;
@@ -482,7 +495,7 @@ export default function CodeComponentHost() {
         // instances (e.g. the six advisors-hero Counters) mounted one-per-frame
         // in a visible "dominos" cascade. Batching makes the sandbox create all
         // roots in a single pass → React batches the first commits → one paint.
-        const mountBatch: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number }> = [];
+        const mountBatch: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number; preview?: boolean }> = [];
         for (const node of codeComponentNodes) {
           if (!node.componentFile) continue;
           // Sandbox bridge accepts EITHER a full TSX source string OR a
@@ -539,7 +552,7 @@ export default function CodeComponentHost() {
           const vpWidths = getViewportWidths();
           const vpWidth = vpWidths['desktop'] || 1440;
           seenIds.add(node.id);
-          mountBatch.push({ nodeId: node.id, code: codeOrUrl, props, vpWidth });
+          mountBatch.push({ nodeId: node.id, code: codeOrUrl, props, vpWidth, preview: liveCompileOpts().previewMode });
         }
 
         // Single batched forward (one macrotask in the sandbox → one paint).
@@ -585,6 +598,13 @@ export default function CodeComponentHost() {
     }
 
   }, []);
+
+  // A preview toggle changes how every code component COMPILES
+  // (`useStaticCanvas`), so the sandbox has to be told again — nothing else
+  // about the page changed, and without this the components stay in the pose
+  // the canvas left them in for the whole preview.
+  const previewMode = useAtomValue(previewModeAtom);
+  useEffect(() => { syncCodeComponents(); }, [previewMode, syncCodeComponents]);
 
   // Sync code components whenever nodes change or renderer completes.
   // Uses a polling interval that runs until all expected ghost mounts succeed,

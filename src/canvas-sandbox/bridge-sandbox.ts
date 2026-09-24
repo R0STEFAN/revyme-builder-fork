@@ -505,7 +505,7 @@ const api: SandboxApi = {
   },
 
   mountCodeComponentsBatch(
-    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number }>,
+    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number; preview?: boolean }>,
   ): void {
     if (!contentRoot) return;
     mountCodeComponentsBatchImpl(contentRoot, mounts);

@@ -540,7 +540,7 @@ export class PostMessageBridge implements CanvasBridge {
    *  them in a single synchronous pass so N instances of the same component
    *  appear together instead of cascading one reflow at a time. */
   mountCodeComponentsBatch(
-    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number }>,
+    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number; preview?: boolean }>,
   ): void {
     this.remote?.mountCodeComponentsBatch(mounts);
   }

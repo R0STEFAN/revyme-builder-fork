@@ -128,6 +128,39 @@ describe('sandbox-code-host mountCodeComponentsBatch', () => {
     for (const id of ids) unmountCodeComponent(id);
   });
 
+  // `useStaticCanvas()` is how a code component knows to hold one
+  // representative still instead of running its rAF loop and answering the
+  // pointer, and the loader wires it to `true` for everything it compiles.
+  // Preview is not the canvas — it is the site — so a preview mount is a
+  // different COMPILATION of the same file and has to re-mount, not
+  // re-render. Left unsaid, a preview ran every component frozen: the nexora
+  // hero's cursor reveal never answered a pointer at all.
+  it('re-mounts when the preview flag flips', async () => {
+    const STATIC_PROBE = `
+      import { useStaticCanvas } from '@revyme/runtime';
+      export default function Probe() {
+        return <div data-code-component-marker="yes" data-static={String(useStaticCanvas())} />;
+      }
+    `;
+    makeContainer(contentRoot, 'probe-1');
+    const mount = (preview: boolean) => mountCodeComponentsBatch(
+      contentRoot,
+      [{ nodeId: 'probe-1', code: STATIC_PROBE, props: {}, vpWidth: 1440, preview }],
+    );
+    const readStatic = () =>
+      contentRoot.querySelector('[data-code-component-marker="yes"]')?.getAttribute('data-static');
+
+    mount(false);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(readStatic()).toBe('true');
+
+    mount(true);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(readStatic()).toBe('false');
+
+    unmountCodeComponent('probe-1');
+  });
+
   it('skips an instance whose container is absent without aborting the rest', async () => {
     // Resilience: one missing container (e.g. a ghost-only id) must not stop
     // the remaining instances in the batch from mounting.

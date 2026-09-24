@@ -372,7 +372,7 @@ export interface SandboxApi {
    *  React roots in a single macrotask → React batches the first commits into
    *  one paint (no per-instance reflow "dominos"). See sandbox-code-host. */
   mountCodeComponentsBatch(
-    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number }>,
+    mounts: Array<{ nodeId: string; code: string; props: Record<string, any>; vpWidth: number; preview?: boolean }>,
   ): void | Promise<void>;
   unmountCodeComponent(nodeId: string): void | Promise<void>;
   updateCodeComponentProps(

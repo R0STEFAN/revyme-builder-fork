@@ -175,6 +175,10 @@ interface MountedComponent {
    *  vs. when the parent is just re-sending the same code (which is the
    *  common case during the parent's retry loop / render-complete fanout). */
   codeHash: string;
+  /** Whether this root was compiled for PREVIEW. A canvas-still root and a
+   *  live one are different compilations of the same file (`useStaticCanvas`
+   *  answers differently), so a toggle has to re-mount, not re-render. */
+  preview: boolean;
   /** Hash of the last props we rendered with — used by `mountCodeComponent`
    *  to dedupe identical re-mount requests so we don't tear down the React
    *  root and cancel any in-flight requestAnimationFrame / WebGL setup. */
@@ -379,6 +383,9 @@ export function mountCodeComponent(
   code: string,
   props: Record<string, any>,
   vpWidth: number,
+  /** True while the builder is PREVIEWING: the components run live, the way
+   *  the published site runs them, rather than in their canvas-still pose. */
+  preview = false,
 ): void {
   // Find ALL containers in the sandbox DOM matching this data-id —
   // one per viewport. Skip ghost copies (those are managed by the
@@ -430,13 +437,14 @@ export function mountCodeComponent(
     }
 
     // Same code + same props → nothing to do. Hot path during retry / resize storms.
-    if (existing && existing.codeHash === code && existing.propsHash === propsHash) {
+    if (existing && existing.codeHash === code && existing.propsHash === propsHash
+      && existing.preview === preview) {
       continue;
     }
 
     // Same code, different props → re-render in place (no recompile, no
     // root teardown). Keeps in-flight rAF / observers alive.
-    if (existing && existing.codeHash === code) {
+    if (existing && existing.codeHash === code && existing.preview === preview) {
       const coercedProps = coerceProps(cProps);
       existing.props = coercedProps;
       existing.vpWidth = containerVpWidth;
@@ -454,7 +462,7 @@ export function mountCodeComponent(
       // CDN imports + vector sets: suppress framer-motion animations on the
       // canvas. Resize / variant-switch should be instant here; the
       // animations are only meaningful in live preview / production.
-      const wrapped = disableCanvasAnimations(code)
+      const wrapped = disableCanvasAnimations(code) && !preview
         ? React.createElement(MotionConfig, { transition: NO_ANIMATION_TRANSITION }, inner)
         : inner;
       existing.root.render(wrapped);
@@ -486,7 +494,7 @@ export function mountCodeComponent(
             return;
           }
         } else {
-          Component = compileCodeComponent(code, nodeId);
+          Component = compileCodeComponent(code, nodeId, { previewMode: preview });
           if (!Component) {
             trace.error('sandbox-code-host:compile-null', { nodeId });
             return;
@@ -514,7 +522,7 @@ export function mountCodeComponent(
       const entry: MountedComponent = {
         root, nodeId, containerNodeId, container, Component, props: coercedProps,
         vpWidth: containerVpWidth,
-        codeHash: code, propsHash,
+        codeHash: code, preview, propsHash,
         resizeObserver: null,
         lastRenderedSize: { w: container.offsetWidth, h: container.offsetHeight },
         hasUserDims: {
@@ -550,6 +558,8 @@ export interface CodeComponentMount {
   code: string;
   props: Record<string, any>;
   vpWidth: number;
+  /** See `mountCodeComponent`'s own `preview`. */
+  preview?: boolean;
 }
 
 /**
@@ -578,7 +588,7 @@ export function mountCodeComponentsBatch(
   trace.action('sandbox-code-host:mount-batch', { count: mounts.length });
   for (const m of mounts) {
     try {
-      mountCodeComponent(contentRoot, m.nodeId, m.code, m.props, m.vpWidth);
+      mountCodeComponent(contentRoot, m.nodeId, m.code, m.props, m.vpWidth, m.preview);
     } catch (err) {
       trace.error('sandbox-code-host:mount-batch-entry-failed', {
         nodeId: m.nodeId,
