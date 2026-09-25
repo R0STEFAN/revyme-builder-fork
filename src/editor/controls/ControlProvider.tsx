@@ -45,6 +45,8 @@ import { updateNodeStyles, getContentRoot, getViewportPrefix, forceCanvasRender,
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
 import { detectValueSource, BORDER_LONGHANDS, type ValueSource } from '@/code/features/variable-ops';
 import { isComponentFileAtom } from '@/code/stores/store';
+import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { pageVariablesAtom } from '@/code/stores/page-variables-store';
 import { defaultForType, pageVariableTypeForProperty, isConditionalDisplayProperty, conditionalBranchesFor } from '@/code/features/page-variables';
@@ -186,6 +188,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
   const localeOverrides = useAtomValue(localeOverridesAtom);
 
   const isComponentFile = useAtomValue(isComponentFileAtom);
+  const isIconSetFile = isIconSetFilePath(useAtomValue(activeFilePathAtom) ?? '');
   const pageVariables = useAtomValue(pageVariablesAtom);
 
   // LIVE cache-first read: a drop commits styles/structure to the imperative
@@ -821,7 +824,12 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     // phase. Falls through to the component-text helper below; the
     // ControlLabel menu gating skips textContent on page files anyway
     // until we add it.
-    if (!isComponentFile && property !== 'textContent') {
+    // An ICON SET is a component in every way that matters here — its file
+    // declares props and its instances pass them — it just does not live under
+    // `components/`, so `isComponentFile` is false and a variable created on a
+    // vector's fill would be written as a PAGE variable, which an icon set has
+    // no way to read. Fall through to the component path instead.
+    if (!isComponentFile && !isIconSetFile && property !== 'textContent') {
       const inferredType = pageVariableTypeForProperty(property);
       if (inferredType) {
         let captured = defaultValue ?? styles[property] ?? defaultForType(inferredType);

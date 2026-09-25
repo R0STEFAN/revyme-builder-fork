@@ -13,6 +13,7 @@ import { codeAtom, stableCodeAtom, nodesAtom, selectedNodeAtom, selectedIdsAtom,
 import { enterComponentFile } from '@/canvas/component-navigation';
 import { projectFS, projectVersionAtom, stableProjectVersionAtom } from '@/code/project/project-fs';
 import { activeFilePathAtom, componentBreadcrumbAtom } from '@/code/project/active-file-store';
+import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { getAnchorsForPage } from './LinkTool/LinkUrlControl';
 import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { isReplicaViewportAtom, interactingViewportWidthAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
@@ -259,6 +260,17 @@ export default function ComponentPropsTool() {
       const hashMatch = componentFile.match(/@([a-f0-9]+)\./);
       const hash = hashMatch?.[1] ?? componentFile;
       return parseComponentInfoFromSource(componentFile, cdnCode, hash);
+    }
+    // An ICON SET lives under `icons/`, which the registry never scans, so an
+    // icon instance had no props panel at all — its colour variable existed in
+    // the file and was unreachable from the page. Parse it directly, the same
+    // fallback a template uses, and drop `name`: that is the icon PICKER,
+    // which IconSetTool already renders above this.
+    if (isIconSetFilePath(componentFile)) {
+      const code = projectFS.readFile(componentFile);
+      if (!code) return null;
+      const info = parseComponentInfoFromSource(componentFile, code, String(code.length));
+      return info ? { ...info, props: info.props.filter((p) => p.name !== 'name') } : null;
     }
     const registry = buildComponentRegistry(projectFS);
     for (const info of registry.values()) {

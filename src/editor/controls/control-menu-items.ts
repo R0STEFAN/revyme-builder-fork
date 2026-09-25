@@ -32,6 +32,11 @@ export interface MenuContext {
   variableRef: string | null;
   hasOverride: boolean;
   isComponentFile: boolean;
+  /** The active file is an ICON SET (`icons/*.tsx`). Component-like for the
+   *  variable system — its file declares props and its instances pass them —
+   *  but it lives outside `components/`, so `isComponentFile` is false and the
+   *  variable menus would hide themselves on a vector's Fill / Stroke. */
+  isIconSetFile?: boolean;
   isPrimary: boolean;
   // Locale context
   isDefaultLocale: boolean;
@@ -154,7 +159,7 @@ export function getVariableMenuItems(ctx: MenuContext, opts?: { hideCreate?: boo
   // applies to the variable-bound pill.
   const hoverColor: 'accent' | 'accent-secondary' = ctx.isComponentFile ? 'accent-secondary' : 'accent';
 
-  if (!hideCreate && ((showCreate && (ctx.isComponentFile || isPageFileWithCompatibleProperty)) || showVariantCreate)) {
+  if (!hideCreate && ((showCreate && (ctx.isComponentFile || ctx.isIconSetFile || isPageFileWithCompatibleProperty)) || showVariantCreate)) {
     items.push({
       label: 'Create Variable',
       show: true,
@@ -216,7 +221,7 @@ export function getVariableMenuItems(ctx: MenuContext, opts?: { hideCreate?: boo
   // one border/color variable across nodes + variants instead of minting a new prop each time.
   if (
     !hideSet &&
-    ctx.isComponentFile &&
+    (ctx.isComponentFile || ctx.isIconSetFile) &&
     !ctx.hasVariable &&
     !ctx.cmsBinding &&
     ctx.componentVariables &&

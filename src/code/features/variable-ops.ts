@@ -1889,6 +1889,26 @@ function addPropToFunction(ast: t.File, propName: string, defaultValue: string, 
         path.stop();
       }
     },
+    // An ICON SET's component is `React.forwardRef(function Name({ name, style,
+    // … }, ref) { … })` — a FunctionExpression, which neither visitor above
+    // reaches, so a variable created on a vector's fill silently no-opped.
+    // The file also opens with module-scope helpers (svgIdsIn, scopeUrlRefs,
+    // scopeSvgIds) whose first parameter is a plain identifier; those are
+    // skipped by addPropToParams's own ObjectPattern requirement, but only
+    // once the forwardRef body is reachable at all.
+    FunctionExpression(path: any) {
+      if (path.getFunctionParent()) return;
+      const call = path.parentPath?.node;
+      const isForwardRef = t.isCallExpression(call)
+        && ((t.isMemberExpression(call.callee)
+          && t.isIdentifier(call.callee.property, { name: 'forwardRef' }))
+          || t.isIdentifier(call.callee, { name: 'forwardRef' }));
+      if (!isForwardRef) return;
+      if (addPropToParams(path.node.params, propName, defaultValue, literalKind)) {
+        added = true;
+        path.stop();
+      }
+    },
   });
 
   return added;

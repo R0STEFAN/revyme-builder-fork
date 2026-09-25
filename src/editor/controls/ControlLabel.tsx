@@ -15,6 +15,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { isComponentFileAtom, variableModalRequestAtom, canvasInteractingAtom } from '@/code/stores/store';
+import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { buildComponentRegistry, parseComponentInfoFromSource, STRUCTURAL_PROPS, type ComponentProp } from '@/code/components/component-registry';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { getPropLabel } from '@/code/components/prop-meta';
@@ -423,6 +424,7 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
     variableRef: varRef,
     hasOverride: isOverride,
     isComponentFile,
+    isIconSetFile: isIconSetFilePath(activeFilePath ?? ''),
     isPrimary,
     isDefaultLocale,
     activeLocale,

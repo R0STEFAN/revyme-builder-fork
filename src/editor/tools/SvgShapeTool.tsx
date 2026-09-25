@@ -27,6 +27,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
+import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { ToolSection, ToolInput, ToolSegmentedControl, ToolSelect, ToolPlusMinus, ColorInput, ToolDivider } from '../controls';
 import ControlLabel from '../controls/ControlLabel';
 import { LocalizeGate } from '../controls/localize-gate';
@@ -185,6 +187,9 @@ export default function SvgShapeTool() {
   }, []);
 
   const selectedPoint = useAtomValue(selectedPointAtom);
+  // Inside an icon set a vector's paint is a per-instance knob, not a fixed
+  // attribute — see `shapeLabel`.
+  const inIconSet = isIconSetFilePath(useAtomValue(activeFilePathAtom) ?? '');
   const childIndex = selectedPoint?.shapeIndex ?? 0;
 
   // Multi-select: Fill/Stroke must apply to EVERY selected SVG shape, not just
@@ -436,13 +441,20 @@ export default function SvgShapeTool() {
   // flags strip Create-Variable / Reset-Style / Bind-to-Field so the menu holds
   // ONLY "Reset Override" — and the chevron auto-hides when there's nothing to
   // show (no override → empty menu → plain-looking, non-interactive label).
+  // …EXCEPT inside an ICON SET, where a vector's paint is exactly what an
+  // instance needs to vary: Framer's own icons declare their colour as a
+  // variable and expose it as a Color control, and a set that cannot do the
+  // same has to bake one file per colour. There the row carries the REAL CSS
+  // property (`fill` / `stroke` / `strokeWidth`), so the variable binds in the
+  // shape's style object — the only form the parser tags `var:` and the panel
+  // can read back — rather than as a presentation attribute.
   const shapeLabel = (label: string, syntheticProp: string, svgKey: string) => (
     <ControlLabel
       label={label}
-      property={syntheticProp}
+      property={inIconSet ? (CSS_ROUTABLE_SHAPE_ATTRS[svgKey] ?? syntheticProp) : syntheticProp}
       overridden={isAttrOverridden(svgKey)}
       onResetOverride={() => resetAttrOverride(svgKey)}
-      hideCreateVariable
+      hideCreateVariable={!inIconSet || !CSS_ROUTABLE_SHAPE_ATTRS[svgKey]}
       hideResetStyle
       hideCmsBinding
     />
