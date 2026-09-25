@@ -433,7 +433,9 @@ function parseProps(paramsStr: string): ComponentProp[] {
       const open = valueStr[0];
       const close = valueStr[valueStr.length - 1];
       if ((open === '"' || open === "'" || open === '`') && open === close) {
-        defaultValue = valueStr.slice(1, -1);
+        // Unescape the quote the source had to escape, or the panel shows the
+        // backslash: a BT Text field reading `Let\'s get your cargo`.
+        defaultValue = valueStr.slice(1, -1).replace(/\\([\\'"`])/g, '$1');
       }
     }
     // Numeric / boolean literal defaults (`fontSize = 16`, `wrap = true`) — captured as their string
@@ -464,13 +466,24 @@ function splitProps(str: string): string[] {
   let inString = false;
   let stringChar = '';
 
+  // An ESCAPED quote does not end the string. Without this, a default like
+  // `bTText = 'Let\'s get your cargo'` closed at the apostrophe, the closing
+  // quote re-OPENED a phantom string, and every prop after it was swallowed
+  // until the next quote — so an imported Button lost `fontSize`,
+  // `iconVisible` and its icon colours from the props panel, the Variables
+  // modal and every "Set Variable" menu, with no error anywhere.
+  let escaped = false;
   for (const ch of str) {
     if (inString) {
       current += ch;
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
       if (ch === stringChar) inString = false;
       continue;
     }
-    if (ch === "'" || ch === '"') {
+    // Backticks too: `parseProps` accepts a template-literal default, so a
+    // comma inside one must not split the parameter list either.
+    if (ch === "'" || ch === '"' || ch === '`') {
       inString = true;
       stringChar = ch;
       current += ch;

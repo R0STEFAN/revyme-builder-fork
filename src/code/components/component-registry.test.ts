@@ -462,3 +462,70 @@ export default withResponsiveProps(X);`;
     expect(getCodeComponentInsertSize(code)).toEqual({ width: '900px', height: '320px' });
   });
 });
+
+// ─── An apostrophe in a default value ─────────────────────────────────────────
+//
+// A prop list is split on commas, skipping over quoted defaults. An ESCAPED
+// quote is not the end of one — but it used to close the string, and the real
+// closing quote then re-OPENED a phantom one that swallowed every parameter
+// after it. An imported Button (`bTText = 'Let\'s get your cargo'`) lost its
+// last four props from the props panel, the Variables modal and every "Set
+// Variable" menu, with no error anywhere to say so. Apostrophes are ordinary
+// in real copy — "Let's", "Don't", "We're".
+
+describe('a default value containing an escaped quote', () => {
+  const BUTTON = `'use client';
+
+/** @name "Button" */
+/** @propMeta {"iconVisible":{"type":"toggle","label":"Icon Visible"}} */
+
+import React from 'react';
+
+function Button({
+  style,
+  initialVariant = 'default',
+  bTText = 'Let\\'s get your cargo',
+  fontSize = 16,
+  iconVisible = true,
+  iconColor = 'rgb(0, 0, 0)',
+  ...rest
+}: any) {
+  return <div data-id="button-1" style={{ display: iconVisible ? 'block' : 'none', color: iconColor }}>{bTText}</div>;
+}
+
+export default Button;
+`;
+
+  const props = () => {
+    clearComponentCache();
+    const registry = buildComponentRegistry(makeMockFS({ 'components/Button.tsx': BUTTON }));
+    return registry.get('Button')?.props ?? [];
+  };
+
+  test('keeps every parameter after it', () => {
+    const names = props().map((p) => p.name);
+    expect(names).toContain('bTText');
+    expect(names).toContain('fontSize');
+    expect(names).toContain('iconVisible');
+    expect(names).toContain('iconColor');
+  });
+
+  test('the default itself survives with its apostrophe', () => {
+    expect(props().find((p) => p.name === 'bTText')?.defaultValue).toBe("Let's get your cargo");
+  });
+
+  test('and the @propMeta type still lands on the right prop', () => {
+    expect(props().find((p) => p.name === 'iconVisible')?.varType).toBe('toggle');
+  });
+
+  // A template literal is a quoted default too, so a comma inside one must not
+  // split the list either.
+  test('a comma inside a template-literal default does not split the list', () => {
+    const code = BUTTON.replace("bTText = 'Let\\'s get your cargo'", 'bTText = `one, two`');
+    clearComponentCache();
+    const registry = buildComponentRegistry(makeMockFS({ 'components/Button.tsx': code }));
+    const names = (registry.get('Button')?.props ?? []).map((p) => p.name);
+    expect(names).toContain('iconVisible');
+    expect(names).not.toContain('two`');
+  });
+});
