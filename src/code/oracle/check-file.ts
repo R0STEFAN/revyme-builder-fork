@@ -22,7 +22,7 @@ import { parseJSXToNodes } from '@/code/parsing/parser';
 import { parseComponentCursorCalls } from '@/code/parsing/cursor-parser';
 import { parseCodeComponentDefaultSize, parseComponentControlsMeta, hasComponentControls, CONTROL_TYPES } from '@/code/components/controls-parser';
 import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
-import { traverse, TRANSPARENT_TAGS, jsxTagName, jsxAttrs, stringAttr, hasAttr, needsDataId, isAllowedTextExpression, isCodeComponentSource } from './checks/shared';
+import { traverse, TRANSPARENT_TAGS, jsxTagName, jsxAttrs, stringAttr, hasAttr, needsDataId, isAllowedTextExpression, isCodeComponentSource, booleanPropNames } from './checks/shared';
 import type { FileKind, OracleViolation } from './checks/shared';
 import { checkStyleObject, styleValueIncludes } from './checks/style-object';
 import { SELECT_ICON_ATTR, parseSelectIconSpec } from '@/editor/tools/InputTool/select-icon';
@@ -195,6 +195,8 @@ export function checkFile(
   // for direct/standalone checks → those new-node rules stay silent.
   const existingDataIds = opts.existingDataIds;
   const v: OracleViolation[] = [];
+  // Computed once per file, not per style object: the walk is over the whole AST.
+  let fileBooleanProps: Set<string> | undefined;
 
   // ── tier 1 — SYNTAX ────────────────────────────────────────────────────────
   let ast: t.File;
@@ -210,6 +212,7 @@ export function checkFile(
       message: `The file does not parse: ${e.message ?? 'unknown parse error'}. Return the complete corrected file.`,
     }];
   }
+  fileBooleanProps = booleanPropNames(ast);
 
   // ── tier 2 — DIALECT ───────────────────────────────────────────────────────
 
@@ -916,6 +919,10 @@ export function checkFile(
         if (!isCodeComponent) {
           checkStyleObject(styleAttr.value.expression, dataId, v, {
             fixedAllowed: kind !== 'page' || parentDataId === 'root' || isOverlay,
+            // A `display` driven by one of the file's own boolean props is a
+            // per-instance toggle the builder resolves when it expands the
+            // master — not someone hiding with CSS.
+            booleanProps: fileBooleanProps,
             // The bg-video child is builder-authored and not a canvas node, so the
             // Position tool never edits its pins — `inset: '0'` is the correct
             // spelling for "fill my parent" there (Renderer.syncBgVideoChild).

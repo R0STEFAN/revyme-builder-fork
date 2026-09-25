@@ -209,3 +209,39 @@ export { traverse, TRANSPARENT_TAGS, findSetVariantArg, endsWithVariantFallthrou
 export function isCodeComponentSource(code: string): boolean {
   return /\/\*\*?\s*@controls\s*\{/.test(code);
 }
+
+/**
+ * The names of a component's own BOOLEAN props — `{ style, iconVisible = true }`.
+ *
+ * These are per-INSTANCE toggles ("Icon Visible", "Footer Visible"), the thing
+ * a design component exposes so one instance can drop a part the next one
+ * keeps. The builder resolves them per instance when it expands the master
+ * (`resolveInstancePropOverrides`), and the props panel renders them as a
+ * Yes/No row.
+ *
+ * Deliberately narrow, so nothing else can pass for one: the first parameter
+ * must be a destructured object that also carries `style` or `initialVariant`
+ * (a component, not a helper), and the prop must default to a boolean
+ * literal. A `useState` flag, a page-level variable or a local const can
+ * never match.
+ */
+export function booleanPropNames(ast: t.File): Set<string> {
+  const out = new Set<string>();
+  traverse(ast, {
+    Function(p) {
+      const p0 = (p.node.params ?? [])[0];
+      if (!t.isObjectPattern(p0)) return;
+      const keys = p0.properties
+        .filter((x): x is t.ObjectProperty => t.isObjectProperty(x) && t.isIdentifier(x.key))
+        .map((x) => (x.key as t.Identifier).name);
+      if (!keys.includes('style') && !keys.includes('initialVariant')) return;
+      for (const prop of p0.properties) {
+        if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)
+            && t.isAssignmentPattern(prop.value) && t.isBooleanLiteral(prop.value.right)) {
+          out.add(prop.key.name);
+        }
+      }
+    },
+  });
+  return out;
+}

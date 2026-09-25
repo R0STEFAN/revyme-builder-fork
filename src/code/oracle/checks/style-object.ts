@@ -80,7 +80,12 @@ function checkStyleObject(
   obj: t.ObjectExpression,
   dataId: string | undefined,
   v: OracleViolation[],
-  ctx: { fixedAllowed: boolean; builderOwned?: boolean; templateRoot?: boolean } = { fixedAllowed: true },
+  ctx: {
+    fixedAllowed: boolean; builderOwned?: boolean; templateRoot?: boolean;
+    /** The file's own boolean props, so a TOGGLE-driven `display` is not
+     *  mistaken for hiding with CSS (see DISPLAY_TOGGLE_VISIBILITY). */
+    booleanProps?: Set<string>;
+  } = { fixedAllowed: true },
 ): void {
   checkShorthandLonghandMix(obj, dataId, v);
   // BG_COLOR_WITH_IMAGE — the builder's Fill control is single-color OR
@@ -262,7 +267,8 @@ function checkStyleObject(
         code: 'TRANSFORM_STRING', tier: 2, line, elementId: dataId,
         message: `transform strings (line ${line}) collide with layout animation and cannot be edited. Use NUMBER motion props instead: rotate: 30, scale: 1.1, x: 10, y: -8, skewX: 5. (Exceptions — the builder's own formats: translate-only centering, e.g. transform: 'translate(-50%, -50%)' with left/top %; rotate-only, e.g. transform: 'rotate(12deg)' with transformBox/transformOrigin; and folded single-arg motion sequences, e.g. 'translateX(10px) translateY(-8px) rotate(30deg)' as baked by Detach.)`,
       });
-    } else if (key === 'display' && styleValueIncludes(prop.value, 'none')) {
+    } else if (key === 'display' && styleValueIncludes(prop.value, 'none')
+        && !isTogglePropTernary(prop.value, ctx.booleanProps)) {
       v.push({
         code: 'DISPLAY_TOGGLE_VISIBILITY', tier: 2, line, elementId: dataId,
         message: `display:'none' (line ${line}) — never hide with display. Visibility is conditional rendering inside <AnimatePresence> ({variant !== 'x' && <element/>}), which animates and stays editable.`,
@@ -408,6 +414,31 @@ function styleValueEndsWithPercent(val: t.ObjectProperty['value']): boolean {
 }
 
 /** true if the value is 'needle' directly or in any ternary branch. */
+/**
+ * `display: iconVisible ? 'block' : 'none'` — a per-INSTANCE toggle, not
+ * someone hiding with CSS.
+ *
+ * This is the builder's OWN Hide-variable shape: `resolveInstancePropOverrides`
+ * reads exactly this ternary when it expands a master and picks the branch the
+ * instance's boolean selected. Framer components lean on it constantly — an
+ * "Icon Visible" control the nav turns off while the hero keeps it — and there
+ * is no other way to say "this instance, not that one": a variant would have
+ * to be invented for every combination, and `hiddenOnVariants` is per variant
+ * by definition.
+ *
+ * Narrow on purpose: the test must be a bare boolean PROP of this file (see
+ * `booleanPropNames`) and both branches plain strings, which is the only form
+ * the resolver's own regex matches.
+ */
+function isTogglePropTernary(
+  val: t.ObjectProperty['value'],
+  booleanProps: Set<string> | undefined,
+): boolean {
+  if (!booleanProps?.size || !t.isConditionalExpression(val)) return false;
+  if (!t.isIdentifier(val.test) || !booleanProps.has(val.test.name)) return false;
+  return t.isStringLiteral(val.consequent) && t.isStringLiteral(val.alternate);
+}
+
 function styleValueIncludes(val: t.ObjectProperty['value'], needle: string): boolean {
   if (t.isStringLiteral(val)) return val.value === needle;
   if (t.isConditionalExpression(val)) {
