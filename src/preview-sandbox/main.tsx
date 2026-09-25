@@ -26,6 +26,12 @@ import { transform } from '@babel/standalone';
 // re-exports the whole namespace (motion, AnimatePresence, useAnimation,
 // useScroll, useTransform, MotionConfig, LayoutGroup, useInView, etc.).
 import * as MotionReact from 'motion/react';
+// The DOM layer under motion/framer-motion. An imported Framer code component
+// can reach for it directly — the Ticker uses its `resize` helper — and the
+// canvas runtime already resolves it. Without the same entry here the preview
+// handed the component an empty module, `resize` came back undefined, and the
+// component died on its first render.
+import * as motionOne from '@motionone/dom';
 // Bundle next-intl's client surface so user pages can `import { useTranslations,
 // useLocale } from 'next-intl'` and `import { NextIntlClientProvider } from
 // 'next-intl'`. The full namespace re-export keeps every named entry point
@@ -169,6 +175,7 @@ const MODULE_MAP: Record<string, any> = {
   'framer-motion': MotionReact,
   'motion/react': MotionReact,
   'motion': MotionReact,
+  '@motionone/dom': motionOne,
   // next-intl — client surface only. Server-only entries (next-intl/server,
   // next-intl/middleware) are stubbed because the preview is a pure-client
   // SPA — there's no Next.js request context here. The user's pages should
