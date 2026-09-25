@@ -31,6 +31,8 @@ import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { ToolSection, ToolInput, ToolSegmentedControl, ToolSelect, ToolPlusMinus, ColorInput, ToolDivider } from '../controls';
 import ControlLabel from '../controls/ControlLabel';
+import { LegacyVariableBoundPill } from '../controls/VariableBoundPill';
+import type { VariableIconKey } from '../controls/VariableTypeIcon';
 import { LocalizeGate } from '../controls/localize-gate';
 import { useControl } from '../controls/ControlProvider';
 import { OpacityControl } from './StylesTool/atoms/OpacityControl';
@@ -179,7 +181,7 @@ function JoinIcon({ join }: { join: 'miter' | 'round' | 'bevel' }) {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function SvgShapeTool() {
-  const { nodeId, node, vpId, styles, updateStyle } = useControl();
+  const { nodeId, node, vpId, styles, updateStyle, getValueSource, removeVariable } = useControl();
   // Mount/unmount trace — a remount here is the "panel flashes on undo" symptom.
   useEffect(() => {
     trace.action('svg-shape-tool:mount', {});
@@ -460,6 +462,27 @@ export default function SvgShapeTool() {
     />
   );
 
+  // A paint bound to an icon-set variable (`iconColor`) shows the variable
+  // pill in the value column, like every other bound row. The raw ColorInput
+  // showed the fallback colour under a label naming the variable, so a bound
+  // stroke read as a plain unbound #000000. Same lookup as the label's.
+  const boundPill = (svgKey: string, label: string, currentValue: string, iconKey: VariableIconKey) => {
+    const property = CSS_ROUTABLE_SHAPE_ATTRS[svgKey];
+    if (!inIconSet || !property) return null;
+    const source = getValueSource(property);
+    if (source.source !== 'prop' || !source.ref) return null;
+    return (
+      <LegacyVariableBoundPill
+        property={property}
+        propertyLabel={label}
+        variableRef={source.ref}
+        currentValue={currentValue}
+        removeVariable={removeVariable}
+        iconKey={iconKey}
+      />
+    );
+  };
+
   // ─── Read inner-shape attrs ─────────────────────────────────────────────
   const fill = attrs.fill || '#000000';
   const stroke = attrs.stroke || '';
@@ -525,12 +548,14 @@ export default function SvgShapeTool() {
         <div className="flex items-center justify-between w-full">
           {shapeLabel('Fill', '__svg-fill', 'fill')}
           <div className="flex items-center gap-2 w-full">
-            <ColorInput
-              value={fill}
-              onChange={v => updateAttr('fill', v)}
-              onChangeLive={v => updateAttrLive('fill', v)}
-              showAlpha
-            />
+            {boundPill('fill', 'Fill', fill, 'color') ?? (
+              <ColorInput
+                value={fill}
+                onChange={v => updateAttr('fill', v)}
+                onChangeLive={v => updateAttrLive('fill', v)}
+                showAlpha
+              />
+            )}
           </div>
         </div>
 
@@ -549,12 +574,14 @@ export default function SvgShapeTool() {
         <div className="flex items-center justify-between w-full">
           {shapeLabel('Color', '__svg-stroke', 'stroke')}
           <div className="flex items-center gap-2 w-full">
-            <ColorInput
-              value={stroke || '#000000'}
-              onChange={v => updateAttr('stroke', v)}
-              onChangeLive={v => updateAttrLive('stroke', v)}
-              showAlpha
-            />
+            {boundPill('stroke', 'Color', stroke || '#000000', 'color') ?? (
+              <ColorInput
+                value={stroke || '#000000'}
+                onChange={v => updateAttr('stroke', v)}
+                onChangeLive={v => updateAttrLive('stroke', v)}
+                showAlpha
+              />
+            )}
           </div>
         </div>
 
@@ -565,19 +592,23 @@ export default function SvgShapeTool() {
         <div className="flex items-center justify-between w-full">
           {shapeLabel('Width', '__svg-stroke-width', 'stroke-width')}
           <div className="flex items-center gap-2 w-full">
-            <ToolInput
-              value={strokeWidth}
-              onChange={v => updateAttr('stroke-width', v)}
-              onChangeLive={v => updateAttrLive('stroke-width', v)}
-              onCommit={v => updateAttr('stroke-width', v)}
-              step={1}
-            />
-            <ToolPlusMinus
-              value={Number.parseFloat(strokeWidth) || 0}
-              onChange={(v) => updateAttr('stroke-width', String(Math.max(0, v)))}
-              min={0}
-              max={100}
-            />
+            {boundPill('stroke-width', 'Width', strokeWidth, 'number') ?? (
+              <>
+                <ToolInput
+                  value={strokeWidth}
+                  onChange={v => updateAttr('stroke-width', v)}
+                  onChangeLive={v => updateAttrLive('stroke-width', v)}
+                  onCommit={v => updateAttr('stroke-width', v)}
+                  step={1}
+                />
+                <ToolPlusMinus
+                  value={Number.parseFloat(strokeWidth) || 0}
+                  onChange={(v) => updateAttr('stroke-width', String(Math.max(0, v)))}
+                  min={0}
+                  max={100}
+                />
+              </>
+            )}
           </div>
         </div>
 

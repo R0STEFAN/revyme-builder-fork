@@ -46,6 +46,7 @@ import { linkedComponentModalUrlAtom } from '@/cloud/components/linked-component
 import { ToolSection } from '../controls';
 import ControlLabel from '../controls/ControlLabel';
 import ToolPopup from '../ui/ToolPopup';
+import ComponentPropsTool from './ComponentPropsTool';
 import Button from '@/design-system/Button';
 import { trace } from '@/shared/debug-trace';
 import { expediteStableAtomSync } from '@/canvas/hooks/useStableAtomSync';
@@ -269,6 +270,12 @@ export default function IconSetTool() {
           <span className="flex-1 text-left truncate">{currentEntry?.displayName ?? 'No icons'}</span>
         </button>
       </div>
+
+      {/* The set's own variables — an icon's colour, a toggle — as rows right
+          under the picker, the way Framer shows them. Rendered embedded so
+          they arrive WITHOUT ComponentPropsTool's own name header and Edit
+          button: an icon set has one section, not two competing ones. */}
+      <ComponentPropsTool embedded />
 
       {/* Edit master button */}
       <div className="w-full mt-2">
