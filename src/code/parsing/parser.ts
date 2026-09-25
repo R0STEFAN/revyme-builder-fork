@@ -633,6 +633,19 @@ export function extractComponentPropDefaults(ast: any): Record<string, string> {
         if (d.init?.type === 'ArrowFunctionExpression' || d.init?.type === 'FunctionExpression') {
           readParam(d.init.params);
         }
+        // …and WRAPPED: `const Foo = React.forwardRef(function Foo({ x = '…' }, ref) {…})`,
+        // which is every icon set — theirs and ours. Read as a bare
+        // CallExpression the component's defaults were never collected, so a
+        // style bound to one of its props kept the raw `var:<prop>` marker:
+        // unresolved, no styleVariables, and no variable pill on the row that
+        // is bound. Same for memo() and any other single-function wrapper.
+        if (d.init?.type === 'CallExpression') {
+          for (const arg of d.init.arguments ?? []) {
+            if (arg?.type === 'FunctionExpression' || arg?.type === 'ArrowFunctionExpression') {
+              readParam(arg.params);
+            }
+          }
+        }
       }
     }
   }
