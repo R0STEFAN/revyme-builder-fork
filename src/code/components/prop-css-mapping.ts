@@ -34,6 +34,21 @@ export function localCssPropForVar(varName: string, code: string): string {
   return result;
 }
 
+/**
+ * Which CSS property consumes `var(--X)` — as a style key OR as an SVG
+ * presentation ATTRIBUTE.
+ *
+ * An icon paints through `stroke="var(--4rxgx6)"` / `fill="var(--…)"`, which
+ * is how SVG states colour and what an imported vector carries. Looking only
+ * for the `key: var(--X)` style form left the variable bound to no property
+ * at all, so its row in the props panel fell back to a raw text input showing
+ * `rgb(0, 0, 0)` instead of a colour swatch.
+ */
+function cssPropConsuming(customVar: string, code: string): string {
+  const m = new RegExp(`([\\w-]+)\\s*[:=]\\s*["']?var\\(--${customVar}\\b`).exec(code);
+  return m ? toCamel(m[1]) : '';
+}
+
 function computeLocalCssPropForVar(varName: string, code: string): string {
   // 1. Direct CSS use. The cssProp must be a real STYLE-OBJECT property — i.e. preceded by `{` or `,`
   // (`{ cssProp: var }`, `…, cssProp: var`). WITHOUT that anchor, a ternary's `consequent : alternate`
@@ -45,8 +60,8 @@ function computeLocalCssPropForVar(varName: string, code: string): string {
   // 2. Overlay custom-property binding (`'--X': varName` consumed by `var(--X)`).
   const varBind = new RegExp(`['"]--([\\w-]+)['"]\\s*:\\s*${varName}(?=[,\\s}])`).exec(code);
   if (varBind) {
-    const usage = new RegExp(`([\\w-]+)\\s*:\\s*var\\(--${varBind[1]}\\b`).exec(code);
-    if (usage) return toCamel(usage[1]);
+    const usage = cssPropConsuming(varBind[1], code);
+    if (usage) return usage;
   }
 
   // 3. Per-variant conditional binding (the var is a branch of a variant ternary), direct or overlay. The cssProp
@@ -66,8 +81,8 @@ function computeLocalCssPropForVar(varName: string, code: string): string {
     const key = cond[1];
     if (key.startsWith("'") || key.startsWith('"')) {
       const customVar = key.replace(/['"]/g, '').slice(2); // strip quotes + `--`
-      const usage = new RegExp(`([\\w-]+)\\s*:\\s*var\\(--${customVar}\\b`).exec(code);
-      if (usage) return toCamel(usage[1]);
+      const usage = cssPropConsuming(customVar, code);
+      if (usage) return usage;
     } else {
       return key;
     }
@@ -85,8 +100,8 @@ function computeLocalCssPropForVar(varName: string, code: string): string {
     const key = vp[1];
     if (key.startsWith("'") || key.startsWith('"')) {
       const customVar = key.replace(/['"]/g, '').slice(2);
-      const usage = new RegExp(`([\\w-]+)\\s*:\\s*var\\(--${customVar}\\b`).exec(code);
-      if (usage) return toCamel(usage[1]);
+      const usage = cssPropConsuming(customVar, code);
+      if (usage) return usage;
     } else {
       return key;
     }
