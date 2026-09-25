@@ -14,6 +14,9 @@ describe('variable-editor-registry', () => {
   const REQUIRED_PROPERTIES = [
     'backgroundColor', 'background', 'backgroundImage',
     'color', 'boxShadow', 'filter', 'mask', 'clipPath',
+    // An icon's colour: SVG paints through stroke/fill, so a variable bound
+    // to one needs the same swatch + picker the text colour gets.
+    'stroke', 'fill',
     'borderRadius', 'border',
     'padding', 'margin',
     'overflow', 'display', 'flexDirection',

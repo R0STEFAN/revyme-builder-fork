@@ -61,6 +61,13 @@ const VARIABLE_EDITOR_REGISTRY = new Map<string, VariableEditorAtom>([
   ['background',      GradientControl],
   ['backgroundImage', ImageControl],
   ['color',           ColorControl],  // text color — uses ColorInput swatch + picker
+  // An ICON's colour. SVG paints through `stroke` / `fill`, so a variable
+  // bound to one resolves to that property and needs the same swatch + picker
+  // the text colour gets — without an editor it fell through to a raw text
+  // input showing `rgb(0, 0, 0)` (an imported Button's Icon Color and Hover
+  // Icon Color).
+  ['stroke',          ColorControl],
+  ['fill',            ColorControl],
   ['boxShadow',       ShadowControl],
   ['filter',          FilterControl],
   ['mask',            MaskControl],
