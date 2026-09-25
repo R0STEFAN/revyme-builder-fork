@@ -233,7 +233,7 @@ export default function DebugToolbar() {
       if (!res.ok || out.error) throw new Error(out.error || `import service answered ${res.status}`);
 
       const { code, template, componentFiles, overrideFiles, overrideWarnings, tokens, presets, colors, stats,
-        collections, cmsFiles, templatedPages, fonts, smoothScroll, pageEffect } = out;
+        collections, cmsFiles, iconSetFiles, templatedPages, fonts, smoothScroll, pageEffect } = out;
       if (typeof code !== 'string') throw new Error('import service returned no page code');
 
       // A site import is a whole project. Start from the empty starter, as the
@@ -242,7 +242,15 @@ export default function DebugToolbar() {
       // /project beside another's /blogs and /projects (2026-09-14).
       resetProjectFS(createEmptyProject());
 
-      // Components first: the page references them as @/components/<Name>, so
+      // ICON SETS, before anything that places an icon from one. The file is
+      // what makes an instance an icon rather than an unknown tag: the parser
+      // reads the imported file's `@iconSet` annotation, so a page or a master
+      // that arrives without it renders the icon as an anonymous frame — no
+      // picker, no set, no colour.
+      for (const [name, source] of Object.entries(iconSetFiles ?? {})) {
+        projectFS.writeFile(`icons/${name}.tsx`, String(source));
+      }
+      // Components next: the page references them as @/components/<Name>, so
       // a page that arrives first renders unresolved tags.
       for (const [name, source] of Object.entries(componentFiles ?? {})) {
         projectFS.writeFile(`components/${name}.tsx`, String(source));
