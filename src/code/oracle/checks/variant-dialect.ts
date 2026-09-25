@@ -633,6 +633,11 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
         for (const p of defaultEntry.value.properties) {
           if (!t.isObjectProperty(p) || !t.isIdentifier(p.key)) continue;
           const k = p.key.name;
+          // `transition` is motion's own key, not a style: it says HOW the
+          // entry animates, and no panel control reads it. Treating it as a
+          // style the inline base must repeat asked for something that would
+          // be meaningless there.
+          if (k === 'transition') continue;
           if (MOTION_ONLY.has(k)) {
             const neutral = (k === 'scale' || k === 'scaleX' || k === 'scaleY') ? 1 : 0;
             const num = t.isNumericLiteral(p.value) ? p.value.value
