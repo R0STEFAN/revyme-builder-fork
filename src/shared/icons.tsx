@@ -665,6 +665,26 @@ export const PageHomeIcon: React.FC<IconProps & { size?: number }> = ({
   </svg>
 );
 
+/** A page FOLDER — a route segment that groups sub-pages without being a
+ *  page itself (`/fonctionnalites` holding `/fonctionnalites/capture`). */
+export const PageFolderIcon: React.FC<IconProps & { size?: number }> = ({
+  size,
+  width,
+  height,
+  ...props
+}) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={width ?? size ?? 16}
+    height={height ?? size ?? 16}
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M2 4a2 2 0 0 1 2-2h2.172a2 2 0 0 1 1.414.586L8.414 4H12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" />
+  </svg>
+);
+
 export const PageDocumentIcon: React.FC<IconProps & { size?: number }> = ({
   size,
   width,

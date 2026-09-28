@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { buildPageTree, extractSlug } from './FileExplorer';
 import { createPageFile, createRouteGroup } from '../code/project/active-file-store';
+import { createPageFolder } from '../code/project/page-folders';
 import { projectFS, resetProjectFS } from '../code/project/project-fs';
 
 beforeEach(() => {
@@ -142,5 +143,73 @@ describe('extractSlug', () => {
 
   test('handles nested slugs inside groups', () => {
     expect(extractSlug('app/(marketing)/blog/posts/page.tsx')).toBe('blog/posts');
+  });
+});
+
+// ─── Virtual folder rows ────────────────────────────────────────────────────
+//
+// Framer publishes `/fonctionnalites` as a FOLDER: it holds pages but is
+// not a page itself (the route 404s). Imported flat, its children had no
+// ancestor page-file and each sat at the top level under its full path.
+
+describe('buildPageTree — folders for page-less route segments', () => {
+  const page = (route: string) =>
+    projectFS.writeFile(`app/${route}/page.client.tsx`, '"use client"; export default function Page() { return <div/>; }');
+
+  test('groups children under a folder row when the parent has no page', () => {
+    page('fonctionnalites/capture');
+    page('fonctionnalites/integrations');
+    const tree = buildPageTree(0);
+
+    const folder = tree.find(e => e.type === 'folder');
+    expect(folder).toBeDefined();
+    expect(folder!.label).toBe('/fonctionnalites');
+    expect(folder!.depth).toBe(0);
+    expect(folder!.children.map(c => c.label).sort()).toEqual(['/capture', '/integrations']);
+    expect(folder!.children.every(c => c.depth === 1)).toBe(true);
+    // …and they no longer appear at the top level (the scaffold's own
+    // `/about` is the only page row left beside Home).
+    expect(tree.filter(e => e.type === 'page' && !e.isHome).map(e => e.label)).toEqual(['/about']);
+  });
+
+  test('a real parent page still wins over a folder', () => {
+    page('articles');
+    page('articles/hello');
+    const tree = buildPageTree(0);
+
+    expect(tree.find(e => e.type === 'folder')).toBeUndefined();
+    const articles = tree.find(e => e.label === '/articles')!;
+    expect(articles.type).toBe('page');
+    expect(articles.children.map(c => c.label)).toEqual(['/hello']);
+  });
+
+  test('folders nest inside folders', () => {
+    page('docs/guides/intro');
+    const tree = buildPageTree(0);
+
+    const docs = tree.find(e => e.label === '/docs')!;
+    expect(docs.type).toBe('folder');
+    const guides = docs.children[0]!;
+    expect(guides.type).toBe('folder');
+    expect(guides.label).toBe('/guides');
+    expect(guides.children[0]!.label).toBe('/intro');
+  });
+
+  test('top-level pages never become folders', () => {
+    page('about');
+    const tree = buildPageTree(0);
+    expect(tree.find(e => e.type === 'folder')).toBeUndefined();
+    expect(tree.find(e => e.label === '/about')!.type).toBe('page');
+  });
+
+  test('an EMPTY folder created by hand still shows a row', () => {
+    // Nothing on disk implies it — it comes from `_meta/page-folders.json`.
+    const dir = createPageFolder('Ressources');
+    const tree = buildPageTree(0);
+    const folder = tree.find(e => e.filePath === dir);
+    expect(folder).toBeDefined();
+    expect(folder!.type).toBe('folder');
+    expect(folder!.label).toBe('/ressources');
+    expect(folder!.children).toEqual([]);
   });
 });
