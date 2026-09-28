@@ -1698,6 +1698,13 @@ const KNOWN_GLOBALS = new Set<string>([
   'Notification', 'caches', 'indexedDB', 'TextEncoder', 'TextDecoder', 'AbortSignal',
   'PointerEvent', 'TouchEvent', 'WheelEvent', 'DragEvent', 'FocusEvent', 'InputEvent',
   'AnimationEvent', 'TransitionEvent', 'DataTransfer', 'ClipboardEvent', 'CSSStyleSheet',
+  // Web Animations. `Animation` is both a runtime feature check
+  // (`typeof Animation !== "undefined"`, which is how a component asks whether
+  // it can hardware-accelerate) and a TS type (`useRef<Animation>`) — the same
+  // two positions the DOM classes above are used in. Without it an imported
+  // marquee could not be published at all: "References undefined identifier:
+  // Animation".
+  'Animation', 'KeyframeEffect', 'AnimationTimeline', 'DocumentTimeline', 'AnimationPlaybackEvent',
   // React / runtime
   'React', 'Fragment', 'process', 'module', 'exports', 'require',
 ]);
