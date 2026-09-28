@@ -17,7 +17,7 @@ import ToolPopup from '../../../ui/ToolPopup';
 import { useEditorPanel } from '../../../hooks/useEditorPanel';
 import GradientEditor from '../../../ui/GradientEditor';
 import { parseGradient as gradientParseGradient, formatGradient as gradientFormatGradient, createDefaultGradient as gradientCreateDefault } from '@/shared/gradient-utils';
-import { parseBorderState, formatBorderUniform, formatBorderIndividual, formatBorderAfterCSS, parseBorderAfterCSS, extractBorderAfterRuleBody, BORDER_INLINE_KEYS, formatGradientBorderAfterCSS, parseGradientBorderAfterCSS, isGradientBorder, type BorderSide, type BorderState } from '../../../ui/border-utils';
+import { parseBorderState, formatBorderUniform, formatBorderIndividual, formatBorderAfterCSS, parseBorderAfterCSS, extractBorderAfterRuleBody, extractVariantBorderAfterRuleBody, BORDER_INLINE_KEYS, formatGradientBorderAfterCSS, parseGradientBorderAfterCSS, isGradientBorder, type BorderSide, type BorderState } from '../../../ui/border-utils';
 import { groupBorderTokens, detectActiveBorderPreset, buildBorderClearStyles, getBorderTokenValue } from '../../../ui/border-preset-utils';
 import EditBorderPresetPanel from '../../../ui/EditBorderPresetPanel';
 import { stableCodeAtom as codeAtom, isComponentFileAtom } from '@/code/stores/store';
@@ -119,6 +119,17 @@ function BorderEditorPanel({ styles: s, nodeId, onChangeMultiple, onChangeMultip
   };
   const removeOverlayBorderVars = () => {
     expediteStableAtomSync();
+    // …only when the rule actually READS those variables. `varBorderMode` is
+    // "this is a component file", not "this node's overlay is var-backed", and
+    // a LITERAL overlay is a shape the builder still writes: a per-variant
+    // rule starts as one (updateBorderOverlayStyle), and an imported master
+    // carries them throughout. Clearing variables nothing reads left the rule
+    // in place, so the X did nothing at all on a variant.
+    if (!isVarBackedBorderAfterBody(afterBodyRaw)) {
+      forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid, variant: overlayVariant }));
+      forSelectionTargets(nodeId, (tid) => removeCanvasCSS(borderOverlaySelector(tid, overlayVariant)));
+      return;
+    }
     if (overlayVariant) { onChangeMultiple(clearedOverlayVars()); return; } // variant → inherit base
     forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid }));
     onChangeMultiple(clearedOverlayVars());
@@ -556,6 +567,17 @@ function BorderAtom() {
   };
   const removeOverlayBorderVars = () => {
     expediteStableAtomSync();
+    // …only when the rule actually READS those variables. `varBorderMode` is
+    // "this is a component file", not "this node's overlay is var-backed", and
+    // a LITERAL overlay is a shape the builder still writes: a per-variant
+    // rule starts as one (updateBorderOverlayStyle), and an imported master
+    // carries them throughout. Clearing variables nothing reads left the rule
+    // in place, so the X did nothing at all on a variant.
+    if (!isVarBackedBorderAfterBody(afterBodyRaw)) {
+      forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid, variant: overlayVariant }));
+      forSelectionTargets(nodeId, (tid) => removeCanvasCSS(borderOverlaySelector(tid, overlayVariant)));
+      return;
+    }
     if (overlayVariant) { onChangeMultiple(clearedOverlayVars()); return; } // variant → inherit base
     forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid }));
     onChangeMultiple(clearedOverlayVars());
@@ -732,6 +754,9 @@ function BorderAtom() {
   const activeGroup = useMemo(() => detectActiveBorderPreset(s, borderGroups), [s, borderGroups]);
 
   const { label: ovLabel, subLabel: ovSubLabel } = useOverriddenLabel('Border');
+  /** A rule scoped to THIS variant — the border it overrides the base with. */
+  const variantBorderOverride = !!overlayVariant
+    && extractVariantBorderAfterRuleBody(extractStyleCSS(code), nodeId, overlayVariant) !== null;
   const ovHoist = useHoistMenuItem();
   const labelPlain = mode !== 'direct' && !ovHoist;
 
@@ -767,6 +792,16 @@ function BorderAtom() {
       <SingleEntryRow
         label={ovLabel} property="border" plain={labelPlain} subLabel={ovSubLabel}
         hasValue={hasAnyBorder}
+        // This variant states a border of its OWN. The override lives in a
+        // `::after` rule, not in the @media style map hasOverride() consults,
+        // so the accent is plumbed directly — the same way ContentControl
+        // does it for a per-viewport text override.
+        overridden={variantBorderOverride}
+        onResetOverride={variantBorderOverride ? () => {
+          expediteStableAtomSync();
+          forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid, variant: overlayVariant }));
+          forSelectionTargets(nodeId, (tid) => removeCanvasCSS(borderOverlaySelector(tid, overlayVariant)));
+        } : undefined}
         onOpen={() => {
           if (!hasAnyBorder) {
             const defaultState: BorderState = { isUniform: true, top: { width: 1, style: 'solid', color: '#000000' }, right: { width: 1, style: 'solid', color: '#000000' }, bottom: { width: 1, style: 'solid', color: '#000000' }, left: { width: 1, style: 'solid', color: '#000000' } };

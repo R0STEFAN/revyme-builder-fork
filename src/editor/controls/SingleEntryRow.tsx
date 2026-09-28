@@ -36,6 +36,11 @@ interface SingleEntryRowProps {
   EmptyIcon: React.FC<React.SVGProps<SVGSVGElement> & { bg?: string; iconColor?: string }>;
   /** Popup anchor — wraps the action row in a display-contents span. */
   anchorRef?: React.RefObject<HTMLElement | null>;
+  /** Forwarded to ControlLabel: the "overridden here" accent, and the reset
+   *  that goes with it, for a property whose override lives outside the
+   *  @media style map (a `::after` rule scoped to one variant). */
+  overridden?: boolean;
+  onResetOverride?: () => void;
 }
 
 export function SingleEntryRow({
@@ -48,6 +53,8 @@ export function SingleEntryRow({
   renderPreview,
   onRemove,
   EmptyIcon,
+  overridden,
+  onResetOverride,
   anchorRef,
 }: SingleEntryRowProps) {
   const row = (
@@ -66,7 +73,8 @@ export function SingleEntryRow({
 
   return (
     <div data-tool-row className="grid grid-cols-[var(--tool-label-col)_minmax(0,1fr)] items-center w-full">
-      <ControlLabel label={label} property={property} plain={plain} subLabel={subLabel} cell />
+      <ControlLabel label={label} property={property} plain={plain} subLabel={subLabel} cell
+        overridden={overridden} onResetOverride={onResetOverride} />
       <div data-tool-row-value className="flex items-center gap-2 w-full min-w-0">
         {anchorRef
           ? <span ref={anchorRef as React.RefObject<HTMLSpanElement | null>} className="contents">{row}</span>
