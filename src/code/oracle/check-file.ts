@@ -166,6 +166,12 @@ function isEditorMediaStyleBlock(el: t.JSXElement): boolean {
       const sel = css.slice(i, open).trim();
       if (!/^\[data-id="[^"]+"\](?:::?[a-z-]+(?:\([^)]*\))?)+$/.test(sel)
         && !/^:lang\([^)]+\)\s*\[data-id="[^"]+"\]$/.test(sel)
+        // The PER-VARIANT border overlay, exactly as borderOverlaySelector
+        // writes it (generator-styles updateBorderOverlayStyle, which also
+        // stamps the `data-variant={variant}` carrier on the root). Generator
+        // output like the base rule above — it was simply never allowed here,
+        // so a master with a variant-scoped border bounced its own oracle.
+        && !/^\[data-variant="([^"]+)"\]\s\[data-id="([^"]+)"\]::after,\s*\[data-id="\2"\]\[data-variant="\1"\]::after$/.test(sel)
         // The Input tool's select CARET rule — the ONE tag-qualified data-id
         // form the editor owns (updateSelectCaretRuleInCode; read back via the
         // data-select-icon attr). Bare un-qualified `[data-id] { }` rules stay
