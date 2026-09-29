@@ -971,6 +971,7 @@ export const LayerRow = React.memo(function LayerRow({
         {isRenaming ? (
           <RenameInput
             initialName={node.name || node.type}
+            color={isSelected ? selFg : 'var(--text-primary)'}
             onCommit={(name) => {
               if (layer.isVariantHeader && layer.viewportId) {
                 onVariantRenameCommit(layer.viewportId, name);
@@ -1002,8 +1003,10 @@ export const LayerRow = React.memo(function LayerRow({
         {/* Spacer to push actions to the right */}
         <div className="flex-1" />
 
-        {/* Lock & Visibility actions — visible on hover, always visible when hidden/locked */}
-        {!isViewer && !isVpHeader && layer.nodeId && (() => {
+        {/* Lock & Visibility actions — visible on hover, always visible when hidden/locked.
+         *  Out of the row WHILE RENAMING: the name field sits where they'd be clicked by mistake,
+         *  and the name gets the full width. They come back with the commit. */}
+        {!isRenaming && !isViewer && !isVpHeader && layer.nodeId && (() => {
           // Use the row-level `effectiveHidden` from the resolver (which
           // already cascades base + default-variant + per-variant + @media
           // overrides). The previous `|| node.styles.display === 'none'`
@@ -1076,7 +1079,12 @@ export const LayerRow = React.memo(function LayerRow({
 
 // ─── Inline Rename Input ────────────────────────────────────────────────────
 
-function RenameInput({ initialName, onCommit }: { initialName: string; onCommit: (name: string) => void }) {
+function RenameInput({ initialName, onCommit, color }: {
+  initialName: string;
+  onCommit: (name: string) => void;
+  /** The static label's color, so the name reads the same while you type. */
+  color: string;
+}) {
   const [value, setValue] = React.useState(initialName);
   const [active, setActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -1115,10 +1123,10 @@ function RenameInput({ initialName, onCommit }: { initialName: string; onCommit:
         if (e.key === 'Escape') finish(initialName);
       }}
       onBlur={() => { if (active) finish(value); }}
-      // `-my-0.5` cancels `py-0.5`'s height contribution so the row stays exactly as tall as the static
-      // label (which has no padding) — the white pill keeps its padding but doesn't grow the row.
-      className="text-xs font-medium leading-4 bg-white text-black border-0 outline-none px-1 py-0.5 -my-0.5 box-border rounded w-full"
-      style={{ minWidth: 40 }}
+      // INVISIBLE field: same font, color and box as the static label (no background, no padding),
+      // so renaming reads as typing straight into the layer name — just the caret and the selection.
+      className="text-xs font-medium leading-4 bg-transparent border-0 outline-none p-0 m-0 box-border w-full selection:bg-white/30"
+      style={{ minWidth: 40, color, caretColor: color }}
     />
   );
 }

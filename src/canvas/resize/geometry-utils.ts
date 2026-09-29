@@ -674,6 +674,20 @@ export function updateDirectionAfterCrossing(
   return originalDirection;
 }
 
+/**
+ * A quad with (near) zero extent on BOTH axes — what a `display: none` node, or
+ * any node inside a hidden parent, measures as: a zero box pinned at the
+ * viewport origin, not at the node. Unioned into a multi-selection it dragged
+ * the group box off to the canvas corner (user report 2026-09-29: a hidden
+ * Hamburger Menu multi-selected from Layers). A thin line (zero height, real
+ * width) still paints and is NOT degenerate.
+ */
+export function isDegenerateQuad(c: ScreenCorners): boolean {
+  const xs = [c.TL.x, c.TR.x, c.BR.x, c.BL.x];
+  const ys = [c.TL.y, c.TR.y, c.BR.y, c.BL.y];
+  return Math.max(...xs) - Math.min(...xs) < 0.5 && Math.max(...ys) - Math.min(...ys) < 0.5;
+}
+
 // ─── Bridge-Aware Geometry (by nodeId) ─────────────────────────────────────
 
 /**
