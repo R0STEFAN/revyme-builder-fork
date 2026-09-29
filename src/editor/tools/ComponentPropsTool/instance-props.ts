@@ -33,16 +33,19 @@ function findInstanceTag(code: string, nodeId: string, componentName: string): {
     // Check char before data-id — must be whitespace (JSX attr separator)
     const charBefore = idIdx > 0 ? code[idIdx - 1] : '';
     if (charBefore === ' ' || charBefore === '\n' || charBefore === '\t') {
-      let tagStart = idIdx;
-      while (tagStart > 0 && code[tagStart] !== '<') tagStart--;
-      // Extra safety: tag must start with `<` followed by an uppercase letter or known lowercase tag
-      // Component tags are PascalCase, element tags are lowercase — both valid.
       // findTagClose (brace/quote-aware) instead of indexOf('>'): an instance can carry an inline arrow
       // handler like `event1={() => setOpen(true)}` whose `=>` contains a `>` — a naive indexOf would cut the
       // tag there, dropping every attr after it (e.g. a `color1={color1}` binding placed after event1 showed
       // as an unbound literal in the panel even though the hoist was wired in the code).
-      const tagEnd = findTagClose(code, tagStart);
-      if (tagEnd !== -1) return { tagStart, tagEnd: tagEnd + 1 };
+      // A prop VALUE before `data-id` can hold markup of its own (a formatted-text prop
+      // `content={"<strong>Hi</strong>"}`), so a `<` only opens OUR tag when that tag closes after the id.
+      let tagStart = idIdx;
+      while (tagStart > 0) {
+        tagStart--;
+        if (code[tagStart] !== '<') continue;
+        const tagEnd = findTagClose(code, tagStart);
+        if (tagEnd > idIdx) return { tagStart, tagEnd: tagEnd + 1 };
+      }
     }
     idSearchFrom = idIdx + idPattern.length;
   }
@@ -131,6 +134,10 @@ export function parseInstanceProps(code: string, nodeId: string, componentName: 
       if (lit) value = lit[1] ?? lit[2] ?? '';
       else if (base === 'undefined') continue;
       else value = base;
+    } else if (match[5] && /^"(?:[^"\\]|\\.)*"$/.test(match[5].trim())) {
+      // An escaped string literal (`prop={"<a href=\"/x\">y</a>"}` — setInstanceProp's form for a
+      // value holding both quote kinds, e.g. formatted text): the prop's value is the DECODED string.
+      try { value = JSON.parse(match[5].trim()); } catch { /* keep the raw source */ }
     }
     result.set(name, value);
   }

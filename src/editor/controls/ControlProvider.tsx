@@ -403,6 +403,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     'lineHeight', 'textAlign', 'textTransform', 'textDecoration', 'whiteSpace',
     'writingMode', 'textDecorationLine', 'textDecorationColor', 'textDecorationStyle',
     'textDecorationThickness', 'textUnderlineOffset', 'WebkitTextStroke',
+    'WebkitTextStrokeWidth', 'WebkitTextStrokeColor',
     'WebkitTextFillColor', 'WebkitBackgroundClip', 'backgroundClip',
   ]);
   const fitInnerIdRef = useRef(fitInnerNode?.id ?? null);
@@ -712,8 +713,13 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     return detectValueSource(val, variableRef);
   }, [styles, node, isComponentVariantViewport, activeComponentVariant, isReplica, vpWidth, hasOverride]);
 
-  const createVariable = useCallback((property: string, propName: string, defaultValue?: string, clearLonghands?: string[]) => {
+  const createVariable = useCallback((requestedProperty: string, propName: string, defaultValue?: string, clearLonghands?: string[]) => {
     if (!selectedId) return;
+    // `textContentFormatted` = the Content row's "Create formatted text variable": the TEXT routing below,
+    // but the component create binds an HTML prop (bold/italic/links survive) — on the primary, or on one
+    // variant only. Page variables stay plain text.
+    const formattedText = requestedProperty === 'textContentFormatted';
+    const property = formattedText ? 'textContent' : requestedProperty;
 
     // ─── TRANSITION variable (framer-motion transition, NOT a CSS style) ────────────────────────────────
     // A transition variable binds the framer-motion transition to a variable IDENTIFIER — per-variant native:
@@ -917,8 +923,8 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       // variants keep their literal text. Otherwise it'd bind `{content}` on the shared child = every
       // variant. Works for both "Create Variable" (prop added) and "Set Variable" (existing prop).
       if (isComponentFile && isComponentVariantViewport && activeComponentVariant && activeComponentVariant !== 'default') {
-        trace.action('control:bind-text-variable-for-variant', { nodeId: selectedId, propName, variant: activeComponentVariant });
-        queueMutation({ type: 'bindTextVariableForVariant', nodeId: selectedId, variantName: activeComponentVariant, propName, propDefault: text });
+        trace.action('control:bind-text-variable-for-variant', { nodeId: selectedId, propName, variant: activeComponentVariant, formatted: formattedText });
+        queueMutation({ type: 'bindTextVariableForVariant', nodeId: selectedId, variantName: activeComponentVariant, propName, propDefault: text, ...(formattedText ? { formatted: true } : {}) });
         return;
       }
       if (!isComponentFile) {
@@ -929,8 +935,8 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         queueMutation({ type: 'createTextPageVariable', nodeId: selectedId, propName, defaultValue: text });
         return;
       }
-      trace.action('control:create-text-variable', { nodeId: selectedId, propName, defaultValue: text });
-      queueMutation({ type: 'createTextVariable', nodeId: selectedId, propName, defaultValue: text });
+      trace.action('control:create-text-variable', { nodeId: selectedId, propName, defaultValue: text, formatted: formattedText });
+      queueMutation({ type: 'createTextVariable', nodeId: selectedId, propName, defaultValue: text, ...(formattedText ? { formatted: true } : {}) });
       return;
     }
     const value = defaultValue ?? styles[property] ?? '';

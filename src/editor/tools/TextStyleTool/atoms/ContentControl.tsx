@@ -29,6 +29,7 @@ import { isPrimaryViewport } from '@/canvas/node-ops';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getContentRoot } from '@/canvas/node-ops';
 import { trace } from '@/shared/debug-trace';
+import FormattedContentButton from '../../../ui/FormattedContentButton';
 
 export function ContentControl() {
   const text = useTextStyles();
@@ -262,6 +263,36 @@ export function ContentControl() {
           variableRef={textVarSource.ref!}
           currentValue={displayValue}
           removeVariable={removeVariable}
+        />
+      </div>
+    );
+  }
+
+  // FORMATTED text node (its text lives in `dangerouslySetInnerHTML={{ __html: … }}`) that is NOT bound
+  // on this variant: the variant's own formatted text — detached from the variable here, or the
+  // primary's text while only a variant is bound. Edited with the rich editor (never as a raw HTML
+  // string); Reset drops the variant's override so it follows the default again.
+  if (isOnComponentMaster && node?.formattedTextVariable) {
+    const html = node.conditionalText?.[variantKey] ?? node.conditionalText?.['default'] ?? node.textContent ?? '';
+    return (
+      <div className="flex items-center justify-between w-full">
+        <ControlLabel
+          label="Content"
+          property="textContent"
+          overridden={isOverride}
+          onResetOverride={() => {
+            trace.action('content-control:reset-formatted-variant', { nodeId: node.id, variantName: variantKey });
+            queueMutation({ type: 'setFormattedTextBranch', nodeId: node.id, variantName: variantKey, op: { kind: 'clear' } });
+          }}
+        />
+        <FormattedContentButton
+          title="Content"
+          value={html}
+          testId={node.id}
+          onCommit={(h) => {
+            trace.action('content-control:formatted-variant-text', { nodeId: node.id, variantName: variantKey, chars: h.length });
+            queueMutation({ type: 'setFormattedTextBranch', nodeId: node.id, variantName: variantKey, op: { kind: 'literal', html: h } });
+          }}
         />
       </div>
     );

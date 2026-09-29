@@ -8,7 +8,7 @@ import { trace } from './debug-trace';
 // until after the editor mounts. Callers of `loadGoogleFont` may run
 // during early bootstrap (default fonts on page load), so we skip the
 // iframe injection if the bridge hasn't initialized yet.
-let _getCanvasBridge: (() => { loadFontInIframe?: (url: string) => void }) | null = null;
+let _getCanvasBridge: (() => { loadFontInIframe?: (url: string) => void; injectCSS?: (selector: string, cssBody: string) => void }) | null = null;
 import('@/canvas/canvas-bridge')
   .then((mod) => { _getCanvasBridge = mod.getCanvasBridge; })
   .catch(() => { /* not available in this context (e.g. tests, ssr) — fine */ });
@@ -151,6 +151,32 @@ function formatHintFromUrl(url: string): string {
     : ext === 'woff' ? 'woff'
     : ext === 'otf' ? 'opentype'
     : 'truetype';
+}
+
+/**
+ * Declare a custom (workspace) font face INSIDE the canvas iframe, so the font
+ * picker's hover preview renders it on the canvas before it has been applied to
+ * the project. The iframe is cross-origin — the FontFace registered in the
+ * editor document by `loadCustomFont` never reaches it, and `loadFontInIframe`
+ * only takes a stylesheet URL (Google's CSS) — so the face goes in as an
+ * `@font-face` rule through the canvas-CSS channel, with the same `src` URL
+ * the committed `globals.css` rule uses (applyWorkspaceFontToProject). The
+ * selector carries a per-face key so each face is its own replaceable rule;
+ * re-declaring one is a no-op replacement, so no dedupe is kept here (a canvas
+ * re-render may drop the rule — the next hover declares it again).
+ */
+export function loadCustomFontInCanvas(args: {
+  family: string; url: string; weight?: number; style?: 'normal' | 'italic';
+}): void {
+  const { family, url, weight = 400, style = 'normal' } = args;
+  const bridge = _getCanvasBridge?.();
+  if (!bridge?.injectCSS || !family || !url) return;
+  const key = `${family.replace(/[^\w -]/g, '')}:${weight}:${style}`;
+  bridge.injectCSS(
+    `@font-face /* rv-font-preview ${key} */`,
+    `font-family: '${family.replace(/'/g, "\\'")}'; src: url('${url}') format('${formatHintFromUrl(url)}'); font-weight: ${weight}; font-style: ${style}; font-display: swap;`,
+  );
+  trace.action('font-loader:custom-canvas-face', { family, weight, style });
 }
 
 /**

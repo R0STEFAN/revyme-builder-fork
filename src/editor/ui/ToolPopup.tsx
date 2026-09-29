@@ -83,6 +83,11 @@ function unregisterActivePopup(closeFn: () => void) {
   }
 }
 
+// Open popups, oldest first. Every popup listens for Escape on window CAPTURE, so a
+// NESTED popup (opened from inside another — the rich editor's Link popup) can't
+// pre-empt its parent's listener; instead only the TOPMOST popup acts on Escape.
+const openPopupStack: object[] = [];
+
 /** Close the currently-open ToolPopup (e.g. the Fill color/gradient picker) from
  *  OUTSIDE React — the canvas-background click handler calls this so one click
  *  dismisses the floating picker. Closing it unmounts the gradient/clip-path/color
@@ -117,12 +122,17 @@ interface ToolPopupProps {
   resetKey?: string | number;
   /** Which side to position the popup relative to the anchor. Default 'left' (opens to the left of anchor). */
   side?: 'left' | 'right';
+  /** A popup opened FROM INSIDE another popup (Framer's text Link popup over the Content
+   *  editor): stays out of the one-popup-at-a-time singleton so the parent stays open,
+   *  opens just below its anchor, and stacks above the parent. */
+  nested?: boolean;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export default function ToolPopup({ isOpen, onClose, title, children, anchorRef, width = 260, resetKey, side = 'left' }: ToolPopupProps) {
+export default function ToolPopup({ isOpen, onClose, title, children, anchorRef, width = 260, resetKey, side = 'left', nested = false }: ToolPopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
+  const stackToken = useRef({});
   const activePanelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [positioned, setPositioned] = useState(false);
@@ -239,6 +249,20 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
     // or missing element (anchor was null).
     const isDetached = !anchor || (rect.left === 0 && rect.right === 0 && rect.top === 0 && rect.width === 0);
 
+    // NESTED: just below the anchor (above it when there's no room), overlapping the parent.
+    if (nested && !isDetached) {
+      const h = popupRef.current?.offsetHeight || 180;
+      let nx = rect.left - 12;
+      let ny = rect.bottom + 8;
+      if (nx + width > window.innerWidth - gap) nx = window.innerWidth - width - gap;
+      if (nx < gap) nx = gap;
+      if (ny + h > window.innerHeight - gap) ny = Math.max(gap, rect.top - h - 8);
+      setPos({ x: nx, y: ny });
+      setPositioned(true);
+      preGrowthYRef.current = null;
+      return;
+    }
+
     // Find the properties panel — from anchor if attached, or directly from DOM
     const sidebar = isDetached
       ? document.querySelector('[data-properties-panel]') as HTMLElement
@@ -269,7 +293,7 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
     setPos({ x, y });
     setPositioned(true);
     preGrowthYRef.current = null; // fresh open — forget any previous growth state
-  }, [width, side]);
+  }, [width, side, nested]);
 
   // Keep onClose in a ref so the open effect doesn't re-run when parent re-renders
   const onCloseRef = useRef(onClose);
@@ -279,7 +303,9 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
     if (!isOpen) { setPositioned(false); return; }
     // Close any other open popup (global singleton)
     const closeFn = () => onCloseRef.current();
-    registerAsActivePopup(closeFn);
+    if (!nested) registerAsActivePopup(closeFn);
+    const token = stackToken.current;
+    openPopupStack.push(token);
     setPositioned(false);
     // Position on next frame so DOM is measured correctly
     requestAnimationFrame(() => recalcPosition());
@@ -290,9 +316,11 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
-      unregisterActivePopup(closeFn);
+      if (!nested) unregisterActivePopup(closeFn);
+      const i = openPopupStack.lastIndexOf(token);
+      if (i !== -1) openPopupStack.splice(i, 1);
     };
-  }, [isOpen, recalcPosition, title]); // onClose removed from deps — uses ref
+  }, [isOpen, recalcPosition, title, nested]); // onClose removed from deps — uses ref
 
   // ─── Reposition whenever content height changes (tabs, panels, any resize) ──
   // Guard: only runs AFTER initial positioning — prevents jump caused by the
@@ -343,6 +371,7 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (openPopupStack[openPopupStack.length - 1] !== stackToken.current) return; // a nested popup is on top
         e.stopPropagation();
         if (canGoBack) popPanel();
         else onClose();
@@ -405,7 +434,8 @@ export default function ToolPopup({ isOpen, onClose, title, children, anchorRef,
   // editor), it must sit ABOVE the modal (100010) or it opens BEHIND it and can't be used. Bump to
   // 100020 in that case.
   const inModal = !!anchorRef?.current?.closest?.('[data-modal-root]');
-  const zIndex = inModal ? 100020 : 100001;
+  // A nested popup stacks just above its parent.
+  const zIndex = (inModal ? 100020 : 100001) + (nested ? 5 : 0);
 
   return createPortal(
     <ToolPopupContext.Provider value={{ pushPanel, popPanel }}>

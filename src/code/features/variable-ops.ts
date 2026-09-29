@@ -11,7 +11,9 @@ import { parseJSX, findFirstElementByDataId, findAttribute, traverse } from '../
 import { updateBorderOverlayStyle } from '../generation/generator-styles';
 import { ensureCanonicalMotionLinkDecl } from '../generation/generator-attrs';
 import { isStructuralProp } from '../components/component-registry';
-import { removePropMetaInCode } from '../components/prop-meta';
+import { removePropMetaInCode, getPropType } from '../components/prop-meta';
+import { updateNodeChildrenFromHTML, variantTextBranch } from '../generation/generator-crud';
+import { formattedBranchesOfDangerAttr, innerJsxToRichMessage, plainTextToRichHtml, type FormattedBranches } from '@/shared/rich-message';
 import * as t from '@babel/types';
 import _generate from '@babel/generator';
 import { trace } from '@/shared/debug-trace';
@@ -1251,6 +1253,21 @@ export function bindTextNodeToPropInCode(code: string, nodeId: string, propName:
   if (!declared) return createTextVariableInCode(code, nodeId, propName);
   const ast = parseJSX(code);
   if (!ast) return code;
+  // A FORMATTED text variable holds HTML — `{prop}` would print the tags as text. Bind it in its
+  // own shape (the node's current content is dropped: the variable's value replaces it).
+  if (getPropType(code, propName) === 'formattedText') {
+    if (bindFormattedTextNode(ast, code, nodeId, propName) === null) {
+      return setFormattedTextBranchInCode(code, nodeId, 'default', { kind: 'var', prop: propName });
+    }
+    try {
+      const output = generate(ast, { retainLines: true }, code);
+      trace.action('variable-ops:bind-formatted-text-existing-prop', { nodeId, propName });
+      return output.code;
+    } catch (err) {
+      trace.error('variable-ops:bindFormattedText-generate-failed', { nodeId, propName, error: err instanceof Error ? err.message : String(err) });
+      return code;
+    }
+  }
   const captured = captureAndBindTextNode(ast, nodeId, propName);
   if (captured === null) return code;
   try {
@@ -1282,6 +1299,374 @@ export function createTextVariableInCode(
     trace.error('variable-ops:createTextVariable-generate-failed', { nodeId, propName, error: err instanceof Error ? err.message : String(err) });
     return code;
   }
+}
+
+/**
+ * FORMATTED-TEXT variable (Framer's "Create formatted text variable"): the
+ * text's content — bold, italic, links, colour runs and all — becomes a
+ * component prop holding sanitized inline HTML, rendered as
+ *
+ *   <p data-id="x" style={…} dangerouslySetInnerHTML={{ __html: body }} />
+ *
+ * with the current formatted content as the prop's default. Same shape and
+ * allow-list as a rich translation (shared/rich-message.ts), so the live site
+ * renders it with plain React and instances pass HTML strings. The caller tags
+ * the prop `formattedText` in @propMeta. Bails (returns `code`) on a node that
+ * is already bound (an expression child, an existing dangerouslySetInnerHTML)
+ * or self-closing. Pure string → string.
+ */
+export function createFormattedTextVariableInCode(code: string, nodeId: string, propName: string): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+  const html = bindFormattedTextNode(ast, code, nodeId, propName);
+  // Per-variant text already (a literal `{variant === …}` ternary): bind the primary, keep the variants'
+  // texts. Never over an existing variable binding.
+  if (html === null) {
+    const branches = readNodeTextBranches(code, nodeId);
+    if (!branches || Object.keys(branches.vars).length > 0) return code;
+    return setFormattedTextBranchInCode(code, nodeId, 'default', { kind: 'var', prop: propName });
+  }
+  if (!addPropToFunction(ast, propName, html)) return code;
+  try {
+    const output = generate(ast, { retainLines: true }, code);
+    trace.action('variable-ops:create-formatted-text', { nodeId, propName, chars: html.length });
+    return output.code;
+  } catch (err) {
+    trace.error('variable-ops:createFormattedTextVariable-generate-failed', { nodeId, propName, error: err instanceof Error ? err.message : String(err) });
+    return code;
+  }
+}
+
+/** Rewrite ONE node into the formatted-text shape (children → `dangerouslySetInnerHTML={{ __html:
+ *  propName }}`, self-closing) in `ast`. Returns the node's former content as sanitized inline HTML,
+ *  or null (no node, self-closing, already HTML-bound, or content bound to an expression). */
+function bindFormattedTextNode(ast: NonNullable<ReturnType<typeof parseJSX>>, code: string, nodeId: string, propName: string): string | null {
+  let html: string | null = null;
+  const hasBinding = (node: t.Node): boolean => {
+    if (t.isJSXExpressionContainer(node)) {
+      const e = node.expression;
+      return !(t.isStringLiteral(e) || t.isNumericLiteral(e) || t.isJSXEmptyExpression(e));
+    }
+    if (t.isJSXElement(node)) return node.children.some(hasBinding);
+    return false;
+  };
+  findFirstElementByDataId(ast, nodeId, (path, el) => {
+    const opening = el.openingElement;
+    path.stop();
+    if (opening.attributes.some((a) => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML')) return;
+    const closing = el.closingElement;
+    if (!closing || opening.end == null || closing.start == null) return;
+    if (el.children.some(hasBinding)) {
+      trace.error('variable-ops:formatted-text-bound-content-bail', { nodeId, propName });
+      return;
+    }
+    html = innerJsxToRichMessage(code.slice(opening.end, closing.start));
+    el.children = [];
+    el.closingElement = null;
+    opening.selfClosing = true;
+    opening.attributes.push(t.jsxAttribute(
+      t.jsxIdentifier('dangerouslySetInnerHTML'),
+      t.jsxExpressionContainer(t.objectExpression([t.objectProperty(t.identifier('__html'), t.identifier(propName))])),
+    ));
+  });
+  return html;
+}
+
+// ─── Per-variant FORMATTED text ───────────────────────────────────────────────
+//
+// A formatted text variable can be bound, detached or re-bound PER VARIANT, like
+// every other variable. The shape stays one attribute whose `__html` is a variant
+// ternary of variables and literal HTML:
+//
+//   <p dangerouslySetInnerHTML={{ __html: initialVariant === 'tablet' ? "Hi <b>you</b>" : content }} />
+//
+// Every operation reads the element's text as branches (variant → variable | HTML),
+// edits one branch, and writes the canonical shape back: any variable left → the
+// `__html` ternary; none → ordinary children (a rich per-variant ternary, or plain
+// formatted children when every variant agrees).
+
+/** One edit to one variant's branch (`default` = the primary / fallback). */
+export type FormattedBranchOp =
+  | { kind: 'var'; prop: string }      // bind this variant to a formatted variable
+  | { kind: 'literal'; html: string }  // this variant shows its own formatted text
+  | { kind: 'detach' }                 // freeze the variable's current value as this variant's text
+  | { kind: 'clear' };                 // drop the variant's override → it follows the default again
+
+const decodeHtmlEntities = (s: string) => s
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+  .replace(/&nbsp;/g, '\u00a0').replace(/&amp;/g, '&');
+
+/** An element's text as per-variant branches — from a formatted `__html` binding, a `{variant === …}`
+ *  child ternary, a `{prop}` child, or plain / inline-marked children. Null when the content can't be
+ *  expressed that way (a CMS field, `t()`, any other expression). */
+function readTextBranches(el: t.JSXElement, code: string): FormattedBranches | null {
+  const ds = el.openingElement.attributes.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML');
+  if (ds) return formattedBranchesOfDangerAttr(ds.value);
+  const out: FormattedBranches = { vars: {}, literals: {}, variantId: null };
+  const branchHtml = (n: t.Node): string | null => {
+    if (t.isStringLiteral(n)) return plainTextToRichHtml(n.value);
+    if (t.isTemplateLiteral(n) && n.expressions.length === 0) return plainTextToRichHtml(n.quasis[0]?.value.cooked ?? '');
+    if (t.isJSXFragment(n)) {
+      const kids = n.children;
+      if (kids.length === 0) return '';
+      const first = kids[0], last = kids[kids.length - 1];
+      return first.start != null && last.end != null ? innerJsxToRichMessage(code.slice(first.start, last.end)) : null;
+    }
+    if (t.isJSXElement(n) && n.start != null && n.end != null) return innerJsxToRichMessage(code.slice(n.start, n.end));
+    return null;
+  };
+  const significant = el.children.filter((c) => !t.isJSXText(c) || c.value.trim() !== '');
+  const only = significant.length === 1 ? significant[0] : null;
+  if (only && t.isJSXExpressionContainer(only) && !t.isJSXEmptyExpression(only.expression)) {
+    const e = only.expression;
+    if (t.isIdentifier(e)) { out.vars['default'] = e.name; return out; }
+    if (t.isConditionalExpression(e)) {
+      let cursor: t.Expression = e;
+      while (t.isConditionalExpression(cursor) && t.isBinaryExpression(cursor.test, { operator: '===' })
+        && t.isIdentifier(cursor.test.left) && (cursor.test.left.name === 'initialVariant' || cursor.test.left.name === 'variant')
+        && t.isStringLiteral(cursor.test.right)) {
+        out.variantId = cursor.test.left.name;
+        const k = cursor.test.right.value;
+        if (!(k in out.vars) && !(k in out.literals)) {
+          if (t.isIdentifier(cursor.consequent)) out.vars[k] = cursor.consequent.name;
+          else { const h = branchHtml(cursor.consequent); if (h === null) return null; out.literals[k] = h; }
+        }
+        cursor = cursor.alternate;
+      }
+      if (t.isConditionalExpression(cursor)) return null; // some other ternary (per-viewport, CMS, …)
+      if (!('default' in out.vars) && !('default' in out.literals)) {
+        if (t.isIdentifier(cursor)) out.vars['default'] = cursor.name;
+        else { const h = branchHtml(cursor); if (h === null) return null; out.literals['default'] = h; }
+      }
+      return out;
+    }
+    const h = branchHtml(e);
+    if (h === null) return null;
+    out.literals['default'] = h;
+    return out;
+  }
+  const hasExpr = (n: t.Node): boolean => t.isJSXExpressionContainer(n)
+    ? !(t.isStringLiteral(n.expression) || t.isJSXEmptyExpression(n.expression))
+    : (t.isJSXElement(n) || t.isJSXFragment(n)) ? n.children.some(hasExpr) : false;
+  if (el.children.some(hasExpr)) return null;
+  const open = el.openingElement, close = el.closingElement;
+  out.literals['default'] = close && open.end != null && close.start != null ? innerJsxToRichMessage(code.slice(open.end, close.start)) : '';
+  return out;
+}
+
+/** Write branches back onto `el` in the canonical shape. Returns HTML still to be written as the
+ *  element's children (all variants agree, no variable) — the caller runs it through the HTML → JSX
+ *  writer after generating — else null. */
+function writeTextBranches(el: t.JSXElement, b: FormattedBranches, code: string): string | null {
+  const opening = el.openingElement;
+  opening.attributes = opening.attributes.filter((a) => !(t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML'));
+  // A variant that says exactly what the default says is no override.
+  for (const k of [...Object.keys(b.vars), ...Object.keys(b.literals)]) {
+    if (k === 'default') continue;
+    if ((k in b.vars && b.vars[k] === b.vars['default']) || (k in b.literals && b.literals[k] === b.literals['default'])) {
+      delete b.vars[k]; delete b.literals[k];
+    }
+  }
+  const keys = [...new Set([...Object.keys(b.literals), ...Object.keys(b.vars)])].filter((k) => k !== 'default');
+  const idName = b.variantId ?? (/\bconst\s*\[\s*variant\b/.test(code) ? 'variant' : 'initialVariant');
+  const chain = (leaf: (k: string) => t.Expression): t.Expression => {
+    let expr = leaf('default');
+    for (let i = keys.length - 1; i >= 0; i--) {
+      expr = t.conditionalExpression(t.binaryExpression('===', t.identifier(idName), t.stringLiteral(keys[i])), leaf(keys[i]), expr);
+    }
+    return expr;
+  };
+  if (Object.keys(b.vars).length > 0) {
+    const expr = chain((k) => (b.vars[k] ? t.identifier(b.vars[k]) : t.stringLiteral(b.literals[k] ?? '')));
+    opening.attributes.push(t.jsxAttribute(
+      t.jsxIdentifier('dangerouslySetInnerHTML'),
+      t.jsxExpressionContainer(t.objectExpression([t.objectProperty(t.identifier('__html'), expr)])),
+    ));
+    el.children = [];
+    el.closingElement = null;
+    opening.selfClosing = true;
+    return null;
+  }
+  // No variable left — ordinary text again.
+  opening.selfClosing = false;
+  el.closingElement = t.jsxClosingElement(t.cloneNode(opening.name));
+  if (keys.length === 0) { el.children = [t.jsxText('x')]; return b.literals['default'] ?? ''; }
+  const htmlBranch = (html: string): t.Expression => (/<[a-z][^>]*>/i.test(html) ? variantTextBranch(html) : t.stringLiteral(decodeHtmlEntities(html)));
+  el.children = [t.jsxExpressionContainer(chain((k) => htmlBranch(b.literals[k] ?? '')))];
+  return null;
+}
+
+/** A node's text as per-variant branches (see readTextBranches), or null. */
+function readNodeTextBranches(code: string, nodeId: string): FormattedBranches | null {
+  const ast = parseJSX(code);
+  if (!ast) return null;
+  let out: FormattedBranches | null = null;
+  findFirstElementByDataId(ast, nodeId, (path, el) => { path.stop(); out = readTextBranches(el, code); });
+  return out;
+}
+
+/** Does this node carry a formatted-text binding (`__html` bound to a variable, any variant)? */
+export function isFormattedTextNodeInCode(code: string, nodeId: string): boolean {
+  const ast = parseJSX(code);
+  if (!ast) return false;
+  let hit = false;
+  findFirstElementByDataId(ast, nodeId, (path, el) => {
+    path.stop();
+    const ds = el.openingElement.attributes.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML');
+    hit = !!ds && formattedBranchesOfDangerAttr(ds.value) !== null;
+  });
+  return hit;
+}
+
+/**
+ * Apply one per-variant edit to a node's formatted text (see FormattedBranchOp). `variantKey` is a
+ * variant name, `default` for the primary. Binding a variable that doesn't exist yet declares it,
+ * with the text that variant shows now as its default. Pure string → string; unchanged code when the
+ * node's content can't take part (a CMS field, a translation call, …).
+ */
+export function setFormattedTextBranchInCode(code: string, nodeId: string, variantKey: string, op: FormattedBranchOp): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+  let childrenHtml: string | null = null;
+  let changed = false;
+  let newProp: { name: string; html: string } | null = null;
+  findFirstElementByDataId(ast, nodeId, (path, el) => {
+    path.stop();
+    const b = readTextBranches(el, code);
+    if (!b) { trace.error('variable-ops:formatted-branch-unreadable', { nodeId, variantKey, op: op.kind }); return; }
+    const k = variantKey;
+    // What this variant shows right now (its own branch, else the fallback's).
+    const shownHtml = (): string => {
+      const key = (k in b.vars || k in b.literals) ? k : 'default';
+      if (key in b.literals) return b.literals[key];
+      return (b.vars[key] ? readPropDefaultString(ast, b.vars[key]) : null) ?? '';
+    };
+    if (op.kind === 'var') {
+      if (readPropDefaultString(ast, op.prop) === null) newProp = { name: op.prop, html: shownHtml() };
+      b.vars[k] = op.prop; delete b.literals[k];
+    } else if (op.kind === 'literal') {
+      b.literals[k] = op.html; delete b.vars[k];
+    } else if (op.kind === 'detach') {
+      const html = shownHtml();
+      b.literals[k] = html; delete b.vars[k];
+    } else if (k !== 'default') {
+      delete b.vars[k]; delete b.literals[k];
+    }
+    childrenHtml = writeTextBranches(el, b, code);
+    changed = true;
+  });
+  if (!changed) return code;
+  const added = newProp as { name: string; html: string } | null;
+  if (added && !addPropToFunction(ast, added.name, added.html)) return code;
+  try {
+    let out = generate(ast, { retainLines: true }, code).code;
+    if (childrenHtml !== null) out = updateNodeChildrenFromHTML(out, nodeId, childrenHtml);
+    trace.action('variable-ops:formatted-branch', { nodeId, variantKey, op: op.kind, declared: added?.name ?? null });
+    return out;
+  } catch (err) {
+    trace.error('variable-ops:formatted-branch-failed', { nodeId, variantKey, error: err instanceof Error ? err.message : String(err) });
+    return code;
+  }
+}
+
+/** × on a formatted binding: the variable's value becomes literal text — on the primary only (variants
+ *  bound to it on their own keep it), or everywhere + the prop removed on a full delete. */
+function unbindFormattedText(code: string, nodeId: string, propName: string, deleteProp: boolean): string | null {
+  const ast = parseJSX(code);
+  if (!ast) return null;
+  let childrenHtml: string | null = null;
+  let matched = false;
+  findFirstElementByDataId(ast, nodeId, (path, el) => {
+    path.stop();
+    const ds = el.openingElement.attributes.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML');
+    const b = ds ? formattedBranchesOfDangerAttr(ds.value) : null;
+    if (!b || !Object.values(b.vars).includes(propName)) return;
+    matched = true;
+    const html = readPropDefaultString(ast, propName) ?? '';
+    const keys = !deleteProp && b.vars['default'] === propName
+      ? ['default']
+      : Object.keys(b.vars).filter((k) => b.vars[k] === propName);
+    for (const k of keys) { b.literals[k] = html; delete b.vars[k]; }
+    childrenHtml = writeTextBranches(el, b, code);
+  });
+  if (!matched) return null;
+  if (deleteProp) removePropFromFunction(ast, propName);
+  try {
+    let out = generate(ast, { retainLines: true }, code).code;
+    if (childrenHtml !== null) out = updateNodeChildrenFromHTML(out, nodeId, childrenHtml);
+    trace.action('variable-ops:remove-formatted-text', { nodeId, propName, deleteProp });
+    return out;
+  } catch (err) {
+    trace.error('variable-ops:unbindFormattedText-failed', { nodeId, propName, error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
+/** Drop a node's `dangerouslySetInnerHTML` (when `isOurs(attr.value)`) and write `html` as its children. */
+function reopenWithHtmlChildren(
+  code: string, nodeId: string, isOurs: (attrValue: t.JSXAttribute['value']) => boolean, html: string,
+  alsoInAst?: (ast: NonNullable<ReturnType<typeof parseJSX>>) => void,
+): string | null {
+  const ast = parseJSX(code);
+  if (!ast) return null;
+  let matched = false;
+  findFirstElementByDataId(ast, nodeId, (path, el) => {
+    const opening = el.openingElement;
+    path.stop();
+    const attr = opening.attributes.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML');
+    if (!attr || !isOurs(attr.value)) return;
+    matched = true;
+    opening.attributes = opening.attributes.filter((a) => a !== attr);
+    opening.selfClosing = false;
+    el.closingElement = t.jsxClosingElement(t.cloneNode(opening.name));
+    el.children = [t.jsxText('x')];
+  });
+  if (!matched) return null;
+  alsoInAst?.(ast);
+  try {
+    const opened = generate(ast, { retainLines: true }, code).code;
+    return updateNodeChildrenFromHTML(opened, nodeId, html || '');
+  } catch (err) {
+    trace.error('variable-ops:reopen-html-children-failed', { nodeId, error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
+/**
+ * DETACH counterpart of a formatted-text binding: once an instance's prop
+ * references are substituted with their values, a formatted text element reads
+ * `dangerouslySetInnerHTML={{ __html: "<strong>Hi</strong>" }}` — a page can't
+ * edit or even paint that (only the prop-bound shape resolves). Bake each such
+ * element among `ids` back into its own formatted children. Pure string → string.
+ */
+export function bakeLiteralFormattedTextInCode(code: string, ids: ReadonlySet<string>): string {
+  const literalHtml = (v: t.JSXAttribute['value']): string | null => {
+    const obj = v?.type === 'JSXExpressionContainer' ? v.expression : null;
+    if (!obj || !t.isObjectExpression(obj) || obj.properties.length !== 1) return null;
+    const pr = obj.properties[0];
+    if (!t.isObjectProperty(pr) || !(t.isIdentifier(pr.key, { name: '__html' }) || t.isStringLiteral(pr.key, { value: '__html' }))) return null;
+    if (t.isStringLiteral(pr.value)) return pr.value.value;
+    if (t.isTemplateLiteral(pr.value) && pr.value.expressions.length === 0) return pr.value.quasis[0]?.value.cooked ?? null;
+    return null;
+  };
+  const ast = parseJSX(code);
+  if (!ast) return code;
+  const found: Array<{ id: string; html: string }> = [];
+  traverse(ast, {
+    JSXOpeningElement(path) {
+      const attrs = path.node.attributes;
+      const idAttr = attrs.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'data-id' && t.isStringLiteral(a.value));
+      const id = idAttr && t.isStringLiteral(idAttr.value) ? idAttr.value.value : null;
+      if (!id || !ids.has(id)) return;
+      const ds = attrs.find((a): a is t.JSXAttribute => t.isJSXAttribute(a) && a.name.name === 'dangerouslySetInnerHTML');
+      const html = ds ? literalHtml(ds.value) : null;
+      if (html !== null) found.push({ id, html });
+    },
+  });
+  let out = code;
+  for (const { id, html } of found) out = reopenWithHtmlChildren(out, id, (v) => literalHtml(v) !== null, html) ?? out;
+  if (found.length > 0) trace.action('variable-ops:bake-literal-formatted-text', { count: found.length });
+  return out;
 }
 
 /**
@@ -1434,6 +1819,13 @@ export function removeTextVariableInCode(
 ): string {
   const ast = parseJSX(code);
   if (!ast) return code;
+
+  // FORMATTED-TEXT binding (`dangerouslySetInnerHTML={{ __html: … }}`, any variant): the variable's
+  // HTML becomes the text — formatted children once no variable is left, not a flat literal.
+  {
+    const unbound = unbindFormattedText(code, nodeId, propName, deleteProp);
+    if (unbound !== null) return unbound;
+  }
 
   // The literal to inject: the caller's value, else the variable's SIGNATURE default (so unbinding shows
   // the variable's text — `<p>{content}</p>` → `<p>qsdgsdgq</p>`, not an empty `<p>`). The × pill passes

@@ -497,7 +497,7 @@ const VARIANT_RICH_RE = /<[a-z][^>]*>/i;
  * Parse failure falls back to tag-stripped plain text: a mark may be lost,
  * the words never are, and raw markup NEVER lands in a string literal.
  */
-function variantTextBranch(text: string): t.Expression {
+export function variantTextBranch(text: string): t.Expression {
   if (!VARIANT_RICH_RE.test(text)) return t.stringLiteral(text);
   try {
     const wrapperAst = parseJSX(`<_>${htmlToJSX(text)}</_>`);

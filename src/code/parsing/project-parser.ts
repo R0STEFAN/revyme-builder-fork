@@ -1244,6 +1244,7 @@ function expandComponent(
       }
     }
 
+    const instanceVariantText = bindInstanceVariantText(node, instanceProps);
     allNodes.set(prefixedId, {
       ...node,
       id: prefixedId,
@@ -1258,7 +1259,8 @@ function expandComponent(
       // renders whatever `title` is on the parent. The parser has to do it
       // manually here because expansion already resolved `{title}` into the
       // master's default at parse time.
-      textContent: overriddenTextContent !== null ? overriddenTextContent : node.textContent,
+      textContent: overriddenTextContent !== null ? overriddenTextContent : (instanceVariantText.textContent ?? node.textContent),
+      conditionalText: instanceVariantText.conditionalText,
       componentFile: componentInfo.filePath,
       componentInstanceId: instanceNode.id,
       isComponentRoot: isRoot,
@@ -1311,6 +1313,30 @@ function expandComponent(
     instanceId: instanceNode.id,
     expandedNodes: componentNodes.size,
   });
+}
+
+/**
+ * PER-VARIANT text bound to variables (`conditionalTextVariable`, variant → prop; `default` = the
+ * ternary fallback): the master parse baked every such branch with the MASTER's default. An instance
+ * passes its own values, so re-evaluate those branches — and the fallback text — with the instance's
+ * props, exactly as React evaluates the ternary live. Literal branches (a variant detached from the
+ * variable) are untouched. Formatted and plain per-variant text alike.
+ */
+function bindInstanceVariantText(
+  node: CanvasNode,
+  instanceProps: Record<string, string>,
+): { conditionalText: CanvasNode['conditionalText']; textContent?: string } {
+  const ctv = node.conditionalTextVariable;
+  if (!ctv || !node.conditionalText) return { conditionalText: node.conditionalText };
+  let conditionalText = node.conditionalText;
+  let textContent: string | undefined;
+  for (const [variant, prop] of Object.entries(ctv)) {
+    if (!(prop in instanceProps)) continue;
+    if (conditionalText === node.conditionalText) conditionalText = { ...node.conditionalText };
+    conditionalText[variant] = instanceProps[prop];
+    if (variant === 'default') textContent = instanceProps[prop];
+  }
+  return { conditionalText, textContent };
 }
 
 /**
@@ -1369,6 +1395,7 @@ export function resolveInstancePropOverrides(
     let match;
     while ((match = styleRegex.exec(componentCode)) !== null) {
       const cssProp = match[1];
+      if (cssProp === '__html') continue; // a formatted text variable — handled as text below
       const nodeId = findEnclosingDataId(match.index);
       if (nodeId) {
         result.set(`${propName}:${nodeId}`, { kind: 'style', nodeId, cssProp, value: propValue });
@@ -1461,6 +1488,22 @@ export function resolveInstancePropOverrides(
         // Use a `text:` prefixed key so it doesn't collide with style overrides
         // for the same nodeId (rare but possible if a prop drives both).
         result.set(`text:${propName}:${nodeId}`, { kind: 'text', nodeId, value: propValue });
+      }
+    }
+
+    // ── Formatted text usage: `dangerouslySetInnerHTML={{ __html: propName }}` ──
+    // The value is inline HTML; the master parse flagged the node mixed, so the
+    // Renderer paints the override as innerHTML. The attribute can sit BEFORE
+    // `data-id` in its tag, so the id is read from the whole opening tag.
+    const htmlRegex = new RegExp(`dangerouslySetInnerHTML=\\{\\{\\s*(?:__html|['"]__html['"])\\s*:\\s*${propName}\\s*\\}\\}`, 'g');
+    let htmlMatch;
+    while ((htmlMatch = htmlRegex.exec(componentCode)) !== null) {
+      const tagStart = componentCode.lastIndexOf('<', htmlMatch.index);
+      const tagEnd = componentCode.indexOf('>', htmlMatch.index + htmlMatch[0].length);
+      if (tagStart < 0 || tagEnd < 0) continue;
+      const idMatch = /data-id="([^"]*)"/.exec(componentCode.slice(tagStart, tagEnd));
+      if (idMatch) {
+        result.set(`text:${propName}:${idMatch[1]}`, { kind: 'text', nodeId: idMatch[1], value: propValue });
       }
     }
   }

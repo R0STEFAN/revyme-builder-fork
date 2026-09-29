@@ -282,20 +282,6 @@ function menuZoomFit(): void {
 
 // ─── Submenu definitions (kept-as-submenu items only) ───────────────────────
 
-// Site Settings keeps a submenu — multi-page domain / SEO / analytics
-// surfaces, each likely to grow.
-const siteSettingsSubmenu: DropdownMenuEntry[] = [
-  { id: 'site-domain', label: 'Domain', onClick: stub('site-domain') },
-  { id: 'site-seo', label: 'SEO', onClick: stub('site-seo') },
-  { id: 'site-analytics', label: 'Analytics', onClick: stub('site-analytics') },
-];
-
-// Plugins keeps a submenu — browse vs manage are clearly distinct entry points.
-const pluginsSubmenu: DropdownMenuEntry[] = [
-  { id: 'plugins-browse', label: 'Browse plugins…', onClick: stub('plugins-browse') },
-  { id: 'plugins-manage', label: 'Manage installed', onClick: stub('plugins-manage') },
-];
-
 /** Builder accent themes — recolours the EDITOR chrome (not the user's site).
  *  Takes the live value + setter (same shape as buildPreferencesSubmenu) so
  *  the checkmark tracks the selection; reading a module-level value here would
@@ -422,7 +408,7 @@ export function buildTabs(preferencesSubmenu: DropdownMenuEntry[]): TabSpec[] {
       // `src/canvas/shortcuts.ts` (search for `menuNewProject`).
       { id: 'file-new-project', label: 'New project', shortcut: 'Ctrl+Alt+N', onClick: () => createAndOpenProject() },
       { id: 'file-new', label: 'New page', onClick: () => menuNewPage() },
-      { id: 'file-export', label: 'Export…', onClick: stub('file-export') },
+      // No bare "Export…": it was a stub that did nothing — "Export code…" below is the real export.
       { type: 'separator' },
       // Create Remix Link — uploads the current project as a
       // shareable template. Same URL works two ways: friends with the
@@ -446,10 +432,8 @@ export function buildTabs(preferencesSubmenu: DropdownMenuEntry[]): TabSpec[] {
           getDefaultStore().set(exportDropdownOpenAtom, true);
         },
       },
-      { type: 'separator' },
-      // Project-scoped configuration — kept as submenus.
-      { id: 'site-settings', label: 'Site Settings', submenuItems: siteSettingsSubmenu, onClick: () => {} },
-      { id: 'plugins', label: 'Plugins', submenuItems: pluginsSubmenu, onClick: () => {} },
+      // No Site Settings / Plugins submenus: every entry in them was a stub that did nothing (site
+      // settings live in the Settings overlay, plugins in the command palette).
       // "Go to Dashboard" + "Your Account" live in the LeftHeader's
       // Revyme-logo dropdown — they're account-level actions that
       // don't really belong with project-file actions like New/Export.

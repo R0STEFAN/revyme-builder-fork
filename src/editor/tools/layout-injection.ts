@@ -398,6 +398,7 @@ export function rebaseChildrenForDirectionFlip(opts: {
       width: eff.width,
       height: eff.height,
       position: eff.position,
+      alignSelf: eff.alignSelf,
     });
   }
 

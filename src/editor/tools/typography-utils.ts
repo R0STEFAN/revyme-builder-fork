@@ -13,9 +13,17 @@ export const TYPO_SUFFIXES = [
   'line-height-md', 'line-height-sm', 'line-height',
   'spacing-md', 'spacing-sm', 'spacing',
   'size-md', 'size-sm', 'size',
+  // OPTIONAL text stroke (only presets that set one carry these). Before `color` — longest first —
+  // or `typo-x-stroke-color` would group as preset "x-stroke".
+  'stroke-width', 'stroke-color',
   'decoration', 'transform', 'shadow',
   'weight', 'color', 'font', 'tag',
 ];
+
+/** Text-stroke width is stored in `em` — relative to the font size, so ONE value keeps the same
+ *  proportion at every breakpoint (a px stroke on a 144px desktop heading reads 3× heavier at 48px
+ *  on mobile). */
+export const TYPO_STROKE_UNIT = 'em';
 
 /** The HTML element a typography preset renders as. Stored as the `-tag` token (`typo-<slug>-tag`) so
  *  applying the preset can also retag the element (p → h2, etc.) — mirroring the reference's Paragraph/Heading
@@ -83,9 +91,21 @@ export function groupTypoTokens(tokens: PresetToken[]): TypoGroup[] {
 
 // ─── Token value helpers ─────────────────────────────────────────────────────
 
+/** The full token name for a suffix within a group. */
+export function typoTokenName(group: Pick<TypoGroup, 'name'>, suffix: string): string {
+  return `typo-${group.name}-${suffix}`;
+}
+
+/** The group's token for a suffix — by EXACT name. An `endsWith('-' + suffix)` lookup read
+ *  `typo-x-stroke-color` as the preset's `color`. */
+export function findTypoToken(group: TypoGroup, suffix: string): PresetToken | undefined {
+  const name = typoTokenName(group, suffix);
+  return group.tokens.find(t => t.name === name);
+}
+
 /** Get the token value for a suffix within a group */
 export function getTypoTokenValue(group: TypoGroup, suffix: string): string {
-  return group.tokens.find(t => t.name.endsWith('-' + suffix))?.value ?? '';
+  return findTypoToken(group, suffix)?.value ?? '';
 }
 
 /** The element tag a preset renders as (`p` when unset — legacy presets had no tag token). */
@@ -121,7 +141,30 @@ export const TYPO_VAR_PROP_MAP: Record<string, string> = {
   size: 'fontSize',
   spacing: 'letterSpacing',
   'line-height': 'lineHeight',
+  // Longhands, not the `WebkitTextStroke` shorthand: width and color are separate tokens.
+  'stroke-width': 'WebkitTextStrokeWidth',
+  'stroke-color': 'WebkitTextStrokeColor',
 };
+
+/**
+ * The inline-style patch that APPLIES a preset to a node with `styles`: every prop the preset has a
+ * token for → `var(--typo-<group>-<suffix>)`. Two clean-ups ride along:
+ *   - a prop the preset has NO token for (stroke is optional) but that still points at ANOTHER
+ *     preset's var — left over from the previously applied preset — is cleared, so switching from a
+ *     stroked preset to a plain one drops the old stroke;
+ *   - a preset with a stroke clears the node's `WebkitTextStroke` shorthand, which would otherwise
+ *     fight the longhands by key order.
+ * Shared by the Text Style panel's apply and the agent's apply_typography_preset.
+ */
+export function presetApplyStyles(group: TypoGroup, styles: Record<string, string> = {}): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [suffix, cssProp] of Object.entries(TYPO_VAR_PROP_MAP)) {
+    if (findTypoToken(group, suffix)) out[cssProp] = `var(--${typoTokenName(group, suffix)})`;
+    else if (/^var\(\s*--typo-/.test(styles[cssProp] ?? '')) out[cssProp] = '';
+  }
+  if (findTypoToken(group, 'stroke-width') && styles.WebkitTextStroke) out.WebkitTextStroke = '';
+  return out;
+}
 
 /**
  * When DETACHING a typography preset, return the inline-style patch that BAKES

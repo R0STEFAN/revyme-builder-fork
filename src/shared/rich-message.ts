@@ -25,6 +25,62 @@ export const RICH_MESSAGE_STYLE_PROPS: ReadonlySet<string> = new Set([
   'text-transform', 'opacity',
 ]);
 
+/**
+ * The FORMATTED-TEXT variable shape on a text element:
+ *   `<p … dangerouslySetInnerHTML={{ __html: body }} />`
+ * where `body` is a component prop (@propMeta type `formattedText`) holding
+ * sanitized inline HTML — the same allow-list as a rich message. Per variant,
+ * the `__html` value is a variant ternary whose branches are formatted
+ * variables or literal HTML —
+ *   `{{ __html: initialVariant === 'tablet' ? "Hi <strong>you</strong>" : content }}`
+ * (a variant detached from the variable, or bound to one on its own). Keys are
+ * variant names plus `default` for the final fallback. Null for any other shape,
+ * and for an all-literal ternary (no variable left — that is plain per-variant
+ * text, written as children). Shared by the parser, the oracle and the
+ * generators so all three agree on the shape.
+ */
+export interface FormattedBranches {
+  vars: Record<string, string>;
+  literals: Record<string, string>;
+  /** The variant identifier the ternary tests (`initialVariant` / `variant`), when there is one. */
+  variantId: string | null;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function formattedBranchesOfDangerAttr(attrValue: any): FormattedBranches | null {
+  const obj = attrValue?.type === 'JSXExpressionContainer' ? attrValue.expression : null;
+  if (!obj || obj.type !== 'ObjectExpression' || obj.properties.length !== 1) return null;
+  const pr = obj.properties[0];
+  const isHtmlKey = pr?.type === 'ObjectProperty'
+    && ((pr.key.type === 'Identifier' && pr.key.name === '__html') || (pr.key.type === 'StringLiteral' && pr.key.value === '__html'));
+  if (!isHtmlKey) return null;
+  const out: FormattedBranches = { vars: {}, literals: {}, variantId: null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const take = (key: string, node: any): boolean => {
+    if (key in out.vars || key in out.literals) return true; // first match wins, like the runtime ternary
+    if (node?.type === 'Identifier') { out.vars[key] = node.name; return true; }
+    if (node?.type === 'StringLiteral') { out.literals[key] = node.value; return true; }
+    if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) { out.literals[key] = node.quasis[0]?.value.cooked ?? ''; return true; }
+    return false;
+  };
+  let cursor = pr.value;
+  while (cursor?.type === 'ConditionalExpression'
+    && cursor.test?.type === 'BinaryExpression' && cursor.test.operator === '==='
+    && cursor.test.left?.type === 'Identifier'
+    && (cursor.test.left.name === 'initialVariant' || cursor.test.left.name === 'variant')
+    && cursor.test.right?.type === 'StringLiteral') {
+    out.variantId = cursor.test.left.name;
+    if (!take(cursor.test.right.value, cursor.consequent)) return null;
+    cursor = cursor.alternate;
+  }
+  if (!take('default', cursor)) return null;
+  return Object.keys(out.vars).length > 0 ? out : null;
+}
+
+/** Inline HTML for a PLAIN string (a plain per-variant branch entering a formatted ternary). */
+export function plainTextToRichHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
 /** True when the value carries inline markup (needs the rich paint path). */
 export function isRichHtml(value: string | null | undefined): boolean {
   return typeof value === 'string' && /<[a-z][^>]*>/i.test(value);

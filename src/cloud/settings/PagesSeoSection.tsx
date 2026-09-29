@@ -22,6 +22,7 @@ import {
   ROW_INPUT_CLS,
   SaveButton,
   RowSelect,
+  Toggle,
 } from '@/editor/overlays/settings-shared';
 import ImageSearchModal from '@/editor/ui/ImageSearchModal';
 import { trace } from '@/shared/debug-trace';
@@ -573,22 +574,11 @@ function RobotsToggle({
   hint: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 py-1">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer ${
-          value ? 'bg-[var(--accent)]' : 'bg-[var(--grid-line)] border border-[var(--control-border)]'
-        }`}
-      >
-        <span
-          className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-            value ? 'translate-x-[1.125rem]' : 'translate-x-1'
-          }`}
-        />
-      </button>
+    <div className="flex flex-col items-start gap-1 py-1">
+      {/* The Settings overlay's shared switch. The hand-rolled one here had an `absolute` thumb
+          with no `left`, so it sat at the button's centred static position and `translate-x`
+          pushed it off the end of the track. */}
+      <Toggle value={value} onChange={onChange} />
       <span className="text-[10px] text-[var(--text-tertiary)] leading-relaxed">{hint}</span>
     </div>
   );

@@ -7,7 +7,7 @@ import { useSetAtom } from 'jotai';
 import { List, useListRef, type RowComponentProps } from 'react-window';
 import { fetchGoogleFonts, DEFAULT_FONTS, FEELING_CATEGORIES, type FontItem } from '@/shared/google-fonts';
 import { loadGoogleFont, loadFontFromCSSValue, loadCustomFont } from '@/shared/font-loader';
-import { useWorkspaceFonts, ensureWorkspaceFonts, applyWorkspaceFontToProject } from '@/code/stores/workspace-fonts-store';
+import { useWorkspaceFonts, ensureWorkspaceFonts, applyWorkspaceFontToProject, previewWorkspaceFontInCanvas } from '@/code/stores/workspace-fonts-store';
 import type { WorkspaceFont } from '@/backend/types';
 import ToolPopup from './ToolPopup';
 import { ControlLabel } from '../controls';
@@ -379,7 +379,9 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
                     className="py-[2px]"
                     onClick={() => handleWorkspaceSelect(font)}
                     onMouseDown={e => e.stopPropagation()}
-                    onMouseEnter={() => onPreview?.(cssFamily)}
+                    // Declare the face in the canvas iframe first — a workspace font isn't in the
+                    // project's globals.css until it's picked, so the preview had nothing to render.
+                    onMouseEnter={() => { previewWorkspaceFontInCanvas(font.family); onPreview?.(cssFamily); }}
                   >
                     <div
                       className={`flex items-center justify-between px-3 py-2 cut-corners cursor-pointer transition-colors ${

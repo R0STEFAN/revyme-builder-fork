@@ -1,6 +1,6 @@
 import { describe, test, it, expect, vi } from 'vitest';
 import { parseJSXToNodes, type CanvasNode } from '../parsing/parser';
-import { computeLayoutBrackets } from '@/shared/flex-helpers';
+import { computeLayoutBrackets, mergeTemplateChildren, cssOrderValue } from '@/shared/flex-helpers';
 
 // Mock trace to avoid side effects
 vi.mock('@/shared/debug-trace', () => ({
@@ -69,14 +69,19 @@ function mergeLayoutIntoPage(pageCode: string, layoutCode: string): Map<string, 
     node.fromLayout = true;
     node.id = newId;
 
-    const kids = (origChildren.get(origId) || []).map((c: string) => 'layout::' + c);
+    let kids = (origChildren.get(origId) || []).map((c: string) => 'layout::' + c);
     if (origId === childrenParentId) {
       const beforeC = layoutCode.slice(0, childrenIdx);
       let insertIdx = 0;
       for (const kidId of (origChildren.get(origId) || [])) {
         if (beforeC.includes(`data-id="${kidId}"`)) insertIdx++;
       }
-      kids.splice(insertIdx, 0, ...pageSectionIds);
+      // Same helper store.ts uses — paint order, not source order.
+      kids = mergeTemplateChildren(
+        origChildren.get(origId) || [], insertIdx, pageSectionIds,
+        (kid) => cssOrderValue(layoutNodes.get(kid)?.styles?.order),
+        cssOrderValue(primaryPageRoot?.styles?.order),
+      );
     }
     node.children = kids;
 
@@ -185,6 +190,32 @@ describe('layout merge', () => {
     expect(parseInt(foot.styles.order!, 10)).toBeGreaterThanOrEqual(100000);
     // Page sections keep NO inline order (stripped — DOM order governs them).
     expect(merged.get('hero')!.styles.order).toBe('');
+  });
+
+  test('chrome written AFTER {children} but ordered before it paints ABOVE the page (header on top)', () => {
+    // The Neon Prime template: `{children}<Navbar style={{ order: '-1', position: 'sticky' }}/><Footer/>`.
+    // Live, flex paints the navbar first; the canvas merge bracketed by SOURCE position, so the
+    // navbar became trailing chrome, got a +100000 order, and the page's frame painted above it.
+    const LAYOUT_SLOT_FIRST = `<div data-id="layout-root" style={{display: 'flex', flexDirection: 'column', width: '100%'}}>
+  {children}
+  <nav data-id="navbar" style={{height: '60px', order: '-1'}}>Nav</nav>
+  <footer data-id="footer" style={{height: '40px'}}>Foot</footer>
+</div>`;
+    const merged = mergeLayoutIntoPage(PAGE, LAYOUT_SLOT_FIRST);
+    expect(merged.get('root')!.children).toEqual(['layout::navbar', 'hero', 'layout::footer']);
+    expect(parseInt(merged.get('layout::navbar')!.styles.order!, 10)).toBeLessThanOrEqual(-100000);
+    expect(parseInt(merged.get('layout::footer')!.styles.order!, 10)).toBeGreaterThanOrEqual(100000);
+  });
+
+  test('the page root\'s own order places the page among the chrome like live', () => {
+    const LAYOUT_ORDERED = `<div data-id="layout-root" style={{display: 'flex', flexDirection: 'column', width: '100%'}}>
+  <nav data-id="navbar" style={{order: '0'}}>Nav</nav>
+  <footer data-id="footer" style={{order: '2'}}>Foot</footer>
+  {children}
+</div>`;
+    const PAGE_ORDERED = PAGE.replace("style={{position: 'relative', width: '100%'}}", "style={{position: 'relative', width: '100%', order: '1'}}");
+    const merged = mergeLayoutIntoPage(PAGE_ORDERED, LAYOUT_ORDERED);
+    expect(merged.get('root')!.children).toEqual(['layout::navbar', 'hero', 'layout::footer']);
   });
 
   test('layout with no {children} returns page nodes unchanged', () => {

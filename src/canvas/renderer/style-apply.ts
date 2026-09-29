@@ -111,31 +111,64 @@ export function applyStrokeAlignment(el: Element, type: string, attrs: Record<st
 }
 
 /**
- * Overflow the INSTANCE WRAPPER must carry, mirrored from the component
- * ROOT's resolved styles.
+ * Does the component ROOT clip (its resolved overflow on either axis is
+ * anything but visible)? The root carries the instance's own overflow too —
+ * expandComponent merges the instance styles onto it, like `...style` live.
+ */
+export function instanceRootClips(rootStyles: Record<string, unknown> | null | undefined): boolean {
+  return ['overflow', 'overflowX', 'overflowY'].some((k) => {
+    const o = rootStyles?.[k];
+    return typeof o === 'string' && o.trim() !== '' && o.trim() !== 'visible';
+  });
+}
+
+/**
+ * Clip parity for the INSTANCE WRAPPER.
  *
  * The canvas renders an instance as TWO divs (wrapper + inner root) while the
  * live site renders ONE (the master root, carrying the instance styles via the
  * `...style` spread). The wrapper — not the inner root — is the actual FLEX
  * ITEM in the parent layout, and CSS's automatic-minimum-size rule keys off
  * the flex item's own overflow: `min-width/min-height: auto` resolves to the
- * content size when the item's overflow is `visible`, but to 0 when it clips
- * (hidden/clip/auto/scroll). So a clipping master root on the live site lets
- * `flex-basis: 0` collapse the instance below its content size — while the
- * canvas's old hard-coded `wrapper.overflow = 'visible'` pinned the minimum at
- * content size and silently masked the collapse (live find 2026-07-05: an
- * AboutPoint row flipped to column showed full cards on the canvas tablet
- * tile but half-cut cards on the live site).
+ * content size when the item's overflow is `visible`, but to 0 when it clips.
+ * So a clipping master root on the live site lets `flex-basis: 0` collapse the
+ * instance below its content size (live find 2026-07-05: an AboutPoint row
+ * flipped to column showed full cards on the canvas tablet tile but half-cut
+ * cards on the live site).
  *
- * Mirroring the root's clipping overflow onto the wrapper restores parity:
- * same flex item, same min-size behaviour, same clip. Returns 'visible' when
- * the root doesn't clip (the wrapper's historical default).
+ * That parity is a MIN-SIZE effect, so the wrapper gets `min-width` /
+ * `min-height: 0` when the root clips — never a clip of its own. The earlier
+ * fix mirrored the root's `overflow: hidden` onto the wrapper, which also cut
+ * the root's OWN outer paint (box-shadow, outline, a drop-shadow filter): the
+ * live site never clips those, because an element's overflow clips its
+ * children, not its own shadow. A navbar card's shadow was cut flat at the
+ * card's edge on the canvas only (user report 2026-09-25). The root keeps its
+ * overflow, so its children clip exactly as they do live.
+ *
+ * An instance-set min bound wins: a value already on the wrapper that this
+ * helper did not put there is left alone (per-axis `data-rv-min-*` flags mark
+ * ours), and the renderer's style pass re-applies the instance's own bound.
+ * Returns whether the root clips.
  */
-export function resolveInstanceWrapperOverflow(
+export function applyInstanceWrapperClipParity(
+  el: HTMLElement,
   rootStyles: Record<string, unknown> | null | undefined,
-): string {
-  const o = rootStyles?.overflow;
-  return typeof o === 'string' && o.trim() !== '' ? o : 'visible';
+): boolean {
+  if (el.style.overflow !== 'visible') el.style.overflow = 'visible';
+  const clips = instanceRootClips(rootStyles);
+  for (const [css, flag] of [['min-width', 'rvMinW'], ['min-height', 'rvMinH']] as const) {
+    const ours = el.dataset[flag] === '1';
+    if (clips) {
+      if (ours || !el.style.getPropertyValue(css)) {
+        el.style.setProperty(css, '0px');
+        el.dataset[flag] = '1';
+      }
+    } else if (ours) {
+      el.style.removeProperty(css);
+      delete el.dataset[flag];
+    }
+  }
+  return clips;
 }
 
 /**

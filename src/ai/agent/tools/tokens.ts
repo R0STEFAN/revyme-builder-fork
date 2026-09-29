@@ -17,7 +17,7 @@ import { getPresetTokens, ensureGoogleFontImport } from '@/code/project/preset-o
 import { scanPresetUsage } from '@/code/stores/preset-store';
 import { refreshCanvasTokens } from '@/canvas/node-ops';
 import {
-  TYPO_SUFFIXES, TYPO_VAR_PROP_MAP, RESPONSIVE_PROPS, createDefaultTypoTokens, groupTypoTokens, getTypoTag, getTypoTokenValue,
+  TYPO_SUFFIXES, presetApplyStyles, findTypoToken, RESPONSIVE_PROPS, createDefaultTypoTokens, groupTypoTokens, getTypoTag, getTypoTokenValue,
 } from '@/editor/tools/typography-utils';
 import type { PresetToken } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
@@ -123,7 +123,7 @@ export const setTypographyPresetTool: AgentTool = {
   name: 'set_typography_preset',
   description:
     'Create or update a TYPOGRAPHY PRESET (a text style: "Heading", "Body") — one family of tokens the Text Style panel groups (font, weight, size, line-height, spacing, color, and optional responsive size-md / size-sm tiers). ' +
-    'name is kebab-case ("heading", "body-large"); tag is the element it renders as; values are keyed by suffix: font, weight, size, line-height (unitless), spacing, color, transform, decoration, shadow, size-md, size-sm, line-height-md, line-height-sm, spacing-md, spacing-sm, min-default, min-md. ' +
+    'name is kebab-case ("heading", "body-large"); tag is the element it renders as; values are keyed by suffix: font, weight, size, line-height (unitless), spacing, color, transform, decoration, shadow, size-md, size-sm, line-height-md, line-height-sm, spacing-md, spacing-sm, min-default, min-md — plus an OPTIONAL text stroke: stroke-width (in em, e.g. "0.015em" — scales with the size on every breakpoint) and stroke-color. ' +
     'Then put it on text with apply_typography_preset. Never hand-write typo-* tokens — the family has to be built as a whole.',
   inputSchema: {
     name: z.string().describe('preset slug, kebab-case, e.g. "heading"'),
@@ -138,6 +138,7 @@ export const setTypographyPresetTool: AgentTool = {
     const valid = new Set<string>(TYPO_SUFFIXES);
     for (const k of Object.keys(overrides)) if (!valid.has(k)) return fail(`Unknown typography suffix "${k}". Valid: ${TYPO_SUFFIXES.join(', ')}.`);
     if (overrides['line-height'] && /px|em|rem|%/.test(overrides['line-height'])) return fail("line-height must be a unitless ratio ('1.2') — never px.");
+    if (overrides['stroke-width'] && !/^\d*\.?\d+em$/.test(overrides['stroke-width'].trim())) return fail("stroke-width is in em ('0.015em') so it scales with the font size — never px.");
     if (isBranchedRun(ctx)) return fail('Presets are written on the active branch only — run unbranched.');
     const tag = String(args.tag ?? overrides.tag ?? 'p');
     const family = createDefaultTypoTokens(name, tag);
@@ -149,6 +150,8 @@ export const setTypographyPresetTool: AgentTool = {
     }
     if (overrides.font) ensureGoogleFontImport(String(overrides.font));
     const current = new Set(getPresetTokens().map((t) => t.name));
+    // An existing preset GAINING a stroke: texts already using it hold no reference to the new tokens.
+    const strokeAdded = current.has(`typo-${name}-font`) && !current.has(`typo-${name}-stroke-width`) && !!overrides['stroke-width'];
     ctx.ensureCheckpoint();
     for (const t of family) {
       if (current.has(t.name)) queueToolMutation(ctx, { type: 'updatePresetToken', name: t.name, value: t.value });
@@ -157,7 +160,12 @@ export const setTypographyPresetTool: AgentTool = {
     flushTool(ctx);
     bump();
     trace.action('agent-tool:set_typography_preset', { name, tag, tokens: family.length });
-    return ok({ preset: name, tag, tokens: family.map((t) => ({ name: t.name, value: t.value })), next: `apply_typography_preset on each text node that should use it` });
+    return ok({
+      preset: name, tag, tokens: family.map((t) => ({ name: t.name, value: t.value })),
+      next: strokeAdded
+        ? 'the preset now has a text stroke — apply_typography_preset again on every text already using it (they hold no reference to the new stroke), and on any new text'
+        : 'apply_typography_preset on each text node that should use it',
+    });
   },
 };
 
@@ -180,10 +188,8 @@ export const applyTypographyPresetTool: AgentTool = {
     const node = getToolNodes(ctx).get(nodeId);
     if (!node) return fail(`No node "${nodeId}" in the active file.`);
     ctx.ensureCheckpoint();
-    const styles: Record<string, string> = {};
-    for (const [suffix, cssProp] of Object.entries(TYPO_VAR_PROP_MAP)) {
-      if (group.tokens.some((t) => t.name.endsWith(`-${suffix}`))) styles[cssProp] = `var(--typo-${group.name}-${suffix})`;
-    }
+    // Same patch as the Text Style panel's apply (stale other-preset refs + stroke shorthand cleared).
+    const styles = presetApplyStyles(group, node.styles ?? {});
     queueToolMutation(ctx, { type: 'updateStyles', nodeId, styles });
     const presetTag = getTypoTag(group);
     const currentTag = (node.type || '').toLowerCase();
@@ -195,7 +201,7 @@ export const applyTypographyPresetTool: AgentTool = {
       if (maxWidth <= 0) continue;
       const tierStyles: Record<string, string> = {};
       for (const [propSuffix, cssProp] of Object.entries(RESPONSIVE_PROPS)) {
-        if (group.tokens.some((t) => t.name.endsWith(`-${propSuffix}-${tier}`))) tierStyles[cssProp] = `var(--typo-${group.name}-${propSuffix}-${tier})`;
+        if (findTypoToken(group, `${propSuffix}-${tier}`)) tierStyles[cssProp] = `var(--typo-${group.name}-${propSuffix}-${tier})`;
       }
       if (Object.keys(tierStyles).length) queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId, maxWidth, styles: tierStyles });
     }

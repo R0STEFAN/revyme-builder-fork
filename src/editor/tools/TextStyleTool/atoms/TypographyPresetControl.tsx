@@ -20,7 +20,8 @@ import { projectVersionAtom } from '@/code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
 import {
   RESPONSIVE_PROPS,
-  TYPO_VAR_PROP_MAP as VAR_PROP_MAP,
+  presetApplyStyles,
+  findTypoToken,
   bakePresetStyles,
   groupTypoTokens,
   getTypoTokenValue,
@@ -226,7 +227,7 @@ function EditTypoPresetPanel({ group, nodeId, onClose }: { group: TypoGroup; nod
       if (maxWidth <= 0) continue;
       const containerStyles: Record<string, string> = {};
       for (const [propSuffix, cssProp] of Object.entries(RESPONSIVE_PROPS)) {
-        const token = updatedGroup.tokens.find(t => t.name.endsWith(`-${propSuffix}-${tier}`));
+        const token = findTypoToken(updatedGroup, `${propSuffix}-${tier}`);
         if (token) {
           containerStyles[cssProp] = `var(--typo-${updatedGroup.name}-${propSuffix}-${tier})`;
         }
@@ -347,15 +348,8 @@ export function TypographyPresetControl() {
    *  and @container rules for responsive tiers (md/sm). */
   const applyPreset = useCallback((group: TypoGroup) => {
     trace.action('typo-preset:apply', { group: group.name });
-    const styleUpdates: Record<string, string> = {};
-    // Bound properties → var() references
-    for (const [suffix, cssProp] of Object.entries(VAR_PROP_MAP)) {
-      const token = group.tokens.find(t => t.name.endsWith('-' + suffix));
-      if (token) {
-        styleUpdates[cssProp] = `var(--typo-${group.name}-${suffix})`;
-      }
-    }
-    updateMultipleStyles(styleUpdates);
+    // Bound properties → var() references (+ stale other-preset refs / stroke shorthand cleared).
+    updateMultipleStyles(presetApplyStyles(group, node?.styles ?? {}));
 
     // Clear stale @container rules for this node (from previous preset applications)
     // then generate fresh rules using the preset's own min-width breakpoints.
@@ -395,7 +389,7 @@ export function TypographyPresetControl() {
       if (maxWidth <= 0) continue;
       const containerStyles: Record<string, string> = {};
       for (const [propSuffix, cssProp] of Object.entries(RESPONSIVE_PROPS)) {
-        const token = group.tokens.find(t => t.name.endsWith(`-${propSuffix}-${tier}`));
+        const token = findTypoToken(group, `${propSuffix}-${tier}`);
         if (token) {
           containerStyles[cssProp] = `var(--typo-${group.name}-${propSuffix}-${tier})`;
         }

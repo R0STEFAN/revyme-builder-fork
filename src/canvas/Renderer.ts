@@ -29,7 +29,7 @@ import {
   setResponsiveBreakpoints, setIsComponentMaster, setAllViewportWidthsAsc,
 } from './renderer/responsive';
 import { positionOverlayInPortal, positionCanvasNodeOverlays, collectOverlayElsForRoot, rememberOverlayPlacements, classifyPortalChild, type OverlayPlacement } from './renderer/overlay-portals';
-import { applyStrokeAlignment, setElStyle, clearElStyle, resolveInstanceWrapperOverflow } from './renderer/style-apply';
+import { applyStrokeAlignment, setElStyle, clearElStyle, applyInstanceWrapperClipParity } from './renderer/style-apply';
 import { initCanvasImagePreview, isPreviewAppliedSrc } from './renderer/canvas-image-preview';
 import { applyNodeCmsBindings, applyBindingDataToTree, applyLocaleOverrides, clearLocaleStyleResidue } from './renderer/bindings';
 import { extractCanvasGlobals, canvasThemeMode } from './canvas-theme';
@@ -2175,19 +2175,18 @@ export function patchElement(
       el.style.removeProperty(prop);
     }
 
-    // Mirror the component ROOT's clipping overflow onto the wrapper (the
-    // wrapper is the real flex item — see resolveInstanceWrapperOverflow's
-    // rationale). Resolved through variants/@media so a per-variant or
-    // per-viewport overflow edit is honoured per tile. An instance-tag
-    // overflow (rare, user-set) still wins: the styleEntries patch loop below
-    // allow-lists `overflow` and runs after this.
+    // The wrapper never clips — it would cut the ROOT's own box-shadow, which
+    // the live site's single div never does. When the root clips, the wrapper
+    // (the real flex item) takes its min-size effect instead: min-width/height
+    // 0. Resolved through variants/@media so a per-variant or per-viewport
+    // overflow edit is honoured per tile. See applyInstanceWrapperClipParity.
     const wrapperRootNode = node.children[0] ? allNodes.get(node.children[0]) : null;
     const wrapperRootStyles = wrapperRootNode ? resolveVariantStyles(wrapperRootNode, variantName, vpWidth) : null;
-    const wrapperOverflow = resolveInstanceWrapperOverflow(wrapperRootStyles);
-    if (el.style.overflow !== wrapperOverflow) {
-      trace.dom('renderer:instance-wrapper-overflow', { nodeId: node.id, overflow: wrapperOverflow });
+    const hadMinParity = el.dataset.rvMinW === '1';
+    const rootClips = applyInstanceWrapperClipParity(el, wrapperRootStyles);
+    if (rootClips !== hadMinParity) {
+      trace.dom('renderer:instance-wrapper-min-parity', { nodeId: node.id, rootClips });
     }
-    el.style.overflow = wrapperOverflow;
     const root = el.firstElementChild as HTMLElement | null;
     if (root) {
       // If wrapper has no explicit dimension OF ITS OWN, take the component
@@ -2326,7 +2325,10 @@ export function patchElement(
         // painting the literal `auto` here would stomp it back to a
         // collapsing box.
         if ((key === 'width' || key === 'height') && value === 'auto') return false;
-        if (key === 'width' || key === 'height' || key === 'overflow') return true;
+        // No `overflow`: the instance's own overflow lives on the ROOT (the
+        // expandComponent merge, like `...style` live) — on the wrapper it
+        // would clip the root's shadow. See applyInstanceWrapperClipParity.
+        if (key === 'width' || key === 'height') return true;
         // `display: 'none'` from `hiddenOnVariants` MUST reach the wrapper so a
         // hidden instance is removed from layout (not just its inner content) —
         // otherwise the wrapper keeps its box: still in flow AND selectable on
@@ -3478,7 +3480,7 @@ function buildNodeElement(
       // Outer wrapper allow-list: positioning + dimensions + overflow, PLUS
       // `display:'none'` from hiddenOnVariants so a hidden instance is removed
       // from layout (not just its inner content). See the patchElement filter.
-      const wrapperAllowed = key === 'width' || key === 'height' || key === 'overflow'
+      const wrapperAllowed = key === 'width' || key === 'height'
         || (key === 'display' && value === 'none')
         || WRAPPER_ONLY_STYLE_PROPS.has(key);
       if (!wrapperAllowed) continue;
@@ -3549,17 +3551,12 @@ function buildNodeElement(
       if (!el.style.height && !node.styles.height && buildWrapperRootStyles.height) {
         el.style.height = buildWrapperRootStyles.height;
       }
-      // Mirror the root's clipping overflow on the FIRST paint too (same
-      // rationale as the patchElement path — the wrapper is the flex item, so
-      // its overflow decides the automatic minimum size / collapse parity with
-      // the deployed single-div instance). Instance-tag overflow (applied by
-      // the build style loop above) wins when present.
-      if (!el.style.overflow && !node.styles.overflow) {
-        const buildRootOverflow = resolveInstanceWrapperOverflow(resolveVariantStyles(rootNode, variantName, vpWidth));
-        if (buildRootOverflow !== 'visible') {
-          el.style.overflow = buildRootOverflow;
-          trace.dom('renderer:instance-wrapper-overflow-build', { nodeId: node.id, overflow: buildRootOverflow });
-        }
+      // Clip parity on the FIRST paint too (same rationale as the patchElement
+      // path): the wrapper never clips, and takes the root's min-size effect
+      // when the root clips. An instance-set min bound (applied by the build
+      // style loop above) is left alone.
+      if (applyInstanceWrapperClipParity(el, buildWrapperRootStyles)) {
+        trace.dom('renderer:instance-wrapper-min-parity-build', { nodeId: node.id });
       }
     }
   }

@@ -31,7 +31,7 @@ import { rehydrateScrollVariant, setScrollVariantInCode } from '../generation/sc
 import { healMissingFormStateDeclarations } from '../generation/form-state-gen';
 import { collectTransferableVariables, applyVariableTransfer, buildInstanceVariableAttrs } from './component-variable-transfer';
 import { detectHugAxes, type HugAxes, type StyleMap } from './master-root-sizing';
-import { hoistMapBindingsToProps, createLinkAttrVariableInCode } from '../features/variable-ops';
+import { hoistMapBindingsToProps, createLinkAttrVariableInCode, bakeLiteralFormattedTextInCode } from '../features/variable-ops';
 import { addPageVariableInCode } from '../features/page-variables';
 import { transferRootOverlayToInstanceInCode, transferDescendantOverlaysToMasterInCode } from '../generation/overlay-gen';
 import { generate, findTagClose } from '../generation/generator-utils';
@@ -2473,6 +2473,8 @@ export function detachInstance(
         }
       }
     }
+    // Formatted text resolved to a literal `__html` string → the element's own formatted children.
+    result = bakeLiteralFormattedTextInCode(result, new Set([...idMap.values(), ...(detachedRootId ? [detachedRootId] : [])]));
     // The carried hooks need their React named imports on the page.
     if (pageHooks.length > 0) result = syncImports(result);
 

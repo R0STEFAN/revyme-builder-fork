@@ -120,6 +120,7 @@ import {
 import { VariablePresetPillRow } from './ComponentPropsTool/VariablePresetPillRow';
 import { CodeComponentControlField } from './ComponentPropsTool/CodeComponentControlField';
 import { LinkVariableInstanceRow } from './ComponentPropsTool/LinkVariableInstanceRow';
+import { FormattedTextInstanceRow } from './ComponentPropsTool/FormattedTextInstanceRow';
 import { CursorVariableInstanceRow } from './ComponentPropsTool/CursorVariableInstanceRow';
 
 export {
@@ -948,7 +949,8 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
         if (node.textVariable === activeName) {
           for (const vpPrefix of targetVpPrefixes) {
             const el = contentEl.querySelector(`[data-node-id="${vpPrefix}${node.id}"]`) as HTMLElement | null;
-            if (el) el.textContent = value;
+            // A formatted text variable paints its (sanitized) HTML, like the Renderer does.
+            if (el) { if (node.formattedTextVariable) el.innerHTML = value; else el.textContent = value; }
           }
         }
 
@@ -1082,6 +1084,14 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       writeUseExpr = true;
       try { writeValue = JSON.stringify(JSON.parse(value || '[]')); } catch { writeValue = '[]'; }
     }
+    // A FORMATTED TEXT value is inline HTML — it holds both quote kinds (`<a href="…">`) and
+    // entities a JSX attribute string would DECODE (`&lt;` → a live `<`). Always a JS string
+    // literal: `content={"<strong>Hi</strong>"}`.
+    const isFormattedText = propVarType === 'formattedText';
+    if (isFormattedText) {
+      writeUseExpr = true;
+      writeValue = JSON.stringify(value);
+    }
 
     // Instant live preview — the canvas reflects the value at once.
     previewProp(propName, value);
@@ -1122,6 +1132,12 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
             propName, activeComponentVariant, writeValue, baseSeed,
           );
         });
+      } else if (isComponentFilePath(activeFile) && isFormattedText) {
+        // Formatted text inside a master: the per-variant ternary writer quotes values with
+        // bare `'…'` / `"…"`, which markup breaks — the value is written to the base prop.
+        modifyProjectFile(activeFile, (currentCode) => (value === (defaultValue ?? '') || value === '')
+          ? removeInstanceProp(currentCode, selectedId, componentInfo.name, propName)
+          : setInstanceProp(currentCode, selectedId, componentInfo.name, propName, writeValue, true));
       } else if (isComponentFilePath(activeFile)) {
         // COMPONENT FILE, DEFAULT variant: write the DEFAULT branch through
         // the conditional writer so existing per-variant branches SURVIVE —
@@ -2682,6 +2698,21 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                       <ControlLabel label={prop.label || prop.name} property="" plain={false} hideLocalize overridden={propOverridden} onResetOverride={propResetOverride} subLabel="Scroll Section" />
                       <ToolSelect value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} options={sectionOptions} />
                     </div>
+                  </HoistMenuItemProvider>
+                );
+              }
+              if (prop.varType === 'formattedText') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <FormattedTextInstanceRow
+                      label={prop.label || prop.name}
+                      propName={prop.name}
+                      value={propValue}
+                      defaultValue={prop.defaultValue}
+                      overridden={propOverridden}
+                      onResetOverride={propResetOverride}
+                      onChange={handlePropChange}
+                    />
                   </HoistMenuItemProvider>
                 );
               }

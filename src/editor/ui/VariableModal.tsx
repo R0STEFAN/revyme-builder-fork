@@ -13,6 +13,7 @@ import { buildComponentRegistry, parseComponentInfoFromSource, STRUCTURAL_PROPS,
 import { inferPropertyFromValue, resolveVariableCssProp, type ChildResolution } from '@/code/components/prop-css-mapping';
 import { getPropOptions, getPropOptionsLocked, getPropNumberMeta, getPropDescription, getPropLabel, parsePropMeta, type PropNumberMeta } from '@/code/components/prop-meta';
 import NumberVariableEditor from '../controls/NumberVariableEditor';
+import RichInlineEditor from './RichInlineEditor';
 import { VariableTypeIcon, resolveVariableIconKey } from '../controls/VariableTypeIcon';
 import { VariableTypePicker } from '../controls/VariableTypePicker';
 import { getVariableType, type VariableTypeDef } from '../controls/variable-types';
@@ -933,7 +934,18 @@ export default function VariableModal({
           return <NumberVariableEditor value={cleanVal} onChange={onChange} meta={selectedVar ? getPropNumberMeta(componentCode, selectedVar) : undefined} />;
         }
         case 'textarea':
-          return <AutoGrowTextarea value={value} onChange={onChange} placeholder="Default value" />;
+          // Formatted Text: the default is inline HTML — edit it with the rich editor
+          // (Cmd+B / I / U, link), commit on blur, preview live on the bound nodes.
+          return (
+            <RichInlineEditor
+              key={selectedVar ?? ''}
+              label={selectedVar ?? 'formatted-text-default'}
+              html={value}
+              fieldAttributes={{ 'data-formatted-text-default': selectedVar ?? '' }}
+              commitDelayMs={300}
+              onCommit={onChange}
+            />
+          );
         case 'option': {
           if (!selectedVar) return null;
           const optionVals = getPropOptions(componentCode, selectedVar);

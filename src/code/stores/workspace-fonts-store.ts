@@ -18,7 +18,7 @@ import { useSyncExternalStore } from 'react';
 import { trace } from '@/shared/debug-trace';
 import { backend } from '@/backend';
 import { getProjectId } from '@/backend/project-id';
-import { loadCustomFont } from '@/shared/font-loader';
+import { loadCustomFont, loadCustomFontInCanvas } from '@/shared/font-loader';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { addWorkspaceFontFacesToCss } from '@/code/project/preset-ops';
 import { forceCanvasRender } from '@/canvas/node-ops';
@@ -95,6 +95,19 @@ export function applyWorkspaceFontToProject(family: string): void {
   const before = modifyProjectFile('app/globals.css', css => addWorkspaceFontFacesToCss(css, specs));
   trace.action('workspace-fonts:applied-to-project', { family, weights: specs.length, changed: before != null });
   forceCanvasRender();
+}
+
+/** Font-picker HOVER preview: make every face of a workspace family resolvable inside the canvas
+ *  iframe right now — the project only declares it (globals.css) once the font is picked. */
+export function previewWorkspaceFontInCanvas(family: string): void {
+  for (const f of _fonts) {
+    if (f.family === family) loadCustomFontInCanvas({ family: f.family, url: f.url, weight: f.weight, style: f.style });
+  }
+}
+
+/** Is this family one of the workspace's custom fonts (not a Google font)? */
+export function isWorkspaceFontFamily(family: string): boolean {
+  return _fonts.some((f) => f.family === family);
 }
 
 function subscribe(fn: () => void): () => void {

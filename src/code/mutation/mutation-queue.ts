@@ -148,7 +148,9 @@ import {
   updateSelectCaretRuleInCode,
   removePseudoStyleInCode,
 } from '../generation/generator-styles';
-import { bindTextNodeToPropInCode, createVariableInCode, createConditionalVariableInCode, removeVariableInCode, createTextVariableInCode, removeTextVariableInCode, bindTextNodeAsPageVarInCode, bindTextVariableForVariantInCode, createLinkAttrVariableInCode, removeLinkAttrVariableInCode, setBorderOverlayVariableForVariant, setInlineVariableForVariant, removeVariantStyleVariableInCode, setComponentPropDefaultInCode, createTypedVariableInCode, addBarePropToFunctionInCode, deleteComponentVariableInCode, renameComponentVariableInCode } from '../features/variable-ops';
+import { isFormattedTextNodeInCode, setFormattedTextBranchInCode, type FormattedBranchOp } from '../features/variable-ops';
+import { sanitizeRichMessage } from '@/shared/rich-message';
+import { bindTextNodeToPropInCode, createVariableInCode, createConditionalVariableInCode, removeVariableInCode, createTextVariableInCode, createFormattedTextVariableInCode, removeTextVariableInCode, bindTextNodeAsPageVarInCode, bindTextVariableForVariantInCode, createLinkAttrVariableInCode, removeLinkAttrVariableInCode, setBorderOverlayVariableForVariant, setInlineVariableForVariant, removeVariantStyleVariableInCode, setComponentPropDefaultInCode, createTypedVariableInCode, addBarePropToFunctionInCode, deleteComponentVariableInCode, renameComponentVariableInCode } from '../features/variable-ops';
 import { addPageVariableInCode, removePageVariableInCode, updatePageVariableInCode } from '../features/page-variables';
 import { applyDeleteVariablePipeline } from '../features/delete-variable-pipeline';
 import { setPropDescriptionInCode, setPropTypeInCode, setPropOptionsInCode, setPropLabelInCode, setPropNumberMetaInCode, setPropVariantOfInCode, getPropType, getPropDescription, getPropOptions, getPropLabel, getPropVariantOf } from '../components/prop-meta';
@@ -269,7 +271,9 @@ export type Mutation =
    *  `{variant === 'x' ? 'a' : 'b'}` ternary child for the given variant. */
   | { type: 'updateVariantText'; nodeId: string; variantName: string; text: string }
   | { type: 'detachTextVariableForVariant'; nodeId: string; variantName: string; propName: string; literal: string }
-  | { type: 'bindTextVariableForVariant'; nodeId: string; variantName: string; propName: string; propDefault: string }
+  | { type: 'bindTextVariableForVariant'; nodeId: string; variantName: string; propName: string; propDefault: string; formatted?: boolean }
+  /** One per-variant edit to a FORMATTED text node (bind / literal / detach / clear — see FormattedBranchOp). */
+  | { type: 'setFormattedTextBranch'; nodeId: string; variantName: string; op: FormattedBranchOp }
   /** Replace all children of an element with parsed HTML content. */
   | { type: 'updateChildrenHTML'; nodeId: string; html: string }
   /** Flatten a per-span text mark (color, fontWeight, …) on a rich-text node:
@@ -327,7 +331,7 @@ export type Mutation =
    * the function signature. Twin of `createVariable` for text content
    * instead of style values.
    */
-  | { type: 'createTextVariable'; nodeId: string; propName: string; defaultValue: string }
+  | { type: 'createTextVariable'; nodeId: string; propName: string; defaultValue: string; /** Formatted text (bold/italic/links) — see createFormattedTextVariableInCode. */ formatted?: boolean }
   /** Bind a text node to an EXISTING component prop (`{prop}`), default untouched. */
   | { type: 'bindTextVariable'; nodeId: string; propName: string }
   /** Inline a text variable back to literal JSX text + remove the prop. */
@@ -2899,10 +2903,27 @@ function applyMutationCore(code: string, mutation: Mutation): string {
       }
 
       case 'updateVariantText':
+        // A formatted node's variant text is HTML inside its `__html` ternary.
+        if (isFormattedTextNodeInCode(code, mutation.nodeId)) {
+          return setFormattedTextBranchInCode(code, mutation.nodeId, mutation.variantName, { kind: 'literal', html: sanitizeRichMessage(mutation.text) });
+        }
         return updateVariantTextInCode(code, mutation.nodeId, mutation.variantName, mutation.text);
       case 'detachTextVariableForVariant':
+        // Formatted: freeze THIS variant to the HTML it shows now (the `literal` the caller read is the
+        // default's plain text — the generator reads the variant's own value instead).
+        if (isFormattedTextNodeInCode(code, mutation.nodeId)) {
+          return setFormattedTextBranchInCode(code, mutation.nodeId, mutation.variantName, { kind: 'detach' });
+        }
         return detachTextVariableForVariantInCode(code, mutation.nodeId, mutation.variantName, mutation.propName, mutation.literal);
+      case 'setFormattedTextBranch':
+        return setFormattedTextBranchInCode(code, mutation.nodeId, mutation.variantName, mutation.op);
       case 'bindTextVariableForVariant': {
+        // FORMATTED on this variant: a new formatted variable, an existing one, or any variable on a node
+        // that is already formatted (its text lives in `__html`, not in `{…}` children).
+        if (mutation.formatted || getPropType(code, mutation.propName) === 'formattedText' || isFormattedTextNodeInCode(code, mutation.nodeId)) {
+          const bound = setFormattedTextBranchInCode(code, mutation.nodeId, mutation.variantName, { kind: 'var', prop: mutation.propName });
+          return mutation.formatted ? setPropTypeInCode(bound, mutation.propName, 'formattedText') : bound;
+        }
         const boundCode = bindTextVariableForVariantInCode(code, mutation.nodeId, mutation.variantName, mutation.propName, mutation.propDefault);
         // A text-content variable is the Plain Text type (same as createTextVariable).
         return setPropTypeInCode(boundCode, mutation.propName, 'plainText');
@@ -3117,6 +3138,19 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         return bindTextNodeToPropInCode(code, mutation.nodeId, mutation.propName);
 
       case 'createTextVariable': {
+        // FORMATTED text variable: the content (marks and all) becomes an HTML prop rendered through
+        // `dangerouslySetInnerHTML={{ __html: prop }}`, typed `formattedText`. Not for free canvas nodes
+        // (their prop reference is module-scope — the dormant form below only knows `{prop}` children):
+        // those fall through to the plain variable.
+        if (mutation.formatted && !isCanvasNode(code, mutation.nodeId)) {
+          const withFormatted = createFormattedTextVariableInCode(code, mutation.nodeId, mutation.propName);
+          if (withFormatted !== code) return setPropTypeInCode(withFormatted, mutation.propName, 'formattedText');
+        }
+        // "Set Variable" with an EXISTING formatted variable binds it in its own shape — and must neither
+        // re-type it plainText nor reset its default to this node's text (the create path below does both).
+        if (!mutation.formatted && getPropType(code, mutation.propName) === 'formattedText' && !isCanvasNode(code, mutation.nodeId)) {
+          return bindTextNodeToPropInCode(code, mutation.nodeId, mutation.propName);
+        }
         // A text-content variable IS the Plain Text type — tag it in @propMeta so it reads as
         // 'plainText' everywhere (icon/modal resolve from the type, not CSS-prop inference), exactly like
         // a Plain Text variable created from the "+" picker. The only difference is what it's bound to:

@@ -23,6 +23,7 @@ import { useAtomValue } from 'jotai';
 import { selectedNodeAtom } from '@/code/stores/store';
 import ToolInput from './ToolInput';
 import ToolSlider from './ToolSlider';
+import { useLivePreview } from '../hooks/useLivePreview';
 import ToolSelect from './ToolSelect';
 import { useControl } from './ControlProvider';
 import { resolveControl } from './control-registry';
@@ -96,6 +97,10 @@ export default function StyleField({
     updateStyle(property, value);
     trace.action('style-field:change', { property, value });
   }, [property, updateStyle]);
+  // A slider drag patches the canvas live but only COMMITS on release, so `rawValue` stays frozen
+  // until mouseup — mirror the in-flight value so the number input tracks the drag (the canonical
+  // useLivePreview pattern, see OpacityControl). Clears itself once the committed value catches up.
+  const [livePreview, setLivePreview] = useLivePreview<string>([rawValue]);
 
   // CMS binding takes priority — show the blue ⚡-pill in place of the
   // regular control. Same short-circuit pattern as the variable case
@@ -206,7 +211,7 @@ export default function StyleField({
         {controlType === 'numeric' && (
           <>
             <ToolSlider
-              value={parseFloat(rawValue) || 0}
+              value={parseFloat(livePreview ?? rawValue) || 0}
               min={resolvedMin}
               max={resolvedMax}
               step={resolvedStep}
@@ -219,17 +224,21 @@ export default function StyleField({
               // drag lag on cheap props like opacity.
               onChange={(v) => {
                 const unit = rawValue.replace(/^-?[\d.]+/, '') || 'px';
+                setLivePreview(`${v}${unit}`);
                 updateStyleLive(property, `${v}${unit}`);
               }}
+              // Keep the preview until the commit's re-parse lands (no end-of-drag snap back).
               onCommit={(v) => {
                 const unit = rawValue.replace(/^-?[\d.]+/, '') || 'px';
+                setLivePreview(`${v}${unit}`);
                 handleChange(`${v}${unit}`);
               }}
             />
             <ToolInput
-              value={String(parseFloat(rawValue) || 0)}
+              value={String(parseFloat(livePreview ?? rawValue) || 0)}
               onChange={(v) => {
                 const unit = rawValue.replace(/^-?[\d.]+/, '') || 'px';
+                setLivePreview(null);
                 handleChange(`${parseFloat(v) || 0}${unit}`);
               }}
               step={resolvedStep}

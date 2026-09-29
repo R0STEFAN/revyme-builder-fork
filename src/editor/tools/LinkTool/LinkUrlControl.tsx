@@ -306,7 +306,7 @@ export function LinkUrlField({
             ref={dropdownRef}
             className="bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-[var(--shadow-lg)] overflow-hidden flex flex-col transition-opacity duration-150 ease-out"
             style={{
-              position: 'fixed', left: menuPos.left, width: menuPos.width, maxHeight: menuPos.maxHeight, zIndex: 100020,
+              position: 'fixed', left: menuPos.left, width: menuPos.width, maxHeight: menuPos.maxHeight, zIndex: 100040, // above every popup level — a nested popup inside a modal sits at 100025
               opacity: menuVisible ? 1 : 0,
               ...(menuPos.placeAbove ? { bottom: menuPos.bottom } : { top: menuPos.top }),
             }}

@@ -126,3 +126,57 @@ describe('TransformManager', () => {
     });
   });
 });
+
+// Elements inside a viewport with their OWN will-change (a component root's
+// stamped perf isolation, a code component's animated track) keep the bitmap
+// they were first rasterized at — text stayed blurry after zooming in (the
+// glass Navbar report, 2026-09-29). On zoom settle they drop to `auto` for a
+// frame and are restored, so Chrome re-rasterizes them at the new scale.
+import { rerasterPromotedDescendants } from './TransformManager';
+
+describe('rerasterPromotedDescendants', () => {
+  const viewport = () => {
+    const vp = document.createElement('div');
+    vp.setAttribute('data-viewport', 'desktop');
+    vp.innerHTML = `
+      <div id="navbar-root" style="contain: layout paint; will-change: transform; box-shadow: 0 4px 8px black"></div>
+      <div id="marquee-track" style="display: flex; will-change: transform, opacity"></div>
+      <div id="plain" style="color: red"></div>
+      <div id="auto" style="will-change: auto"></div>`;
+    return vp;
+  };
+
+  it('drops every promoted descendant to auto for a frame, then restores it', () => {
+    const vp = viewport();
+    let flush: (() => void) | null = null;
+    const n = rerasterPromotedDescendants([vp], (cb) => { flush = cb; });
+    expect(n).toBe(2);
+    const nav = vp.querySelector<HTMLElement>('#navbar-root')!;
+    const track = vp.querySelector<HTMLElement>('#marquee-track')!;
+    expect(nav.style.willChange).toBe('auto');
+    expect(track.style.willChange).toBe('auto');
+    flush!();
+    expect(nav.style.willChange).toBe('transform');
+    expect(track.style.willChange).toBe('transform, opacity');
+    // the rest of the element's style is untouched
+    expect(nav.style.contain).toBe('layout paint');
+  });
+
+  it('leaves elements without their own will-change alone, and schedules nothing when there are none', () => {
+    const vp = document.createElement('div');
+    vp.innerHTML = '<div style="color: red"></div><div style="will-change: auto"></div>';
+    let scheduled = false;
+    expect(rerasterPromotedDescendants([vp], () => { scheduled = true; })).toBe(0);
+    expect(scheduled).toBe(false);
+  });
+
+  it('does not restore a value something else changed in between (a drag ending clears it)', () => {
+    const vp = viewport();
+    let flush: (() => void) | null = null;
+    rerasterPromotedDescendants([vp], (cb) => { flush = cb; });
+    const nav = vp.querySelector<HTMLElement>('#navbar-root')!;
+    nav.style.willChange = '';
+    flush!();
+    expect(nav.style.willChange).toBe('');
+  });
+});

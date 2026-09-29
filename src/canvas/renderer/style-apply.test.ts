@@ -1,29 +1,74 @@
 import { describe, test, expect } from 'vitest';
-import { resolveInstanceWrapperOverflow } from './style-apply';
+import { instanceRootClips, applyInstanceWrapperClipParity } from './style-apply';
 
-// The wrapper is the real FLEX ITEM for a component instance on the canvas.
-// Its overflow must mirror the master root's so the CSS automatic-minimum-size
-// rule (min-height:auto → 0 only when the item clips) behaves like the
-// deployed single-div instance — otherwise a flex-basis:0 collapse shows on
-// the live site but not on the canvas (the AboutPoint tablet-column find).
-describe('resolveInstanceWrapperOverflow', () => {
-  test('mirrors a clipping root overflow onto the wrapper', () => {
-    expect(resolveInstanceWrapperOverflow({ overflow: 'hidden' })).toBe('hidden');
-    expect(resolveInstanceWrapperOverflow({ overflow: 'clip' })).toBe('clip');
-    expect(resolveInstanceWrapperOverflow({ overflow: 'auto' })).toBe('auto');
-    expect(resolveInstanceWrapperOverflow({ overflow: 'scroll' })).toBe('scroll');
+describe('instanceRootClips', () => {
+  test('any non-visible overflow on the root clips, on either axis', () => {
+    for (const overflow of ['hidden', 'clip', 'auto', 'scroll']) expect(instanceRootClips({ overflow })).toBe(true);
+    expect(instanceRootClips({ overflowX: 'hidden' })).toBe(true);
+    expect(instanceRootClips({ overflowY: 'auto' })).toBe(true);
   });
 
-  test('keeps the historical visible default when the root does not clip', () => {
-    expect(resolveInstanceWrapperOverflow({ overflow: 'visible' })).toBe('visible');
-    expect(resolveInstanceWrapperOverflow({})).toBe('visible');
-    expect(resolveInstanceWrapperOverflow(null)).toBe('visible');
-    expect(resolveInstanceWrapperOverflow(undefined)).toBe('visible');
+  test('visible, missing or junk values do not clip', () => {
+    expect(instanceRootClips({ overflow: 'visible' })).toBe(false);
+    expect(instanceRootClips({})).toBe(false);
+    expect(instanceRootClips(null)).toBe(false);
+    expect(instanceRootClips(undefined)).toBe(false);
+    expect(instanceRootClips({ overflow: '   ' })).toBe(false);
+    expect(instanceRootClips({ overflow: 0 as unknown as string })).toBe(false);
+  });
+});
+
+// The canvas draws an instance as wrapper + root; the live site draws one div.
+// The wrapper must give the parent flex layout the same min-size behaviour as
+// a clipping root (the AboutPoint collapse find, 2026-07-05) WITHOUT clipping:
+// its clip cut the root's own box-shadow flat, which the live site never does
+// (the navbar-card shadow report, 2026-09-25).
+describe('applyInstanceWrapperClipParity', () => {
+  const wrapper = (style = '') => { const el = document.createElement('div'); el.setAttribute('style', style); return el; };
+
+  test('a clipping root: the wrapper stays visible and carries min 0 instead', () => {
+    const el = wrapper();
+    expect(applyInstanceWrapperClipParity(el, { overflow: 'hidden', boxShadow: '0 4px 8px rgba(0,0,0,.25)' })).toBe(true);
+    expect(el.style.overflow).toBe('visible');
+    expect(el.style.minWidth).toBe('0px');
+    expect(el.style.minHeight).toBe('0px');
   });
 
-  test('ignores non-string / empty overflow values (variant objects can carry numbers)', () => {
-    expect(resolveInstanceWrapperOverflow({ overflow: '' })).toBe('visible');
-    expect(resolveInstanceWrapperOverflow({ overflow: '   ' })).toBe('visible');
-    expect(resolveInstanceWrapperOverflow({ overflow: 0 as unknown as string })).toBe('visible');
+  test('a wrapper left clipped by an earlier render is opened up', () => {
+    const el = wrapper('overflow: hidden');
+    applyInstanceWrapperClipParity(el, { overflow: 'hidden' });
+    expect(el.style.overflow).toBe('visible');
+  });
+
+  test('a root that does not clip adds nothing', () => {
+    const el = wrapper();
+    expect(applyInstanceWrapperClipParity(el, { overflow: 'visible' })).toBe(false);
+    expect(el.style.overflow).toBe('visible');
+    expect(el.style.minWidth).toBe('');
+    expect(el.style.minHeight).toBe('');
+  });
+
+  test('an instance-set min bound is left alone', () => {
+    const el = wrapper('min-width: 280px');
+    applyInstanceWrapperClipParity(el, { overflow: 'hidden' });
+    expect(el.style.minWidth).toBe('280px');
+    expect(el.style.minHeight).toBe('0px');
+  });
+
+  test('when the root stops clipping, only the min values this helper set are removed', () => {
+    const el = wrapper('min-width: 280px');
+    applyInstanceWrapperClipParity(el, { overflow: 'hidden' });
+    applyInstanceWrapperClipParity(el, { overflow: 'visible' });
+    expect(el.style.minWidth).toBe('280px');
+    expect(el.style.minHeight).toBe('');
+  });
+
+  test('re-running on a clipping root is stable', () => {
+    const el = wrapper();
+    applyInstanceWrapperClipParity(el, { overflow: 'hidden' });
+    applyInstanceWrapperClipParity(el, { overflow: 'hidden' });
+    expect(el.style.minWidth).toBe('0px');
+    expect(el.style.minHeight).toBe('0px');
+    expect(el.style.overflow).toBe('visible');
   });
 });

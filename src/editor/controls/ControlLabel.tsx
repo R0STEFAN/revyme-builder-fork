@@ -551,6 +551,17 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
       }
       setLocaleOverrides(next);
     } : undefined,
+    onCreateFormattedVariable: () => {
+      setMenuOpen(false);
+      // Same unique auto-name + bind + open-in-edit flow as Create Variable, routed through the
+      // `textContentFormatted` create (an HTML prop — see ControlProvider.createVariable).
+      instantCreateAndEditVariable({
+        property, propertyLabel: label, value: value ?? '',
+        activeFilePath, pageVariables,
+        createVariable: (_p, name, v) => createVariable('textContentFormatted', name, v),
+        setVariableModalRequest,
+      });
+    },
     onOpenVariableModal: async () => {
       setMenuOpen(false);
       // Seed the variable's default from the EFFECTIVE value, not just the inline style. A text node whose

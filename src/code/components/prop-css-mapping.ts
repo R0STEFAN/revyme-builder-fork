@@ -54,7 +54,8 @@ function computeLocalCssPropForVar(varName: string, code: string): string {
   // (`{ cssProp: var }`, `…, cssProp: var`). WITHOUT that anchor, a ternary's `consequent : alternate`
   // (`__mq2 ? direction345 : direction5hoisted`) false-matches as `direction345: direction5hoisted`,
   // making a base/alternate VARIABLE resolve to the consequent's NAME as a bogus cssProp.
-  const direct = new RegExp(`[{,]\\s*(\\w+)\\s*:\\s*${varName}(?=[,\\s}])`).exec(code);
+  // `__html` is not a style key: `dangerouslySetInnerHTML={{ __html: var }}` is a FORMATTED TEXT variable.
+  const direct = new RegExp(`[{,]\\s*(?!__html\\b)(\\w+)\\s*:\\s*${varName}(?=[,\\s}])`).exec(code);
   if (direct) return direct[1];
 
   // 2. Overlay custom-property binding (`'--X': varName` consumed by `var(--X)`).

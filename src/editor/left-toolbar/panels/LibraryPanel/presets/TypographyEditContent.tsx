@@ -1,6 +1,6 @@
 // TypographyEditContent — the multi-field editor for a typography preset
 // group (font, size, weight, line-height, spacing, decoration, color,
-// shadow). Used both inside the LibraryPanel preset edit popup and by
+// shadow, stroke). Used both inside the LibraryPanel preset edit popup and by
 // TypographyPresetControl in the TextStyleTool (it consumes this as the
 // shared editor surface).
 
@@ -19,7 +19,9 @@ import { ShadowControl as TextShadowControl } from '@/editor/tools/TextStyleTool
 import ColorInput from '@/editor/controls/ColorInput';
 import ControlLabel from '@/editor/controls/ControlLabel';
 import { trace } from '@/shared/debug-trace';
-import { TYPO_TAG_OPTIONS } from '@/editor/tools/typography-utils';
+import { TYPO_TAG_OPTIONS, TYPO_STROKE_UNIT, findTypoToken, typoTokenName } from '@/editor/tools/typography-utils';
+import { TextStrokeRow } from '@/editor/tools/TextStyleTool/atoms/StrokeControl';
+import { bindPresetStrokeAcrossProject } from '@/editor/tools/typography-preset-ops';
 import type { TypoGroup as TypographyGroup } from '@/editor/tools/typography-utils';
 
 interface TypographyEditContentProps {
@@ -41,7 +43,7 @@ const RESPONSIVE_SUFFIXES = ['size', 'spacing', 'line-height'] as const;
 
 export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: TypographyEditContentProps) {
   // Local state for each value — changes reflect immediately in sub-panels
-  const initVal = (suffix: string) => group.tokens.find(t => t.name.endsWith('-' + suffix))?.value ?? '';
+  const initVal = (suffix: string) => findTypoToken(group, suffix)?.value ?? '';
 
   const [tag, setTag] = useState(() => initVal('tag') || 'p');
   const [font, setFont] = useState(() => initVal('font'));
@@ -50,6 +52,9 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
   const [transform, setTransform] = useState(() => initVal('transform'));
   const [decoration, setDecoration] = useState(() => initVal('decoration'));
   const [shadow, setShadow] = useState(() => initVal('shadow'));
+  // Optional text stroke — width in em (scales with the size on every breakpoint, so no tiers).
+  const [strokeWidth, setStrokeWidth] = useState(() => initVal('stroke-width'));
+  const [strokeColor, setStrokeColor] = useState(() => initVal('stroke-color'));
 
   // Base (desktop) values
   const [size, setSize] = useState(() => initVal('size'));
@@ -76,7 +81,7 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
   // Write to both local state AND token (auto-creates missing tokens for legacy groups)
   const writeVal = useCallback((suffix: string, value: string, setLocal: (v: string) => void) => {
     setLocal(value);
-    let token = group.tokens.find(t => t.name.endsWith('-' + suffix));
+    let token = findTypoToken(group, suffix);
     if (!token) {
       // Legacy group missing this token — create it on the fly
       const tokenName = `typo-${group.name}-${suffix}`;
@@ -103,10 +108,19 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
   // frame) is what made the picker low-FPS.
   const liveVal = useCallback((suffix: string, value: string, setLocal: (v: string) => void) => {
     setLocal(value);
-    const token = group.tokens.find(t => t.name.endsWith('-' + suffix));
-    const tokenName = token ? token.name : `typo-${group.name}-${suffix}`;
+    const tokenName = typoTokenName(group, suffix);
     (getCanvasBridge() as any)?.setCanvasTokenVar?.(tokenName, value);
   }, [group.tokens, group.name]);
+
+  // Stroke: both tokens in one go. The FIRST stroke on a preset also binds it on every text already
+  // using the preset — they were applied before the stroke tokens existed, so they hold no reference
+  // to them and would never show it (color / size edits reach them through their existing refs).
+  const writeStroke = useCallback((w: number, c: string) => {
+    const isFirstStroke = !findTypoToken(group, 'stroke-width');
+    writeVal('stroke-width', `${w}${TYPO_STROKE_UNIT}`, setStrokeWidth);
+    writeVal('stroke-color', c, setStrokeColor);
+    if (isFirstStroke && w > 0) bindPresetStrokeAcrossProject(group.name);
+  }, [group, writeVal]);
 
   // Resolve the active tier's setters/values for responsive properties
   const responsiveProps = tier === 'sm'
@@ -142,6 +156,16 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
       <ElementPropertyControl property="textTransform" label="Transform" value={transform} onChange={(v) => writeVal('transform', v, setTransform)} />
       <DecorationControl value={decoration} onChange={(v) => writeVal('decoration', v, setDecoration)} />
       <TextShadowControl value={shadow} onChange={(v) => writeVal('shadow', v, setShadow)} />
+      <TextStrokeRow
+        width={parseFloat(strokeWidth) || 0}
+        unit={TYPO_STROKE_UNIT}
+        color={strokeColor || '#000000'}
+        onSet={writeStroke}
+        onSetLive={(w, c) => {
+          liveVal('stroke-width', `${w}${TYPO_STROKE_UNIT}`, setStrokeWidth);
+          liveVal('stroke-color', c, setStrokeColor);
+        }}
+      />
 
       {/* ── Responsive section ── */}
       <div className="border-t border-[var(--border-light)] pt-2 -mx-3 px-3 flex items-center justify-between">

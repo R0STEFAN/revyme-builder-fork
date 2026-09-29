@@ -19,7 +19,7 @@ import { resolveInstancePropOverrides } from '@/code/parsing/project-parser';
 import { extractImports, resolveImportPath } from '@/code/components/import-resolver';
 import { trace } from '@/shared/debug-trace';
 
-type VarBinding = { id: string; cssProp: string | null; vpPrefixes: string[]; isText: boolean };
+type VarBinding = { id: string; cssProp: string | null; vpPrefixes: string[]; isText: boolean; isHtml?: boolean };
 type HoistedBinding = { id: string; cssProp: string; vpPrefixes: string[] };
 
 /**
@@ -72,7 +72,7 @@ export function useVariablePreview(clientPath: string | null | undefined) {
           }
         }
       }
-      if (node.textVariable) push(node.textVariable, { id, cssProp: null, vpPrefixes: allPrefixes, isText: true });
+      if (node.textVariable) push(node.textVariable, { id, cssProp: null, vpPrefixes: allPrefixes, isText: true, isHtml: !!node.formattedTextVariable });
     }
     return map;
   }, [nodes, viewportsConfig]);
@@ -197,7 +197,8 @@ export function useVariablePreview(clientPath: string | null | undefined) {
         for (const p of b.vpPrefixes) {
           if (b.isText) {
             const el = contentEl.querySelector(`[data-node-id="${p}${b.id}"]`) as HTMLElement | null;
-            if (el) el.textContent = value;
+            // A formatted text variable's value is sanitized inline HTML.
+            if (el) { if (b.isHtml) el.innerHTML = value; else el.textContent = value; }
           } else if (b.cssProp) {
             patchNodeStyles(contentEl, b.id, p, { [b.cssProp]: value });
           }

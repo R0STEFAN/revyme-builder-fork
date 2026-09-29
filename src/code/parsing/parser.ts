@@ -8,6 +8,7 @@ import { isTruthy } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
 import { isSvgTag } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
+import { formattedBranchesOfDangerAttr, type FormattedBranches } from '@/shared/rich-message';
 import { parsePageVariables } from '../features/page-variables';
 
 // Handle ESM/CJS interop
@@ -125,6 +126,9 @@ export interface CanvasNode {
    * variable on this node's text.
    */
   textVariable?: string;
+  /** `textVariable` is a FORMATTED text variable: the node renders
+   *  `dangerouslySetInnerHTML={{ __html: textVariable }}` and the default is inline HTML. */
+  formattedTextVariable?: boolean;
   /**
    * next-intl translation key — set when the element's text child is a
    * `{t('key')}` call (any hook variable name, one string-literal argument).
@@ -2061,6 +2065,8 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         // on a text tag (no children). The key is the message; the value is
         // sanitized inline HTML — see shared/rich-message.ts.
         let richTranslation = false;
+        let formattedTextVariable = false;
+        let formattedBranches: FormattedBranches | null = null;
         {
           const dsAttr = (opening.attributes as any[]).find((a: any) => a.type === 'JSXAttribute' && a.name?.name === 'dangerouslySetInnerHTML');
           const obj = dsAttr?.value?.type === 'JSXExpressionContainer' ? dsAttr.value.expression : null;
@@ -2073,6 +2079,17 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             translationKey = call.arguments[0].value as string;
             richTranslation = true;
             trace.action('parser:rich-translation-key', { nodeId: id, translationKey });
+          } else {
+            // FORMATTED TEXT variable: `dangerouslySetInnerHTML={{ __html: propName }}` — the
+            // prop default is sanitized inline HTML (shared/rich-message.ts), substituted below.
+            // Per variant, `__html` is a variant ternary of variables / literal HTML (applied to
+            // the conditionalText fields once they're declared below).
+            formattedBranches = formattedBranchesOfDangerAttr(dsAttr?.value);
+            if (formattedBranches) {
+              textVariable = formattedBranches.vars['default'] ?? Object.values(formattedBranches.vars)[0];
+              formattedTextVariable = true;
+              trace.action('parser:formatted-text-variable', { nodeId: id, prop: textVariable, variants: Object.keys(formattedBranches.vars).length + Object.keys(formattedBranches.literals).length });
+            }
           }
         }
         // Per-variant text from a `{variant === 'x' ? 'a' : 'b'}` child.
@@ -2080,6 +2097,15 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         let conditionalTextRich: Record<string, true> | null = null;
         // Per-variant TEXT-VARIABLE branches (variant → prop name) when a branch/fallback is a variable.
         let conditionalTextVariable: Record<string, string> | null = null;
+        // Per-variant FORMATTED text → the same per-variant fields plain per-variant text fills.
+        // Every branch is HTML (literal or a variable's value), so every branch is rich.
+        if (formattedBranches && (Object.keys(formattedBranches.vars).length + Object.keys(formattedBranches.literals).length) > 1) {
+          conditionalText = { ...formattedBranches.literals };
+          conditionalTextRich = {};
+          for (const k of [...Object.keys(formattedBranches.vars), ...Object.keys(formattedBranches.literals)]) conditionalTextRich[k] = true;
+          conditionalTextVariable = { ...formattedBranches.vars };
+          if (formattedBranches.literals['default'] !== undefined) textContent = formattedBranches.literals['default'];
+        }
         // Per-VIEWPORT text branches from a `{__mqN ? branch : base}` child (variable names / literal
         // values / band floors). Variable branches get resolved into `responsiveTextValues` post-pass.
         let responsiveTextVariables: Record<number, string> | null = null;
@@ -2333,10 +2359,10 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         let hasMixedContent = false;
         // A rich-translated node has NO children — its marks live in the message.
         // Flag it mixed so the renderer takes the innerHTML path for the override.
-        if (richTranslation) hasMixedContent = true;
+        if (richTranslation || formattedTextVariable) hasMixedContent = true;
         // A wrapped text-anim node takes this path: its inner is real text (+ <br />), so
         // textContent becomes a genuine string instead of a tag-strip of N spans.
-        if (!richTranslation && (!hasTextAnim || splitWrapper) && !isTextOverridesContainer && isAllInlineMixedContent(contentEl)) {
+        if (!richTranslation && !formattedTextVariable && (!hasTextAnim || splitWrapper) && !isTextOverridesContainer && isAllInlineMixedContent(contentEl)) {
           hasMixedContent = true;
           // Extract full inner content via Babel's ABSOLUTE node offsets —
           // never a (line, column) walk over code.split('\n'). Babel counts
@@ -2424,6 +2450,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (textVariable) node.textVariable = textVariable;
         if (translationKey) node.translationKey = translationKey;
         if (richTranslation) node.richTranslation = true;
+        if (formattedTextVariable) node.formattedTextVariable = true;
         if (attrTranslationKeys) node.attrTranslationKeys = attrTranslationKeys;
         if (textOverrides) node.textOverrides = textOverrides;
 

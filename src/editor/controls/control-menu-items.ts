@@ -84,6 +84,8 @@ export interface MenuContext {
   onResetOverride?: () => void;
   /** Callback to open the VariableModal (replaces prompt()) */
   onOpenVariableModal?: () => void;
+  /** Content row in a component: create a FORMATTED text variable (bold/italic/links kept). */
+  onCreateFormattedVariable?: () => void;
   /**
    * All page variables declared in the active file. Used to populate the
    * "Set Variable" submenu so the user can bind to an existing variable
@@ -159,9 +161,14 @@ export function getVariableMenuItems(ctx: MenuContext, opts?: { hideCreate?: boo
   // applies to the variable-bound pill.
   const hoverColor: 'accent' | 'accent-secondary' = ctx.isComponentFile ? 'accent-secondary' : 'accent';
 
+  // Text content in a component: Framer's pair — plain text, or formatted text that keeps bold / italic /
+  // links (an HTML prop edited with a rich editor on each instance). On a variant tile both bind that
+  // variant only.
+  const offerFormatted = !hideCreate && (showCreate || showVariantCreate) && ctx.isComponentFile
+    && ctx.property === 'textContent' && !!ctx.onCreateFormattedVariable;
   if (!hideCreate && ((showCreate && (ctx.isComponentFile || ctx.isIconSetFile || isPageFileWithCompatibleProperty)) || showVariantCreate)) {
     items.push({
-      label: 'Create Variable',
+      label: offerFormatted ? 'Create plain text variable' : 'Create Variable',
       show: true,
       hoverColor,
       onClick: () => {
@@ -169,6 +176,17 @@ export function getVariableMenuItems(ctx: MenuContext, opts?: { hideCreate?: boo
           ctx.onOpenVariableModal();
         }
         trace.action('control-menu:open-variable-modal', { property: ctx.property, isComponent: ctx.isComponentFile });
+      },
+    });
+  }
+  if (offerFormatted) {
+    items.push({
+      label: 'Create formatted text variable',
+      show: true,
+      hoverColor,
+      onClick: () => {
+        ctx.onCreateFormattedVariable?.();
+        trace.action('control-menu:create-formatted-text-variable', { property: ctx.property });
       },
     });
   }

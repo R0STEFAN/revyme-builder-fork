@@ -404,3 +404,29 @@ describe('getAllMenuItems — Localize allowlist', () => {
     expect(localize({ property: 'color', nodeId: null })).toBeUndefined();
   });
 });
+
+describe('text Content — plain / formatted variable pair (component primary)', () => {
+  const labels = (over: Partial<MenuContext>) => getVariableMenuItems(makeCtx(over)).map((i) => i.label);
+
+  it('offers both creates on a component text Content row', () => {
+    const onCreateFormattedVariable = vi.fn();
+    const items = getVariableMenuItems(makeCtx({ property: 'textContent', isComponentFile: true, onCreateFormattedVariable }));
+    expect(items.map((i) => i.label)).toEqual(expect.arrayContaining(['Create plain text variable', 'Create formatted text variable']));
+    items.find((i) => i.label === 'Create formatted text variable')!.onClick?.();
+    expect(onCreateFormattedVariable).toHaveBeenCalledOnce();
+  });
+
+  it('a variant tile offers the pair — each binds that variant only', () => {
+    const f = vi.fn();
+    const variantLabels = labels({ property: 'textContent', isComponentFile: true, isPrimary: false, isVariantTile: true, onCreateFormattedVariable: f });
+    expect(variantLabels).toEqual(expect.arrayContaining(['Create plain text variable', 'Create formatted text variable']));
+  });
+
+  it('a page file / a non-text row keeps the single Create Variable', () => {
+    const f = vi.fn();
+    expect(labels({ property: 'textContent', isComponentFile: false, onCreateFormattedVariable: f })).not.toContain('Create formatted text variable');
+    // A variant tile gets the pair too (binds that variant only) — asserted below.
+    expect(labels({ property: 'opacity', isComponentFile: true, onCreateFormattedVariable: f })).toContain('Create Variable');
+    expect(labels({ property: 'opacity', isComponentFile: true, onCreateFormattedVariable: f })).not.toContain('Create formatted text variable');
+  });
+});

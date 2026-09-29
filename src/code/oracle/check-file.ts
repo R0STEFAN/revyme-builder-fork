@@ -18,6 +18,7 @@ import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { trace } from '@/shared/debug-trace';
 import { isSvgTag, isTextTag } from '@/shared/constants';
+import { formattedBranchesOfDangerAttr } from '@/shared/rich-message';
 import { parseJSXToNodes } from '@/code/parsing/parser';
 import { parseComponentCursorCalls } from '@/code/parsing/cursor-parser';
 import { parseCodeComponentDefaultSize, parseComponentControlsMeta, hasComponentControls, CONTROL_TYPES } from '@/code/components/controls-parser';
@@ -862,7 +863,17 @@ export function checkFile(
           && call.callee.object?.type === 'Identifier' && call.arguments?.length === 1 && call.arguments[0]?.type === 'StringLiteral'
           && path.node.children.every((c: any) => c.type === 'JSXText' && !c.value.trim());
       })();
-      if (dangerHtmlAttr && !isRichTranslationShape) {
+      // EXCEPTION — a FORMATTED TEXT variable on a TEXT tag: `dangerouslySetInnerHTML={{ __html: prop }}`
+      // with no children, where `prop` is a parameter of the component (its default is the inline
+      // HTML the Content control's rich editor produced) — or, per variant, a variant ternary of such
+      // params and literal HTML. The parser binds it (formattedTextVariable).
+      const isFormattedVariableShape = (() => {
+        if (!dangerHtmlAttr || !isTextTag(tag)) return false;
+        const branches = formattedBranchesOfDangerAttr(dangerHtmlAttr.value);
+        if (!branches || Object.values(branches.vars).some((name) => path.scope.getBinding(name)?.kind !== 'param')) return false;
+        return path.node.children.every((c: any) => c.type === 'JSXText' && !c.value.trim());
+      })();
+      if (dangerHtmlAttr && !isRichTranslationShape && !isFormattedVariableShape) {
         const idForMsg = dataId ?? 'field-body';
         v.push({
           code: 'DANGEROUS_INNER_HTML', tier: 2, line, elementId: dataId,

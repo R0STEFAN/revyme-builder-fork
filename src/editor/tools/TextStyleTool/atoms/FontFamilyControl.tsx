@@ -9,6 +9,7 @@ import { useTextStyles } from '../../../hooks/useTextStyles';
 import { useToolPopupOptional } from '../../../ui/ToolPopup';
 import FontFamilyPopup from '../../../ui/FontFamilyPopup';
 import { loadGoogleFont } from '@/shared/font-loader';
+import { isWorkspaceFontFamily } from '@/code/stores/workspace-fonts-store';
 import { ensureGoogleFontImport } from '@/code/project/preset-ops';
 import { injectCanvasCSS, removeCanvasCSS, getInteractingViewport, getViewportPrefix } from '@/canvas/node-ops';
 import { fitTextInnerId } from '@/shared/id-utils';
@@ -104,7 +105,7 @@ function FontFamilyBase({ value, isMixed, onChange, plain, onPreviewWrite, label
     return value.split(',')[0].trim().replace(/['"]/g, '');
   })();
 
-  if (value && !isMixed) loadGoogleFont(displayName);
+  if (value && !isMixed && !isWorkspaceFontFamily(displayName)) loadGoogleFont(displayName);
 
   const handleChange = useCallback((family: string) => {
     trace.action('font-family:change', { from: value, to: family });
@@ -179,7 +180,9 @@ function FontFamilyBase({ value, isMixed, onChange, plain, onPreviewWrite, label
     // otherwise the canvas falls back to the parent stack and the user
     // sees no visual change.
     const fontName = previewValue.split(',')[0].trim().replace(/['"]/g, '');
-    if (fontName) loadGoogleFont(fontName);
+    // A workspace font's face is declared by the picker (previewWorkspaceFontInCanvas) — asking
+    // Google Fonts for it is a guaranteed 400.
+    if (fontName && !isWorkspaceFontFamily(fontName)) loadGoogleFont(fontName);
 
     if (isTextEditingRef.current && onPreviewWriteRef.current) {
       // Text mode: snapshot the original value the FIRST time we enter

@@ -20,6 +20,7 @@ import {
 } from '@/code/parsing/parser';
 import { getPageVariables } from '@/code/features/page-variables';
 import type { CanvasNode } from '@/code/parsing/parser';
+import { formattedBranchesOfDangerAttr } from '@/shared/rich-message';
 import { needsDataId, type OracleViolation } from '../../checks/shared';
 
 const traverse = (
@@ -679,6 +680,10 @@ function classifyUnsupportedSignatures(ast: t.File, findings: EditabilityFinding
     JSXAttribute(path) {
       if (!t.isJSXIdentifier(path.node.name)) return;
       if (path.node.name.name !== 'dangerouslySetInnerHTML') return;
+      // A formatted text variable (`{{ __html: prop }}`, or its per-variant ternary) is the builder's
+      // own shape — editable.
+      const branches = formattedBranchesOfDangerAttr(path.node.value);
+      if (branches && Object.values(branches.vars).every((name) => path.scope.getBinding(name)?.kind === 'param')) return;
       dsi = true;
       if (!firstDsi) firstDsi = 'dangerouslySetInnerHTML @line ' + (path.node.loc?.start.line ?? 0);
     },

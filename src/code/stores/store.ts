@@ -9,7 +9,7 @@
 
 import { atom, getDefaultStore } from 'jotai';
 import { parseJSXToNodes, type CanvasNode } from '../parsing/parser';
-import { computeLayoutBrackets } from '@/shared/flex-helpers';
+import { computeLayoutBrackets, mergeTemplateChildren, cssOrderValue } from '@/shared/flex-helpers';
 import { parseProjectFile, resolveInstancePropOverrides } from '../parsing/project-parser';
 import { getTemplateRouteValues, substituteTemplateVarAttrsForCanvas } from '../generation/template-route-parse';
 import { substituteScrollVariantFromVarForCanvas } from '../generation/scroll-variant-gen';
@@ -438,7 +438,7 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                   node.fromLayout = true;
                   node.id = newId;
 
-                  const kids = (origChildren.get(origId) || []).map(c => 'layout::' + c);
+                  let kids = (origChildren.get(origId) || []).map(c => 'layout::' + c);
                   // Splice the page's SECTIONS into the {children} position
                   // (NOT the page root — that layer is dropped).
                   if (origId === childrenParentId) {
@@ -450,7 +450,13 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                       const tagIdx = jsxDataIdIndex(layoutCode, kidId);
                       if (tagIdx !== -1 && tagIdx < childrenIdx) insertIdx++;
                     }
-                    kids.splice(insertIdx, 0, ...pageSectionIds);
+                    // In PAINT order (template `order` values + the page root's own),
+                    // not source order — see mergeTemplateChildren.
+                    kids = mergeTemplateChildren(
+                      origChildren.get(origId) || [], insertIdx, pageSectionIds,
+                      (kid) => cssOrderValue(layoutNodes.get(kid)?.styles?.order),
+                      cssOrderValue(primaryPageRoot?.styles?.order),
+                    );
                   }
                   node.children = kids;
 
