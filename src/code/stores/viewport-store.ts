@@ -18,16 +18,19 @@ function computeDefaultPositions(configs: Omit<ViewportConfig, 'x' | 'y'>[]): Vi
   let currentX = 0;
   return configs.map(c => {
     const vp = { ...c, x: currentX, y: 0 };
-    currentX += c.width + VIEWPORT_GAP;
+    // Tiles are drawn at their start (designWidth) — space them by that, not the range's end.
+    currentX += (c.designWidth && c.designWidth > 0 ? c.designWidth : c.width) + VIEWPORT_GAP;
     return vp;
   });
 }
 
-/** Default viewport configs — used as initial value. */
+/** Default viewport configs — used as initial value. START model (breakpoint-ladder.ts): each
+ *  breakpoint starts at its designWidth and ends one pixel below the next wider one's start —
+ *  Desktop 1440+, Tablet 768–1439, Mobile below 768. */
 export const DEFAULT_VIEWPORTS: ViewportConfig[] = computeDefaultPositions([
   { id: 'desktop', label: 'Desktop', width: DEFAULT_VIEWPORT_WIDTH, isPrimary: true, order: 0 },
-  { id: 'tablet', label: 'Tablet', width: 768, isPrimary: false, order: 1 },
-  { id: 'mobile', label: 'Mobile', width: 375, isPrimary: false, order: 2 },
+  { id: 'tablet', label: 'Tablet', width: DEFAULT_VIEWPORT_WIDTH - 1, designWidth: 768, isPrimary: false, order: 1 },
+  { id: 'mobile', label: 'Mobile', width: 767, designWidth: 375, isPrimary: false, order: 2 },
 ]);
 
 

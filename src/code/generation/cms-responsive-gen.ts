@@ -375,7 +375,7 @@ function splitTopLevelArgs(s: string): string[] {
 
 /** Walk every `useResponsiveListConfig(...)` CALL (skipping the function DEFINITION),
  *  parse its vpOverrides (arg 2) + vpWidths (arg 3), let `mutate` edit them, re-serialize. */
-function transformResponsiveListCalls(
+export function transformResponsiveListCalls(
   code: string,
   mutate: (parts: { vpOverrides: Record<string, unknown>; vpWidths: number[] }) => void,
 ): string {

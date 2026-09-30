@@ -301,7 +301,9 @@ function serializeResponsiveAttr(model: RespModel): string {
       for (const [pk, pv] of Object.entries(model.overrides[k])) e[pk] = (pv as { kind: 'literal'; value: any }).value;
       obj[k] = e;
     }
-    obj._bp = model.bp;
+    // No list = no `_bp`: an EMPTY `_bp` reads as "no breakpoints" to the runtime (every
+    // width → base), which silently killed a keys-only payload's overrides on re-key.
+    if (model.bp.length) obj._bp = model.bp;
     return `data-responsive='${JSON.stringify(obj)}'`;
   }
   const vpParts = ordered.map(k => {
@@ -310,7 +312,7 @@ function serializeResponsiveAttr(model: RespModel): string {
       .join(',');
     return `${JSON.stringify(k)}:{${props}}`;
   });
-  vpParts.push(`"_bp":[${model.bp.join(',')}]`);
+  if (model.bp.length) vpParts.push(`"_bp":[${model.bp.join(',')}]`);
   return `data-responsive={JSON.stringify({${vpParts.join(',')}})}`;
 }
 

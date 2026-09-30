@@ -21,6 +21,7 @@
 // the two tiny helpers below are duplicated on purpose and pinned by the
 // parity test (action-layer-rich.test.ts imports the editor side).
 
+import { viewportKeyWidth, viewportForArg } from './viewport-arg';
 import { z } from 'zod';
 import { getDefaultStore } from 'jotai';
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
@@ -254,7 +255,7 @@ export const setMotionPresetTool: AgentTool = {
   async execute(args, ctx) {
     const nodeId = args.node_id as string;
     const effect = args.effect as (typeof MOTION_PRESET_VALUES)[number];
-    const valueScope = scopeFor(args.viewport as number | undefined);
+    const valueScope = scopeFor(viewportKeyWidth(args.viewport));
     // updateLoop's spec takes the serializable scope form — the panel passes
     // getActiveAnimationScope with the same cast (AnimationTool/index.tsx:703).
     const loopScope = valueScope ? [valueScope as SerScope] : undefined;

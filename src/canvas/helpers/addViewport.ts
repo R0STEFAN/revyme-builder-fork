@@ -8,6 +8,8 @@ import { VIEWPORT_GAP } from '@/shared/constants';
 import { syncViewportWidths, getSortedBreakpointWidths } from '@/code/stores/viewport-store';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { copyContainerRulesToNewWidth, addResponsiveBreakpoint } from '@/code/generation/generator-styles';
+import { isStartModelLadder } from '@/code/project/breakpoint-ladder';
+import { commitBreakpointAdd } from './breakpoint-commit';
 import { trace } from '@/shared/debug-trace';
 
 export interface AddViewportOpts {
@@ -39,7 +41,8 @@ export function addViewport(opts: AddViewportOpts): void {
   // Position: to the right of the rightmost existing viewport
   const rightmost = activeViewports.reduce((max, v) => {
     const pos = vpPositions[v.id] || { x: v.x };
-    const vw = vpWidths[v.id] ?? renderWidth(v);
+    // A start-model tile is drawn at its start (designWidth), not at its range's end.
+    const vw = v.designWidth ? renderWidth(v) : (vpWidths[v.id] ?? renderWidth(v));
     return Math.max(max, (pos.x || v.x) + vw);
   }, 0);
   const newX = rightmost + VIEWPORT_GAP;
@@ -55,6 +58,16 @@ export function addViewport(opts: AddViewportOpts): void {
       ? { height: sourceVp.height }
       : {}),
   };
+  // START MODEL (Framer's): the new breakpoint STARTS at `width` and takes the part of the range
+  // that held it — the breakpoint that owned that width keeps the rest, and the new tile opens
+  // looking exactly as that width looked (breakpoint-ladder.ts). One commit writes it all.
+  if (isStartModelLadder(activeViewports)) {
+    commitBreakpointAdd(activeFilePath, newVp, { x: newX, y: 0 });
+    setVpPositions(prev => ({ ...prev, [vpId]: { x: newX, y: 0 } }));
+    trace.action('canvas:add-viewport-start-model', { vpId, start: width });
+    return;
+  }
+
   setVpConfigs(prev => [...prev, newVp]);
 
   // 3. Initialize width + position atoms

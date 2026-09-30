@@ -62,11 +62,13 @@ describe('semantic property tools', () => {
     const ctx = makeCtx();
     await setStylesTool.execute({ node_id: 'box', styles: { display: 'none' }, viewport: 768 }, ctx);
     expect(queueMutation).toHaveBeenCalledTimes(1);
+    // `viewport: 768` names Tablet by its START; its overrides key on its END (default ladder:
+    // Desktop 1440+, Tablet 768–1439, Mobile < 768).
     expect(queueMutation).toHaveBeenCalledWith(
       {
         type: 'updateContainerStyle',
         nodeId: 'box',
-        maxWidth: 768,
+        maxWidth: 1439,
         styles: { display: 'none' },
       },
       { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },

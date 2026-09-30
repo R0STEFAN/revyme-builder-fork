@@ -179,6 +179,12 @@ export function rewriteAnimationBreakpoints(
     const nq = mapQuery(query);
     return nq ? `"query":"${nq}"` : full;
   });
+  // 3. SplitText's spec is a JS object LITERAL (`responsive: [{ scope: { query: "…" } }]`), not
+  //    JSON — its unquoted `query:` key was never re-stamped, so a text effect kept the old ranges.
+  out = out.replace(/(?<!")\bquery:\s*"((?:[^"\\]|\\.)*)"/g, (full, query: string) => {
+    const nq = mapQuery(query);
+    return nq ? `query: "${nq}"` : full;
+  });
   return out;
 }
 

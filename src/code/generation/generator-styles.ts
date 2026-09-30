@@ -834,6 +834,14 @@ export function rewriteContainerBreakpoints(
         const existing = newRules.get(nodeId)!;
         for (const [k, v] of props) existing.set(k, v);
       }
+      // The band's LOCALE rules (`:lang(fr) [data-id=…]`) move with it. They sit in `lang.banded`,
+      // keyed by the band's width; left under the old key they were silently dropped on
+      // re-serialize, so resizing a breakpoint lost its per-locale tweaks.
+      const movedLang = lang.banded.get(key);
+      if (movedLang) {
+        lang.banded.delete(key);
+        lang.banded.set(newWidth, [...(lang.banded.get(newWidth) ?? []), ...movedLang]);
+      }
       if (key !== oldWidth) trace.action('rewriteBreakpoints:orphan-band-claimed', { orphanKey: key, oldWidth, newWidth });
     }
   }
@@ -886,14 +894,19 @@ export function rewriteContainerBreakpoints(
  *
  * Normal form: ONE band per non-primary viewport, keyed at that viewport's width. Each
  * viewport's band is the FLATTENED state its tile currently paints: all bands whose
- * interval covers the viewport width, merged in cascade order (serializers emit widest
- * first, so the NARROWEST matching band wins per prop). Banded :lang rules follow their
- * band. Strays covering NO viewport are dropped (no tile paints them — keeping them is
+ * interval covers the viewport width, merged in cascade (source) order, so the band the
+ * tile paints last wins per prop. Banded :lang rules follow their band. Strays covering NO viewport are dropped (no tile paints them — keeping them is
  * exactly the live-vs-canvas divergence this heals) and traced. Idempotent: keys already
  * ⊆ config widths → byte-identical no-op. Deterministic from the code string alone (the
  * config is read from the file, not from editor state).
+ *
+ * `force` skips the cheap gate below and flattens even when every band is already keyed at a
+ * viewport width — the breakpoint migration's pre-pass: a CASCADING legacy band (a non-smallest
+ * band with no floor, `@media (max-width: 768px) {`) is viewport-keyed yet also paints every
+ * smaller tile; flattening folds its rules into the smaller bands so the floors the rewrite adds
+ * change nothing a tile shows.
  */
-export function normalizeResponsiveBandKeys(code: string): string {
+export function normalizeResponsiveBandKeys(code: string, opts?: { force?: boolean }): string {
   const config = parseCanvasConfig(code);
   if (!config?.viewports?.length) return code;
   const primaryW = (config.viewports.find(v => v.isPrimary) ?? config.viewports.reduce((a, b) => (b.width > a.width ? b : a))).width;
@@ -905,40 +918,54 @@ export function normalizeResponsiveBandKeys(code: string): string {
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
-  // CHEAP GATE (this runs in the mutation-flush pipeline): band keys + floors
-  // straight off the headers; all keys already viewport-keyed → no-op.
-  const bandHeaderRe = /@media\s*\(max-width:\s*([\d.]+)px\)(?:\s*and\s*\(min-width:\s*([\d.]+)px\))?/g;
-  const floors = new Map<number, number>();
+  // CHEAP GATE (this runs in the mutation-flush pipeline): band keys straight
+  // off the headers; all keys already viewport-keyed → no-op.
+  const bandHeaderRe = /@media\s*\(max-width:\s*([\d.]+)px\)/g;
+  const bandKeys = new Set<number>();
   let hm: RegExpExecArray | null;
-  while ((hm = bandHeaderRe.exec(blockMatch[2]))) {
-    floors.set(Number(hm[1]), hm[2] ? Number(hm[2]) : 0);
-  }
-  if (floors.size === 0) return code;
-  if ([...floors.keys()].every(k => vpSet.has(k))) return code;
+  while ((hm = bandHeaderRe.exec(blockMatch[2]))) bandKeys.add(Number(hm[1]));
+  if (bandKeys.size === 0) return code;
+  if (!opts?.force && [...bandKeys].every(k => vpSet.has(k))) return code;
 
   const lang = extractLangRules(blockMatch[2]);
-  const rules = parseContainerRules(lang.css);
-  if (rules.size === 0) return code;
+  // Per BLOCK, in source order — each with its OWN floor. A file can carry two blocks with the
+  // same max-width and different floors (a floored `(max-width: 768px) and (min-width: 375.02px)`
+  // band beside a legacy unfloored `(max-width: 768px)` one). Keyed by max-width alone, the last
+  // floor applied to both, so the floored block's rules were flattened into the smaller tiles too.
+  const blocks: Array<{ max: number; floor: number; rules: Map<string, Map<string, string>>; lang: string[] }> = [];
+  const blockHeadRe = /@(?:media|container)\s*\([^)]*max-width:\s*(\d+)px[^)]*\)[^{]*\{/g;
+  const css = blockMatch[2];
+  let bm: RegExpExecArray | null;
+  while ((bm = blockHeadRe.exec(css))) {
+    let depth = 1;
+    let i = blockHeadRe.lastIndex;
+    for (; i < css.length && depth > 0; i++) { if (css[i] === '{') depth++; else if (css[i] === '}') depth--; }
+    const max = Number(bm[1]);
+    const floor = Number(/min-width:\s*([\d.]+)px/.exec(bm[0])?.[1] ?? 0);
+    const own = extractLangRules(css.slice(bm.index, i));
+    blocks.push({ max, floor, rules: parseContainerRules(own.css).get(max) ?? new Map(), lang: own.banded.get(max) ?? [] });
+    blockHeadRe.lastIndex = i;
+  }
+  if (!blocks.some(b => b.rules.size > 0 || b.lang.length > 0)) return code;
 
-  // Flatten: per viewport, merge every band whose interval covers a REFERENCE
-  // width, widest first, so the narrowest (= latest in serialized source,
-  // cascade winner) band's value wins per prop.
-  const bandKeysDesc = [...rules.keys()].sort((a, b) => b - a);
-  const covers = (bandMax: number, w: number) => w <= bandMax && w >= (floors.get(bandMax) ?? 0);
+  // Flatten: per viewport, merge every block whose interval covers a REFERENCE width, in
+  // SOURCE order — the cascade itself (equal specificity, all !important), so the later
+  // block's value wins per prop exactly as the tile paints it.
+  const covers = (b: { max: number; floor: number }, w: number) => w <= b.max && w >= b.floor;
   const claimed = new Set<number>();
   const flattenAt = (refW: number): { target: Map<string, Map<string, string>>; targetLang: string[] } => {
     const target = new Map<string, Map<string, string>>();
     const targetLang: string[] = [];
-    for (const bandMax of bandKeysDesc) {
-      if (!covers(bandMax, refW)) continue;
-      claimed.add(bandMax);
-      for (const [nodeId, props] of rules.get(bandMax)!) {
+    blocks.forEach((b, idx) => {
+      if (!covers(b, refW)) return;
+      claimed.add(idx);
+      for (const [nodeId, props] of b.rules) {
         if (!target.has(nodeId)) target.set(nodeId, new Map());
         const existing = target.get(nodeId)!;
         for (const [k, v] of props) existing.set(k, v);
       }
-      for (const rule of lang.banded.get(bandMax) ?? []) targetLang.push(rule);
-    }
+      for (const rule of b.lang) targetLang.push(rule);
+    });
     return { target, targetLang };
   };
 
@@ -947,7 +974,7 @@ export function normalizeResponsiveBandKeys(code: string): string {
   const mergedLang = new Map<number, string[]>();
   const bandless: number[] = [];
   for (const vpW of nonPrimary) {
-    if (!bandKeysDesc.some(b => covers(b, vpW))) { bandless.push(vpW); continue; }
+    if (!blocks.some(b => covers(b, vpW))) { bandless.push(vpW); continue; }
     const { target, targetLang } = flattenAt(vpW);
     if (target.size > 0) merged.set(vpW, target);
     if (targetLang.length > 0) mergedLang.set(vpW, targetLang);
@@ -961,8 +988,9 @@ export function normalizeResponsiveBandKeys(code: string): string {
   // case 2026-08-06: config mobile already committed at 1310 while its
   // overrides sat in a stranded (max-width: 500px) band; interval-claiming
   // alone DROPPED them — exactly the loss being healed.
+  const bandKeysDesc = [...new Set(blocks.map(b => b.max))].sort((a, b) => b - a);
   if (bandless.length > 0) {
-    const strays = bandKeysDesc.filter(b => !claimed.has(b));
+    const strays = [...new Set(blocks.filter((_, idx) => !claimed.has(idx)).map(b => b.max))].sort((a, b) => b - a);
     const bandlessDesc = [...bandless].sort((a, b) => b - a);
     for (let i = 0; i < bandlessDesc.length && i < strays.length; i++) {
       const vpW = bandlessDesc[i];
@@ -973,7 +1001,7 @@ export function normalizeResponsiveBandKeys(code: string): string {
       trace.action('generator:normalize-band-keys:stray-claim', { vpWidth: vpW, strayKey: refW });
     }
   }
-  const dropped = bandKeysDesc.filter(k => !claimed.has(k));
+  const dropped = [...new Set(blocks.filter((_, idx) => !claimed.has(idx)).map(b => b.max))];
 
   trace.action('generator:normalize-band-keys', {
     from: bandKeysDesc,

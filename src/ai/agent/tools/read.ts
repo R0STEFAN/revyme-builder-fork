@@ -34,6 +34,7 @@
 // Both the prompt's "Current page tree" section and the get_node_tree tool
 // project through the SAME `projectNodeTree` — one dialect everywhere.
 
+import { drawnViewportWidths } from './viewport-arg';
 import { describeVariantAxis } from './components-more';
 import { z } from 'zod';
 import { getDefaultStore } from 'jotai';
@@ -42,7 +43,7 @@ import type { CanvasNode } from '@/code/parsing/parser';
 import { getNodesSnapshot, selectedIdsAtom } from '@/code/stores/store';
 import {
   interactingViewportIdAtom,
-  interactingViewportWidthAtom,
+  interactingViewportWidthAtom, interactingViewportRenderWidthAtom,
   viewportWidthsAtom,
   viewportsConfigAtom,
 } from '@/code/stores/viewport-store';
@@ -451,11 +452,11 @@ export const getActiveFileTool: AgentTool = {
 
 export const getViewportWidthTool: AgentTool = {
   name: 'get_viewport_width',
-  description: 'Returns the active viewport width in px (desktop/tablet/mobile resolved).',
+  description: 'Returns the active viewport width in px — where its breakpoint starts, the width its tile is drawn at (desktop/tablet/mobile resolved).',
   inputSchema: {},
   category: 'read',
   async execute() {
-    return ok({ width: store.get(interactingViewportWidthAtom) });
+    return ok({ width: store.get(interactingViewportRenderWidthAtom) });
   },
 };
 
@@ -562,7 +563,13 @@ export function resolveViewportQuery(
 
 /** Store-backed resolver for every layout observation tool. */
 export function resolveViewportArgs(raw: unknown): ResolvedViewport {
-  return resolveViewportQuery(raw, store.get(interactingViewportIdAtom), store.get(viewportWidthsAtom));
+  // Named and measured at the DRAWN width (a start-model breakpoint's start); its stored end
+  // names the same viewport.
+  const drawn = drawnViewportWidths();
+  const hit = resolveViewportQuery(raw, store.get(interactingViewportIdAtom), drawn);
+  if (hit.width !== null || !(typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw.trim())))) return hit;
+  const byEnd = viewportIdForWidth(Number(String(raw).trim()), store.get(viewportWidthsAtom));
+  return byEnd ? { id: byEnd.id, width: drawn[byEnd.id] ?? byEnd.width } : hit;
 }
 
 // Canonical definition lives in observation-epoch.ts (P6 T4); re-exported

@@ -140,8 +140,11 @@ export function checkPreservation(oldCode: string, newCode: string): OracleViola
         // builder-owned. `height` is content-driven (a page grows past its
         // starter height; locking it clips content), so the AI/editor MAY
         // change it freely, including switching a fixed px height to "auto".
-        const proj = (vp: { id?: string; label?: string; width?: number; isPrimary?: boolean; order?: number }) =>
-          JSON.stringify({ id: vp.id, label: vp.label, width: vp.width, isPrimary: vp.isPrimary || false, order: vp.order ?? 0 });
+        // A breakpoint is compared by where it STARTS (designWidth ?? width): the gate converts a
+        // classic file to the start model (width → the range's end, designWidth → the old width),
+        // which changes no breakpoint — a moved start still does.
+        const proj = (vp: { id?: string; label?: string; width?: number; designWidth?: number; isPrimary?: boolean; order?: number }) =>
+          JSON.stringify({ id: vp.id, label: vp.label, width: vp.designWidth && vp.designWidth > 0 ? vp.designWidth : vp.width, isPrimary: vp.isPrimary || false, order: vp.order ?? 0 });
         if (proj(nv) !== proj(oldVp)) problems.push(`viewport "${oldVp.id}" was modified (id/width/label/primary/order must stay as-is — height may change to "auto")`);
         const op = JSON.stringify(oldCanvas.positions[oldVp.id] ?? null);
         const np = JSON.stringify(newCanvas.positions[oldVp.id] ?? null);

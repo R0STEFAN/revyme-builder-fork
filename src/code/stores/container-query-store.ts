@@ -49,7 +49,12 @@ export function parseContainerRules(css: string): Map<number, Map<string, Map<st
     }
 
     const blockContent = css.slice(blockStart, blockEnd - 1);
-    const selectors = new Map<string, Map<string, string>>();
+    // A file can carry SEVERAL blocks for the same breakpoint (two `(max-width: 768px) … {` blocks —
+    // hand-written, AI-written, or merged in by Detach). Merge them the way the cascade does (a later
+    // block's value wins per property). `rules.set(width, fresh)` REPLACED the earlier block, so the
+    // next rewrite (a breakpoint resize, the band clean-up) silently deleted its rules — 27 of 138
+    // page files in the 2026-07-31 backup lost overrides that way.
+    const selectors = rules.get(width) ?? new Map<string, Map<string, string>>();
 
     // Parse individual selectors: [data-id="x"] { prop: val !important; }
     const selectorRegex = /\[data-id="([^"]+)"\]\s*\{([^}]*)\}/g;

@@ -192,14 +192,16 @@ describe('set_motion_preset — payload parity', () => {
   });
 
   it('viewport arg scopes value props with the panel resolveScope query (null on desktop)', async () => {
-    const tablet = resolveScope({ kind: 'viewports', widths: [768] }, getSortedBreakpointWidths());
+    // `viewport: 768` names Tablet by its START (its tile width); its overrides key on its END —
+    // the default ladder is start-model (Desktop 1440+, Tablet 768–1439, Mobile < 768).
+    const tablet = resolveScope({ kind: 'viewports', widths: [1439] }, getSortedBreakpointWidths());
     // Band seam: canvas-poc writes the FRACTIONAL lower bound (375.02px), not
     // the legacy integer 376px the fork asserted — see animation-scope.ts, the
     // fix for the integer band hole. Both encode "just above 375"; only the
     // fractional form is emitted now.
     // Panel parity: the scope IS resolveScope(...) with the project breakpoints —
     // with the default [1440, 768, 375] the 768 replica bands to max-768 min-376.
-    expect(tablet).toMatchObject({ query: '(max-width: 768px) and (min-width: 375.02px)' });
+    expect(tablet).toMatchObject({ query: '(max-width: 1439px) and (min-width: 767.02px)' });
     await setMotionPresetTool.execute({ node_id: 'n1', effect: 'hover', viewport: 768 }, makeCtx());
     expect(queueMutation).toHaveBeenCalledWith({
       type: 'updateMotionProp', nodeId: 'n1', propName: 'whileHover', props: { scale: '1.05' }, scope: tablet,
@@ -207,7 +209,7 @@ describe('set_motion_preset — payload parity', () => {
 
     vi.clearAllMocks();
     await setMotionPresetTool.execute({ node_id: 'n1', effect: 'loop', viewport: 375 }, makeCtx());
-    const mobile = resolveScope({ kind: 'viewports', widths: [375] }, getSortedBreakpointWidths());
+    const mobile = resolveScope({ kind: 'viewports', widths: [767] }, getSortedBreakpointWidths()); // Mobile: starts 375, keyed at its end
     expect(queueMutation).toHaveBeenCalledWith({
       type: 'updateLoop', nodeId: 'n1',
       spec: { props: { rotate: '360' }, transition: { duration: '2', repeat: 'Infinity', ease: 'linear' }, scope: [mobile] },

@@ -25,6 +25,9 @@ import ControlLabel from '../controls/ControlLabel';
 import { getInsetState, computeDimensionInsetStyles, parsePx } from '@/shared/pin-utils';
 import { findNodeSize, findNodeParentInnerSize, findNodeComputedStyles, forceCanvasRender, getInteractingViewport } from '@/canvas/node-ops';
 import { beginViewportWidthScrub, type ViewportWidthScrub } from '@/canvas/resize/viewport-width-scrub';
+import { activeLadderIsStartModel, commitBreakpointStart } from '@/canvas/helpers/breakpoint-commit';
+import { startOf } from '@/code/project/breakpoint-ladder';
+import { renderWidth } from '@/shared/types';
 import { canUseFill, isMainAxis, isFillMode, getFillMultiplier, makeFillFlex, parseFlex, formatFlex, crossAxisFillPatch, isCrossAxisStretchFill } from '@/shared/flex-helpers';
 import { convertPxToDimUnit, estimatedVpHeight, pickLiveDim, fitSizeRedirectTarget, exitFillFlexPatch, isAutoDim, resolveUnitChangePx } from './size-helpers';
 import { resizeLiveOps } from '@/canvas/resize/resize-live-store';
@@ -441,7 +444,9 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     if (!Number.isFinite(num) || num <= 0) return;
     const rounded = Math.round(num);
     if (!scrubRef.current) {
-      const startWidth = getDefaultStore().get(viewportsConfigAtom).find(v => v.id === vpId)?.width ?? rounded;
+      // The tile's DRAWN width — a start-model breakpoint is drawn at its start (designWidth).
+      const cfgVp = getDefaultStore().get(viewportsConfigAtom).find(v => v.id === vpId);
+      const startWidth = cfgVp ? renderWidth(cfgVp) : rounded;
       scrubRef.current = beginViewportWidthScrub({ vpId, nodeId, startWidth, activeFilePath });
     }
     scrubRef.current.tick(rounded);
@@ -470,6 +475,19 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // width the bands are currently keyed by (same rule the tile-drag path
     // documents in SelectionOverlay's onViewportResize).
     const prevWidth = getDefaultStore().get(viewportsConfigAtom).find(v => v.id === vpId)?.width ?? rounded;
+
+    // START MODEL: the field is the breakpoint's START. Moving it moves the next narrower
+    // breakpoint's end with it (breakpoint-ladder.ts); one commit does the rewrite + config.
+    if (activeLadderIsStartModel()) {
+      const cfgVp = getDefaultStore().get(viewportsConfigAtom).find(v => v.id === vpId);
+      if (!cfgVp || startOf(cfgVp) === rounded || !activeFilePath) return bail();
+      setForceRender();
+      commitBreakpointStart(activeFilePath, vpId, rounded);
+      forceCanvasRender();
+      trace.action('size:viewport-breakpoint-change', { vpId, prevStart: startOf(cfgVp), newStart: rounded, model: 'start' });
+      return;
+    }
+
     if (prevWidth === rounded) return bail();
 
     setViewportWidths(prev => {
@@ -1475,14 +1493,14 @@ if (heightIsAuto) {
         // apply. Unit is locked to px.
         <DimensionRow
           label="Width"
-          value={`${currentViewportConfig.width}px`}
+          value={`${startOf(currentViewportConfig)}px`}
           onChange={handleViewportBreakpointChange}
           // Chevron scrub live-tracks the tile via the widths atom only; the
           // commit (onChange via ToolInput's onCommit) runs the band rewrite
           // ONCE on release — same live/commit split as the tile drag.
           onChangeLive={handleViewportBreakpointLive}
           onUnitChange={() => {}}
-          computedSize={currentViewportConfig.width}
+          computedSize={startOf(currentViewportConfig)}
           parentSize={currentViewportConfig.width}
           unitOptions={[{ value: 'px', label: 'px' }]}
           hideResetStyle

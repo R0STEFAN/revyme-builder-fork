@@ -17,6 +17,7 @@ import { trace, pauseDOMObserver, resumeDOMObserver } from '@/shared/debug-trace
 import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers } from '@/shared/css-utils';
 import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag } from '@/shared/constants';
 import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
+import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
 import { hasMotionTransformProp, motionPropsToCSSTransform, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { simpleHash } from '@/shared/hash-utils';
 import { getOrCreateCanvasStyleEl, getActiveFilePath } from './node-ops';
@@ -1077,18 +1078,26 @@ export function renderNodes(
     // hover effects only show during the CSS Hover editor preview, not on normal canvas hover (which is
     // used for selection). Both transforms apply to the carried component CSS too — its @media rules must
     // become @container, otherwise an instance's responsive resolves against the whole canvas window.
-    let canvasCSS = pageCSSClean ? pageCSSClean.replace(/@media\s*\(/g, '@container (') : '';
+    // A page whose tiles are drawn at their range's START (`designWidth`: start-model pages, Framer
+    // imports) gets its width queries re-expressed in the DRAWN-width ladder — the container
+    // measures inside the root's padding, which dropped such a tile into the next band down (see
+    // canvas-band-queries.ts). Classic pages keep the plain rename.
+    const drawnLadder = (viewports ?? []).some((v) => renderWidth(v) !== v.width)
+      ? (viewports ?? []).map((v) => renderWidth(v)).filter((w) => Number.isFinite(w) && w > 0).sort((a, b) => a - b)
+      : null;
+    let canvasCSS = pageCSSClean ? mediaToCanvasContainer(pageCSSClean, drawnLadder) : '';
     canvasCSS = canvasCSS.replace(/:hover\s*\{/g, '[data-hover-preview]{');
-    let componentAfterCSS = componentAfterCSSRaw
-      .replace(/@media\s*\(/g, '@container (')
+    let componentAfterCSS = mediaToCanvasContainer(componentAfterCSSRaw, drawnLadder)
       .replace(/:hover\s*\{/g, '[data-hover-preview]{');
     // Resolve vw/vh INSIDE the @container blocks per matching tile width —
     // native CSS would resolve them against the iframe window, so a
     // `clamp(…vw…) !important` override painted the same (huge) size on every
     // tile and beat the correctly-resolved inline merge. Blocks matching
     // multiple tiles are duplicated per width. See responsive-units.ts.
-    canvasCSS = resolveContainerQueryUnits(canvasCSS, _allViewportWidthsAsc);
-    componentAfterCSS = resolveContainerQueryUnits(componentAfterCSS, _allViewportWidthsAsc);
+    // (Drawn-ladder pages resolve against each tile's DRAWN width.)
+    const unitWidths = drawnLadder ?? _allViewportWidthsAsc;
+    canvasCSS = resolveContainerQueryUnits(canvasCSS, unitWidths, { drawnLadder: !!drawnLadder });
+    componentAfterCSS = resolveContainerQueryUnits(componentAfterCSS, unitWidths, { drawnLadder: !!drawnLadder });
     // Component master → drop all responsive @container blocks so the inline base/desktop styles win on
     // every variant tile (the `!important` @container rules would otherwise resolve against each narrow
     // tile and collapse the text to the smallest breakpoint). Pairs with `_isComponentMaster` short-
@@ -1235,6 +1244,10 @@ export function renderNodes(
 
     // For each viewport, we render root directly with viewport attributes.
     // The root element IS the viewport frame.
+    // Responsive values resolve at the width the tile is DRAWN at — what a window that wide shows,
+    // and what its container queries paint. A start-model breakpoint is drawn at its start
+    // (designWidth) while its `width` is its range's end; keyed lookups bucket up to the end.
+    const tileWidth = renderWidth(vp);
     for (const rootNode of viewportRoots) {
       const prefixedId = prefix + rootNode.id;
       let rootEl = container.querySelector(`[data-node-id="${prefixedId}"]`) as HTMLElement | null;
@@ -1264,10 +1277,10 @@ export function renderNodes(
         // from messages/{locale}.json by Canvas.tsx) is the only source of
         // visible copy, including in the default locale. Without this the
         // transformed nodes render empty when the user switches back to EN.
-        patchElement(rootEl, rootNode, nodes, onNodeMouseDown, prefix, variantName, undefined, localeOverrides, vp.width);
+        patchElement(rootEl, rootNode, nodes, onNodeMouseDown, prefix, variantName, undefined, localeOverrides, tileWidth);
       } else {
         // NEW — create root element
-        rootEl = buildNodeElement(rootNode, nodes, onNodeMouseDown, prefix, variantName, undefined, '', localeOverrides, vp.width);
+        rootEl = buildNodeElement(rootNode, nodes, onNodeMouseDown, prefix, variantName, undefined, '', localeOverrides, tileWidth);
         container.appendChild(rootEl);
       }
 
@@ -1300,7 +1313,7 @@ export function renderNodes(
       let masterFitWidth = false;
       let masterHugWidth = false;
       if (isComponentMaster && variantName !== undefined) {
-        const rwv = resolveVariantStyles(rootNode, variantName, vp.width).width ?? rootNode.styles?.width;
+        const rwv = resolveVariantStyles(rootNode, variantName, tileWidth).width ?? rootNode.styles?.width;
         masterFitWidth = isFitSize(rwv);
         masterHugWidth = !rwv || rwv === 'auto';
       }
@@ -1324,9 +1337,11 @@ export function renderNodes(
       // debounce so Chrome re-rasterizes at the new scale.
       // The tile renders at its DESIGN width when it has one — the band it
       // represents can be wider than the canvas it was drawn on (a phone band
-      // reaching 809px designed at 390). Container queries still resolve:
-      // a band's lower bound is the next smaller viewport + 0.02, and a design
-      // width sits inside its own band by construction.
+      // reaching 809px designed at 390). Such a tile sits at the BOTTOM of its
+      // band, and the container measures inside the root's padding/border — so
+      // its queries are re-expressed in the drawn-width ladder (drawnLadder
+      // below, canvas-band-queries.ts), where each tile's range tops out at its
+      // drawn width.
       if (vp.width > 0 && !isComponentMaster) rootEl.style.width = `${renderWidth(vp)}px`;
       // Optional viewport height — three cases, all sourced from the
       // @canvas block via SizeTool:
@@ -1355,7 +1370,7 @@ export function renderNodes(
       // to its content. No-op when the root is in normal flow (the
       // wrapper already grows to fit its child).
       if (isComponentMaster && variantName !== undefined) {
-        const resolved = resolveVariantStyles(rootNode, variantName, vp.width);
+        const resolved = resolveVariantStyles(rootNode, variantName, tileWidth);
         const rootPosition = resolved.position || rootNode.styles?.position;
         if (rootPosition === 'absolute' || rootPosition === 'fixed') {
           if (resolved.width) rootEl.style.width = resolved.width;
@@ -1470,7 +1485,7 @@ export function renderNodes(
           // modal covers ~100vh, like it will on the deployed site.
           const vpH = typeof vp.height === 'number' && vp.height > 0
             ? vp.height
-            : (vp.width >= 1024 ? 900 : vp.width >= 600 ? 1024 : 812);
+            : (renderWidth(vp) >= 1024 ? 900 : renderWidth(vp) >= 600 ? 1024 : 812);
           el.style.height = `${vpH}px`;
           // Config-driven backdrop (live, so panel edits show immediately): fill +
           // zIndex come from data-overlay, falling back to the defaults the
@@ -1547,9 +1562,9 @@ export function renderNodes(
           // primary kept showing the overlay (live find 2026-09-06).
           const tileVariant = isPrimary ? 'default' : vp.id;
           const ovNode = nodes.get(overlaySrcId);
-          if (ovNode) hideThisTile = resolveVariantStyles(ovNode, tileVariant, vp.width).display === 'none';
+          if (ovNode) hideThisTile = resolveVariantStyles(ovNode, tileVariant, renderWidth(vp)).display === 'none';
         } else {
-          hideThisTile = getResponsiveOverridesForNode(overlaySrcId, vp.width).display === 'none';
+          hideThisTile = getResponsiveOverridesForNode(overlaySrcId, renderWidth(vp)).display === 'none';
         }
         if (hideThisTile) el.style.setProperty('display', 'none', 'important');
         else el.style.removeProperty('display');

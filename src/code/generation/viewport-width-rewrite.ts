@@ -25,19 +25,57 @@ import {
 } from '@/code/generation/generator-styles';
 import { rewriteAnimationBreakpoints } from '@/code/animations/animation-scope';
 
-/** The four width-keyed rewrites every width change needs, in one place:
- *  @media style bands, animation media-query gates (useMediaQuery consts +
- *  spec-attr `"query"` strings), component-instance `data-responsive`
- *  (per-viewport values + `_bp`), and width-keyed `useResponsiveText`. */
+/** Every width-keyed rewrite a width change needs, in one place: @media style
+ *  bands, animation media-query gates (useMediaQuery consts, spec-attr
+ *  `"query"` strings and SplitText's JS-literal `query: "…"`), component-
+ *  instance `data-responsive` (per-viewport values + `_bp`, and the CMS list
+ *  config), width-keyed `useResponsiveText`, overlay per-breakpoint config
+ *  (`data-overlay` `responsive` + `responsiveBp`, and the open-variant
+ *  `window.innerWidth <= W` chain) and template route keys (`name@W`). */
 export function rewriteWidthKeyedArtifacts(code: string, oldWidth: number, newWidth: number): string {
   const widths = getSortedBreakpointWidths();
-  return rewriteResponsiveTextBreakpoints(
+  const out = rewriteResponsiveTextBreakpoints(
     rewriteResponsiveBreakpoints(
       rewriteAnimationBreakpoints(
         rewriteContainerBreakpoints(code, oldWidth, newWidth),
         oldWidth, newWidth, widths),
       oldWidth, newWidth, widths),
     oldWidth, newWidth, widths);
+  return rewriteRouteKeyBreakpoints(rewriteOverlayBreakpoints(out, oldWidth, newWidth), oldWidth, newWidth);
+}
+
+/** Overlay per-breakpoint config: `data-overlay='{…"responsive":{"768":…},"responsiveBp":[…]}'`,
+ *  plus the open-variant chain generated from it (`window.innerWidth <= 768 ? 'a' : …`). Left
+ *  under the old width, the runtime's `bps.filter(b => ww <= b)` bucketed the resized viewport
+ *  onto the wrong override. */
+export function rewriteOverlayBreakpoints(code: string, oldWidth: number, newWidth: number): string {
+  if (oldWidth === newWidth || !code.includes('data-overlay=')) return code;
+  let out = code.replace(/data-overlay='(\{[^']*\})'/g, (full, json: string) => {
+    let cfg: { responsive?: Record<string, unknown>; responsiveBp?: number[] };
+    try { cfg = JSON.parse(json); } catch { return full; }
+    let changed = false;
+    const k = String(oldWidth);
+    if (cfg.responsive && cfg.responsive[k] !== undefined) {
+      const into = cfg.responsive[String(newWidth)];
+      cfg.responsive[String(newWidth)] = into && typeof into === 'object' ? { ...into, ...(cfg.responsive[k] as object) } : cfg.responsive[k];
+      delete cfg.responsive[k];
+      changed = true;
+    }
+    if (Array.isArray(cfg.responsiveBp) && cfg.responsiveBp.includes(oldWidth)) {
+      cfg.responsiveBp = cfg.responsiveBp.map((w) => (w === oldWidth ? newWidth : w));
+      changed = true;
+    }
+    return changed ? `data-overlay='${JSON.stringify(cfg)}'` : full;
+  });
+  out = out.replace(new RegExp(`window\\.innerWidth\\s*<=\\s*${oldWidth}\\b`, 'g'), `window.innerWidth <= ${newWidth}`);
+  return out;
+}
+
+/** Template route values set for ONE breakpoint: `'headerVariant@768'` keys in the
+ *  LayoutClient's `__templateProps` map (their gates move with rewriteAnimationBreakpoints). */
+export function rewriteRouteKeyBreakpoints(code: string, oldWidth: number, newWidth: number): string {
+  if (oldWidth === newWidth || !code.includes('__templateProps') || !code.includes(`@${oldWidth}`)) return code;
+  return code.replace(new RegExp(`(["'])([A-Za-z_$][\\w$]*)@${oldWidth}\\1`, 'g'), (_m, q: string, name: string) => `${q}${name}@${newWidth}${q}`);
 }
 
 /**

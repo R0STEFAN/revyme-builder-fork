@@ -15,6 +15,7 @@
 // subtree on every commit just because this hook subscribed to the raw
 // nodesAtom/codeAtom.
 
+import { withLiveWidth } from '@/shared/types';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import { codeAtom, nodesAtom } from '@/code/stores/store';
@@ -98,7 +99,7 @@ export function computeActiveViewports(
     }];
   }
 
-  return vpConfigs.map(v => ({ ...v, width: vpWidths[v.id] ?? v.width }));
+  return vpConfigs.map(v => withLiveWidth({ ...v }, vpWidths[v.id]));
 }
 
 // Recomputes on every input change (cheap)…

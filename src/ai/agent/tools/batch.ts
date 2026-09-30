@@ -17,6 +17,7 @@
 // guaranteed by the checkpoint the runtime arms via ctx.ensureCheckpoint() —
 // batch calls it once, first.
 
+import { drawnViewportWidths } from './viewport-arg';
 import { z } from 'zod';
 import { getDefaultStore } from 'jotai';
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
@@ -489,7 +490,8 @@ export const batchTool: AgentTool = {
     let touchedIds: string[] = [];
     try {
       const interactingVpId = store.get(interactingViewportIdAtom);
-      const widths = store.get(viewportWidthsAtom);
+      // Named + measured at the DRAWN width (a start-model breakpoint's start).
+      const widths = drawnViewportWidths();
       const vpConfigs = store.get(viewportsConfigAtom);
       touchedIds = [...createdIds];
       for (const id of modifiedIds) if (!touchedIds.includes(id)) touchedIds.push(id);

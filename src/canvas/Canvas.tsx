@@ -1,6 +1,7 @@
 // Canvas.tsx — Thin shell wiring together: TransformManager, DragCoordinator, text editing.
 // All complex logic lives in dedicated systems. Canvas just routes events.
 
+import { withLiveWidth } from '@/shared/types';
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { nextFrames } from '@/shared/dom-utils';
 import { getCanvasRenderer } from './CanvasRenderer';
@@ -754,7 +755,7 @@ export default function Canvas() {
     const freshViewports = isMasterFile
       ? activeViewportsRef.current
       : freshConfigs.map(v => {
-          const merged = { ...v, width: freshWidths[v.id] ?? v.width };
+          const merged = withLiveWidth({ ...v }, freshWidths[v.id]);
           const pos = freshPositions[v.id];
           return pos ? { ...merged, ...pos } : merged;
         });

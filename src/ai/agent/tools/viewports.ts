@@ -17,6 +17,8 @@ import { viewportsConfigAtom, viewportWidthsAtom, syncViewportWidths, getSortedB
 import { addResponsiveBreakpoint, copyContainerRulesToNewWidth } from '@/code/generation/generator-styles';
 import { applyViewportWidthChange } from '@/code/generation/viewport-width-rewrite';
 import { removeReplicaViewport } from '@/canvas/commands';
+import { isStartModelLadder, startOf } from '@/code/project/breakpoint-ladder';
+import { commitBreakpointAdd, commitBreakpointStart } from '@/canvas/helpers/breakpoint-commit';
 import { VIEWPORT_GAP } from '@/shared/constants';
 import type { ViewportConfig } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
@@ -35,15 +37,23 @@ function viewports(ctx: ToolContext): ViewportConfig[] {
   return cfg?.viewports?.length ? cfg.viewports : (store.get(viewportsConfigAtom) as ViewportConfig[]);
 }
 
-function describe(list: ViewportConfig[]): { id: string; label: string; width: number; primary: boolean }[] {
-  return [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((v) => ({ id: v.id, label: v.label, width: v.width, primary: !!v.isPrimary }));
+/** `width` is where the breakpoint STARTS (its tile width, the number the user sees); `range` is
+ *  the widths it styles on a start-model page — up to the next wider breakpoint's start − 1. */
+function describe(list: ViewportConfig[]): { id: string; label: string; width: number; range?: string; primary: boolean }[] {
+  const startModel = isStartModelLadder(list);
+  return [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((v) => ({
+    id: v.id, label: v.label, width: startOf(v),
+    ...(startModel && v.width !== startOf(v) ? { range: v.width >= 100000 ? `${startOf(v)}px and up` : `${startOf(v)}–${v.width}px` } : {}),
+    primary: !!v.isPrimary,
+  }));
 }
 
-/** Resolve a viewport by id, label or width. */
+/** Resolve a viewport by id, label or width (its start; the stored end also matches). */
 function findViewport(list: ViewportConfig[], raw: unknown): ViewportConfig | undefined {
-  if (typeof raw === 'number') return list.find((v) => v.width === raw);
+  const byWidth = (w: number) => list.find((v) => startOf(v) === w) ?? list.find((v) => v.width === w);
+  if (typeof raw === 'number') return byWidth(raw);
   const s = String(raw ?? '').trim().toLowerCase();
-  if (/^\d+$/.test(s)) return list.find((v) => v.width === Number(s));
+  if (/^\d+$/.test(s)) return byWidth(Number(s));
   return list.find((v) => v.id.toLowerCase() === s || v.label.toLowerCase() === s);
 }
 
@@ -57,7 +67,7 @@ function syncWidths(list: ViewportConfig[]): void {
 
 export const listViewportsTool: AgentTool = {
   name: 'list_viewports',
-  description: 'The breakpoints (viewports) of the active file: id, label, width, which is primary. Responsive overrides key on these widths.',
+  description: 'The breakpoints (viewports) of the active file: id, label, width (where the breakpoint STARTS — its tile width), range (the widths it styles, up to the next wider breakpoint), which is primary.',
   inputSchema: {},
   category: 'read',
   async execute(_args, ctx) {
@@ -70,7 +80,7 @@ export const listViewportsTool: AgentTool = {
 export const addViewportTool: AgentTool = {
   name: 'add_viewport',
   description:
-    'Add a BREAKPOINT to the active file — the "+" on a viewport tile: a new replica at the given width, seeded with the overrides of the next-larger breakpoint so it opens looking like what already rendered at that width. ' +
+    'Add a BREAKPOINT to the active file — the "+" on a viewport tile: a new breakpoint STARTING at the given width (it styles that width up to the next wider breakpoint), seeded with the overrides of the breakpoint whose range held that width so it opens looking like what already rendered there. ' +
     'Then style it with viewport-scoped writes (set_styles {viewport}). Widths must be unique.',
   inputSchema: {
     label: z.string().describe('e.g. "Laptop", "Small tablet"'),
@@ -83,7 +93,7 @@ export const addViewportTool: AgentTool = {
     const width = Number(args.width);
     const label = String(args.label).trim();
     if (!label) return fail('Pass a label.');
-    if (list.some((v) => v.width === width)) return fail(`A breakpoint of ${width}px already exists (${findViewport(list, width)!.id}).`);
+    if (list.some((v) => startOf(v) === width)) return fail(`A breakpoint of ${width}px already exists (${findViewport(list, width)!.id}).`);
     const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'viewport';
     let id = base;
     for (let n = 2; list.some((v) => v.id === id); n++) id = `${base}-${n}`;
@@ -92,9 +102,15 @@ export const addViewportTool: AgentTool = {
     flushTool(ctx);
     const cfg = parseCanvasConfig(getToolCode(ctx));
     const positions = cfg?.positions ?? Object.fromEntries(list.map((v) => [v.id, { x: v.x ?? 0, y: v.y ?? 0 }]));
-    const rightmost = list.reduce((max, v) => Math.max(max, (positions[v.id]?.x ?? v.x ?? 0) + v.width), 0);
+    const rightmost = list.reduce((max, v) => Math.max(max, (positions[v.id]?.x ?? v.x ?? 0) + startOf(v)), 0);
     const source = list.find((v) => v.isPrimary) ?? list[0];
     const next: ViewportConfig = { id, label, width, isPrimary: false, order: list.length, x: rightmost + VIEWPORT_GAP, y: 0, ...(typeof source?.height === 'number' && source.height > 0 ? { height: source.height } : {}) };
+    if (isStartModelLadder(list)) {
+      const after = commitBreakpointAdd(active, next, { x: next.x ?? 0, y: 0 }) ?? list;
+      store.set(projectVersionAtom, (v) => v + 1);
+      trace.action('agent-tool:add_viewport', { id, start: width, model: 'start' });
+      return ok({ added: { id, label, width }, viewports: describe(after) });
+    }
     const all = [...list, next];
     syncWidths(all);
     const widths = getSortedBreakpointWidths();
@@ -117,7 +133,7 @@ export const addViewportTool: AgentTool = {
 
 export const setViewportWidthTool: AgentTool = {
   name: 'set_viewport_width',
-  description: 'Change a breakpoint\'s WIDTH (the Size panel\'s breakpoint input): every override keyed on the old width — style bands, animation gates, responsive instance props, per-breakpoint text — moves to the new one.',
+  description: 'Change where a breakpoint STARTS (the Size panel\'s breakpoint width): its tile is drawn at the new width and the next narrower breakpoint\'s range follows it; every override stays with its breakpoint.',
   inputSchema: { viewport: z.string().describe('id, label or current width'), width: z.number().int().min(200).max(4000) },
   category: 'semantic',
   async execute(args, ctx) {
@@ -126,11 +142,18 @@ export const setViewportWidthTool: AgentTool = {
     const vp = findViewport(list, args.viewport);
     if (!vp) return fail(`No breakpoint "${args.viewport}". Breakpoints: ${describe(list).map((v) => `${v.id} ${v.width}px`).join(', ')}.`);
     const width = Number(args.width);
-    if (vp.width === width) return ok({ viewport: vp.id, width, changed: false });
-    if (list.some((v) => v.id !== vp.id && v.width === width)) return fail(`${width}px is already ${findViewport(list, width)!.id}'s width.`);
+    if (startOf(vp) === width) return ok({ viewport: vp.id, width, changed: false });
+    if (list.some((v) => v.id !== vp.id && startOf(v) === width)) return fail(`${width}px is already ${findViewport(list, width)!.id}'s width.`);
     const active = resolveToolFile(ctx);
     ctx.ensureCheckpoint();
     flushTool(ctx);
+    if (isStartModelLadder(list)) {
+      // Start model: `width` is the breakpoint's START; the next narrower one's range follows.
+      const after = commitBreakpointStart(active, vp.id, width) ?? list;
+      store.set(projectVersionAtom, (v) => v + 1);
+      trace.action('agent-tool:set_viewport_width', { id: vp.id, from: startOf(vp), to: width, model: 'start' });
+      return ok({ viewport: vp.id, from: startOf(vp), width, changed: true, viewports: describe(after) });
+    }
     const all = list.map((v) => (v.id === vp.id ? { ...v, width } : v));
     // Same order as the Size panel: widths first (the rewrite reads them),
     // then the source rewrite, then the @canvas config.
@@ -150,7 +173,7 @@ export const setViewportWidthTool: AgentTool = {
 
 export const removeViewportTool: AgentTool = {
   name: 'remove_viewport',
-  description: 'Remove a breakpoint from the active file with every override authored for it. The primary breakpoint cannot be removed.',
+  description: 'Remove a breakpoint from the active file with every override authored for it; the next narrower breakpoint takes over its widths. The primary breakpoint cannot be removed.',
   inputSchema: { viewport: z.string().describe('id, label or width') },
   category: 'semantic',
   async execute(args, ctx) {
@@ -161,11 +184,13 @@ export const removeViewportTool: AgentTool = {
     if (vp.isPrimary) return fail(`${vp.id} is the primary breakpoint — it cannot be removed.`);
     ctx.ensureCheckpoint();
     flushTool(ctx);
+    const startModel = isStartModelLadder(list);
     removeReplicaViewport(resolveToolFile(ctx), vp.id);
-    syncWidths(list.filter((v) => v.id !== vp.id));
+    // Start model: the commit already adopted the new ladder (the narrower breakpoint's end moved).
+    if (!startModel) syncWidths(list.filter((v) => v.id !== vp.id));
     store.set(projectVersionAtom, (v) => v + 1);
     trace.action('agent-tool:remove_viewport', { id: vp.id, width: vp.width });
-    return ok({ removed: vp.id, viewports: describe(list.filter((v) => v.id !== vp.id)) });
+    return ok({ removed: vp.id, viewports: describe(startModel ? viewports(ctx) : list.filter((v) => v.id !== vp.id)) });
   },
 };
 

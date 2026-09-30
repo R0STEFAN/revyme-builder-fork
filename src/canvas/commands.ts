@@ -18,6 +18,8 @@ import { getViewportWidths } from '@/code/stores/viewport-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
 import { clearContainerStylesForWidth, removeResponsiveBreakpoint } from '@/code/generation/generator-styles';
+import { isStartModelLadder } from '@/code/project/breakpoint-ladder';
+import { commitBreakpointRemove } from './helpers/breakpoint-commit';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { getReplicaContext } from '@/canvas/drag/replica-context';
 import { parseOverlayCalls, parseOverlayTriggerCalls } from '@/code/parsing/overlay-parser';
@@ -1431,6 +1433,17 @@ function unfoldToCanvas(
  * viewport is rejected upstream in `deleteNode`.
  */
 export function removeReplicaViewport(filePath: string, vpId: string): void {
+  // START MODEL: the next narrower breakpoint takes the removed one's range (breakpoint-ladder.ts).
+  const current = parseCanvasConfig(projectFS.readFile(filePath) ?? '')?.viewports;
+  if (current && isStartModelLadder(current)) {
+    const vp = current.find(v => v.id === vpId);
+    if (!vp || vp.isPrimary) {
+      trace.error('commands:remove-replica-viewport-not-found-or-primary', { vpId });
+      return;
+    }
+    commitBreakpointRemove(filePath, vpId);
+    return;
+  }
   modifyProjectFile(filePath, (code) => {
     const cfg = parseCanvasConfig(code);
     if (!cfg) return code;

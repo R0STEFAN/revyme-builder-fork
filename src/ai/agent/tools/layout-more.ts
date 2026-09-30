@@ -7,6 +7,7 @@
 // Fit, the banded `order` write for a per-breakpoint reorder, and
 // `wrapInLayout` / `unfoldChildren` (canvas/commands) for the structural ones.
 
+import { viewportKeyWidth, viewportForArg } from './viewport-arg';
 import { z } from 'zod';
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
 import { queueToolMutation, flushTool, getToolNodes, isBranchedRun, getToolCode } from '@/ai/agent/workspace';
@@ -85,7 +86,8 @@ export const setSizeUnitsTool: AgentTool = {
     if (!node) return fail(`No node "${nodeId}" in the active file.`);
     if (args.width === undefined && args.height === undefined) return fail('set_size_units needs width and/or height.');
     const parent = node.parentId ? nodes.get(node.parentId) : undefined;
-    const isReplica = typeof args.viewport === 'number';
+    const keyWidth = viewportKeyWidth(args.viewport);
+    const isReplica = keyWidth !== undefined;
     const styles: Record<string, string> = {};
     for (const axis of ['width', 'height'] as const) {
       const v = args[axis];
@@ -95,7 +97,7 @@ export const setSizeUnitsTool: AgentTool = {
       Object.assign(styles, w);
     }
     ctx.ensureCheckpoint();
-    if (isReplica) queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId, maxWidth: args.viewport as number, styles });
+    if (isReplica) queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId, maxWidth: keyWidth, styles });
     else queueToolMutation(ctx, { type: 'updateStyles', nodeId, styles });
     flushTool(ctx);
     return ok({ node_id: nodeId, styles, viewport: args.viewport ?? null });
@@ -187,7 +189,7 @@ export const reorderOnBreakpointTool: AgentTool = {
     const writes = planReorder(parent, nodes, nodeId, Number(args.index));
     if (writes.length === 0) return ok({ node_id: nodeId, viewport: args.viewport, changed: 0, note: 'already at that position' });
     ctx.ensureCheckpoint();
-    for (const w of writes) queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId: w.id, maxWidth: Number(args.viewport), styles: { order: w.order } });
+    for (const w of writes) queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId: w.id, maxWidth: viewportKeyWidth(args.viewport) ?? Number(args.viewport), styles: { order: w.order } });
     flushTool(ctx);
     trace.action('agent-tool:reorder_on_breakpoint', { nodeId, viewport: args.viewport, writes: writes.length });
     return ok({ node_id: nodeId, viewport: args.viewport, sequence: visualFlowChildren(parent, nodes), changed: writes.length });
@@ -258,7 +260,7 @@ export const resetOverridesTool: AgentTool = {
   async execute(args, ctx) {
     const nodeId = String(args.node_id);
     if (!getToolNodes(ctx).get(nodeId)) return fail(`No node "${nodeId}" in the active file.`);
-    const width = Number(args.viewport);
+    const width = viewportKeyWidth(args.viewport) ?? Number(args.viewport);
     const widths = getSortedBreakpointWidths();
     if (!widths.includes(width)) return fail(`No breakpoint of ${width}px. Breakpoints: ${widths.join(', ')}.`);
     const block = /<style>\s*\{[`']([\s\S]*?)[`']\}\s*<\/style>/.exec(getToolCode(ctx));

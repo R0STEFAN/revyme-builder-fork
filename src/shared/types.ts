@@ -189,6 +189,12 @@ export interface ViewportConfig {
 export const renderWidth = (vp: { width: number; designWidth?: number }): number =>
   vp.designWidth && vp.designWidth > 0 ? vp.designWidth : vp.width;
 
+/** A viewport merged with the widths atom. A width that differs from the config is LIVE — a width
+ *  drag / scrub writes the tile's live width there — and is what the tile is drawn at, so the
+ *  stored `designWidth` (the start) no longer applies while it lasts. */
+export const withLiveWidth = <T extends { width: number; designWidth?: number }>(vp: T, live: number | undefined): T =>
+  live === undefined || live === vp.width ? vp : { ...vp, width: live, designWidth: undefined };
+
 // ─── Overlay ───────────────────────────────────────────────────────────────
 
 // ─── Locale ────────────────────────────────────────────────────────────────

@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createStore } from 'jotai';
 import { activeFilePathAtom } from '../project/active-file-store';
 import { projectFS, projectVersionAtom } from '../project/project-fs';
-import { viewportWidthsAtom, visibleViewportsAtom, viewportsConfigAtom } from './viewport-store';
+import { viewportWidthsAtom, visibleViewportsAtom, viewportsConfigAtom, DEFAULT_VIEWPORTS } from './viewport-store';
+
+/** A config-less file shows the DEFAULT ladder (start model: mobile's stored width is its range's end). */
+const DEFAULT_MOBILE = DEFAULT_VIEWPORTS.find((v) => v.id === 'mobile')!.width;
 
 const PAGE = `'use client';
 
@@ -41,8 +44,8 @@ describe('viewportWidthsAtom is FILE-SCOPED (the template round-trip leak)', () 
     // widths atom kept the page's 898 here — the template's mobile tile
     // rendered at the PAGE's width.
     store.set(activeFilePathAtom, 'app/(Body)/LayoutClient.tsx');
-    expect(store.get(viewportWidthsAtom).mobile).toBe(375);
-    expect(store.get(visibleViewportsAtom).find(v => v.id === 'mobile')?.width).toBe(375);
+    expect(store.get(viewportWidthsAtom).mobile).toBe(DEFAULT_MOBILE);
+    expect(store.get(visibleViewportsAtom).find(v => v.id === 'mobile')?.width).toBe(DEFAULT_MOBILE);
 
     // Back to the page: pre-fix the reconcile effect could leave the
     // template's 375 overlaying the page's fresh 898 config — the visible
@@ -61,7 +64,7 @@ describe('viewportWidthsAtom is FILE-SCOPED (the template round-trip leak)', () 
 
     // The override never follows into another file…
     store.set(activeFilePathAtom, 'app/(Body)/LayoutClient.tsx');
-    expect(store.get(viewportWidthsAtom).mobile).toBe(375);
+    expect(store.get(viewportWidthsAtom).mobile).toBe(DEFAULT_MOBILE);
 
     // Resize commit step 4 pairs the width write with a durable config
     // write (version bump). After it, the CONFIG is the truth everywhere.

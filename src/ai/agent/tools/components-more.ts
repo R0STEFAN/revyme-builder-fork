@@ -7,6 +7,7 @@
 // and the variant bar call — so what the agent produces is what a hand edit
 // produces.
 
+import { viewportKeyWidth, viewportForArg } from './viewport-arg';
 import { z } from 'zod';
 import type { AgentTool, AgentToolResult, ToolContext } from '@/ai/agent';
 import { getToolNodes, resolveToolFile, getToolCode, isBranchedRun, flushTool } from '@/ai/agent/workspace';
@@ -109,7 +110,7 @@ export const showVariantTool: AgentTool = {
     const active = master.host;
     ctx.ensureCheckpoint();
     flushTool(ctx);
-    const viewport = typeof args.viewport === 'number' ? args.viewport : undefined;
+    const viewport = viewportKeyWidth(args.viewport);
     const wrote = modifyProjectFile(active, (code) => {
       if (viewport !== undefined) {
         // Per-breakpoint: an override keyed by width, the base value left alone.

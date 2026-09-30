@@ -95,6 +95,43 @@ describe('normalizeResponsiveBandKeys', () => {
     expect(normalizeResponsiveBandKeys(healed)).toBe(healed);
   });
 
+  it('a floored band and an unfloored band with the SAME max-width each keep their own floor', () => {
+    // Keyed by max-width alone, the unfloored block's floor (0) applied to the floored one too:
+    // its tablet-only rules (incl. a banded :lang rule) were flattened into the mobile band.
+    const bands = `
+    @media (max-width: 564px) and (min-width: 429.02px) {
+      [data-id="hero-1"] { color: green !important; }
+      :lang(fr) [data-id="hero-1"] { letter-spacing: 2px !important; }
+    }
+    @media (max-width: 564px) {
+      [data-id="frame-a"] { padding: 4px !important; }
+    }
+  `;
+    const out = normalizeResponsiveBandKeys(page(bands), { force: true });
+    const mobileBand = out.slice(out.indexOf('@media (max-width: 429px)'));
+    expect(mobileBand).toContain('padding: 4px');            // the cascading band reaches mobile
+    expect(mobileBand).not.toContain('color: green');       // the floored band does not
+    expect(mobileBand).not.toContain(':lang(fr)');
+    const tabletBand = out.slice(out.indexOf('@media (max-width: 564px)'), out.indexOf('@media (max-width: 429px)'));
+    expect(tabletBand).toContain('color: green');
+    expect(tabletBand).toContain('padding: 4px');
+    expect(tabletBand).toContain(':lang(fr) [data-id="hero-1"]');
+  });
+
+  it('flattens in SOURCE order — a later wider band beats an earlier narrower one, as it paints', () => {
+    const bands = `
+    @media (max-width: 429px) {
+      [data-id="hero-1"] { color: red !important; }
+    }
+    @media (max-width: 564px) {
+      [data-id="hero-1"] { color: green !important; }
+    }
+  `;
+    const out = normalizeResponsiveBandKeys(page(bands), { force: true });
+    const mobileBand = out.slice(out.indexOf('@media (max-width: 429px)'));
+    expect(mobileBand).toContain('color: green');           // both match at 429; the later one wins
+  });
+
   it('no-ops without an @canvas config or without band rules', () => {
     const noConfig = `export default function P() { return <div data-id="root"><style>{\`@media (max-width: 500px) { [data-id="x"] { color: red !important; } }\`}</style></div>; }`;
     expect(normalizeResponsiveBandKeys(noConfig)).toBe(noConfig);

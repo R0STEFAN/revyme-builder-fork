@@ -8,6 +8,7 @@
 // JSON-serialized text content.
 // Never writes ProjectFS directly — the mutation queue owns the write path.
 
+import { viewportKeyWidth, viewportForArg } from './viewport-arg';
 import { z } from 'zod';
 import { queueToolMutation, flushTool, getToolTokens } from '@/ai/agent/workspace';
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
@@ -52,8 +53,9 @@ export const setStylesTool: AgentTool = {
     ctx.ensureCheckpoint();
     const nodeId = args.node_id as string;
     const styles = args.styles as Record<string, string>;
-    if (typeof args.viewport === 'number') {
-      queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId, maxWidth: args.viewport, styles });
+    const keyWidth = viewportKeyWidth(args.viewport);
+    if (keyWidth !== undefined) {
+      queueToolMutation(ctx, { type: 'updateContainerStyle', nodeId, maxWidth: keyWidth, styles });
     } else {
       queueToolMutation(ctx, { type: 'updateStyles', nodeId, styles });
     }

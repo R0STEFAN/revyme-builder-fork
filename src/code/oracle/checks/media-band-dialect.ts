@@ -19,6 +19,7 @@
 // the replica paints the base locale color on every tile (the "French shows
 // purple, not tablet blue" find).
 
+import { OPEN_END } from '@/code/project/breakpoint-start-migration';
 import type * as t from '@babel/types';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, type OracleViolation } from './shared';
 import { parseCanvasConfig } from '@/code/project/canvas-config';
@@ -133,7 +134,8 @@ export function checkMediaBandDialect(code: string, ast: t.File, v: OracleViolat
     let c: RegExpExecArray | null;
     while ((c = capRe.exec(css)) !== null) {
       const maxW = parseFloat(c[1]);
-      if (maxW >= largest && !flagged.has(c[1])) {
+      // A breakpoint WIDER than the primary is keyed at OPEN_END: its band is its own open top.
+      if (maxW >= largest && maxW < OPEN_END && !flagged.has(c[1])) {
         flagged.add(c[1]);
         v.push({
           code: 'MEDIA_TOP_BAND_CAPPED', tier: 2,

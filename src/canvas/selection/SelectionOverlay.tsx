@@ -14,6 +14,8 @@ import { SELECTION_COLOR, COMPONENT_COLOR, isTextTag, isFitSize } from '@/shared
 import { interactingViewportIdAtom, viewportWidthsAtom, syncViewportWidths, viewportsConfigAtom, viewportPositionsAtom } from '@/code/stores/viewport-store';
 import { isDefaultLocaleAtom } from '@/code/stores/locale-store';
 import { applyViewportWidthChange } from '@/code/generation/viewport-width-rewrite';
+import { activeLadderIsStartModel, commitBreakpointStart } from '@/canvas/helpers/breakpoint-commit';
+import { startOf } from '@/code/project/breakpoint-ladder';
 import { findNodeRect, findGhostsForTemplate, getContentRoot, updateNodeStyles, findNodeComputedStyles, patchNodeStyles, getViewportPrefix, forceCanvasRender } from '@/canvas/node-ops';
 import { mirrorPrimaryViewportHeightToRoot } from '@/canvas/viewport-size-ops';
 import { makeGhostId } from '@/shared/ghost-id';
@@ -503,6 +505,23 @@ export default function SelectionOverlay({ onGripDragStart, onSnapGuidesChange }
         const oldVp = allViewportConfigs.find(v => v.id === resizedVpId);
         const oldWidth = oldVp?.width ?? newWidth;
 
+        // START MODEL: the dragged width is the breakpoint's new START (its tile width); one
+        // commit moves the next narrower breakpoint's end with it (breakpoint-ladder.ts) and
+        // writes the ladder. The drag dirtied the widths atom with live widths — the commit
+        // re-adopts the config's; an unchanged start just restores them.
+        const startModel = activeLadderIsStartModel();
+        if (startModel) {
+          const cfgVp = getDefaultStore().get(viewportsConfigAtom).find(v => v.id === resizedVpId);
+          if (cfgVp && startOf(cfgVp) !== newWidth) {
+            commitBreakpointStart(activeFilePath, resizedVpId, newWidth);
+          } else if (cfgVp) {
+            setViewportWidths(prev => {
+              const restored = { ...prev, [resizedVpId]: cfgVp.width };
+              syncViewportWidths(restored);
+              return restored;
+            });
+          }
+        } else
         // 2. Update viewport width atom + imperative sync for the generator
         setViewportWidths(prev => {
           // Band rules in the FILE are keyed by the CONFIG width — always
@@ -549,6 +568,10 @@ export default function SelectionOverlay({ onGripDragStart, onSnapGuidesChange }
         const primaryForCommit = allVpsForCommit.find(v => v.isPrimary) ?? allVpsForCommit[0];
         const isPrimaryResize = !!primaryForCommit && primaryForCommit.id === resizedVpId;
         setViewportsConfig(prev => prev.map(v => {
+          if (v.id === resizedVpId && startModel) {
+            // Start model: the ladder (widths + starts) was committed above — height only.
+            return newHeight > 0 ? { ...v, height: newHeight } : v;
+          }
           if (v.id === resizedVpId) {
             // Dragging the tile's edge DEFINES it, so the import's
             // `designWidth` hint goes: the tile renders at what was just

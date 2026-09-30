@@ -1014,8 +1014,8 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 /** @canvas {
   "viewports": [
     { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 375, "isPrimary": false, "order": 2 }
+    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
+    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
   ],
   "positions": {
     "desktop": { "x": 0, "y": 0 },
@@ -1119,8 +1119,8 @@ export default function Page() {
 const CANVAS_CONFIG_BLOCK = `/** @canvas {
   "viewports": [
     { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 375, "isPrimary": false, "order": 2 }
+    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
+    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
   ],
   "positions": {
     "desktop": { "x": 0, "y": 0 },

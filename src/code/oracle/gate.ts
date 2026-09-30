@@ -13,6 +13,7 @@
 // `commitTurnFiles` is honest: a path only appears in `written[]` if it
 // actually landed, so a partial write is detectable by the caller.
 
+import { migrateFileToStartBreakpoints } from '@/code/project/breakpoint-start-migration';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { trace } from '@/shared/debug-trace';
@@ -61,6 +62,16 @@ export function gateTurnFiles(
       }
     }
     return f;
+  }).map((f) => {
+    // BREAKPOINTS: a model writes the classic shape (a viewport's width is where its range ENDS,
+    // bands keyed at it). Pages and templates are converted to the start model with the same
+    // lossless migration every stored project went through — before the checks, so the checks
+    // judge exactly what gets written. A no-op for start-model and single-breakpoint files.
+    if (f.kind !== 'page') return f;
+    const { code, steps } = migrateFileToStartBreakpoints(f.code);
+    if (steps.length === 0) return f;
+    trace.action('gate:breakpoints-to-start-model', { path: f.path, steps: steps.length });
+    return { ...f, code };
   });
 
   // The EFFECTIVE page surfaces for cross-file checks: batch versions win over
