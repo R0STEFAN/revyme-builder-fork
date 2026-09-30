@@ -9,10 +9,10 @@ import { calculateFitViewBox } from '@/code/generation/fit-text-gen';
 import { refitFitTextForStyles } from '../fit-refit';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import { useRef } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
 import { selectedNodeAtom, selectedIdsAtom, getNodesSnapshot } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
-import { isReplicaViewportAtom, interactingViewportWidthAtom } from '@/code/stores/viewport-store';
+import { isReplicaViewportAtom, interactingViewportWidthAtom, interactingViewportRenderWidthAtom } from '@/code/stores/viewport-store';
 import { containerOverridesAtom, getOverrideValue, hasOverrideAtWidth } from '@/code/stores/container-query-store';
 import { findNodeComputedStyle, getInteractingViewport, forceCanvasRender, updateNodeStyles, getContentRoot } from '@/canvas/node-ops';
 import { trace } from '@/shared/debug-trace';
@@ -394,7 +394,8 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
         // the text keeps its on-screen size through the switch.
         const textId = fitTextNode?.id;
         if (!textId) return;
-        const { vpId, vpWidth } = getInteractingViewport();
+        const { vpId } = getInteractingViewport();
+        const vpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom); // the DRAWN tile width
         const unitPx = parseFloat(fitTextNode?.styles?.fontSize ?? '') || 16;
         const vbW = parseFloat(String((fitWrapperNode?.attrs as any)?.viewBox ?? '').split(/\s+/)[2] ?? '') || 0;
         const wrapperW = parseFloat(findNodeComputedStyle(selectedId, vpId, 'width')) || 0;
@@ -421,7 +422,10 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
       // then express that px in the new unit. Without this the user
       // swap from `56px` → `vw` would write `56vw` and balloon the text;
       // with it, `56px` becomes `~3.89vw` at vp=1440, looking identical.
-      const { vpId, vpWidth } = getInteractingViewport();
+      // vw / vh convert against the width the tile is DRAWN at (a start-model breakpoint's start),
+      // not its stored width (where its range ends).
+      const { vpId } = getInteractingViewport();
+      const vpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
       const currentPx = resolveCurrentFontSizePx(selectedId ?? null, vpId, value, vpWidth);
       const converted = convertFontSizeUnit(currentPx, newUnit, vpWidth);
       const newValue = `${formatConvertedValue(converted)}${newUnit}`;

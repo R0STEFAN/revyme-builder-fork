@@ -13,7 +13,7 @@ import { isDefaultLocaleAtom, localeOverridesAtom } from '@/code/stores/locale-s
 import { updateNodeStyles, getContentRoot, flushAndForceStructuralRender } from '@/canvas/node-ops';
 import { detectValueSource } from '@/code/features/variable-ops';
 import { containerOverridesAtom, hasOverride as _hasOverride, hasOverrideAtWidth, getOverrideBreakpoints, clearShorthandSupersededLonghands } from '@/code/stores/container-query-store';
-import { isReplicaViewportAtom, interactingViewportWidthAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
+import { isReplicaViewportAtom, interactingViewportWidthAtom, interactingViewportRenderWidthAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { removeComponentPropProjectWide } from '@/code/features/remove-component-prop';
 import { getScrollBoundProps } from '@/editor/hooks/useScrollBoundProps';
@@ -167,6 +167,9 @@ export function UnifiedControlProvider({
   const overrides = useAtomValue(containerOverridesAtom);
   const isReplica = useAtomValue(isReplicaViewportAtom);
   const vpWidth = useAtomValue(interactingViewportWidthAtom);
+  // Per-breakpoint VALUE ranges are judged at the width the tile is DRAWN at (a start-model
+  // breakpoint's start); `vpWidth` stays the KEY its overrides are stored under.
+  const drawnWidth = useAtomValue(interactingViewportRenderWidthAtom);
   const isComponentVariantViewport = useAtomValue(isComponentVariantViewportAtom);
   const activeComponentVariant = useAtomValue(activeComponentVariantAtom);
 
@@ -211,7 +214,7 @@ export function UnifiedControlProvider({
           const widths = Object.keys(byW).map(Number).sort((a, b) => a - b);
           for (const b of widths) {
             const min = node.responsiveStyleBands?.[p]?.[b] ?? 0;
-            if (vpWidth <= b && vpWidth >= min) { result = { ...result, [p]: byW[b] }; break; }
+            if (drawnWidth <= b && drawnWidth >= min) { result = { ...result, [p]: byW[b] }; break; }
           }
         }
       }
@@ -262,7 +265,7 @@ export function UnifiedControlProvider({
     result = surfaceHiddenVariantDisplay(result, property, activeComponentVariant, node?.hiddenOnVariants);
 
     return result;
-  }, [mode, outerControl?.styles, baseNodeStyles, isDefaultLocale, selectedId, localeOverrides, isReplica, vpWidth, overrides, property, isComponentVariantViewport, activeComponentVariant, node]);
+  }, [mode, outerControl?.styles, baseNodeStyles, isDefaultLocale, selectedId, localeOverrides, isReplica, vpWidth, drawnWidth, overrides, property, isComponentVariantViewport, activeComponentVariant, node]);
 
   // Resolve value
   const value = resolveValue(mode, property, nodeStyles, stopProps, externalValue, defaultValue);
@@ -466,7 +469,7 @@ export function UnifiedControlProvider({
     for (const b of widths) {
       // BAND, not cascade: a Tablet override's pill shows on Tablet only, not Mobile.
       const min = node.responsiveStyleBands?.[property]?.[b] ?? 0;
-      if (vpWidth <= b && vpWidth >= min) return byW[b];
+      if (drawnWidth <= b && drawnWidth >= min) return byW[b];
     }
     return undefined;
   })();

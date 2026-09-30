@@ -969,13 +969,19 @@ export function normalizeResponsiveBandKeys(code: string, opts?: { force?: boole
     return { target, targetLang };
   };
 
-  // Phase 1 — each viewport flattens what its tile paints TODAY.
+  // Phase 1 — each viewport flattens what its tile paints TODAY: the blocks that cover the width
+  // its tile is DRAWN at (a start-model breakpoint's start, `designWidth`), written under its KEY
+  // (`width`, where its range ends). A band off the ladder (a typography preset tier keyed 599)
+  // is judged exactly as the tile shows it.
   const merged = new Map<number, Map<string, Map<string, string>>>();
   const mergedLang = new Map<number, string[]>();
   const bandless: number[] = [];
-  for (const vpW of nonPrimary) {
-    if (!blocks.some(b => covers(b, vpW))) { bandless.push(vpW); continue; }
-    const { target, targetLang } = flattenAt(vpW);
+  for (const vp of config.viewports) {
+    const vpW = vp.width;
+    if (vpW === primaryW || merged.has(vpW) || bandless.includes(vpW)) continue;
+    const drawn = vp.designWidth && vp.designWidth > 0 ? vp.designWidth : vpW;
+    if (!blocks.some(b => covers(b, drawn))) { bandless.push(vpW); continue; }
+    const { target, targetLang } = flattenAt(drawn);
     if (target.size > 0) merged.set(vpW, target);
     if (targetLang.length > 0) mergedLang.set(vpW, targetLang);
   }

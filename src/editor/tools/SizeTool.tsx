@@ -12,7 +12,7 @@ import { useAtomValue, useSetAtom, getDefaultStore } from 'jotai';
 import { canvasInteractingAtom, getNodesSnapshot, selectedIdsAtom } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
 import { injectFlexLayoutOnFrame, shouldInjectLayoutOnAuto, freezeParentRelativeChildrenForAuto } from './layout-injection';
-import { viewportsConfigAtom, viewportWidthsAtom, syncViewportWidths, activeComponentVariantAtom } from '@/code/stores/viewport-store';
+import { viewportsConfigAtom, viewportWidthsAtom, syncViewportWidths, activeComponentVariantAtom, interactingViewportRenderWidthAtom } from '@/code/stores/viewport-store';
 import { applyViewportWidthChange } from '@/code/generation/viewport-width-rewrite';
 import { activeFilePathAtom, isVectorSetComponentFile } from '@/code/project/active-file-store';
 import { modifyProjectFile } from '@/code/project/modify-file';
@@ -1140,7 +1140,9 @@ if (heightIsAuto) {
     // EXCEPT when the user typed a number over the auto placeholder: that
     // number is the intent, not the size the element happens to have.
     const currentPx = resolveUnitChangePx(toUnit, typedNum, computed.width);
-    const { vpWidth: simVpWidth } = getInteractingViewport();
+    // vw / vh / % are measured against the width the tile is DRAWN at (a start-model breakpoint's
+    // start) — never the stored width, which is where its range ends.
+    const simVpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
     const simVpHeight = estimatedVpHeight(simVpWidth);
     if (toUnit === 'auto') {
       const selfNode = getNodesSnapshot().get(nodeId);
@@ -1342,7 +1344,9 @@ if (heightIsAuto) {
     // EXCEPT when the user typed a number over the auto placeholder: that
     // number is the intent, not the size the element happens to have.
     const currentPx = resolveUnitChangePx(toUnit, typedNum, computed.height);
-    const { vpWidth: simVpWidth } = getInteractingViewport();
+    // vw / vh / % are measured against the width the tile is DRAWN at (a start-model breakpoint's
+    // start) — never the stored width, which is where its range ends.
+    const simVpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
     const simVpHeight = estimatedVpHeight(simVpWidth);
     if (toUnit === 'auto') {
       const selfNode = getNodesSnapshot().get(nodeId);
