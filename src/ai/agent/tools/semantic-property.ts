@@ -39,14 +39,14 @@ const NODE_ID_DESCRIBE = 'data-id of the target node';
 export const setStylesTool: AgentTool = {
   name: 'set_styles',
   description:
-    'Set CSS styles (camelCase) on a node. Pass "" to REMOVE a property. Optional viewport = breakpoint width in px (e.g. 768 for tablet) for a responsive override; omit for base/desktop.',
+    'Set CSS styles (camelCase) on a node. Pass "" to REMOVE a property. Optional viewport = breakpoint width in px (e.g. 810 for tablet) for a responsive override; omit for base/desktop.',
   inputSchema: {
     node_id: z.string().describe(NODE_ID_DESCRIBE),
     styles: stylesSchema,
     viewport: z
       .number()
       .optional()
-      .describe('breakpoint width in px for a responsive override (e.g. 768 for tablet); omit for base/desktop'),
+      .describe('breakpoint width in px for a responsive override (e.g. 810 for tablet); omit for base/desktop'),
   },
   category: 'semantic',
   async execute(args, ctx) {

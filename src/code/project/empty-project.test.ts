@@ -21,6 +21,7 @@
 //     (2026-07-22). Demo content (about page, CMS, components) still lives
 //     only in `createDefaultProject`.
 
+import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 import { describe, expect, it } from 'vitest';
 import { createEmptyProject } from './project-fs';
 
@@ -120,7 +121,7 @@ describe('createEmptyProject', () => {
       expect(config.viewports[0]).toMatchObject({
         id: 'desktop',
         label: 'Desktop',
-        width: 1440,
+        width: DEFAULT_BREAKPOINT_STARTS.desktop,
         isPrimary: true,
         order: 0,
         height: 900,

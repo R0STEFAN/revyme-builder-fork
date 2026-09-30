@@ -21,6 +21,7 @@
 // Both client files use the same canvas-config block so viewport positions
 // stay consistent with hand-created pages.
 
+import { defaultCanvasBlock } from './canvas-config';
 import { projectFS } from './project-fs';
 import { uniqueRouteSlug, slugToFilePath } from './active-file-store';
 import { getCollectionSchema } from './cms-ops';
@@ -251,18 +252,7 @@ function renderAllFields(
 
 // ─── Canvas config block (shared) ──────────────────────────────────────────
 
-const CANVAS_CONFIG_BLOCK = `/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 },
-    "tablet": { "x": 1600, "y": 0 },
-    "mobile": { "x": 2528, "y": 0 }
-  }
-} */`;
+const CANVAS_CONFIG_BLOCK = `${defaultCanvasBlock()}`;
 
 // ─── Server wrapper (shared) ────────────────────────────────────────────────
 // The thin server `page.tsx` half of the page pair: owns the `metadata`

@@ -7,7 +7,7 @@ import { atom } from 'jotai';
 import type { ViewportConfig } from '@/shared/types';
 import { activeFilePathAtom, activeCodeAtom, isComponentFilePath, isIconSetFilePath } from '../project/active-file-store';
 import { projectVersionAtom, projectFS } from '../project/project-fs';
-import { parseCanvasConfig, updateCanvasConfigInCode } from '../project/canvas-config';
+import { parseCanvasConfig, updateCanvasConfigInCode, defaultViewports } from '../project/canvas-config';
 import { parseVariantConfig } from '../variants/variant-config';
 import { VIEWPORT_GAP, DEFAULT_VIEWPORT_WIDTH } from '@/shared/constants';
 import { trace } from '@/shared/debug-trace';
@@ -24,14 +24,10 @@ function computeDefaultPositions(configs: Omit<ViewportConfig, 'x' | 'y'>[]): Vi
   });
 }
 
-/** Default viewport configs — used as initial value. START model (breakpoint-ladder.ts): each
- *  breakpoint starts at its designWidth and ends one pixel below the next wider one's start —
- *  Desktop 1440+, Tablet 768–1439, Mobile below 768. */
-export const DEFAULT_VIEWPORTS: ViewportConfig[] = computeDefaultPositions([
-  { id: 'desktop', label: 'Desktop', width: DEFAULT_VIEWPORT_WIDTH, isPrimary: true, order: 0 },
-  { id: 'tablet', label: 'Tablet', width: DEFAULT_VIEWPORT_WIDTH - 1, designWidth: 768, isPrimary: false, order: 1 },
-  { id: 'mobile', label: 'Mobile', width: 767, designWidth: 375, isPrimary: false, order: 2 },
-]);
+/** Default viewport configs — used as initial value and for a page without an @canvas block.
+ *  The new-page ladder (DEFAULT_BREAKPOINT_STARTS, START model): Desktop 1200+, Tablet 810–1199,
+ *  Mobile below 810. */
+export const DEFAULT_VIEWPORTS: ViewportConfig[] = computeDefaultPositions(defaultViewports());
 
 
 // ─── Dynamic viewport config (from @canvas block) ──────────────────────────

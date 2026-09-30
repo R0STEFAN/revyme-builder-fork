@@ -31,7 +31,7 @@ import { getEnclosingMapIteratorForNode, getEnclosingMapSourceForNode } from '@/
 import { enclosingFormIdInCode, formStateVar, type FormStateMapping } from '@/code/generation/form-state-gen';
 import type { SerScope } from '@/code/generation/generator-motion';
 import { resolveScope, type ResolvedScope } from '@/code/animations/animation-scope';
-import { getSortedBreakpointWidths, interactingViewportIdAtom } from '@/code/stores/viewport-store';
+import { getSortedBreakpointWidths, interactingViewportIdAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
 import { detectHugAxes } from '@/code/components/master-root-sizing';
 import { findNodeRect } from '@/canvas/node-ops';
 import { DEFAULT_VIEWPORT_WIDTH } from '@/shared/constants';
@@ -224,7 +224,9 @@ function nodeStyles(code: string, nodeId: string): Record<string, string> {
 }
 
 function scopeFor(viewport: number | undefined): ResolvedScope {
-  if (viewport == null || viewport === DEFAULT_VIEWPORT_WIDTH) return null;
+  // The PRIMARY viewport's own width is the base design (no scope) — whatever the page's desktop is.
+  const primaryWidth = getDefaultStore().get(viewportsConfigAtom).find((v) => v.isPrimary)?.width ?? DEFAULT_VIEWPORT_WIDTH;
+  if (viewport == null || viewport === primaryWidth) return null;
   return resolveScope({ kind: 'viewports', widths: [viewport] }, getSortedBreakpointWidths());
 }
 
@@ -242,7 +244,7 @@ export const setMotionPresetTool: AgentTool = {
     viewport: z
       .number()
       .optional()
-      .describe('breakpoint width in px (e.g. 768 for tablet) to scope the effect to that replica, like the panel does; omit for base/desktop'),
+      .describe('breakpoint width in px (e.g. 810 for tablet) to scope the effect to that replica, like the panel does; omit for base/desktop'),
     transition: z
       .object({
         duration: z.number().positive().optional().describe('duration in seconds, e.g. 0.3'),

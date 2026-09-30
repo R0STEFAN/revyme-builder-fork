@@ -7,12 +7,14 @@ import type { OracleViolation } from './shared';
  *  JSON comment the canvas parses literally:
  *    /** @canvas { "viewports": [{ "id", "label", "width", "height"?,
  *    "isPrimary", "order" }...], "positions": { "<id>": { "x", "y" } } } *\/
- *  Models may EDIT it to ADD viewports (e.g. tablet 768 / mobile 375) but the
+ *  Models may EDIT it to ADD viewports (e.g. tablet 810 / mobile 390) but the
  *  shape must stay valid: exactly one primary, unique ids, a positions entry
  *  per viewport. */
 function checkCanvasConfig(code: string, v: OracleViolation[]): void {
   const m = code.match(/\/\*\*\s*@canvas\s*([\s\S]*?)\*\//);
-  const CANONICAL = `/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1440, "height": "auto", "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 768, "height": "auto", "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 375, "height": "auto", "isPrimary": false, "order": 2 } ], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1560, "y": 0 }, "mobile": { "x": 2450, "y": 0 } } } */`;
+  // The default ladder (Desktop 1200 / Tablet 810 / Mobile 390). A model writes each breakpoint's
+  // number as its `width`; the gate converts the page to the start model on write.
+  const CANONICAL = `/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 810, "height": "auto", "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 390, "height": "auto", "isPrimary": false, "order": 2 } ], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1360, "y": 0 }, "mobile": { "x": 2330, "y": 0 } } } */`;
   if (!m) {
     v.push({
       code: 'CANVAS_CONFIG_MISSING', tier: 2,
@@ -83,7 +85,7 @@ function checkCanvasConfig(code: string, v: OracleViolation[]): void {
     if (missing.length > 0) {
       v.push({
         code: 'CANVAS_VIEWPORT_BREAKPOINT_MISMATCH', tier: 2,
-        message: `The page styles breakpoint width(s) ${missing.sort((a, b) => b - a).map((w) => `${w}px`).join(', ')} (@media max-width / data-responsive "_bp") but the /** @canvas */ block declares no viewport at those widths — the responsive styles work on the live site, yet the canvas shows NO tile to preview or edit them. Add a viewport entry (+ a positions entry, to the RIGHT of existing tiles) for each breakpoint, e.g. tablet 768 / mobile 375 as in: ${CANONICAL}`,
+        message: `The page styles breakpoint width(s) ${missing.sort((a, b) => b - a).map((w) => `${w}px`).join(', ')} (@media max-width / data-responsive "_bp") but the /** @canvas */ block declares no viewport at those widths — the responsive styles work on the live site, yet the canvas shows NO tile to preview or edit them. Add a viewport entry (+ a positions entry, to the RIGHT of existing tiles) for each breakpoint, e.g. tablet 810 / mobile 390 as in: ${CANONICAL}`,
       });
     }
   }

@@ -6,13 +6,16 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { DesktopViewportIcon, TabletViewportIcon, MobileViewportIcon, ReloadIcon } from '@/shared/icons';
 import { trace } from '@/shared/debug-trace';
+import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 
 // ─── Device presets ─────────────────────────────────────────────────────────
 
+// Each width lands inside the matching breakpoint of the default ladder (Desktop 1200+,
+// Tablet 810–1199, Mobile < 810) AND of the older 1440 / 768 / 375 one.
 const PRESETS = {
   desktop: { width: 1440, height: 900 },
-  tablet: { width: 768, height: 1024 },
-  mobile: { width: 375, height: 812 },
+  tablet: { width: DEFAULT_BREAKPOINT_STARTS.tablet, height: 1024 },
+  mobile: { width: DEFAULT_BREAKPOINT_STARTS.mobile, height: 812 },
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -50,8 +53,9 @@ export default function PreviewFrame({ children, onReload }: PreviewFrameProps) 
   const currentHeight = isFullScreen ? windowHeight - 52 : previewHeight; // 52 = header height
 
   // Derive active viewport from width
-  const activeViewport = currentWidth <= PRESETS.mobile.width ? 'mobile'
-    : currentWidth <= PRESETS.tablet.width ? 'tablet' : 'desktop';
+  // The default ladder's ranges: a breakpoint runs from its start up to the next wider one's.
+  const activeViewport = currentWidth < DEFAULT_BREAKPOINT_STARTS.tablet ? 'mobile'
+    : currentWidth < DEFAULT_BREAKPOINT_STARTS.desktop ? 'tablet' : 'desktop';
 
   // ─── Drag handlers ──────────────────────────────────────────────────
 

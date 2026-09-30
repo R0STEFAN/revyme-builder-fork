@@ -27,42 +27,13 @@
 
 import { parseCanvasConfig, updateCanvasConfigInCode } from './canvas-config';
 import { relabelWidthQueries, renameWidthKey } from './breakpoint-relabel';
+import { planLadder, startOf } from './breakpoint-ladder';
 import { trace } from '@/shared/debug-trace';
-import type { ViewportConfig } from '@/shared/types';
 
-export interface LadderEntry {
-  id: string;
-  /** Where the breakpoint's range starts — the number shown to the user. */
-  start: number;
-  /** Where it ends — the stored `width` every mechanism reads. The primary at the top has none. */
-  end: number | null;
-}
-
-/** The end of a range that has none — the widest breakpoint when it is not the primary. */
-export const OPEN_END = 100000;
-
-/**
- * The rule, in one place: given each breakpoint's START, its END is the next-larger distinct start
- * − 1. The widest range is open: no end when it is the primary's (the base design), OPEN_END when
- * it belongs to replicas. Breakpoints at the same start share a range. Pure. Sorted widest first.
- */
-export function ladderFromStarts(starts: Array<{ id: string; start: number; isPrimary?: boolean }>): LadderEntry[] {
-  const sorted = [...starts].sort((a, b) => b.start - a.start);
-  const distinct = [...new Set(sorted.map((v) => v.start))];
-  const primaryOnTop = sorted.some((v) => v.isPrimary && v.start === distinct[0]);
-  return sorted.map((vp) => {
-    const i = distinct.indexOf(vp.start);
-    const end = i > 0 ? distinct[i - 1] - 1 : primaryOnTop ? null : OPEN_END;
-    return { id: vp.id, start: vp.start, end };
-  });
-}
+// The rule (ladderFromStarts, OPEN_END) lives with the edit planner; re-exported for callers.
+export { ladderFromStarts, OPEN_END, type LadderEntry } from './breakpoint-ladder';
 
 export interface MigrationStep { id: string; start: number; oldEnd: number; newEnd: number }
-
-/** Does this file already follow the start model (a Framer import, or already migrated)? */
-function alreadyStartModel(viewports: ViewportConfig[]): boolean {
-  return viewports.some((v) => typeof v.designWidth === 'number' && v.designWidth > 0);
-}
 
 /**
  * Migrate ONE file. Returns the new code and the steps taken (empty = nothing to do: no
@@ -70,39 +41,38 @@ function alreadyStartModel(viewports: ViewportConfig[]): boolean {
  */
 export function migrateFileToStartBreakpoints(code: string): { code: string; steps: MigrationStep[] } {
   const config = parseCanvasConfig(code);
-  if (!config || config.viewports.length < 2 || alreadyStartModel(config.viewports)) return { code, steps: [] };
+  if (!config || config.viewports.length < 2) return { code, steps: [] };
 
-  const primary = config.viewports.find((v) => v.isPrimary)
-    ?? config.viewports.reduce((a, b) => (b.width > a.width ? b : a));
-  const ladder = ladderFromStarts(config.viewports.map((v) => ({ id: v.id, start: v.width, isPrimary: v === primary })));
-
+  // Each breakpoint's START is its designWidth, or its width when it has none (a classic file,
+  // or a breakpoint appended in the classic shape to a start-model page). The planner turns the
+  // starts into ends and orders the key moves so none lands on a width still held.
+  const plan = planLadder(config.viewports);
   const steps: MigrationStep[] = [];
-  for (const entry of ladder) {
-    if (entry.end === null) continue;                        // the primary's open range: nothing moves
-    const vp = config.viewports.find((v) => v.id === entry.id)!;
-    if (entry.end <= vp.width) continue;                      // breakpoints 1px apart: nothing to widen
-    steps.push({ id: vp.id, start: entry.start, oldEnd: vp.width, newEnd: entry.end });
-  }
+  config.viewports.forEach((vp, i) => {
+    const next = plan.viewports[i];
+    if (next.width !== vp.width) steps.push({ id: vp.id, start: startOf(next), oldEnd: vp.width, newEnd: next.width });
+  });
   if (steps.length === 0) return { code, steps };
-  const endOf = (v: ViewportConfig) => steps.find((s) => s.id === v.id)?.newEnd ?? v.width;
-  const openTop = ladder.filter((e) => e.end === null).map((e) => e.id);
-  // 1. Queries — every tile keeps its truth, the primary's range keeps its queries.
-  //    When the primary is on top, its open range keeps its queries as they were.
+
+  // 1. Queries — every tile keeps its truth; when the primary is on top, its open range keeps
+  //    its queries as they were.
+  const primary = config.viewports.find((v) => v.isPrimary)
+    ?? config.viewports.reduce((a, b) => (startOf(b) > startOf(a) ? b : a));
+  const topStart = Math.max(...config.viewports.map(startOf));
+  const openTop = startOf(primary) === topStart
+    ? config.viewports.filter((v) => startOf(v) === topStart).map((v) => v.id)
+    : [];
   let out = relabelWidthQueries(code, {
     preserveAbove: openTop.length > 0,
-    tiles: config.viewports.filter((v) => !openTop.includes(v.id)).map((v) => ({ drawn: v.width, newEnd: endOf(v) })),
+    tiles: config.viewports
+      .map((v, i) => ({ id: v.id, drawn: startOf(v), newEnd: plan.viewports[i].width }))
+      .filter((t) => !openTop.includes(t.id))
+      .map(({ drawn, newEnd }) => ({ drawn, newEnd })),
   });
-  // 2. Keys — widest first: a new end never collides with a narrower breakpoint's old end.
-  //    Breakpoints sharing a width share their keys: rename each width once.
-  for (const st of steps.filter((s, i) => steps.findIndex((o) => o.oldEnd === s.oldEnd) === i)) {
-    out = renameWidthKey(out, st.oldEnd, st.newEnd);
-  }
+  // 2. Keys — in the planner's collision-free order.
+  for (const m of plan.moves) out = renameWidthKey(out, m.from, m.to);
   // 3. Declare it: start = designWidth (the tile keeps its width), end = width.
-  for (const st of steps) {
-    const vp = config.viewports.find((v) => v.id === st.id)!;
-    vp.designWidth = st.start;
-    vp.width = st.newEnd;
-  }
+  config.viewports = plan.viewports;
   out = updateCanvasConfigInCode(out, config);
   if (steps.length > 0) trace.action('breakpoint-migration:file', { steps });
   return { code: out, steps };

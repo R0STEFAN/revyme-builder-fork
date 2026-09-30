@@ -390,7 +390,7 @@ const store = getDefaultStore();
 
 /** The viewport argument's contract: an id ('desktop' | 'tablet' | 'mobile' |
  *  custom) OR a width in px (reverse-resolved to its viewport). */
-export const VIEWPORT_DESCRIBE = 'a viewport id (desktop/tablet/mobile or custom) OR a width in px (1440, 768, 375)';
+export const VIEWPORT_DESCRIBE = 'a viewport id (desktop/tablet/mobile or custom) OR a width in px — where the breakpoint starts, as list_viewports shows it (e.g. 1200, 810, 390)';
 
 const NODE_ID_DESCRIBE = 'data-id of the target node';
 
@@ -624,7 +624,7 @@ function formatStylesLine(computed: Record<string, string>): string {
 export const getLayoutTool: AgentTool = {
   name: 'get_layout',
   description:
-    'Returns the measured bounding rects of every rendered node in a viewport — where elements ACTUALLY landed after CSS is applied (flex, container rules, …). One line per node: <id>  x:.. y:.. w:.. h:..  visible|hidden(display:none)|norect. Use it to verify spacing, alignment and stacking. Optional viewport: a viewport id (\'desktop\' (default), \'tablet\', \'mobile\', a custom id) OR a width in px (1440, 768, 375) — a width resolves to the viewport with that width. The output carries status ("ready" | "pending" | "unavailable") with a reason, plus epoch/coverage/unmeasured: status is "ready" only at 100 % coverage on a fresh epoch — a turn is not finished while status is not "ready".',
+    'Returns the measured bounding rects of every rendered node in a viewport — where elements ACTUALLY landed after CSS is applied (flex, container rules, …). One line per node: <id>  x:.. y:.. w:.. h:..  visible|hidden(display:none)|norect. Use it to verify spacing, alignment and stacking. Optional viewport: a viewport id (\'desktop\' (default), \'tablet\', \'mobile\', a custom id) OR a width in px — where the breakpoint starts, as list_viewports shows it (e.g. 1200, 810, 390) — a width resolves to the viewport with that width. The output carries status ("ready" | "pending" | "unavailable") with a reason, plus epoch/coverage/unmeasured: status is "ready" only at 100 % coverage on a fresh epoch — a turn is not finished while status is not "ready".',
   inputSchema: { viewport: z.union([z.string(), z.number()]).optional().describe(VIEWPORT_DESCRIBE) },
   category: 'read',
   async execute(args, ctx?: ToolContext) {

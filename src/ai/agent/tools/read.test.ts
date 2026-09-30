@@ -55,7 +55,12 @@ const toolCtx: ToolContext = {
 };
 
 /** Tiny page the parser turns into a 4-node map: hero → (card-a → card-a-text, card-b). */
-const PAGE_CODE = `export default function Page() {
+/** The ladder these fixtures' rects are measured against: Desktop 1440+, Tablet 768–1439, Mobile
+ *  below 768 (start model) — declared, so the tests don't lean on the editor's default ladder. */
+const FIXTURE_CANVAS = `/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 } ], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1600, "y": 0 }, "mobile": { "x": 2528, "y": 0 } } } */
+`;
+
+const PAGE_CODE = `${FIXTURE_CANVAS}export default function Page() {
   return (
     <section data-id="hero" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div data-id="card-a" style={{ width: '200px' }}>
@@ -69,7 +74,7 @@ const PAGE_CODE = `export default function Page() {
 
 /** A page where every linter rule can be triggered: overlapping siblings,
  *  an overflowing child, dim/tiny/long text and a 3×3 dead spot. */
-const AUDIT_PAGE_CODE = `export default function Page() {
+const AUDIT_PAGE_CODE = `${FIXTURE_CANVAS}export default function Page() {
   return (
     <section data-id="hero" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div data-id="a" style={{ width: '300px' }} />

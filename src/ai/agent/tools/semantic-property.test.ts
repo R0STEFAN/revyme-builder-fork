@@ -13,6 +13,11 @@ import {
 import type { AgentTool, ToolContext } from '@/ai/agent';
 import { getPresetTokens } from '@/code/project/preset-ops';
 import { setTokenTool } from './semantic-property';
+import { DEFAULT_VIEWPORTS } from '@/code/stores/viewport-store';
+/** The default ladder (start model): each breakpoint is named by its START, keyed by its END. */
+const DEFAULT_TABLET = DEFAULT_VIEWPORTS.find((v) => v.id === 'tablet')!;
+const DEFAULT_MOBILE = DEFAULT_VIEWPORTS.find((v) => v.id === 'mobile')!;
+
 
 vi.mock('@/code/mutation/mutation-queue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/code/mutation/mutation-queue')>();
@@ -60,15 +65,14 @@ describe('semantic property tools', () => {
 
   it('set_styles with viewport queues updateContainerStyle', async () => {
     const ctx = makeCtx();
-    await setStylesTool.execute({ node_id: 'box', styles: { display: 'none' }, viewport: 768 }, ctx);
+    await setStylesTool.execute({ node_id: 'box', styles: { display: 'none' }, viewport: DEFAULT_TABLET.designWidth }, ctx);
     expect(queueMutation).toHaveBeenCalledTimes(1);
-    // `viewport: 768` names Tablet by its START; its overrides key on its END (default ladder:
-    // Desktop 1440+, Tablet 768–1439, Mobile < 768).
+    // `viewport` names Tablet by its START (its tile width); its overrides key on its END.
     expect(queueMutation).toHaveBeenCalledWith(
       {
         type: 'updateContainerStyle',
         nodeId: 'box',
-        maxWidth: 1439,
+        maxWidth: DEFAULT_TABLET.width,
         styles: { display: 'none' },
       },
       { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },

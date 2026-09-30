@@ -94,7 +94,7 @@ export const setListConfigTool: AgentTool = {
     sort: z.array(z.object({ field: z.string(), direction: z.enum(['asc', 'desc']) })).optional(),
     limit: z.number().optional().describe('max items, 0 = no limit'),
     offset: z.number().optional().describe('skip the first N'),
-    viewport: z.number().optional().describe('breakpoint width in px (e.g. 375) to scope the FILTER / SORT to that breakpoint only — the base stays; limit / offset are not per breakpoint'),
+    viewport: z.number().optional().describe('breakpoint width in px (e.g. 390) to scope the FILTER / SORT to that breakpoint only — the base stays; limit / offset are not per breakpoint'),
   },
   category: 'semantic',
   async execute(args, ctx) {

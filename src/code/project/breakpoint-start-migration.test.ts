@@ -292,6 +292,19 @@ describe('migrateFileToStartBreakpoints — ladders and file kinds', () => {
     expect(vps.find((v) => v.id === 'm')).toMatchObject({ width: 1438, designWidth: 767 });
   });
 
+  it('a breakpoint appended in the classic shape to a start-model page joins the ladder', () => {
+    // Desktop 1200 + Tablet 810–1199 (start model), then an AI appends `mobile 390` keyed at 390.
+    const before = page([{ id: 'd', width: 1200, primary: true }, { id: 't', width: 1199, designWidth: 810 }, { id: 'm', width: 390 }],
+      `<div data-id="root"><style>{\`\n    @media (max-width: 1199px) {\n      [data-id="p"] { color: green !important; }\n    }\n    @media (max-width: 390px) {\n      [data-id="p"] { color: red !important; }\n    }\n  \`}</style><p data-id="p">x</p></div>`);
+    const { code: after, steps } = migrateFileToStartBreakpoints(before);
+    expect(steps.map((s) => [s.id, s.oldEnd, s.newEnd])).toEqual([['m', 390, 809]]);
+    const vps = Object.fromEntries(parseCanvasConfig(after)!.viewports.map((v) => [v.id, [v.width, v.designWidth]]));
+    expect(vps).toEqual({ d: [1200, undefined], t: [1199, 810], m: [809, 390] });
+    expectTilesUnchanged(before, after);
+    // 600 is Mobile's range now — it gets the mobile styles, not the desktop base.
+    expect(cssAt(after, 600)['[data-id="p"] :: color']).toBe('red !important');
+  });
+
   it('leaves a Framer import (already start model) untouched', () => {
     const framer = page([{ id: 'd', width: 1200, primary: true }, { id: 't', width: 1199, designWidth: 810 }, { id: 'm', width: 809, designWidth: 390 }]);
     expect(migrateFileToStartBreakpoints(framer)).toEqual({ code: framer, steps: [] });

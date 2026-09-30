@@ -10,6 +10,10 @@ import type { CanvasNode } from '@/code/parsing/parser';
 import type { ToolContext } from '@/ai/agent';
 import { batchTool, checkBatchEndGate, isBatchViewportRendered } from './batch';
 import { restoreSnapshot } from '@/code/mutation/history';
+import { DEFAULT_VIEWPORTS } from '@/code/stores/viewport-store';
+/** The default ladder (start model): each breakpoint is named by its START, keyed by its END. */
+const DEFAULT_TABLET = DEFAULT_VIEWPORTS.find((v) => v.id === 'tablet')!;
+const DEFAULT_MOBILE = DEFAULT_VIEWPORTS.find((v) => v.id === 'mobile')!;
 
 vi.mock('@/code/mutation/mutation-queue', () => ({
   queueMutation: vi.fn(),
@@ -390,7 +394,7 @@ describe('batch tool — multi-viewport audit (CHANTIER C)', () => {
     vi.mocked(getNodesSnapshot).mockReturnValue(new Map<string, CanvasNode>());
   });
 
-  it('audits every viewport an op explicitly wrote (set_styles viewport=375 → mobile), listed in the audit block', async () => {
+  it('audits every viewport an op explicitly wrote (set_styles viewport=<mobile start> → mobile), listed in the audit block', async () => {
     const preTest = projectFS.getSnapshot();
     try {
       projectFS.loadSnapshot(
@@ -401,7 +405,7 @@ describe('batch tool — multi-viewport audit (CHANTIER C)', () => {
         {
           operations: [
             { tool: 'add_node', args: { parent_id: 'root', tag: 'div' }, ref_id: 'box' },
-            { tool: 'set_styles', args: { node_id: '$ref:box', styles: { padding: '80px 24px' }, viewport: 375 } },
+            { tool: 'set_styles', args: { node_id: '$ref:box', styles: { padding: '80px 24px' }, viewport: DEFAULT_MOBILE.designWidth } },
           ],
         },
         ctx,
@@ -443,7 +447,7 @@ describe('batch tool — multi-viewport audit (CHANTIER C)', () => {
       expect(data.audit.viewports.map((v: { id: string }) => v.id)).toEqual(['desktop', 'tablet', 'mobile']);
       // The list is ordered deterministically: interacting first, then width desc.
       const mobile = data.audit.viewports.find((v: { id: string }) => v.id === 'mobile');
-      expect(mobile.width).toBe(375);
+      expect(mobile.width).toBe(DEFAULT_MOBILE.designWidth); // the drawn width — where Mobile starts
     } finally {
       projectFS.loadSnapshot(preTest);
     }
@@ -492,6 +496,7 @@ describe('batch tool — multi-viewport audit (CHANTIER C)', () => {
 const BATCH_TESTIMONIAL_PAGE = `'use client';
 
 import React from 'react';
+
 
 export default function Page() {
   return (

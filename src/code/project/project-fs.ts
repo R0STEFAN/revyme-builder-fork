@@ -3,6 +3,7 @@
 // ProjectFS interface allows swapping to a real file API later
 // without touching any canvas/parser/control code.
 
+import { defaultCanvasBlock } from './canvas-config';
 import { atom, getDefaultStore } from 'jotai';
 import type { ProjectData } from '@/backend/types';
 // Type-only: erased at build time, so this does NOT create a runtime cycle
@@ -1070,18 +1071,7 @@ const UNIVERSAL_SEED_RESET = `*, *::before, *::after {
 }`;
 
 // Default @canvas block for new pages — 3 viewports side-by-side
-const DEFAULT_CANVAS_BLOCK = `/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 },
-    "tablet": { "x": 1600, "y": 0 },
-    "mobile": { "x": 2528, "y": 0 }
-  }
-} */`;
+const DEFAULT_CANVAS_BLOCK = defaultCanvasBlock();
 
 const HOME_PAGE = `'use client';
 
@@ -2208,14 +2198,7 @@ export const DEFAULT_PROVIDERS = buildProvidersSource({
 // Deliberately bare — "blank canvas" instead of the demo content
 // `createDefaultProject()` ships.
 
-const EMPTY_CANVAS_BLOCK = `/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "height": 900, "isPrimary": true, "order": 0 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 }
-  }
-} */`;
+const EMPTY_CANVAS_BLOCK = defaultCanvasBlock({ single: true, height: 900 });
 
 // Pages ship as a PAIR: the server wrapper (owns SEO `metadata`) and
 // the client body (canvas-editable). Next.js's App Router only reads

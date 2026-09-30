@@ -16,7 +16,7 @@ import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { getPresetTokens } from '@/code/project/preset-ops';
 import { getNodesSnapshot, selectedIdsAtom } from '@/code/stores/store';
-import { interactingViewportWidthAtom } from '@/code/stores/viewport-store';
+import { interactingViewportRenderWidthAtom, interactingViewportIdAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
 import { DEFAULT_VIEWPORT_WIDTH } from '@/shared/constants';
 import { trace } from '@/shared/debug-trace';
 import { describeSurface, type AgentSurface } from './surface';
@@ -108,9 +108,12 @@ export function buildAgentContextBlock(surface: AgentSurface = readAgentSurface(
       ? `Editing: ${store.get(activeFilePathAtom) ?? 'unknown'}`
       : `Page underneath (NOT what the user is looking at): ${store.get(activeFilePathAtom) ?? 'unknown'}`);
 
-    const vpWidth = store.get(interactingViewportWidthAtom) || DEFAULT_VIEWPORT_WIDTH;
+    // The width the user sees (a breakpoint's start); "non-desktop" = not the PRIMARY viewport —
+    // a desktop's width is the page's own (1200, 1440…), never a constant.
+    const vpWidth = store.get(interactingViewportRenderWidthAtom) || DEFAULT_VIEWPORT_WIDTH;
     lines.push(`Active viewport width: ${vpWidth}px`);
-    if (vpWidth !== DEFAULT_VIEWPORT_WIDTH) {
+    const primaryVp = store.get(viewportsConfigAtom).find((v) => v.isPrimary);
+    if (primaryVp && store.get(interactingViewportIdAtom) !== primaryVp.id) {
       lines.push("(editing a non-desktop breakpoint — pass this px value as 'viewport' to set_styles for responsive overrides)");
     }
 

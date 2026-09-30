@@ -2,6 +2,7 @@
 // Provides activeFilePathAtom and activeCodeAtom.
 // activeCodeAtom is the adapter: existing codeAtom consumers migrate to this.
 
+import { defaultCanvasBlock } from './canvas-config';
 import { atom, getDefaultStore } from 'jotai';
 import { projectFS, projectVersionAtom } from './project-fs';
 import { isCanvasBusy, isLockHolderScoped } from '../stores/agent-run-lock-store';
@@ -851,14 +852,7 @@ export default function Page() {
 
   const clientCode = `'use client';
 
-/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "height": "auto", "isPrimary": true, "order": 0 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 }
-  }
-} */
+${defaultCanvasBlock({ single: true, height: 'auto' })}
 
 import React from 'react';
 
@@ -1011,18 +1005,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 
     const clientCode = `'use client';
 
-/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 },
-    "tablet": { "x": 1600, "y": 0 },
-    "mobile": { "x": 2528, "y": 0 }
-  }
-} */
+${defaultCanvasBlock()}
 
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
   return (
@@ -1116,15 +1099,4 @@ export default function Page() {
   return { pageName, serverPath, clientPath, serverCode, clientCode };
 }
 
-const CANVAS_CONFIG_BLOCK = `/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 },
-    { "id": "tablet", "label": "Tablet", "width": 1439, "designWidth": 768, "isPrimary": false, "order": 1 },
-    { "id": "mobile", "label": "Mobile", "width": 767, "designWidth": 375, "isPrimary": false, "order": 2 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 },
-    "tablet": { "x": 1600, "y": 0 },
-    "mobile": { "x": 2528, "y": 0 }
-  }
-} */`;
+const CANVAS_CONFIG_BLOCK = defaultCanvasBlock();

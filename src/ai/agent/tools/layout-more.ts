@@ -176,7 +176,7 @@ export const reorderOnBreakpointTool: AgentTool = {
   inputSchema: {
     node_id: z.string(),
     index: z.number().describe('0-based visible position among the parent\'s flow children on that breakpoint'),
-    viewport: z.number().describe('breakpoint width in px, e.g. 375'),
+    viewport: z.number().describe('breakpoint width in px, e.g. 390'),
   },
   category: 'semantic',
   async execute(args, ctx) {
@@ -253,7 +253,7 @@ export const resetOverridesTool: AgentTool = {
     'Optional properties narrows it to some camelCase properties.',
   inputSchema: {
     node_id: z.string(),
-    viewport: z.number().describe('breakpoint width in px, e.g. 375'),
+    viewport: z.number().describe('breakpoint width in px, e.g. 390'),
     properties: z.array(z.string()).optional().describe('camelCase properties to reset; omit for all'),
   },
   category: 'semantic',

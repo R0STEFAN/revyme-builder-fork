@@ -22,7 +22,9 @@ import { migrateLegacyDarkBlock } from '@/code/project/preset-ops';
 import { canvasThemeMode } from '@/canvas/canvas-theme';
 import { activePreviewSlugAtom } from '@/code/stores/cms-page-store';
 import { selectedNodeAtom, codeAtom, getNodesSnapshot } from '@/code/stores/store';
-import { interactingViewportIdAtom, interactingViewportRenderWidthAtom } from '@/code/stores/viewport-store';
+import { interactingViewportIdAtom, interactingViewportRenderWidthAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
+import { startOf } from '@/code/project/breakpoint-ladder';
+import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 import { parseVariantConfig } from '@/code/variants/variant-config';
 import { previewComponentFileOverrideAtom } from '@/code/stores/editor-store';
 import { activeLocaleAtom } from '@/code/stores/locale-store';
@@ -55,10 +57,12 @@ const PREVIEW_ORIGIN =
  *  whichever origin actually serves the iframe are accepted. */
 const POST_MESSAGE_TARGET = '*';
 
+// Preview devices: each width lands inside the matching breakpoint of the default ladder
+// (Desktop 1200+, Tablet 810–1199, Mobile < 810) AND of the older 1440 / 768 / 375 one.
 const PRESETS = {
   desktop: { width: 1440, height: 900 },
-  tablet: { width: 768, height: 1024 },
-  mobile: { width: 375, height: 812 },
+  tablet: { width: DEFAULT_BREAKPOINT_STARTS.tablet, height: 1024 },
+  mobile: { width: DEFAULT_BREAKPOINT_STARTS.mobile, height: 812 },
 };
 
 // Header height — the preview surface sits below the 52px LeftHeader/
@@ -148,6 +152,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   // phone tile should show the page the width that tile shows it, not the top
   // of the band it represents (809 for a tile drawn at 390).
   const interactingVpWidth = useAtomValue(interactingViewportRenderWidthAtom);
+  const pageViewports = useAtomValue(viewportsConfigAtom);
   const code = useAtomValue(codeAtom);
 
   // ─── Viewport sizing state ─────────────────────────────────────────
@@ -206,8 +211,14 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   const renderedWidth = isFullScreen ? '100%' : Math.min(currentWidth, windowWidth - 64);
   const renderedHeight = isFullScreen ? '100%' : Math.min(currentHeight, maxIframeHeight);
 
-  const activeViewport = currentWidth <= PRESETS.mobile.width ? 'mobile'
-    : currentWidth <= PRESETS.tablet.width ? 'tablet' : 'desktop';
+  // Which breakpoint the previewed width falls in — by the PAGE's own starts (a breakpoint runs
+  // from its start up to the next wider one's), not the device presets.
+  const primaryVp = pageViewports.find((v) => v.isPrimary);
+  const tabletVp = pageViewports.find((v) => v.id === 'tablet');
+  const desktopStart = primaryVp ? startOf(primaryVp) : DEFAULT_BREAKPOINT_STARTS.desktop;
+  const tabletStart = tabletVp ? startOf(tabletVp) : DEFAULT_BREAKPOINT_STARTS.tablet;
+  const activeViewport = currentWidth >= desktopStart ? 'desktop'
+    : currentWidth >= tabletStart ? 'tablet' : 'mobile';
 
   // ─── Drag handlers (4-side grip resize) ────────────────────────────
 

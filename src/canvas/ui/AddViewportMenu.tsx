@@ -2,6 +2,7 @@
 // Ported from old builder's AddViewportMenu with identical design.
 // Shows device presets (desktop/tablet/mobile) + custom breakpoint option.
 
+import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 import { useState, useRef, useLayoutEffect, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { DesktopViewportIcon, TabletViewportIcon, MobileViewportIcon } from '@/shared/icons';
@@ -260,24 +261,24 @@ export default function AddViewportMenu({ menu, existingVpIds, onAdd, onClose }:
                 <div style={dividerStyle} />
                 {!existingSet.has('tablet') && (
                   <div
-                    onClick={() => handleAddPreset({ id: 'tablet', label: 'Tablet', width: 768 })}
+                    onClick={() => handleAddPreset({ id: 'tablet', label: 'Tablet', width: DEFAULT_BREAKPOINT_STARTS.tablet })}
                     className="vp-add-item"
                     style={itemStyle}
                   >
                     <span style={{ color: 'var(--text-secondary)' }}><TabletViewportIcon size={11} /></span>
                     <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1 }}>Tablet</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>768</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{DEFAULT_BREAKPOINT_STARTS.tablet}</span>
                   </div>
                 )}
                 {!existingSet.has('mobile') && (
                   <div
-                    onClick={() => handleAddPreset({ id: 'mobile', label: 'Mobile', width: 375 })}
+                    onClick={() => handleAddPreset({ id: 'mobile', label: 'Mobile', width: DEFAULT_BREAKPOINT_STARTS.mobile })}
                     className="vp-add-item"
                     style={itemStyle}
                   >
                     <span style={{ color: 'var(--text-secondary)' }}><MobileViewportIcon size={11} /></span>
                     <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1 }}>Mobile</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>375</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{DEFAULT_BREAKPOINT_STARTS.mobile}</span>
                   </div>
                 )}
               </>

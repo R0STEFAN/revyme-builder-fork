@@ -49,10 +49,10 @@ export const setTextOnBreakpointTool: AgentTool = {
   name: 'set_text_on_breakpoint',
   description:
     'Different TEXT on one breakpoint — "on mobile the headline says just Plan & ship". The Content control\'s per-viewport text: the desktop copy stays the base, the breakpoint gets an override the text tool shows and edits. ' +
-    'viewport is the breakpoint width in px (375 for mobile); pass text "" to remove the override.',
+    'viewport is the breakpoint width in px (390 for mobile); pass text "" to remove the override.',
   inputSchema: {
     node_id: z.string(),
-    viewport: z.number().describe('breakpoint width in px, e.g. 375'),
+    viewport: z.number().describe('breakpoint width in px, e.g. 390'),
     text: z.string().describe('the text on that breakpoint; "" removes the override'),
   },
   category: 'semantic',

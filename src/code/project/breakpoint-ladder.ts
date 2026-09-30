@@ -15,7 +15,33 @@
 // multi-breakpoint pages keep the classic edits until migrated.
 
 import type { ViewportConfig } from '@/shared/types';
-import { ladderFromStarts, OPEN_END } from './breakpoint-start-migration';
+
+export interface LadderEntry {
+  id: string;
+  /** Where the breakpoint's range starts — the number shown to the user. */
+  start: number;
+  /** Where it ends — the stored `width` every mechanism reads. The primary at the top has none. */
+  end: number | null;
+}
+
+/** The end of a range that has none — the widest breakpoint when it is not the primary. */
+export const OPEN_END = 100000;
+
+/**
+ * The rule, in one place: given each breakpoint's START, its END is the next-larger distinct start
+ * − 1. The widest range is open: no end when it is the primary's (the base design), OPEN_END when
+ * it belongs to replicas. Breakpoints at the same start share a range. Pure. Sorted widest first.
+ */
+export function ladderFromStarts(starts: Array<{ id: string; start: number; isPrimary?: boolean }>): LadderEntry[] {
+  const sorted = [...starts].sort((a, b) => b.start - a.start);
+  const distinct = [...new Set(sorted.map((v) => v.start))];
+  const primaryOnTop = sorted.some((v) => v.isPrimary && v.start === distinct[0]);
+  return sorted.map((vp) => {
+    const i = distinct.indexOf(vp.start);
+    const end = i > 0 ? distinct[i - 1] - 1 : primaryOnTop ? null : OPEN_END;
+    return { id: vp.id, start: vp.start, end };
+  });
+}
 
 /** Where a breakpoint's range starts — the number the user sees. */
 export const startOf = (vp: Pick<ViewportConfig, 'width' | 'designWidth'>): number =>

@@ -90,7 +90,7 @@ export const showVariantTool: AgentTool = {
   name: 'show_variant',
   description:
     'Choose which VARIANT a component INSTANCE shows (`initialVariant`) — the same write as the variant picker in the instance\'s properties. ' +
-    'node_id is the page-side instance; variant is a name from get_component. Optional viewport (breakpoint width in px, e.g. 375) shows that variant on THAT breakpoint only — the desktop keeps its own ("use the phone variant on mobile"). ' +
+    'node_id is the page-side instance; variant is a name from get_component. Optional viewport (breakpoint width in px, e.g. 390) shows that variant on THAT breakpoint only — the desktop keeps its own ("use the phone variant on mobile"). ' +
     'Pass variant "default" (no viewport) to reset. This is display; to make a trigger switch variants use add_connection.',
   inputSchema: {
     node_id: z.string().describe('data-id of the component instance'),

@@ -21,6 +21,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import type { Mutation } from '@/code/mutation/mutation-queue';
 import { queueMutation, flushNow, getCurrentCode } from '@/code/mutation/mutation-queue';
+import { DEFAULT_VIEWPORTS } from '@/code/stores/viewport-store';
+/** The default ladder (start model): each breakpoint is named by its START, keyed by its END. */
+const DEFAULT_TABLET = DEFAULT_VIEWPORTS.find((v) => v.id === 'tablet')!;
+const DEFAULT_MOBILE = DEFAULT_VIEWPORTS.find((v) => v.id === 'mobile')!;
 
 type CreateOverlayMutation = Extract<Mutation, { type: 'createOverlay' }>;
 import type { AgentTool, ToolContext } from '@/ai/agent';
@@ -48,7 +52,6 @@ import { ALL_TOOLS } from './index';
 import { appearReveal as realAppearReveal } from '@/editor/tools/AnimationTool/appear-utils';
 import { resolveScope } from '@/code/animations/animation-scope';
 import { getSortedBreakpointWidths } from '@/code/stores/viewport-store';
-import { DEFAULT_VIEWPORT_WIDTH } from '@/shared/constants';
 import { bindToCmsCollectionInCode } from '@/code/generation/map-gen';
 import { setLoopInCode } from '@/code/generation/generator-motion';
 import { updateMotionPropInCode } from '@/code/generation/generator-motion';
@@ -192,31 +195,25 @@ describe('set_motion_preset — payload parity', () => {
   });
 
   it('viewport arg scopes value props with the panel resolveScope query (null on desktop)', async () => {
-    // `viewport: 768` names Tablet by its START (its tile width); its overrides key on its END —
-    // the default ladder is start-model (Desktop 1440+, Tablet 768–1439, Mobile < 768).
-    const tablet = resolveScope({ kind: 'viewports', widths: [1439] }, getSortedBreakpointWidths());
-    // Band seam: canvas-poc writes the FRACTIONAL lower bound (375.02px), not
-    // the legacy integer 376px the fork asserted — see animation-scope.ts, the
-    // fix for the integer band hole. Both encode "just above 375"; only the
-    // fractional form is emitted now.
-    // Panel parity: the scope IS resolveScope(...) with the project breakpoints —
-    // with the default [1440, 768, 375] the 768 replica bands to max-768 min-376.
-    expect(tablet).toMatchObject({ query: '(max-width: 1439px) and (min-width: 767.02px)' });
-    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'hover', viewport: 768 }, makeCtx());
+    // `viewport` names Tablet by its START (its tile width); its overrides key on its END — the
+    // scope is resolveScope(...) with the project breakpoints, exactly as the panel builds it.
+    const tablet = resolveScope({ kind: 'viewports', widths: [DEFAULT_TABLET.width] }, getSortedBreakpointWidths());
+    expect(tablet).toMatchObject({ query: `(max-width: ${DEFAULT_TABLET.width}px) and (min-width: ${DEFAULT_MOBILE.width + 0.02}px)` });
+    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'hover', viewport: DEFAULT_TABLET.designWidth }, makeCtx());
     expect(queueMutation).toHaveBeenCalledWith({
       type: 'updateMotionProp', nodeId: 'n1', propName: 'whileHover', props: { scale: '1.05' }, scope: tablet,
     }, expect.anything());
 
     vi.clearAllMocks();
-    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'loop', viewport: 375 }, makeCtx());
-    const mobile = resolveScope({ kind: 'viewports', widths: [767] }, getSortedBreakpointWidths()); // Mobile: starts 375, keyed at its end
+    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'loop', viewport: DEFAULT_MOBILE.designWidth }, makeCtx());
+    const mobile = resolveScope({ kind: 'viewports', widths: [DEFAULT_MOBILE.width] }, getSortedBreakpointWidths()); // named by its start, keyed at its end
     expect(queueMutation).toHaveBeenCalledWith({
       type: 'updateLoop', nodeId: 'n1',
       spec: { props: { rotate: '360' }, transition: { duration: '2', repeat: 'Infinity', ease: 'linear' }, scope: [mobile] },
     }, expect.anything());
 
     vi.clearAllMocks();
-    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'hover', viewport: DEFAULT_VIEWPORT_WIDTH }, makeCtx());
+    await setMotionPresetTool.execute({ node_id: 'n1', effect: 'hover', viewport: DEFAULT_VIEWPORTS.find((v) => v.isPrimary)!.width }, makeCtx()); // the desktop's own width
     expect(queueMutation).toHaveBeenCalledWith(expect.objectContaining({ scope: null }), expect.anything());
   });
 
@@ -1107,6 +1104,7 @@ describe('P8 — branched runs', () => {
   it('set_variant page-side (instance redirect) commits the branch master; main master unchanged', async () => {
     const page = `'use client';
 import Card from '@/components/Card';
+
 export default function Page() {
   return (
     <div data-id="root" style={{ position: 'relative' }}>

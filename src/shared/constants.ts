@@ -7,6 +7,11 @@ export const VIEWPORT_GAP = 160;
 
 export const DEFAULT_VIEWPORT_WIDTH = 1440;
 
+/** The breakpoint ladder every NEW page, site, template and "+" quick-add starts from (Framer's):
+ *  each number is where that breakpoint STARTS — Desktop 1200+, Tablet 810–1199, Mobile below 810.
+ *  (DEFAULT_VIEWPORT_WIDTH stays the render fallback for a width nothing declares.) */
+export const DEFAULT_BREAKPOINT_STARTS = { desktop: 1200, tablet: 810, mobile: 390 } as const;
+
 // ─── Drag ──────────────────────────────────────────────────────────────────
 
 export const MIN_DRAG_DISTANCE = 3;        // px before drag starts (prevents accidental drags from clicks)

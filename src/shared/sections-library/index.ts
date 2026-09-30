@@ -3,6 +3,7 @@
 // for the insert path. Every blueprint is oracle-validated in CI
 // (src/code/oracle/sections-blueprints.test.ts).
 
+import { defaultCanvasBlock } from '@/code/project/canvas-config';
 import type { SectionBlueprint } from './types';
 import { headerEditorial } from './blueprints/header-editorial';
 import { headerGlass } from './blueprints/header-glass';
@@ -44,14 +45,7 @@ export function blueprintIdFromItemId(itemId: string): string | null {
 export function wrapBlueprintInPage(source: string): string {
   return `'use client';
 
-/** @canvas {
-  "viewports": [
-    { "id": "desktop", "label": "Desktop", "width": 1440, "height": "auto", "isPrimary": true, "order": 0 }
-  ],
-  "positions": {
-    "desktop": { "x": 0, "y": 0 }
-  }
-} */
+${defaultCanvasBlock({ single: true, height: 'auto' })}
 
 import React from 'react';
 
