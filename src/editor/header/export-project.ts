@@ -6,21 +6,74 @@
 // module owns the fetch → blob → anchor-click sequence, which is the part
 // that must not diverge between callers.
 //
-// Each format maps to its own backend route so the service layer can pick
-// the right transformer. `source` ships today; `tailwind` returns 501 until
-// Phase 2 lands, which surfaces as a "coming soon" message rather than a
-// generic failure.
+// Cloud: each format maps to its own backend route so the service layer can
+// pick the right transformer. `tailwind` returns 501 until Phase 2 lands,
+// which surfaces as a "coming soon" message rather than a generic failure.
+//
+// Standalone (open source, no backend): the "Source code" format — a runnable
+// Next.js project — is assembled and zipped IN THE BROWSER from the files the
+// editor already holds (code/project/source-export.ts, shared/zip.ts). The
+// other formats need a server build (prerender, Tailwind conversion) and are
+// not offered there.
 
 import { toast } from 'sonner';
 import { trace } from '@/shared/debug-trace';
 import { CLOUD_ENABLED } from '@/shared/cloud-flag';
 import type { ExportFormat } from './ExportDropdown';
+import { projectFS, MAIN_BRANCH_ID } from '@/code/project/project-fs';
+import { flushNow } from '@/code/mutation/mutation-queue';
+import { buildSourceExport } from '@/code/project/source-export';
+import { buildZip } from '@/shared/zip';
+import { getDefaultStore } from 'jotai';
+import { projectNameAtom } from '@/code/stores/project-store';
 
-/** Whether export is reachable at all. Local mode has no backend to build
- *  the zip, so callers should hide the affordance entirely rather than
- *  offer one that always fails. */
+/** Whether export is reachable at all. Always: cloud exports on the server,
+ *  standalone builds the Next.js source zip in the browser. */
 export function canExport(): boolean {
-  return CLOUD_ENABLED;
+  return true;
+}
+
+/** The formats this build can export. Standalone has no server to prerender
+ *  or convert, so only the Next.js source — built locally — is on offer. */
+export function canExportFormat(format: ExportFormat): boolean {
+  return CLOUD_ENABLED || format === 'source';
+}
+
+/** The @revyme/runtime range to pin in an exported package.json. */
+function runtimeRange(): string {
+  const defined = typeof __REVYME_RUNTIME_RANGE__ === 'string' ? __REVYME_RUNTIME_RANGE__ : null;
+  return defined ?? 'latest';
+}
+
+function download(bytes: Uint8Array<ArrayBuffer> | Blob, filename: string): void {
+  const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: 'application/zip' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoked on the next tick: some browsers start the download after click().
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/** Standalone: MAIN's files (what publishes — never a branch), as a
+ *  runnable Next.js project, zipped here and downloaded. */
+async function exportSourceInBrowser(): Promise<boolean> {
+  // Pending canvas edits reach ProjectFS on flush — export what's on screen.
+  flushNow();
+  const main = projectFS.readBranchFiles(MAIN_BRANCH_ID, { shared: true }) ?? new Map<string, string>();
+  const name = getDefaultStore().get(projectNameAtom) || null;
+  trace.action('export-project:local-start', { files: main.size });
+  const built = await buildSourceExport(Object.fromEntries(main), { name, runtimeRange: runtimeRange() });
+  const zip = await buildZip(Object.entries(built.files).map(([path, data]) => ({ path, data })));
+  download(zip, built.filename);
+  if (built.failed.length > 0) {
+    toast(`${built.failed.length} marketplace component${built.failed.length === 1 ? '' : 's'} couldn’t be downloaded — ${built.failed.length === 1 ? 'it stays' : 'they stay'} imported by URL.`);
+  }
+  trace.action('export-project:local-success', { filename: built.filename, files: Object.keys(built.files).length, bytes: zip.length, localized: built.downloaded.length, failed: built.failed.length });
+  return true;
 }
 
 /**
@@ -34,7 +87,19 @@ export function canExport(): boolean {
  * an unhandled rejection.
  */
 export async function exportProject(format: ExportFormat = 'source'): Promise<boolean> {
-  if (!canExport()) return false;
+  if (!CLOUD_ENABLED) {
+    if (!canExportFormat(format)) {
+      toast.error('Only the Next.js source export runs without Revyme Cloud.');
+      return false;
+    }
+    try {
+      return await exportSourceInBrowser();
+    } catch (err) {
+      trace.error('export-project:local-error', err);
+      toast.error('Export failed — check console');
+      return false;
+    }
+  }
 
   const { getProjectId } = await import('@/backend/project-id');
   const id = getProjectId();

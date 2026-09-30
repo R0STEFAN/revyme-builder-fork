@@ -236,7 +236,9 @@ export function ExportDropdown({
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open, onClose]);
 
-  const selected = FORMATS.find(f => f.id === format) ?? FORMATS[0]!;
+  // Standalone offers only what the browser can build: the Next.js source.
+  const formats = FORMATS.filter((f) => CLOUD_ENABLED || f.id === 'source');
+  const selected = formats.find(f => f.id === format) ?? formats[0]!;
   const canUseSelected = meetsPlan(meta, selected.minPlan);
 
   return (
@@ -263,8 +265,8 @@ export function ExportDropdown({
               and adding the horizontal pad here matches that feel
               regardless of `min-w-[260px]`. */}
           <div className="flex flex-col gap-1">
-            {FORMATS.map((f) => {
-              const isActive = f.id === format;
+            {formats.map((f) => {
+              const isActive = f.id === selected.id;
               return (
                 <button
                   key={f.id}

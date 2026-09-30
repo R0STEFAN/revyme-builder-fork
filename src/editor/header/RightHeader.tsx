@@ -165,8 +165,9 @@ export default function RightHeader({ previewMode, onTogglePreview }: Props) {
     setSettingsOpenAtom(true);
   }, [exportFormat, setSettingsSectionAtom, setSettingsOpenAtom]);
 
+  // Both builds export: cloud on the server, standalone the Next.js source
+  // zipped in the browser (export-project.ts).
   const handleExportToggle = useCallback(() => {
-    if (!CLOUD_ENABLED) return;
     setExportOpen((v) => !v);
     trace.action('header:export-toggle');
   }, []);
@@ -290,7 +291,7 @@ export default function RightHeader({ previewMode, onTogglePreview }: Props) {
             tabIndex={-1}
             className="w-full cut-corners"
             onClick={handleExportToggle}
-            disabled={!CLOUD_ENABLED || isViewer || isClosedSource}
+            disabled={isViewer || isClosedSource}
             // `data-export-trigger` lets ExportDropdown's outside-click
             // listener ignore clicks on us so this toggle isn't fought
             // by a "close because outside" race.

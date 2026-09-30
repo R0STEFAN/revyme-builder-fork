@@ -425,6 +425,13 @@ export default defineConfig(({ mode }) => {
   },
   define: {
     'process.env': {},
+    // The @revyme/runtime range the editor itself runs — what a browser-built
+    // source export depends on (code/project/source-export.ts), so an exported
+    // site gets the runtime its canvas and preview were verified against.
+    __REVYME_RUNTIME_RANGE__: JSON.stringify(
+      (JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> })
+        .dependencies?.['@revyme/runtime'] ?? null,
+    ),
   },
   };
 });

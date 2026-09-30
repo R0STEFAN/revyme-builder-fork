@@ -1,0 +1,259 @@
+// source-export.ts — the "Source code" export (a runnable Next.js project),
+// assembled IN THE BROWSER for the standalone / open-source editor.
+//
+// Cloud builds get the zip from the backend (GET /api/export/source/:id,
+// backend/src/services/export-project.ts). Standalone has no backend, but the
+// editor already holds every file and the rest is static text — so this is a
+// port of that service's source path, kept in step with it:
+//   1. every ProjectFS file of MAIN, minus builder metadata (`_meta/`,
+//      `_revyme/` — any top-level `_` segment);
+//   2. marketplace components imported by URL are downloaded into
+//      components/remote/ and the imports rewritten, so a vanilla `next build`
+//      works offline (Turbopack refuses external http(s) modules);
+//   3. the scaffold — package.json, next.config.mjs, tsconfig.json,
+//      .gitignore only when the project doesn't ship its own; README always.
+//
+// Pure apart from the injectable module fetch. Zipping and downloading live in
+// editor/header/export-project.ts.
+//
+// The scaffold targets Next 16 and was checked by exporting, `npm install`,
+// `next build` and `next dev` (2026-09-30). Three differences from the
+// backend's copy, which still carries them: no `eslint` key in next.config
+// (unsupported in 16 — a warning on every run), no `next lint` script (the
+// command was removed in 16), and the tsconfig values Next would otherwise
+// rewrite on first run (`jsx: react-jsx`, `.next/dev/types`).
+
+// ─── URL-import localization ────────────────────────────────────────────────
+
+const URL_IMPORT_RE = /(['"])(https:\/\/assets\.revyme\.app\/components\/([A-Za-z0-9_-]+)@([a-f0-9]+)\.js)\1/g;
+
+export type ModuleFetch = (url: string) => Promise<string>;
+
+/** Browser fetch of a component bundle. An error / challenge page instead of
+ *  the module would poison the build with a far-away "no default export". */
+export const fetchModule: ModuleFetch = async (url) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`fetch ${url} -> ${r.status}`);
+  const text = await r.text();
+  if (text.trimStart().startsWith('<')) throw new Error(`fetch ${url} -> HTML response, not a module`);
+  return text;
+};
+
+export async function localizeUrlImports(
+  files: Record<string, string>,
+  fetchImpl: ModuleFetch = fetchModule,
+): Promise<{ files: Record<string, string>; downloaded: string[]; failed: string[] }> {
+  const localized = new Map<string, string>(); // url -> local path (or the url on failure)
+  const extra: Record<string, string> = {};
+  const downloaded: string[] = [];
+  const failed: string[] = [];
+
+  async function ensureLocal(url: string, name: string, hash: string): Promise<string> {
+    const seen = localized.get(url);
+    if (seen !== undefined) return seen;
+    const local = `components/remote/${name}-${hash.slice(0, 8)}.js`;
+    localized.set(url, local); // BEFORE recursing — cycle guard
+    let content: string;
+    try {
+      content = await fetchImpl(url);
+    } catch {
+      // Unreachable: the import stays a URL — the export still works
+      // everywhere except that one component.
+      localized.set(url, url);
+      failed.push(url);
+      return url;
+    }
+    extra[local] = await rewrite(content);
+    downloaded.push(local);
+    return local;
+  }
+
+  async function rewrite(code: string): Promise<string> {
+    const resolved = new Map<string, string>();
+    for (const m of code.matchAll(URL_IMPORT_RE)) {
+      const [, , url, name, hash] = m;
+      if (!url || !name || !hash) continue;
+      if (!resolved.has(url)) resolved.set(url, await ensureLocal(url, name, hash));
+    }
+    return code.replace(URL_IMPORT_RE, (full, q: string, url: string) => {
+      const local = resolved.get(url);
+      return local && local !== url ? `${q}@/${local}${q}` : full;
+    });
+  }
+
+  const out: Record<string, string> = {};
+  for (const [path, content] of Object.entries(files)) {
+    out[path] = /\.(tsx|jsx|ts|js|mjs)$/.test(path) && content.includes('assets.revyme.app/components/')
+      ? await rewrite(content)
+      : content;
+  }
+  return { files: { ...out, ...extra }, downloaded, failed };
+}
+
+// ─── The project ────────────────────────────────────────────────────────────
+
+/** Top-level `_` segments are editor-internal (`_meta/`, `_revyme/`). */
+export function isBuilderMetadataPath(path: string): boolean {
+  return (path.split('/', 1)[0] ?? '').startsWith('_');
+}
+
+export function exportSlug(name: string | null | undefined): string {
+  return (name || 'revyme-site')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'revyme-site';
+}
+
+export interface SourceExportOptions {
+  /** Project name — the package name, the zip name, the README title. */
+  name: string | null;
+  /** `@revyme/runtime` semver range the project depends on. */
+  runtimeRange: string;
+  now?: Date;
+  fetchImpl?: ModuleFetch;
+}
+
+export interface SourceExport {
+  files: Record<string, string>;
+  filename: string;
+  downloaded: string[];
+  failed: string[];
+}
+
+export async function buildSourceExport(input: Record<string, string>, opts: SourceExportOptions): Promise<SourceExport> {
+  const { files: localized, downloaded, failed } = await localizeUrlImports(input, opts.fetchImpl ?? fetchModule);
+  const files: Record<string, string> = {};
+  for (const [path, content] of Object.entries(localized)) {
+    if (!isBuilderMetadataPath(path)) files[path] = content;
+  }
+  const slug = exportSlug(opts.name);
+  if (!localized['package.json']) files['package.json'] = buildPackageJson(slug, opts.runtimeRange, opts.now ?? new Date());
+  if (!localized['next.config.mjs'] && !localized['next.config.js']) files['next.config.mjs'] = NEXT_CONFIG;
+  if (!localized['tsconfig.json']) files['tsconfig.json'] = TSCONFIG;
+  files['README.md'] = buildReadme(opts.name || 'Revyme project');
+  if (!localized['.gitignore']) files['.gitignore'] = GITIGNORE;
+  return { files, filename: `${slug}.zip`, downloaded, failed };
+}
+
+// ─── Scaffold (mirrors backend/src/services/export-project.ts) ──────────────
+
+export function buildPackageJson(name: string, runtimeRange: string, now: Date): string {
+  return JSON.stringify({
+    name,
+    version: '0.1.0',
+    private: true,
+    type: 'module',
+    scripts: {
+      dev: 'next dev',
+      build: 'next build',
+      start: 'next start',
+    },
+    // The same runtime surface the deploy scaffold uses, so `npm install &&
+    // npm run dev` just works off-platform. Never GSAP: its licence forbids
+    // it in a visual website builder like Revyme.
+    dependencies: {
+      react: '^19',
+      'react-dom': '^19',
+      next: '^16',
+      'framer-motion': '^12',
+      'next-themes': 'latest',
+      'next-intl': 'latest',
+      '@revyme/runtime': runtimeRange,
+      'perfect-freehand': '^1.2',
+      // The generated Smooth Scroll controller imports Lenis.
+      lenis: '^1.3.26',
+    },
+    devDependencies: {
+      typescript: '^5',
+      '@types/react': '^19',
+      '@types/react-dom': '^19',
+      '@types/node': '^20',
+    },
+    revyme: {
+      exportedAt: now.toISOString(),
+    },
+  }, null, 2);
+}
+
+export const NEXT_CONFIG = `/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  // Builder-generated code is runtime-correct but not always type-pristine
+  // (e.g. a duplicate style key from an editing session — last one wins at
+  // runtime). Don't let type nits fail a site build off-platform.
+  typescript: { ignoreBuildErrors: true },
+};
+
+export default nextConfig;
+`;
+
+export const TSCONFIG = JSON.stringify({
+  compilerOptions: {
+    target: 'ES2022',
+    lib: ['dom', 'dom.iterable', 'esnext'],
+    allowJs: true,
+    skipLibCheck: true,
+    strict: true,
+    noEmit: true,
+    esModuleInterop: true,
+    module: 'esnext',
+    moduleResolution: 'bundler',
+    resolveJsonModule: true,
+    isolatedModules: true,
+    jsx: 'react-jsx',
+    incremental: true,
+    // The editor's generated code imports `@/...` — keep the alias.
+    paths: { '@/*': ['./*'] },
+    plugins: [{ name: 'next' }],
+  },
+  include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '.next/types/**/*.ts', '.next/dev/types/**/*.ts'],
+  exclude: ['node_modules'],
+}, null, 2);
+
+export const GITIGNORE = `# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Build output
+/.next
+/out
+/build
+/dist
+
+# Env
+.env*.local
+
+# Misc
+.DS_Store
+*.log
+`;
+
+export function buildReadme(name: string): string {
+  return `# ${name}
+
+Exported from [Revyme](https://revyme.com).
+
+## Quickstart
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Deploy
+
+This is a standard Next.js project. Deploy anywhere that supports Next.js
+(Vercel, Netlify, AWS, your own host).
+
+## What's inside
+
+- \`app/\` — page routes (Next.js App Router)
+- \`components/\` — your component library
+- \`public/\` — static assets
+
+Made with Revyme.
+`;
+}
