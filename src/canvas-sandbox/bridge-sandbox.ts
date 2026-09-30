@@ -65,6 +65,7 @@ import {
   removeElement, reparentLive, createPlaceholder, movePlaceholder, patchPlaceholderStyles,
   swapTwoElements, removePlaceholders, getPlaceholderRect, liftNode, restoreNode, commitMergedOrder,
 } from './sandbox/placeholders';
+import { rerasterPromotedDescendants } from '@/canvas/transform/reraster';
 import {
   startTextEdit, commitTextEdit, cancelTextEdit, editorCommand,
   startShapeEdit, commitShapeEdit, cancelShapeEdit, setShapeEditHandleMode, setShapeEditAnchorPosition,
@@ -127,15 +128,29 @@ export function initSandbox(_containerEl: HTMLElement, contentRootEl: HTMLElemen
 // blurry, like Figma) and re-rasterise sharp once at idle. It must NOT stay
 // on permanently: a promoted layer holds the full content texture at the
 // current scale — GPU memory we only want to pay during gestures.
+//
+// Clearing the root's hint re-rasters the CONTENT layer — but not layers that
+// promote THEMSELVES inside it (a component instance's perf-isolation
+// will-change, a Marquee track): those keep the bitmap of the zoom they were
+// first painted at, so text inside component instances stayed blurry after a
+// zoom while plain text sharpened. At idle, when the SCALE changed (a pan
+// never needs it), they are toggled too (canvas/transform/reraster.ts).
 let _gestureHintTimer: ReturnType<typeof setTimeout> | null = null;
+let _rasteredScale: number | null = null;
 
-function hintCameraGesture(): void {
+function hintCameraGesture(scale?: number): void {
   if (!contentRoot) return;
   if (contentRoot.style.willChange !== 'transform') contentRoot.style.willChange = 'transform';
   if (_gestureHintTimer) clearTimeout(_gestureHintTimer);
   _gestureHintTimer = setTimeout(() => {
     _gestureHintTimer = null;
-    if (contentRoot) contentRoot.style.willChange = '';
+    if (!contentRoot) return;
+    contentRoot.style.willChange = '';
+    if (scale !== undefined && scale !== _rasteredScale) {
+      _rasteredScale = scale;
+      const n = rerasterPromotedDescendants([contentRoot]);
+      if (n > 0) trace.action('canvas-sandbox:reraster-promoted', { count: n, scale });
+    }
   }, 250);
 }
 
@@ -424,7 +439,7 @@ const api: SandboxApi = {
   setViewportTransform(x: number, y: number, scale: number): void {
     if (!contentRoot) return;
     setCurrentSandboxTransform({ x, y, scale });
-    hintCameraGesture();
+    hintCameraGesture(scale);
     contentRoot.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
     contentRoot.style.transformOrigin = '0 0';
     // Forward to canvas-dnd so drag/snap math uses the right scale + offset

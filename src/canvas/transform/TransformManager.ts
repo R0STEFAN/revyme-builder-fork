@@ -19,41 +19,13 @@ export type { Transform };
  */
 const ZOOM_END_DEBOUNCE_MS = 180;
 
-/**
- * Elements INSIDE the viewports that carry their own `will-change` keep the
- * bitmap Chrome first rasterized them at, whatever the viewport does — the
- * same rule that makes the viewport toggle below necessary. Two sources put
- * one there: the variant perf isolation (`contain` + `willChange` stamped into
- * a component root's source so its tweens don't repaint the live page —
- * code/variants/variant-perf.ts), and code components that promote an
- * animated track (a Marquee). Their text stayed blurry at any zoom above the
- * one they were first painted at (a glass Navbar's links, 2026-09-29).
- *
- * Drop each one to `auto` for a frame, then restore it: Chrome re-rasterizes
- * the layer at the current scale when it is promoted again. The source and
- * the live site are untouched. Exported for tests.
- */
-export function rerasterPromotedDescendants(
-  roots: Iterable<HTMLElement>,
-  nextFrame: (cb: () => void) => void = (cb) => requestAnimationFrame(() => requestAnimationFrame(cb)),
-): number {
-  const restore: Array<[HTMLElement, string]> = [];
-  for (const root of roots) {
-    for (const el of root.querySelectorAll<HTMLElement>('[style*="will-change"]')) {
-      const v = el.style.willChange;
-      if (!v || v === 'auto') continue;
-      restore.push([el, v]);
-      el.style.willChange = 'auto';
-    }
-  }
-  if (restore.length) {
-    nextFrame(() => {
-      // Only put back what nobody changed in between (a drag ending clears it).
-      for (const [el, v] of restore) if (el.style.willChange === 'auto') el.style.willChange = v;
-    });
-  }
-  return restore.length;
-}
+// Self-promoted descendants (a component root's perf isolation, a Marquee
+// track) keep their old bitmap after a zoom; the re-raster that fixes them
+// lives in ./reraster and runs INSIDE the canvas iframe (the sandbox's camera
+// settle) — the viewports are there, not in this document. The call below
+// covers any viewport rendered in the editor document itself.
+import { rerasterPromotedDescendants } from './reraster';
+export { rerasterPromotedDescendants };
 
 class TransformManager {
   private transform: Transform = { x: 200, y: 100, scale: 0.5 };
