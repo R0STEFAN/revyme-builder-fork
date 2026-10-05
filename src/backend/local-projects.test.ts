@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { listAllProjects, createProject, deleteProject, duplicateProject } from './local-projects';
+import { listAllProjects, createProject, deleteProject, duplicateProject, migrateLocalStorageProjectsToServer } from './local-projects';
 
 describe('local-projects management', () => {
   beforeEach(() => {
@@ -46,4 +46,37 @@ describe('local-projects management', () => {
     expect(dup?.name).toBe('Original Copied');
     expect(dup?.id).not.toBe(created.id);
   });
+});
+
+ it('migration never overwrites an existing server project with a stale browser copy', async () => {
+  localStorage.setItem('revyme-project-existing', JSON.stringify({ format: 'revyme-v1', files: { home: 'stale' } }));
+  const request = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+  vi.stubGlobal('fetch', request);
+  try {
+    expect(await migrateLocalStorageProjectsToServer()).toBe(0);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('/api/projects/existing');
+  } finally { vi.unstubAllGlobals(); localStorage.clear(); }
+ });
+
+it('migration imports a browser project only after the server confirms it is missing', async () => {
+  const data = { format: 'revyme-v1', files: { home: 'custom' } };
+  localStorage.setItem('revyme-project-missing', JSON.stringify(data));
+  const request = vi.fn().mockResolvedValueOnce({ ok: false, status: 404 }).mockResolvedValueOnce({ ok: true });
+  vi.stubGlobal('fetch', request);
+  try {
+    expect(await migrateLocalStorageProjectsToServer()).toBe(1);
+    expect(request.mock.calls[1][1]).toMatchObject({ method: 'PUT' });
+    expect(JSON.parse(request.mock.calls[1][1].body).data).toEqual(data);
+  } finally { vi.unstubAllGlobals(); localStorage.clear(); }
+});
+
+it('migration does not write when the server cannot establish whether the project exists', async () => {
+  localStorage.setItem('revyme-project-existing', JSON.stringify({ files: { home: 'stale' } }));
+  const request = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+  vi.stubGlobal('fetch', request);
+  try {
+    expect(await migrateLocalStorageProjectsToServer()).toBe(0);
+    expect(request).toHaveBeenCalledTimes(1);
+  } finally { vi.unstubAllGlobals(); localStorage.clear(); }
 });

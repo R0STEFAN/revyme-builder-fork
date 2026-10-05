@@ -226,6 +226,9 @@ export async function migrateLocalStorageProjectsToServer(): Promise<number> {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       try {
+        // Migration imports missing projects only; browser caches may be stale.
+        const existing = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        if (existing.status !== 404) continue;
         const data = JSON.parse(raw);
         const name = localStorage.getItem(NAME_PREFIX + id) || (id === 'local' ? 'My First Website' : 'Website');
         const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {

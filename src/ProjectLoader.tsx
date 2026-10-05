@@ -44,6 +44,7 @@ import SelfHostDashboard from './editor/dashboard/SelfHostDashboard';
 
 export default function ProjectLoader() {
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // When set, a `?remix=` load is paused on the workspace picker — the
   // remix only runs once the user chooses a workspace (see below).
   const [remixPrompt, setRemixPrompt] = useState<{ websiteId: string } | null>(null);
@@ -540,8 +541,8 @@ export default function ProjectLoader() {
 
     init().catch(err => {
       trace.error('project-loader:init-error', err);
-      // Show app anyway so user isn't stuck on blank screen
-      if (!cancelled) setReady(true);
+      // Never mount an editable default snapshot after a failed load.
+      if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
     });
 
     return () => { cancelled = true; };
@@ -550,6 +551,18 @@ export default function ProjectLoader() {
   // Self-hosted dashboard route
   if (!CLOUD_ENABLED && isDashboardRoute) {
     return <SelfHostDashboard />;
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" style={{ padding: 32 }}>
+        <h2>Could not load project</h2>
+        <p>{loadError}</p>
+        <p>Your saved project has not been replaced.</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+        <a href="/dashboard" style={{ marginLeft: 16 }}>Go to Dashboard</a>
+      </div>
+    );
   }
 
   // Remix flow: the picker is BLOCKING and renders over whatever we managed
