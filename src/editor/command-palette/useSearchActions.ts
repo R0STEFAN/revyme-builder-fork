@@ -62,7 +62,8 @@ import { exportProject } from '@/editor/header/export-project';
 import { previewModeAtom, shortcutsModalOpenAtom } from '@/code/stores/editor-store';
 import { settingsOverlayOpenAtom } from '@/code/stores/website-settings-store';
 import { startOnboarding } from '@/editor/onboarding';
-import { flushNow } from '@/code/mutation/mutation-queue';
+import { flushNow, queueMutation } from '@/code/mutation/mutation-queue';
+import { copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste } from '@/code/stores/context-menu-store';
 import { shareAsTemplate } from '@/backend/revyme-backend';
 import { projectFS } from '@/code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
@@ -323,6 +324,45 @@ function executeCommand(commandId: string): void {
     case 'paste':     dispatchPaste(); break;
     case 'cut':       dispatchCut(); break;
     case 'duplicate': dispatchDuplicate(); break;
+    case 'copy-styles': {
+      if (!first) {
+        toast.info('Select an element first');
+        break;
+      }
+      const targetNode = nodes.get(first);
+      if (!targetNode) break;
+      const stylesToCopy = extractCopyableStyles(targetNode.styles);
+      if (Object.keys(stylesToCopy).length === 0) {
+        toast.info('No copyable styles on selected element');
+        break;
+      }
+      store.set(copiedElementStylesAtom, {
+        styles: stylesToCopy,
+        sourceNodeId: first,
+        sourceNodeName: targetNode.name || targetNode.type,
+      });
+      toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+      break;
+    }
+    case 'paste-styles': {
+      const copied = store.get(copiedElementStylesAtom);
+      if (!copied) {
+        toast.info('No styles copied yet');
+        break;
+      }
+      if (selected.length === 0) {
+        toast.info('Select one or more elements to paste styles onto');
+        break;
+      }
+      for (const id of selected) {
+        const targetNode = nodes.get(id);
+        const payload = prepareStylesForPaste(copied.styles, targetNode?.styles);
+        queueMutation({ type: 'updateStyles', nodeId: id, styles: payload });
+      }
+      flushNow();
+      toast.success(`Pasted styles to ${selected.length > 1 ? `${selected.length} elements` : 'element'}`);
+      break;
+    }
     case 'delete':
       if (selected.length > 0 && contentEl) deleteNode(selected, contentEl);
       break;

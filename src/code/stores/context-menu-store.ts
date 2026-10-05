@@ -24,3 +24,64 @@ export const contextMenuAtom = atom<ContextMenuState>({
 
 /** Set to a nodeId to activate inline rename in the layers panel */
 export const renamingNodeIdAtom = atom<string | null>(null);
+
+// ─── Element Styles Clipboard ──────────────────────────────────────────────
+
+export interface CopiedElementStyles {
+  styles: Record<string, string>;
+  sourceNodeId: string;
+  sourceNodeName?: string;
+}
+
+export const copiedElementStylesAtom = atom<CopiedElementStyles | null>(null);
+
+/** Style keys that define element positioning/layout within its parent or canvas,
+ *  which must NOT be transferred to another element when copying styles. */
+export const EXCLUDED_STYLE_KEYS = new Set([
+  'position',
+  'left',
+  'top',
+  'right',
+  'bottom',
+  'width',
+  'height',
+  'order',
+  'zIndex',
+  'gridColumn',
+  'gridRow',
+  'gridArea',
+]);
+
+/** Extract all transferable visual & typography styles from a node's styles */
+export function extractCopyableStyles(styles: Record<string, string> | undefined): Record<string, string> {
+  if (!styles) return {};
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(styles)) {
+    if (EXCLUDED_STYLE_KEYS.has(key)) continue;
+    if (val === undefined || val === '') continue;
+    result[key] = val;
+  }
+  return result;
+}
+
+/** Prepare payload for pasting styles, clearing any conflicting fill layers on the target */
+export function prepareStylesForPaste(
+  copiedStyles: Record<string, string>,
+  targetStyles?: Record<string, string>,
+): Record<string, string> {
+  const result = { ...copiedStyles };
+  const hasCopiedFill = 'backgroundColor' in copiedStyles || 'background' in copiedStyles || 'backgroundImage' in copiedStyles;
+  if (hasCopiedFill && targetStyles) {
+    if ('backgroundImage' in targetStyles && !('backgroundImage' in copiedStyles)) {
+      result.backgroundImage = '';
+    }
+    if ('background' in targetStyles && !('background' in copiedStyles)) {
+      result.background = '';
+    }
+    if ('backgroundColor' in targetStyles && !('backgroundColor' in copiedStyles)) {
+      result.backgroundColor = '';
+    }
+  }
+  return result;
+}
+

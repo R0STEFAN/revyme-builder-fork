@@ -31,18 +31,18 @@ import { readReshadersClipboard } from './reshaders-clipboard';
 import { hasClipboard as hasInternalClipboard, setExternalClipboardData } from '../code/features/paste-engine';
 import { parsePluginUrl } from '@/editor/command-palette/marketplace-client';
 import { paletteOpenAtom, paletteQueryAtom } from '@/code/stores/palette-store';
-import { getDefaultStore as getJotaiStore } from 'jotai';
+import { getDefaultStore, getDefaultStore as getJotaiStore } from 'jotai';
 import { trace } from '../shared/debug-trace';
 import type { CanvasNode } from '../code/parsing/parser';
-import { getDefaultStore } from 'jotai';
 import { shapeEditingIdAtom, selectedPointAtom, groupEditingIdAtom, activeContainerIdAtom } from '../code/stores/shape-edit-store';
-import { flushNow, syncQueueCode, setForceRender } from '../code/mutation/mutation-queue';
+import { flushNow, syncQueueCode, setForceRender, queueMutation } from '../code/mutation/mutation-queue';
 import { groupSvgs, ungroupSvgs } from '../code/svg/group-svgs';
 import { buildGroupSvgsOpts } from './svg-group-helper';
 import { activeFilePathAtom, activeCodeAtom, isIconSetFilePath, isDesignComponentFile } from '../code/project/active-file-store';
 import { detachInstance } from '../code/components/component-ops';
 import { isReplicaViewportAtom, isComponentVariantViewportAtom } from '../code/stores/viewport-store';
-import { renamingNodeIdAtom } from '../code/stores/context-menu-store';
+import { renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste } from '../code/stores/context-menu-store';
+import { toast } from 'sonner';
 import { createAndOpenProject } from '../editor/header/menu-builders';
 import { nudgeSelection, flushPendingNudge, type NudgeDirection } from './arrow-nudge';
 import { selectAllPageNodeIds } from './selection/select-all';
@@ -666,6 +666,60 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     });
     trace.action('clipboard:duplicate', { nodeId: sel });
   }}));
+
+  cleanups.push(keyboard.register({
+    key: 'c',
+    ctrl: true,
+    alt: true,
+    label: 'Copy Styles',
+    category: 'general',
+    handler: () => {
+      const targetId = selectedIdRef.current || selectedIdsRef.current[0];
+      if (!targetId) return;
+      const targetNode = nodesRef.current.get(targetId);
+      if (!targetNode) return;
+      const stylesToCopy = extractCopyableStyles(targetNode.styles);
+      if (Object.keys(stylesToCopy).length === 0) {
+        toast.info('No copyable styles on selected element');
+        return;
+      }
+      const store = getDefaultStore();
+      store.set(copiedElementStylesAtom, {
+        styles: stylesToCopy,
+        sourceNodeId: targetId,
+        sourceNodeName: targetNode.name || targetNode.type,
+      });
+      toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+    },
+  }));
+
+  cleanups.push(keyboard.register({
+    key: 'v',
+    ctrl: true,
+    alt: true,
+    label: 'Paste Styles',
+    category: 'general',
+    handler: () => {
+      const store = getDefaultStore();
+      const copied = store.get(copiedElementStylesAtom);
+      if (!copied) {
+        toast.info('No styles copied yet');
+        return;
+      }
+      const targetIds = selectedIdsRef.current.length > 0
+        ? selectedIdsRef.current
+        : (selectedIdRef.current ? [selectedIdRef.current] : []);
+      if (targetIds.length === 0) return;
+      for (const id of targetIds) {
+        const targetNode = nodesRef.current.get(id);
+        const payload = prepareStylesForPaste(copied.styles, targetNode?.styles);
+        queueMutation({ type: 'updateStyles', nodeId: id, styles: payload });
+      }
+      flushNow();
+      const count = targetIds.length;
+      toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);
+    },
+  }));
 
   // ─── URL paste detection (Code component + Plugin) ──────────────────────────
   // Intercepts native paste event to detect Revyme URLs in the clipboard.

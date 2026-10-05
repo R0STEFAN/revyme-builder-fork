@@ -2,10 +2,11 @@
 // Exact styling from old builder. Backdrop prevents canvas interaction while open.
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CDN_HOST_BARE } from '@/shared/hosts';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
-import { createPortal } from 'react-dom';
-import { contextMenuAtom, renamingNodeIdAtom } from '@/code/stores/context-menu-store';
+import { contextMenuAtom, renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste } from '@/code/stores/context-menu-store';
+import { toast } from 'sonner';
 import { codeAtom, nodesAtom, selectedNodeAtom, selectedIdsAtom, updatingFromCanvasAtom, getNodesSnapshot } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
 import type { CanvasNode } from '@/code/parsing/parser';
@@ -24,7 +25,7 @@ import { makeIconSetFromNodes } from '@/code/icons/icon-set-ops';
 import { suppressSelectionOverlayAtom } from '@/code/stores/editor-store';
 import { groupSvgs, ungroupSvgs } from '@/code/svg/group-svgs';
 import { buildGroupSvgsOpts } from '@/canvas/svg-group-helper';
-import { setForceRender, syncQueueCode, flushNow } from '@/code/mutation/mutation-queue';
+import { setForceRender, syncQueueCode, flushNow, queueMutation } from '@/code/mutation/mutation-queue';
 import { activeFilePathAtom, componentBreadcrumbAtom, isComponentFilePath, isDesignComponentFile } from '@/code/project/active-file-store';
 import { viewportsConfigAtom, interactingViewportIdAtom, isReplicaViewportAtom, isComponentVariantViewportAtom } from '@/code/stores/viewport-store';
 import { enterComponentFile } from '@/canvas/component-navigation';
@@ -154,6 +155,7 @@ export default function ContextMenu() {
   const interactingVp = useAtomValue(interactingViewportIdAtom);
   const setComponentEditorFile = useSetAtom(componentEditorFileAtom);
   const setVersion = useSetAtom(projectVersionAtom);
+  const [copiedElementStyles, setCopiedElementStyles] = useAtom(copiedElementStylesAtom);
   const menuRef = useRef<HTMLDivElement>(null);
   // No hover hit-testing behind the open menu (and clear the lingering one).
   useSuppressCanvasHover(menu.show);
@@ -546,6 +548,44 @@ export default function ContextMenu() {
     }, 10);
   };
 
+  const handleCopyStyles = () => {
+    const targetNodeId = (nodeId && !selectedIds.includes(nodeId)) ? nodeId : (selectedIds[0] || nodeId);
+    if (!targetNodeId) return;
+    const targetNode = getNodesSnapshot().get(targetNodeId);
+    if (!targetNode) return;
+    const stylesToCopy = extractCopyableStyles(targetNode.styles);
+    if (Object.keys(stylesToCopy).length === 0) {
+      toast.info('No copyable styles on selected element');
+      close();
+      return;
+    }
+    setCopiedElementStyles({
+      styles: stylesToCopy,
+      sourceNodeId: targetNodeId,
+      sourceNodeName: targetNode.name || targetNode.type,
+    });
+    toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+    close();
+  };
+
+  const handlePasteStyles = () => {
+    if (!copiedElementStyles) return;
+    const targetIds = (nodeId && !selectedIds.includes(nodeId))
+      ? [nodeId]
+      : (selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []));
+    if (targetIds.length === 0) return;
+    const snapshot = getNodesSnapshot();
+    for (const id of targetIds) {
+      const targetNode = snapshot.get(id);
+      const payload = prepareStylesForPaste(copiedElementStyles.styles, targetNode?.styles);
+      queueMutation({ type: 'updateStyles', nodeId: id, styles: payload });
+    }
+    flushNow();
+    const count = targetIds.length;
+    toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);
+    close();
+  };
+
   const handleDelete = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
     if (ids.length === 0) return;
@@ -929,11 +969,12 @@ export default function ContextMenu() {
           </>
         )}
 
-        {/* Edit operations */}
         <MenuItem label="Cut" shortcut="Ctrl+X" onClick={handleCut} disabled={!nodeId} />
         <MenuItem label="Copy" shortcut="Ctrl+C" onClick={handleCopy} disabled={!nodeId} />
         <MenuItem label="Paste" shortcut="Ctrl+V" onClick={handlePaste} disabled={!hasClipboard()} />
         <MenuItem label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} disabled={!nodeId} />
+        <MenuItem label="Copy Styles" shortcut="Ctrl+Alt+C" onClick={handleCopyStyles} disabled={!nodeId} />
+        <MenuItem label="Paste Styles" shortcut="Ctrl+Alt+V" onClick={handlePasteStyles} disabled={!copiedElementStyles || !nodeId} />
 
         <Separator />
 

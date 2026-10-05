@@ -24,6 +24,8 @@ const COMMANDS: Array<{
   { id: 'paste',             name: 'Paste',               shortcut: '⌃V',  keywords: ['paste', 'clipboard'] },
   { id: 'cut',               name: 'Cut',                 shortcut: '⌃X',  keywords: ['cut', 'clipboard'] },
   { id: 'duplicate',         name: 'Duplicate',           shortcut: '⌃D',  keywords: ['duplicate', 'copy'] },
+  { id: 'copy-styles',       name: 'Copy Styles',         shortcut: '⌃⌥C', keywords: ['copy', 'styles', 'css', 'style', 'format'] },
+  { id: 'paste-styles',      name: 'Paste Styles',        shortcut: '⌃⌥V', keywords: ['paste', 'styles', 'css', 'style', 'format'] },
   { id: 'delete',            name: 'Delete',              shortcut: '⌫',   keywords: ['delete', 'remove', 'trash'] },
   // Visibility / state toggles
   { id: 'toggle-lock',       name: 'Lock / Unlock',       shortcut: '⌃L',  keywords: ['lock', 'unlock', 'freeze'] },
