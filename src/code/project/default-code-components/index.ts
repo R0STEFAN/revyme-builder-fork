@@ -9,6 +9,7 @@
 // 3. Wire the path in `project-fs.ts` (createDefaultProject + BUILT_IN_COMPONENTS).
 
 // ─── Existing Code components ──────────────────────────────────────────────────────
+export { MARKDOWN_ARTICLE_COMPONENT } from './MarkdownArticle';
 export { ANIMATED_COUNTER_COMPONENT } from './AnimatedCounter';
 export { TYPING_EFFECT_COMPONENT } from './TypingEffect';
 export { GRADIENT_TEXT_COMPONENT } from './GradientText';

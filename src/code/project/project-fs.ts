@@ -24,6 +24,7 @@ import { formatOverrideSource } from '@/code/generation/format-override-source';
 import { OVERRIDES_DIR } from '@/code/generation/code-override-gen';
 import { ensureSmoothScrollInLayout, SMOOTH_SCROLL_DATA_PATH, SMOOTH_SCROLL_CONTROLLER_PATH } from '@/code/generation/smooth-scroll-layout';
 import {
+  MARKDOWN_ARTICLE_COMPONENT,
   ANIMATED_COUNTER_COMPONENT,
   TYPING_EFFECT_COMPONENT,
   AURORA_BACKGROUND_COMPONENT,
@@ -2255,6 +2256,7 @@ export function createEmptyProject(): Map<string, string> {
     // resolves (modern reset + design tokens). The preview tolerates a
     // missing CSS file, but a real Next build would error without it.
     ['app/globals.css', DEFAULT_TOKENS_CSS],
+    ['components/MarkdownArticle.tsx', MARKDOWN_ARTICLE_COMPONENT],
     ['plugins/DirectusSync.tsx', DIRECTUS_SYNC_PLUGIN_SOURCE],
     // `withResponsiveProps` / `withCursor` / `CursorPortal` now live in the
     // `@revyme/runtime` npm package — no longer seeded as projectFS files.
@@ -2377,6 +2379,8 @@ export function createDefaultProject(): Map<string, string> {
 // Insert drag, AI generation, or manual creation).
 
 const BUILT_IN_COMPONENTS: [string, string][] = [
+  // Content / Typography
+  ['components/MarkdownArticle.tsx', MARKDOWN_ARTICLE_COMPONENT],
   // Effects / animations
   ['components/AnimatedCounter.tsx', ANIMATED_COUNTER_COMPONENT],
   ['components/AuroraBackground.tsx', AURORA_BACKGROUND_COMPONENT],
