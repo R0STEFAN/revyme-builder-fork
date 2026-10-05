@@ -10,7 +10,7 @@
  * mountCodeComponent skips re-mounting, leaving the React root attached to
  * a detached element while the live wrapper paints empty.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mountCodeComponent, mountCodeComponentsBatch, unmountCodeComponent } from './sandbox-code-host';
 import { clearCodeComponentCache } from '@/canvas/code-component-runtime';
 
@@ -323,4 +323,75 @@ describe('resolveVariantProps — typed branch coercion', () => {
     }, null);
     expect(def.invert).toBe(false);
   });
+});
+
+
+describe('code component intrinsic sizing', () => {
+  it.each(['min-content', 'auto', 'fit-content', 'max-content'])(
+    'does not feed a measured height back into a %s component', async (height) => {
+      clearCodeComponentCache();
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const id = 'intrinsic-' + height;
+      const container = makeContainer(root, id);
+      let notify: (() => void) | undefined;
+      vi.stubGlobal('ResizeObserver', class {
+        constructor(callback: () => void) { notify = callback; }
+        observe() {}
+        disconnect() {}
+      });
+      // Simulate the browser's content-box measurement: fixing the inner
+      // height to the wrapper's last measurement adds its padding again.
+      Object.defineProperty(container, 'offsetHeight', { get: () => {
+        const inner = container.querySelector<HTMLElement>('[data-code-component-marker]');
+        return inner ? (parseFloat(inner.style.height || '') || 100) + 32 : 0;
+      } });
+      Object.defineProperty(container, 'offsetWidth', { get: () => 300 });
+      try {
+        mountCodeComponent(root, id, CODE_COMPONENT_CODE, { style: { width: '300px', height } }, 1200);
+        await new Promise(r => setTimeout(r, 20));
+        for (let tick = 0; tick < 3; tick++) {
+          notify!();
+          await new Promise(r => setTimeout(r, 20));
+        }
+        const inner = container.querySelector<HTMLElement>('[data-code-component-marker]')!;
+        expect(inner.style.height).toBe(height);
+        expect(container.offsetHeight).toBe(132);
+      } finally {
+        unmountCodeComponent(id);
+        root.remove();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it('still forwards measured pixel sizes during a manual resize', async () => {
+    clearCodeComponentCache();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const id = 'fixed-size-resize';
+    const container = makeContainer(root, id);
+    let notify: (() => void) | undefined;
+    let measuredHeight = 240;
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { notify = callback; }
+      observe() {}
+      disconnect() {}
+    });
+    Object.defineProperty(container, 'offsetWidth', { get: () => 300 });
+    Object.defineProperty(container, 'offsetHeight', { get: () => measuredHeight });
+    try {
+      mountCodeComponent(root, id, CODE_COMPONENT_CODE, { style: { width: '300px', height: '240px' } }, 1200);
+      await new Promise(r => setTimeout(r, 20));
+      measuredHeight = 480;
+      notify!();
+      await new Promise(r => setTimeout(r, 20));
+      expect(container.querySelector<HTMLElement>('[data-code-component-marker]')!.style.height).toBe('480px');
+    } finally {
+      unmountCodeComponent(id);
+      root.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
 });

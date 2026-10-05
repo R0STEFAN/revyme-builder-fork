@@ -22,6 +22,7 @@ import { isSandboxDragSettling } from './sandbox-dnd-host';
 import { trace } from '@/shared/debug-trace';
 import { coerceScalar } from '@/code/values/value-eval';
 import { elementSvgScope } from '@/shared/svg-id-scope';
+import { isFitSize } from '@/shared/constants';
 
 /**
  * Build the inner React element for a mounted code component, threading any
@@ -89,7 +90,9 @@ export function disableCanvasAnimations(code: string): boolean {
 function hasUserDim(style: any, axis: 'width' | 'height'): boolean {
   if (!style || typeof style !== 'object') return false;
   const v = style[axis];
-  return v != null && v !== '';
+  // Intrinsic dimensions must remain content-driven. Feeding the measured
+  // wrapper size back as pixels creates a ResizeObserver growth loop.
+  return v != null && v !== '' && !isFitSize(String(v));
 }
 
 // ─── In-iframe CDN component cache ─────────────────────────────────────────
