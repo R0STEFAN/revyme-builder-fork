@@ -4,6 +4,7 @@ import {
   copiedElementStylesAtom,
   extractCopyableStyles,
   prepareStylesForPaste,
+  resolveEffectiveStyles,
   EXCLUDED_STYLE_KEYS,
 } from './context-menu-store';
 
@@ -104,5 +105,36 @@ describe('context-menu-store style copying', () => {
       backgroundColor: '#abcdef',
       color: '#123456',
     });
+  });
+
+  it('resolveEffectiveStyles merges default and active variant overrides', () => {
+    const node = {
+      styles: {
+        backgroundColor: '#ffffff',
+        color: '#000000',
+        borderRadius: '8px',
+      },
+      motionVariants: {
+        default: {
+          backgroundColor: '#eeeeee', // overrides base on default
+        },
+        'pricing-secondary': {
+          backgroundColor: '#3b82f6', // overrides default on pricing-secondary
+          color: '#ffffff',
+        },
+      },
+    };
+
+    // On primary/desktop without variant:
+    const onPrimary = resolveEffectiveStyles(node, 'default');
+    expect(onPrimary.backgroundColor).toBe('#eeeeee');
+    expect(onPrimary.color).toBe('#000000');
+    expect(onPrimary.borderRadius).toBe('8px');
+
+    // On pricing-secondary variant:
+    const onSecondary = resolveEffectiveStyles(node, 'pricing-secondary');
+    expect(onSecondary.backgroundColor).toBe('#3b82f6');
+    expect(onSecondary.color).toBe('#ffffff');
+    expect(onSecondary.borderRadius).toBe('8px');
   });
 });

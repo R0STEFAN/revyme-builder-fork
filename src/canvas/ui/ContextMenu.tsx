@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CDN_HOST_BARE } from '@/shared/hosts';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
-import { contextMenuAtom, renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste } from '@/code/stores/context-menu-store';
+import { contextMenuAtom, renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste, resolveEffectiveStyles } from '@/code/stores/context-menu-store';
 import { toast } from 'sonner';
 import { codeAtom, nodesAtom, selectedNodeAtom, selectedIdsAtom, updatingFromCanvasAtom, getNodesSnapshot } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
@@ -16,7 +16,7 @@ import {
   selectParent, selectChildren, selectNextSibling, selectPrevSibling, selectNextReplica,
   wrapInFrame, wrapInLayout, unfoldChildren,
 } from '../commands';
-import { getContentRoot, findNodeRect, parseRectCacheKey } from '../node-ops';
+import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext } from '../node-ops';
 import { isTextTag } from '@/shared/constants';
 import { getCanvasBridge } from '../canvas-bridge';
 import { transformManager } from '../transform';
@@ -553,7 +553,8 @@ export default function ContextMenu() {
     if (!targetNodeId) return;
     const targetNode = getNodesSnapshot().get(targetNodeId);
     if (!targetNode) return;
-    const stylesToCopy = extractCopyableStyles(targetNode.styles);
+    const effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
+    const stylesToCopy = extractCopyableStyles(effectiveStyles);
     if (Object.keys(stylesToCopy).length === 0) {
       toast.info('No copyable styles on selected element');
       close();
@@ -574,11 +575,16 @@ export default function ContextMenu() {
       ? [nodeId]
       : (selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []));
     if (targetIds.length === 0) return;
+    const contentEl = getContentEl() || document.body;
+    const targetVpId = interactingVp || 'desktop';
+    const vpWidth = viewports.find(v => v.id === targetVpId)?.width ?? 1440;
+    setStyleContext(activeFilePath, targetVpId, vpWidth);
     const snapshot = getNodesSnapshot();
     for (const id of targetIds) {
       const targetNode = snapshot.get(id);
-      const payload = prepareStylesForPaste(copiedElementStyles.styles, targetNode?.styles);
-      queueMutation({ type: 'updateStyles', nodeId: id, styles: payload });
+      const effectiveTargetStyles = resolveEffectiveStyles(targetNode, targetVpId);
+      const payload = prepareStylesForPaste(copiedElementStyles.styles, effectiveTargetStyles);
+      updateNodeStyles({ id, styles: payload, contentEl });
     }
     flushNow();
     const count = targetIds.length;

@@ -14,7 +14,7 @@ import {
   deleteNode, toggleLock, toggleVisibility, wrapInFrame, wrapInLayout, unfoldChildren,
   duplicateSelection,
 } from './commands';
-import { getContentRoot } from './node-ops';
+import { getContentRoot, updateNodeStyles, setStyleContext } from './node-ops';
 import { getCanvasBridge } from './canvas-bridge';
 import { undo, redo } from '../code/mutation/history';
 import { copyNodes } from '../code/features/paste-engine';
@@ -41,12 +41,12 @@ import { buildGroupSvgsOpts } from './svg-group-helper';
 import { activeFilePathAtom, activeCodeAtom, isIconSetFilePath, isDesignComponentFile } from '../code/project/active-file-store';
 import { detachInstance } from '../code/components/component-ops';
 import { isReplicaViewportAtom, isComponentVariantViewportAtom } from '../code/stores/viewport-store';
-import { renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste } from '../code/stores/context-menu-store';
+import { renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste, resolveEffectiveStyles } from '../code/stores/context-menu-store';
 import { toast } from 'sonner';
 import { createAndOpenProject } from '../editor/header/menu-builders';
 import { nudgeSelection, flushPendingNudge, type NudgeDirection } from './arrow-nudge';
 import { selectAllPageNodeIds } from './selection/select-all';
-import { interactingViewportIdAtom } from '../code/stores/viewport-store';
+import { interactingViewportIdAtom, viewportsConfigAtom } from '../code/stores/viewport-store';
 
 
 export interface ShortcutRefs {
@@ -678,12 +678,14 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
       if (!targetId) return;
       const targetNode = nodesRef.current.get(targetId);
       if (!targetNode) return;
-      const stylesToCopy = extractCopyableStyles(targetNode.styles);
+      const store = getDefaultStore();
+      const interactingVp = store.get(interactingViewportIdAtom);
+      const effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
+      const stylesToCopy = extractCopyableStyles(effectiveStyles);
       if (Object.keys(stylesToCopy).length === 0) {
         toast.info('No copyable styles on selected element');
         return;
       }
-      const store = getDefaultStore();
       store.set(copiedElementStylesAtom, {
         styles: stylesToCopy,
         sourceNodeId: targetId,
@@ -710,10 +712,17 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
         ? selectedIdsRef.current
         : (selectedIdRef.current ? [selectedIdRef.current] : []);
       if (targetIds.length === 0) return;
+      const contentEl = contentRef.current || getContentRoot() || document.body;
+      const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
+      const activeFilePath = store.get(activeFilePathAtom);
+      const viewports = store.get(viewportsConfigAtom);
+      const vpWidth = viewports.find(v => v.id === interactingVp)?.width ?? 1440;
+      setStyleContext(activeFilePath, interactingVp, vpWidth);
       for (const id of targetIds) {
         const targetNode = nodesRef.current.get(id);
-        const payload = prepareStylesForPaste(copied.styles, targetNode?.styles);
-        queueMutation({ type: 'updateStyles', nodeId: id, styles: payload });
+        const effectiveTargetStyles = resolveEffectiveStyles(targetNode, interactingVp);
+        const payload = prepareStylesForPaste(copied.styles, effectiveTargetStyles);
+        updateNodeStyles({ id, styles: payload, contentEl });
       }
       flushNow();
       const count = targetIds.length;

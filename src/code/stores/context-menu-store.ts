@@ -85,3 +85,25 @@ export function prepareStylesForPaste(
   return result;
 }
 
+/** Resolve effective styles for a node considering active variant overrides */
+export function resolveEffectiveStyles(
+  node: { styles?: Record<string, string>; motionVariants?: Record<string, Record<string, string>> | null } | null | undefined,
+  activeVariant?: string | null,
+): Record<string, string> {
+  if (!node) return {};
+  let result = { ...(node.styles ?? {}) };
+  if (node.motionVariants) {
+    const defaultEntry = node.motionVariants['default'];
+    if (defaultEntry && Object.keys(defaultEntry).length > 0) {
+      result = { ...result, ...defaultEntry };
+    }
+    if (activeVariant && activeVariant !== 'default' && node.motionVariants[activeVariant]) {
+      const variantStyles = node.motionVariants[activeVariant];
+      if (variantStyles && Object.keys(variantStyles).length > 0) {
+        result = { ...result, ...variantStyles };
+      }
+    }
+  }
+  return result;
+}
+
