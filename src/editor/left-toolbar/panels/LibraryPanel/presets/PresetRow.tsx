@@ -6,7 +6,7 @@ import SidebarRow from '@/design-system/SidebarRow';
 import { type DropdownMenuEntry } from '@/design-system/DropdownMenu';
 import { type PresetUsage } from '@/code/stores/preset-store';
 import type { PresetToken } from '@/shared/types';
-import { formatTokenLabel } from '../shared/format-utils';
+import { formatTokenLabel, getPresetNumericValue } from '../shared/format-utils';
 import { MULTI_SELECT_OUTLINE } from '../shared/section-utils';
 import { ValuePreview } from './ValuePreview';
 import { UsageBadge } from './UsagePopup';
@@ -43,6 +43,8 @@ interface PresetRowProps {
 
 export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameChange, onRenameSubmit, onRenameCancel, onEdit, onStartRename, onDelete, usages, onShiftClick, isMultiSelected, menuOverride }: PresetRowProps) {
   const displayLabel = token.label ?? formatTokenLabel(token.name);
+  const numericValue = getPresetNumericValue(token);
+
   // Direct actions — the old entries routed through the legacy
   // PresetContextMenu (opened at 0,0 and needed a second click).
   const menuItems: DropdownMenuEntry[] = menuOverride ?? [
@@ -51,6 +53,18 @@ export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameC
     { type: 'separator' },
     { id: 'delete', label: 'Delete', onClick: () => onDelete(token.name) },
   ];
+
+  const hasUsage = usages.length > 0;
+  const rightSlot = (hasUsage || numericValue) ? (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <UsageBadge count={usages.length} usages={usages} />
+      {numericValue && (
+        <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] select-none pointer-events-none">
+          {numericValue}
+        </span>
+      )}
+    </div>
+  ) : undefined;
 
   // When renaming, show inline input instead of SidebarRow
   if (isRenaming) {
@@ -66,6 +80,11 @@ export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameC
           className="flex-1 w-full bg-transparent text-xs font-medium text-[var(--text-primary)] outline-none border-b border-[var(--accent)]"
           onClick={(e) => e.stopPropagation()}
         />
+        {numericValue && (
+          <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] shrink-0 select-none pointer-events-none mr-6">
+            {numericValue}
+          </span>
+        )}
       </div>
     );
   }
@@ -89,7 +108,7 @@ export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameC
         onEdit(token.name);
       }}
       style={isMultiSelected ? { cursor: 'pointer', ...MULTI_SELECT_OUTLINE } : { cursor: 'pointer' }}
-      right={<UsageBadge count={usages.length} usages={usages} />}
+      right={rightSlot}
     />
   );
 }

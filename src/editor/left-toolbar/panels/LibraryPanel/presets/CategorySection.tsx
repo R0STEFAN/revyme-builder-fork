@@ -433,6 +433,21 @@ export function BorderGroupRow({ group, isEditing, onEdit, onDelete, usages, onS
     { id: 'delete', label: 'Delete', onClick: onDelete },
   ];
 
+  const widthVal = group.tokens.find(t => t.name.endsWith('-width'))?.value?.trim();
+  const widthDisplay = widthVal ? (widthVal.endsWith('px') ? widthVal : `${widthVal}px`) : `${widthPx}px`;
+
+  const hasUsage = usages.length > 0;
+  const rightSlot = (hasUsage || widthDisplay) ? (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <UsageBadge count={usages.length} usages={usages} />
+      {widthDisplay && (
+        <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] select-none pointer-events-none">
+          {widthDisplay}
+        </span>
+      )}
+    </div>
+  ) : undefined;
+
   return (
     <SidebarRow
       label={group.label}
@@ -450,7 +465,7 @@ export function BorderGroupRow({ group, isEditing, onEdit, onDelete, usages, onS
       }}
       style={isMultiSelected ? MULTI_SELECT_OUTLINE : undefined}
       menuItems={menuItems}
-      right={<UsageBadge count={usages.length} usages={usages} />}
+      right={rightSlot}
     />
   );
 }

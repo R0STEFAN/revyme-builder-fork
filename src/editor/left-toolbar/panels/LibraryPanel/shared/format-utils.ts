@@ -43,3 +43,36 @@ export function sanitizeName(input: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 }
+
+/**
+ * Returns the displayable numeric dimension value for a preset token,
+ * or null if it is a color, asset, complex shadow, or non-numeric value.
+ * Used on the Presets panel to display the size scale (e.g. "16px", "8px", "100px")
+ * next to each dimensional preset before the action buttons.
+ */
+export function getPresetNumericValue(token: { category?: string; value?: string } | null | undefined): string | null {
+  if (!token) return null;
+  const category = token.category;
+  if (category === 'color' || category === 'image' || category === 'video' || category === 'shadow') {
+    return null;
+  }
+  const val = (token.value || '').trim();
+  if (!val) return null;
+
+  // Never treat color expressions or URLs as numeric dimensions
+  if (/^#|[a-z]+\(/i.test(val)) return null;
+
+  // Known dimension categories (radius, spacing/padding, margin)
+  if (category === 'radius' || category === 'spacing' || category === 'margin') {
+    return val;
+  }
+
+  // Any other category: check if the value is a numeric or dimension value
+  // (e.g. "16px", "2rem", "1.5em", "100%", "24", "16px 24px")
+  if (/^-?\d+(\.\d+)?(px|rem|em|%|vh|vw|vmin|vmax|pt|ch|ex)?(\s+-?\d+(\.\d+)?(px|rem|em|%|vh|vw|vmin|vmax|pt|ch|ex)?)*$/i.test(val)) {
+    return val;
+  }
+
+  return null;
+}
+

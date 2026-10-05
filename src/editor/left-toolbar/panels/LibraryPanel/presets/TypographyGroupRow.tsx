@@ -9,7 +9,7 @@ import SidebarRow from '@/design-system/SidebarRow';
 import { type DropdownMenuEntry } from '@/design-system/DropdownMenu';
 import { type PresetUsage } from '@/code/stores/preset-store';
 import type { TypoGroup as TypographyGroup } from '@/editor/tools/typography-utils';
-import { getTypoTag } from '@/editor/tools/typography-utils';
+import { getTypoTag, getTypoTokenValue } from '@/editor/tools/typography-utils';
 import { TypoTagBadge } from '@/editor/controls';
 import { MULTI_SELECT_OUTLINE } from '../shared/section-utils';
 import { UsageBadge } from './UsagePopup';
@@ -43,6 +43,19 @@ export function TypographyGroupRow({ group, isEditing, onEdit, onDelete, usages,
     { id: 'delete', label: 'Delete', onClick: onDelete },
   ];
 
+  const fontSize = getTypoTokenValue(group, 'size')?.trim();
+  const hasUsage = usages.length > 0;
+  const rightSlot = (hasUsage || fontSize) ? (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <UsageBadge count={usages.length} usages={usages} />
+      {fontSize && (
+        <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] select-none pointer-events-none">
+          {fontSize}
+        </span>
+      )}
+    </div>
+  ) : undefined;
+
   return (
     <div style={isMultiSelected ? MULTI_SELECT_OUTLINE : undefined}>
       <SidebarRow
@@ -62,7 +75,7 @@ export function TypographyGroupRow({ group, isEditing, onEdit, onDelete, usages,
           onEdit();
         }}
         style={{ cursor: 'pointer' }}
-        right={<UsageBadge count={usages.length} usages={usages} />}
+        right={rightSlot}
       />
     </div>
   );
