@@ -1258,27 +1258,21 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
   // it bare, e.g. `backgroundImage: coverImage`): the CMS field holds a PLAIN url, so
   // the binding wraps at the instance → `propName={`url(${item.field})`}`.
   const bindPropToCmsField = useCallback((propName: string, fieldId: string, currentValue: string, urlWrap = false) => {
-    if (!selectedId || !cmsBinding || !componentInfo) return;
+    if (!selectedId || !cmsBinding) return;
     trace.action('ComponentPropsTool:cms-bind-prop', { nodeId: selectedId, propName, fieldId, urlWrap, isReplica, vpWidth: isReplica ? vpWidth : undefined });
-    // Panel-originated: the pill has to appear the moment it's clicked, not
-    // after the mirror's canvas-paint budget (trace 2026-08-08 — the bind
-    // parsed in 5ms, the panel showed it 466ms later).
     expediteStableAtomSync();
     if (isReplica) {
-      // Per-viewport REBIND → a computed `data-responsive` override carrying the
-      // live `item.field` ref; withResponsiveProps merges it for this breakpoint.
-      // The base binding (other viewports) is untouched. The override model stores
-      // non-literal exprs as raw source, so the wrapped template round-trips.
       const expr = urlWrap ? `\`url(\${${cmsBinding.itemVar}.${fieldId}})\`` : `${cmsBinding.itemVar}.${fieldId}`;
+      const cName = componentInfo?.name || node?.type || '';
       modifyProjectFile(activeFile, (currentCode) =>
-        setResponsiveBindingOverride(currentCode, selectedId, componentInfo.name, vpWidth, propName, { kind: 'field', expr }));
+        setResponsiveBindingOverride(currentCode, selectedId, cName, vpWidth, propName, { kind: 'field', expr }));
       const newCode = projectFS.readFile(activeFile);
       if (newCode) { setCode(newCode); setVersion(v => v + 1); }
       return;
     }
     queueMutation({ type: 'bindPropToMap', nodeId: selectedId, varName: cmsBinding.slug, propName, fieldName: fieldId, currentValue, urlWrap });
     flushNow();
-  }, [selectedId, cmsBinding, componentInfo, isReplica, vpWidth, activeFile, setCode, setVersion]);
+  }, [selectedId, cmsBinding, componentInfo, node, isReplica, vpWidth, activeFile, setCode, setVersion]);
 
   // Per-viewport UNBIND → inject the component default on THIS viewport only
   // (a literal override), leaving the base binding intact elsewhere.
@@ -1859,8 +1853,55 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     const resetOverride = lpOv.reset
       ?? (hasResponsiveOverride ? () => handleResetOverride(propName) : undefined)
       ?? variantOv.reset;
+
+    const cmsBoundField = (() => {
+      const pb = node?.propBindings?.find(b => b.prop === propName);
+      if (pb) return pb.field;
+      if (cmsBinding && typeof committedValue === 'string') {
+        if (committedValue.startsWith(cmsBinding.itemVar + '.')) {
+          return committedValue.slice(cmsBinding.itemVar.length + 1);
+        }
+      }
+      return null;
+    })();
+
+    const cmsMenuItems: any[] = [];
+    if (cmsBinding) {
+      const candidates = cmsBinding.fields.filter(f => {
+        if (controlDef.type === 'text') return f.type === 'text' || f.type === 'textarea' || f.type === 'richtext' || f.type === 'slug';
+        if (controlDef.type === 'color') return f.type === 'color';
+        if (controlDef.type === 'number' || controlDef.type === 'slider') return f.type === 'number';
+        return false;
+      });
+      if (candidates.length > 0) {
+        cmsMenuItems.push({
+          label: 'Bind to CMS Field',
+          show: true,
+          hoverColor: 'accent' as const,
+          submenuItems: candidates.map(f => ({
+            label: f.name || f.id,
+            show: true,
+            hoverColor: 'accent' as const,
+            onClick: () => bindPropToCmsField(propName, f.id, committedValue),
+          })),
+        });
+      }
+      if (cmsBoundField) {
+        cmsMenuItems.push({
+          label: 'Unbind Field',
+          show: true,
+          onClick: () => {
+            if (!selectedId) return;
+            expediteStableAtomSync();
+            queueMutation({ type: 'unbindPropFromMap', nodeId: selectedId, propName });
+            flushNow();
+          },
+        });
+      }
+    }
+
     const rowLocale = {
-      extraMenuItems: lpMenu,
+      extraMenuItems: [...cmsMenuItems, ...(lpMenu || [])],
       overridden: hasResponsiveOverride || lpOv.overridden || variantOv.overridden,
       onResetOverride: resetOverride,
     };
@@ -1876,15 +1917,30 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
         ? 'slider' : 'stepper') as 'slider' | 'stepper',
       min: controlDef.min, max: controlDef.max, step: controlDef.step ?? 1,
     } : undefined;
-    const wrapPill = (node: React.ReactNode): React.ReactNode => (
-      selectedId && componentName
+    const wrapPill = (contentNode: React.ReactNode): React.ReactNode => {
+      if (cmsBoundField) {
+        const fieldName = cmsBinding?.fields.find(f => f.id === cmsBoundField)?.name || cmsBoundField;
+        return (
+          <CmsFieldPill
+            field={fieldName}
+            title={`Bound to ${cmsBinding?.slug ?? 'CMS'}.${cmsBoundField}`}
+            onUnbind={() => {
+              if (!selectedId) return;
+              expediteStableAtomSync();
+              queueMutation({ type: 'unbindPropFromMap', nodeId: selectedId, propName });
+              flushNow();
+            }}
+          />
+        );
+      }
+      return selectedId && componentName
         ? <LocalePropPillOr nodeId={selectedId} componentName={componentName} prop={propName}
             propLabel={controlDef.label} options={pillOpts}
             editorKind={controlDef.type === 'color' ? 'color' : isNumberCtl ? 'number' : undefined}
             numberMeta={numberCtlMeta}
-            fallback={cleanPropFallback(currentValue, defaultStr)}>{node}</LocalePropPillOr>
-        : node
-    );
+            fallback={cleanPropFallback(currentValue, defaultStr)}>{contentNode}</LocalePropPillOr>
+        : contentNode;
+    };
 
     trace.fn('ComponentPropsTool:code-component-control', {
       propName, type: controlDef.type, currentValue,

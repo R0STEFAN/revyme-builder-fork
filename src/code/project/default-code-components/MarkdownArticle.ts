@@ -108,8 +108,23 @@ function renderInline(text: string, accentColor: string, headingColor: string): 
   });
 }
 
+const DEFAULT_SAMPLE_CONTENT = \`# Main Article Title
+
+### Subtitle or Section
+
+This is a formatted paragraph with **bold text**, *italic*, and a [link](https://example.com).
+
+> This is an important quote or highlight from the author.
+
+* First bullet point
+* Second bullet point
+
+### Second Subtitle
+
+Another paragraph with detailed information.\`;
+
 function MarkdownArticleComponent({
-  content = '',
+  content,
   baseSize = 16,
   headingFont = 'Inter, sans-serif',
   bodyFont = 'Inter, sans-serif',
@@ -122,11 +137,13 @@ function MarkdownArticleComponent({
   ...props
 }: MarkdownArticleProps) {
   const actualH3Color = h3Color && h3Color.trim() ? h3Color.trim() : headingColor;
+  const rawText = (content != null && String(content).trim().length > 0)
+    ? String(content)
+    : DEFAULT_SAMPLE_CONTENT;
 
   // Block parser
   const blocks = useMemo(() => {
-    if (!content) return [];
-    const lines = String(content).replace(/\\r\\n/g, '\\n').split('\\n');
+    const lines = rawText.replace(/\\r\\n/g, '\\n').split('\\n');
     const result: React.ReactNode[] = [];
 
     let currentList: { type: 'ul' | 'ol'; items: string[] } | null = null;

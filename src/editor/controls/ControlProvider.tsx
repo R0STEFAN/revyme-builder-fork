@@ -1179,7 +1179,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     // A component INSTANCE inside a collection list binds its PROPS (not element
     // text/style/attr) — route get/bind/unbind through the `.map()` prop path so
     // CmsBoundPill works for component props (Mechanism A).
-    const isInstanceNode = !!selectedId && isComponentInstanceInCache(selectedId);
+    const isInstanceNode = !!selectedId && (isComponentInstanceInCache(selectedId) || !!node?.isCodeComponent);
     return {
       slug,
       itemVar,

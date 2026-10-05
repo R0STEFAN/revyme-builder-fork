@@ -20,6 +20,7 @@ import { getAllSlotConnections } from '@/code/generation/slot-ops';
 import { activeFilePathAtom, getLayoutForPage, getLayoutClientPath } from '@/code/project/active-file-store';
 import { projectVersionAtom } from '@/code/project/project-fs';
 import { parseProjectFile } from '@/code/parsing/project-parser';
+import { resolveCmsRowValues } from '@/code/generation/cms-row-resolve';
 
 import { getCdnComponent, loadCdnComponent } from '@/cloud/components/cdn-component-cache';
 import { previewModeAtom } from '@/code/stores/editor-store';
@@ -72,6 +73,17 @@ export function extractCodeComponentProps(node: CanvasNode): Record<string, any>
     for (const [key, value] of Object.entries(node.componentJsonProps)) {
       try { props[key] = JSON.parse(value); } catch { /* leave the prop unset */ }
     }
+  }
+  // Forward live CMS bound values for code component props
+  if (node.propBindings && node.propBindings.length > 0 && _codeComponentNodes) {
+    try {
+      const cmsValues = resolveCmsRowValues(node, _codeComponentNodes);
+      for (const b of node.propBindings) {
+        if (cmsValues[b.prop] !== undefined) {
+          props[b.prop] = cmsValues[b.prop];
+        }
+      }
+    } catch {}
   }
   // Bake INLINE per-viewport variable VALUES into `data-responsive` so the code component resolves the
   // per-tile value on canvas. A per-viewport variable bound on a replica is written as an inline ternary
