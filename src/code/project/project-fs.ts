@@ -112,6 +112,7 @@ import {
   LOCALE_SWITCHER_COMPONENT,
   COPY_BUTTON_COMPONENT,
   ACCORDION_COMPONENT,
+  EMBED_COMPONENT,
   // Creative — text effects ported from the old builder's customCodeJs.
   MORPHING_TEXT_COMPONENT,
   WORD_ROTATE_COMPONENT,
@@ -2535,6 +2536,7 @@ export const BUILT_IN_COMPONENTS: [string, string][] = [
   ['components/LocaleSwitcher.tsx', LOCALE_SWITCHER_COMPONENT],
   ['components/CopyButton.tsx', COPY_BUTTON_COMPONENT],
   ['components/Accordion.tsx', ACCORDION_COMPONENT],
+  ['components/Embed.tsx', EMBED_COMPONENT],
   // Creative — text effects (port batch 1 of the old builder's
   // customCodeJs library). Each one is a self-contained React code component
   // with `@controls` exposing the same axes the imperative versions

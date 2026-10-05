@@ -370,12 +370,14 @@ export function applyWorkspaceFontToProject(family: string): void {
   for (const f of familyFonts) {
     specs.push({
       family: f.family, url: f.url, weight: f.weight, style: f.style, ext: f.ext,
+      ...(f.weightRange ? { weightRange: f.weightRange } : {}),
     });
     // For single-face custom fonts (default 400), also declare weight: 700
     // so bold elements and tags (<strong>, <b>) still resolve this custom face
     if (f.weight === 400 && !familyFonts.some(other => other.weight === 700)) {
       specs.push({
         family: f.family, url: f.url, weight: 700, style: f.style, ext: f.ext,
+        ...(f.weightRange ? { weightRange: f.weightRange } : {}),
       });
     }
     // Also declare alias without spaces if family has spaces (e.g. "CompactaMobsters")
@@ -383,10 +385,12 @@ export function applyWorkspaceFontToProject(family: string): void {
     if (unspaced && unspaced !== f.family) {
       specs.push({
         family: unspaced, url: f.url, weight: f.weight, style: f.style, ext: f.ext,
+        ...(f.weightRange ? { weightRange: f.weightRange } : {}),
       });
       if (f.weight === 400 && !familyFonts.some(other => other.weight === 700)) {
         specs.push({
           family: unspaced, url: f.url, weight: 700, style: f.style, ext: f.ext,
+          ...(f.weightRange ? { weightRange: f.weightRange } : {}),
         });
       }
     }
@@ -411,6 +415,51 @@ export function previewWorkspaceFontInCanvas(family: string): void {
       }
     }
   }
+}
+
+/** Seed the library directly. Tests only — the real list arrives from the
+ *  backend through `ensureWorkspaceFonts`. */
+export function __setWorkspaceFontsForTest(fonts: WorkspaceFont[]): void {
+  _fonts = fonts;
+}
+
+/** CSS weight → the name a type foundry uses for it. */
+const WEIGHT_NAMES: Record<number, string> = {
+  100: 'Thin', 200: 'Extralight', 300: 'Light', 400: 'Regular',
+  500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extrabold', 900: 'Black',
+};
+
+/**
+ * The weights a workspace family actually ships, for the Weight control.
+ *
+ * The default control offers a flat 100–900 whatever the font is, so picking
+ * 800 on a family that only has Light/Regular/Bold gets a SYNTHESISED bold —
+ * the browser smearing the nearest cut — rather than a real one. Offering
+ * only what exists makes the control tell the truth.
+ *
+ * Returns `null` for a family we do not own (Google fonts, system stacks),
+ * so the caller keeps the standard list.
+ *
+ * A VARIABLE font is the opposite case: one file covers a continuous range,
+ * so every step inside it is real and the full list is correct.
+ */
+export function workspaceFamilyWeights(family: string): Array<{ value: string; label: string }> | null {
+  const faces = _fonts.filter((f) => f.family === family);
+  if (faces.length === 0) return null;
+
+  const variable = faces.find((f) => f.weightRange);
+  if (variable?.weightRange) {
+    const { min, max } = variable.weightRange;
+    return Object.keys(WEIGHT_NAMES)
+      .map(Number)
+      .filter((w) => w >= min && w <= max)
+      .map((w) => ({ value: String(w), label: `${WEIGHT_NAMES[w]} ${w}` }));
+  }
+
+  // One entry per WEIGHT, not per file: a family with Regular + Regular
+  // Italic has one weight, and Italic is its own control.
+  const weights = [...new Set(faces.map((f) => f.weight))].sort((a, b) => a - b);
+  return weights.map((w) => ({ value: String(w), label: `${WEIGHT_NAMES[w] ?? ''} ${w}`.trim() }));
 }
 
 /** Is this family one of the workspace's custom fonts (not a Google font)? */

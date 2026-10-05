@@ -200,11 +200,15 @@ const DIVIDER_ITEMS: InsertItem[] = [
 ];
 
 const INTERACTIVE_UTILITY_ITEMS: InsertItem[] = [
+  // `cs-` prefix routes through getToolbarItemConfig's code component/divider branch
+  // so dragging actually drops the code component file as a JSX tag. See
+  // src/canvas/drag/toolbar-item-config.ts CODE_SNIPPET_TOOLBAR_ITEMS.
   { id: 'cs-themeToggle', name: 'Theme Toggle', iconKey: 'effectThemeToggle', gradientColors: ['#F59E0B', '#1F2937'], description: 'Sun/moon toggle button switching between light and dark modes.' },
   { id: 'cs-localeSwitcher', name: 'Locale Switcher', iconKey: 'effectLocaleSwitcher', gradientColors: ['#10B981', '#059669'], description: 'Dropdown selector for switching page languages in multi-language sites.' },
   { id: 'cs-copyButton', name: 'Copy Button', iconKey: 'effectCopyButton', gradientColors: ['#171A16', '#16A34A'], description: 'One-click copy-to-clipboard button with checkmark transition.' },
   { id: 'cs-accordion', name: 'Accordion', iconKey: 'effectAccordion', gradientColors: ['#1F1F1F', '#374151'], description: 'Expandable FAQ accordion with smooth spring animations.' },
   { id: 'cs-markdownArticle', name: 'Markdown Article', iconKey: 'articleMarkdown', gradientColors: ['#EAB308', '#CA8A04'], description: 'Formatted article renderer with typography controls from CMS Markdown or custom text.' },
+  { id: 'cs-embed', name: 'Embed', iconKey: 'effectEmbed', gradientColors: ['#1E293B', '#3B82F6'], description: 'Custom HTML, iframe or widget embed code.' },
 ];
 
 // Patterns drop as a `<div>` with a CSS background pattern (or an SVG-data

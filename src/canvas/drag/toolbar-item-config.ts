@@ -587,6 +587,7 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-copyButton':      { tag: 'CopyButton',      width: 160, height: 48 },
   'cs-accordion':       { tag: 'Accordion',       width: 391, height: 200 },
   'cs-markdownArticle': { tag: 'MarkdownArticle', width: 760, height: 600 },
+  'cs-embed':           { tag: 'Embed',           width: 560, height: 315 },
   // Creative — text effects (port batch 1). Defaults sized big enough
   // for the rendered animation to be visible on first drop without the
   // user needing to resize. SpinningText is square because the chars
