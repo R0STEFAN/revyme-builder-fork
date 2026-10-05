@@ -355,6 +355,8 @@ export default function PluginsSection({ searchQuery }: { searchQuery?: string }
         label: 'Delete',
         onClick: () => {
           deletePluginFile(filePath);
+          setVersion(v => v + 1);
+          setLaunchedProject(null);
           toast.success('Plugin deleted');
         },
       },

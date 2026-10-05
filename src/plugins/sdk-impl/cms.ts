@@ -64,6 +64,17 @@ function schemaToCollection(schema: CollectionSchema, managedBy: string | null):
   };
 }
 
+function extractStringProp(params: unknown, key: string): string | null {
+  if (typeof params === 'string') return params;
+  if (!params || typeof params !== 'object') return null;
+  let val: any = (params as any)[key];
+  if (val === undefined) val = params;
+  while (val && typeof val === 'object' && key in val) {
+    val = val[key];
+  }
+  return typeof val === 'string' ? val : null;
+}
+
 function fieldDefToField(f: FieldDefinition): CollectionField {
   // Map Revyme's richer field types onto the public SDK's narrower
   // set. Anything not in the SDK enum buckets to 'string'.
@@ -130,19 +141,21 @@ export const cmsHandlers: Record<string, RpcHandler> = {
   },
 
   'cms.createCollection': async (params): Promise<string> => {
-    const p = params as { name?: unknown };
-    if (typeof p?.name !== 'string') throw new Error('cms.createCollection: name required');
-    const slug = slugify(p.name);
-    const schema: CollectionSchema = { name: p.name, slug, fields: [] };
+    const name = extractStringProp(params, 'name');
+    if (!name || !name.trim()) throw new Error('cms.createCollection: name required');
+    const trimmed = name.trim();
+    const slug = slugify(trimmed);
+    const schema: CollectionSchema = { name: trimmed, slug, fields: [] };
     saveCollectionSchema(slug, schema);
     return slug;
   },
 
   'cms.createManagedCollection': async (params, ctx): Promise<string> => {
-    const p = params as { name?: unknown };
-    if (typeof p?.name !== 'string') throw new Error('cms.createManagedCollection: name required');
-    const slug = slugify(p.name);
-    saveCollectionSchema(slug, { name: p.name, slug, fields: [] });
+    const name = extractStringProp(params, 'name');
+    if (!name || !name.trim()) throw new Error('cms.createManagedCollection: name required');
+    const trimmed = name.trim();
+    const slug = slugify(trimmed);
+    saveCollectionSchema(slug, { name: trimmed, slug, fields: [] });
     const idx = readManagedIndex();
     idx[slug] = ctx.manifest.id;
     writeManagedIndex(idx);
@@ -150,70 +163,78 @@ export const cmsHandlers: Record<string, RpcHandler> = {
   },
 
   'cms.getFields': async (params): Promise<CollectionField[]> => {
-    const p = params as { collectionId?: unknown };
-    if (typeof p?.collectionId !== 'string') throw new Error('cms.getFields: collectionId required');
-    const schema = getCollectionSchema(p.collectionId);
+    const collectionId = extractStringProp(params, 'collectionId');
+    if (!collectionId) throw new Error('cms.getFields: collectionId required');
+    const schema = getCollectionSchema(collectionId);
     return (schema?.fields ?? []).map(fieldDefToField);
   },
 
   'cms.addFields': async (params): Promise<string[]> => {
-    const p = params as { collectionId?: unknown; fields?: unknown };
-    if (typeof p?.collectionId !== 'string' || !Array.isArray(p?.fields)) {
+    const collectionId = extractStringProp(params, 'collectionId');
+    const p = params as any;
+    const fields = Array.isArray(p?.fields) ? p.fields : (Array.isArray(params) ? params : []);
+    if (!collectionId || !Array.isArray(fields)) {
       throw new Error('cms.addFields: collectionId + fields[] required');
     }
-    const schema = getCollectionSchema(p.collectionId);
-    if (!schema) throw new Error(`cms.addFields: collection not found: ${p.collectionId}`);
+    const schema = getCollectionSchema(collectionId);
+    if (!schema) throw new Error(`cms.addFields: collection not found: ${collectionId}`);
     // Delegate to the builder's own writer: it uniquifies the NAME and the id
     // (a pushed `slugify(name)` could duplicate an existing id, and a later
     // reorder refuses duplicate ids to avoid dropping a definition).
     const ids: string[] = [];
-    for (const f of p.fields) {
+    for (const f of fields) {
       if (!f || typeof f !== 'object') continue;
       const ff = f as { name: string; type: string; required?: boolean };
-      const id = addCollectionField(p.collectionId, { name: ff.name, type: ff.type as FieldDefinition['type'], required: ff.required });
+      const id = addCollectionField(collectionId, { name: ff.name, type: ff.type as FieldDefinition['type'], required: ff.required });
       if (id) ids.push(id);
     }
     return ids;
   },
 
   'cms.removeFields': async (params): Promise<void> => {
-    const p = params as { collectionId?: unknown; fieldIds?: unknown };
-    if (typeof p?.collectionId !== 'string' || !Array.isArray(p?.fieldIds)) {
+    const collectionId = extractStringProp(params, 'collectionId');
+    const p = params as any;
+    const fieldIds = Array.isArray(p?.fieldIds) ? p.fieldIds : [];
+    if (!collectionId || !Array.isArray(fieldIds)) {
       throw new Error('cms.removeFields: collectionId + fieldIds[] required');
     }
-    const schema = getCollectionSchema(p.collectionId);
+    const schema = getCollectionSchema(collectionId);
     if (!schema) return;
-    const drop = new Set(p.fieldIds as string[]);
+    const drop = new Set(fieldIds as string[]);
     schema.fields = schema.fields.filter((f) => !drop.has(f.id));
-    saveCollectionSchema(p.collectionId, schema);
+    saveCollectionSchema(collectionId, schema);
   },
 
   'cms.setFieldOrder': async (params): Promise<void> => {
-    const p = params as { collectionId?: unknown; fieldIds?: unknown };
-    if (typeof p?.collectionId !== 'string' || !Array.isArray(p?.fieldIds)) {
+    const collectionId = extractStringProp(params, 'collectionId');
+    const p = params as any;
+    const fieldIds = Array.isArray(p?.fieldIds) ? p.fieldIds : [];
+    if (!collectionId || !Array.isArray(fieldIds)) {
       throw new Error('cms.setFieldOrder: collectionId + fieldIds[] required');
     }
-    const schema = getCollectionSchema(p.collectionId);
+    const schema = getCollectionSchema(collectionId);
     if (!schema) return;
     // Same single writer as the Fields tab drag (no-op detection, unknown ids
     // ignored, missing ids appended) and the same title rule: the first
     // text-type field names items / seeds slugs, so it stays the first text field.
-    reorderCollectionFields(p.collectionId, keepTitleFieldFirst(schema.fields, p.fieldIds as string[]));
+    reorderCollectionFields(collectionId, keepTitleFieldFirst(schema.fields, fieldIds as string[]));
   },
 
   'cms.getItems': async (params): Promise<PluginCollectionItem[]> => {
-    const p = params as { collectionId?: unknown };
-    if (typeof p?.collectionId !== 'string') throw new Error('cms.getItems: collectionId required');
-    return getCollectionData(p.collectionId).map(itemToCollectionItem);
+    const collectionId = extractStringProp(params, 'collectionId');
+    if (!collectionId) throw new Error('cms.getItems: collectionId required');
+    return getCollectionData(collectionId).map(itemToCollectionItem);
   },
 
   'cms.addItems': async (params): Promise<string[]> => {
-    const p = params as { collectionId?: unknown; items?: unknown };
-    if (typeof p?.collectionId !== 'string' || !Array.isArray(p?.items)) {
+    const collectionId = extractStringProp(params, 'collectionId');
+    const p = params as any;
+    const items = Array.isArray(p?.items) ? p.items : (Array.isArray(params) ? params : []);
+    if (!collectionId || !Array.isArray(items)) {
       throw new Error('cms.addItems: collectionId + items[] required');
     }
     const ids: string[] = [];
-    for (const item of p.items) {
+    for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       const ii = item as { slug: string; fieldData: Record<string, unknown> };
       const partial: Partial<CollectionItem> = {
@@ -222,7 +243,7 @@ export const cmsHandlers: Record<string, RpcHandler> = {
         _status: 'published',
         ...ii.fieldData,
       };
-      const created = addCollectionItem(p.collectionId, partial);
+      const created = addCollectionItem(collectionId, partial);
       ids.push(created._id);
     }
     return ids;

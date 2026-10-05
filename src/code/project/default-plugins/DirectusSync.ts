@@ -225,7 +225,7 @@ function App({ plugin }) {
   // Load existing Revyme fields
   useEffect(() => {
     if (targetMode !== 'existing' || !selectedRevymeSlug) return;
-    plugin.revyme.cms.getFields({ collectionId: selectedRevymeSlug })
+    plugin.revyme.cms.getFields(selectedRevymeSlug)
       .then(fields => setRevymeFields(fields || []))
       .catch(() => setRevymeFields([]));
   }, [targetMode, selectedRevymeSlug]);
@@ -274,7 +274,7 @@ function App({ plugin }) {
       // 1. If New Collection
       if (targetMode === 'new') {
         const name = newCollName.trim() || selectedDirectusColl;
-        targetSlug = await plugin.revyme.cms.createCollection({ name });
+        targetSlug = await plugin.revyme.cms.createCollection(name);
 
         const fieldsToAdd = directusFields.map(f => ({
           name: f.field,
@@ -282,7 +282,7 @@ function App({ plugin }) {
           required: false,
         }));
         if (fieldsToAdd.length > 0) {
-          await plugin.revyme.cms.addFields({ collectionId: targetSlug, fields: fieldsToAdd });
+          await plugin.revyme.cms.addFields(targetSlug, fieldsToAdd);
         }
       } else {
         // 2. Existing Collection
@@ -292,7 +292,7 @@ function App({ plugin }) {
             type: mapFieldType(f),
             required: false,
           }));
-          await plugin.revyme.cms.addFields({ collectionId: targetSlug, fields: fieldsToAdd });
+          await plugin.revyme.cms.addFields(targetSlug, fieldsToAdd);
         }
       }
 
@@ -327,7 +327,7 @@ function App({ plugin }) {
       });
 
       if (mappedItems.length > 0) {
-        await plugin.revyme.cms.addItems({ collectionId: targetSlug, items: mappedItems });
+        await plugin.revyme.cms.addItems(targetSlug, mappedItems);
       }
 
       setSyncSuccess(\`Successfully synced \${mappedItems.length} items into collection "\${targetSlug}"!\`);

@@ -10,7 +10,9 @@
 // projectFS — they have their own `manifest.json` over HTTP. This
 // module is only for the in-browser editor flow.
 
-import { projectFS } from '@/code/project/project-fs';
+import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
+import { getDefaultStore } from 'jotai';
+import { triggerAutosave } from '@/backend/autosave';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import type { PluginManifest } from '@revyme/plugin-sdk';
 import { buildStarterTemplate } from './plugin-bundler';
@@ -104,6 +106,8 @@ export function writePluginSource(filePath: string, source: string): void {
 export function deletePluginFile(filePath: string): void {
   if (!isPluginFilePath(filePath)) return;
   projectFS.deleteFile(filePath);
+  getDefaultStore().set(projectVersionAtom, (v) => v + 1);
+  triggerAutosave();
   trace.action('plugin-files:delete', { filePath });
 }
 
