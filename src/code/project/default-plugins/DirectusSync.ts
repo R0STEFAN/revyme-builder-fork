@@ -1,21 +1,35 @@
 // DirectusSync.ts — Full-featured Directus CMS synchronization plugin for Revyme.
-// Supports: connecting to Directus, selecting collection, creating new collection or
-// importing into existing collection with field diffing, validation, and merging.
+// Supports both Admin API (/collections, /fields) and direct Items API (/items/<collection>)
+// with automatic schema inference, field validation, merging, and syncing.
 
 export const DIRECTUS_SYNC_PLUGIN_SOURCE = `// Directus CMS Sync — Revyme plugin
 import { createPlugin } from '@revyme/plugin-sdk';
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
+function parseDirectusInput(rawUrl) {
+  let clean = rawUrl.trim().replace(/\\/+$/, '');
+  let detectedCollection = '';
+  // Check if URL is like https://api.tattoozp.com/items/tattoos or https://api.tattoozp.com/items/
+  const match = clean.match(/^(https?:\\/\\/[^/]+)(?:\\/items(?:\\/([^/?#]+))?)?/i);
+  if (match) {
+    clean = match[1];
+    if (match[2]) detectedCollection = match[2];
+  }
+  return { baseUrl: clean, detectedCollection };
+}
+
 function App({ plugin }) {
   // Step 1: Connection
-  const [url, setUrl] = useState('http://localhost:8055');
+  const [url, setUrl] = useState('https://api.tattoozp.com');
   const [token, setToken] = useState('');
+  const [collectionInput, setCollectionInput] = useState('');
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Step 2: Collections & Schema
+  // Collections detected or available
+  const [hasAdminCollections, setHasAdminCollections] = useState(false);
   const [directusCollections, setDirectusCollections] = useState([]);
   const [selectedDirectusColl, setSelectedDirectusColl] = useState('');
   const [directusFields, setDirectusFields] = useState([]);
@@ -36,13 +50,15 @@ function App({ plugin }) {
   const [syncing, setSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState('');
 
-  // Load saved credentials on mount
+  // Load saved credentials
   useEffect(() => {
     try {
       const savedUrl = localStorage.getItem('revyme:directus:url');
       const savedToken = localStorage.getItem('revyme:directus:token');
+      const savedColl = localStorage.getItem('revyme:directus:last-coll');
       if (savedUrl) setUrl(savedUrl);
       if (savedToken) setToken(savedToken);
+      if (savedColl) setCollectionInput(savedColl);
     } catch {}
   }, []);
 
@@ -57,14 +73,13 @@ function App({ plugin }) {
     } catch {}
   };
 
-  // Fetch helper that transparently falls back to local server-side proxy
-  // if the remote Directus server blocks browser requests with CORS
+  // CORS-safe fetch helper via local proxy
   const directusFetch = async (targetUrl, init = {}) => {
     try {
       const res = await fetch(targetUrl, init);
       return res;
     } catch {
-      // Browser CORS blocked the request -> route through self-host server proxy
+      // Browser CORS blocked -> fallback to server proxy
       const proxyRes = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,40 +94,59 @@ function App({ plugin }) {
     }
   };
 
-  // Connect to Directus
+  // Connect & Discover
   const handleConnect = async (e) => {
     e?.preventDefault();
     setError('');
     setLoading(true);
     setSyncSuccess('');
-    const cleanUrl = url.trim().replace(/\\/+$/, '');
+
+    const { baseUrl, detectedCollection } = parseDirectusInput(url);
+    const effectiveColl = collectionInput.trim() || detectedCollection || 'tattoos';
+
+    const headers = {};
+    if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
 
     try {
-      const headers = {};
-      if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
-
-      const res = await directusFetch(\`\${cleanUrl}/collections\`, { headers });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          const errJson = await res.json().catch(() => null);
-          const msg = errJson?.errors?.[0]?.message || 'Access denied (403/401). Please enter a valid Directus API Token with permissions to read collections.';
-          throw new Error(msg);
+      // Try 1: check admin /collections
+      let colls = [];
+      try {
+        const res = await directusFetch(\`\${baseUrl}/collections\`, { headers });
+        if (res.ok) {
+          const json = await res.json();
+          colls = (json.data || []).filter(c => !c.collection.startsWith('directus_'));
         }
-        throw new Error(\`Directus returned HTTP \${res.status}\`);
-      }
-      const json = await res.json();
-      const colls = (json.data || []).filter(c => !c.collection.startsWith('directus_'));
-      if (colls.length === 0) throw new Error('No user collections found in Directus');
+      } catch {}
 
-      setDirectusCollections(colls);
-      setSelectedDirectusColl(colls[0].collection);
-      setNewCollName(colls[0].name || colls[0].collection);
+      if (colls.length > 0) {
+        setHasAdminCollections(true);
+        setDirectusCollections(colls);
+        setSelectedDirectusColl(colls[0].collection);
+        setNewCollName(colls[0].name || colls[0].collection);
+      } else {
+        // Try 2: directly verify items endpoint for the collection
+        setHasAdminCollections(false);
+        const itemRes = await directusFetch(\`\${baseUrl}/items/\${effectiveColl}?limit=1\`, { headers });
+        if (!itemRes.ok) {
+          if (itemRes.status === 403 || itemRes.status === 401) {
+            throw new Error(\`Access denied (HTTP \${itemRes.status}). Please check API Token or collection permissions in Directus.\`);
+          }
+          if (itemRes.status === 404) {
+            throw new Error(\`Collection "\${effectiveColl}" was not found at \${baseUrl}/items/\${effectiveColl}\`);
+          }
+          throw new Error(\`Directus returned HTTP \${itemRes.status}\`);
+        }
+        setSelectedDirectusColl(effectiveColl);
+        setNewCollName(effectiveColl.charAt(0).toUpperCase() + effectiveColl.slice(1));
+      }
+
       setConnected(true);
 
       // Save credentials
       try {
-        localStorage.setItem('revyme:directus:url', cleanUrl);
+        localStorage.setItem('revyme:directus:url', baseUrl);
         localStorage.setItem('revyme:directus:token', token.trim());
+        localStorage.setItem('revyme:directus:last-coll', effectiveColl);
       } catch {}
 
       await loadRevymeCollections();
@@ -123,27 +157,59 @@ function App({ plugin }) {
     }
   };
 
-  // When Directus collection changes, load its fields
+  // Inspect schema / fields
   useEffect(() => {
     if (!connected || !selectedDirectusColl) return;
-    const cleanUrl = url.trim().replace(/\\/+$/, '');
+    const { baseUrl } = parseDirectusInput(url);
     const headers = {};
     if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
 
     setFetchingFields(true);
-    directusFetch(\`\${cleanUrl}/fields/\${selectedDirectusColl}\`, { headers })
-      .then(r => r.json())
-      .then(json => {
-        const fields = (json.data || []).filter(f => !f.field.startsWith('directus_') && !['sort', 'user_created', 'date_created', 'user_updated', 'date_updated'].includes(f.field));
-        setDirectusFields(fields);
-        const col = directusCollections.find(c => c.collection === selectedDirectusColl);
-        if (col) setNewCollName(col.name || col.collection);
+
+    // Try schema from /fields/:collection, fallback to sample item inspection
+    directusFetch(\`\${baseUrl}/fields/\${selectedDirectusColl}\`, { headers })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          const fields = (json.data || []).filter(f => !f.field.startsWith('directus_') && !['sort', 'user_created', 'date_created', 'user_updated', 'date_updated'].includes(f.field));
+          if (fields.length > 0) return fields;
+        }
+        // Fallback: infer schema from sample item
+        const itemRes = await directusFetch(\`\${baseUrl}/items/\${selectedDirectusColl}?limit=1\`, { headers });
+        if (itemRes.ok) {
+          const json = await itemRes.json();
+          const sample = json.data?.[0];
+          if (sample) {
+            const fields = [];
+            for (const [k, v] of Object.entries(sample)) {
+              if (['sort', 'user_created', 'date_created', 'user_updated', 'date_updated'].includes(k)) continue;
+              let inferredType = 'string';
+              if (typeof v === 'number') inferredType = 'number';
+              else if (typeof v === 'boolean') inferredType = 'boolean';
+              else if (typeof v === 'string') {
+                if (/^https?:\\/\\/.+\\.(webp|png|jpe?g|gif|svg)$/i.test(v) || k.toLowerCase().includes('img') || k.toLowerCase().includes('image') || k.toLowerCase().includes('photo')) {
+                  inferredType = 'image';
+                } else if (v.includes('\\n\\n') || v.includes('### ') || v.includes('<p>')) {
+                  inferredType = 'rich-text';
+                } else if (/^\\d{4}-\\d{2}-\\d{2}/.test(v)) {
+                  inferredType = 'date';
+                }
+              }
+              fields.push({ field: k, type: inferredType });
+            }
+            return fields;
+          }
+        }
+        return [];
+      })
+      .then((fields) => {
+        setDirectusFields(fields || []);
       })
       .catch(() => {})
       .finally(() => setFetchingFields(false));
   }, [connected, selectedDirectusColl, url, token]);
 
-  // When Revyme collection selected, load its existing fields
+  // Load existing Revyme fields
   useEffect(() => {
     if (targetMode !== 'existing' || !selectedRevymeSlug) return;
     plugin.revyme.cms.getFields({ collectionId: selectedRevymeSlug })
@@ -157,10 +223,8 @@ function App({ plugin }) {
       setMissingFields([]);
       return;
     }
-
     const revymeFieldNames = new Set(revymeFields.map(f => (f.name || f.id).toLowerCase()));
     const missing = [];
-
     for (const df of directusFields) {
       const name = df.field.toLowerCase();
       if (!revymeFieldNames.has(name)) {
@@ -170,25 +234,24 @@ function App({ plugin }) {
     setMissingFields(missing);
   }, [targetMode, directusFields, revymeFields]);
 
-  // Map Directus field types to Revyme CMS types
   const mapFieldType = (df) => {
     const dt = (df.type || '').toLowerCase();
     const iface = (df.meta?.interface || '').toLowerCase();
-    if (['integer', 'biginteger', 'float', 'decimal'].includes(dt)) return 'number';
+    if (['integer', 'biginteger', 'float', 'decimal', 'number'].includes(dt)) return 'number';
     if (dt === 'boolean') return 'boolean';
     if (['date', 'datetime', 'timestamp', 'time'].includes(dt)) return 'date';
-    if (iface.includes('image') || dt === 'file' || iface.includes('file')) return 'image';
-    if (iface.includes('wysiwyg') || iface.includes('markdown') || dt === 'text') return 'rich-text';
+    if (iface.includes('image') || dt === 'image' || dt === 'file' || iface.includes('file')) return 'image';
+    if (iface.includes('wysiwyg') || iface.includes('markdown') || dt === 'rich-text' || dt === 'text') return 'rich-text';
     return 'string';
   };
 
-  // Start Sync
+  // Sync Data
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
     setError('');
     setSyncSuccess('');
-    const cleanUrl = url.trim().replace(/\\/+$/, '');
+    const { baseUrl } = parseDirectusInput(url);
     const headers = {};
     if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
 
@@ -200,7 +263,6 @@ function App({ plugin }) {
         const name = newCollName.trim() || selectedDirectusColl;
         targetSlug = await plugin.revyme.cms.createCollection({ name });
 
-        // Add fields
         const fieldsToAdd = directusFields.map(f => ({
           name: f.field,
           type: mapFieldType(f),
@@ -221,13 +283,13 @@ function App({ plugin }) {
         }
       }
 
-      // 3. Fetch Items from Directus
-      const itemsRes = await directusFetch(\`\${cleanUrl}/items/\${selectedDirectusColl}?limit=-1\`, { headers });
+      // 3. Fetch all items
+      const itemsRes = await directusFetch(\`\${baseUrl}/items/\${selectedDirectusColl}?limit=-1\`, { headers });
       if (!itemsRes.ok) throw new Error(\`Failed to fetch Directus items: \${itemsRes.status}\`);
       const itemsJson = await itemsRes.json();
       const rawItems = itemsJson.data || [];
 
-      // 4. Map & Add Items into Revyme CMS
+      // 4. Map & Add Items
       const mappedItems = rawItems.map(item => {
         const slug = item.slug || item.title || item.name || \`item-\${item.id}\`;
         const cleanSlug = String(slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || \`item-\${Date.now()}\`;
@@ -235,10 +297,14 @@ function App({ plugin }) {
 
         for (const [k, v] of Object.entries(item)) {
           if (v === null || v === undefined) continue;
-          // Image/file expansion
           const df = directusFields.find(f => f.field === k);
           if (df && mapFieldType(df) === 'image' && typeof v === 'string') {
-            fieldData[k] = \`\${cleanUrl}/assets/\${v}\`;
+            // Expand Directus asset UUID to full URL if not already a full URL
+            if (!v.startsWith('http')) {
+              fieldData[k] = \`\${baseUrl}/assets/\${v}\`;
+            } else {
+              fieldData[k] = v;
+            }
           } else {
             fieldData[k] = v;
           }
@@ -288,31 +354,47 @@ function App({ plugin }) {
       {!connected ? (
         <form onSubmit={handleConnect} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <label style={{ display: 'block', marginBottom: 4, opacity: 0.8, fontSize: 11 }}>Directus URL</label>
+            <label style={{ display: 'block', marginBottom: 4, opacity: 0.8, fontSize: 11 }}>Directus API URL</label>
             <input
               type="text"
               value={url}
               onChange={e => setUrl(e.target.value)}
-              placeholder="http://localhost:8055"
+              placeholder="https://api.tattoozp.com or /items/tattoos"
               style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
             />
           </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: 4, opacity: 0.8, fontSize: 11 }}>Directus Collection Slug</label>
+            <input
+              type="text"
+              value={collectionInput}
+              onChange={e => setCollectionInput(e.target.value)}
+              placeholder="e.g. tattoos, posts, services"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
+            />
+            <span style={{ fontSize: 10, opacity: 0.5, marginTop: 2, display: 'block' }}>
+              Leave blank to auto-detect from Admin API or URL
+            </span>
+          </div>
+
           <div>
             <label style={{ display: 'block', marginBottom: 4, opacity: 0.8, fontSize: 11 }}>API Token (Optional)</label>
             <input
               type="password"
               value={token}
               onChange={e => setToken(e.target.value)}
-              placeholder="Bearer Token"
+              placeholder="Bearer Token (if private)"
               style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
             style={{ marginTop: 6, padding: '7px 12px', background: '#eab308', color: '#000', fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}
           >
-            {loading ? 'Connecting...' : 'Connect to Directus'}
+            {loading ? 'Connecting & Verifying...' : 'Connect to Directus'}
           </button>
         </form>
       ) : (
@@ -321,17 +403,24 @@ function App({ plugin }) {
           {/* Source Collection */}
           <div>
             <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 11, color: '#eab308' }}>1. Directus Source Collection</label>
-            <select
-              value={selectedDirectusColl}
-              onChange={e => setSelectedDirectusColl(e.target.value)}
-              style={{ width: '100%', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
-            >
-              {directusCollections.map(c => (
-                <option key={c.collection} value={c.collection}>{c.name || c.collection} ({c.collection})</option>
-              ))}
-            </select>
+            {hasAdminCollections ? (
+              <select
+                value={selectedDirectusColl}
+                onChange={e => setSelectedDirectusColl(e.target.value)}
+                style={{ width: '100%', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
+              >
+                {directusCollections.map(c => (
+                  <option key={c.collection} value={c.collection}>{c.name || c.collection} ({c.collection})</option>
+                ))}
+              </select>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: '#27272a', borderRadius: 4, border: '1px solid #3f3f46' }}>
+                <span style={{ fontWeight: 600 }}>{selectedDirectusColl}</span>
+                <span style={{ fontSize: 10, opacity: 0.6, marginLeft: 'auto' }}>/items/{selectedDirectusColl}</span>
+              </div>
+            )}
             <div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>
-              {fetchingFields ? 'Inspecting schema...' : \`\${directusFields.length} field(s) detected\`}
+              {fetchingFields ? 'Inspecting fields...' : \`\${directusFields.length} field(s) detected\`}
             </div>
           </div>
 
