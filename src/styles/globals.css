@@ -121,6 +121,8 @@ select option:disabled {
        lands most accents near 4.5:1 on white. A very light accent will come in
        under that and wants a hand-set value here. */
     --accent-text: color-mix(in srgb, var(--accent) 50%, #000);
+    /* Modified style label indicator — high contrast and saturation against white panel */
+    --accent-modified: #c026d3;
     --accent-strong: color-mix(in srgb, var(--accent) 88%, #fff);
     --accent-strong-fg: #ffffff;
     --accent-muted: color-mix(in srgb, var(--accent) 30%, #fff);
@@ -140,6 +142,7 @@ select option:disabled {
     --accent-secondary: #9a66ff;
     --accent-secondary-hover: #b883ff;
     --accent-secondary-fg: #ffffff;
+    --accent-secondary-modified: #7e22ce;
 
     /* Canvas selection — FUNCTIONAL, not brand. Deliberately NOT --accent.
        These strokes sit on top of the user's own design, so the colour has to
@@ -315,6 +318,8 @@ select option:disabled {
        accent — but written as a var so it tracks any change, including the
        component-mode rewrite. */
     --accent-text: var(--accent);
+    /* Modified style label indicator — vibrant, high luminance and saturation against dark chrome */
+    --accent-modified: #f062c2;
     --accent-strong: color-mix(in srgb, var(--accent) 88%, #fff);
     --accent-strong-fg: #ffffff;
     --accent-muted: color-mix(in srgb, var(--accent) 22%, #000);
@@ -333,6 +338,7 @@ select option:disabled {
     --accent-secondary: #9a66ff;
     --accent-secondary-hover: #b883ff;
     --accent-secondary-fg: #ffffff;
+    --accent-secondary-modified: #c084fc;
 
     /* Canvas selection — see the light-theme note. Brighter here so the
        stroke holds up against the darker canvas (#1d1d1d). */

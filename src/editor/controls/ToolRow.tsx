@@ -114,13 +114,13 @@ export default function ToolRow({ label, children, labelStyle, onResetOverride, 
               className="group relative text-left cursor-pointer w-full"
             >
               {/* Left chevron */}
-              <span className="absolute -left-[14px] top-1/2 -translate-y-1/2 text-[var(--text-secondary)] group-hover:text-[var(--accent-text)] transition-all duration-200 group-hover:-translate-x-0.5">
+              <span className={`absolute -left-[14px] top-1/2 -translate-y-1/2 transition-all duration-200 ${isOverride ? 'text-[var(--accent-modified,var(--accent-text))]' : 'text-[var(--text-secondary)] group-hover:text-[var(--accent-modified,var(--accent-text))]'} group-hover:-translate-x-0.5`}>
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </span>
               <span
-                className={`text-xs font-bold transition-colors ${isOverride ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'}`}
+                className={`text-xs font-bold transition-colors ${isOverride ? 'text-[var(--accent-modified,var(--accent-text))]' : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'}`}
                 style={!isOverride ? labelStyle : undefined}
               >
                 {label}

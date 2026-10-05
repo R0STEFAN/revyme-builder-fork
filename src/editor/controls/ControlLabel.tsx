@@ -48,6 +48,7 @@ import { toKebab } from '@/shared/css-utils';
 import { useLocalizeHidden } from './localize-gate';
 import CreatePresetPopup from '../ui/CreatePresetPopup';
 import type { PresetToken } from '@/shared/types';
+import { isStyleModified } from './style-modified';
 
 interface ControlLabelProps {
   label: string;
@@ -120,7 +121,7 @@ function PlainOverrideLabel({ label, subLabel, onReset, cell }: { label: string;
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
-  const accent = isComponentFile ? 'var(--accent-secondary)' : 'var(--accent)';
+  const accent = isComponentFile ? 'var(--accent-secondary-modified,var(--accent-secondary))' : 'var(--accent-modified,var(--accent-text))';
   return (
     <div ref={ref} className={`relative min-w-0 pl-[18px] -ml-[18px] select-none${cell ? '' : ' w-3/4 mr-[2px]'}`}>
       <button
@@ -178,6 +179,19 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   // Scale rows) opt back in explicitly via `forceShow` so they stay visible while the outer label stays hidden.
   if (unifiedCtx?.hideLabel && !forceShow) return null;
 
+  const {
+    nodeId, node, styles, vpId, isReplica, vpWidth,
+    hasOverride, getValueSource,
+    createVariable, removeVariable, updateStyle, updateStyleLive, updateMultipleStyles,
+    cmsBinding,
+  } = useControl();
+
+  const isComponentFile = useAtomValue(isComponentFileAtom);
+  const isModified = isStyleModified(property, styles, node, unifiedCtx, label);
+  const plainColorClass = (overridden || isModified)
+    ? (isComponentFile ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]' : 'text-[var(--accent-modified,var(--accent-text))]')
+    : 'text-[var(--text-secondary)]';
+
   // Plain mode: simple styled label, no menu/variable/override logic.
   // Typography + `pl-[18px] -ml-[18px]` gutter match the non-plain
   // (button) variant so a row mixing plain and non-plain labels (or two
@@ -218,30 +232,22 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
       // `zeagzegazeg…` would otherwise touch the value without this gap.
       return (
         <span className={`min-w-0 select-none pl-[18px] -ml-[18px] pr-2 flex flex-col leading-tight${cell ? '' : ' w-3/4 mr-[2px]'}`}>
-          <span className="text-xs font-bold text-[var(--text-secondary)] block truncate" title={label}>{label}</span>
+          <span className={`text-xs font-bold ${plainColorClass} block truncate`} title={label}>{label}</span>
           <span className="text-[10px] text-[var(--text-disabled)] font-normal block truncate" title={subLabel}>{subLabel}</span>
         </span>
       );
     }
     return (
-      <span className={`min-w-0 text-xs font-bold text-[var(--text-secondary)] select-none pl-[18px] -ml-[18px] block truncate${cell ? '' : ' w-3/4 mr-[2px]'}`} title={label}>
+      <span className={`min-w-0 text-xs font-bold ${plainColorClass} select-none pl-[18px] -ml-[18px] block truncate${cell ? '' : ' w-3/4 mr-[2px]'}`} title={label}>
         {label}
       </span>
     );
   }
 
-  const {
-    nodeId, node, styles, vpId, isReplica, vpWidth,
-    hasOverride, getValueSource,
-    createVariable, removeVariable, updateStyle, updateStyleLive, updateMultipleStyles,
-    cmsBinding,
-  } = useControl();
-
   // Custom in-memory style clipboard (Copy Style / Paste Style on the label menu).
   const copiedStyle = useAtomValue(copiedStyleAtom);
   const setCopiedStyle = useSetAtom(copiedStyleAtom);
 
-  const isComponentFile = useAtomValue(isComponentFileAtom);
   const isPrimary = isPrimaryViewport(vpId);
 
   // Locale awareness
@@ -807,16 +813,18 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   // ─── Determine label color ─────────────────────────────────
   let labelColorClass = 'text-[var(--text-secondary)]';
   let hoverColorClass = isComponentFile
-    ? 'group-hover:text-[var(--accent-secondary)]'
+    ? 'group-hover:text-[var(--accent-secondary-modified,var(--accent-secondary))]'
     : 'group-hover:text-[var(--text-primary)]';
   const chevronHoverColor = isComponentFile
-    ? 'group-hover:text-[var(--accent-secondary)]'
-    : 'group-hover:text-[var(--accent-text)]';
+    ? 'group-hover:text-[var(--accent-secondary-modified,var(--accent-secondary))]'
+    : 'group-hover:text-[var(--accent-modified,var(--accent-text))]';
 
-  if (isOverride) {
-    // Component-file overrides use the purple secondary accent (matching the bound pill + the rest of the
-    // component-editing chrome); page overrides use the standard blue accent.
-    labelColorClass = isComponentFile ? 'text-[var(--accent-secondary)]' : 'text-[var(--accent-text)]';
+  if (isOverride || isModified) {
+    // Modified / overridden styles use the high-contrast vibrant accent color
+    // (purple in component master files, vibrant magenta/accent on pages).
+    labelColorClass = isComponentFile
+      ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]'
+      : 'text-[var(--accent-modified,var(--accent-text))]';
     hoverColorClass = '';
   }
 
@@ -833,10 +841,11 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   // their cursor onto the dropdown, the button loses :hover, and the label
   // visually goes back to neutral despite still being the source of the
   // open menu. Skipped when the label is already in a special state
-  // (override / locale) so we don't trample those colours.
-  const forceActive = menuOpen && !isOverride && !showLocaleIndicator;
-  const activeLabelColor = isComponentFile ? 'text-[var(--accent-secondary)]' : 'text-[var(--text-primary)]';
-  const activeChevronColor = isComponentFile ? 'text-[var(--accent-secondary)]' : 'text-[var(--accent-text)]';
+  // (override / locale / modified) so we don't trample those colours.
+  const forceActive = menuOpen && !isOverride && !showLocaleIndicator && !isModified;
+  const activeLabelColor = isComponentFile ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]' : 'text-[var(--text-primary)]';
+  const activeChevronColor = isComponentFile ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]' : 'text-[var(--accent-modified,var(--accent-text))]';
+  const modifiedChevronColor = isComponentFile ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]' : 'text-[var(--accent-modified,var(--accent-text))]';
   const effectiveLabelColor = forceActive ? activeLabelColor : labelColorClass;
   // When there's no dropdown to open (no chevron), the label is not interactive
   // — strip the hover color class so it stays neutral instead of lighting up
@@ -885,7 +894,9 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
             className={`absolute left-[4px] top-1/2 -translate-y-1/2 transition-all duration-200 ${
               forceActive
                 ? `${activeChevronColor} -translate-x-0.5`
-                : `text-[var(--text-secondary)] ${chevronHoverColor} group-hover:-translate-x-0.5`
+                : (isOverride || isModified)
+                  ? `${modifiedChevronColor} group-hover:-translate-x-0.5`
+                  : `text-[var(--text-secondary)] ${chevronHoverColor} group-hover:-translate-x-0.5`
             }`}
           >
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

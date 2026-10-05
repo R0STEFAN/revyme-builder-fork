@@ -23,7 +23,7 @@ import {
 import { trace } from '@/shared/debug-trace';
 
 /** The variables we own. The rest of the accent family color-mixes off these. */
-const OWNED_VARS = ['--accent', '--accent-fg', '--accent-strong-fg', '--accent-surface', '--accent-text'] as const;
+const OWNED_VARS = ['--accent', '--accent-fg', '--accent-strong-fg', '--accent-surface', '--accent-text', '--accent-modified'] as const;
 
 let observer: MutationObserver | null = null;
 
@@ -61,6 +61,11 @@ function paint(theme: BuilderTheme): void {
   // Hardcoded as an orange rgba in the stylesheet, so it would stay orange
   // under any other accent. Derive it to keep tinted surfaces in family.
   root.style.setProperty('--accent-surface', 'color-mix(in srgb, var(--accent) 12%, transparent)');
+  if (c.accentModified) {
+    root.style.setProperty('--accent-modified', c.accentModified);
+  } else {
+    root.style.removeProperty('--accent-modified');
+  }
   if (isDarkMode()) {
     // `.dark` collapses --accent-text to the RAW accent — right for the
     // bright stock brass, unreadable for the mid-dark palettes: Rose as

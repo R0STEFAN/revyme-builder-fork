@@ -21,6 +21,8 @@ export interface BuilderThemeColors {
   accent: string;
   /** `--accent-fg` / `--accent-strong-fg` — the label sitting ON the accent. */
   accentFg: string;
+  /** `--accent-modified` — vibrant, high-contrast accent for modified style labels. */
+  accentModified?: string;
 }
 
 export interface BuilderTheme {
@@ -39,24 +41,24 @@ export const BUILDER_THEMES: BuilderTheme[] = [
     // come back exactly as authored.
     id: 'default',
     label: 'Default',
-    light: { accent: '#b858a3', accentFg: '#ffffff' },
-    dark: { accent: '#b858a3', accentFg: '#ffffff' },
+    light: { accent: '#b858a3', accentFg: '#ffffff', accentModified: '#c026d3' },
+    dark: { accent: '#b858a3', accentFg: '#ffffff', accentModified: '#f062c2' },
   },
   {
     // The brass/gold that shipped as the default during the redesign — kept
     // as a selectable palette. Near-black label: white on gold is 1.9:1.
     id: 'gold',
     label: 'Gold',
-    light: { accent: '#cec997', accentFg: '#0d1017' },
-    dark: { accent: '#cec997', accentFg: '#0d1017' },
+    light: { accent: '#cec997', accentFg: '#0d1017', accentModified: '#854d0e' },
+    dark: { accent: '#cec997', accentFg: '#0d1017', accentModified: '#fde047' },
   },
   {
     // Maximum contrast against the chrome in both directions: near-black
     // accent on the light UI, white accent on the dark one.
     id: 'monochrome',
     label: 'Monochrome',
-    light: { accent: '#111111', accentFg: '#ffffff' },
-    dark: { accent: '#ffffff', accentFg: '#111111' },
+    light: { accent: '#111111', accentFg: '#ffffff', accentModified: '#000000' },
+    dark: { accent: '#ffffff', accentFg: '#111111', accentModified: '#ffffff' },
   },
   {
     // Deep forest green. Every non-Default palette here is tuned so its
@@ -65,20 +67,20 @@ export const BUILDER_THEMES: BuilderTheme[] = [
     // ~4.0 and had to come down a step.
     id: 'forest',
     label: 'Green Forest',
-    light: { accent: '#297f54', accentFg: '#ffffff' },
-    dark: { accent: '#297f54', accentFg: '#ffffff' },
+    light: { accent: '#297f54', accentFg: '#ffffff', accentModified: '#15803d' },
+    dark: { accent: '#297f54', accentFg: '#ffffff', accentModified: '#4ade80' },
   },
   {
     id: 'ocean',
     label: 'Ocean',
-    light: { accent: '#2a6fbe', accentFg: '#ffffff' },
-    dark: { accent: '#2a6fbe', accentFg: '#ffffff' },
+    light: { accent: '#2a6fbe', accentFg: '#ffffff', accentModified: '#0284c7' },
+    dark: { accent: '#2a6fbe', accentFg: '#ffffff', accentModified: '#38bdf8' },
   },
   {
     id: 'ember',
     label: 'Ember',
-    light: { accent: '#c04832', accentFg: '#ffffff' },
-    dark: { accent: '#c04832', accentFg: '#ffffff' },
+    light: { accent: '#c04832', accentFg: '#ffffff', accentModified: '#be123c' },
+    dark: { accent: '#c04832', accentFg: '#ffffff', accentModified: '#fb7185' },
   },
   {
     // The pale one: light enough that white labels would wash out, so the
@@ -86,14 +88,14 @@ export const BUILDER_THEMES: BuilderTheme[] = [
     // `accentFg` field exists for.
     id: 'amber',
     label: 'Amber',
-    light: { accent: '#e0a83c', accentFg: '#1a1206' },
-    dark: { accent: '#e0a83c', accentFg: '#1a1206' },
+    light: { accent: '#e0a83c', accentFg: '#1a1206', accentModified: '#b45309' },
+    dark: { accent: '#e0a83c', accentFg: '#1a1206', accentModified: '#fbbf24' },
   },
   {
     id: 'rose',
     label: 'Rose',
-    light: { accent: '#ad3f68', accentFg: '#ffffff' },
-    dark: { accent: '#ad3f68', accentFg: '#ffffff' },
+    light: { accent: '#ad3f68', accentFg: '#ffffff', accentModified: '#be123c' },
+    dark: { accent: '#ad3f68', accentFg: '#ffffff', accentModified: '#fb7185' },
   },
 ];
 
