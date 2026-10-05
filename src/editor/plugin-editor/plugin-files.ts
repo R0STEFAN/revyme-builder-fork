@@ -15,6 +15,7 @@ import { modifyProjectFile } from '@/code/project/modify-file';
 import type { PluginManifest } from '@revyme/plugin-sdk';
 import { buildStarterTemplate } from './plugin-bundler';
 import { parseComponentName, setComponentName } from '@/code/components/component-ops';
+import { DIRECTUS_SYNC_PLUGIN_SOURCE } from '@/code/project/default-plugins/DirectusSync';
 import { trace } from '@/shared/debug-trace';
 
 const PLUGINS_DIR = 'plugins/';
@@ -83,6 +84,9 @@ export function createPluginFile(displayName: string): string {
 
 /** Read a plugin's source. Returns empty string when the file's missing. */
 export function readPluginSource(filePath: string): string {
+  if (filePath === 'plugins/DirectusSync.tsx') {
+    return DIRECTUS_SYNC_PLUGIN_SOURCE;
+  }
   return projectFS.readFile(filePath) ?? '';
 }
 

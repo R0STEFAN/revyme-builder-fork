@@ -553,7 +553,7 @@ export default function ContextMenu() {
     if (!targetNodeId) return;
     const targetNode = getNodesSnapshot().get(targetNodeId);
     if (!targetNode) return;
-    const effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
+    const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
     const stylesToCopy = extractCopyableStyles(effectiveStyles);
     if (Object.keys(stylesToCopy).length === 0) {
       toast.info('No copyable styles on selected element');
@@ -582,7 +582,7 @@ export default function ContextMenu() {
     const snapshot = getNodesSnapshot();
     for (const id of targetIds) {
       const targetNode = snapshot.get(id);
-      const effectiveTargetStyles = resolveEffectiveStyles(targetNode, targetVpId);
+      const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, targetVpId);
       const payload = prepareStylesForPaste(copiedElementStyles.styles, effectiveTargetStyles);
       updateNodeStyles({ id, styles: payload, contentEl });
     }

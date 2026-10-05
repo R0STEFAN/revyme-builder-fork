@@ -680,7 +680,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
       if (!targetNode) return;
       const store = getDefaultStore();
       const interactingVp = store.get(interactingViewportIdAtom);
-      const effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
+      const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
       const stylesToCopy = extractCopyableStyles(effectiveStyles);
       if (Object.keys(stylesToCopy).length === 0) {
         toast.info('No copyable styles on selected element');
@@ -720,7 +720,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
       setStyleContext(activeFilePath, interactingVp, vpWidth);
       for (const id of targetIds) {
         const targetNode = nodesRef.current.get(id);
-        const effectiveTargetStyles = resolveEffectiveStyles(targetNode, interactingVp);
+        const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
         const payload = prepareStylesForPaste(copied.styles, effectiveTargetStyles);
         updateNodeStyles({ id, styles: payload, contentEl });
       }
