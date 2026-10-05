@@ -84,7 +84,7 @@ const parts = [
   '  return parts;',
   '}',
   '',
-  'function MarkdownArticleComponent(props) {',
+  'function MarkdownArticle(props) {',
   '  const content = props.content;',
   '  const baseSize = props.baseSize || 16;',
   "  const headingFont = props.headingFont || 'Inter, sans-serif';",
@@ -164,7 +164,7 @@ const parts = [
   '  return React.createElement("article", Object.assign({ style: Object.assign({ boxSizing: "border-box", width: "100%", maxWidth: maxWidth ? maxWidth + "px" : "760px", margin: "0 auto", padding: "16px 0" }, props.style) }, props), blocks);',
   '}',
   '',
-  'export default withResponsiveProps(MarkdownArticleComponent);',
+  'export default withResponsiveProps(MarkdownArticle);',
 ];
 
-export const MARKDOWN_ARTICLE_COMPONENT = parts.join('\\n');
+export const MARKDOWN_ARTICLE_COMPONENT = parts.join('\n');
