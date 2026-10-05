@@ -17,6 +17,7 @@ import { findVariantRootId, insertAtRootRestSpread, stampRootDataVariantAttr } f
 import { nodeIdToVarName } from '@/shared/id-utils';
 import { healStyleBlockImportant } from '@/shared/media-important';
 import { ensureLayoutFile } from '@/code/generation/metadata-gen';
+import { DIRECTUS_SYNC_PLUGIN_SOURCE } from './default-plugins/DirectusSync';
 import { healSectionOffsets } from '@/code/generation/generator-motion-scroll';
 import { healEventOverlayToggle } from '@/code/generation/event-overlay-heal';
 import { formatOverrideSource } from '@/code/generation/format-override-source';
@@ -2254,6 +2255,7 @@ export function createEmptyProject(): Map<string, string> {
     // resolves (modern reset + design tokens). The preview tolerates a
     // missing CSS file, but a real Next build would error without it.
     ['app/globals.css', DEFAULT_TOKENS_CSS],
+    ['plugins/DirectusSync.tsx', DIRECTUS_SYNC_PLUGIN_SOURCE],
     // `withResponsiveProps` / `withCursor` / `CursorPortal` now live in the
     // `@revyme/runtime` npm package — no longer seeded as projectFS files.
     // Existing projects with `lib/withResponsiveProps.tsx` keep working

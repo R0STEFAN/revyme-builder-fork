@@ -39,6 +39,9 @@ import Button from '@/design-system/Button';
 import SearchBar from '@/design-system/SearchBar';
 import type { DropdownMenuEntry } from '@/design-system/DropdownMenu';
 import { CmsIcon } from '@/shared/icons';
+import { launchedProjectPluginAtom } from '@/plugins/registry';
+import { DIRECTUS_SYNC_PLUGIN_SOURCE } from '@/code/project/default-plugins/DirectusSync';
+import { projectFS } from '@/code/project/project-fs';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -777,6 +780,17 @@ export default function CmsPanel() {
     trace.action('cms-panel:create-collection-inline', { slug });
   }, [refresh, handleClickCollection]);
 
+  const setLaunchedPlugin = useSetAtom(launchedProjectPluginAtom);
+  const handleOpenDirectusSync = useCallback(() => {
+    const pluginPath = 'plugins/DirectusSync.tsx';
+    if (!projectFS.exists(pluginPath)) {
+      projectFS.writeFile(pluginPath, DIRECTUS_SYNC_PLUGIN_SOURCE);
+      refresh();
+    }
+    setLaunchedPlugin(pluginPath);
+    trace.action('cms-panel:open-directus-sync');
+  }, [setLaunchedPlugin, refresh]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Top-of-panel search — matches the Library panel chrome (SearchBar
@@ -797,7 +811,25 @@ export default function CmsPanel() {
       </div>
       <div data-tool-divider className="h-px bg-[var(--border-light)] mx-3 mt-1.5 mb-0" />
 
-      <SectionLabel size="md" right={<AddButton onClick={handleCreateCollectionInline} title="New collection" />}>CMS</SectionLabel>
+      <SectionLabel
+        size="md"
+        right={
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleOpenDirectusSync}
+              title="Sync from Directus CMS"
+              className="px-1.5 py-0.5 text-[10px] font-semibold cut-corners bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] hover:bg-[var(--accent)] hover:text-[var(--accent-fg,#000)] text-[var(--text-secondary)] transition-colors cursor-pointer flex items-center gap-1 border-none"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6644ff] inline-block" />
+              Directus
+            </button>
+            <AddButton onClick={handleCreateCollectionInline} title="New collection" />
+          </div>
+        }
+      >
+        CMS
+      </SectionLabel>
 
       <CollectionListView
         onClickCollection={handleClickCollection}
