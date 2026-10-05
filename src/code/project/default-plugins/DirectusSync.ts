@@ -57,6 +57,28 @@ function App({ plugin }) {
     } catch {}
   };
 
+  // Fetch helper that transparently falls back to local server-side proxy
+  // if the remote Directus server blocks browser requests with CORS
+  const directusFetch = async (targetUrl, init = {}) => {
+    try {
+      const res = await fetch(targetUrl, init);
+      return res;
+    } catch {
+      // Browser CORS blocked the request -> route through self-host server proxy
+      const proxyRes = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: targetUrl,
+          method: init.method || 'GET',
+          headers: init.headers || {},
+          body: init.body,
+        }),
+      });
+      return proxyRes;
+    }
+  };
+
   // Connect to Directus
   const handleConnect = async (e) => {
     e?.preventDefault();
@@ -69,8 +91,15 @@ function App({ plugin }) {
       const headers = {};
       if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
 
-      const res = await fetch(\`\${cleanUrl}/collections\`, { headers });
-      if (!res.ok) throw new Error(\`Directus returned HTTP \${res.status}\`);
+      const res = await directusFetch(\`\${cleanUrl}/collections\`, { headers });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          const errJson = await res.json().catch(() => null);
+          const msg = errJson?.errors?.[0]?.message || 'Access denied (403/401). Please enter a valid Directus API Token with permissions to read collections.';
+          throw new Error(msg);
+        }
+        throw new Error(\`Directus returned HTTP \${res.status}\`);
+      }
       const json = await res.json();
       const colls = (json.data || []).filter(c => !c.collection.startsWith('directus_'));
       if (colls.length === 0) throw new Error('No user collections found in Directus');
@@ -102,7 +131,7 @@ function App({ plugin }) {
     if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
 
     setFetchingFields(true);
-    fetch(\`\${cleanUrl}/fields/\${selectedDirectusColl}\`, { headers })
+    directusFetch(\`\${cleanUrl}/fields/\${selectedDirectusColl}\`, { headers })
       .then(r => r.json())
       .then(json => {
         const fields = (json.data || []).filter(f => !f.field.startsWith('directus_') && !['sort', 'user_created', 'date_created', 'user_updated', 'date_updated'].includes(f.field));
@@ -193,7 +222,7 @@ function App({ plugin }) {
       }
 
       // 3. Fetch Items from Directus
-      const itemsRes = await fetch(\`\${cleanUrl}/items/\${selectedDirectusColl}?limit=-1\`, { headers });
+      const itemsRes = await directusFetch(\`\${cleanUrl}/items/\${selectedDirectusColl}?limit=-1\`, { headers });
       if (!itemsRes.ok) throw new Error(\`Failed to fetch Directus items: \${itemsRes.status}\`);
       const itemsJson = await itemsRes.json();
       const rawItems = itemsJson.data || [];

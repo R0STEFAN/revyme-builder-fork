@@ -401,11 +401,9 @@ export default function PluginsSection({ searchQuery }: { searchQuery?: string }
 
   const handleAddDirectusPlugin = useCallback(() => {
     const filePath = 'plugins/DirectusSync.tsx';
-    if (!projectFS.exists(filePath)) {
-      projectFS.writeFile(filePath, DIRECTUS_SYNC_PLUGIN_SOURCE);
-      setVersion(v => v + 1);
-      toast.success('Directus CMS Sync plugin added to project');
-    }
+    projectFS.writeFile(filePath, DIRECTUS_SYNC_PLUGIN_SOURCE);
+    setVersion(v => v + 1);
+    toast.success('Directus CMS Sync plugin ready');
     runProjectPlugin(filePath);
   }, [setVersion, runProjectPlugin]);
 

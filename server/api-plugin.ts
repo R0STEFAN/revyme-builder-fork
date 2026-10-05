@@ -89,6 +89,34 @@ export function selfHostApiPlugin(): Plugin {
         });
       }
 
+      // ─── POST /api/proxy (CORS-free proxy for plugins) ───────────────────
+      if (url === '/api/proxy' && method === 'POST') {
+        try {
+          const bodyBuf = await readBodyBuffer(req);
+          const { url: targetUrl, method: targetMethod = 'GET', headers = {}, body: targetBody } = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          if (!targetUrl) return sendJson(res, 400, { error: 'targetUrl required' });
+
+          const fetchHeaders: Record<string, string> = { ...headers };
+          delete fetchHeaders['host'];
+
+          const upstreamRes = await fetch(targetUrl, {
+            method: targetMethod,
+            headers: fetchHeaders,
+            body: targetBody ? (typeof targetBody === 'string' ? targetBody : JSON.stringify(targetBody)) : undefined,
+          });
+
+          const contentType = upstreamRes.headers.get('content-type') || 'application/json';
+          res.statusCode = upstreamRes.status;
+          res.setHeader('Content-Type', contentType);
+
+          const upstreamData = await upstreamRes.arrayBuffer();
+          res.end(Buffer.from(upstreamData));
+          return;
+        } catch (err: any) {
+          return sendJson(res, 502, { error: err.message || 'Proxy request failed' });
+        }
+      }
+
       // ─── GET /api/projects ────────────────────────────────────────────────
       if (url === '/api/projects' && method === 'GET') {
         const projects = listProjects();
