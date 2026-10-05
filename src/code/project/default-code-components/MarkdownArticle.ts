@@ -161,7 +161,7 @@ const parts = [
   '    return result;',
   '  }, [rawText, baseSize, headingFont, bodyFont, headingColor, textColor, accentColor, h3Color, lineHeight]);',
   '',
-  '  return React.createElement("article", Object.assign({ style: Object.assign({ boxSizing: "border-box", width: "100%", maxWidth: maxWidth ? maxWidth + "px" : "760px", margin: "0 auto", padding: "16px 0" }, props.style) }, props), blocks);',
+  '  return React.createElement("article", Object.assign({}, props, { style: Object.assign({ boxSizing: "border-box", width: "100%", maxWidth: maxWidth ? maxWidth + "px" : "760px", margin: "0 auto", padding: "16px 0" }, props.style) }), blocks);',
   '}',
   '',
   'export default withResponsiveProps(MarkdownArticle);',

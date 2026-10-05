@@ -32,4 +32,30 @@ describe('MarkdownArticle template', () => {
     expect(markup).toContain('<strong');
     expect(markup).not.toContain('Main Article Title');
   });
+
+  it.each([
+    { width: '100%', height: 'min-content' },
+    { width: 'min-content', height: 'min-content' },
+    { flex: '1 0 0px', height: '240px' },
+  ])('preserves editor sizing while retaining the article defaults: %o', (style) => {
+    const Component = compileCodeComponent(MARKDOWN_ARTICLE_COMPONENT, 'MarkdownArticle', { previewMode: false });
+    const markup = renderToStaticMarkup(createElement(Component!, { content: 'Article body', style }));
+    const container = document.createElement('div');
+    container.innerHTML = markup;
+    const article = container.querySelector('article')!;
+    expect(article.style.boxSizing).toBe('border-box');
+    expect(article.style.padding).toBe('16px 0px');
+    expect(article.style.maxWidth).toBe('760px');
+    for (const [key, value] of Object.entries(style)) {
+      expect((article.style as unknown as Record<string, string>)[key]).toBe(value);
+    }
+  });
+
+  it('lets editor styles override the configured article width limit', () => {
+    const Component = compileCodeComponent(MARKDOWN_ARTICLE_COMPONENT, 'MarkdownArticle', { previewMode: false });
+    const override = renderToStaticMarkup(createElement(Component!, { content: 'Article', maxWidth: 640, style: { maxWidth: '100%' } }));
+    expect(override).toContain('max-width:100%');
+    expect(override).toContain('box-sizing:border-box');
+  });
+
 });
