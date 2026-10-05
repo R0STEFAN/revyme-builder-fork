@@ -147,7 +147,7 @@ export function extractCopyableStyles(styles: Record<string, string> | undefined
 export function prepareStylesForPaste(
   copied: CopiedElementStyles | Record<string, string>,
   targetStyles?: Record<string, string>,
-  opts?: { isMotionTarget?: boolean },
+  opts?: { isMotionTarget?: boolean; isVariant?: boolean },
 ): Record<string, string> {
   const copiedStyles = ('styles' in copied && typeof copied.styles === 'object' && copied.styles !== null)
     ? copied.styles
@@ -177,17 +177,22 @@ export function prepareStylesForPaste(
   const sourceHasBorder = hasBorder ?? hasAnyBorder(copiedStyles, borderOverlayCSS);
   const targetHasBorder = hasAnyBorder(targetStyles);
   if (!sourceHasBorder && targetHasBorder) {
-    // Clear standard shorthand/longhands
-    result.border = '';
-    result.borderWidth = '';
-    result.borderColor = '';
-    result.borderStyle = '';
-    if (targetStyles) {
-      for (const k of BORDER_INLINE_KEYS) {
-        if (targetStyles[k]) result[k] = '';
-      }
-      for (const k of Object.keys(targetStyles)) {
-        if (k.startsWith('--border-')) result[k] = '';
+    if (opts?.isVariant) {
+      result.border = 'none';
+      result.borderWidth = '0px';
+    } else {
+      // Clear standard shorthand/longhands
+      result.border = '';
+      result.borderWidth = '';
+      result.borderColor = '';
+      result.borderStyle = '';
+      if (targetStyles) {
+        for (const k of BORDER_INLINE_KEYS) {
+          if (targetStyles[k]) result[k] = '';
+        }
+        for (const k of Object.keys(targetStyles)) {
+          if (k.startsWith('--border-')) result[k] = '';
+        }
       }
     }
   } else if (borderOverlayCSS) {
@@ -212,14 +217,14 @@ export function prepareStylesForPaste(
   const sourceHasShadow = hasShadow ?? hasAnyShadow(copiedStyles);
   if (!sourceHasShadow) {
     if (targetStyles?.boxShadow) {
-      result.boxShadow = '';
+      result.boxShadow = opts?.isVariant ? 'none' : '';
     }
     if (targetStyles?.filter && /drop-shadow\(/i.test(targetStyles.filter)) {
       result.filter = extractNonShadowFilter(targetStyles.filter);
     }
   } else {
     if (!('boxShadow' in copiedStyles) && targetStyles?.boxShadow) {
-      result.boxShadow = '';
+      result.boxShadow = opts?.isVariant ? 'none' : '';
     }
     const copiedDropShadow = copiedStyles.filter
       ? formatShadowEntries(parseShadowEntries('', copiedStyles.filter)).dropShadowFilter

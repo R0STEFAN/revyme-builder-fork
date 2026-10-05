@@ -223,5 +223,29 @@ describe('context-menu-store style copying', () => {
     // Stale motion props on target are cleared
     expect(forPage.rotate).toBe('');
   });
+
+  it('prepareStylesForPaste on a variant sets border and shadow to "none" rather than "" to prevent inheriting default', () => {
+    const copiedPlain = {
+      styles: { backgroundColor: '#111827' },
+      sourceNodeId: 'node-plain',
+      hasBorder: false,
+      hasShadow: false,
+    };
+    const targetWithBorderAndShadow = {
+      border: '1px solid #e5e5e5',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+    };
+
+    // On primary/default: clears with '' so property is removed from code
+    const forPrimary = prepareStylesForPaste(copiedPlain, targetWithBorderAndShadow, { isVariant: false });
+    expect(forPrimary.border).toBe('');
+    expect(forPrimary.boxShadow).toBe('');
+
+    // On a secondary variant: overrides with 'none' so framer-motion does not inherit default's border/shadow
+    const forVariant = prepareStylesForPaste(copiedPlain, targetWithBorderAndShadow, { isVariant: true });
+    expect(forVariant.border).toBe('none');
+    expect(forVariant.borderWidth).toBe('0px');
+    expect(forVariant.boxShadow).toBe('none');
+  });
 });
 

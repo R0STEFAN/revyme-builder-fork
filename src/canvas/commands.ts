@@ -1620,7 +1620,10 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
     const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
     const isMotionTarget = isMotionTransformTarget({ isComponentFile: isComp, node: targetNode });
 
-    const payload = prepareStylesForPaste(copied, effectiveTargetStyles, { isMotionTarget });
+    const payload = prepareStylesForPaste(copied, effectiveTargetStyles, {
+      isMotionTarget,
+      isVariant: !!targetVariant,
+    });
     updateNodeStyles({ id, styles: payload, contentEl: effectiveContentEl });
 
     // Border overlay transfer: recreate if copied, or remove if copied has inline border or no border

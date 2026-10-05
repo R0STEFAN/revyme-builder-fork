@@ -171,6 +171,12 @@ export const CSS_NEUTRAL_FALLBACK: Record<string, string> = {
   margin: '0px', marginTop: '0px', marginRight: '0px', marginBottom: '0px', marginLeft: '0px',
   left: 'auto', top: 'auto', right: 'auto', bottom: 'auto',
   borderRadius: '0px', opacity: '1',
+  border: 'none', borderWidth: '0px', borderColor: 'transparent', borderStyle: 'none',
+  borderTop: 'none', borderRight: 'none', borderBottom: 'none', borderLeft: 'none',
+  borderTopWidth: '0px', borderRightWidth: '0px', borderBottomWidth: '0px', borderLeftWidth: '0px',
+  borderTopColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: 'transparent',
+  borderTopStyle: 'none', borderRightStyle: 'none', borderBottomStyle: 'none', borderLeftStyle: 'none',
+  outline: 'none', outlineWidth: '0px', outlineColor: 'transparent', outlineStyle: 'none',
   backgroundColor: 'rgba(0, 0, 0, 0)', backgroundImage: 'none',
   boxShadow: 'none', filter: 'none', backdropFilter: 'none',
   pointerEvents: 'auto',
@@ -3768,6 +3774,7 @@ export function setConditionalStyleInCode(
   // Parse the existing `prop: ...` value into a {variant → value} map so we
   // merge rather than clobber sibling-variant branches.
   const map: Record<string, string> = {};
+  let hadExplicitDefault = false;
   const parseSpan = findTopLevelPropSpan(styleContent, prop);
   if (parseSpan) {
     const expr = styleContent.slice(parseSpan.valStart, parseSpan.valEnd).trim();
@@ -3778,8 +3785,13 @@ export function setConditionalStyleInCode(
     // read the trailing quoted literal (or a bare value).
     const tail = expr.replace(/(?:variant|initialVariant)\s*===\s*'[^']+'\s*\?\s*'[^']*'\s*:\s*/g, '').trim();
     const tailQuoted = tail.match(/^'([^']*)'/);
-    if (tailQuoted) map.default = tailQuoted[1];
-    else if (tail && !tail.includes('?')) map.default = tail.replace(/^['"]|['"]$/g, '');
+    if (tailQuoted) {
+      map.default = tailQuoted[1];
+      hadExplicitDefault = true;
+    } else if (tail && !tail.includes('?')) {
+      map.default = tail.replace(/^['"]|['"]$/g, '');
+      hadExplicitDefault = true;
+    }
   }
   // Apply this write. An empty value is a "reset override" — drop this
   // variant's branch so it reverts to the default (and the ternary collapses
@@ -3788,6 +3800,9 @@ export function setConditionalStyleInCode(
     delete map[variantName];
   } else {
     map[variantName] = value;
+  }
+  if (variantName === 'default') {
+    hadExplicitDefault = value !== '';
   }
   // CLEARING the DEFAULT branch with no sibling-variant branch remaining fully
   // REMOVES the prop — the "remove layout" case (the reference wipes flex/grid props
@@ -3807,12 +3822,22 @@ export function setConditionalStyleInCode(
   const removeProp = value === '' && Object.keys(map).length === 0;
   if (removeProp) trace.action('generator.setConditionalStyle:removeLayoutProp', { nodeId, prop, variantName });
   if (map.default === undefined) {
-    map.default = variantName === 'default' && value !== '' ? value : (CSS_LAYOUT_DEFAULTS[prop] ?? '');
+    if (variantName === 'default') {
+      map.default = value !== '' ? value : (CSS_LAYOUT_DEFAULTS[prop] ?? '');
+    } else {
+      // Non-default variant write on an element with no prior inline value for this prop.
+      // If the variant value matches the CSS layout default (e.g. flexDirection: 'row'),
+      // using that same default as the else-branch fallback would produce a redundant ternary
+      // or collapse to an unconditional plain value that overwrites `default`.
+      // Use '' as the else fallback so `default` is not mutated by the variant's write.
+      const cssDef = CSS_LAYOUT_DEFAULTS[prop] ?? '';
+      map.default = value === cssDef ? '' : cssDef;
+    }
   }
 
   // Build the expression. Collapse to a plain value when no non-default branch.
   const variantVar = detectVariantVar(code);
-  const nonDefault = Object.entries(map).filter(([k, v]) => k !== 'default' && v !== map.default);
+  const nonDefault = Object.entries(map).filter(([k, v]) => k !== 'default' && (hadExplicitDefault ? v !== map.default : true));
   let expr: string;
   if (nonDefault.length === 0) {
     expr = `'${map.default}'`;
