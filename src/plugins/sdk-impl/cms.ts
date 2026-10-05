@@ -184,8 +184,23 @@ export const cmsHandlers: Record<string, RpcHandler> = {
     const ids: string[] = [];
     for (const f of fields) {
       if (!f || typeof f !== 'object') continue;
-      const ff = f as { name: string; type: string; required?: boolean };
-      const id = addCollectionField(collectionId, { name: ff.name, type: ff.type as FieldDefinition['type'], required: ff.required });
+      const ff = f as { id?: string; name: string; type: string; required?: boolean };
+
+      // Map SDK types onto valid Revyme FieldDefinition['type']
+      let fieldType: FieldDefinition['type'] = 'text';
+      const rawType = (ff.type || '').toLowerCase();
+      if (rawType === 'image') fieldType = 'image';
+      else if (rawType === 'file') fieldType = 'file';
+      else if (rawType === 'number') fieldType = 'number';
+      else if (rawType === 'boolean') fieldType = 'boolean';
+      else if (rawType === 'date') fieldType = 'date';
+      else if (rawType === 'richtext' || rawType === 'rich-text') fieldType = 'richtext';
+      else if (rawType === 'tags' || rawType === 'array' || rawType === 'm2m' || rawType === 'multi-reference') fieldType = 'tags';
+      else if (rawType === 'color') fieldType = 'color';
+      else if (rawType === 'link' || rawType === 'url') fieldType = 'link';
+      else fieldType = 'text';
+
+      const id = addCollectionField(collectionId, { id: ff.id, name: ff.name, type: fieldType, required: ff.required });
       if (id) ids.push(id);
     }
     return ids;
@@ -233,6 +248,7 @@ export const cmsHandlers: Record<string, RpcHandler> = {
     if (!collectionId || !Array.isArray(items)) {
       throw new Error('cms.addItems: collectionId + items[] required');
     }
+    const schema = getCollectionSchema(collectionId);
     const ids: string[] = [];
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -241,8 +257,23 @@ export const cmsHandlers: Record<string, RpcHandler> = {
         _id: generateItemId(),
         _slug: ii.slug,
         _status: 'published',
-        ...ii.fieldData,
       };
+      if (ii.fieldData && typeof ii.fieldData === 'object') {
+        for (const [k, v] of Object.entries(ii.fieldData)) {
+          (partial as any)[k] = v;
+        }
+        // Map to matching schema field IDs (e.g. seo_title -> seoTitle, alt_text -> altText)
+        if (schema?.fields) {
+          for (const f of schema.fields) {
+            if ((partial as any)[f.id] === undefined) {
+              const matched = (ii.fieldData as any)[f.name] ?? (ii.fieldData as any)[f.id];
+              if (matched !== undefined) {
+                (partial as any)[f.id] = matched;
+              }
+            }
+          }
+        }
+      }
       const created = addCollectionItem(collectionId, partial);
       ids.push(created._id);
     }

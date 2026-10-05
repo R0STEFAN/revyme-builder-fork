@@ -761,6 +761,7 @@ export function syncFieldDefaultToItems(
 export function addCollectionField(
   slug: string,
   field: {
+    id?: string;
     name: string;
     type: FieldDefinition['type'];
     required?: boolean;
@@ -778,7 +779,7 @@ export function addCollectionField(
   // step ("Content 2" → `content2`). The id loop below stays as a safety net.
   const name = uniqueFieldName(field.name, schema.fields.map(f => f.name));
   const existingIds = new Set(schema.fields.map(f => f.id));
-  const base = fieldIdFromName(name);
+  const base = field.id && !existingIds.has(field.id) ? field.id : fieldIdFromName(name);
   let id = base;
   let n = 2;
   // Suffix without a hyphen so the id stays a valid JS identifier.

@@ -196,19 +196,27 @@ function App({ plugin }) {
             const fields = [];
             for (const [k, v] of Object.entries(sample)) {
               if (['sort', 'user_created', 'date_created', 'user_updated', 'date_updated'].includes(k)) continue;
-              let inferredType = 'string';
+              let inferredType = 'text';
               if (typeof v === 'number') inferredType = 'number';
               else if (typeof v === 'boolean') inferredType = 'boolean';
+              else if (Array.isArray(v) || k.includes('_m2m') || k.includes('m2m')) inferredType = 'tags';
               else if (typeof v === 'string') {
-                if (/^https?:\\/\\/.+\\.(webp|png|jpe?g|gif|svg)$/i.test(v) || k.toLowerCase().includes('img') || k.toLowerCase().includes('image') || k.toLowerCase().includes('photo')) {
+                if (
+                  /^https?:\\/\\/.+\\.(webp|png|jpe?g|gif|svg)(\\?.*)?$/i.test(v) ||
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ||
+                  k.toLowerCase().includes('img') ||
+                  k.toLowerCase().includes('image') ||
+                  k.toLowerCase().includes('photo') ||
+                  k.toLowerCase().includes('cover')
+                ) {
                   inferredType = 'image';
-                } else if (v.includes('\\n\\n') || v.includes('### ') || v.includes('<p>')) {
-                  inferredType = 'rich-text';
+                } else if (v.includes('\\n\\n') || v.includes('### ') || v.includes('<p>') || v.length > 200) {
+                  inferredType = 'richtext';
                 } else if (/^\\d{4}-\\d{2}-\\d{2}/.test(v)) {
                   inferredType = 'date';
                 }
               }
-              fields.push({ field: k, type: inferredType });
+              fields.push({ id: k, field: k, name: k, type: inferredType });
             }
             return fields;
           }
@@ -250,12 +258,14 @@ function App({ plugin }) {
   const mapFieldType = (df) => {
     const dt = (df.type || '').toLowerCase();
     const iface = (df.meta?.interface || '').toLowerCase();
+    const name = (df.field || df.name || '').toLowerCase();
     if (['integer', 'biginteger', 'float', 'decimal', 'number'].includes(dt)) return 'number';
     if (dt === 'boolean') return 'boolean';
     if (['date', 'datetime', 'timestamp', 'time'].includes(dt)) return 'date';
-    if (iface.includes('image') || dt === 'image' || dt === 'file' || iface.includes('file')) return 'image';
-    if (iface.includes('wysiwyg') || iface.includes('markdown') || dt === 'rich-text' || dt === 'text') return 'rich-text';
-    return 'string';
+    if (iface.includes('image') || dt === 'image' || dt === 'file' || iface.includes('file') || name.includes('img') || name.includes('image') || name.includes('photo')) return 'image';
+    if (iface.includes('wysiwyg') || iface.includes('markdown') || dt === 'richtext' || dt === 'rich-text') return 'richtext';
+    if (dt === 'tags' || dt === 'array' || dt === 'm2m' || dt === 'multi-reference' || iface.includes('m2m') || iface.includes('tags') || iface.includes('select-multiple') || name.includes('_m2m') || name.includes('m2m')) return 'tags';
+    return 'text';
   };
 
   // Sync Data
@@ -310,15 +320,35 @@ function App({ plugin }) {
 
         for (const [k, v] of Object.entries(item)) {
           if (v === null || v === undefined) continue;
-          const df = directusFields.find(f => f.field === k);
-          if (df && mapFieldType(df) === 'image' && typeof v === 'string') {
-            // Expand Directus asset UUID to full URL if not already a full URL
-            if (!v.startsWith('http')) {
-              fieldData[k] = \`\${baseUrl}/assets/\${v}\`;
+          const df = directusFields.find(f => f.field === k || f.name === k);
+          const fType = df ? mapFieldType(df) : 'text';
+
+          // 1. Image handling
+          if (fType === 'image') {
+            if (typeof v === 'string') {
+              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+                fieldData[k] = \`\${baseUrl}/assets/\${v}\`;
+              } else {
+                fieldData[k] = v;
+              }
+            } else if (typeof v === 'object' && v !== null) {
+              const fileId = v.id || v.filename_disk;
+              if (fileId) fieldData[k] = \`\${baseUrl}/assets/\${fileId}\`;
+              else fieldData[k] = String(v);
             } else {
-              fieldData[k] = v;
+              fieldData[k] = String(v);
             }
-          } else {
+          }
+          // 2. Many-to-many / arrays (tags)
+          else if (Array.isArray(v) || fType === 'tags') {
+            if (Array.isArray(v)) {
+              fieldData[k] = v.map(x => (typeof x === 'object' && x !== null ? String(x.id || x.name || JSON.stringify(x)) : String(x)));
+            } else {
+              fieldData[k] = [String(v)];
+            }
+          }
+          // 3. Regular fields
+          else {
             fieldData[k] = v;
           }
         }
