@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ToolSelect, ToolSegmentedControl, ToolInput, ToolSlider, ControlLabel } from '../../controls';
 import { SliderRow } from './shared';
-import CurvePreview, { EASE_BEZIERS } from './CurvePreview';
+import CurvePreview, { EASE_BEZIERS, easeToString } from './CurvePreview';
 
 const MOTION_EASING_OPTIONS = [
   { value: 'easeOut', label: 'Ease Out' },
@@ -30,6 +30,11 @@ export default function TransitionPanel({ initialTransition, onWrite, restrictTo
 }) {
   const [t, setT] = useState<Record<string, string>>(() => ({ ...initialTransition }));
   const isSpring = t.type === 'spring';
+  // A cubic-bezier can arrive as a number ARRAY (framer-motion's own
+  // shape, and what the Framer importer writes). Coerce once rather than
+  // at each use site — this panel is shared by eight callers and any of
+  // them can hand it an imported transition.
+  const ease = easeToString(t.ease);
   const hasPhysics = !!(initialTransition.stiffness || initialTransition.damping || initialTransition.mass);
   const [springMode, setSpringMode] = useState<'time' | 'physics'>(hasPhysics ? 'physics' : 'time');
 
@@ -78,7 +83,7 @@ export default function TransitionPanel({ initialTransition, onWrite, restrictTo
   const commit = (patch: Record<string, string>) =>
     setT((prev) => { const next = { ...prev, ...patch }; emit(next); return next; });
 
-  const switchToTween = () => write({ type: 'tween', duration: t.duration || '0.3', ease: t.ease || 'easeOut', delay: t.delay || '0' });
+  const switchToTween = () => write({ type: 'tween', duration: t.duration || '0.3', ease: ease || 'easeOut', delay: t.delay || '0' });
   const switchToSpring = () => {
     if (springMode === 'physics') write({ type: 'spring', stiffness: '300', damping: '25', mass: '1', delay: t.delay || '0' });
     else write({ type: 'spring', duration: t.duration || '0.5', bounce: '0.25', delay: t.delay || '0' });
@@ -113,7 +118,7 @@ export default function TransitionPanel({ initialTransition, onWrite, restrictTo
 
       {t.type !== 'instant' && (
         <>
-          <CurvePreview isSpring={isSpring} ease={t.ease || 'easeOut'}
+          <CurvePreview isSpring={isSpring} ease={ease || 'easeOut'}
             bounce={parseFloat(t.bounce || '0.25')} stiffness={parseFloat(t.stiffness || '300')}
             damping={parseFloat(t.damping || '25')} mass={parseFloat(t.mass || '1')}
             springMode={springMode}
@@ -147,16 +152,16 @@ export default function TransitionPanel({ initialTransition, onWrite, restrictTo
               <div className="flex items-center justify-between w-full">
                 <ControlLabel label="Ease" property="" plain />
                 <div className="w-full">
-                  <ToolSelect value={EASE_BEZIERS[t.ease || ''] ? (t.ease || 'easeOut') : 'custom'}
+                  <ToolSelect value={EASE_BEZIERS[ease] ? (ease || 'easeOut') : 'custom'}
                     onChange={(v) => { if (v !== 'custom') update({ ease: v }); }}
                     options={MOTION_EASING_OPTIONS} />
                 </div>
               </div>
-              {!EASE_BEZIERS[t.ease || ''] && t.ease && t.ease !== 'easeOut' && (
+              {!EASE_BEZIERS[ease] && ease && ease !== 'easeOut' && (
                 <div className="flex items-center justify-between w-full">
                   <ControlLabel label="Bezier" property="" plain />
                   <div className="w-full">
-                    <span className="text-[10px] text-[var(--text-disabled)]">{t.ease.replace(/[[\]]/g, '')}</span>
+                    <span className="text-[10px] text-[var(--text-disabled)]">{ease.replace(/[[\]]/g, '')}</span>
                   </div>
                 </div>
               )}

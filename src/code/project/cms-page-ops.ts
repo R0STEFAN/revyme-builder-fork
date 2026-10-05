@@ -28,6 +28,7 @@ import { getCollectionSchema } from './cms-ops';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { rootMountBlockedBy } from './cms-root-mount';
+import { buildCmsDetailServerWrapper, defaultBindings } from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
 
 // ─── Field selection ────────────────────────────────────────────────────────
@@ -517,9 +518,14 @@ ${fieldsJsx}
   );
 }`;
 
-  projectFS.writeFile(serverPath, SERVER_WRAPPER);
+  // A detail page is ONE route rendering every item, so a static
+  // `export const metadata` would stamp the same <title> on all of them.
+  // The wrapper instead resolves its SEO per item from the collection,
+  // seeded with the same fields the body uses for its heading and text.
+  const seoBindings = defaultBindings(schema);
+  projectFS.writeFile(serverPath, buildCmsDetailServerWrapper({ collection: slug, bindings: seoBindings }));
   projectFS.writeFile(clientPath, code);
-  trace.action('cms-page-ops:create-detail', { serverPath, clientPath, slug, headingField, bodyField, fieldCount: schema?.fields.length });
+  trace.action('cms-page-ops:create-detail', { serverPath, clientPath, slug, headingField, bodyField, seoBindings, fieldCount: schema?.fields.length });
   return clientPath;
 }
 

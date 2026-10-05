@@ -73,7 +73,11 @@ export interface TextAnimConfig {
     damping?: number;
     mass?: number;
     duration?: number;
-    ease?: string;
+    /** A named easing (`'easeOut'`) OR a cubic-bezier as four numbers —
+     *  framer-motion's own shape, and what the Framer importer writes. The
+     *  runtime accepts both (`normalizeEase` in @revyme/runtime); declaring
+     *  it string-only is what let an imported bezier crash the panel. */
+    ease?: string | number[];
     bounce?: number;
     delay?: number;       // initial delay before animation starts
   };

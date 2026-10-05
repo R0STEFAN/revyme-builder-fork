@@ -7,6 +7,22 @@ const totalW = W + HPAD * 2;
 const totalH = H + VPAD * 2;
 
 /** Map easing names to cubic bezier control points */
+/**
+ * Coerce an `ease` to the string form every control here expects.
+ *
+ * A cubic-bezier legitimately arrives as a NUMBER ARRAY — framer-motion takes
+ * `ease: [0.22, 1, 0.36, 1]`, the Framer importer writes exactly that, and the
+ * runtime accepts it (`normalizeEase` in @revyme/runtime). The editor's panels
+ * standardised on the bracket STRING instead, so an imported bezier reaching a
+ * control that calls `.replace()` threw and took the whole properties panel
+ * down with it (live find 2026-10-05: "Transition" closed instantly on any
+ * Framer-imported text).
+ */
+export function easeToString(ease: unknown): string {
+  if (Array.isArray(ease)) return `[${ease.join(', ')}]`;
+  return typeof ease === 'string' ? ease : '';
+}
+
 export const EASE_BEZIERS: Record<string, [number, number, number, number]> = {
   'linear': [0, 0, 1, 1],
   'easeIn': [0.42, 0, 1, 1],

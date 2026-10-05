@@ -25,8 +25,23 @@ import {
   Toggle,
 } from '@/editor/overlays/settings-shared';
 import ImageSearchModal from '@/editor/ui/ImageSearchModal';
+import ToolSelect from '@/editor/controls/ToolSelect';
 import { trace } from '@/shared/debug-trace';
 import { pageFilePathToSlug as slugForPage } from '@/code/project/page-slug-utils';
+/** Sentinel for the "no binding, type it yourself" option. */
+const CUSTOM_TEXT = '__custom__';
+
+import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
+import { collectionSchemasAtom } from '@/code/stores/cms-store';
+import {
+  type CmsSeoSlot,
+  type CmsSeoBindings,
+  bindableFields,
+  buildCmsDetailServerWrapper,
+  hasCmsSeo,
+  parseCmsSeoBindings,
+  parseCmsSeoDefaults,
+} from '@/code/project/cms-seo';
 
 // ─── Page list helpers ──────────────────────────────────────────────────────
 
@@ -67,7 +82,18 @@ function labelForPage(filePath: string): string {
     .replace(/^app\//, '')
     .replace(/\(.+?\)\//g, '');
   const parts = slug.split('/').filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1]! : 'Home';
+  const last = parts.length > 0 ? parts[parts.length - 1]! : 'Home';
+
+  // A CMS detail page's last segment is the literal `[slug]`, which names
+  // nothing the user recognises — every collection's detail page would read
+  // identically. Name the COLLECTION instead; the dynamic part is already
+  // implied by it being one row per item.
+  if (last === '[slug]') {
+    const meta = parseCmsPageMeta(projectFS.readFile(filePath) ?? '');
+    const collection = meta?.collection ?? parts[parts.length - 2];
+    if (collection) return `${collection}/[slug]`;
+  }
+  return last;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -285,6 +311,47 @@ function formToMeta(form: PageMeta): SiteMetadata {
   return out;
 }
 
+/**
+ * Field picker for one SEO slot on a CMS detail page.
+ *
+ * A detail page is ONE route rendering every item, so the usual text box
+ * would stamp the same value on all of them. The collection's fields are
+ * therefore the primary choice and "Custom text" is the opt-out — picking a
+ * field hides the box entirely, because a value that never renders is worse
+ * than no box at all.
+ *
+ * Uses the same ToolSelect as the properties panel's CMS bindings, so
+ * choosing a field looks the same wherever you do it.
+ */
+function SeoFieldSelect({
+  slot,
+  fields,
+  value,
+  onChange,
+}: {
+  slot: CmsSeoSlot;
+  fields: { id: string; name: string }[];
+  value: string | undefined;
+  onChange: (fieldId: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="max-w-[260px]">
+      <ToolSelect
+        value={value ?? CUSTOM_TEXT}
+        // Custom text leads: it is the neutral default and the one option
+        // that means "no binding", so it reads as the baseline the fields
+        // are alternatives to, rather than as a trailing escape hatch.
+        options={[
+          { value: CUSTOM_TEXT, label: 'Custom text' },
+          ...fields.map((f) => ({ value: f.id, label: f.name || f.id })),
+        ]}
+        onChange={(v) => onChange(v === CUSTOM_TEXT ? '' : v)}
+        className={`seo-bind-${slot}`}
+      />
+    </div>
+  );
+}
+
 function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   const version = useAtomValue(projectVersionAtom);
   // SEO metadata lives in the SERVER wrapper (`page.tsx`) — Next.js
@@ -293,13 +360,41 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // editable half), so derive the sibling server path here for all
   // read/write operations.
   const metadataPath = useMemo(() => getServerWrapperPath(page.filePath), [page.filePath]);
+  const schemas = useAtomValue(collectionSchemasAtom);
+
+  // A CMS DETAIL page is the one case where a typed-in title is wrong: the
+  // route renders every item in the collection, so the value has to come
+  // from the item. The `@cmsPage` annotation on the CLIENT half names the
+  // collection (the route folder can be bumped to `blog-2`, the annotation
+  // cannot).
+  const cms = useMemo(() => {
+    void version;
+    const meta = parseCmsPageMeta(projectFS.readFile(page.filePath) ?? '');
+    if (!meta || meta.kind !== 'detail') return null;
+    return { collection: meta.collection, schema: schemas.get(meta.collection) ?? null };
+  }, [page.filePath, schemas, version]);
 
   const initial = useMemo<PageMeta>(() => {
     void version;
     const code = projectFS.readFile(metadataPath);
     if (!code) return EMPTY_META;
+    // A bound wrapper keeps its static values in a local `seoDefaults`,
+    // because a module may not export both `metadata` and
+    // `generateMetadata`. Legacy detail pages still have the plain
+    // `export const metadata` and read through the normal path until the
+    // first save migrates them.
+    if (cms && hasCmsSeo(code)) return { ...EMPTY_META, ...(parseCmsSeoDefaults(code) as Partial<PageMeta>) };
     return metaToForm(parseMetadataFromCode(code));
-  }, [metadataPath, version]);
+  }, [metadataPath, version, cms]);
+
+  const initialBindings = useMemo<CmsSeoBindings>(() => {
+    void version;
+    if (!cms) return {};
+    return parseCmsSeoBindings(projectFS.readFile(metadataPath) ?? '');
+  }, [cms, metadataPath, version]);
+
+  const [bindings, setBindings] = useState<CmsSeoBindings>(initialBindings);
+  useEffect(() => { setBindings(initialBindings); }, [initialBindings]);
 
   const [form, setForm] = useState<PageMeta>(initial);
   // Reset form state when the parent swaps to a different page. The
@@ -307,18 +402,71 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // practice, but keep the effect for belt-and-suspenders.
   useEffect(() => { setForm(initial); }, [initial]);
 
-  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
+  const dirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initial)
+      || JSON.stringify(bindings) !== JSON.stringify(initialBindings),
+    [form, initial, bindings, initialBindings],
+  );
+
+  // One writer per page kind. A bound wrapper is REGENERATED whole rather
+  // than patched: `updateMetadataInCode` would append a second
+  // `export const metadata`, which Next.js rejects outright and vinext
+  // silently ignores in favour of `generateMetadata` — the edit would look
+  // saved and never render.
+  const writeMeta = useCallback((next: PageMeta, nextBindings: CmsSeoBindings) => {
+    if (cms) {
+      modifyProjectFile(metadataPath, () =>
+        buildCmsDetailServerWrapper({
+          collection: cms.collection,
+          defaults: next as unknown as Record<string, unknown>,
+          bindings: nextBindings,
+        }));
+      return;
+    }
+    modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, formToMeta(next)));
+  }, [cms, metadataPath]);
 
   const save = useCallback(() => {
     if (!dirty) return;
-    trace.action('pages-seo:save', { metadataPath, filePath: page.filePath });
-    const next = formToMeta(form);
-    modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, next));
-  }, [dirty, form, metadataPath, page.filePath]);
+    trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings });
+    writeMeta(form, bindings);
+  }, [dirty, form, bindings, metadataPath, page.filePath, cms, writeMeta]);
+
+  // Binding changes are discrete picks, like the image fields — commit them
+  // straight away so a pick can't be lost by forgetting Save. Any in-flight
+  // text edits ride along, which is what the user sees on screen anyway.
+  const updateBinding = useCallback((slot: CmsSeoSlot, fieldId: string) => {
+    const next = { ...bindings };
+    if (fieldId) next[slot] = fieldId; else delete next[slot];
+    setBindings(next);
+    trace.action('pages-seo:bind', { slot, fieldId, collection: cms?.collection });
+    writeMeta(form, next);
+  }, [bindings, form, cms, writeMeta]);
 
   const update = <K extends keyof PageMeta>(key: K, value: PageMeta[K]) => {
     setForm((cur) => ({ ...cur, [key]: value }));
   };
+
+  /** The field picker for one slot. Only a CMS detail page has one, and
+   *  only when the collection actually has a field of the right kind. */
+  const bindFor = (slot: CmsSeoSlot): React.ReactElement | null => {
+    if (!cms) return null;
+    const fields = bindableFields(cms.schema, slot);
+    if (fields.length === 0) return null;
+    return (
+      <SeoFieldSelect
+        slot={slot}
+        fields={fields}
+        value={bindings[slot]}
+        onChange={(fieldId: string) => updateBinding(slot, fieldId)}
+      />
+    );
+  };
+
+  /** Whether to show the plain text box for a slot: always on a normal
+   *  page, and on a detail page only while the slot is unbound. A bound
+   *  slot's typed value would never render, so the box is hidden. */
+  const showStatic = (slot: CmsSeoSlot): boolean => !cms || !bindings[slot];
 
   // Image picks are discrete (Choose / Remove) — no "drafting" like
   // text inputs have. Requiring users to hit the Save button after
@@ -329,11 +477,14 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // form state (a follow-up Save button click commits those).
   const commitImageField = useCallback((field: 'ogImage' | 'twitterImage', url: string) => {
     trace.action('pages-seo:commit-image', { field, hasUrl: url.length > 0, urlLen: url.length });
+    // A bound wrapper has no `metadata` export to patch — regenerate it with
+    // the new URL as that slot's static value.
+    if (cms) { writeMeta({ ...form, [field]: url }, bindings); return; }
     const partial: SiteMetadata = field === 'ogImage'
       ? { openGraph: { images: url ? [url] : [] } }
       : { twitter: { image: url || '' } as Record<string, unknown> };
     modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, partial));
-  }, [metadataPath]);
+  }, [metadataPath, cms, form, bindings, writeMeta]);
 
   return (
     <div className="space-y-8">
@@ -342,24 +493,30 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
         action={<SaveButton onClick={save} saving={false} dirty={dirty} />}
       >
         <SettingsRow label="Title" htmlFor="seo-title">
-          <input
-            id="seo-title"
-            type="text"
-            value={form.title}
-            onChange={(e) => update('title', e.target.value)}
-            className={ROW_INPUT_CLS}
-            placeholder="Page title — falls back to site title when empty"
-          />
+          {bindFor('title')}
+          {showStatic('title') && (
+            <input
+              id="seo-title"
+              type="text"
+              value={form.title}
+              onChange={(e) => update('title', e.target.value)}
+              className={ROW_INPUT_CLS}
+              placeholder="Page title, falls back to the site title"
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="Description" htmlFor="seo-description" align="top">
-          <textarea
-            id="seo-description"
-            rows={3}
-            value={form.description}
-            onChange={(e) => update('description', e.target.value)}
-            className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-            placeholder="A brief description that shows in search results."
-          />
+          {bindFor('description')}
+          {showStatic('description') && (
+            <textarea
+              id="seo-description"
+              rows={3}
+              value={form.description}
+              onChange={(e) => update('description', e.target.value)}
+              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+              placeholder="A brief description that shows in search results."
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="Canonical URL" htmlFor="seo-canonical">
           <input
@@ -375,31 +532,40 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
 
       <SettingsGroup title="Open Graph (Facebook, LinkedIn, iMessage)">
         <SettingsRow label="OG title" htmlFor="og-title">
-          <input
-            id="og-title"
-            type="text"
-            value={form.ogTitle}
-            onChange={(e) => update('ogTitle', e.target.value)}
-            className={ROW_INPUT_CLS}
-            placeholder="Falls back to page title when empty"
-          />
+          {bindFor('ogTitle')}
+          {showStatic('ogTitle') && (
+            <input
+              id="og-title"
+              type="text"
+              value={form.ogTitle}
+              onChange={(e) => update('ogTitle', e.target.value)}
+              className={ROW_INPUT_CLS}
+              placeholder="Falls back to page title when empty"
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="OG description" htmlFor="og-description" align="top">
-          <textarea
-            id="og-description"
-            rows={3}
-            value={form.ogDescription}
-            onChange={(e) => update('ogDescription', e.target.value)}
-            className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-            placeholder="Falls back to page description when empty"
-          />
+          {bindFor('ogDescription')}
+          {showStatic('ogDescription') && (
+            <textarea
+              id="og-description"
+              rows={3}
+              value={form.ogDescription}
+              onChange={(e) => update('ogDescription', e.target.value)}
+              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+              placeholder="Falls back to page description when empty"
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="OG image" align="top">
-          <ImagePickerField
-            value={form.ogImage}
-            onChange={(url) => { update('ogImage', url); commitImageField('ogImage', url); }}
-            hint="1200×630 recommended"
-          />
+          {bindFor('ogImage')}
+          {showStatic('ogImage') && (
+            <ImagePickerField
+              value={form.ogImage}
+              onChange={(url) => { update('ogImage', url); commitImageField('ogImage', url); }}
+              hint="1200×630 recommended"
+            />
+          )}
         </SettingsRow>
       </SettingsGroup>
 
@@ -416,31 +582,40 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
           />
         </SettingsRow>
         <SettingsRow label="Title" htmlFor="tw-title">
-          <input
-            id="tw-title"
-            type="text"
-            value={form.twitterTitle}
-            onChange={(e) => update('twitterTitle', e.target.value)}
-            className={ROW_INPUT_CLS}
-            placeholder="Falls back to OG title / page title"
-          />
+          {bindFor('twitterTitle')}
+          {showStatic('twitterTitle') && (
+            <input
+              id="tw-title"
+              type="text"
+              value={form.twitterTitle}
+              onChange={(e) => update('twitterTitle', e.target.value)}
+              className={ROW_INPUT_CLS}
+              placeholder="Falls back to OG title / page title"
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="Description" htmlFor="tw-description" align="top">
-          <textarea
-            id="tw-description"
-            rows={3}
-            value={form.twitterDescription}
-            onChange={(e) => update('twitterDescription', e.target.value)}
-            className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-            placeholder="Falls back to OG description / page description"
-          />
+          {bindFor('twitterDescription')}
+          {showStatic('twitterDescription') && (
+            <textarea
+              id="tw-description"
+              rows={3}
+              value={form.twitterDescription}
+              onChange={(e) => update('twitterDescription', e.target.value)}
+              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+              placeholder="Falls back to OG description / page description"
+            />
+          )}
         </SettingsRow>
         <SettingsRow label="Image" align="top">
-          <ImagePickerField
-            value={form.twitterImage}
-            onChange={(url) => { update('twitterImage', url); commitImageField('twitterImage', url); }}
-            hint="Falls back to OG image"
-          />
+          {bindFor('twitterImage')}
+          {showStatic('twitterImage') && (
+            <ImagePickerField
+              value={form.twitterImage}
+              onChange={(url) => { update('twitterImage', url); commitImageField('twitterImage', url); }}
+              hint="Falls back to the OG image"
+            />
+          )}
         </SettingsRow>
       </SettingsGroup>
 

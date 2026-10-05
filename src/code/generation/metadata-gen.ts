@@ -86,9 +86,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 /** Locate `export const <name> = { … };` with a BALANCED, string-aware scan
  *  (quotes, template literals, escapes). Returns the full statement span and
  *  the object literal's text. Never confused by `};` inside stored strings. */
-function extractExportObject(code: string, name: string): { start: number; end: number; objStr: string } | null {
+function extractExportObject(
+  code: string,
+  name: string,
+  /** When false, a plain `const <name> = {` (no `export`) also matches. A CMS
+   *  detail page keeps its static SEO values in a LOCAL const, because a file
+   *  may not export both `metadata` and `generateMetadata` — Next.js fails the
+   *  build on it, and vinext silently prefers the function. */
+  opts: { exported?: boolean } = {},
+): { start: number; end: number; objStr: string } | null {
   // optional type annotation (`: Record<string, string>`) between name and `=`
-  const declRe = new RegExp(`export\\s+const\\s+${name}(?:\\s*:\\s*[\\w<>,.\\[\\]\\s]+?)?\\s*=\\s*\\{`);
+  const declPrefix = opts.exported === false ? '(?:export\\s+)?const' : 'export\\s+const';
+  const declRe = new RegExp(`${declPrefix}\\s+${name}(?:\\s*:\\s*[\\w<>,.\\[\\]\\s]+?)?\\s*=\\s*\\{`);
   const m = declRe.exec(code);
   if (!m) return null;
   const open = m.index + m[0].length - 1;
@@ -177,6 +186,22 @@ export function parseMetadataFromCode(code: string): SiteMetadata {
   const viaBabel = objectLiteralToRecord(block.objStr);
   if (viaBabel) return viaBabel;
   trace.error('metadata-gen:parse-failed', { raw: block.objStr.slice(0, 200) });
+  return legacyObjectToRecord(block.objStr);
+}
+
+/**
+ * Parse `const <name> = { … }` (exported or not) into plain data.
+ *
+ * Same balanced, string-aware scan `parseMetadataFromCode` uses — a CMS
+ * detail page's SEO lives in local consts rather than an exported
+ * `metadata`, and re-implementing the scanner for it is how the two would
+ * drift on the first odd string literal.
+ */
+export function parseLocalObjectFromCode(code: string, name: string): Record<string, any> {
+  const block = extractExportObject(code, name, { exported: false });
+  if (!block) return {};
+  const viaBabel = objectLiteralToRecord(block.objStr);
+  if (viaBabel) return viaBabel;
   return legacyObjectToRecord(block.objStr);
 }
 

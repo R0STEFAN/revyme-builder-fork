@@ -13,6 +13,7 @@ import { useToolPopup } from '../../../ui/ToolPopup';
 import { SliderRow } from '../shared';
 import { summarizeTransition, TransitionCurveIcon } from '../CurvePreview';
 import TransitionPanel from '../TransitionPanel';
+import { easeToString } from '../CurvePreview';
 import MotionPropsEditor from './MotionPropsEditor';
 import TextEffectPreview from './TextEffectPreview';
 import {
@@ -75,6 +76,13 @@ function motionPropsToConfig(props: Record<string, string>, prev: TextAnimConfig
   return config;
 }
 
+/** `'[0.22, 1, 0.36, 1]'` → `[0.22, 1, 0.36, 1]`; a named ease passes through. */
+function parseEase(ease: string): string | number[] {
+  if (!ease.trim().startsWith('[')) return ease;
+  const nums = ease.replace(/[[\]]/g, '').split(',').map((v) => parseFloat(v.trim()));
+  return nums.length === 4 && nums.every(Number.isFinite) ? nums : ease;
+}
+
 /** Convert TextAnimConfig.transition to Record<string, string> for TransitionPanel */
 function transitionToRecord(t?: TextAnimConfig['transition']): Record<string, string> {
   if (!t) return { type: 'spring', stiffness: '300', damping: '30' };
@@ -84,7 +92,7 @@ function transitionToRecord(t?: TextAnimConfig['transition']): Record<string, st
   if (t.damping !== undefined) result.damping = String(t.damping);
   if (t.mass !== undefined) result.mass = String(t.mass);
   if (t.duration !== undefined) result.duration = String(t.duration);
-  if (t.ease) result.ease = t.ease;
+  if (t.ease) result.ease = easeToString(t.ease);
   if (t.bounce !== undefined) result.bounce = String(t.bounce);
   if (t.delay !== undefined) result.delay = String(t.delay);
   return result;
@@ -98,7 +106,10 @@ function recordToTransition(t: Record<string, string>): TextAnimConfig['transiti
   if (t.damping) transition.damping = parseFloat(t.damping);
   if (t.mass) transition.mass = parseFloat(t.mass);
   if (t.duration) transition.duration = parseFloat(t.duration);
-  if (t.ease) transition.ease = t.ease;
+  // Back to the array form the value came in as: framer-motion's canonical
+  // shape, so an imported bezier round-trips byte-identical instead of being
+  // rewritten as a string on the first save.
+  if (t.ease) transition.ease = parseEase(t.ease);
   if (t.bounce) transition.bounce = parseFloat(t.bounce);
   if (t.delay) transition.delay = parseFloat(t.delay);
   return transition;
