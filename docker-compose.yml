@@ -1,0 +1,14 @@
+services:
+  revyme:
+    build: .
+    container_name: revyme-builder
+    restart: unless-stopped
+    ports:
+      - "3333:3333"
+      - "5174:5174"
+      - "5175:5175"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - REVYME_DATA_DIR=/app/data

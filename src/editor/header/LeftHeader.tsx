@@ -131,32 +131,14 @@ export function LogoButton() {
         label: 'Go to Dashboard',
         onClick: () => {
           trace.action('left-header:logo-dashboard');
-          // Hard nav: `/dashboard` is owned by revyme-cloud (different
-          // app), reached via the dispatcher. React Router with
-          // basename="/builder" can't route there.
-          //
-          // leaveBuilderTo, not a bare assignment: it flushes the mutation
-          // queue AND awaits the backend save. Doing only the first left the
-          // project dirty at unload, which is exactly when the browser's
-          // "Leave site?" guard fires.
           void leaveBuilderTo('/dashboard', 'logo-dashboard');
         },
       },
-      {
+      ...(CLOUD_ENABLED ? [{
         id: 'logo-account',
         label: 'Your Account',
         onClick: async () => {
           trace.action('left-header:logo-account');
-          // Route to the workspace-scoped account settings in the cloud
-          // dashboard: `/dashboard?ws=<workspaceId>&view=settings:account`.
-          // `/dashboard` is owned by revyme-cloud, reached via the
-          // dispatcher (same hard-nav as "Go to Dashboard" above).
-          //
-          // workspaceId is fetched per-click. Local mode (or any fetch
-          // error) → null → the `ws` param is omitted and the cloud app
-          // lands on the user's default workspace. leaveBuilderTo below
-          // commits + saves before the route swap, so this await can't
-          // race autosave.
           const projectId = getProjectId();
           let workspaceId: string | null = null;
           if (projectId !== 'local') {
@@ -167,7 +149,7 @@ export function LogoButton() {
           params.set('view', 'settings:account');
           await leaveBuilderTo(`/dashboard?${params.toString()}`, 'logo-account');
         },
-      },
+      }] : []),
       // Sits directly under "Your Account" — a billing action belongs with
       // the other account actions. `accent: true` gives it the one coloured
       // label in an otherwise neutral menu so it still stands out, without

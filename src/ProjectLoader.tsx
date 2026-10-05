@@ -40,6 +40,7 @@ import { migrateOutOfFlowSiblingOrders } from '@/canvas/drag/out-of-flow-order-m
 import { migrateFormSubmitDisplayTransitions } from '@/code/generation/form-submit-gen';
 import { getI18nConfig } from '@/code/project/locale-ops';
 import { openPluginIdAtom } from '@/plugins/registry';
+import SelfHostDashboard from './editor/dashboard/SelfHostDashboard';
 
 export default function ProjectLoader() {
   const [ready, setReady] = useState(false);
@@ -50,7 +51,15 @@ export default function ProjectLoader() {
   const setActiveFile = useSetAtom(activeFilePathAtom);
   const openCmsEditor = useSetAtom(openCmsEditorAtom);
 
+  const isDashboardRoute =
+    typeof window !== 'undefined' &&
+    (window.location.pathname === '/dashboard' || window.location.pathname.startsWith('/dashboard/'));
+
   useEffect(() => {
+    if (!CLOUD_ENABLED && isDashboardRoute) {
+      return;
+    }
+
     let cancelled = false;
 
     async function init() {
@@ -537,6 +546,11 @@ export default function ProjectLoader() {
 
     return () => { cancelled = true; };
   }, [setUser, setActiveFile, openCmsEditor]);
+
+  // Self-hosted dashboard route
+  if (!CLOUD_ENABLED && isDashboardRoute) {
+    return <SelfHostDashboard />;
+  }
 
   // Remix flow: the picker is BLOCKING and renders over whatever we managed
   // to show behind it — the previewed template inside the builder when the

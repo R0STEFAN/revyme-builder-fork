@@ -1,11 +1,12 @@
-// local-backend.ts — Standalone (no backend) implementation using localStorage.
-// Used when VITE_REVYME_CLOUD is not set.
+// local-backend.ts — Standalone (no cloud) implementation supporting both
+// disk server storage (/api/projects) and localStorage fallback.
 
 import type { ProjectBackend, ProjectData, RevymeUser, WorkspaceFont } from './types';
 import { isKnownProjectFormat } from './types';
 import { trace } from '@/shared/debug-trace';
 
 const STORAGE_PREFIX = 'revyme-project-';
+const NAME_PREFIX = 'revyme:project-name:';
 
 export class LocalBackend implements ProjectBackend {
   async getUser(): Promise<RevymeUser | null> {
@@ -13,14 +14,34 @@ export class LocalBackend implements ProjectBackend {
   }
 
   async loadProject(id: string): Promise<ProjectData | null> {
+    // 1. Try server storage first when in browser
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.data && typeof json.data === 'object' && json.data.files && Object.keys(json.data.files).length > 0) {
+            if (json.name && window.localStorage) {
+              localStorage.setItem(NAME_PREFIX + id, json.name);
+            }
+            if (!isKnownProjectFormat(json.data.format)) {
+              trace.error('local-backend:unknown-format', { id, format: json.data.format, fileCount: Object.keys(json.data.files).length });
+            }
+            trace.action('backend:load-project', { id, source: 'server', fileCount: Object.keys(json.data.files).length });
+            return json.data as ProjectData;
+          }
+        }
+      } catch {
+        // server unreachable / test environment
+      }
+    }
+
+    // 2. Fall back to localStorage
     const key = STORAGE_PREFIX + id;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
       const data = JSON.parse(raw) as ProjectData;
-      // Files present = real project. Never reject over the format tag alone:
-      // ProjectLoader would seed an empty starter and autosave would write it
-      // back over the user's work. Unknown tag is logged, then loaded.
       const fileCount = data?.files ? Object.keys(data.files).length : 0;
       if (fileCount === 0) return null;
       if (!isKnownProjectFormat(data.format)) {
@@ -36,33 +57,81 @@ export class LocalBackend implements ProjectBackend {
 
   async saveProject(id: string, data: ProjectData): Promise<void> {
     const key = STORAGE_PREFIX + id;
-    localStorage.setItem(key, JSON.stringify(data));
-    trace.action('backend:save-project', { id, source: 'localStorage', fileCount: Object.keys(data.files).length });
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      trace.action('backend:save-project', { id, source: 'localStorage', fileCount: Object.keys(data.files).length });
+    } catch {
+      // ignore localStorage quota error if storage is full
+    }
+
+    // Also persist to server storage API
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const name = localStorage.getItem(NAME_PREFIX + id) || undefined;
+        await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data, name }),
+        });
+        trace.action('backend:save-project', { id, source: 'server', fileCount: Object.keys(data.files).length });
+      } catch {
+        // offline / mock
+      }
+    }
   }
 
   async renameWebsite(id: string, name: string): Promise<void> {
-    // No cloud row to update — the project chip persists the name itself via
-    // project-store's localStorage. Nothing else to do here.
     trace.action('backend:rename-website', { id, name, source: 'local' });
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+      } catch {
+        // offline / mock
+      }
+    }
   }
 
-  async getWebsiteName(_id: string): Promise<string | null> {
-    // Local projects have no canonical backend name — the chip's localStorage
-    // value is the source of truth, so don't override it on load.
+  async getWebsiteName(id: string): Promise<string | null> {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.name) return json.name;
+        }
+      } catch {
+        // offline / mock
+      }
+    }
     return null;
   }
 
   async uploadAsset(_id: string, file: File): Promise<string> {
-    // Standalone (no-cloud) mode: read the file as a base64 data URL
-    // so the bytes get embedded directly in whatever code path stores
-    // it. `URL.createObjectURL` was simpler but produced a `blob:`
-    // URL that's scoped to the current page session — closing or
-    // reloading the editor invalidated every uploaded image, which
-    // surfaced as 404 image placeholders in the SEO metadata form
-    // and anywhere else uploads were saved (Fill tool, etc.). Data
-    // URLs are bigger but survive across sessions and serialize
-    // cleanly into the project JSON. Cloud mode (revyme-backend)
-    // uses the real CDN endpoint and is unaffected by this change.
+    // 1. Try server storage upload first
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.url) {
+            trace.action('backend:upload-asset', { source: 'server', name: file.name, url: json.url });
+            return json.url;
+          }
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    // 2. Standalone (no-server) fallback: base64 data URL
     const url = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -74,16 +143,10 @@ export class LocalBackend implements ProjectBackend {
   }
 
   async deleteAssets(_id: string, keys: string[]): Promise<void> {
-    // Standalone uploads are data: URLs embedded in the project — there is
-    // no server object to delete. The Media panel hides its delete UI in
-    // this mode; keep the interface satisfied as a traced no-op.
     trace.action('backend:delete-assets', { source: 'local-noop', count: keys.length });
   }
 
   async fetchMediaBytes(remoteUrl: string): Promise<Blob> {
-    // No server-side proxy in standalone mode — best-effort direct fetch.
-    // Works for data:/blob: URLs and CORS-enabled sources; cross-origin CDNs
-    // (e.g. Pixabay) will reject, which is expected without the cloud backend.
     const res = await fetch(remoteUrl);
     if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
     trace.action('backend:fetch-media-bytes', { source: 'direct' });
@@ -91,32 +154,22 @@ export class LocalBackend implements ProjectBackend {
   }
 
   async getWebsiteRole(_id: string): Promise<'owner' | 'editor' | 'viewer'> {
-    // localStorage projects are single-user — there are no other roles
-    // to be. Always owner.
     return 'owner';
   }
 
   async getWebsiteClosedSource(_id: string): Promise<boolean> {
-    // localStorage projects are never template remixes — code always visible.
     return false;
   }
 
   async getWebsiteWorkspaceId(_id: string): Promise<string | null> {
-    // localStorage projects don't belong to any workspace — there's no
-    // cloud dashboard to route to. Callers (LeftHeader's "Your Account"
-    // menu item) treat null as "skip the workspace param" and fall back
-    // to a bare dashboard URL.
     return null;
   }
 
   async getCredits(_workspaceId: string): Promise<number | null> {
-    // No credits in local mode — AI runs aren't metered against a
-    // workspace pool. The AI bars hide the indicator when this is null.
     return null;
   }
 
   async listWorkspaceFonts(_workspaceId: string): Promise<WorkspaceFont[]> {
-    // localStorage projects have no workspace — no custom font library.
     return [];
   }
 }
