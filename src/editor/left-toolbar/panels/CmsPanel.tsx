@@ -781,15 +781,14 @@ export default function CmsPanel() {
   }, [refresh, handleClickCollection]);
 
   const setLaunchedPlugin = useSetAtom(launchedProjectPluginAtom);
+  const isDirectusInstalled = projectFS.exists('plugins/DirectusSync.tsx');
   const handleOpenDirectusSync = useCallback(() => {
     const pluginPath = 'plugins/DirectusSync.tsx';
-    if (!projectFS.exists(pluginPath)) {
-      projectFS.writeFile(pluginPath, DIRECTUS_SYNC_PLUGIN_SOURCE);
-      refresh();
+    if (projectFS.exists(pluginPath)) {
+      setLaunchedPlugin(pluginPath);
+      trace.action('cms-panel:open-directus-sync');
     }
-    setLaunchedPlugin(pluginPath);
-    trace.action('cms-panel:open-directus-sync');
-  }, [setLaunchedPlugin, refresh]);
+  }, [setLaunchedPlugin]);
 
   return (
     <div className="flex flex-col h-full">
@@ -815,15 +814,17 @@ export default function CmsPanel() {
         size="md"
         right={
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleOpenDirectusSync}
-              title="Sync from Directus CMS"
-              className="px-1.5 py-0.5 text-[10px] font-semibold cut-corners bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] hover:bg-[var(--accent)] hover:text-[var(--accent-fg,#000)] text-[var(--text-secondary)] transition-colors cursor-pointer flex items-center gap-1 border-none"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#6644ff] inline-block" />
-              Directus
-            </button>
+            {isDirectusInstalled && (
+              <button
+                type="button"
+                onClick={handleOpenDirectusSync}
+                title="Sync from Directus CMS"
+                className="px-1.5 py-0.5 text-[10px] font-semibold cut-corners bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] hover:bg-[var(--accent)] hover:text-[var(--accent-fg,#000)] text-[var(--text-secondary)] transition-colors cursor-pointer flex items-center gap-1 border-none"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6644ff] inline-block" />
+                Directus
+              </button>
+            )}
             <AddButton onClick={handleCreateCollectionInline} title="New collection" />
           </div>
         }

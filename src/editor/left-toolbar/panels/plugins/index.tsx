@@ -60,7 +60,8 @@ import { copyLocalPluginUrl } from '@/plugins/copy-url-action';
 import { uploadInstructionsForAtom } from '@/plugins/UploadInstructionsModal';
 import { pluginEditorFileAtom } from '@/editor/plugin-editor/plugin-editor-store';
 import { getFileDisplayName } from '@/code/project/active-file-store';
-import { projectVersionAtom } from '@/code/project/project-fs';
+import { projectVersionAtom, projectFS } from '@/code/project/project-fs';
+import { DIRECTUS_SYNC_PLUGIN_SOURCE } from '@/code/project/default-plugins/DirectusSync';
 import {
   listPluginFolders,
   getPluginRootOrder,
@@ -398,11 +399,28 @@ export default function PluginsSection({ searchQuery }: { searchQuery?: string }
     return items;
   };
 
+  const handleAddDirectusPlugin = useCallback(() => {
+    const filePath = 'plugins/DirectusSync.tsx';
+    if (!projectFS.exists(filePath)) {
+      projectFS.writeFile(filePath, DIRECTUS_SYNC_PLUGIN_SOURCE);
+      setVersion(v => v + 1);
+      toast.success('Directus CMS Sync plugin added to project');
+    }
+    runProjectPlugin(filePath);
+  }, [setVersion, runProjectPlugin]);
+
   // ─── `+` button dropdown ────────────────────────────────────────────────
   const plusMenuItems: DropdownMenuEntry[] = [
     {
+      id: 'add-directus',
+      label: 'Directus CMS Sync',
+      icon: <span className="w-2.5 h-2.5 rounded-full bg-[#6644ff] inline-block" />,
+      onClick: () => { setPlusMenuOpen(false); handleAddDirectusPlugin(); },
+    },
+    { type: 'separator' },
+    {
       id: 'new-plugin',
-      label: 'New plugin',
+      label: 'New custom plugin',
       icon: <PluginIcon />,
       onClick: () => { setPlusMenuOpen(false); setNewNameOpen(true); },
     },
@@ -509,11 +527,26 @@ export default function PluginsSection({ searchQuery }: { searchQuery?: string }
       </SectionLabel>
 
       {isEmpty ? (
-        <div className="flex flex-col items-center gap-1.5 px-4 py-4 text-center">
-          <PluginIcon />
-          <p className="text-[10px] text-[var(--text-disabled)] max-w-[180px] leading-relaxed">
-            No plugins yet. Click + to create one or add from a dev URL.
+        <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
+          <p className="text-[10px] text-[var(--text-disabled)] max-w-[200px] leading-relaxed">
+            No plugins in this project yet. Add from templates or click + above:
           </p>
+          <div className="w-full mt-1 p-2.5 rounded cut-corners bg-[var(--bg-secondary,rgba(255,255,255,0.04))] border border-[var(--border-subtle,rgba(255,255,255,0.08))] text-left flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#6644ff] inline-block shrink-0" />
+              <span className="text-xs font-semibold text-[var(--text-primary)]">Directus CMS Sync</span>
+            </div>
+            <p className="text-[10px] text-[var(--text-secondary)] leading-normal">
+              Import & synchronize collections from Directus headless CMS.
+            </p>
+            <button
+              type="button"
+              onClick={handleAddDirectusPlugin}
+              className="mt-1 py-1 px-2.5 text-[10px] font-semibold cut-corners bg-[var(--accent)] text-[var(--accent-fg,#000)] border-none cursor-pointer hover:brightness-110 transition-all self-start"
+            >
+              + Add Plugin
+            </button>
+          </div>
         </div>
       ) : (
         <div className="px-2 pb-2">
