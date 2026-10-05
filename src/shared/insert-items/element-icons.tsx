@@ -32,6 +32,7 @@ import {
   EffectThemeToggleIcon,
   EffectLocaleSwitcherIcon,
   EffectCopyButtonIcon,
+  EffectAccordionIcon,
 } from '@/shared/insert-items/creative-preview-icons';
 import { CHIP_SHADOW, CHIP_SURFACE } from '@/shared/insert-items/cms-field-glyphs';
 
@@ -1728,6 +1729,8 @@ export const ELEMENT_ICON_MAP: Record<string, React.FC> = {
   effectThemeToggle: EffectThemeToggleIcon,
   effectLocaleSwitcher: EffectLocaleSwitcherIcon,
   effectCopyButton: EffectCopyButtonIcon,
+  effectAccordion: EffectAccordionIcon,
+  accordion: EffectAccordionIcon,
   // Legacy flat icons (kept for back-compat with any out-of-tree
   // iconKey references; not used by the current EFFECTS_ITEMS list).
   carousel: CarouselIconCreative,

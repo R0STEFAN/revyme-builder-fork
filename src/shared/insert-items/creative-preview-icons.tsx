@@ -1461,3 +1461,49 @@ export function EffectLocaleSwitcherIcon() {
     </div>
   );
 }
+
+// ─── Accordion ─────────────────────────────────────────────────────────────
+// Sleek mini card showing an expandable accordion item with title, +/- icon,
+// and preview hint lines.
+
+export function EffectAccordionIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center p-2">
+      <div
+        style={{
+          width: '85%',
+          borderRadius: 6,
+          backgroundColor: '#1f1f1f',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          padding: '6px 8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <div style={{ width: '55%', height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255, 255, 255, 0.7)' }} />
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
+            <div style={{ width: 6, height: 1, backgroundColor: '#999999' }} />
+            <div style={{ position: 'absolute', width: 1, height: 6, backgroundColor: '#999999' }} />
+          </div>
+        </div>
+        <div style={{ width: '80%', height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ width: '65%', height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255, 255, 255, 0.15)' }} />
+      </div>
+    </div>
+  );
+}
+

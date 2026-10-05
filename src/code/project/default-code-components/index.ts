@@ -102,6 +102,7 @@ export { GOOGLE_FORM_EMBED_COMPONENT } from './GoogleFormEmbed';
 export { THEME_TOGGLE_COMPONENT } from './ThemeToggle';
 export { COPY_BUTTON_COMPONENT } from './CopyButton';
 export { LOCALE_SWITCHER_COMPONENT } from './LocaleSwitcher';
+export { ACCORDION_COMPONENT } from './Accordion';
 
 // ─── WebGL background pack (hand-written GLSL, hash + value-noise fBm) ────
 export { SILK_RIBBONS_COMPONENT } from './SilkRibbons';
