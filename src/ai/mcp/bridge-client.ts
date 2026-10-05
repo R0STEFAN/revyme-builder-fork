@@ -1010,9 +1010,18 @@ export function startMcpBridge(): void {
   // (REVYME_BRIDGE_AUTH) — cookies must flow even if the bridge origin differs.
   source = new EventSource(`${AI_SERVICE_URL}/bridge/events${bridgeQs}`, { withCredentials: true });
   (window as any)[BRIDGE_WINDOW_KEY] = source;
-  source.onopen = () => trace.action('mcp-bridge:connected', {});
-  source.onmessage = (e) => { void dispatch(e.data); };
-  source.onerror = () => trace.action('mcp-bridge:disconnected-retrying', {});
+  source.onopen = () => {
+    console.log('[MCP Bridge] Connected to bridge server successfully');
+    trace.action('mcp-bridge:connected', {});
+  };
+  source.onmessage = (e) => {
+    console.log('[MCP Bridge] Message received:', e.data);
+    void dispatch(e.data);
+  };
+  source.onerror = (err) => {
+    console.warn('[MCP Bridge] EventSource error / disconnected:', err);
+    trace.action('mcp-bridge:disconnected-retrying', {});
+  };
 }
 
 if (import.meta.hot) {

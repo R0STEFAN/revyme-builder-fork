@@ -91,8 +91,61 @@ Everything is optional - see [`.env.example`](./.env.example) for the annotated 
 | `VITE_UNSPLASH_ACCESS_KEY` / `VITE_PIXABAY_KEY` | stock image/video search tabs (hidden without keys) |
 | `VITE_REVYME_CLOUD` | set to `true` only when running against the hosted cloud backend |
 | `VITE_CDN_HOST` / `VITE_PLATFORM_HOST` | point a self-hosted fork at your own asset CDN / platform |
+| `VITE_AI_SERVICE_URL` | points to local MCP bridge server (`http://localhost:8082` by default) |
 
 ![The Add Language dialog - locale search, display name, slug and fallback](docs/readme/localization.webp)
+
+## Model Context Protocol (MCP) & AI Integration
+
+Revyme supports bi-directional control from AI coding agents (Antigravity, Claude Code, Cursor) via the open **Model Context Protocol (MCP)**.
+
+### Architecture
+
+```
+┌─────────────────────────┐         Stdio MCP          ┌──────────────────────────────┐
+│  AI Agent (Antigravity/ │ ◄────────────────────────► │      Revyme MCP Bridge       │
+│   Claude / Cursor)      │                            │  (scripts/mcp-bridge-server) │
+└─────────────────────────┘                            └──────────────┬───────────────┘
+                                                                      │ SSE: /bridge/events
+                                                                      │ POST: /bridge/result
+                                                                      ▼
+                                                       ┌──────────────────────────────┐
+                                                       │  Revyme Builder in Browser   │
+                                                       │   (http://localhost:3333)    │
+                                                       │  Live Canvas, Oracle Gate    │
+                                                       └──────────────────────────────┘
+```
+
+1. **Start the editor**: `npm run dev` (starts on port `3333`)
+2. **Start the MCP bridge**: `npm run mcp` (listens on `http://localhost:8082` and exposes MCP on `stdio`)
+3. **Connect your agent**:
+   Add to `~/.gemini/config/mcp_config.json` or `claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "revyme-builder": {
+         "command": "npx",
+         "args": ["tsx", "scripts/mcp-bridge-server.ts"],
+         "cwd": "/path/to/revyme-builder-fork"
+       }
+     }
+   }
+   ```
+
+### Available MCP Tool Capabilities
+
+- **`revyme_get_context`**: Reads current active page/component, JSX AST, design tokens, and CMS collections.
+- **`revyme_submit_files`**: Commits full React/Next.js code through the built-in **Oracle Gate** validator.
+- **`revyme_manage_presets`**: Directly edits design tokens (`color-*`, `typo-*`, `space-*`, `radius-*`).
+- **`revyme_manage_cms`**: Creates collections, schemas, and CRUD items.
+- **`revyme_agent_tool`**: Direct gateway to **168 fine-grained semantic tools**:
+  - `add_node`, `clone_node`, `wrap_in_layout` (structure)
+  - `set_styles`, `set_size` (`fill`, `fit`, px, %, responsive viewports)
+  - `set_motion` (Framer Motion: `appear`, `hover`, `tap`, `loop`, `speed`/parallax, `transform`)
+  - `set_text_effect` (letter-by-letter or word-by-word staggered reveal)
+  - `set_smooth_scroll` (Lenis momentum scrolling)
+  - `batch` (transactional execution of multiple actions with single undo)
+
 
 ## How it works
 

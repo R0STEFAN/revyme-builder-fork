@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "concurrently \"vite\" \"vite --config vite.sandbox.config.ts\" \"vite --config vite.preview.config.ts\"",
+    "mcp": "tsx scripts/mcp-bridge-server.ts",
     "dev:standalone": "vite",
     "build": "vite build",
     "build:sandbox": "vite build --config vite.sandbox.config.ts",
@@ -75,6 +76,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/react": "^16.3.2",
@@ -91,6 +93,7 @@
     "eslint-plugin-unused-imports": "^4.4.1",
     "jsdom": "^29.0.0",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.1",
