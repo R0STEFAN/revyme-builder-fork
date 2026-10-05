@@ -251,6 +251,9 @@ export default function PluginsSection({ searchQuery }: { searchQuery?: string }
   // Launch a project plugin as a runtime popup over the canvas.
   // Bypasses the editor — same UX as opening a Tier 1 plugin.
   const runProjectPlugin = useCallback((filePath: string) => {
+    if (filePath === 'plugins/DirectusSync.tsx') {
+      projectFS.writeFile(filePath, DIRECTUS_SYNC_PLUGIN_SOURCE);
+    }
     setOpenPluginId(null);
     setLaunchedCloud(null);
     setLaunchedProject(filePath);

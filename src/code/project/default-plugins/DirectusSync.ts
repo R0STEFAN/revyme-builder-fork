@@ -73,14 +73,27 @@ function App({ plugin }) {
     } catch {}
   };
 
-  // CORS-safe fetch helper via local proxy
+  const getHostOrigin = () => {
+    try {
+      if (window.parent && window.parent.location && window.parent.location.origin) {
+        return window.parent.location.origin;
+      }
+    } catch {}
+    if (window.location && window.location.origin && window.location.origin !== 'null') {
+      return window.location.origin;
+    }
+    return 'http://localhost:3333';
+  };
+
+  // CORS-safe fetch helper via local proxy (using absolute URL to resolve correctly from blob iframe)
   const directusFetch = async (targetUrl, init = {}) => {
     try {
       const res = await fetch(targetUrl, init);
       return res;
     } catch {
       // Browser CORS blocked -> fallback to server proxy
-      const proxyRes = await fetch('/api/proxy', {
+      const proxyUrl = \`\${getHostOrigin()}/api/proxy\`;
+      const proxyRes = await fetch(proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
