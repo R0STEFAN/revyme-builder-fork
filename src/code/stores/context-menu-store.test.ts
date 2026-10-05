@@ -137,4 +137,91 @@ describe('context-menu-store style copying', () => {
     expect(onSecondary.color).toBe('#ffffff');
     expect(onSecondary.borderRadius).toBe('8px');
   });
+
+  it('prepareStylesForPaste clears border on target when copied element has no border', () => {
+    const copiedWithoutBorder = {
+      styles: {
+        backgroundColor: '#ffffff',
+        padding: '16px',
+      },
+      sourceNodeId: 'node-plain',
+      hasBorder: false,
+    };
+    const targetWithBorder = {
+      border: '2px solid red',
+      borderColor: 'red',
+      borderWidth: '2px',
+      borderStyle: 'solid',
+      '--border-width': '2px',
+    };
+
+    const prepared = prepareStylesForPaste(copiedWithoutBorder, targetWithBorder);
+    expect(prepared.backgroundColor).toBe('#ffffff');
+    expect(prepared.padding).toBe('16px');
+    expect(prepared.border).toBe('');
+    expect(prepared.borderWidth).toBe('');
+    expect(prepared.borderColor).toBe('');
+    expect(prepared.borderStyle).toBe('');
+    expect(prepared['--border-width']).toBe('');
+  });
+
+  it('prepareStylesForPaste clears shadow on target when copied element has no shadow', () => {
+    const copiedWithoutShadow = {
+      styles: {
+        backgroundColor: '#ffffff',
+      },
+      sourceNodeId: 'node-plain',
+      hasShadow: false,
+    };
+    const targetWithShadow = {
+      boxShadow: '0 10px 20px rgba(0,0,0,0.5)',
+      filter: 'blur(4px) drop-shadow(0 2px 4px black)',
+    };
+
+    const prepared = prepareStylesForPaste(copiedWithoutShadow, targetWithShadow);
+    expect(prepared.boxShadow).toBe('');
+    // Drop shadow is stripped, but blur is preserved!
+    expect(prepared.filter).toBe('blur(4px)');
+  });
+
+  it('prepareStylesForPaste sets position relative and clears inline keys for overlay border', () => {
+    const copiedOverlayBorder = {
+      styles: {
+        backgroundColor: '#ffffff',
+      },
+      sourceNodeId: 'node-gradient-border',
+      borderOverlayCSS: 'border: 2px solid transparent; border-image: linear-gradient(...) 1;',
+      hasBorder: true,
+    };
+    const targetStyles = {
+      border: '1px solid #ccc',
+      position: 'static',
+    };
+
+    const prepared = prepareStylesForPaste(copiedOverlayBorder, targetStyles);
+    expect(prepared.border).toBe('');
+    expect(prepared.position).toBe('relative');
+  });
+
+  it('prepareStylesForPaste converts canonical transform appropriately for motion and non-motion targets', () => {
+    const copiedWithTransform = {
+      styles: {},
+      sourceNodeId: 'node-rotated',
+      transformCSS: 'rotate(45deg)',
+    };
+
+    // For a motion target (e.g. inside a component):
+    const forMotion = prepareStylesForPaste(copiedWithTransform, { scaleX: '1.2' }, { isMotionTarget: true });
+    expect(forMotion.transform).toBe('');
+    expect(forMotion.rotate).toBe('45');
+    // Stale previous scaleX on target is cleared
+    expect(forMotion.scaleX).toBe('');
+
+    // For a non-motion target (e.g. plain page element):
+    const forPage = prepareStylesForPaste(copiedWithTransform, { rotate: '15' }, { isMotionTarget: false });
+    expect(forPage.transform).toBe('rotate(45deg)');
+    // Stale motion props on target are cleared
+    expect(forPage.rotate).toBe('');
+  });
 });
+

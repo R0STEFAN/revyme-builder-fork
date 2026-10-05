@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CDN_HOST_BARE } from '@/shared/hosts';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
-import { contextMenuAtom, renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste, resolveEffectiveStyles } from '@/code/stores/context-menu-store';
+import { contextMenuAtom, renamingNodeIdAtom, copiedElementStylesAtom } from '@/code/stores/context-menu-store';
 import { toast } from 'sonner';
 import { codeAtom, nodesAtom, selectedNodeAtom, selectedIdsAtom, updatingFromCanvasAtom, getNodesSnapshot } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
@@ -15,6 +15,7 @@ import {
   deleteNode, toggleLock, toggleVisibility,
   selectParent, selectChildren, selectNextSibling, selectPrevSibling, selectNextReplica,
   wrapInFrame, wrapInLayout, unfoldChildren,
+  copyElementStylesCommand, pasteElementStylesCommand,
 } from '../commands';
 import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext } from '../node-ops';
 import { isTextTag } from '@/shared/constants';
@@ -551,21 +552,7 @@ export default function ContextMenu() {
   const handleCopyStyles = () => {
     const targetNodeId = (nodeId && !selectedIds.includes(nodeId)) ? nodeId : (selectedIds[0] || nodeId);
     if (!targetNodeId) return;
-    const targetNode = getNodesSnapshot().get(targetNodeId);
-    if (!targetNode) return;
-    const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
-    const stylesToCopy = extractCopyableStyles(effectiveStyles);
-    if (Object.keys(stylesToCopy).length === 0) {
-      toast.info('No copyable styles on selected element');
-      close();
-      return;
-    }
-    setCopiedElementStyles({
-      styles: stylesToCopy,
-      sourceNodeId: targetNodeId,
-      sourceNodeName: targetNode.name || targetNode.type,
-    });
-    toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+    copyElementStylesCommand(targetNodeId);
     close();
   };
 
@@ -574,21 +561,7 @@ export default function ContextMenu() {
     const targetIds = (nodeId && !selectedIds.includes(nodeId))
       ? [nodeId]
       : (selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []));
-    if (targetIds.length === 0) return;
-    const contentEl = getContentEl() || document.body;
-    const targetVpId = interactingVp || 'desktop';
-    const vpWidth = viewports.find(v => v.id === targetVpId)?.width ?? 1440;
-    setStyleContext(activeFilePath, targetVpId, vpWidth);
-    const snapshot = getNodesSnapshot();
-    for (const id of targetIds) {
-      const targetNode = snapshot.get(id);
-      const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, targetVpId);
-      const payload = prepareStylesForPaste(copiedElementStyles.styles, effectiveTargetStyles);
-      updateNodeStyles({ id, styles: payload, contentEl });
-    }
-    flushNow();
-    const count = targetIds.length;
-    toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);
+    pasteElementStylesCommand(targetIds, getContentEl());
     close();
   };
 

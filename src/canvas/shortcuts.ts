@@ -13,6 +13,7 @@ import {
   selectNextReplica,
   deleteNode, toggleLock, toggleVisibility, wrapInFrame, wrapInLayout, unfoldChildren,
   duplicateSelection,
+  copyElementStylesCommand, pasteElementStylesCommand,
 } from './commands';
 import { getContentRoot, updateNodeStyles, setStyleContext } from './node-ops';
 import { getCanvasBridge } from './canvas-bridge';
@@ -41,7 +42,7 @@ import { buildGroupSvgsOpts } from './svg-group-helper';
 import { activeFilePathAtom, activeCodeAtom, isIconSetFilePath, isDesignComponentFile } from '../code/project/active-file-store';
 import { detachInstance } from '../code/components/component-ops';
 import { isReplicaViewportAtom, isComponentVariantViewportAtom } from '../code/stores/viewport-store';
-import { renamingNodeIdAtom, copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste, resolveEffectiveStyles } from '../code/stores/context-menu-store';
+import { renamingNodeIdAtom, copiedElementStylesAtom } from '../code/stores/context-menu-store';
 import { toast } from 'sonner';
 import { createAndOpenProject } from '../editor/header/menu-builders';
 import { nudgeSelection, flushPendingNudge, type NudgeDirection } from './arrow-nudge';
@@ -674,24 +675,9 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     label: 'Copy Styles',
     category: 'general',
     handler: () => {
-      const targetId = selectedIdRef.current || selectedIdsRef.current[0];
+      const targetId = selectedIdRef.current || (selectedIdsRef.current.length > 0 ? selectedIdsRef.current[0] : null);
       if (!targetId) return;
-      const targetNode = nodesRef.current.get(targetId);
-      if (!targetNode) return;
-      const store = getDefaultStore();
-      const interactingVp = store.get(interactingViewportIdAtom);
-      const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
-      const stylesToCopy = extractCopyableStyles(effectiveStyles);
-      if (Object.keys(stylesToCopy).length === 0) {
-        toast.info('No copyable styles on selected element');
-        return;
-      }
-      store.set(copiedElementStylesAtom, {
-        styles: stylesToCopy,
-        sourceNodeId: targetId,
-        sourceNodeName: targetNode.name || targetNode.type,
-      });
-      toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+      copyElementStylesCommand(targetId);
     },
   }));
 
@@ -702,31 +688,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     label: 'Paste Styles',
     category: 'general',
     handler: () => {
-      const store = getDefaultStore();
-      const copied = store.get(copiedElementStylesAtom);
-      if (!copied) {
-        toast.info('No styles copied yet');
-        return;
-      }
-      const targetIds = selectedIdsRef.current.length > 0
-        ? selectedIdsRef.current
-        : (selectedIdRef.current ? [selectedIdRef.current] : []);
-      if (targetIds.length === 0) return;
-      const contentEl = contentRef.current || getContentRoot() || document.body;
-      const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
-      const activeFilePath = store.get(activeFilePathAtom);
-      const viewports = store.get(viewportsConfigAtom);
-      const vpWidth = viewports.find(v => v.id === interactingVp)?.width ?? 1440;
-      setStyleContext(activeFilePath, interactingVp, vpWidth);
-      for (const id of targetIds) {
-        const targetNode = nodesRef.current.get(id);
-        const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
-        const payload = prepareStylesForPaste(copied.styles, effectiveTargetStyles);
-        updateNodeStyles({ id, styles: payload, contentEl });
-      }
-      flushNow();
-      const count = targetIds.length;
-      toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);
+      pasteElementStylesCommand(selectedIdsRef.current, contentRef.current);
     },
   }));
 

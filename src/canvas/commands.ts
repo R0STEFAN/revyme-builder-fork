@@ -2,24 +2,41 @@
 // Called from BOTH context menu AND keyboard shortcuts.
 // Each command composes low-level operations from node-ops.ts.
 
-import type { CanvasNode } from '@/code/parsing/parser';
+import { CanvasNode, extractStyleCSS } from '@/code/parsing/parser';
 import { unfoldFlowStyles } from './unfold-flow-sizing';
 import { TRANSPARENT_FILL } from '@/shared/css-utils';
 import { getDefaultStore } from 'jotai';
-import { removeNode, updateNodeStyles, isPrimaryViewport, getInteractingViewport, getActiveFilePath, patchNodeStyles, getViewportPrefix, vpIdFromPrefix, parseRectCacheKey, findNodeRect, findNodeComputedStyles } from './node-ops';
-import { isIconSetFilePath, isComponentFilePath } from '@/code/project/active-file-store';
+import {
+  removeNode, updateNodeStyles, isPrimaryViewport, getInteractingViewport,
+  getActiveFilePath, patchNodeStyles, getViewportPrefix, vpIdFromPrefix,
+  parseRectCacheKey, findNodeRect, findNodeComputedStyles,
+  getContentRoot, setStyleContext, injectCanvasCSS, removeCanvasCSS,
+} from './node-ops';
+import { isIconSetFilePath, isComponentFilePath, activeFilePathAtom } from '@/code/project/active-file-store';
 import { removeVariant } from '@/code/variants/variant-ops';
-import { nodesAtom, hoveredIdAtom, hoveredNodeIdAtom } from '@/code/stores/store';
+import { nodesAtom, hoveredIdAtom, hoveredNodeIdAtom, selectedNodeAtom, selectedIdsAtom, getNodesSnapshot } from '@/code/stores/store';
 import { toast } from 'sonner';
 import { parseIconSetConfig } from '@/code/icons/icon-set-config';
 import { removeIconFromSet } from '@/code/icons/icon-set-ops';
 import { projectFS } from '@/code/project/project-fs';
-import { getViewportWidths } from '@/code/stores/viewport-store';
+import { getViewportWidths, interactingViewportIdAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
-import { clearContainerStylesForWidth, removeResponsiveBreakpoint } from '@/code/generation/generator-styles';
+import { clearContainerStylesForWidth, removeResponsiveBreakpoint, borderOverlaySelector } from '@/code/generation/generator-styles';
 import { isStartModelLadder } from '@/code/project/breakpoint-ladder';
 import { commitBreakpointRemove } from './helpers/breakpoint-commit';
+import { extractBorderAfterRuleBody } from '@/editor/ui/border-utils';
+import { isMotionTransformTarget } from '@/editor/controls/style-clipboard';
+import {
+  copiedElementStylesAtom,
+  extractCopyableStyles,
+  prepareStylesForPaste,
+  resolveEffectiveStyles,
+  hasAnyBorder,
+  hasAnyShadow,
+  extractVisualTransformCSS,
+  type CopiedElementStyles,
+} from '@/code/stores/context-menu-store';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { getReplicaContext } from '@/canvas/drag/replica-context';
 import { parseOverlayCalls, parseOverlayTriggerCalls } from '@/code/parsing/overlay-parser';
@@ -1501,3 +1518,129 @@ export function duplicateSelection(opts: {
   if (savedClipboard) localStorage.setItem('canvas_clipboard', savedClipboard);
   else localStorage.removeItem('canvas_clipboard');
 }
+
+// ─── Copy / Paste Element Styles ──────────────────────────────────────────
+
+/**
+ * Copy visual styles of a node into the element styles clipboard.
+ * Snapshots inline styles, overlay border (::after rule), visual transform,
+ * and records whether the node has active borders or shadows (for full-clear contract).
+ */
+export function copyElementStylesCommand(targetId?: string | null): boolean {
+  const store = getDefaultStore();
+  const nodes = getNodesSnapshot();
+  const selectedId = store.get(selectedNodeAtom);
+  const idToCopy = targetId || selectedId;
+  if (!idToCopy) return false;
+  const targetNode = nodes.get(idToCopy);
+  if (!targetNode) return false;
+
+  const interactingVp = store.get(interactingViewportIdAtom);
+  const activeFilePath = store.get(activeFilePathAtom) || getActiveFilePath();
+  const isComp = isComponentFilePath(activeFilePath);
+  const overlayVariant = isComp && interactingVp && !isPrimaryViewport(interactingVp) ? interactingVp : null;
+
+  flushNow();
+  const code = projectFS.readFile(activeFilePath) ?? '';
+  const borderOverlayCSS = extractBorderAfterRuleBody(extractStyleCSS(code), idToCopy, overlayVariant);
+
+  const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
+  const transformCSS = extractVisualTransformCSS(effectiveStyles);
+  const stylesToCopy = extractCopyableStyles(effectiveStyles);
+
+  const hasBorder = hasAnyBorder(effectiveStyles, borderOverlayCSS);
+  const hasShadow = hasAnyShadow(effectiveStyles);
+
+  if (Object.keys(stylesToCopy).length === 0 && !borderOverlayCSS && !transformCSS) {
+    toast.info('No copyable styles on selected element');
+    return false;
+  }
+
+  const payload: CopiedElementStyles = {
+    styles: stylesToCopy,
+    sourceNodeId: idToCopy,
+    sourceNodeName: targetNode.name || targetNode.type,
+    borderOverlayCSS,
+    transformCSS: transformCSS || undefined,
+    hasBorder,
+    hasShadow,
+  };
+
+  store.set(copiedElementStylesAtom, payload);
+  toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+  trace.action('commands:copy-element-styles', {
+    nodeId: idToCopy,
+    overlayVariant,
+    hasOverlay: !!borderOverlayCSS,
+    hasBorder,
+    hasShadow,
+    transformCSS,
+  });
+  return true;
+}
+
+/**
+ * Paste copied element styles onto target node(s).
+ * Applies scoped variant routing, clears conflicting fill layers, applies full-clear
+ * contract for borders & shadows, recreates/removes ::after border overlay, and converts
+ * transform format to motion props or CSS transform matching the target.
+ */
+export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl?: HTMLElement | null): boolean {
+  const store = getDefaultStore();
+  const copied = store.get(copiedElementStylesAtom);
+  if (!copied) {
+    toast.info('No styles copied yet');
+    return false;
+  }
+
+  const selectedIds = store.get(selectedIdsAtom);
+  const selectedId = store.get(selectedNodeAtom);
+  const effectiveTargetIds = (targetIds && targetIds.length > 0)
+    ? targetIds
+    : (selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []));
+
+  if (effectiveTargetIds.length === 0) {
+    toast.info('Select one or more elements to paste styles onto');
+    return false;
+  }
+
+  const activeFilePath = store.get(activeFilePathAtom) || getActiveFilePath();
+  const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
+  const viewports = store.get(viewportsConfigAtom);
+  const vpWidth = viewports.find(v => v.id === interactingVp)?.width ?? 1440;
+  setStyleContext(activeFilePath, interactingVp, vpWidth);
+
+  const isComp = isComponentFilePath(activeFilePath);
+  const targetVariant = isComp && !isPrimaryViewport(interactingVp) ? interactingVp : null;
+  const effectiveContentEl = contentEl || getContentRoot() || document.body;
+  const snapshot = getNodesSnapshot();
+
+  for (const id of effectiveTargetIds) {
+    const targetNode = snapshot.get(id);
+    const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
+    const isMotionTarget = isMotionTransformTarget({ isComponentFile: isComp, node: targetNode });
+
+    const payload = prepareStylesForPaste(copied, effectiveTargetStyles, { isMotionTarget });
+    updateNodeStyles({ id, styles: payload, contentEl: effectiveContentEl });
+
+    // Border overlay transfer: recreate if copied, or remove if copied has inline border or no border
+    if (copied.borderOverlayCSS) {
+      queueMutation({ type: 'updateBorderOverlay', nodeId: id, afterCSS: copied.borderOverlayCSS, variant: targetVariant });
+      injectCanvasCSS(borderOverlaySelector(id, targetVariant), copied.borderOverlayCSS);
+    } else {
+      queueMutation({ type: 'removeBorderOverlay', nodeId: id, variant: targetVariant });
+      removeCanvasCSS(borderOverlaySelector(id, targetVariant));
+    }
+  }
+
+  flushNow();
+  const count = effectiveTargetIds.length;
+  toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);
+  trace.action('commands:paste-element-styles', {
+    count,
+    targetVariant,
+    hasOverlay: !!copied.borderOverlayCSS,
+  });
+  return true;
+}
+

@@ -34,6 +34,8 @@ import {
   wrapInFrame,
   wrapInLayout,
   unfoldChildren,
+  copyElementStylesCommand,
+  pasteElementStylesCommand,
 } from '@/canvas/commands';
 import {
   dispatchCopy,
@@ -63,7 +65,6 @@ import { previewModeAtom, shortcutsModalOpenAtom } from '@/code/stores/editor-st
 import { settingsOverlayOpenAtom } from '@/code/stores/website-settings-store';
 import { startOnboarding } from '@/editor/onboarding';
 import { flushNow, queueMutation } from '@/code/mutation/mutation-queue';
-import { copiedElementStylesAtom, extractCopyableStyles, prepareStylesForPaste, resolveEffectiveStyles } from '@/code/stores/context-menu-store';
 import { interactingViewportIdAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
 import { shareAsTemplate } from '@/backend/revyme-backend';
 import { projectFS } from '@/code/project/project-fs';
@@ -330,47 +331,11 @@ function executeCommand(commandId: string): void {
         toast.info('Select an element first');
         break;
       }
-      const targetNode = nodes.get(first);
-      if (!targetNode) break;
-      const interactingVp = store.get(interactingViewportIdAtom);
-      const effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
-      const stylesToCopy = extractCopyableStyles(effectiveStyles);
-      if (Object.keys(stylesToCopy).length === 0) {
-        toast.info('No copyable styles on selected element');
-        break;
-      }
-      store.set(copiedElementStylesAtom, {
-        styles: stylesToCopy,
-        sourceNodeId: first,
-        sourceNodeName: targetNode.name || targetNode.type,
-      });
-      toast.success(`Copied styles from ${targetNode.name || targetNode.type}`);
+      copyElementStylesCommand(first);
       break;
     }
     case 'paste-styles': {
-      const copied = store.get(copiedElementStylesAtom);
-      if (!copied) {
-        toast.info('No styles copied yet');
-        break;
-      }
-      if (selected.length === 0) {
-        toast.info('Select one or more elements to paste styles onto');
-        break;
-      }
-      const effectiveContentEl = contentEl || document.body;
-      const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
-      const activeFilePath = store.get(activeFilePathAtom);
-      const viewports = store.get(viewportsConfigAtom);
-      const vpWidth = viewports.find(v => v.id === interactingVp)?.width ?? 1440;
-      setStyleContext(activeFilePath, interactingVp, vpWidth);
-      for (const id of selected) {
-        const targetNode = nodes.get(id);
-        const effectiveTargetStyles = resolveEffectiveStyles(targetNode, interactingVp);
-        const payload = prepareStylesForPaste(copied.styles, effectiveTargetStyles);
-        updateNodeStyles({ id, styles: payload, contentEl: effectiveContentEl });
-      }
-      flushNow();
-      toast.success(`Pasted styles to ${selected.length > 1 ? `${selected.length} elements` : 'element'}`);
+      pasteElementStylesCommand(selected, contentEl);
       break;
     }
     case 'delete':
