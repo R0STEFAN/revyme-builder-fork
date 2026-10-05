@@ -1207,10 +1207,11 @@ export default function Canvas() {
     trace.action('canvas:selection-box-change', { count: ids.length, ids, vpId });
     setSelectedIds(ids);
     if (ids.length > 0 && vpId) setInteractingViewport(vpId);
+    if (ids.length > 0) setLeftPanel('layers');
     setMarqueeSpread(ids.length > 0 ? { sig: marqueeSelectionSig(ids), byNode: viewportsByNode } : null);
     // Cancel the deferred deselect — selection box is handling selection
     mouseControllerRef.current?.cancelEmptyCanvasClick();
-  }, [setSelectedIds, setInteractingViewport, setMarqueeSpread]);
+  }, [setSelectedIds, setInteractingViewport, setMarqueeSpread, setLeftPanel]);
 
   // Wheel + middle-mouse pan: moved to useCanvasTransform above.
 

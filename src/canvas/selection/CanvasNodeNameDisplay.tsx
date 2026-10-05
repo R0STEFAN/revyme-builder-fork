@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { nodesAtom, selectedIdsAtom, canvasInteractingAtom, isComponentFileAtom } from '@/code/stores/store';
+import { leftPanelAtom } from '@/code/stores/left-panel-store';
 import { useLiveNode, useLiveNodesMap } from '@/code/stores/node-family';
 import { contextMenuAtom } from '@/code/stores/context-menu-store';
 import { shapeEditingIdAtom, shapeEditCommitPendingAtom } from '@/code/stores/shape-edit-store';
@@ -189,6 +190,7 @@ function NameDisplay({ nodeId, vpId }: LabelProps) {
   const selectedIds = useAtomValue(selectedIdsAtom);
   const setSelectedIds = useSetAtom(selectedIdsAtom);
   const setContextMenu = useSetAtom(contextMenuAtom);
+  const setLeftPanel = useSetAtom(leftPanelAtom);
   const isComponentFile = useAtomValue(isComponentFileAtom);
   // When a variant root label is clicked, switch the interacting
   // viewport to that variant — otherwise clicking variant-1's "Frame"
@@ -421,6 +423,7 @@ function NameDisplay({ nodeId, vpId }: LabelProps) {
         } else {
           setSelectedIds([nodeId]);
         }
+        setLeftPanel('layers');
         trace.action('canvas-node-name:click', { nodeId, vpId, shift: e.shiftKey });
       }}
       onContextMenu={(e) => {
@@ -437,6 +440,7 @@ function NameDisplay({ nodeId, vpId }: LabelProps) {
         // already selected keep the selection as-is (don't collapse a multi-select
         // and never unselect); otherwise select just this node.
         setSelectedIds((prev) => (prev.includes(nodeId) ? prev : [nodeId]));
+        setLeftPanel('layers');
         setContextMenu({ show: true, x: e.clientX, y: e.clientY, nodeId });
         trace.action('canvas-node-name:contextmenu', { nodeId, vpId });
       }}

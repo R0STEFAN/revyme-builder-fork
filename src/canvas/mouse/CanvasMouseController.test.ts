@@ -144,6 +144,7 @@ import {
 } from '@/canvas/node-ops';
 import { codeAtom } from '@/code/stores/store';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { leftPanelAtom } from '@/code/stores/left-panel-store';
 import { projectFS } from '@/code/project/project-fs';
 import { CanvasMouseController } from './CanvasMouseController';
 
@@ -208,7 +209,7 @@ function makeController(storeOverride?: ReturnType<typeof createStore>) {
     startTextEdit: vi.fn(),
     commitTextEdit: vi.fn(),
     openCmsEditor: vi.fn(),
-    setLeftPanel: vi.fn(),
+    setLeftPanel: vi.fn((p: string) => store.set(leftPanelAtom, p as any)),
     setToolMode: vi.fn((m: string) => store.set(toolModeAtom, m as any)),
   };
 
@@ -537,5 +538,48 @@ describe('CanvasMouseController — CMS-bound text double-click', () => {
 
     expect(opts.openCmsEditor).not.toHaveBeenCalled();
     expect(opts.startTextEdit).not.toHaveBeenCalled();
+  });
+
+  describe('auto-switch left panel to layers on element click', () => {
+    test('clicking an element when on insert panel switches left panel to layers', () => {
+      const { controller, store, opts } = makeController();
+      store.set(leftPanelAtom, 'insert');
+
+      controller.handleNodeMouseDown('some-card', makeMouseEvent(), 'desktop');
+
+      expect(opts.setLeftPanel).toHaveBeenCalledWith('layers');
+      expect(store.get(leftPanelAtom)).toBe('layers');
+    });
+
+    test('clicking an ALREADY selected element when on media panel switches to layers', () => {
+      const { controller, store, opts } = makeController();
+      store.set(selectedIdsAtom, ['some-card']);
+      store.set(leftPanelAtom, 'media');
+
+      controller.handleNodeMouseDown('some-card', makeMouseEvent(), 'desktop');
+
+      expect(opts.setLeftPanel).toHaveBeenCalledWith('layers');
+      expect(store.get(leftPanelAtom)).toBe('layers');
+    });
+
+    test('clicking an element when on pages-layers (Pages tab) switches to layers', () => {
+      const { controller, store, opts } = makeController();
+      store.set(leftPanelAtom, 'pages-layers');
+
+      controller.handleNodeMouseDown('some-card', makeMouseEvent(), 'desktop');
+
+      expect(opts.setLeftPanel).toHaveBeenCalledWith('layers');
+      expect(store.get(leftPanelAtom)).toBe('layers');
+    });
+
+    test('clicking an element when already on layers does not call setLeftPanel again', () => {
+      const { controller, store, opts } = makeController();
+      store.set(leftPanelAtom, 'layers');
+
+      controller.handleNodeMouseDown('some-card', makeMouseEvent(), 'desktop');
+
+      expect(opts.setLeftPanel).not.toHaveBeenCalled();
+      expect(store.get(leftPanelAtom)).toBe('layers');
+    });
   });
 });

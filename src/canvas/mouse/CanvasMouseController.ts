@@ -516,6 +516,16 @@ export class CanvasMouseController {
     // through `handleMouseDown`'s call. Same reason; see
     // `commitFocusedPanelInput`.
     commitFocusedPanelInput();
+
+    // If the left panel is anywhere other than Layers, switch to 'layers' so
+    // the clicked element is immediately visible in the tree.
+    const currentPanel = this.store.get(leftPanelAtom);
+    if (currentPanel !== 'layers') {
+      this.opts.setLeftPanel('layers');
+      this.store.set(leftPanelAtom, 'layers');
+      trace.action('canvas:auto-switch-to-layers', { from: currentPanel, nodeId });
+    }
+
     // Any locked template node click → select the whole viewport (same as
     // clicking the viewport header). The template is merged onto the page root,
     // so the viewport IS `root` — redirectLayoutNodeToViewport returns 'root'

@@ -59,7 +59,7 @@ export const autoPanSpeedAtom = atomWithStorage<AutoPanSpeed>(
 /** Auto focus layers: when ON, selecting a node also opens the
  *  Pages & Layers panel and scrolls the matching layer into view. */
 export const autoFocusLayersAtom = atomWithStorage<boolean>(
-  'revyme:prefs:autoFocusLayers', false,
+  'revyme:prefs:autoFocusLayers', true,
 );
 
 /** Show rulers: when ON, horizontal + vertical rulers render along
