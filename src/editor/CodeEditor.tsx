@@ -28,14 +28,20 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { trace } from "../shared/debug-trace";
 import { useIsDark } from "@/shared/useIsDark";
 import NameInputModal from "@/editor/ui/NameInputModal";
-import { userAtom } from "@/backend/user-store";
+import { triggerAutosave, flushSaveNow } from "@/backend/autosave";
+import { saveStatusAtom } from "@/backend/save-store";
+import { toast } from "sonner";
 import type * as monaco from "monaco-editor";
 
-// Only the admin account may edit the generated source directly — everyone
-// else is view-only, because the canvas resolves this code in a very
-// opinionated way and hand edits would corrupt that resolution. Admin status
-// comes from the server (`user.isAdmin`, mirroring the `ADMIN_EMAILS` env
-// allowlist) — never hardcode an address here.
+function getLanguageForPath(filePath: string): string {
+  if (filePath.endsWith('.tsx') || filePath.endsWith('.ts')) return 'typescript';
+  if (filePath.endsWith('.jsx') || filePath.endsWith('.js')) return 'javascript';
+  if (filePath.endsWith('.json')) return 'json';
+  if (filePath.endsWith('.css')) return 'css';
+  if (filePath.endsWith('.html')) return 'html';
+  if (filePath.endsWith('.md')) return 'markdown';
+  return 'typescript';
+}
 
 // ─── File Tree ───────────────────────────────────────────────────────────────
 
@@ -218,19 +224,15 @@ export default function CodeEditor() {
   // "New File" path prompt — NameInputModal replaces window.prompt.
   const [newFileModalOpen, setNewFileModalOpen] = useState(false);
 
-  // Admin-only WRITE toggle. Default view-only for everyone; an admin can flip
-  // it on to hand-edit the generated source. Non-admins never see the toggle
-  // and the editor stays read-only.
-  const currentUser = useAtomValue(userAtom);
-  const isAdmin = !!currentUser?.isAdmin;
-  const [writeEnabled, setWriteEnabled] = useState(false);
-  // Code override files (`overrides/*.tsx`) are user-authored code, not
-  // generated source — always editable.
+  // Editable by default unless an active agent run holds a lock on this branch
   const [viewRequest, setViewRequest] = useAtom(codeEditorViewRequestAtom);
-  // Never while an agent run holds this branch — a hand edit would land on
-  // the source the run is composing against.
   const runLocked = useActiveBranchLocked();
-  const canWriteGenerated = isAdmin && writeEnabled && !runLocked;
+  const canWrite = !runLocked;
+
+  // Save status & dirty tracking
+  const globalSaveStatus = useAtomValue(saveStatusAtom);
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Build file tree from projectFS
   const allFiles = projectFS.listFiles();
@@ -250,12 +252,23 @@ export default function CodeEditor() {
     setViewPath(viewRequest);
     setViewRequest(null);
   }, [viewRequest, setViewRequest]);
-  const canWrite = (canWriteGenerated || viewPath.startsWith('overrides/')) && !runLocked;
-  // Apply read-only imperatively on toggle — the options prop covers mount, this
-  // guarantees a live Write flip takes effect on the mounted editor instance.
+
+  // Apply read-only imperatively on lock changes
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly: !canWrite, domReadOnly: !canWrite });
   }, [canWrite]);
+
+  // When autosave finishes in the background, reflect saved state
+  useEffect(() => {
+    if (globalSaveStatus === 'saved' && isDirty && saveState !== 'saving') {
+      setIsDirty(false);
+      setSaveState('saved');
+      const timer = setTimeout(() => {
+        setSaveState((prev) => (prev === 'saved' ? 'idle' : prev));
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [globalSaveStatus, isDirty, saveState]);
   const isViewingActive = viewPath === activeFilePath;
   // Non-active files read straight from projectFS — the projectVersion
   // subscription above re-renders this on any FS change, keeping it fresh.
@@ -275,6 +288,8 @@ export default function CodeEditor() {
       trace.action("code-editor:view-file", { from: viewPath, to: filePath });
       lastSwitchRef.current = { fromPath: viewPath, fromCode: viewCode };
       setViewPath(filePath);
+      setIsDirty(false);
+      setSaveState('idle');
     },
     [viewPath, viewCode]
   );
@@ -327,8 +342,47 @@ export default function CodeEditor() {
     [activeFilePath, viewPath, setActiveFile, setSelectedIds, setUpdatingFromCanvas]
   );
 
-  const handleMount: OnMount = (editor) => {
+  const handleManualSave = useCallback(async () => {
+    if (!canWrite) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    const value = editor.getValue();
+
+    // Ensure latest code is pushed to activeCodeAtom or projectFS
+    if (isViewingActive) {
+      setCode(value);
+      triggerAsyncParse(value, setNodes);
+    } else {
+      modifyProjectFile(viewPath, () => value, { skipParseGate: true });
+    }
+
+    setSaveState('saving');
+    try {
+      await flushSaveNow();
+      setSaveState('saved');
+      setIsDirty(false);
+      const filename = viewPath.split('/').pop() || viewPath;
+      toast.success(`Saved ${filename}`);
+      setTimeout(() => {
+        setSaveState((prev) => (prev === 'saved' ? 'idle' : prev));
+      }, 2000);
+    } catch (err) {
+      setSaveState('idle');
+      toast.error('Failed to save code');
+      trace.error('code-editor:save-error', err);
+    }
+  }, [canWrite, isViewingActive, viewPath, setCode, setNodes]);
+
+  const handleManualSaveRef = useRef(handleManualSave);
+  handleManualSaveRef.current = handleManualSave;
+
+  const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+
+    // Cmd+S / Ctrl+S → save shortcut
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      handleManualSaveRef.current();
+    });
   };
 
   // Track previous selectedId to detect actual selection changes (vs code-only changes)
@@ -482,7 +536,20 @@ export default function CodeEditor() {
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
           </svg>
-          <span>{viewPath}</span>
+          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{viewPath}</span>
+          {isDirty && (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                display: "inline-block",
+                marginLeft: -2,
+              }}
+              title="Unsaved changes"
+            />
+          )}
           <span
             data-testid="code-editor-branch"
             data-branch={activeBranchId}
@@ -509,46 +576,107 @@ export default function CodeEditor() {
             <BranchIcon size={9} />
             {activeBranchId === MAIN_BRANCH_ID ? "main" : activeBranchId}
           </span>
-          {isAdmin && (
+          {runLocked ? (
+            <span
+              style={{
+                marginLeft: "auto",
+                fontSize: 11,
+                color: "var(--text-disabled)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              🔒 Locked by agent
+            </span>
+          ) : (
             <button
-              onClick={() => setWriteEnabled((v) => !v)}
-              title={
-                writeEnabled
-                  ? "Editing enabled (admin) — changes write to the generated source. Click to lock."
-                  : "Read-only. Click to enable editing (admin only)."
-              }
+              onClick={handleManualSave}
+              disabled={!canWrite || (!isDirty && saveState === 'idle')}
+              title="Save code (Ctrl+S / Cmd+S). Edits are autosaved automatically."
               style={{
                 marginLeft: "auto",
                 display: "flex",
                 alignItems: "center",
                 gap: 5,
-                padding: "2px 8px",
-                borderRadius: 6,
-                cursor: "pointer",
+                padding: "2px 10px",
+                borderRadius: 5,
+                cursor: (!canWrite || (!isDirty && saveState === 'idle')) ? "default" : "pointer",
                 border: "1px solid var(--border-light)",
-                background: writeEnabled ? "var(--accent)" : "transparent",
-                color: writeEnabled ? "#fff" : "var(--text-secondary)",
-                fontSize: 10,
+                background: saveState === 'saved'
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : isDirty
+                  ? "var(--accent)"
+                  : "transparent",
+                color: saveState === 'saved'
+                  ? "#22c55e"
+                  : isDirty
+                  ? "#ffffff"
+                  : "var(--text-secondary)",
+                opacity: (!canWrite || (!isDirty && saveState === 'idle')) ? 0.6 : 1,
+                fontSize: 11,
                 fontWeight: 600,
-                letterSpacing: 0.3,
-                textTransform: "uppercase",
+                letterSpacing: 0.2,
+                transition: "all 0.15s ease",
               }}
             >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: writeEnabled ? "#fff" : "var(--text-disabled)",
-                }}
-              />
-              Write
+              {saveState === 'saving' ? (
+                <>
+                  <svg
+                    className="animate-spin"
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  >
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" />
+                  </svg>
+                  <span>Saving…</span>
+                </>
+              ) : saveState === 'saved' ? (
+                <>
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Saved</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                  <span>Save</span>
+                </>
+              )}
             </button>
           )}
         </div>
         <Editor
           height="100%"
-          defaultLanguage="javascript"
+          language={getLanguageForPath(viewPath)}
           theme={isDark ? "vs-dark" : "vs"}
           value={viewCode}
           onMount={handleMount}
@@ -576,14 +704,17 @@ export default function CodeEditor() {
               return;
             }
             lastSwitchRef.current = null;
+            setIsDirty(true);
+            setSaveState('idle');
+            triggerAutosave();
+
             if (isViewingActive) {
               setCode(value);
               // Parse in Web Worker (background thread) — canvas will update when result arrives
               triggerAsyncParse(value, setNodes);
             } else {
               // Viewing a NON-active file (view decoupled from canvas):
-              // admin Write edits land on THAT file via the safe
-              // read-modify-write path — never through codeAtom, which
+              // safe read-modify-write path — never through codeAtom, which
               // belongs to the canvas's active file. skipParseGate: a human
               // deliberately saving WIP code is the one legitimate way a
               // broken file may be written; generator writes stay gated.
@@ -599,16 +730,11 @@ export default function CodeEditor() {
             tabSize: 2,
             padding: { top: 8 },
             automaticLayout: true,
-            // READ-ONLY by default: the canvas resolves this source in a very
-            // opinionated way (variant/slot/responsive codegen). Hand edits
-            // would silently break that resolution, so the editor is view-only —
-            // select, copy, scroll, but no typing/deleting. Only an admin who
-            // has flipped the Write toggle (canWrite) may edit. `domReadOnly`
-            // also blocks any DOM-level contentEditable edit; `readOnlyMessage`
-            // explains why (shown only while read-only).
             readOnly: !canWrite,
             domReadOnly: !canWrite,
-            readOnlyMessage: { value: 'Read-only — edit visually on the canvas; this code is generated.' },
+            readOnlyMessage: runLocked
+              ? { value: 'Editing is locked while an agent is modifying this branch.' }
+              : undefined,
           }}
         />
       </div>

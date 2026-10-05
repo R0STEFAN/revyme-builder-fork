@@ -599,12 +599,14 @@ export default function ContextMenu() {
     close();
   };
 
-  const handleCreateFrame = () => {
-    const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
-    if (ids.length === 0) return;
+  const handleWrap = () => {
+    const targetIds = (nodeId && !selectedIds.includes(nodeId))
+      ? [nodeId]
+      : (selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []));
+    if (targetIds.length === 0) return;
     const contentEl = getContentEl();
     if (!contentEl) return;
-    const frameId = wrapInFrame(ids, getNodesSnapshot(), contentEl);
+    const frameId = wrapInFrame(targetIds, getNodesSnapshot(), contentEl);
     if (frameId) {
       // Force the queued addNode + moves to land in JSX before we set
       // selection — otherwise the panel reads stale node data.
@@ -613,13 +615,16 @@ export default function ContextMenu() {
     }
     close();
   };
+  const handleCreateFrame = handleWrap;
 
   const handleCreateLayout = () => {
-    const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
-    if (ids.length === 0) return;
+    const targetIds = (nodeId && !selectedIds.includes(nodeId))
+      ? [nodeId]
+      : (selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []));
+    if (targetIds.length === 0) return;
     const contentEl = getContentEl();
     if (!contentEl) return;
-    const frameId = wrapInLayout(ids, getNodesSnapshot(), contentEl);
+    const frameId = wrapInLayout(targetIds, getNodesSnapshot(), contentEl);
     if (frameId) {
       flushNow();
       setSelectedIds([frameId]);
@@ -946,10 +951,10 @@ export default function ContextMenu() {
         <Separator />
 
         {/* Structure */}
-        <MenuItem label="Create Layout" shortcut="Shift+A" onClick={handleCreateLayout} disabled={!nodeId} />
-        <MenuItem label="Create Frame" shortcut="Shift+Alt+A" onClick={handleCreateFrame} disabled={!nodeId} />
+        <MenuItem label="Wrap" shortcut="Shift+Alt+A" onClick={handleWrap} disabled={!nodeId} />
+        <MenuItem label="Wrap in Layout" shortcut="Shift+A" onClick={handleCreateLayout} disabled={!nodeId} />
         {!isInstance && (
-          <MenuItem label="Unfold Children" shortcut="Ctrl+Bksp" onClick={handleUnfold} disabled={!hasChildren} />
+          <MenuItem label="Unwrap" shortcut="Ctrl+Bksp" onClick={handleUnfold} disabled={!hasChildren} />
         )}
 
         <Separator />

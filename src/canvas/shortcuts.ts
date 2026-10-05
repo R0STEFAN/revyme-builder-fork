@@ -300,7 +300,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
   }}));
 
   // ─── Structure Operations ─────────────────────────────────────
-  cleanups.push(keyboard.register({ key: 'a', shift: true, label: 'Create Layout', category: 'structure', handler: () => {
+  cleanups.push(keyboard.register({ key: 'a', shift: true, label: 'Wrap in Layout', category: 'structure', handler: () => {
     const ids = selectedIdsRef.current.length > 0
       ? selectedIdsRef.current
       : (selectedIdRef.current ? [selectedIdRef.current] : []);
@@ -310,7 +310,18 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     if (frameId) { flushNow(); setSelectedIds([frameId]); }
   }}));
 
-  cleanups.push(keyboard.register({ key: 'a', shift: true, alt: true, label: 'Create Frame', category: 'structure', handler: () => {
+  cleanups.push(keyboard.register({ key: 'a', shift: true, alt: true, label: 'Wrap', category: 'structure', handler: () => {
+    const ids = selectedIdsRef.current.length > 0
+      ? selectedIdsRef.current
+      : (selectedIdRef.current ? [selectedIdRef.current] : []);
+    const contentEl = contentRef.current;
+    if (ids.length === 0 || !contentEl) return;
+    const frameId = wrapInFrame(ids, nodesRef.current, contentEl, handleNodeMouseDown);
+    if (frameId) { flushNow(); setSelectedIds([frameId]); }
+  }}));
+
+  // Also support Alt+W for quick Wrap
+  cleanups.push(keyboard.register({ key: 'w', alt: true, label: 'Wrap', category: 'structure', hideFromHelp: true, handler: () => {
     const ids = selectedIdsRef.current.length > 0
       ? selectedIdsRef.current
       : (selectedIdRef.current ? [selectedIdRef.current] : []);
