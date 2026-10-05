@@ -70,7 +70,7 @@ function roundPxDisplay(v: string | undefined | null): string | undefined {
 const UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'px', label: 'px' },
   { value: '%', label: '%' },
-  { value: 'auto', label: 'auto' },
+  { value: 'auto', label: 'fit' },
   { value: 'vw', label: 'vw' },
   { value: 'vh', label: 'vh' },
 ];
@@ -781,13 +781,9 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
   // auto available on the vector set although it should act like the design
   // component"). Gate on what the option MEANS, not on how the node renders.
   const isIconSetInstance = isVectorSetComponentFile(selfNodeSub?.componentFile);
-  const isCodeComponentInstance = selfNodeSub?.isCodeComponent === true && !isIconSetInstance;
   const disableAutoForCode = useCallback(
-    (opts: { value: string; label: string; disabled?: boolean }[]) =>
-      isCodeComponentInstance
-        ? opts.map(o => o.value === 'auto' ? { ...o, disabled: true } : o)
-        : opts,
-    [isCodeComponentInstance],
+    (opts: { value: string; label: string; disabled?: boolean }[]) => opts,
+    [],
   );
 
   const widthUnitOptions = useMemo(() => {
@@ -1034,7 +1030,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // re-enabled an inset somehow.
     if (aspectRatioNum && !inset.horizontalInset) {
       const trimmed = (v || '').trim().toLowerCase();
-      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fill') {
+      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill') {
         // Auto/fill paths flow through the unit handler instead — fall
         // through to the normal write here to avoid double-handling.
         onUpdate('width', v);
@@ -1146,18 +1142,6 @@ if (heightIsAuto) {
     const simVpHeight = estimatedVpHeight(simVpWidth);
     if (toUnit === 'auto') {
       const selfNode = getNodesSnapshot().get(nodeId);
-      // CODE COMPONENT instance: auto is not a legal state (the option is
-      // greyed out in the dropdown; this guards keyboard/legacy paths).
-      // Removing the override would leave the wrapper sizeless → collapse.
-      // An ICON SET carries `isCodeComponent` only so it LIVE-RENDERS instead of
-      // being expanded inline; it paints an SVG with an intrinsic size, so auto
-      // resolves. Enabling the dropdown option alone did nothing because this
-      // guard still refused the write (user report 2026-09-21) — the two
-      // decisions have to agree, so both ask the same question.
-      if (selfNode?.isCodeComponent && !isVectorSetComponentFile(selfNode.componentFile)) {
-        trace.action('size:unit-change-blocked', { label: 'W', reason: 'code-component-fixed-only' });
-        return;
-      }
       // VECTOR SET: locked aspect — derive this dimension from the other rather
       // than hugging the variant's intrinsic size. See vectorSetFitSize.
       // Exiting main-axis FILL: neutralise the grow flex in the SAME write —
@@ -1172,7 +1156,7 @@ if (heightIsAuto) {
       // word per line). Instead remove the override (write '') so the master's
       // own width resolves through the `...style` spread — design-tool parity. Also
       // skip layout injection (the master owns its internal layout).
-      if (selfNode?.componentFile != null) {
+      if (selfNode?.componentFile != null && !selfNode.isCodeComponent) {
         // Hug the master via a dedicated mutation — the generic '' write gets
         // variant-scoped on a replica into an empty-string OVERRIDE
         // (`cond ? '' : …`), which still clobbers the master's size (the
@@ -1255,7 +1239,7 @@ if (heightIsAuto) {
     //     old builder's delta-based math.
     if (aspectRatioNum && !inset.verticalInset) {
       const trimmed = (v || '').trim().toLowerCase();
-      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fill') {
+      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill') {
         onUpdate('height', v);
         return;
       }
@@ -1350,13 +1334,6 @@ if (heightIsAuto) {
     const simVpHeight = estimatedVpHeight(simVpWidth);
     if (toUnit === 'auto') {
       const selfNode = getNodesSnapshot().get(nodeId);
-      // CODE COMPONENT instance: fixed-only — see handleWidthUnitChange.
-      // Icon sets are exempt for the same reason as the width branch above:
-      // the flag means "live-rendered", not "no intrinsic size".
-      if (selfNode?.isCodeComponent && !isVectorSetComponentFile(selfNode.componentFile)) {
-        trace.action('size:unit-change-blocked', { label: 'H', reason: 'code-component-fixed-only' });
-        return;
-      }
       // VECTOR SET: locked aspect — derive this dimension from the other rather
       // than hugging the variant's intrinsic size. See vectorSetFitSize.
       // Exiting main-axis FILL: clear the grow flex in the same write — see
@@ -1365,7 +1342,7 @@ if (heightIsAuto) {
       // Component instance: hug the master's natural height — remove the
       // override (write '') instead of forcing min-content, and skip layout
       // injection. See handleWidthUnitChange for the full rationale.
-      if (selfNode?.componentFile != null) {
+      if (selfNode?.componentFile != null && !selfNode.isCodeComponent) {
         // Hug the master — same contract as the width branch above.
         const activeVar = activeComponentVariant && activeComponentVariant !== 'default' ? activeComponentVariant : null;
         const interactVp = viewportsConfig.find(v => v.id === getInteractingViewport().vpId);
@@ -1673,7 +1650,7 @@ if (heightIsAuto) {
               parentSize={computed.parentHeight}
               unitOptions={[
                 { value: 'px', label: 'px' },
-                { value: 'auto', label: 'auto' },
+                { value: 'auto', label: 'fit' },
               ]}
               currentUnit={isPxMode ? 'px' : 'auto'}
               disabled={!isPxMode}

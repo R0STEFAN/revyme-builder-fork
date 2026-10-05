@@ -257,7 +257,7 @@ export const FIT_SIZE = 'min-content';
  *  values — never for `cursor`/`margin`/`overflow`/flex `0 0 auto`. */
 export function isFitSize(v: string | undefined | null): boolean {
   if (!v) return false;
-  return v === 'min-content' || v === 'auto' || v === 'fit-content' || v === 'max-content';
+  return v === 'min-content' || v === 'auto' || v === 'fit-content' || v === 'max-content' || v === 'fit';
 }
 
 // ─── Grid ──────────────────────────────────────────────────────────────────

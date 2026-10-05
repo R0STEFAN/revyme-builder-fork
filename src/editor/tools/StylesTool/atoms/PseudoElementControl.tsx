@@ -82,7 +82,7 @@ const DIMENSION_UNIT_OPTIONS = [
   { value: 'rem', label: 'rem' },
   { value: 'vw', label: 'vw' },
   { value: 'vh', label: 'vh' },
-  { value: 'auto', label: 'auto' },
+  { value: 'auto', label: 'fit' },
 ];
 
 const BLEND_MODE_OPTIONS = [
