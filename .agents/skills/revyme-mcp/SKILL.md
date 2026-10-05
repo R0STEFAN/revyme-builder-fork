@@ -55,12 +55,49 @@ Use `add_node`:
 - `text`: Plain text only (no HTML).
 - Place text styles (`fontSize`, `color`, `textAlign`) on the text element itself, not on wrapper frames.
 
-### C. Adding Motion & Animations
-- **Text Reveal (Character/Word Stagger)**:
-  Use `set_text_effect`:
+### C. Adding Motion & Animations (Choreography & Springs)
+Always apply animations using Revyme's native semantic tools (`set_motion`, `set_text_effect`, `set_smooth_scroll`) rather than raw code. This ensures they are interactive on the canvas and editable in the builder's GUI.
+
+- **Physics-Based Transitions (Springs)**:
+  Avoid linear animations. Prefer realistic springs:
+  - *Snappy Buttons/Taps*: `transition: { "type": "spring", "stiffness": 400, "damping": 28 }`
+  - *Smooth Cards/Popups*: `transition: { "type": "spring", "stiffness": 300, "damping": 24 }`
+  - *Gentle Section Entrance*: `transition: { "type": "spring", "stiffness": 240, "damping": 26 }`
+
+- **Interactive Hover & Tap**:
+  Keep hover scale subtle (`1.02` - `1.04`) with slight vertical elevation:
   ```json
   {
-    "node_id": "element-id",
+    "tool": "set_motion",
+    "input": {
+      "node_id": "card-1",
+      "effect": "hover",
+      "targets": { "scale": 1.025, "y": -6, "boxShadow": "0 20px 25px -5px rgba(0,0,0,0.15)" },
+      "transition": { "type": "spring", "stiffness": 320, "damping": 22 }
+    }
+  }
+  ```
+
+- **Staggered Multi-Card Entrances**:
+  When introducing cards or features, stagger them by `0.1s`:
+  ```json
+  {
+    "tool": "batch",
+    "input": {
+      "actions": [
+        { "tool": "set_motion", "input": { "node_id": "card-1", "effect": "appear", "from": { "opacity": 0, "y": 30 }, "transition": { "type": "spring", "stiffness": 260, "damping": 24, "delay": 0 } } },
+        { "tool": "set_motion", "input": { "node_id": "card-2", "effect": "appear", "from": { "opacity": 0, "y": 30 }, "transition": { "type": "spring", "stiffness": 260, "damping": 24, "delay": 0.1 } } },
+        { "tool": "set_motion", "input": { "node_id": "card-3", "effect": "appear", "from": { "opacity": 0, "y": 30 }, "transition": { "type": "spring", "stiffness": 260, "damping": 24, "delay": 0.2 } } }
+      ]
+    }
+  }
+  ```
+
+- **Cinematic Text Reveals**:
+  Use `set_text_effect` with `mask: true` for split-text entrance:
+  ```json
+  {
+    "node_id": "hero-title",
     "preset": "Slide Up",
     "split": "character",
     "stagger": 0.035,
@@ -68,16 +105,13 @@ Use `add_node`:
     "trigger": "appear"
   }
   ```
-- **Parallax Speed**:
-  Use `set_motion` with `effect: "speed"`:
-  - `speed < 100`: Lags behind scroll (moves down relative to viewport).
-  - `speed > 100`: Moves faster than scroll (moves up relative to viewport).
-- **Hover & Tap**:
-  Use `set_motion` with `effect: "hover"` and `targets: { "scale": 1.05, "y": -8 }`.
-- **Entrance on Scroll**:
-  Use `set_motion` with `effect: "appear"`, `from: { "opacity": 0, "y": 30 }`.
-- **Smooth Scroll**:
-  Use `set_smooth_scroll` with `enabled: true, intensity: 14`.
+
+- **Scroll Parallax & Scrubbing**:
+  - *Parallax Speed*: `speed: 125` (moves up faster), `speed: 75` (lags behind).
+  - *Scroll Transform*: `effect: "transform"`, `trigger: "layerInView"`, `from: { "opacity": 0.3, "scale": 0.9 }`, `to: { "opacity": 1, "scale": 1 }`.
+
+- **Smooth Momentum Scrolling**:
+  Enable Lenis physics: `set_smooth_scroll` with `enabled: true, intensity: 14`.
 
 ### D. Managing CMS
 - To create a collection: `cms_create_collection` with `name: "Projects"`.
@@ -85,4 +119,5 @@ Use `add_node`:
 - To insert data: `cms_add_items`.
 
 ### E. References
-Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all 168 available semantic tools.
+- Read [references/motion-choreography.md](./references/motion-choreography.md) for full animation physics, springs, easing presets, and choreography recipes.
+- Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all 168 available semantic tools.
