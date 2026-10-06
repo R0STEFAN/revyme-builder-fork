@@ -104,7 +104,7 @@ Revyme supports bi-directional control from AI coding agents (Antigravity, Claud
 ```
 ┌─────────────────────────┐         Stdio MCP          ┌──────────────────────────────┐
 │  AI Agent (Antigravity/ │ ◄────────────────────────► │      Revyme MCP Bridge       │
-│   Claude / Cursor)      │                            │  (scripts/mcp-bridge-server) │
+│   Claude / Cursor)      │                            │     (server/mcp-server)      │
 └─────────────────────────┘                            └──────────────┬───────────────┘
                                                                       │ SSE: /bridge/events
                                                                       │ POST: /bridge/result
@@ -125,7 +125,7 @@ Revyme supports bi-directional control from AI coding agents (Antigravity, Claud
      "mcpServers": {
        "revyme-builder": {
          "command": "npx",
-         "args": ["tsx", "scripts/mcp-bridge-server.ts"],
+         "args": ["tsx", "server/mcp-server.ts"],
          "cwd": "/path/to/revyme-builder-fork"
        }
      }

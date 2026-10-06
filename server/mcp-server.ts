@@ -1,4 +1,4 @@
-import { mcpBridge } from '../server/mcp-bridge';
+import { mcpBridge } from './mcp-bridge';
 
 const PORT = process.env.REVYME_MCP_PORT ? parseInt(process.env.REVYME_MCP_PORT, 10) : 8082;
 

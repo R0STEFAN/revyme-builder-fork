@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "concurrently \"vite\" \"vite --config vite.sandbox.config.ts\" \"vite --config vite.preview.config.ts\"",
-    "mcp": "tsx scripts/mcp-bridge-server.ts",
+    "mcp": "tsx server/mcp-server.ts",
     "dev:standalone": "vite",
     "build": "vite build",
     "build:sandbox": "vite build --config vite.sandbox.config.ts",
