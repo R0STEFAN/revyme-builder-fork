@@ -7,7 +7,17 @@ import { useAtomValue } from 'jotai';
 import { ToolSelect, ControlLabel, ControlActionRow, ToolSegmentedControl, ToolDivider } from '../../../controls';
 import { useToolPopup } from '../../../ui/ToolPopup';
 import { queueMutation } from '@/code/mutation/mutation-queue';
-import { type ScrollAnimConfig, type ScrollTrigger, detectTriggerFromOffset, detectSectionViewportFromOffset, detectLayerRangeFromOffset, detectLayerExitFromOffset } from '@/code/generation/generator-motion';
+import {
+  type ScrollAnimConfig,
+  type ScrollTrigger,
+  detectTriggerFromOffset,
+  detectSectionViewportFromOffset,
+  detectLayerRangeFromOffset,
+  detectLayerExitFromOffset,
+  detectScrollStartFromOffset,
+  detectScrollEndFromOffset,
+  buildScrollOffset,
+} from '@/code/generation/generator-motion';
 import { parseRange } from '@/code/parsing/scroll-parser';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { getAnchorsForPage } from '../../LinkTool/LinkUrlControl';
@@ -18,6 +28,7 @@ import { TransitionCurveIcon, summarizeTransition } from '../CurvePreview';
 
 import MotionPropsEditor from './MotionPropsEditor';
 import { expediteStableAtomSync } from '@/canvas/hooks/useStableAtomSync';
+import { findNodeComputedStyle } from '@/canvas/node-ops';
 
 /** Parse a raw `useSpring` config object string from the source into the
  *  flat-string-map transition shape the Transition panel uses. Supports
@@ -127,6 +138,8 @@ function buildScrollConfig(
   sectionViewport: 'top' | 'middle' | 'bottom',
   layerRange: string,
   layerExit: boolean,
+  scrollStart?: 'top' | 'middle' | 'bottom',
+  scrollEnd?: 'top' | 'middle' | 'bottom',
 ): ScrollAnimConfig {
   // Multi-section: From (stops[0]) + N section milestones (stops[1..N])
   if (trigger === 'sectionInView' && stops.length >= 3) {
@@ -138,6 +151,8 @@ function buildScrollConfig(
       nodeId, trigger,
       sectionId: '',
       sectionViewport,
+      scrollStart,
+      scrollEnd,
       sections,
       fromProps: stops[0].props,
       stops: stops.map(s => ({ progress: s.progress, props: s.props })),
@@ -153,6 +168,8 @@ function buildScrollConfig(
     nodeId, trigger,
     sectionId: effectiveSectionId,
     sectionViewport,
+    scrollStart,
+    scrollEnd,
     // Range only applies to layerInView; pass it unconditionally — the
     // generator ignores it for other triggers.
     layerRange: trigger === 'layerInView' ? layerRange : undefined,
@@ -181,6 +198,8 @@ interface StopEditorProps {
   /** Same idea for sectionViewport — without it, every per-stop write
    *  would reset the viewport to the generator default. */
   sectionViewportRef: React.MutableRefObject<'top' | 'middle' | 'bottom'>;
+  scrollStartRef: React.MutableRefObject<'top' | 'middle' | 'bottom'>;
+  scrollEndRef: React.MutableRefObject<'top' | 'middle' | 'bottom'>;
   /** Layer-in-View range (0–1). Threaded the same reason as the above —
    *  per-stop writes need to preserve the current range or they'd reset
    *  to the generator default on every slider tweak. */
@@ -208,7 +227,7 @@ interface StopEditorProps {
   onStopsChange?: (stops: ScrollStop[]) => void;
 }
 
-function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite, onStopsChange }: StopEditorProps) {
+function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, scrollStartRef, scrollEndRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite, onStopsChange }: StopEditorProps) {
   const handleChange = useCallback((newProps: Record<string, string>) => {
     const newStops = [...stopsRef.current];
     newStops[stopIndex] = { ...newStops[stopIndex], props: newProps };
@@ -273,10 +292,12 @@ function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, se
       sectionViewportRef.current,
       layerRangeRef.current,
       layerExitRef.current,
+      scrollStartRef.current,
+      scrollEndRef.current,
     );
     expediteStableAtomSync();
     queueMutation({ type: 'updateScrollAnim', config });
-  }, [stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite]);
+  }, [stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, scrollStartRef, scrollEndRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite]);
 
   // Collect keys from ALL stops so all stops show the same controls
   const allStopKeys = new Set<string>();
@@ -430,6 +451,19 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
   const sectionViewportRef = useRef(sectionViewport);
   sectionViewportRef.current = sectionViewport;
 
+  // Start and End scroll scrub anchors (where in the viewport scrub starts and completes)
+  const [scrollStart, setScrollStart] = useState<'top' | 'middle' | 'bottom'>(
+    detectScrollStartFromOffset(scrollData?.source?.offset ?? null),
+  );
+  const scrollStartRef = useRef(scrollStart);
+  scrollStartRef.current = scrollStart;
+
+  const [scrollEnd, setScrollEnd] = useState<'top' | 'middle' | 'bottom'>(
+    detectScrollEndFromOffset(scrollData?.source?.offset ?? null),
+  );
+  const scrollEndRef = useRef(scrollEnd);
+  scrollEndRef.current = scrollEnd;
+
   // Layer-in-View range (0–1 fraction of viewport scrolled until TO).
   // Default 0.3 = snappy (30% of viewport). The detect helper returns
   // null for legacy/full-pass-through offsets; fall back to default in
@@ -487,7 +521,16 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
     [activeFilePath],
   );
 
-  const writeToCode = useCallback((newStops: ScrollStop[], newTrigger: string, trans: Record<string, string>, secId?: string, vp?: 'top' | 'middle' | 'bottom', range?: string) => {
+  const writeToCode = useCallback((
+    newStops: ScrollStop[],
+    newTrigger: string,
+    trans: Record<string, string>,
+    secId?: string,
+    vp?: 'top' | 'middle' | 'bottom',
+    range?: string,
+    start?: 'top' | 'middle' | 'bottom',
+    end?: 'top' | 'middle' | 'bottom',
+  ) => {
     // Scroll ANIMATION "On Scroll" (layerInView) is direction-TRIGGERED (the reference):
     // the To animates in when scrolling in `direction`, reverts on opposite
     // (replay). Scroll TRANSFORM "On Scroll" is SCRUBBED (From→To tied to scroll
@@ -506,15 +549,19 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
     // filled). Scroll Transform authors an explicit From + To — so only
     // normalize-to-resting in animation mode.
     const finalStops = mode === 'animation' ? normalizeScrollStops(newStops, newTrigger) : newStops;
+    const effectiveStart = start ?? scrollStartRef.current;
+    const effectiveEnd = end ?? scrollEndRef.current;
     const config = buildScrollConfig(
       nodeId,
       newTrigger as ScrollAnimConfig['trigger'],
       finalStops,
       trans,
       secId ?? sectionIdRef.current,
-      vp ?? sectionViewportRef.current,
+      vp ?? effectiveEnd ?? sectionViewportRef.current,
       range ?? layerRangeRef.current,
       layerExitRef.current,
+      effectiveStart,
+      effectiveEnd,
     );
     // Direction/Replay are Scroll ANIMATION (direction-triggered) concepts. For
     // Scroll TRANSFORM (scrubbed) they must NOT be applied: config.direction='up'
@@ -527,7 +574,10 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
     }
     trace.action('scroll-editor:write', {
       nodeId, trigger: newTrigger, sectionId: config.sectionId,
-      sectionViewport: config.sectionViewport, stopCount: newStops.length,
+      sectionViewport: config.sectionViewport,
+      scrollStart: config.scrollStart,
+      scrollEnd: config.scrollEnd,
+      stopCount: newStops.length,
       sectionMilestones: config.sections?.length || 0,
       transitionType: trans.type, direction: config.direction, replay: config.replay,
     });
@@ -601,16 +651,31 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
             // means. An empty sectionId degrades to a self-targeted scrub
             // (valid code), so this only upgrades the default.
             let seedSecId: string | undefined;
-            if (newTrigger === 'sectionInView' && !sectionIdRef.current) {
-              const enclosing = findEnclosingAnchorId(nodeId);
-              if (enclosing) {
-                seedSecId = enclosing;
-                setSectionId(enclosing);
-                sectionIdRef.current = enclosing;
-                trace.action('scroll-editor:seed-enclosing-section', { nodeId, sectionId: enclosing });
+            let nextStart = scrollStartRef.current;
+            let nextEnd = scrollEndRef.current;
+            if (newTrigger === 'sectionInView') {
+              if (!sectionIdRef.current) {
+                const enclosing = findEnclosingAnchorId(nodeId);
+                if (enclosing) {
+                  seedSecId = enclosing;
+                  setSectionId(enclosing);
+                  sectionIdRef.current = enclosing;
+                  trace.action('scroll-editor:seed-enclosing-section', { nodeId, sectionId: enclosing });
+                }
               }
+              try {
+                const pos = findNodeComputedStyle(nodeId, '', 'position');
+                if (pos === 'sticky') {
+                  nextStart = 'top';
+                  nextEnd = 'bottom';
+                  setScrollStart('top');
+                  scrollStartRef.current = 'top';
+                  setScrollEnd('bottom');
+                  scrollEndRef.current = 'bottom';
+                }
+              } catch {}
             }
-            writeToCode(stopsToUse, v, transition, seedSecId);
+            writeToCode(stopsToUse, v, transition, seedSecId, undefined, undefined, nextStart, nextEnd);
             // Animation-mode Section in View is SCRUBBED — after this write
             // the effect parses back as the separate Scroll Transform entry,
             // so the open popup must follow it there (the host flushes then
@@ -667,13 +732,18 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
             value={layerExit ? 'exit' : 'enter'}
             onChange={(v) => {
               const ex = v === 'exit';
-              const vp = ex ? 'top' : 'middle';
+              const s = ex ? 'top' : 'bottom';
+              const e = ex ? 'top' : 'middle';
               setLayerExit(ex);
               layerExitRef.current = ex;
-              setSectionViewport(vp);
-              sectionViewportRef.current = vp;
-              writeToCode(stops, trigger, transition, undefined, vp);
-              trace.action('scroll-editor:layer-timing', { nodeId, exit: ex, viewport: vp });
+              setScrollStart(s);
+              scrollStartRef.current = s;
+              setScrollEnd(e);
+              scrollEndRef.current = e;
+              setSectionViewport(e);
+              sectionViewportRef.current = e;
+              writeToCode(stops, trigger, transition, undefined, e, undefined, s, e);
+              trace.action('scroll-editor:layer-timing', { nodeId, exit: ex, viewport: e, scrollStart: s, scrollEnd: e });
             }}
             options={[{ value: 'enter', label: 'Enter' }, { value: 'exit', label: 'Exit' }]}
             size="sm"
@@ -681,27 +751,43 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
         </div>
       )}
 
-      {/* Viewport segmented — where in the viewport the section reaches
-          its "To" state. Top = full pass-through (slowest), Middle = at
-          viewport center (default), Bottom = fully entered (fastest).
-          Shown BEFORE Section so the user picks the timing model before
-          the anchor — matches the reference's layout where the global "how"
-          comes before the "what". */}
-      {/* Also drives the Layer-in-View "Start" position (top/center/bottom of the
-          LAYER against the viewport) — shares the sectionViewport state; the
-          generator maps it via layerInViewOffset and it round-trips through
-          detectSectionViewportFromOffset. */}
+      {/* Start segmented control — where in the viewport scrub begins */}
       {(trigger === 'sectionInView' || trigger === 'layerInView') && (
         <div className="flex items-center justify-between w-full">
-          <ControlLabel label={trigger === 'layerInView' ? 'Start' : 'Viewport'} property="" plain />
+          <ControlLabel label="Start" property="" plain />
           <ToolSegmentedControl
-            value={sectionViewport}
+            value={scrollStart}
             onChange={(v) => {
-              const vp = v as 'top' | 'middle' | 'bottom';
-              setSectionViewport(vp);
-              sectionViewportRef.current = vp;
-              writeToCode(stops, trigger, transition, undefined, vp);
-              trace.action('scroll-editor:viewport-pick', { nodeId, viewport: vp });
+              const s = v as 'top' | 'middle' | 'bottom';
+              setScrollStart(s);
+              scrollStartRef.current = s;
+              writeToCode(stops, trigger, transition, undefined, undefined, undefined, s, scrollEndRef.current);
+              trace.action('scroll-editor:scroll-start-pick', { nodeId, scrollStart: s });
+            }}
+            options={[
+              { value: 'top',    icon: <ViewportIcon position="top" /> },
+              { value: 'middle', icon: <ViewportIcon position="middle" /> },
+              { value: 'bottom', icon: <ViewportIcon position="bottom" /> },
+            ]}
+            size="sm"
+          />
+        </div>
+      )}
+
+      {/* End segmented control — where in the viewport scrub ends */}
+      {(trigger === 'sectionInView' || trigger === 'layerInView') && (
+        <div className="flex items-center justify-between w-full">
+          <ControlLabel label="End" property="" plain />
+          <ToolSegmentedControl
+            value={scrollEnd}
+            onChange={(v) => {
+              const e = v as 'top' | 'middle' | 'bottom';
+              setScrollEnd(e);
+              scrollEndRef.current = e;
+              setSectionViewport(e);
+              sectionViewportRef.current = e;
+              writeToCode(stops, trigger, transition, undefined, e, undefined, scrollStartRef.current, e);
+              trace.action('scroll-editor:scroll-end-pick', { nodeId, scrollEnd: e });
             }}
             options={[
               { value: 'top',    icon: <ViewportIcon position="top" /> },
@@ -778,6 +864,8 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
                   transitionRef={transitionRef}
                   sectionIdRef={sectionIdRef}
                   sectionViewportRef={sectionViewportRef}
+                  scrollStartRef={scrollStartRef}
+                  scrollEndRef={scrollEndRef}
                   layerRangeRef={layerRangeRef}
                   layerExitRef={layerExitRef}
                   directionRef={directionRef}
@@ -842,6 +930,8 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
                         transitionRef={transitionRef}
                         sectionIdRef={sectionIdRef}
                         sectionViewportRef={sectionViewportRef}
+                        scrollStartRef={scrollStartRef}
+                        scrollEndRef={scrollEndRef}
                         layerRangeRef={layerRangeRef}
                         layerExitRef={layerExitRef}
                         directionRef={directionRef}

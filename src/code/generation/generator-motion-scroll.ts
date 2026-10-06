@@ -88,7 +88,52 @@ export function detectLayerExitFromOffset(offset: string | null): boolean {
   return /,\s*"end start"\s*\]/.test(canonicalOffset(offset.replace(/\s+/g, ' ').trim()));
 }
 
-/** Detect the section viewport variant ('top' / 'middle' / 'bottom') from
+export function buildScrollOffset(
+  scrollStart: 'top' | 'middle' | 'bottom',
+  scrollEnd: 'top' | 'middle' | 'bottom',
+): string {
+  let startAnchor: string;
+  if (scrollStart === 'top') startAnchor = 'start start';
+  else if (scrollStart === 'middle') startAnchor = 'start center';
+  else startAnchor = 'start end';
+
+  let endAnchor: string;
+  if (scrollEnd === 'bottom') {
+    endAnchor = 'end end';
+  } else if (scrollEnd === 'middle') {
+    endAnchor = scrollStart === 'middle' ? 'end center' : 'start center';
+  } else {
+    endAnchor = scrollStart === 'top' ? 'end start' : 'start start';
+  }
+
+  return `["${startAnchor}", "${endAnchor}"]`;
+}
+
+/** Detect visual Start position ('top' | 'middle' | 'bottom') from a useScroll offset string. */
+export function detectScrollStartFromOffset(offset: string | null): 'top' | 'middle' | 'bottom' {
+  if (!offset) return 'bottom';
+  const clean = canonicalOffset(offset.replace(/\s+/g, ' ').trim());
+  const m = clean.match(/^\["([a-z]+)\s+([a-z0-9%]+)"/);
+  if (!m) return 'bottom';
+  const edge = m[2];
+  if (edge === 'start' || edge === '0%') return 'top';
+  if (edge === 'center' || edge === '50%') return 'middle';
+  return 'bottom';
+}
+
+/** Detect visual End position ('top' | 'middle' | 'bottom') from a useScroll offset string. */
+export function detectScrollEndFromOffset(offset: string | null): 'top' | 'middle' | 'bottom' {
+  if (!offset) return 'middle';
+  const clean = canonicalOffset(offset.replace(/\s+/g, ' ').trim());
+  const m = clean.match(/,\s*"([a-z]+)\s+([a-z0-9%]+)"\]$/);
+  if (!m) return 'middle';
+  const edge = m[2];
+  if (edge === 'start' || edge === '0%') return 'top';
+  if (edge === 'center' || edge === '50%') return 'middle';
+  return 'bottom';
+}
+
+/** Detect the section viewport variant ('top' | 'middle' | 'bottom') from
  *  a raw offset string. Inverse of the generator's per-viewport offset
  *  selection above. Used by ScrollEditor to pre-fill the Viewport
  *  segmented control on re-open. Returns 'middle' when the offset doesn't
@@ -104,7 +149,8 @@ export function detectSectionViewportFromOffset(offset: string | null): 'top' | 
   if (clean === `["start start", "end start"]`) return 'top';
   if (clean === `["start center", "end start"]`) return 'middle';
   if (clean === `["start end", "end start"]`) return 'bottom';
-  return 'middle';
+  if (clean === `["start start", "end end"]`) return 'bottom';
+  return detectScrollEndFromOffset(offset);
 }
 
 /** Detect trigger type from a raw offset string.
@@ -348,6 +394,16 @@ export interface ScrollAnimConfig {
    *  All three start at "section's top entering viewport bottom" (progress 0).
    *  The offset differs only on the endpoint. */
   sectionViewport?: 'top' | 'middle' | 'bottom';
+  /** Where in the viewport the scroll animation starts (progress 0).
+   *  - 'top'    → element/section top hits viewport top (sticky start / top align)
+   *  - 'middle' → element/section top hits viewport center
+   *  - 'bottom' → element/section top enters viewport bottom (entrance start, default) */
+  scrollStart?: 'top' | 'middle' | 'bottom';
+  /** Where in the viewport the scroll animation ends (progress 1).
+   *  - 'top'    → finishes at viewport top
+   *  - 'middle' → finishes at viewport center
+   *  - 'bottom' → finishes when bottom hits viewport bottom (sticky end / fully entered) */
+  scrollEnd?: 'top' | 'middle' | 'bottom';
   /** Layer-in-View only: fraction (0–1) of the viewport height that the
    *  animation occupies, measured from the moment the element enters the
    *  viewport. e.g. 0.3 = TO state reached after the user has scrolled
@@ -451,12 +507,15 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
   }
 
   // useScroll
-  // Section-in-View viewport variants. The endpoint (offset[1]) controls
-  // where in the viewport the section finishes the animation. Default is
-  // 'middle' — the most natural feel (animation completes as the section
-  // crosses the viewport center).
+  // Dual Start & End offset handling: gives full visual control over where
+  // the scrub begins (start) and completes (end).
   let offsetStr = SCROLL_TRIGGER_OFFSETS[trigger];
-  if (useSectionRef) {
+  if (config.scrollStart && config.scrollEnd) {
+    offsetStr = buildScrollOffset(config.scrollStart, config.scrollEnd);
+    if (useSectionRef) {
+      offsetStr = sectionSafeOffset(offsetStr);
+    }
+  } else if (useSectionRef) {
     const vp = config.sectionViewport || 'middle';
     if (vp === 'top') offsetStr = `["start end", "start start"]`;
     else if (vp === 'bottom') offsetStr = `["start end", "end end"]`;
@@ -851,6 +910,36 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
     );
   }
 
+  // Ensure React hook imports (useRef, and useEffect if useSectionRef)
+  const neededReact: string[] = [];
+  if (trigger !== 'onScroll') neededReact.push('useRef');
+  if (useSectionRef) neededReact.push('useEffect');
+  if (neededReact.length > 0) {
+    if (result.match(/import\s*React,\s*\{([^}]*)\}\s*from\s*['"]react['"]/)) {
+      result = result.replace(
+        /import\s*React,\s*\{([^}]*)\}\s*from\s*['"]react['"]/,
+        (match, imports) => {
+          const existing = imports.split(',').map((s: string) => s.trim()).filter(Boolean);
+          for (const n of neededReact) {
+            if (!existing.includes(n)) existing.push(n);
+          }
+          return `import React, { ${existing.join(', ')} } from 'react'`;
+        }
+      );
+    } else if (result.match(/import\s*\{([^}]*)\}\s*from\s*['"]react['"]/)) {
+      result = result.replace(
+        /import\s*\{([^}]*)\}\s*from\s*['"]react['"]/,
+        (match, imports) => {
+          const existing = imports.split(',').map((s: string) => s.trim()).filter(Boolean);
+          for (const n of neededReact) {
+            if (!existing.includes(n)) existing.push(n);
+          }
+          return `import { ${existing.join(', ')} } from 'react'`;
+        }
+      );
+    }
+  }
+
   // Final whitespace cleanup — collapse any 3+ consecutive newlines to 2
   result = result.replace(/\n{3,}/g, '\n\n');
 
@@ -887,7 +976,7 @@ function updateMultiSectionScrollAnimInCode(code: string, config: ScrollAnimConf
   //   top    → section top hits viewport top   (need scrollY = offsetTop)
   //   middle → section top hits viewport center (offsetTop − vpH/2)
   //   bottom → section top hits viewport bottom (offsetTop − vpH)
-  const vp = sectionViewport || 'middle';
+  const vp = config.scrollEnd || sectionViewport || 'middle';
   const viewportOffsetExpr =
     vp === 'top' ? '0'
     : vp === 'bottom' ? 'window.innerHeight'

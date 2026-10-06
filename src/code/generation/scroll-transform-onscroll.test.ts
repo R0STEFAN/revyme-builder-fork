@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { updateScrollAnimInCode, detectTriggerFromOffset, layerInViewOffset, layerInViewExitOffset, detectLayerExitFromOffset } from './generator-motion';
+import { updateScrollAnimInCode, detectTriggerFromOffset, layerInViewOffset, layerInViewExitOffset, detectLayerExitFromOffset, buildScrollOffset, detectScrollStartFromOffset, detectScrollEndFromOffset } from './generator-motion';
 import { detectSectionViewportFromOffset } from './generator-motion-scroll';
 import { parseJSX } from '@/code/parsing/ast-utils';
 import { parseScrollHooks, getScrollDataForNode } from '@/code/parsing/scroll-parser';
@@ -187,5 +187,53 @@ describe('Scroll Transform "Layer in View" EXIT — the sticky-shrink case', () 
     expect(detectTriggerFromOffset(offset, !!data.source?.refVar, !!data.source?.sectionId)).toBe('layerInView');
     expect(detectLayerExitFromOffset(offset)).toBe(true);
     expect(detectSectionViewportFromOffset(offset)).toBe('top');
+  });
+});
+
+describe('Dual Start & End scroll offset control', () => {
+  it('buildScrollOffset maps combinations accurately', () => {
+    expect(buildScrollOffset('top', 'bottom')).toBe('["start start", "end end"]');
+    expect(buildScrollOffset('bottom', 'middle')).toBe('["start end", "start center"]');
+    expect(buildScrollOffset('bottom', 'top')).toBe('["start end", "start start"]');
+    expect(buildScrollOffset('top', 'top')).toBe('["start start", "end start"]');
+    expect(buildScrollOffset('middle', 'middle')).toBe('["start center", "end center"]');
+  });
+
+  it('detectScrollStartFromOffset and detectScrollEndFromOffset decode edges correctly', () => {
+    expect(detectScrollStartFromOffset('["start start", "end end"]')).toBe('top');
+    expect(detectScrollEndFromOffset('["start start", "end end"]')).toBe('bottom');
+
+    expect(detectScrollStartFromOffset('["start end", "start center"]')).toBe('bottom');
+    expect(detectScrollEndFromOffset('["start end", "start center"]')).toBe('middle');
+
+    expect(detectScrollStartFromOffset('["start 0%", "end 100%"]')).toBe('top');
+    expect(detectScrollEndFromOffset('["start 0%", "end 100%"]')).toBe('bottom');
+
+    expect(detectScrollStartFromOffset(null)).toBe('bottom');
+    expect(detectScrollEndFromOffset(null)).toBe('middle');
+  });
+
+  it('generates sectionSafeOffset for sectionInView when scrollStart and scrollEnd are set', () => {
+    const out = updateScrollAnimInCode(PAGE, {
+      nodeId: 'box',
+      trigger: 'sectionInView',
+      sectionId: 'projects',
+      scrollStart: 'top',
+      scrollEnd: 'bottom',
+      stops: [
+        { progress: 0, props: { x: '0px' } },
+        { progress: 1, props: { x: '-2000px' } },
+      ],
+      transition: { type: 'spring', duration: '0.5', bounce: '0.25' },
+    });
+    // Section-in-view with dynamic ref must use safe percentage offsets to avoid ViewTimeline crash
+    expect(out).toContain('offset: ["start 0%", "end 100%"]');
+    expect(parseJSX(out)).not.toBeNull();
+
+    // Round-trip check
+    const data = getScrollDataForNode(parseScrollHooks(out), 'box');
+    const offset = data.source?.offset ?? null;
+    expect(detectScrollStartFromOffset(offset)).toBe('top');
+    expect(detectScrollEndFromOffset(offset)).toBe('bottom');
   });
 });
