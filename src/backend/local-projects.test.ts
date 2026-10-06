@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { listAllProjects, createProject, deleteProject, duplicateProject, migrateLocalStorageProjectsToServer } from './local-projects';
+import {
+  listAllProjects,
+  createProject,
+  deleteProject,
+  duplicateProject,
+  migrateLocalStorageProjectsToServer,
+  listAllFolders,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  setProjectFolder,
+} from './local-projects';
 
 describe('local-projects management', () => {
   beforeEach(() => {
@@ -45,6 +56,36 @@ describe('local-projects management', () => {
     expect(dup).not.toBeNull();
     expect(dup?.name).toBe('Original Copied');
     expect(dup?.id).not.toBe(created.id);
+  });
+
+  it('manages folders and assigns projects in localStorage fallback', async () => {
+    const f1 = await createFolder('Landing Pages');
+    const f2 = await createFolder('E-Commerce');
+
+    const folders = await listAllFolders();
+    expect(folders.length).toBe(2);
+    expect(folders.map(f => f.name)).toContain('Landing Pages');
+
+    const renameOk = await renameFolder(f1.id, 'Marketing Landings');
+    expect(renameOk).toBe(true);
+
+    const project = await createProject('Landing 1');
+    expect(project.folderId).toBeNull();
+
+    const setFolderOk = await setProjectFolder(project.id, f1.id);
+    expect(setFolderOk).toBe(true);
+
+    const allProjects = await listAllProjects();
+    const foundProject = allProjects.find(p => p.id === project.id);
+    expect(foundProject?.folderId).toBe(f1.id);
+
+    // Deleting folder unassigns the project
+    const deleteFolderOk = await deleteFolder(f1.id);
+    expect(deleteFolderOk).toBe(true);
+
+    const updatedProjects = await listAllProjects();
+    const unassigned = updatedProjects.find(p => p.id === project.id);
+    expect(unassigned?.folderId).toBeNull();
   });
 });
 

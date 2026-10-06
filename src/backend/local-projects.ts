@@ -8,10 +8,19 @@ export interface LocalProjectItem {
   updatedAt: number;
   createdAt: number;
   isLocalStorageOnly?: boolean;
+  folderId?: string | null;
+}
+
+export interface ProjectFolder {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 
 const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
+const FOLDER_PROJECT_PREFIX = 'revyme:project-folder:';
+const FOLDERS_KEY = 'revyme:folders';
 
 /**
  * Fetch all projects from the server API, merged with any pending in localStorage.
@@ -26,9 +35,14 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
       if (res.ok) {
         const serverList = (await res.json()) as LocalProjectItem[];
         for (const p of serverList) {
+          const localFolderId =
+            typeof window !== 'undefined' && window.localStorage
+              ? localStorage.getItem(FOLDER_PROJECT_PREFIX + p.id)
+              : null;
           itemsMap.set(p.id, {
             ...p,
             isLocalStorageOnly: false,
+            folderId: localFolderId !== null ? localFolderId : (p.folderId ?? null),
           });
         }
       }
@@ -54,6 +68,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
               // ignore
             }
             const name = localStorage.getItem(NAME_PREFIX + id) || (id === 'local' ? 'Default Website' : 'Untitled Website');
+            const folderId = localStorage.getItem(FOLDER_PROJECT_PREFIX + id) || null;
             itemsMap.set(id, {
               id,
               name,
@@ -61,6 +76,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
               createdAt: Date.now(),
               updatedAt: Date.now(),
               isLocalStorageOnly: true,
+              folderId,
             });
           }
         }
@@ -72,6 +88,10 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
 
   // 3. If completely empty, seed at least 'local'
   if (itemsMap.size === 0) {
+    const folderId =
+      typeof window !== 'undefined' && window.localStorage
+        ? localStorage.getItem(FOLDER_PROJECT_PREFIX + 'local') || null
+        : null;
     itemsMap.set('local', {
       id: 'local',
       name: 'Default Website',
@@ -79,6 +99,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       isLocalStorageOnly: false,
+      folderId,
     });
   }
 
@@ -88,7 +109,11 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
 /**
  * Create a new project on the server (and seed in localStorage).
  */
-export async function createProject(name?: string, initialData?: ProjectData): Promise<LocalProjectItem> {
+export async function createProject(
+  name?: string,
+  initialData?: ProjectData,
+  folderId?: string | null
+): Promise<LocalProjectItem> {
   const id = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const finalName = (name && name.trim()) || 'Untitled Website';
   const data: ProjectData = initialData || {
@@ -102,13 +127,14 @@ export async function createProject(name?: string, initialData?: ProjectData): P
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name: finalName, data }),
+        body: JSON.stringify({ id, name: finalName, data, folderId: folderId ?? null }),
       });
       if (res.ok) {
         const saved = (await res.json()) as LocalProjectItem;
         if (window.localStorage) {
           localStorage.setItem(NAME_PREFIX + id, finalName);
           localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
+          if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
         }
         return saved;
       }
@@ -121,6 +147,7 @@ export async function createProject(name?: string, initialData?: ProjectData): P
   if (typeof window !== 'undefined' && window.localStorage) {
     localStorage.setItem(NAME_PREFIX + id, finalName);
     localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
+    if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
   }
 
   return {
@@ -130,6 +157,7 @@ export async function createProject(name?: string, initialData?: ProjectData): P
     createdAt: Date.now(),
     updatedAt: Date.now(),
     isLocalStorageOnly: true,
+    folderId: folderId ?? null,
   };
 }
 
@@ -153,6 +181,7 @@ export async function deleteProject(id: string): Promise<boolean> {
   if (typeof window !== 'undefined' && window.localStorage) {
     localStorage.removeItem(STORAGE_PREFIX + id);
     localStorage.removeItem(NAME_PREFIX + id);
+    localStorage.removeItem(FOLDER_PROJECT_PREFIX + id);
     ok = true;
   }
 
@@ -172,7 +201,14 @@ export async function duplicateProject(id: string, newName?: string): Promise<Lo
         body: JSON.stringify({ name: newName }),
       });
       if (res.ok) {
-        return (await res.json()) as LocalProjectItem;
+        const copy = (await res.json()) as LocalProjectItem;
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const sourceFolder = localStorage.getItem(FOLDER_PROJECT_PREFIX + id);
+          if (sourceFolder) {
+            localStorage.setItem(FOLDER_PROJECT_PREFIX + copy.id, sourceFolder);
+          }
+        }
+        return copy;
       }
     } catch {
       // fallback
@@ -189,6 +225,11 @@ export async function duplicateProject(id: string, newName?: string): Promise<Lo
     localStorage.setItem(STORAGE_PREFIX + newId, raw);
     localStorage.setItem(NAME_PREFIX + newId, copyName);
 
+    const sourceFolder = localStorage.getItem(FOLDER_PROJECT_PREFIX + id);
+    if (sourceFolder) {
+      localStorage.setItem(FOLDER_PROJECT_PREFIX + newId, sourceFolder);
+    }
+
     let fileCount = 0;
     try {
       const parsed = JSON.parse(raw);
@@ -204,10 +245,217 @@ export async function duplicateProject(id: string, newName?: string): Promise<Lo
       createdAt: Date.now(),
       updatedAt: Date.now(),
       isLocalStorageOnly: true,
+      folderId: sourceFolder || null,
     };
   }
 
   return null;
+}
+
+/**
+ * Fetch all folders from server API and localStorage fallback.
+ */
+export async function listAllFolders(): Promise<ProjectFolder[]> {
+  const foldersMap = new Map<string, ProjectFolder>();
+
+  // 1. Fetch from server API
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/folders');
+      if (res.ok) {
+        const serverList = (await res.json()) as ProjectFolder[];
+        for (const f of serverList) {
+          foldersMap.set(f.id, f);
+        }
+      }
+    } catch {
+      // Server not reachable
+    }
+  }
+
+  // 2. LocalStorage merge
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      if (raw) {
+        const localList = JSON.parse(raw) as ProjectFolder[];
+        if (Array.isArray(localList)) {
+          for (const f of localList) {
+            if (!foldersMap.has(f.id)) {
+              foldersMap.set(f.id, f);
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return Array.from(foldersMap.values()).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/**
+ * Create a new folder on server and localStorage.
+ */
+export async function createFolder(name: string): Promise<ProjectFolder> {
+  const finalName = name.trim() || 'New Folder';
+  const id = `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const folder: ProjectFolder = {
+    id,
+    name: finalName,
+    createdAt: Date.now(),
+  };
+
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: finalName }),
+      });
+      if (res.ok) {
+        const saved = (await res.json()) as ProjectFolder;
+        syncFolderToLocalStorage(saved);
+        return saved;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  syncFolderToLocalStorage(folder);
+  return folder;
+}
+
+/**
+ * Rename an existing folder.
+ */
+export async function renameFolder(id: string, name: string): Promise<boolean> {
+  const finalName = name.trim();
+  if (!finalName) return false;
+
+  let ok = false;
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: finalName }),
+      });
+      ok = res.ok;
+    } catch {
+      // fallback
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      if (raw) {
+        const list = JSON.parse(raw) as ProjectFolder[];
+        const idx = list.findIndex((f) => f.id === id);
+        if (idx !== -1) {
+          list[idx].name = finalName;
+          localStorage.setItem(FOLDERS_KEY, JSON.stringify(list));
+          ok = true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return ok;
+}
+
+/**
+ * Delete a folder. Projects in the folder are unassigned.
+ */
+export async function deleteFolder(id: string): Promise<boolean> {
+  let ok = false;
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      ok = res.ok;
+    } catch {
+      // fallback
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      if (raw) {
+        const list = JSON.parse(raw) as ProjectFolder[];
+        const next = list.filter((f) => f.id !== id);
+        localStorage.setItem(FOLDERS_KEY, JSON.stringify(next));
+        ok = true;
+      }
+      // Unassign any project in localStorage assigned to this folder
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(FOLDER_PROJECT_PREFIX)) {
+          if (localStorage.getItem(key) === id) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return ok;
+}
+
+/**
+ * Move or unassign a project to/from a folder.
+ */
+export async function setProjectFolder(projectId: string, folderId: string | null): Promise<boolean> {
+  let ok = false;
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      });
+      ok = res.ok;
+    } catch {
+      // fallback
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (folderId) {
+      localStorage.setItem(FOLDER_PROJECT_PREFIX + projectId, folderId);
+    } else {
+      localStorage.removeItem(FOLDER_PROJECT_PREFIX + projectId);
+    }
+    ok = true;
+  }
+
+  return ok;
+}
+
+function syncFolderToLocalStorage(folder: ProjectFolder) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const raw = localStorage.getItem(FOLDERS_KEY);
+    const list = raw ? (JSON.parse(raw) as ProjectFolder[]) : [];
+    const idx = list.findIndex((f) => f.id === folder.id);
+    if (idx >= 0) {
+      list[idx] = folder;
+    } else {
+      list.push(folder);
+    }
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
 }
 
 /**

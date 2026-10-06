@@ -9,6 +9,11 @@ import {
   duplicateProject,
   saveUpload,
   getUploadFilePath,
+  listFolders,
+  saveFolder,
+  renameFolder,
+  deleteFolder,
+  setProjectFolder,
 } from './storage';
 
 const TEST_DATA_DIR = path.resolve(process.cwd(), '.test-data');
@@ -90,5 +95,41 @@ describe('Self-host storage', () => {
     const filePath = getUploadFilePath(upload.filename, TEST_DATA_DIR);
     expect(filePath).not.toBeNull();
     expect(fs.readFileSync(filePath!)).toEqual(buf);
+  });
+
+  it('manages folders and project folder assignment', () => {
+    // 1. Create and list folders
+    const f1 = saveFolder('Marketing', TEST_DATA_DIR);
+    const f2 = saveFolder('Client Sites', TEST_DATA_DIR);
+    const list = listFolders(TEST_DATA_DIR);
+    expect(list.length).toBe(2);
+    expect(list.map(f => f.name)).toContain('Marketing');
+    expect(list.map(f => f.name)).toContain('Client Sites');
+
+    // 2. Rename folder
+    const renamed = renameFolder(f1.id, 'Marketing 2026', TEST_DATA_DIR);
+    expect(renamed?.name).toBe('Marketing 2026');
+
+    // 3. Create project and assign to folder
+    const p = saveProject('proj-folder-test', { files: {} }, 'Brand Site', TEST_DATA_DIR);
+    expect(p.folderId).toBeNull();
+
+    const assigned = setProjectFolder('proj-folder-test', f1.id, TEST_DATA_DIR);
+    expect(assigned).toBe(true);
+
+    const loadedP = getProject('proj-folder-test', TEST_DATA_DIR);
+    expect(loadedP?.folderId).toBe(f1.id);
+
+    const summaries = listProjects(TEST_DATA_DIR);
+    expect(summaries.find(s => s.id === 'proj-folder-test')?.folderId).toBe(f1.id);
+
+    // 4. Delete folder unassigns the project, project still exists
+    const deletedFolder = deleteFolder(f1.id, TEST_DATA_DIR);
+    expect(deletedFolder).toBe(true);
+    expect(listFolders(TEST_DATA_DIR).length).toBe(1);
+
+    const unassignedProject = getProject('proj-folder-test', TEST_DATA_DIR);
+    expect(unassignedProject).not.toBeNull();
+    expect(unassignedProject?.folderId).toBeNull();
   });
 });

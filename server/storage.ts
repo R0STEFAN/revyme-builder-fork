@@ -2,12 +2,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+export interface ProjectFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 export interface ProjectSummary {
   id: string;
   name: string;
   fileCount: number;
   createdAt: number;
   updatedAt: number;
+  folderId?: string | null;
 }
 
 export interface ProjectRecord {
@@ -17,6 +24,7 @@ export interface ProjectRecord {
   createdAt: number;
   updatedAt: number;
   data: any;
+  folderId?: string | null;
 }
 
 /**
@@ -27,6 +35,7 @@ export function getDataDirs(customRoot?: string) {
   const root = customRoot || process.env.REVYME_DATA_DIR || path.resolve(process.cwd(), 'data');
   const projectsDir = path.join(root, 'projects');
   const uploadsDir = path.join(root, 'uploads');
+  const foldersFile = path.join(root, 'folders.json');
 
   if (!fs.existsSync(projectsDir)) {
     fs.mkdirSync(projectsDir, { recursive: true });
@@ -35,7 +44,7 @@ export function getDataDirs(customRoot?: string) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  return { root, projectsDir, uploadsDir };
+  return { root, projectsDir, uploadsDir, foldersFile };
 }
 
 /**
@@ -58,6 +67,7 @@ export function listProjects(customRoot?: string): ProjectSummary[] {
         fileCount: parsed.fileCount ?? (parsed.data?.files ? Object.keys(parsed.data.files).length : 0),
         createdAt: parsed.createdAt || Date.now(),
         updatedAt: parsed.updatedAt || Date.now(),
+        folderId: parsed.folderId ?? null,
       });
     } catch (err) {
       console.error(`[Revyme Storage] Failed to read project ${file}:`, err);
@@ -90,6 +100,7 @@ export function getProject(id: string, customRoot?: string): ProjectRecord | nul
       createdAt: parsed.createdAt || Date.now(),
       updatedAt: parsed.updatedAt || Date.now(),
       data: parsed.data || null,
+      folderId: parsed.folderId ?? null,
     };
   } catch (err) {
     console.error(`[Revyme Storage] Error loading project ${safeId}:`, err);
@@ -104,7 +115,8 @@ export function saveProject(
   id: string,
   data: any,
   name?: string,
-  customRoot?: string
+  customRoot?: string,
+  folderId?: string | null
 ): ProjectRecord {
   const { projectsDir } = getDataDirs(customRoot);
   const safeId = sanitizeId(id);
@@ -112,18 +124,21 @@ export function saveProject(
 
   let createdAt = Date.now();
   let existingName = 'Untitled Website';
+  let existingFolderId: string | null = null;
 
   if (fs.existsSync(filePath)) {
     try {
       const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       if (existing.createdAt) createdAt = existing.createdAt;
       if (existing.name) existingName = existing.name;
+      if (existing.folderId !== undefined) existingFolderId = existing.folderId;
     } catch {
       // ignore read error on overwrite
     }
   }
 
   const finalName = (name && name.trim()) ? name.trim() : existingName;
+  const finalFolderId = folderId !== undefined ? folderId : existingFolderId;
   const fileCount = data?.files ? Object.keys(data.files).length : 0;
   const updatedAt = Date.now();
 
@@ -134,6 +149,7 @@ export function saveProject(
     createdAt,
     updatedAt,
     data,
+    folderId: finalFolderId,
   };
 
   // Atomic write via temp file
@@ -152,11 +168,12 @@ export function deleteProject(id: string, customRoot?: string): boolean {
   const safeId = sanitizeId(id);
   const filePath = path.join(projectsDir, `${safeId}.json`);
 
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-    return true;
+  if (!fs.existsSync(filePath)) {
+    return false;
   }
-  return false;
+
+  fs.unlinkSync(filePath);
+  return true;
 }
 
 /**
@@ -173,7 +190,118 @@ export function duplicateProject(
   const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const duplicateName = newName || `${source.name} (Copy)`;
 
-  return saveProject(newId, source.data, duplicateName, customRoot);
+  return saveProject(newId, source.data, duplicateName, customRoot, source.folderId ?? null);
+}
+
+/**
+ * List all folders from folders.json.
+ */
+export function listFolders(customRoot?: string): ProjectFolder[] {
+  const { foldersFile } = getDataDirs(customRoot);
+  if (!fs.existsSync(foldersFile)) {
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(foldersFile, 'utf-8');
+    const folders = JSON.parse(raw);
+    return Array.isArray(folders) ? folders : [];
+  } catch (err) {
+    console.error('[Revyme Storage] Failed to read folders:', err);
+    return [];
+  }
+}
+
+/**
+ * Save a new folder to folders.json.
+ */
+export function saveFolder(name: string, customRoot?: string): ProjectFolder {
+  const { foldersFile } = getDataDirs(customRoot);
+  const folders = listFolders(customRoot);
+  const id = `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const newFolder: ProjectFolder = {
+    id,
+    name: name.trim() || 'New Folder',
+    createdAt: Date.now(),
+  };
+  folders.push(newFolder);
+  fs.writeFileSync(foldersFile, JSON.stringify(folders, null, 2), 'utf-8');
+  return newFolder;
+}
+
+/**
+ * Rename an existing folder in folders.json.
+ */
+export function renameFolder(id: string, name: string, customRoot?: string): ProjectFolder | null {
+  const { foldersFile } = getDataDirs(customRoot);
+  const folders = listFolders(customRoot);
+  const idx = folders.findIndex((f) => f.id === id);
+  if (idx === -1) return null;
+  folders[idx].name = name.trim() || folders[idx].name;
+  fs.writeFileSync(foldersFile, JSON.stringify(folders, null, 2), 'utf-8');
+  return folders[idx];
+}
+
+/**
+ * Delete a folder from folders.json and unassign all projects in it.
+ */
+export function deleteFolder(id: string, customRoot?: string): boolean {
+  const { foldersFile, projectsDir } = getDataDirs(customRoot);
+  const folders = listFolders(customRoot);
+  const nextFolders = folders.filter((f) => f.id !== id);
+  if (nextFolders.length === folders.length) return false;
+  fs.writeFileSync(foldersFile, JSON.stringify(nextFolders, null, 2), 'utf-8');
+
+  // Unassign projects that belonged to this folder
+  try {
+    const files = fs.readdirSync(projectsDir);
+    for (const file of files) {
+      if (!file.endsWith('.json') || file.includes('.tmp.')) continue;
+      const filePath = path.join(projectsDir, file);
+      try {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.folderId === id) {
+          parsed.folderId = null;
+          fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf-8');
+        }
+      } catch {
+        // ignore single file error
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return true;
+}
+
+/**
+ * Update a project's assigned folder.
+ */
+export function setProjectFolder(
+  projectId: string,
+  folderId: string | null,
+  customRoot?: string
+): boolean {
+  const { projectsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(projectId);
+  const filePath = path.join(projectsDir, `${safeId}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    parsed.folderId = folderId;
+    parsed.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf-8');
+    return true;
+  } catch (err) {
+    console.error(`[Revyme Storage] Error updating project folder for ${safeId}:`, err);
+    return false;
+  }
 }
 
 /**
