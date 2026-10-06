@@ -62,8 +62,14 @@ function convertFontSizeUnit(
       // type a new number afterwards.
       return currentPx / (parentFontSizePx ?? currentPx);
     case 'vw':
+    case 'svw':
+    case 'dvw':
+    case 'lvw':
       return (currentPx / vpWidth) * 100;
-    case 'vh': {
+    case 'vh':
+    case 'svh':
+    case 'dvh':
+    case 'lvh': {
       // vh in the canvas isn't tied to a real viewport height; use the
       // same heuristic Renderer.ts uses for vh→px: width × ratio per
       // device class. Inverse of that.
@@ -101,7 +107,11 @@ function resolveCurrentFontSizePx(
   if (inlineValue.endsWith('px')) return num;
   if (inlineValue.endsWith('rem')) return num * 16;
   if (inlineValue.endsWith('em')) return num * 16;
-  if (inlineValue.endsWith('vw')) return (num / 100) * vpWidth;
+  if (/(?:vw|svw|dvw|lvw)$/i.test(inlineValue)) return (num / 100) * vpWidth;
+  if (/(?:vh|svh|dvh|lvh)$/i.test(inlineValue)) {
+    const heightRatio = vpWidth >= 1024 ? 0.625 : vpWidth >= 500 ? 1.33 : 2.16;
+    return (num / 100) * (vpWidth * heightRatio);
+  }
   if (inlineValue.endsWith('pt')) return num * (4 / 3);
   return num;
 }
@@ -122,6 +132,11 @@ const FONT_SIZE_UNITS = [
   { value: 'rem', label: 'rem' },
   { value: 'em', label: 'em' },
   { value: 'vw', label: 'vw' },
+  { value: 'vh', label: 'vh' },
+  { value: 'svh', label: 'svh' },
+  { value: 'svw', label: 'svw' },
+  { value: 'dvh', label: 'dvh' },
+  { value: 'dvw', label: 'dvw' },
   { value: 'clamp', label: 'clamp' },
   { value: 'fit', label: 'fit' },
 ];
@@ -131,6 +146,11 @@ const CLAMP_UNITS = [
   { value: 'rem', label: 'rem' },
   { value: 'em', label: 'em' },
   { value: 'vw', label: 'vw' },
+  { value: 'vh', label: 'vh' },
+  { value: 'svh', label: 'svh' },
+  { value: 'svw', label: 'svw' },
+  { value: 'dvh', label: 'dvh' },
+  { value: 'dvw', label: 'dvw' },
 ];
 
 interface ClampValues { minVal: string; minUnit: string; prefVal: string; prefUnit: string; maxVal: string; maxUnit: string }

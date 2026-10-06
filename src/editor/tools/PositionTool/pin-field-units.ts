@@ -19,7 +19,9 @@ export function pinFieldDisplayPx(value: string | undefined, total: number): num
   if (!value) return 0;
   const num = parseFloat(value);
   if (isNaN(num)) return 0;
-  if (value.trim().endsWith('%')) return total > 0 ? (num / 100) * total : 0;
+  const trimmed = value.trim();
+  if (trimmed.endsWith('%')) return total > 0 ? (num / 100) * total : 0;
+  if (trimmed.endsWith('rem') || trimmed.endsWith('em')) return num * 16;
   return num;
 }
 
@@ -51,7 +53,7 @@ export function paintedPinPx(
 export function pinFieldCommitValue(typed: string, sourceValue: string | undefined, total: number): string {
   const raw = typed.trim();
   if (raw === '') return '';
-  if (raw.endsWith('%') || raw.endsWith('px')) return raw;
+  if (/(?:%|px|rem|em|vw|vh|svh|svw|dvh|dvw|lvh|lvw)$/i.test(raw)) return raw;
   const num = parseFloat(raw);
   if (isNaN(num)) return raw;
   if (sourceValue && sourceValue.trim().endsWith('%')) {

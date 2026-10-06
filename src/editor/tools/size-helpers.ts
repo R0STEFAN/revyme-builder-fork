@@ -7,7 +7,21 @@ import { isFitSize } from '@/shared/constants';
 
 import { isFillMode } from '@/shared/flex-helpers';
 
-export type DimUnit = 'px' | '%' | 'auto' | 'vw' | 'vh' | 'fill';
+export type DimUnit =
+  | 'px'
+  | '%'
+  | 'auto'
+  | 'rem'
+  | 'em'
+  | 'vw'
+  | 'vh'
+  | 'svh'
+  | 'svw'
+  | 'dvh'
+  | 'dvw'
+  | 'lvh'
+  | 'lvw'
+  | 'fill';
 
 /** Exiting main-axis FILL to `auto`/Fit must neutralise the grow flex in the
  *  SAME write. Fill mode is DERIVED state (grow flex + no/fit-size dimension —
@@ -41,10 +55,8 @@ export function estimatedVpHeight(vpWidth: number): number {
  *  use the right axis (parentWidth+vpWidth vs parentHeight+vpHeight).
  *
  *  Output formatting:
- *   - `px` / `%` / `vw` / `vh` → integer (no decimals — per user
- *     preference, the JSX source stays clean and small visual drift
- *     after a unit swap is acceptable since the user typically tweaks
- *     the number afterwards anyway).
+ *   - `px` / `%` / `vw` / `vh` / `svh` / `svw` / `dvh` / `dvw` / `lvh` / `lvw` → integer
+ *   - `rem` / `em` → decimal up to 2 places (e.g. 1.5rem, 2rem)
  *   - `auto` / `fill` → sentinel return values (`'auto'` / `''`)
  *
  *  Zero-denominator guard: returns `0<unit>` rather than NaN when the
@@ -56,26 +68,36 @@ export function convertPxToDimUnit(
   parentSize: number,
   vpWidth: number,
   vpHeight: number,
+  rootFontSizePx = 16,
 ): string {
   if (toUnit === 'auto') return 'auto';
   if (toUnit === 'fill') return ''; // fill is handled via flex property
   if (toUnit === 'px') return `${Math.round(px)}px`;
+  if (toUnit === 'rem') {
+    const root = rootFontSizePx > 0 ? rootFontSizePx : 16;
+    const rem = Math.round((px / root) * 100) / 100;
+    return `${rem}rem`;
+  }
+  if (toUnit === 'em') {
+    const em = Math.round((px / 16) * 100) / 100;
+    return `${em}em`;
+  }
   if (toUnit === '%') {
     if (!(parentSize > 0)) return '0%';
     return `${Math.round((px / parentSize) * 100)}%`;
   }
-  if (toUnit === 'vw') {
-    if (!(vpWidth > 0)) return '0vw';
-    return `${Math.round((px / vpWidth) * 100)}vw`;
+  if (toUnit === 'vw' || toUnit === 'svw' || toUnit === 'dvw' || toUnit === 'lvw') {
+    if (!(vpWidth > 0)) return `0${toUnit}`;
+    return `${Math.round((px / vpWidth) * 100)}${toUnit}`;
   }
-  if (toUnit === 'vh') {
-    if (!(vpHeight > 0)) return '0vh';
-    return `${Math.round((px / vpHeight) * 100)}vh`;
+  if (toUnit === 'vh' || toUnit === 'svh' || toUnit === 'dvh' || toUnit === 'lvh') {
+    if (!(vpHeight > 0)) return `0${toUnit}`;
+    return `${Math.round((px / vpHeight) * 100)}${toUnit}`;
   }
   return `${Math.round(px)}px`;
 }
 
-/** Does an authored dimension carry a RELATIVE unit (%, vw, vh)?
+/** Does an authored dimension carry a RELATIVE unit (%, vw, vh, svh, svw, dvh, dvw, rem, em…)?
  *
  *  SizeTool uses this to decide whether the Dimensions field may show the
  *  element's LIVE inline px (`liveSize`, polled during a canvas handle-resize).
@@ -87,7 +109,7 @@ export function convertPxToDimUnit(
  *  keep `liveSize` (the legit live-resize feedback path, incl. component
  *  instances with no explicit width/height in JSX). */
 export function isRelativeUnit(v: string | undefined | null): boolean {
-  return !!v && /(?:%|vw|vh)$/.test(v.trim());
+  return !!v && /(?:%|vw|vh|svh|svw|dvh|dvw|lvh|lvw|rem|em|cqw|cqh)$/i.test(v.trim());
 }
 
 /** Extract the unit suffix of a dimension string. A bare number or unrecognised

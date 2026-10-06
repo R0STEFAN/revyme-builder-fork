@@ -296,14 +296,18 @@ function resolveComputedPx(
     return isNaN(v) ? computedPx : (v / 100) * _parentPx;
   }
 
-  // vw/vh
-  if (cssValue.endsWith('vw')) {
+  // vw/vh/svw/svh/dvw/dvh/lvw/lvh
+  if (/(?:vw|svw|dvw|lvw)$/i.test(cssValue)) {
     const v = parseFloat(cssValue);
     return isNaN(v) ? computedPx : (v / 100) * window.innerWidth;
   }
-  if (cssValue.endsWith('vh')) {
+  if (/(?:vh|svh|dvh|lvh)$/i.test(cssValue)) {
     const v = parseFloat(cssValue);
     return isNaN(v) ? computedPx : (v / 100) * window.innerHeight;
+  }
+  if (/(?:rem|em)$/i.test(cssValue)) {
+    const v = parseFloat(cssValue);
+    return isNaN(v) ? computedPx : v * 16;
   }
 
   // Everything else (fit-content, min-content, max-content, flex-basis, calc, etc.)

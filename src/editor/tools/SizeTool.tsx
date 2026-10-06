@@ -37,14 +37,28 @@ import { trace } from '@/shared/debug-trace';
 
 // ─── Unit parsing ───────────────────────────────────────────────────────────
 
-type DimUnit = 'px' | '%' | 'auto' | 'vw' | 'vh' | 'fill';
+type DimUnit =
+  | 'px'
+  | '%'
+  | 'auto'
+  | 'rem'
+  | 'em'
+  | 'vw'
+  | 'vh'
+  | 'svh'
+  | 'svw'
+  | 'dvh'
+  | 'dvw'
+  | 'lvh'
+  | 'lvw'
+  | 'fill';
 
 function parseValue(raw: string): { num: number; unit: DimUnit } {
   // The "auto" unit (shown as Fit) maps from the CSS Fit values — `min-content`
   // (current), legacy `auto`, and `fit-content`/`max-content`.
   if (!raw || isFitSize(raw)) return { num: 0, unit: 'auto' };
-  const match = raw.match(/^(-?[\d.]+)\s*(px|%|vw|vh)?$/);
-  if (match) return { num: parseFloat(match[1]), unit: (match[2] || 'px') as DimUnit };
+  const match = raw.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
+  if (match) return { num: parseFloat(match[1]), unit: (match[2]?.toLowerCase() || 'px') as DimUnit };
   return { num: 0, unit: 'auto' };
 }
 
@@ -70,9 +84,17 @@ function roundPxDisplay(v: string | undefined | null): string | undefined {
 const UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'px', label: 'px' },
   { value: '%', label: '%' },
-  { value: 'auto', label: 'fit' },
+  { value: 'rem', label: 'rem' },
+  { value: 'em', label: 'em' },
   { value: 'vw', label: 'vw' },
   { value: 'vh', label: 'vh' },
+  { value: 'svh', label: 'svh' },
+  { value: 'svw', label: 'svw' },
+  { value: 'dvh', label: 'dvh' },
+  { value: 'dvw', label: 'dvw' },
+  { value: 'lvh', label: 'lvh' },
+  { value: 'lvw', label: 'lvw' },
+  { value: 'auto', label: 'fit' },
 ];
 
 // ─── Dimension Row ──────────────────────────────────────────────────────────
@@ -822,23 +844,23 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     return disableAutoForCode([...UNIT_OPTIONS, { value: 'fill', label: 'fill' }]);
   }, [heightCanFill, isTopLevel, pxOnly, disableAutoForCode, isIconSetInstance]);
 
-  // Min/max width/height accept ONLY Fixed (px) or % — auto/vw/vh don't apply as a
-  // constraint (clearing a min/max = REMOVE the row via its ×, not an "auto" unit).
+  // Min/max width/height accept all length units (px, %, rem, em, vw, vh, svh, svw, dvh, dvw, lvh, lvw).
   // On a top-level node (a design-component variant root or a canvas node) a '%'
-  // has no sizing parent to resolve against, so it's disabled there → px only.
+  // has no sizing parent to resolve against, so it's disabled there.
   const minMaxUnitOptions = useMemo(() => {
-    const base = UNIT_OPTIONS.filter(o => o.value === 'px' || o.value === '%');
+    const base = UNIT_OPTIONS.filter(o => o.value !== 'auto');
     if (isTopLevel) return base.map(o => o.value === 'px' ? o : { ...o, disabled: true });
     return base;
   }, [isTopLevel]);
 
-  // px↔% switch for a min/max row. Reuses the resize converter (% relative to the
-  // parent's inner size); vp dims are irrelevant here since vw/vh aren't offered.
+  // Unit switch for a min/max row.
   const minMaxUnitChange = useCallback((prop: 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight', to: DimUnit) => {
     const isW = prop === 'minWidth' || prop === 'maxWidth';
     const px = Math.round((isW ? computed.width : computed.height) || 0);
     const parent = isW ? computed.parentWidth : computed.parentHeight;
-    const next = convertPxToDimUnit(px, to, parent, 0, 0);
+    const simVpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
+    const simVpHeight = estimatedVpHeight(simVpWidth);
+    const next = convertPxToDimUnit(px, to, parent, simVpWidth, simVpHeight);
     trace.action('size:minmax-unit', { prop, to, px, parent, next });
     onUpdate(prop, next);
   }, [computed.width, computed.height, computed.parentWidth, computed.parentHeight, onUpdate]);
@@ -1248,7 +1270,7 @@ if (heightIsAuto) {
       if (widthIsAuto) {
         // Height is already the controlling dimension — straight update.
         onUpdate('height', v);
-      } else if (newUnit === '%' || newUnit === 'vh' || newUnit === 'vw') {
+      } else if (newUnit === '%' || newUnit === 'vh' || newUnit === 'vw' || newUnit === 'svh' || newUnit === 'svw' || newUnit === 'dvh' || newUnit === 'dvw' || newUnit === 'lvh' || newUnit === 'lvw' || newUnit === 'rem' || newUnit === 'em') {
         // Switch control to height. Normalise % from the visible height.
         let finalHeight = v;
         if (newUnit === '%' && computed.parentHeight > 0) {
@@ -1268,10 +1290,20 @@ if (heightIsAuto) {
         const widthDelta = heightDelta * aspectRatioNum;
         const newWidthPx = computed.width + widthDelta;
         const widthUnit = (String(styles.width || '').replace(/[\d.-]/g, '').trim() || 'px') as DimUnit;
+        const simVpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
+        const simVpHeight = estimatedVpHeight(simVpWidth);
         let finalWidth: string;
         if (widthUnit === '%' && computed.parentWidth > 0) {
           const pct = (newWidthPx / computed.parentWidth) * 100;
           finalWidth = `${pct.toFixed(5)}%`;
+        } else if ((widthUnit === 'vw' || widthUnit === 'svw' || widthUnit === 'dvw' || widthUnit === 'lvw') && simVpWidth > 0) {
+          finalWidth = `${Math.round((newWidthPx / simVpWidth) * 100)}${widthUnit}`;
+        } else if ((widthUnit === 'vh' || widthUnit === 'svh' || widthUnit === 'dvh' || widthUnit === 'lvh') && simVpHeight > 0) {
+          finalWidth = `${Math.round((newWidthPx / simVpHeight) * 100)}${widthUnit}`;
+        } else if (widthUnit === 'rem') {
+          finalWidth = `${Math.round((newWidthPx / 16) * 100) / 100}rem`;
+        } else if (widthUnit === 'em') {
+          finalWidth = `${Math.round((newWidthPx / 16) * 100) / 100}em`;
         } else {
           finalWidth = `${Math.round(newWidthPx)}${widthUnit}`;
         }

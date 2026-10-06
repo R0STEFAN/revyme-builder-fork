@@ -80,8 +80,15 @@ const DIMENSION_UNIT_OPTIONS = [
   { value: 'px', label: 'px' },
   { value: '%', label: '%' },
   { value: 'rem', label: 'rem' },
+  { value: 'em', label: 'em' },
   { value: 'vw', label: 'vw' },
   { value: 'vh', label: 'vh' },
+  { value: 'svh', label: 'svh' },
+  { value: 'svw', label: 'svw' },
+  { value: 'dvh', label: 'dvh' },
+  { value: 'dvw', label: 'dvw' },
+  { value: 'lvh', label: 'lvh' },
+  { value: 'lvw', label: 'lvw' },
   { value: 'auto', label: 'fit' },
 ];
 

@@ -27,8 +27,11 @@
 import { trace } from './debug-trace';
 import { drawnTileRange } from './canvas-band-queries';
 
-const VW_INNER_RE = /([\d.]+)vw/g;
-const VH_INNER_RE = /([\d.]+)vh/g;
+const VW_INNER_RE = /([\d.]+)(svw|dvw|lvw|vw|svi|dvi|lvi|vi)\b/gi;
+const VH_INNER_RE = /([\d.]+)(svh|dvh|lvh|vh|svb|dvb|lvb|vb)\b/gi;
+const VMIN_INNER_RE = /([\d.]+)(svmin|dvmin|lvmin|vmin)\b/gi;
+const VMAX_INNER_RE = /([\d.]+)(svmax|dvmax|lvmax|vmax)\b/gi;
+const ANY_VP_UNIT_RE = /[\d.](svw|dvw|lvw|vw|svi|dvi|lvi|vi|svh|dvh|lvh|vh|svb|dvb|lvb|vb|svmin|dvmin|lvmin|vmin|svmax|dvmax|lvmax|vmax)\b/i;
 
 /** Simulated viewport height for a given width — the canvas has no real
  *  viewport, so vh resolves via a per-device-class ratio:
@@ -83,31 +86,45 @@ export function canvasFixedAnchor(
  *  agree on what `vw` means in the absence of a viewport. */
 export const FALLBACK_VP_WIDTH = 1440;
 
-/** Resolve a single CSS value's `vw` / `vh` units to absolute `px`
- *  against `vpWidthPx`. Pass-through for non-string values, empty
- *  strings, and values that don't contain vw/vh.
+/** Resolve a single CSS value's `vw` / `vh` / `svh` / `svw` / `dvh` / `dvw` / `lvh` / `lvw`
+ *  units to absolute `px` against `vpWidthPx`. Pass-through for non-string values, empty
+ *  strings, and values that don't contain viewport units.
  *
  *  Handles three cases:
- *   - `9vw` → `${9/100 * vpWidthPx}px`
- *   - `clamp(16px, 4vw, 48px)` → inner regex replace of every `Nvw`
- *   - `9vh` → width-based height ratio (no real vh container) */
+ *   - `9vw` / `9svw` / `9dvw` → `${9/100 * vpWidthPx}px`
+ *   - `clamp(16px, 4svw, 48px)` → inner regex replace of every viewport unit
+ *   - `9vh` / `9svh` / `9dvh` → width-based height ratio (no real vh container) */
 export function resolveResponsiveUnits(value: string, vpWidthPx: number): string {
   if (typeof value !== 'string' || value === '') return value;
+  if (!ANY_VP_UNIT_RE.test(value)) return value;
   let v = value;
-  if (v.includes('vw')) {
-    if (v.endsWith('vw')) {
-      const num = parseFloat(v);
-      if (!isNaN(num)) v = `${(num / 100) * vpWidthPx}px`;
-    } else {
-      v = v.replace(VW_INNER_RE, (_, n) => `${(parseFloat(n) / 100) * vpWidthPx}px`);
-    }
-  }
-  if (v.endsWith('vh')) {
-    const num = parseFloat(v);
+  const vpHeightPx = simulatedVpHeight(vpWidthPx);
+  const minDim = Math.min(vpWidthPx, vpHeightPx);
+  const maxDim = Math.max(vpWidthPx, vpHeightPx);
+
+  const exactMatch = v.trim().match(/^(-?[\d.]+)(svw|dvw|lvw|vw|svi|dvi|lvi|vi|svh|dvh|lvh|vh|svb|dvb|lvb|vb|svmin|dvmin|lvmin|vmin|svmax|dvmax|lvmax|vmax)$/i);
+  if (exactMatch) {
+    const num = parseFloat(exactMatch[1]);
+    const unit = exactMatch[2].toLowerCase();
     if (!isNaN(num)) {
-      v = `${(num / 100) * simulatedVpHeight(vpWidthPx)}px`;
+      if (['svw', 'dvw', 'lvw', 'vw', 'svi', 'dvi', 'lvi', 'vi'].includes(unit)) {
+        v = `${(num / 100) * vpWidthPx}px`;
+      } else if (['svh', 'dvh', 'lvh', 'vh', 'svb', 'dvb', 'lvb', 'vb'].includes(unit)) {
+        v = `${(num / 100) * vpHeightPx}px`;
+      } else if (['svmin', 'dvmin', 'lvmin', 'vmin'].includes(unit)) {
+        v = `${(num / 100) * minDim}px`;
+      } else if (['svmax', 'dvmax', 'lvmax', 'vmax'].includes(unit)) {
+        v = `${(num / 100) * maxDim}px`;
+      }
     }
+  } else {
+    v = v
+      .replace(VW_INNER_RE, (_, n) => `${(parseFloat(n) / 100) * vpWidthPx}px`)
+      .replace(VH_INNER_RE, (_, n) => `${(parseFloat(n) / 100) * vpHeightPx}px`)
+      .replace(VMIN_INNER_RE, (_, n) => `${(parseFloat(n) / 100) * minDim}px`)
+      .replace(VMAX_INNER_RE, (_, n) => `${(parseFloat(n) / 100) * maxDim}px`);
   }
+
   if (v !== value) {
     trace.action('responsive-units:resolved', { from: value, to: v, vpWidthPx });
   }
@@ -128,11 +145,11 @@ export function getResponsiveVpWidth(el: Element | null): number {
 
 const QUERY_BOUND_RE = /\(\s*(min|max)-width:\s*([\d.]+)px\s*\)/g;
 
-/** Resolve vw/vh units INSIDE `@container (…) { … }` blocks of canvas-
+/** Resolve viewport units INSIDE `@container (…) { … }` blocks of canvas-
  *  injected CSS to per-tile px.
  *
  *  Why: the canvas transforms source `@media` overrides to `@container` so
- *  each side-by-side tile responds to its own width — but any vw/vh VALUE
+ *  each side-by-side tile responds to its own width — but any viewport VALUE
  *  inside the block is still resolved by native CSS against the IFRAME
  *  window. A per-viewport `font-size: clamp(40px, 11.6vw, 163px) !important`
  *  override therefore painted at the clamp MAX on every tile (11.6vw of the
@@ -141,14 +158,14 @@ const QUERY_BOUND_RE = /\(\s*(min|max)-width:\s*([\d.]+)px\s*\)/g;
  *  template footer wordmark giant on the mobile tile, correct on live).
  *
  *  A block can match MORE THAN ONE configured tile (e.g. `max-width: 1199px`
- *  matches 768 AND 375), and each tile needs a different px — so a vw/vh-
+ *  matches 768 AND 375), and each tile needs a different px — so a viewport-
  *  carrying block is emitted once per matching width, scoped to exactly that
  *  width (`(min-width: W) and (max-width: W)`), with units resolved against
- *  W. Blocks without vw/vh (and non-block text) pass through untouched.
- *  Runs at canvas-injection time only — the source keeps real vw/vh. */
+ *  W. Blocks without viewport units (and non-block text) pass through untouched.
+ *  Runs at canvas-injection time only — the source keeps real viewport units. */
 export function resolveContainerQueryUnits(css: string, viewportWidthsAsc: number[], opts?: { drawnLadder?: boolean }): string {
   if (!css || viewportWidthsAsc.length === 0) return css;
-  if (!css.includes('vw') && !css.includes('vh')) return css;
+  if (!ANY_VP_UNIT_RE.test(css)) return css;
   let out = '';
   let i = 0;
   while (i < css.length) {
@@ -166,7 +183,7 @@ export function resolveContainerQueryUnits(css: string, viewportWidthsAsc: numbe
     }
     const query = css.slice(at, braceOpen);
     const body = css.slice(braceOpen + 1, j - 1);
-    if (!/[\d.](vw|vh)/.test(body)) { out += css.slice(at, j); i = j; continue; }
+    if (!ANY_VP_UNIT_RE.test(body)) { out += css.slice(at, j); i = j; continue; }
     let min = -Infinity;
     let max = Infinity;
     for (const m of query.matchAll(QUERY_BOUND_RE)) {
@@ -181,9 +198,14 @@ export function resolveContainerQueryUnits(css: string, viewportWidthsAsc: numbe
     // inside the root's padding, so an exact `(min-width: W) and (max-width: W)` missed a padded tile.
     const desc = opts?.drawnLadder ? [...new Set(viewportWidthsAsc)].sort((a, b) => b - a) : null;
     for (const w of matching) {
+      const vhH = simulatedVpHeight(w);
+      const minD = Math.min(w, vhH);
+      const maxD = Math.max(w, vhH);
       const resolvedBody = body
         .replace(VW_INNER_RE, (_, n) => toPx((parseFloat(n) / 100) * w))
-        .replace(VH_INNER_RE, (_, n) => toPx((parseFloat(n) / 100) * simulatedVpHeight(w)));
+        .replace(VH_INNER_RE, (_, n) => toPx((parseFloat(n) / 100) * vhH))
+        .replace(VMIN_INNER_RE, (_, n) => toPx((parseFloat(n) / 100) * minD))
+        .replace(VMAX_INNER_RE, (_, n) => toPx((parseFloat(n) / 100) * maxD));
       out += `@container ${desc ? drawnTileRange(w, desc) : `(min-width: ${w}px) and (max-width: ${w}px)`} {${resolvedBody}}\n`;
     }
     trace.action('responsive-units:container-block-resolved', { query: query.trim(), widths: matching });

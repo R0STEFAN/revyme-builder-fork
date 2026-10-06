@@ -216,6 +216,9 @@ const NUMBER_UNIT_OPTIONS = [
   { value: 'None', label: 'None' }, { value: 'px', label: 'px' }, { value: '%', label: '%' },
   { value: 'em', label: 'em' }, { value: 'rem', label: 'rem' }, { value: 'deg', label: 'deg' },
   { value: 'vh', label: 'vh' }, { value: 'vw', label: 'vw' },
+  { value: 'svh', label: 'svh' }, { value: 'svw', label: 'svw' },
+  { value: 'dvh', label: 'dvh' }, { value: 'dvw', label: 'dvw' },
+  { value: 'lvh', label: 'lvh' }, { value: 'lvw', label: 'lvw' },
 ];
 
 type NumberMetaPatch = { min?: number | null; max?: number | null; step?: number | null; unit?: string | null; control?: 'slider' | 'stepper' | null };

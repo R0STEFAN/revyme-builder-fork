@@ -87,6 +87,28 @@ describe('convertPxToDimUnit', () => {
     expect(convertPxToDimUnit(100, '%', -10, VP_W, VP_H)).toBe('0%');
   });
 
+  it('px → rem is rootFontSize-relative', () => {
+    expect(convertPxToDimUnit(32, 'rem', PARENT_W, VP_W, VP_H, 16)).toBe('2rem');
+    expect(convertPxToDimUnit(24, 'rem', PARENT_W, VP_W, VP_H, 16)).toBe('1.5rem');
+  });
+
+  it('px → em is 16px-relative', () => {
+    expect(convertPxToDimUnit(32, 'em', PARENT_W, VP_W, VP_H)).toBe('2em');
+    expect(convertPxToDimUnit(24, 'em', PARENT_W, VP_W, VP_H)).toBe('1.5em');
+  });
+
+  it('px → svw / dvw / lvw is viewport-width-relative', () => {
+    expect(convertPxToDimUnit(720, 'svw', PARENT_W, 1440, VP_H)).toBe('50svw');
+    expect(convertPxToDimUnit(720, 'dvw', PARENT_W, 1440, VP_H)).toBe('50dvw');
+    expect(convertPxToDimUnit(720, 'lvw', PARENT_W, 1440, VP_H)).toBe('50lvw');
+  });
+
+  it('px → svh / dvh / lvh is viewport-height-relative', () => {
+    expect(convertPxToDimUnit(450, 'svh', PARENT_W, VP_W, 900)).toBe('50svh');
+    expect(convertPxToDimUnit(450, 'dvh', PARENT_W, VP_W, 900)).toBe('50dvh');
+    expect(convertPxToDimUnit(450, 'lvh', PARENT_W, VP_W, 900)).toBe('50lvh');
+  });
+
   it('rounds % / vw / vh to whole integers (no decimals)', () => {
     // 333 / 768 * 100 = 43.359 → 43
     expect(convertPxToDimUnit(333, '%', 768, VP_W, VP_H)).toBe('43%');
@@ -98,10 +120,14 @@ describe('convertPxToDimUnit', () => {
 describe('isRelativeUnit', () => {
   // TRUE — relative units the Renderer resolves to px on canvas; the
   // Dimensions field must keep showing the authored value, NOT liveSize px.
-  it('is true for %, vw, vh authored values', () => {
+  it('is true for %, vw, vh, svh, svw, dvh, dvw, rem, em authored values', () => {
     expect(isRelativeUnit('100%')).toBe(true);
     expect(isRelativeUnit('50vw')).toBe(true);
     expect(isRelativeUnit('99vh')).toBe(true);
+    expect(isRelativeUnit('100svh')).toBe(true);
+    expect(isRelativeUnit('50dvw')).toBe(true);
+    expect(isRelativeUnit('2rem')).toBe(true);
+    expect(isRelativeUnit('1.5em')).toBe(true);
     expect(isRelativeUnit(' 100% ')).toBe(true); // tolerant of whitespace
   });
 

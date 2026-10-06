@@ -44,8 +44,22 @@ describe('resolveResponsiveUnits', () => {
     expect(resolveResponsiveUnits('100vh', 375)).toBe(`${375 * 2.16}px`);
   });
 
+  it('resolves svw, dvw, lvw values like vw', () => {
+    expect(resolveResponsiveUnits('9svw', 1440)).toBe('129.6px');
+    expect(resolveResponsiveUnits('9dvw', 768)).toBe('69.12px');
+    expect(resolveResponsiveUnits('9lvw', 375)).toBe('33.75px');
+    expect(resolveResponsiveUnits('clamp(16px, 4svw, 48px)', 1440)).toBe('clamp(16px, 57.6px, 48px)');
+  });
+
+  it('resolves svh, dvh, lvh values like vh', () => {
+    expect(resolveResponsiveUnits('100svh', 1440)).toBe(`${1440 * 0.625}px`);
+    expect(resolveResponsiveUnits('100dvh', 768)).toBe(`${768 * 1.33}px`);
+    expect(resolveResponsiveUnits('100lvh', 375)).toBe(`${375 * 2.16}px`);
+  });
+
   it('resolves negative vw values', () => {
     expect(resolveResponsiveUnits('-9vw', 1440)).toBe('-129.6px');
+    expect(resolveResponsiveUnits('-9dvw', 1440)).toBe('-129.6px');
   });
 
   it('passes through malformed values without crashing', () => {

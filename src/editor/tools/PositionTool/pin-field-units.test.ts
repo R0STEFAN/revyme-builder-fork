@@ -40,9 +40,17 @@ describe('pinFieldCommitValue', () => {
     expect(pinFieldDisplayPx(back, 807)).toBeCloseTo(shown, 3);
   });
 
+  it('resolves rem and em units', () => {
+    expect(pinFieldDisplayPx('2rem', 807)).toBe(32);
+    expect(pinFieldDisplayPx('1.5em', 807)).toBe(24);
+  });
+
   it('keeps an explicit unit the user typed', () => {
     expect(pinFieldCommitValue('50%', '649px', 807)).toBe('50%');
     expect(pinFieldCommitValue('50px', '36.7802%', 807)).toBe('50px');
+    expect(pinFieldCommitValue('2rem', '649px', 807)).toBe('2rem');
+    expect(pinFieldCommitValue('100svh', '649px', 807)).toBe('100svh');
+    expect(pinFieldCommitValue('50dvw', '649px', 807)).toBe('50dvw');
   });
 
   it('empty clears the property', () => {

@@ -105,7 +105,7 @@ const px = (n: number): string => `${Math.round(n * 100) / 100}px`;
 /** Units that make no sense on a vector: its size is one ratio-linked number,
  *  and a viewport unit or a flex fill sizes ONE axis from outside, breaking the
  *  ratio (choosing `vw` produced a 504 × 32 sliver). */
-export const VECTOR_SET_DISABLED_UNITS: ReadonlySet<string> = new Set(['vw', 'vh', 'fill']);
+export const VECTOR_SET_DISABLED_UNITS: ReadonlySet<string> = new Set(['vw', 'vh', 'svh', 'svw', 'dvh', 'dvw', 'lvh', 'lvw', 'fill']);
 
 export interface VectorSetUnitAction {
   /** Styles to write (may be empty). */
