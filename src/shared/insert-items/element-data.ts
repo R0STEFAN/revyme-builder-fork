@@ -67,6 +67,7 @@ const BASIC_ITEMS: InsertItem[] = [
 const TYPOGRAPHY_ITEMS: InsertItem[] = [
   { id: 'heading', name: 'Heading', iconKey: 'heading' },
   { id: 'paragraph', name: 'Paragraph', iconKey: 'paragraph' },
+  { id: 'span', name: 'Span', iconKey: 'span' },
   { id: 'text-link', name: 'Text Link', iconKey: 'textLink' },
   { id: 'quote', name: 'Quote', iconKey: 'quote' },
 ];

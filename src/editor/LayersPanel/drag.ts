@@ -17,7 +17,7 @@ import { isInstanceLike, instanceReplicaUnhideDisplay } from '@/canvas/drag/inst
 import { detectParentLayoutById, getFlexDirectionById } from '@/canvas/drag/types';
 import { queuePendingUpdates } from '@/canvas/arrow-nudge';
 import { trace } from '@/shared/debug-trace';
-import { isFrameTag } from '@/shared/constants';
+import { isFrameTag, isTextContainerTag, isInlineTextChild } from '@/shared/constants';
 import { sortChildrenByVisualOrder } from './rows';
 
 export type DropIndicator = { layerId: string; nodeId: string; position: 'before' | 'after' | 'inside'; depth: number };
@@ -86,10 +86,14 @@ export function computeEdgeAutoScrollDelta(
  */
 export function layerAcceptsInsideDrop(
   nodeType: string,
-  opts?: { isCmsRowTemplate?: boolean },
+  opts?: { isCmsRowTemplate?: boolean; draggedNodeType?: string },
 ): boolean {
   if (isFrameTag(nodeType)) return true;
-  return !!opts?.isCmsRowTemplate;
+  if (opts?.isCmsRowTemplate) return true;
+  if (opts?.draggedNodeType && isTextContainerTag(nodeType) && isInlineTextChild(opts.draggedNodeType)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -325,10 +329,14 @@ export function startLayerDrag(ctx: LayerDragContext, e: ReactMouseEvent, layerI
         : [];
       const isLastChild = ordered.length > 0 && ordered[ordered.length - 1] === targetNodeId;
       const isComponentInstance = !!targetNode.componentFile;
+      const draggedNode = activeIdRef.current ? nodes.get(activeIdRef.current) : undefined;
+      const acceptsInside = targetIsFrame || layerAcceptsInsideDrop(targetNode.type, {
+        draggedNodeType: draggedNode?.type,
+      });
 
       let position: 'before' | 'after' | 'inside';
 
-      if (targetIsFrame && !isComponentInstance) {
+      if (acceptsInside && !isComponentInstance) {
         if (relativeY < height * 0.3) {
           position = 'before';
         } else if (isLastChild && relativeY > height * 0.7) {
@@ -508,8 +516,9 @@ export function startLayerDrag(ctx: LayerDragContext, e: ReactMouseEvent, layerI
       // computed width/height are CSS px (unscaled), so no canvas-zoom math. A
       // cold cache reads 0 → fall back to the 0,0 anchors `ensureDefaultAnchors`
       // uses, which is still a valid pin.
+      const destIsTextContainer = destNode ? isTextContainerTag(destNode.type) : false;
       const destHasLayout = parentLayout === 'flex' || parentLayout === 'grid';
-      if (!destHasLayout) {
+      if (!destHasLayout && !destIsTextContainer) {
         const pcs = findNodeComputedStyles(finalParentId, dropVpId, ['width', 'height']);
         const ncs = findNodeComputedStyles(draggedId, dropVpId, ['width', 'height']);
         const pw = parseFloat(pcs.width) || 0;
@@ -527,6 +536,13 @@ export function startLayerDrag(ctx: LayerDragContext, e: ReactMouseEvent, layerI
           draggedId, finalParentId, dropVpId, parentLayout,
           left: moveStyles.left, top: moveStyles.top, pw, ph, nw, nh,
         });
+      } else if (destIsTextContainer) {
+        moveStyles.position = 'relative';
+        moveStyles.left = '';
+        moveStyles.top = '';
+        moveStyles.right = '';
+        moveStyles.bottom = '';
+        moveStyles.flex = '';
       }
 
       // Any node entering a FLEX parent must be pinned to `0 0 auto` unless it
@@ -546,7 +562,7 @@ export function startLayerDrag(ctx: LayerDragContext, e: ReactMouseEvent, layerI
       // don't stamp inert `flex` on them.
       const effectivePosition = moveStyles.position !== undefined ? moveStyles.position : (draggedNode.styles?.position ?? '');
       const outOfFlow = effectivePosition === 'absolute' || effectivePosition === 'fixed';
-      const enterFlex = outOfFlow ? null : flexForFlowChildEnteringFlex(draggedNode.styles, parentLayout);
+      const enterFlex = (outOfFlow || destIsTextContainer) ? null : flexForFlowChildEnteringFlex(draggedNode.styles, parentLayout);
       if (enterFlex) moveStyles.flex = enterFlex;
       // A canvas node (present in NO viewport) entering a NON-PRIMARY page
       // replica should appear ONLY there — same as the canvas drag. Hide it on

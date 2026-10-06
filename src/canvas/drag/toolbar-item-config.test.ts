@@ -84,6 +84,13 @@ describe('getToolbarItemConfig', () => {
     expect(item!.textContent!.toLowerCase()).toContain('lorem');
   });
 
+  it('returns config for span', () => {
+    const item = getToolbarItemConfig('span');
+    expect(item).not.toBeNull();
+    expect(item!.elementType).toBe('span');
+    expect(item!.textContent).toBe('Text');
+  });
+
   it('returns config for text-link', () => {
     const item = getToolbarItemConfig('text-link');
     expect(item!.elementType).toBe('a');

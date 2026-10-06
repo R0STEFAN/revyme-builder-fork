@@ -18,7 +18,7 @@ import { selectedIdsAtom } from '@/code/stores/store';
 import { calculateLayoutInsertIndexById, applyLayoutEdgeMagnet, computeLayoutInsertOrderUpdates } from '../reparent-utils';
 import { commitOrderAssignments } from './order-commit';
 import { detectParentLayoutById, getFlexDirectionById } from '../types';
-import { nodeAcceptsChildren } from '@/shared/constants';
+import { nodeAcceptsChildren, isTextContainerTag } from '@/shared/constants';
 import { screenToCanvas } from '@/canvas/canvas-math';
 import { dropLineOps } from '@/canvas/selection/drop-line-store';
 import { parentHighlightOps } from '@/canvas/selection/parent-highlight-store';
@@ -80,6 +80,7 @@ function getViewportIdAtPoint(
  *  smaller than the ghost — matches the UX of moving an existing node. */
 function findDeepestFrameAtPoint(
   x: number, y: number, nodes: Map<string, CanvasNode>, vpId: string,
+  draggedTag?: string,
 ): { id: string; rect: DOMRect } | null {
   const hits = getNodeHitsAtPoint(x, y);
   // hits sorted smallest-area-first → first frame-tag match is the deepest
@@ -98,7 +99,7 @@ function findDeepestFrameAtPoint(
     // its expansion) can never receive a dropped element.
     if (isInstanceOwnedNode(hit.id, node as any)) continue;
     const tag = node.type || 'div';
-    if (!nodeAcceptsChildren(node)) continue;
+    if (!nodeAcceptsChildren(node, draggedTag)) continue;
     const rect = findNodeRect(hit.id, vpId);
     if (!rect) continue;
     return { id: hit.id, rect };
@@ -221,7 +222,7 @@ export class ToolbarDragStrategy implements DragStrategy {
       // not full-rect-containment — so nested cards smaller than the ghost
       // still detect. Matches the existing-node-drag UX: hover over a child,
       // drop into it.
-      let frame = findDeepestFrameAtPoint(mouseScreen.x, mouseScreen.y, context.nodes, vpId);
+      let frame = findDeepestFrameAtPoint(mouseScreen.x, mouseScreen.y, context.nodes, vpId, this.item.elementType);
 
       // Edge-magnet promotion: same UX as CanvasDragStrategy. When the
       // cursor sits within ~12px of a layout-axis edge of `frame` and
@@ -233,10 +234,12 @@ export class ToolbarDragStrategy implements DragStrategy {
       frame = applyLayoutEdgeMagnet(frame, mouseScreen, context.nodes, vpId);
 
       if (frame) {
+        const frameNode = context.nodes.get(frame.id);
+        const isTextContainer = frameNode ? isTextContainerTag(frameNode.type) : false;
         const layout = detectParentLayoutById(frame.id, vpId);
-        if (layout === 'flex' || layout === 'grid' || layout === 'block') {
+        if (layout === 'flex' || layout === 'grid' || layout === 'block' || isTextContainer) {
           // Layout container — show drop line
-          const direction = getFlexDirectionById(frame.id, vpId);
+          const direction = isTextContainer ? 'row' : getFlexDirectionById(frame.id, vpId);
           const insertIndex = calculateLayoutInsertIndexById(mouseScreen, frame.id, vpId, direction);
           this.dropParentId = frame.id;
           this.dropIndex = insertIndex;
@@ -287,15 +290,17 @@ export class ToolbarDragStrategy implements DragStrategy {
       // flex/grid → drop line; non-layout → inside highlight.)
       const CANVAS_VP = '';
       const canvasPos = screenToCanvas(mouseScreen.x, mouseScreen.y, context.transform, context.containerRect);
-      let cnFrame = findDeepestFrameAtPoint(mouseScreen.x, mouseScreen.y, context.nodes, CANVAS_VP);
+      let cnFrame = findDeepestFrameAtPoint(mouseScreen.x, mouseScreen.y, context.nodes, CANVAS_VP, this.item.elementType);
       cnFrame = applyLayoutEdgeMagnet(cnFrame, mouseScreen, context.nodes, CANVAS_VP);
 
       if (cnFrame) {
         this.isOverCanvas = true;
         this.currentVpId = null; // canvas-node drop — no replica / variant routing
+        const cnNode = context.nodes.get(cnFrame.id);
+        const isTextContainer = cnNode ? isTextContainerTag(cnNode.type) : false;
         const layout = detectParentLayoutById(cnFrame.id, CANVAS_VP);
-        if (layout === 'flex' || layout === 'grid' || layout === 'block') {
-          const direction = getFlexDirectionById(cnFrame.id, CANVAS_VP);
+        if (layout === 'flex' || layout === 'grid' || layout === 'block' || isTextContainer) {
+          const direction = isTextContainer ? 'row' : getFlexDirectionById(cnFrame.id, CANVAS_VP);
           const insertIndex = calculateLayoutInsertIndexById(mouseScreen, cnFrame.id, CANVAS_VP, direction);
           this.dropParentId = cnFrame.id;
           this.dropIndex = insertIndex;
@@ -489,6 +494,17 @@ export class ToolbarDragStrategy implements DragStrategy {
       // (Fill) keeps its grow + basis; everything else lands at `0 0 auto`.
       const f = parseFlex(styles.flex || '0 0 auto');
       styles.flex = f.grow > 0 ? `${f.grow} 0 ${f.basis}` : '0 0 auto';
+    }
+
+    const dropParentNode = this.dropParentId ? context.nodes.get(this.dropParentId) : null;
+    const isDroppingIntoText = dropParentNode ? isTextContainerTag(dropParentNode.type) : false;
+    if (isDroppingIntoText) {
+      delete (styles as Record<string, string>).position;
+      delete (styles as Record<string, string>).left;
+      delete (styles as Record<string, string>).top;
+      delete (styles as Record<string, string>).right;
+      delete (styles as Record<string, string>).bottom;
+      delete (styles as Record<string, string>).flex;
     }
 
     // Generate children if the item has a children factory (e.g. row/column with default frames)

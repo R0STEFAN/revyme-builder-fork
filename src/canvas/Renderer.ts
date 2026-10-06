@@ -2663,24 +2663,42 @@ export function patchElement(
       trace.error('renderer:patchElement-innerHTML-failed', { nodeId: node.id, error: err instanceof Error ? err.message : String(err) });
       try { el.textContent = resolvedTextContent; } catch { /* ignore */ }
     }
-  } else if (resolvedTextContent && node.children.length === 0 && !hasActiveTextBinding) {
-    // Patch text content (only for leaf nodes)
-    if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) {
-      if (el.childNodes[0].textContent !== resolvedTextContent) {
-        el.childNodes[0].textContent = resolvedTextContent;
+  } else if (resolvedTextContent && !hasActiveTextBinding) {
+    if (node.children.length === 0) {
+      // Patch text content (only for leaf nodes)
+      if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) {
+        if (el.childNodes[0].textContent !== resolvedTextContent) {
+          el.childNodes[0].textContent = resolvedTextContent;
+        }
+      } else if (el.textContent !== resolvedTextContent || el.childElementCount > 0) {
+        // `el.textContent` STRIPS child element tags, so a rich→plain flatten — styled
+        // `<span>` runs removed in source but still in the live DOM — compares EQUAL
+        // ("Guidance…chapter." === "Guidance…chapter.") and would SKIP, leaving the
+        // stale styled spans on canvas (mixed colors) AND letting the next text-edit
+        // round-trip re-serialize them back into the code. A plain leaf has NO element
+        // children, so `childElementCount > 0` forces the bare text, which removes them.
+        el.textContent = resolvedTextContent;
       }
-    } else if (el.textContent !== resolvedTextContent || el.childElementCount > 0) {
-      // `el.textContent` STRIPS child element tags, so a rich→plain flatten — styled
-      // `<span>` runs removed in source but still in the live DOM — compares EQUAL
-      // ("Guidance…chapter." === "Guidance…chapter.") and would SKIP, leaving the
-      // stale styled spans on canvas (mixed colors) AND letting the next text-edit
-      // round-trip re-serialize them back into the code. A plain leaf has NO element
-      // children, so `childElementCount > 0` forces the bare text, which removes them.
-      el.textContent = resolvedTextContent;
+    } else if (isTextTag(node.type)) {
+      // Text container with children (e.g. h1 with span child)
+      const firstTextNode = Array.from(el.childNodes).find(n => n.nodeType === 3);
+      if (firstTextNode) {
+        if (firstTextNode.textContent !== resolvedTextContent) {
+          firstTextNode.textContent = resolvedTextContent;
+        }
+      } else {
+        el.insertBefore(document.createTextNode(resolvedTextContent), el.firstChild);
+      }
     }
   } else if (shouldClearEmptiedText(node, resolvedTextContent, hasActiveTextBinding, !!el.textContent)) {
     el.textContent = '';
     trace.dom('renderer:clear-emptied-text', { nodeId: node.id, tag: node.type });
+  } else if (!resolvedTextContent && node.children.length > 0 && isTextTag(node.type) && !hasActiveTextBinding) {
+    const firstTextNode = Array.from(el.childNodes).find(n => n.nodeType === 3);
+    if (firstTextNode) {
+      firstTextNode.remove();
+      trace.dom('renderer:clear-emptied-text-node', { nodeId: node.id, tag: node.type });
+    }
   }
 
   // Locale overrides (non-default language: text w/ per-viewport bucketing, attrs, styles).
@@ -3118,7 +3136,13 @@ function patchChildElements(
           parent.appendChild(childEl);
         }
       } else {
-        parent.prepend(childEl);
+        if (isTextTag(parent.tagName.toLowerCase()) && parent.firstChild?.nodeType === 3 && !parent.firstElementChild) {
+          parent.appendChild(childEl);
+        } else if (parent.firstElementChild) {
+          parent.insertBefore(childEl, parent.firstElementChild);
+        } else {
+          parent.prepend(childEl);
+        }
       }
     }
 
@@ -3663,8 +3687,12 @@ function buildNodeElement(
         trace.error('renderer:buildNodeElement-innerHTML-failed', { nodeId: node.id, error: err instanceof Error ? err.message : String(err) });
         try { el.textContent = buildText; } catch { /* ignore */ }
       }
-    } else if (buildText && node.children.length === 0) {
-      el.textContent = buildText;
+    } else if (buildText) {
+      if (node.children.length === 0) {
+        el.textContent = buildText;
+      } else if (isTextTag(node.type)) {
+        el.appendChild(document.createTextNode(buildText));
+      }
     }
   }
 

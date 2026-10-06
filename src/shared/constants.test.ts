@@ -7,6 +7,8 @@ import {
   nodeAcceptsChildren,
   isFrameTag,
   isTextTag,
+  isTextContainerTag,
+  isInlineTextChild,
   isSvgTag,
   FRAME_TAGS,
   TEXT_TAGS,
@@ -427,5 +429,43 @@ describe('nodeAcceptsChildren', () => {
   it('is false for a missing node', () => {
     expect(nodeAcceptsChildren(null)).toBe(false);
     expect(nodeAcceptsChildren(undefined)).toBe(false);
+  });
+
+  it('accepts span when dropped into heading or paragraph', () => {
+    expect(nodeAcceptsChildren({ type: 'h1' }, 'span')).toBe(true);
+    expect(nodeAcceptsChildren({ type: 'h2' }, 'span')).toBe(true);
+    expect(nodeAcceptsChildren({ type: 'h3' }, 'span')).toBe(true);
+    expect(nodeAcceptsChildren({ type: 'p' }, 'span')).toBe(true);
+    expect(nodeAcceptsChildren({ type: 'motion.h1' }, 'span')).toBe(true);
+    expect(nodeAcceptsChildren({ type: 'motion.p' }, 'span')).toBe(true);
+  });
+
+  it('rejects block elements when dropped into heading or paragraph', () => {
+    expect(nodeAcceptsChildren({ type: 'h1' }, 'div')).toBe(false);
+    expect(nodeAcceptsChildren({ type: 'p' }, 'section')).toBe(false);
+    expect(nodeAcceptsChildren({ type: 'h2' }, 'img')).toBe(false);
+  });
+});
+
+describe('isTextContainerTag and isInlineTextChild', () => {
+  it('identifies headings and paragraph as text containers', () => {
+    expect(isTextContainerTag('h1')).toBe(true);
+    expect(isTextContainerTag('h6')).toBe(true);
+    expect(isTextContainerTag('p')).toBe(true);
+    expect(isTextContainerTag('motion.h1')).toBe(true);
+    expect(isTextContainerTag('motion.p')).toBe(true);
+    expect(isTextContainerTag('div')).toBe(false);
+    expect(isTextContainerTag('span')).toBe(false);
+  });
+
+  it('identifies span and other phrasing tags as inline text children', () => {
+    expect(isInlineTextChild('span')).toBe(true);
+    expect(isInlineTextChild('motion.span')).toBe(true);
+    expect(isInlineTextChild('a')).toBe(true);
+    expect(isInlineTextChild('strong')).toBe(true);
+    expect(isInlineTextChild('em')).toBe(true);
+    expect(isInlineTextChild('div')).toBe(false);
+    expect(isInlineTextChild('p')).toBe(false);
+    expect(isInlineTextChild(undefined)).toBe(false);
   });
 });

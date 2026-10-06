@@ -2930,15 +2930,22 @@ function applyMutationCore(code: string, mutation: Mutation): string {
       }
 
       case 'updateChildrenHTML': {
-        // Text-anim nodes: fold the TipTap HTML to plain multi-line text and FULL-replace, then
-        // re-split. Routing through updateNodeChildrenFromHTML wrote the multi-paragraph commit as
-        // real `<p>` JSX children, which the re-split then baked in as literal characters — the
-        // live site rendered `<P>DESIGN.</P>` as visible text. And its tag-free fallback
-        // (updateNodeTextInCode) preserved those stale children forever (see updateText above).
+        // Text-anim nodes: multi-paragraph TipTap commits arrive as `<p>...</p>`, which if written
+        // as real `<p>` JSX children would bake in as literal characters or invalid nesting in headings.
+        // We normalize paragraph wrappers to `<br />` and preserve rich inline marks (`<span>`, `<strong>`, etc.).
         if (nodeHasTextAnim(code, mutation.nodeId)) {
           const config = readTextAnimConfig(code, mutation.nodeId);
           let c = removeTextAnimFromCode(code, mutation.nodeId);
-          c = replaceNodeTextContent(c, mutation.nodeId, htmlToPlainTextLines(mutation.html));
+          if (/<(span|strong|b|em|i|u|s|small|sub|sup|mark|code|a)\b/i.test(mutation.html)) {
+            const normalized = mutation.html
+              .replace(/<\/p>\s*<p[^>]*>/gi, '<br />')
+              .replace(/^<p[^>]*>/i, '')
+              .replace(/<\/p>$/i, '')
+              .trim();
+            c = updateNodeChildrenFromHTML(c, mutation.nodeId, normalized);
+          } else {
+            c = replaceNodeTextContent(c, mutation.nodeId, htmlToPlainTextLines(mutation.html));
+          }
           return config ? addTextAnimInCode(c, mutation.nodeId, config) : c;
         }
         return updateNodeChildrenFromHTML(code, mutation.nodeId, mutation.html);

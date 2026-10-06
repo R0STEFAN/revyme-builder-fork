@@ -1843,7 +1843,9 @@ export class LayoutLiftedStrategy implements DragStrategy {
         if (candidateId === this.parentNodeId) continue;
         if (isInstanceOwnedNode(candidateId, candidateNode as any)) continue; // master-owned
         const tag = candidateNode.type || 'div';
-        if (!nodeAcceptsChildren(candidateNode)) continue;
+        const draggedPrimaryId = draggedNodes[0]?.id;
+        const draggedPrimaryType = draggedPrimaryId ? context.nodes.get(draggedPrimaryId)?.type : undefined;
+        if (!nodeAcceptsChildren(candidateNode, draggedPrimaryType)) continue;
 
         // Use bridge for candidate rect
         const frameRect = findNodeRect(candidateId, vpId);

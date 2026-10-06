@@ -125,6 +125,14 @@ describe('layerAcceptsInsideDrop', () => {
     expect(layerAcceptsInsideDrop('a', { isCmsRowTemplate: false })).toBe(false);
     expect(layerAcceptsInsideDrop('a', {})).toBe(false);
   });
+
+  it('headings and paragraph accept inside drop when dragging span', () => {
+    expect(layerAcceptsInsideDrop('h1', { draggedNodeType: 'span' })).toBe(true);
+    expect(layerAcceptsInsideDrop('h2', { draggedNodeType: 'span' })).toBe(true);
+    expect(layerAcceptsInsideDrop('p', { draggedNodeType: 'span' })).toBe(true);
+    expect(layerAcceptsInsideDrop('h1', { draggedNodeType: 'div' })).toBe(false);
+    expect(layerAcceptsInsideDrop('p', { draggedNodeType: 'section' })).toBe(false);
+  });
 });
 
 // FIT TEXT is a PAIR: `<svg data-id="<id>-svg" data-name="FIT"><foreignObject>

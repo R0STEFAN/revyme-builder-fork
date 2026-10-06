@@ -200,6 +200,27 @@ export function isLinkTag(tag: string): boolean {
   return tag === 'a' || tag === 'Link' || tag === 'MotionLink';
 }
 
+/** HTML tags for headings and paragraphs that can contain inline text children (e.g. <span>) */
+export const TEXT_CONTAINER_TAGS = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'motion.p', 'motion.h1', 'motion.h2', 'motion.h3', 'motion.h4', 'motion.h5', 'motion.h6',
+]);
+
+export function isTextContainerTag(tag: string): boolean {
+  return TEXT_CONTAINER_TAGS.has(tag.toLowerCase());
+}
+
+/** Inline phrasing tags allowed inside text containers */
+export const INLINE_TEXT_TAGS = new Set([
+  'span', 'a', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'code', 'mark', 'sub', 'sup',
+  'motion.span', 'motion.a',
+]);
+
+export function isInlineTextChild(tag?: string): boolean {
+  if (!tag) return false;
+  return INLINE_TEXT_TAGS.has(tag.toLowerCase());
+}
+
 /** HTML tags whose UA default `display` is inline-level, so their padding
  *  paints OUTSIDE the line box and their parent measures a line-height rather
  *  than their border box. Layout normally blockifies them anyway — as a flex or
@@ -231,14 +252,20 @@ export function isInlineLevelTag(tag: string): boolean {
  *
  * Mirrors `linkIsContainer` in PropertiesPanel — element children mean
  * "container", since a link's own text lives in `textContent`.
+ *
+ * Also allows headings (h1-h6) and paragraphs (p) to accept inline text
+ * children (such as <span>) when `childTag` is provided.
  */
 export function nodeAcceptsChildren(
   node: { type?: string; children?: unknown[] } | null | undefined,
+  childTag?: string,
 ): boolean {
   if (!node) return false;
   const tag = node.type || 'div';
   if (canAcceptChildren(tag)) return true;
-  return isLinkTag(tag) && Array.isArray(node.children) && node.children.length > 0;
+  if (isLinkTag(tag) && Array.isArray(node.children) && node.children.length > 0) return true;
+  if (childTag && isTextContainerTag(tag) && isInlineTextChild(childTag)) return true;
+  return false;
 }
 
 // ─── "Fit" sizing (auto-size to content) ────────────────────────────────────

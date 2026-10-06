@@ -227,6 +227,12 @@ const TOOLBAR_ITEMS: Record<string, ToolbarItem> = {
     textContent: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
     ghostSize: { width: 480, height: 100 },
   },
+  span: {
+    id: 'span', elementType: 'span',
+    defaultStyles: { color: '#3b82f6' },
+    textContent: 'Text',
+    ghostSize: { width: 80, height: 24 },
+  },
   'text-link': {
     id: 'text-link', elementType: 'a',
     defaultStyles: { fontSize: '16px', color: '#3b82f6', cursor: 'pointer', textDecorationLine: 'underline', textDecorationStyle: 'solid', textDecorationThickness: '1px', textUnderlineOffset: '0px' },

@@ -1202,7 +1202,7 @@ export class CanvasDragStrategy implements DragStrategy {
         // whatever is behind — never adopt it as the parent.
         if (isInstanceOwnedNode(hit.id, candidateNode as any)) continue;
         const tag = (candidateNode as any).tag || candidateNode.type || 'div';
-        if (!nodeAcceptsChildren(candidateNode)) continue;
+        if (!nodeAcceptsChildren(candidateNode, nodes.get(node.id)?.type)) continue;
         const hitVpId = hit.vpPrefix ? vpIdFromPrefix(hit.vpPrefix) : startVpId;
         const rect = findNodeRect(hit.id, hitVpId);
         if (!rect) continue;
@@ -1431,7 +1431,8 @@ export class CanvasDragStrategy implements DragStrategy {
       const candidateNode = nodes.get(hit.id);
       if (!candidateNode) continue;
       if (isInstanceOwnedNode(hit.id, candidateNode as any)) continue; // see the single path
-      if (!nodeAcceptsChildren(candidateNode)) continue;
+      const draggedTag = Array.from(skipIds)[0] ? nodes.get(Array.from(skipIds)[0])?.type : undefined;
+      if (!nodeAcceptsChildren(candidateNode, draggedTag)) continue;
       const layout = detectParentLayoutById(hit.id, hoverVpId);
       if (layout === 'flex' || layout === 'grid') {
         const rect = findNodeRect(hit.id, hoverVpId);
@@ -1670,7 +1671,7 @@ export class CanvasDragStrategy implements DragStrategy {
       if (!node) { reject(hit, 'not-in-node-map'); continue; }
       if (isInstanceOwnedNode(hit.id, node as any)) { reject(hit, 'instance-owned'); continue; }
       const tag = (node as any).tag || node.type || 'div';
-      if (!nodeAcceptsChildren(node)) { reject(hit, `no-children:${tag}`); continue; }
+      if (!nodeAcceptsChildren(node, primary ? nodes.get(primary.id)?.type : undefined)) { reject(hit, `no-children:${tag}`); continue; }
       const rect = findNodeRect(hit.id, hoverVpId);
       if (!rect) { reject(hit, 'no-rect'); continue; }
 

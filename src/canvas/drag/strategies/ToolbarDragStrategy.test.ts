@@ -382,4 +382,30 @@ export default Hero;
     expect(updates2[0].nodeId).toContain('frame'); // div maps to 'frame' prefix
     expect(updates1[0].nodeId).not.toBe(updates2[0].nodeId);
   });
+
+  it('dropping span into heading or paragraph does not set position absolute or flex', () => {
+    const strategy = new ToolbarDragStrategy();
+    const spanItem = makeItem({
+      id: 'span',
+      elementType: 'span',
+      defaultStyles: { color: '#3b82f6' },
+      ghostSize: { width: 80, height: 24 },
+    });
+    const nodes = new Map<string, any>([
+      ['heading-1', { id: 'heading-1', type: 'h1', children: [], styles: {} }],
+    ]);
+    strategy.setToolbarItem(spanItem);
+    strategy.onStart(makeContext({ nodes }));
+    strategy._setTestState({
+      isOverCanvas: true,
+      dropParentId: 'heading-1',
+      dropIndex: 0,
+    });
+    const updates = strategy.onEnd(makeContext({ nodes }));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].type).toBe('add');
+    expect(updates[0].newParentId).toBe('heading-1');
+    expect(updates[0].descriptor!.styles.position).not.toBe('absolute');
+    expect(updates[0].descriptor!.styles.flex).toBeUndefined();
+  });
 });
