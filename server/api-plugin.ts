@@ -9,7 +9,13 @@ import {
   duplicateProject,
   saveUpload,
   getUploadFilePath,
+  listFolders,
+  saveFolder,
+  renameFolder,
+  deleteFolder,
 } from './storage';
+import { LocalServerManager, localServerManager } from './local-server';
+
 
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -73,9 +79,15 @@ function parseMultipartFile(body: Buffer, contentType: string): { filename: stri
   };
 }
 
-export function selfHostApiPlugin(): Plugin {
+export interface SelfHostApiPluginOptions {
+  manager?: LocalServerManager;
+}
+
+export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
+  const manager = options?.manager || localServerManager;
   const setupMiddlewares = (middlewares: any) => {
     middlewares.use(async (req: any, res: any, next: any) => {
+
       const url = req.url || '';
       const method = req.method || 'GET';
 
@@ -117,6 +129,25 @@ export function selfHostApiPlugin(): Plugin {
         }
       }
 
+      // ─── GET /api/folders ─────────────────────────────────────────────────
+      if (url === '/api/folders' && method === 'GET') {
+        const folders = listFolders();
+        return sendJson(res, 200, folders);
+      }
+
+      // ─── POST /api/folders ────────────────────────────────────────────────
+      if (url === '/api/folders' && method === 'POST') {
+        try {
+          const bodyBuf = await readBodyBuffer(req);
+          const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          const name = body.name || 'New Folder';
+          const saved = saveFolder(name);
+          return sendJson(res, 201, saved);
+        } catch (err: any) {
+          return sendJson(res, 400, { error: err.message || 'Failed to create folder' });
+        }
+      }
+
       // ─── GET /api/projects ────────────────────────────────────────────────
       if (url === '/api/projects' && method === 'GET') {
         const projects = listProjects();
@@ -131,7 +162,8 @@ export function selfHostApiPlugin(): Plugin {
           const id = body.id || `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const name = body.name || 'Untitled Website';
           const data = body.data || { format: 'revyme-v1', files: {} };
-          const saved = saveProject(id, data, name);
+          const folderId = body.folderId !== undefined ? body.folderId : null;
+          const saved = saveProject(id, data, name, undefined, folderId);
           return sendJson(res, 201, saved);
         } catch (err: any) {
           return sendJson(res, 400, { error: err.message || 'Failed to create project' });
@@ -221,9 +253,25 @@ export function selfHostApiPlugin(): Plugin {
           try {
             const bodyBuf = await readBodyBuffer(req);
             const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
-            const data = body.data || body;
+            const data = body.data;
             const name = body.name;
-            const saved = saveProject(id, data, name);
+            const folderId = body.folderId;
+            let current = getProject(id);
+            if (!current && (data || body.files)) {
+              // Creating or importing via PUT
+              const saved = saveProject(id, data || body, name, undefined, folderId);
+              return sendJson(res, 200, { success: true, project: saved });
+            }
+            if (!current) {
+              return sendJson(res, 404, { error: 'Project not found' });
+            }
+            const saved = saveProject(
+              id,
+              data !== undefined ? data : current.data,
+              name !== undefined ? name : current.name,
+              undefined,
+              folderId !== undefined ? folderId : current.folderId
+            );
             return sendJson(res, 200, { success: true, project: saved });
           } catch (err: any) {
             return sendJson(res, 500, { error: err.message || 'Failed to save project' });
@@ -240,7 +288,91 @@ export function selfHostApiPlugin(): Plugin {
         }
       }
 
+      // ─── Folder detail routes: /api/folders/:id ───────────────────────────
+      const folderRouteMatch = url.match(/^\/api\/folders\/([^/?#]+)/);
+      if (folderRouteMatch) {
+        const folderId = decodeURIComponent(folderRouteMatch[1]);
+        if (method === 'PUT') {
+          try {
+            const bodyBuf = await readBodyBuffer(req);
+            const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+            const updated = renameFolder(folderId, body.name);
+            if (!updated) {
+              return sendJson(res, 404, { error: 'Folder not found' });
+            }
+            return sendJson(res, 200, updated);
+          } catch (err: any) {
+            return sendJson(res, 500, { error: err.message || 'Failed to rename folder' });
+          }
+        }
+        if (method === 'DELETE') {
+          const ok = deleteFolder(folderId);
+          if (!ok) {
+            return sendJson(res, 404, { error: 'Folder not found' });
+          }
+          return sendJson(res, 200, { success: true });
+        }
+      }
+
+      // ─── Local Server routes: /api/local-server/:projectId/* ─────────────
+      const localServerMatch = url.match(/^\/api\/local-server\/([^/?#]+)\/(status|build|start|stop)(?:\/)?(?:[?#].*)?$/);
+      if (localServerMatch) {
+        const projectId = decodeURIComponent(localServerMatch[1]);
+        const action = localServerMatch[2];
+
+        // GET /api/local-server/:projectId/status
+        if (action === 'status' && method === 'GET') {
+          const status = manager.getStatus(projectId);
+          return sendJson(res, 200, { status });
+        }
+
+        // POST /api/local-server/:projectId/build
+        if (action === 'build' && method === 'POST') {
+          try {
+            const bodyBuf = await readBodyBuffer(req);
+            const body = bodyBuf.length ? JSON.parse(bodyBuf.toString('utf-8')) : {};
+            const result = await manager.build(projectId, body.files);
+            if (result.success) {
+              return sendJson(res, 200, { success: true, log: result.log });
+            } else {
+              return sendJson(res, 500, { error: 'Build failed', log: result.log });
+            }
+          } catch (err: any) {
+            return sendJson(res, 500, { error: err.message || 'Build failed', log: err.stack || '' });
+          }
+        }
+
+        // POST /api/local-server/:projectId/start
+        if (action === 'start' && method === 'POST') {
+          try {
+            const bodyBuf = await readBodyBuffer(req);
+            const body = bodyBuf.length ? JSON.parse(bodyBuf.toString('utf-8')) : {};
+            const status = await manager.start(projectId, body.port);
+            return sendJson(res, 200, status);
+          } catch (err: any) {
+            return sendJson(res, 500, {
+              error: err.message || 'Failed to start server',
+              status: manager.getStatus(projectId),
+            });
+          }
+        }
+
+        // POST /api/local-server/:projectId/stop
+        if (action === 'stop' && method === 'POST') {
+          try {
+            const status = await manager.stop(projectId);
+            return sendJson(res, 200, status);
+          } catch (err: any) {
+            return sendJson(res, 500, {
+              error: err.message || 'Failed to stop server',
+              status: manager.getStatus(projectId),
+            });
+          }
+        }
+      }
+
       next();
+
     });
   };
 

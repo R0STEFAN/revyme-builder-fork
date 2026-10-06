@@ -501,3 +501,6 @@ export class LocalServerManager {
     this.servers.clear();
   }
 }
+
+export const localServerManager = new LocalServerManager();
+
