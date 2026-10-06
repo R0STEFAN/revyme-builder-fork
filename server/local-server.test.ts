@@ -340,6 +340,7 @@ describe('LocalServerManager', () => {
 
       const stoppedStatus = await manager.stop('stop-test');
       expect(stoppedStatus.status).toBe('idle');
+      expect(stoppedStatus.lastError).toBeNull();
       expect(stoppedStatus.port).toBeNull();
       expect(stoppedStatus.url).toBeNull();
       expect(stoppedStatus.pid).toBeNull();
@@ -352,6 +353,29 @@ describe('LocalServerManager', () => {
       } else {
         expect(mockChild.kill).toHaveBeenCalled();
       }
+    });
+
+    it('does not treat intentional stop as error even if child exits with non-zero code', async () => {
+      const mockChild = createMockChild(6667);
+      mockSpawn.mockImplementation(() => {
+        setTimeout(() => {
+          mockChild.stdout.emit('data', Buffer.from('- Local: http://localhost:3000\n✓ Ready in 100ms'));
+        }, 10);
+        return mockChild;
+      });
+
+      await manager.start('stop-clean', 3012);
+      expect(manager.getStatus('stop-clean').status).toBe('running');
+
+      // Stop the server
+      const stopped = await manager.stop('stop-clean');
+      // Even if child emits exit with code 1 after taskkill
+      mockChild.emit('exit', 1, null);
+
+      expect(stopped.status).toBe('idle');
+      expect(stopped.lastError).toBeNull();
+      expect(manager.getStatus('stop-clean').status).toBe('idle');
+      expect(manager.getStatus('stop-clean').lastError).toBeNull();
     });
 
     it('handles start failure if process exits before becoming ready', async () => {

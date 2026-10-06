@@ -31,6 +31,7 @@ interface ProjectServerRecord {
   lastError: string | null;
   pid: number | null;
   proc: ChildProcess | null;
+  isStopping?: boolean;
 }
 
 export function sanitizeId(id: string): string {
@@ -374,9 +375,13 @@ export class LocalServerManager {
 
     const nextBin = resolveNextBin();
 
+    record.lastError = null;
+    record.isStopping = false;
+
     return new Promise<LocalServerStatus>((resolve) => {
       let settled = false;
       let startupLog = '';
+      let runtimeErrorLog = '';
 
       const child = this.spawnFn(process.execPath, [nextBin, 'start', '-p', String(port)], {
         cwd: targetDir,
@@ -410,7 +415,7 @@ export class LocalServerManager {
           record.pid = null;
           record.port = null;
           record.url = null;
-          record.lastError = errorMsg;
+          record.lastError = stripAnsi(errorMsg.trim());
           resolve(this.getStatus(safeId));
         }
       };
@@ -430,18 +435,30 @@ export class LocalServerManager {
 
       child.stdout?.on('data', (data) => {
         const text = data.toString();
-        startupLog += text;
+        if (!settled) {
+          startupLog += text;
+        }
         if (readyPattern.test(text)) {
           finishReady();
         }
       });
 
       child.stderr?.on('data', (data) => {
-        startupLog += data.toString();
+        const text = data.toString();
+        if (!settled) {
+          startupLog += text;
+        } else {
+          runtimeErrorLog += text;
+        }
       });
 
       child.on('error', (err) => {
-        finishError(err.message);
+        if (!settled) {
+          finishError(err.message);
+        } else if (!record.isStopping && record.proc === child) {
+          record.status = 'error';
+          record.lastError = stripAnsi(err.message);
+        }
       });
 
       child.on('exit', (code, signal) => {
@@ -453,11 +470,12 @@ export class LocalServerManager {
           record.pid = null;
           record.port = null;
           record.url = null;
-          if (code === 0 || signal === 'SIGTERM' || signal === 'SIGKILL') {
+          if (record.isStopping || code === 0 || signal === 'SIGTERM' || signal === 'SIGKILL') {
             record.status = 'idle';
+            record.lastError = null;
           } else {
             record.status = 'error';
-            record.lastError = startupLog || `Process exited unexpectedly with code ${code}`;
+            record.lastError = stripAnsi(runtimeErrorLog.trim()) || `Process exited unexpectedly with code ${code}`;
           }
         }
       });
@@ -469,12 +487,23 @@ export class LocalServerManager {
     const record = this.servers.get(safeId);
 
     if (record && record.proc) {
-      await killProcessTree(record.proc, record.pid, this.execFn);
+      record.isStopping = true;
+      const child = record.proc;
+      const pid = record.pid;
       record.proc = null;
       record.pid = null;
       record.port = null;
       record.url = null;
       record.status = 'idle';
+      record.lastError = null;
+      try {
+        await killProcessTree(child, pid, this.execFn);
+      } finally {
+        record.isStopping = false;
+      }
+    } else if (record) {
+      record.status = 'idle';
+      record.lastError = null;
     }
 
     return this.getStatus(safeId);

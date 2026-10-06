@@ -155,6 +155,8 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       }
       if (curStatus?.lastError) {
         setErrorMessage(curStatus.lastError);
+      } else if (curStatus?.status === 'running') {
+        setErrorMessage(null);
       }
       onStatusChange?.(curStatus);
       if (typeof window !== 'undefined') {
@@ -261,11 +263,13 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
   const handleStop = useCallback(async () => {
     if (stopping || status?.status !== 'running') return;
     setStopping(true);
+    setErrorMessage(null);
     trace.action('local-server-dropdown:stop', { projectId });
 
     try {
       const nextStatus = await stopLocalServer(projectId);
       setStatus(nextStatus);
+      setErrorMessage(nextStatus?.lastError || null);
       onStatusChange?.(nextStatus);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('local-server-status-changed', { detail: nextStatus }));
