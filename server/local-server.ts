@@ -51,6 +51,15 @@ function resolveNextBin(): string {
   }
 }
 
+function cleanProcessEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  delete env.NODE_OPTIONS;
+  delete env.npm_lifecycle_script;
+  delete env.npm_lifecycle_event;
+  delete env.INIT_CWD;
+  return env;
+}
+
 export async function killProcessTree(
   child: ChildProcess,
   pid?: number | null,
@@ -135,14 +144,17 @@ const DEFAULT_TSCONFIG = `{
     "skipLibCheck": true,
     "strict": false,
     "noEmit": true,
+    "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "paths": { "@/*": ["./*"] }
+    "incremental": true,
+    "paths": { "@/*": ["./*"] },
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
   "exclude": ["node_modules"]
 }
 `;
@@ -291,10 +303,9 @@ export class LocalServerManager {
 
       const child = this.spawnFn(process.execPath, [nextBin, 'build'], {
         cwd: targetDir,
-        env: {
-          ...process.env,
+        env: cleanProcessEnv({
           NODE_ENV: 'production',
-        },
+        }),
       });
 
       child.stdout?.on('data', (data) => {
@@ -350,11 +361,10 @@ export class LocalServerManager {
 
       const child = this.spawnFn(process.execPath, [nextBin, 'start', '-p', String(port)], {
         cwd: targetDir,
-        env: {
-          ...process.env,
+        env: cleanProcessEnv({
           NODE_ENV: 'production',
           PORT: String(port),
-        },
+        }),
       });
 
       record.proc = child;
