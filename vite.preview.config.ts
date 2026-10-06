@@ -76,7 +76,7 @@ export default defineConfig({
     // `@revyme/runtime` (npm-installed) ships peer deps
     // (`react`, `framer-motion`) — without dedupe Vite pulls duplicate React
     // copies through the linked package, which crashes hooks. Same fix as
-    // Revyme/vite.config.ts.
+    // Revyme/vite.config.ts. Includes SplitText display:contents support.
     dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'framer-motion', 'motion/react'],
   },
   optimizeDeps: {

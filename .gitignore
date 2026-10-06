@@ -34,3 +34,5 @@ before-oss-refactor/
 oss-release-plan/
 
 .DS_Store
+.superpowers/
+scratch/

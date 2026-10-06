@@ -2,7 +2,7 @@
 // Supports: Scroll Transform (from→to with full transition control), multi-section morphing.
 // Uses refs for state so pushPanel content stays reactive.
 
-import { useState, useRef, useCallback, useMemo, Fragment } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react';
 import { useAtomValue } from 'jotai';
 import { ToolSelect, ControlLabel, ControlActionRow, ToolSegmentedControl, ToolDivider } from '../../../controls';
 import { useToolPopup } from '../../../ui/ToolPopup';
@@ -204,24 +204,26 @@ interface StopEditorProps {
   /** On a REPLICA, route a direction-To edit to a per-viewport animation.responsive
    *  override (returns true when handled). */
   scopedDirectionWrite?: (patch: { direction?: 'down' | 'up'; replay?: boolean; toProps?: Record<string, string> }) => boolean;
+  /** Callback to notify parent editor when stops are modified */
+  onStopsChange?: (stops: ScrollStop[]) => void;
 }
 
-function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite }: StopEditorProps) {
+function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, sectionIdRef, sectionViewportRef, layerRangeRef, layerExitRef, directionRef, replayRef, mode, scopedWrite, directionScope, scopedDirectionWrite, onStopsChange }: StopEditorProps) {
   const handleChange = useCallback((newProps: Record<string, string>) => {
     const newStops = [...stopsRef.current];
     newStops[stopIndex] = { ...newStops[stopIndex], props: newProps };
+    stopsRef.current = newStops;
+    onStopsChange?.(newStops);
     // Per-viewport: on a REPLICA, a scrubbed From/To edit writes a transform.responsive
     // override (keeping base + siblings) instead of the base. Only the simple 2-stop
     // transform case (not multi-section). scopedWrite returns false on primary → base path.
     if (scopedWrite && mode === 'transform' && triggerRef.current !== 'sectionInView' && newStops.length === 2
         && scopedWrite(stopIndex === 0 ? 'from' : 'to', newProps)) {
-      stopsRef.current = newStops;
       return;
     }
     // Scroll ANIMATION On Scroll: edit the To → updateScrollDirection (discrete).
     // Scroll TRANSFORM On Scroll is scrubbed → falls through to updateScrollAnim.
     if (triggerRef.current === 'layerInView' && mode === 'animation') {
-      stopsRef.current = newStops;
       const toProps = newStops[newStops.length - 1].props;
       // On a REPLICA: route the To edit to a per-viewport animation.responsive override.
       if (scopedDirectionWrite?.({ direction: directionRef.current, replay: replayRef.current, toProps })) return;
@@ -336,10 +338,21 @@ const normalizeScrollStops = (stops: { progress: number; props: Record<string, s
   const to = stops[stops.length - 1];
   return [{ progress: 0, props: restingStopProps(to.props) }, { ...to, progress: 1 }];
 };
-const detectScrollPreset = (toProps: Record<string, string>): string => {
-  const norm = (o: Record<string, string>) => JSON.stringify(Object.entries(o).filter(([, v]) => v !== '').sort());
-  const cur = norm(toProps);
-  for (const [key, props] of Object.entries(SCROLL_PRESETS)) if (norm(props) === cur) return key;
+const isNeutralValue = (k: string, v: string) => {
+  if (v === '' || v == null) return true;
+  if ((k === 'opacity' || k.startsWith('scale')) && (v === '1' || v === '100%')) return true;
+  if ((k === 'x' || k === 'y' || k === 'z' || k.startsWith('rotate') || k.startsWith('skew')) && (v === '0' || v === '0px' || v === '0deg' || v === '0%')) return true;
+  return false;
+};
+
+export const detectScrollPreset = (toProps: Record<string, string>): string => {
+  const activeEntries = Object.entries(toProps).filter(([k, v]) => !isNeutralValue(k, v));
+  const norm = (entries: [string, string][]) => JSON.stringify(entries.sort());
+  const cur = norm(activeEntries);
+  for (const [key, props] of Object.entries(SCROLL_PRESETS)) {
+    const presetEntries = Object.entries(props).filter(([k, v]) => !isNeutralValue(k, v));
+    if (norm(presetEntries) === cur) return key;
+  }
   return 'custom';
 };
 
@@ -445,6 +458,17 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
   triggerRef.current = trigger;
   const transitionRef = useRef(transition);
   transitionRef.current = transition;
+
+  // EXTERNAL change re-seed (undo/redo, external re-parse)
+  const stopsSig = JSON.stringify(initStops);
+  useEffect(() => {
+    if (!initStops) return;
+    const currentSig = JSON.stringify(stopsRef.current);
+    if (stopsSig !== currentSig) {
+      stopsRef.current = initStops;
+      setStops(initStops);
+    }
+  }, [stopsSig]);
 
   // On-Scroll (the reference) Direction + Replay — read back from the `// @scroll`
   // marker (defaults down / replay). Down = animate resting→To scrolling down;
@@ -746,7 +770,24 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
             <ControlLabel label={label} property="" plain />
             <div className="w-full">
               <ControlActionRow onClick={() => pushPanel(panelTitle ?? label, (
-                <StopEditor stopsRef={stopsRef} stopIndex={stopIdx} nodeId={nodeId} triggerRef={triggerRef} transitionRef={transitionRef} sectionIdRef={sectionIdRef} sectionViewportRef={sectionViewportRef} layerRangeRef={layerRangeRef} layerExitRef={layerExitRef} directionRef={directionRef} replayRef={replayRef} mode={mode} scopedWrite={scopedTransformWrite} directionScope={scrollData?.scope} scopedDirectionWrite={scopedDirectionWrite} />
+                <StopEditor
+                  stopsRef={stopsRef}
+                  stopIndex={stopIdx}
+                  nodeId={nodeId}
+                  triggerRef={triggerRef}
+                  transitionRef={transitionRef}
+                  sectionIdRef={sectionIdRef}
+                  sectionViewportRef={sectionViewportRef}
+                  layerRangeRef={layerRangeRef}
+                  layerExitRef={layerExitRef}
+                  directionRef={directionRef}
+                  replayRef={replayRef}
+                  mode={mode}
+                  scopedWrite={scopedTransformWrite}
+                  directionScope={scrollData?.scope}
+                  scopedDirectionWrite={scopedDirectionWrite}
+                  onStopsChange={setStops}
+                />
               ))}>
                 <svg width="14" height="14" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="6" className="text-[var(--text-secondary)] shrink-0">
                   <path fill="currentColor" d="m24.95 42.36l5.466-11.99l12.689-3.72l-9.767-8.88l.368-13.163l-11.502 6.503l-12.46-4.416l2.657 12.9l-8.069 10.433l13.145 1.47z" />
@@ -791,7 +832,29 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
               <ToolSelect
                 value={detectScrollPreset(stops[stops.length - 1]?.props || {})}
                 onChange={(v) => {
-                  if (v === 'custom') return;
+                  if (v === 'custom') {
+                    pushPanel('To', (
+                      <StopEditor
+                        stopsRef={stopsRef}
+                        stopIndex={1}
+                        nodeId={nodeId}
+                        triggerRef={triggerRef}
+                        transitionRef={transitionRef}
+                        sectionIdRef={sectionIdRef}
+                        sectionViewportRef={sectionViewportRef}
+                        layerRangeRef={layerRangeRef}
+                        layerExitRef={layerExitRef}
+                        directionRef={directionRef}
+                        replayRef={replayRef}
+                        mode={mode}
+                        scopedWrite={scopedTransformWrite}
+                        directionScope={scrollData?.scope}
+                        scopedDirectionWrite={scopedDirectionWrite}
+                        onStopsChange={setStops}
+                      />
+                    ));
+                    return;
+                  }
                   const newStops: ScrollStop[] = [
                     { progress: 0, props: {} },
                     { progress: 1, props: { ...SCROLL_PRESETS[v] } },
