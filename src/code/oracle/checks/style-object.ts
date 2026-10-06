@@ -287,13 +287,13 @@ function checkStyleObject(
         code: 'VARIABLE_TERNARY_BINDING', tier: 2, line, elementId: dataId,
         message: `${key} (line ${line}) puts the variable '${ident}' inside a ternary — the controls bind variables only as the WHOLE value, so this renders wrong on the canvas and shows no bound pill. Bind it as the full value (${key}: ${ident}). If the value must DIFFER per variant, give it a dedicated conditionally-rendered element (<AnimatePresence>{variant === 'x' && <motion.div … style={{ ${key}: ${ident} }} />}</AnimatePresence>) and vary VISIBILITY instead.`,
       });
-    } else if (key === 'alignItems' && (styleValueIncludes(prop.value, 'baseline') || styleValueIncludes(prop.value, 'stretch'))) {
-      // The Layout tool's Align control offers ONLY start/center/end — baseline
-      // and stretch were removed from the dropdown (2026-06-10), so a file using
-      // them shows an unset Align the user can't read or round-trip.
+    } else if (key === 'alignItems' && styleValueIncludes(prop.value, 'baseline')) {
+      // The Layout tool's Align control offers start/center/end/stretch — baseline
+      // is not in the control, so a file using it shows an unset Align the user
+      // can't read or round-trip.
       v.push({
         code: 'FORBIDDEN_ALIGN_VALUE', tier: 2, line, elementId: dataId,
-        message: `alignItems: 'baseline'/'stretch' (line ${line}) is not in the Layout tool's Align control — the panel shows it as unset. Use 'flex-start', 'center' or 'flex-end'. For stretch behaviour OMIT alignItems (children with no cross-axis size fill by default); for text rows baseline ≈ 'flex-start'.`,
+        message: `alignItems: 'baseline' (line ${line}) is not in the Layout tool's Align control — the panel shows it as unset. Use 'flex-start', 'center', 'flex-end' or 'stretch'. For text rows baseline ≈ 'flex-start'.`,
       });
     }
   }

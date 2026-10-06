@@ -717,16 +717,16 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   });
 });
 
-describe('checkFile — FORBIDDEN_ALIGN_VALUE (Align control has no baseline/stretch)', () => {
-  it.each(['baseline', 'stretch'])('flags alignItems: %s', (val) => {
-    const code = CLEAN_COMPONENT.replace("display: 'flex',", `display: 'flex', alignItems: '${val}',`);
+describe('checkFile — FORBIDDEN_ALIGN_VALUE (Align control has no baseline)', () => {
+  it('flags alignItems: baseline', () => {
+    const code = CLEAN_COMPONENT.replace("display: 'flex',", "display: 'flex', alignItems: 'baseline',");
     const vs = checkFile(code, { kind: 'component' });
     expect(codes(vs)).toContain('FORBIDDEN_ALIGN_VALUE');
     expect(vs.find((x) => x.code === 'FORBIDDEN_ALIGN_VALUE')!.message).toContain("'flex-start'");
   });
 
   it('stays silent for the values the Align control offers', () => {
-    for (const val of ['flex-start', 'center', 'flex-end']) {
+    for (const val of ['flex-start', 'center', 'flex-end', 'stretch']) {
       const code = CLEAN_COMPONENT.replace("display: 'flex',", `display: 'flex', alignItems: '${val}',`);
       expect(codes(checkFile(code, { kind: 'component' }))).not.toContain('FORBIDDEN_ALIGN_VALUE');
     }
@@ -748,7 +748,7 @@ describe('checkFile — FORBIDDEN_ALIGN_VALUE (Align control has no baseline/str
 import React from 'react';
 
 export default function Page() {
-  return <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'stretch' }} />;
+  return <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'baseline' }} />;
 }`;
     expect(codes(checkFile(page, { kind: 'page' }))).toContain('FORBIDDEN_ALIGN_VALUE');
   });

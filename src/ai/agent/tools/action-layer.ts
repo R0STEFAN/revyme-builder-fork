@@ -38,14 +38,14 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 // ─── Enum mirrors of the editor's option sets ─────────────────────────────
 // Parity sources (src/editor/controls/css-property-options.ts):
-//   getAlignOptions()   → ['flex-start', 'center', 'flex-end']
+//   getAlignOptions()   → ['flex-start', 'center', 'flex-end', 'stretch']
 //   getJustifyOptions() → ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly']
-// `stretch` / `baseline` are NOT in the Align control (they read as unset in
+// `baseline` is NOT in the Align control (it reads as unset in
 // the panel) — excluded here too (anti-permissivity).
 
 export const LAYOUT_DISPLAY_VALUES = ['flex', 'block', 'grid', 'none'] as const;
 export const LAYOUT_DIRECTION_VALUES = ['row', 'row-reverse', 'column', 'column-reverse'] as const;
-export const LAYOUT_ALIGN_VALUES = ['flex-start', 'center', 'flex-end'] as const;
+export const LAYOUT_ALIGN_VALUES = ['flex-start', 'center', 'flex-end', 'stretch'] as const;
 export const LAYOUT_JUSTIFY_VALUES = [
   'flex-start',
   'center',

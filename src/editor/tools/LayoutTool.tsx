@@ -1255,6 +1255,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
                   { value: 'flex-start', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="2" height="16" rx="1" /><rect x="7" y="6" width="11" height="4" rx="1" /><rect x="7" y="14" width="7" height="4" rx="1" /></svg> },
                   { value: 'center', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="11" y="3" width="2" height="18" rx="1" /><rect x="6.5" y="6" width="11" height="4" rx="1" /><rect x="8.5" y="14" width="7" height="4" rx="1" /></svg> },
                   { value: 'flex-end', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="19" y="4" width="2" height="16" rx="1" /><rect x="6" y="6" width="11" height="4" rx="1" /><rect x="10" y="14" width="7" height="4" rx="1" /></svg> },
+                  { value: 'stretch', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="2" height="16" rx="1" /><rect x="19" y="4" width="2" height="16" rx="1" /><rect x="7" y="6" width="10" height="4" rx="1" /><rect x="7" y="14" width="10" height="4" rx="1" /></svg> },
                 ]}
                 size="sm"
               />

@@ -52,6 +52,7 @@ const OPTIONS: Record<string, CSSOption[]> = {
     { value: 'flex-start', label: 'Start' },
     { value: 'center', label: 'Center' },
     { value: 'flex-end', label: 'End' },
+    { value: 'stretch', label: 'Stretch' },
   ],
   justifyContent: [
     { value: 'flex-start', label: 'Start' },
@@ -185,6 +186,7 @@ export function getAlignOptions(_flexDirection?: string): CSSOption[] {
     { value: 'flex-start', label: 'Start' },
     { value: 'center', label: 'Center' },
     { value: 'flex-end', label: 'End' },
+    { value: 'stretch', label: 'Stretch' },
   ];
 }
 
