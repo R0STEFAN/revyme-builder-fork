@@ -283,4 +283,35 @@ describe('LocalServerDropdown', () => {
     fireEvent.mouseDown(document.body);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('displays build success box and cleans ANSI escape codes from build log', async () => {
+    const rawAnsiLog = '\u001b[1m\u001b[38;2;173;127;168m▲ Next.js 16.2.10\u001b[39m\u001b[22m (Turbopack)\n\u001b[32m\u001b[1m✓\u001b[22m\u001b[39m Compiled successfully in 1797ms';
+    vi.mocked(localServerClient.buildLocalServer).mockResolvedValue({
+      success: true,
+      log: rawAnsiLog,
+    });
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(localServerClient.fetchLocalServerStatus).toHaveBeenCalled();
+    });
+
+    const buildBtn = screen.getByRole('button', { name: /^build$/i });
+    await act(async () => {
+      fireEvent.click(buildBtn);
+    });
+
+    // Check success badge
+    expect(screen.getByText('Build succeeded')).toBeTruthy();
+
+    // Toggle log view
+    const viewLogBtn = screen.getByText('View build log');
+    fireEvent.click(viewLogBtn);
+
+    // Verify ANSI codes are stripped
+    expect(screen.getByText(/▲ Next\.js 16\.2\.10 \(Turbopack\)/)).toBeTruthy();
+    expect(screen.getByText(/Compiled successfully in 1797ms/)).toBeTruthy();
+    expect(screen.queryByText(/\[38;2;/)).toBeNull();
+  });
 });

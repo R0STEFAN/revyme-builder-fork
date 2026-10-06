@@ -93,6 +93,20 @@ function X({ size = 12, className }: IconProps) {
   );
 }
 
+function Check({ size = 12, className }: IconProps) {
+  return (
+    <svg {...svgProps(size, className)}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function stripAnsi(str: string): string {
+  return str
+    .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+    .replace(/\[\d+(?:;\d+)*m/g, '');
+}
+
 // ─── Component Props ─────────────────────────────────────────────────────────
 
 export interface LocalServerDropdownProps {
@@ -375,12 +389,12 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
             </button>
           </div>
 
-          {/* Error & Log view */}
-          {(errorMessage || buildLog) && (
+          {/* Error view */}
+          {errorMessage ? (
             <div className="mt-1 p-2 rounded bg-red-500/10 border border-red-500/30 text-xs flex flex-col gap-1.5">
               <div className="flex items-start justify-between gap-1 text-red-400">
                 <span className="font-medium truncate leading-tight">
-                  {errorMessage || 'Build completed with log'}
+                  {errorMessage}
                 </span>
                 <button
                   type="button"
@@ -388,7 +402,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
                     setErrorMessage(null);
                     setShowLog(false);
                   }}
-                  className="text-red-400 hover:text-red-300 p-0.5 rounded"
+                  className="text-red-400 hover:text-red-300 p-0.5 rounded cursor-pointer"
                   title="Dismiss error"
                 >
                   <X size={12} />
@@ -402,17 +416,53 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
                     onClick={() => setShowLog((prev) => !prev)}
                     className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline cursor-pointer"
                   >
-                    {showLog ? 'Hide log' : 'View log'}
+                    {showLog ? 'Hide log' : 'View error log'}
                   </button>
                   {showLog && (
-                    <pre className="mt-1 p-1.5 max-h-28 overflow-auto font-mono text-[10px] bg-black/50 text-[var(--text-primary)] rounded whitespace-pre-wrap">
-                      {buildLog}
+                    <pre className="mt-1 p-1.5 max-h-36 overflow-auto font-mono text-[10px] bg-black/60 text-red-300 rounded whitespace-pre-wrap select-text">
+                      {stripAnsi(buildLog)}
                     </pre>
                   )}
                 </div>
               )}
             </div>
-          )}
+          ) : buildLog ? (
+            /* Build Success log notice */
+            <div className="mt-1 p-2 rounded bg-emerald-500/10 border border-emerald-500/25 text-xs flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-1 text-emerald-400">
+                <span className="font-medium truncate leading-tight flex items-center gap-1.5">
+                  <Check size={12} />
+                  <span>Build succeeded</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBuildLog(null);
+                    setShowLog(false);
+                  }}
+                  className="text-emerald-400/70 hover:text-emerald-300 p-0.5 rounded cursor-pointer"
+                  title="Dismiss"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowLog((prev) => !prev)}
+                  className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline cursor-pointer"
+                >
+                  {showLog ? 'Hide log' : 'View build log'}
+                </button>
+                {showLog && (
+                  <pre className="mt-1 p-1.5 max-h-36 overflow-auto font-mono text-[10px] bg-black/60 text-emerald-300 rounded whitespace-pre-wrap select-text">
+                    {stripAnsi(buildLog)}
+                  </pre>
+                )}
+              </div>
+            </div>
+          ) : null}
         </motion.div>
       )}
     </AnimatePresence>

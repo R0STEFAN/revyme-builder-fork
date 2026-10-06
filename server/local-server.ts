@@ -52,12 +52,21 @@ function resolveNextBin(): string {
 }
 
 function cleanProcessEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NO_COLOR: '1',
+    FORCE_COLOR: '0',
+    ...extra,
+  };
   delete env.NODE_OPTIONS;
   delete env.npm_lifecycle_script;
   delete env.npm_lifecycle_event;
   delete env.INIT_CWD;
   return env;
+}
+
+export function stripAnsi(str: string): string {
+  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
 }
 
 export async function killProcessTree(
@@ -318,21 +327,23 @@ export class LocalServerManager {
 
       child.on('error', (err) => {
         output += `\n${err.message}`;
+        const cleaned = stripAnsi(output);
         record.status = 'error';
-        record.lastError = output;
-        resolve({ success: false, log: output });
+        record.lastError = cleaned;
+        resolve({ success: false, log: cleaned });
       });
 
       child.on('close', (code) => {
+        const cleaned = stripAnsi(output);
         if (code === 0) {
           record.isBuilt = true;
           record.lastBuiltAt = Date.now();
           record.status = record.proc ? 'running' : 'idle';
           record.lastError = null;
-          resolve({ success: true, log: output });
+          resolve({ success: true, log: cleaned });
         } else {
           record.status = 'error';
-          record.lastError = output || `Build failed with exit code ${code}`;
+          record.lastError = cleaned || `Build failed with exit code ${code}`;
           resolve({ success: false, log: record.lastError });
         }
       });
