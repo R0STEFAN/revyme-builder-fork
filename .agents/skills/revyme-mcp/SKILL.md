@@ -2,7 +2,7 @@
 name: revyme-mcp
 description: >-
   Use this skill whenever the user asks to control, modify, generate designs, animate elements,
-  or manage CMS in the Revyme Website Builder via the Model Context Protocol (MCP) bridge.
+  author design components or code components, or manage CMS in the Revyme Website Builder via the Model Context Protocol (MCP) bridge.
 ---
 
 # Revyme MCP Agent Skill
@@ -19,13 +19,13 @@ Before executing any tool calls, verify that the builder is running:
 ## 2. Communication Methods
 
 The agent can send requests to the builder in two ways:
-1. **Through MCP Tools directly** (if Antigravity / Claude has loaded `mcp_config.json`):
-   - `revyme_get_context`
-   - `revyme_submit_files`
-   - `revyme_manage_presets`
-   - `revyme_manage_cms`
-   - `revyme_agent_tool`
-   - `revyme_agent_manifest`
+1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
+   - `revyme_get_context`: Read current page/component AST, tokens, and schemas.
+   - `revyme_submit_files`: Write page files with Oracle gate validation.
+   - `revyme_manage_presets`: Manage design tokens (colors, typography, radii).
+   - `revyme_manage_cms`: Manage CMS collections, fields, and items.
+   - `revyme_agent_tool`: Execute semantic builder operations (`create_component`, `set_motion`, `add_node`, etc.).
+   - `revyme_agent_manifest`: List all available semantic agent tools.
 
 2. **Through the Bridge HTTP RPC Endpoint**:
    If running via script or CLI:
@@ -37,7 +37,58 @@ The agent can send requests to the builder in two ways:
 
 ---
 
-## 3. Workflows & Best Practices
+## 3. Design Components vs Code Components (CRITICAL)
+
+In Revyme, components in `components/<Name>.tsx` belong to two completely different paradigms. You **MUST** choose correctly based on the requirement:
+
+```
+                          ┌───────────────────────────┐
+                          │   Component in Revyme     │
+                          └─────────────┬─────────────┘
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             ▼                                                     ▼
+┌─────────────────────────┐                           ┌─────────────────────────┐
+│    Design Component     │                           │     Code Component      │
+│  (Canvas-Native Master) │                           │       (Black Box)       │
+├─────────────────────────┤                           ├─────────────────────────┤
+│ • NO @controls          │                           │ • MUST HAVE @controls   │
+│ • Visually editable     │                           │ • Edited in Code Editor │
+│ • Appears in Layers     │                           │ • Internal DOM hidden   │
+│ • Has variantConfig     │                           │ • Custom hooks & state  │
+│ • Authored via          │                           │ • Shaders, math, Canvas │
+│   create_component /    │                           │ • Authored via          │
+│   extract_component     │                           │   revyme_submit_files   │
+└─────────────────────────┘                           └─────────────────────────┘
+```
+
+### A. Design Components (Native Canvas Masters)
+- **What it is**: Reusable visual UI elements (cards, spec rows, buttons, pricing tables, navigation items, testimonial blocks, badges).
+- **Canvas Experience**: Fully interactive and visual! Designers can double-click on the canvas to select inner elements, see all layers in the Layers panel, customize styles with the Style Inspector, reorder elements, and switch visual variants.
+- **File Structure**:
+  - `/** @name "ComponentName" */`
+  - `export const variantConfig = [ { name: 'default', ... }, { name: 'highlight', ... } ];`
+  - Typed props with defaults in destructuring: `function ComponentName({ style, tag = "...", initialVariant = 'default' }: Props)`
+  - `export default withResponsiveProps(ComponentName);`
+  - **NEVER include `/** @controls */`**.
+- **How to Author**:
+  - Always use the semantic tool `create_component` (declarative `{ name, props, variants, layout }` or `{ from: "node_id" }`).
+  - Or use `extract_component` on a live subtree on the page.
+  - Instantiate on pages with `add_component_instance({ name: "SpecItem", parent_id: "...", props: {...} })` or in page JSX `<SpecItem data-id="..." ... />`.
+
+### B. Code Components (Custom Logic & Shaders)
+- **What it is**: Complex, stateful, or low-level components requiring custom React runtime logic, WebGL shaders, Canvas 2D drawings, complex keyframed scroll math, audio/video players, or third-party libraries.
+- **Canvas Experience**: Rendered inside `CodeComponentHost` as a **black box**. Individual inner DOM nodes are not selectable or styleable on the canvas; configuration is exposed strictly via the Inspector's `@controls` panel.
+- **File Structure**:
+  - **MUST have `/** @controls { ... } */`** JSDoc annotation.
+  - Can use `useState`, `useEffect`, `useRef`, `useCallback`, `requestAnimationFrame`, `window` event listeners.
+  - `export default withResponsiveProps(ComponentName);`
+- **How to Author**:
+  - Author source directly to `components/<Name>.tsx` using `revyme_submit_files` or direct file creation.
+
+---
+
+## 4. Workflows & Best Practices
 
 ### A. Reading Context Before Editing
 Always query the editor first to understand the current page structure, active `data-id`s, and design tokens:
@@ -105,10 +156,6 @@ Always apply animations using Revyme's native semantic tools (`set_motion`, `set
   }
   ```
 
-- **Scroll Parallax & Scrubbing**:
-  - *Parallax Speed*: `speed: 125` (moves up faster), `speed: 75` (lags behind).
-  - *Scroll Transform*: `effect: "transform"`, `trigger: "layerInView"`, `from: { "opacity": 0.3, "scale": 0.9 }`, `to: { "opacity": 1, "scale": 1 }`.
-
 - **Smooth Momentum Scrolling**:
   Enable Lenis physics: `set_smooth_scroll` with `enabled: true, intensity: 14`.
 
@@ -117,6 +164,9 @@ Always apply animations using Revyme's native semantic tools (`set_motion`, `set
 - To add fields: `cms_add_field` with `collection`, `name`, `type`.
 - To insert data: `cms_add_items`.
 
-### E. References
+---
+
+## 5. References & Deep Dives
+- Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.
 - Read [references/motion-choreography.md](./references/motion-choreography.md) for full animation physics, springs, easing presets, and choreography recipes.
-- Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all 168 available semantic tools.
+- Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all available semantic tools.

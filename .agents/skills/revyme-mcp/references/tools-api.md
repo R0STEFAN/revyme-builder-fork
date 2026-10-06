@@ -43,6 +43,7 @@ Direct file write with Oracle Gate checking:
 2. Do not use unsupported tags (`<ul>`, `<li>` are invalid — use stacked `<div>` frames).
 3. Text styles (`textAlign`, `fontSize`, `color`) must be placed directly on text elements (`<p>`, `<h1>`, `<span>`), not on parent frames.
 4. CSS styles must use camelCase.
+5. All elements must have explicit positioning (`position: 'relative'`, etc.).
 
 ### `revyme_manage_presets`
 Manipulates design tokens in `app/globals.css`:
@@ -61,6 +62,82 @@ CRUD for CMS:
 ## 3. Semantic Agent Tools (`revyme_agent_tool`)
 
 Executed through the internal agent tool dispatcher (`src/ai/agent/bridge-tools.ts`). These mutate the virtual AST and DOM directly without full-page re-renders:
+
+### Component Operations (Design Components)
+- **`create_component`**:
+  Authors a new canvas-native Design Component master in `components/<Name>.tsx`:
+  ```json
+  {
+    "name": "SpecItem",
+    "props": [
+      { "name": "tag", "type": "string", "default": "SPEC // 01" },
+      { "name": "description", "type": "string", "default": "Machined solid brass" },
+      { "name": "value", "type": "string", "default": "48.2 g" }
+    ],
+    "variants": [{ "name": "highlight", "label": "Highlight" }],
+    "layout": [
+      {
+        "tag": "div",
+        "dataId": "spec-row",
+        "style": { "display": "flex", "flexDirection": "row", "justifyContent": "space-between", "padding": "14px 0px" },
+        "children": [
+          { "tag": "span", "text": "{tag}", "style": { "color": "#2C4A8F", "fontWeight": "700" } },
+          { "tag": "span", "text": "{description}", "style": { "color": "#4A5364" } },
+          { "tag": "span", "text": "{value}", "style": { "color": "#141C2B", "fontWeight": "700" } }
+        ]
+      }
+    ]
+  }
+  ```
+- **`extract_component`**:
+  Extracts an existing live subtree on the page into a Design Component master and replaces it with an instance:
+  ```json
+  {
+    "node_id": "hero-card-1",
+    "name": "PricingCard"
+  }
+  ```
+- **`add_component_instance`**:
+  Places an instance of a component on the page:
+  ```json
+  {
+    "name": "SpecItem",
+    "parent_id": "measurements-list",
+    "props": {
+      "tag": "DIM // 01",
+      "description": "Total length capped",
+      "value": "142.0 mm"
+    }
+  }
+  ```
+- **`set_component_prop`**:
+  Updates a prop on a component instance:
+  ```json
+  {
+    "node_id": "comp-spec-1",
+    "component_name": "SpecItem",
+    "prop": "value",
+    "value": "150.0 mm"
+  }
+  ```
+- **`set_variant`**:
+  Switches the active variant of a component instance:
+  ```json
+  {
+    "node_id": "pricing-card-1",
+    "variant": "highlight"
+  }
+  ```
+- **`add_variant`**:
+  Adds a new visual variant to a Design Component master:
+  ```json
+  {
+    "component": "PricingCard",
+    "name": "dark"
+  }
+  ```
+- **`list_components`**:
+  Lists all design and code components available in the project.
 
 ### Design & Structure
 - **`add_node`**:
@@ -83,7 +160,7 @@ Executed through the internal agent tool dispatcher (`src/ai/agent/bridge-tools.
 - **`set_motion`**:
   - `effect: "appear"`: entrance on scroll
     ```json
-    { "node_id": "card-1", "effect": "appear", "from": { "opacity": 0, "y": 30 }, "transition": { "duration": 0.8 } }
+    { "node_id": "card-1", "effect": "appear", "from": { "opacity": 0, "y": 30 }, "transition": { "type": "spring", "stiffness": 240, "damping": 26 } }
     ```
   - `effect: "hover"` / `"tap"`:
     ```json
