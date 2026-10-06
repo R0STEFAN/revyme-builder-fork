@@ -99,12 +99,15 @@ export const LAYOUT_MORE_CASES: CapabilityCase[] = [
   },
   {
     id: 'layout/size-fill-cross', domain: 'layout', status: 'supported',
+    // Cross-axis Fill is `alignSelf: 'stretch'` + size 'auto' since 2026-09-29 —
+    // a `100%` collapses to 0 inside a hug (min-content) parent.
     feature: 'Fill in the cross axis stretches to the flex line',
     ask: 'make the first card as tall as the row',
     calls: [{ tool: 'set_size_units', args: { node_id: 'card-1', height: 'fill' } }],
     expect: (w) => {
       const s = w.node('card-1').styles;
       must(s.height === 'auto' && s.alignSelf === 'stretch', `cross-axis fill is ${JSON.stringify({ height: s.height, alignSelf: s.alignSelf })}`);
+    },
     },
   },
   {
