@@ -6,7 +6,7 @@ export {
   zoomIn, zoomOut, zoomTo100, zoomToScale,
   zoomToFit, zoomToFitNodes, zoomToFitSelection, zoomToFitCanvasBounds,
   fitAllOnNextRender,
-  panToNode, panToCanvasPoint,
+  panToNode, panToCanvasPoint, ensureNodeVisible,
 } from './CameraCommands';
 export {
   handleWheel,

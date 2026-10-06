@@ -295,6 +295,119 @@ export function panToCanvasPoint(canvasX: number, canvasY: number, duration?: nu
   animateCanvasTo(x, y, t.scale, duration ?? ANIM_PAN_TO_NODE);
 }
 
+/**
+ * Ensure a node is visible in the canvas viewport.
+ * If the node is already within the visible viewport bounds, does nothing (returns false).
+ * If it is off-screen or partially out of view, pans smoothly to bring it into view (returns true).
+ */
+export function ensureNodeVisible(
+  nodeId: string,
+  vpId?: string,
+  options?: { padding?: number; instant?: boolean; duration?: number },
+): boolean {
+  trace.fn('camera.ensureNodeVisible', { nodeId, vpId, options });
+  if (!nodeId) return false;
+
+  const bridge = getCanvasBridge();
+  let screenRect: DOMRect | null = null;
+
+  if (vpId !== undefined) {
+    const prefix = getViewportPrefix(vpId);
+    screenRect = bridge.getRect(nodeId, prefix);
+  }
+
+  if (!screenRect) {
+    const cache = (bridge as any).rectCache as Map<string, DOMRect> | undefined;
+    if (!cache) return false;
+
+    // Determine preferred prefix if vpId is not provided
+    const interactingVpId = vpId ?? getDefaultStore().get(interactingViewportIdAtom);
+    const preferredPrefix = getViewportPrefix(interactingVpId);
+
+    // Try preferred prefix first
+    screenRect = bridge.getRect(nodeId, preferredPrefix);
+
+    if (!screenRect) {
+      // Scan cache for a matching split
+      for (const key of cache.keys()) {
+        const parsed = parseRectCacheKey(key);
+        if (!parsed) continue;
+        const { vpPrefix, nodeId: dataId } = parsed;
+        if (`${vpPrefix}${dataId}` === nodeId || dataId === nodeId) {
+          const r = bridge.getRect(dataId, vpPrefix);
+          if (r && (r.width > 0 || r.height > 0)) {
+            screenRect = r;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!screenRect || (screenRect.width === 0 && screenRect.height === 0)) {
+    return false;
+  }
+
+  const { width: availW, height: availH, centerX, centerY } = getAvailableArea();
+  const padding = options?.padding ?? 40;
+
+  const visibleLeft = canvasInsets.left;
+  const visibleRight = canvasInsets.left + availW;
+  const visibleTop = canvasInsets.top;
+  const visibleBottom = canvasInsets.top + availH;
+
+  const fitsX = screenRect.width <= availW - 2 * padding;
+  const inViewX = fitsX
+    ? screenRect.left >= visibleLeft + padding && screenRect.right <= visibleRight - padding
+    : screenRect.left <= visibleLeft + padding && screenRect.right >= visibleRight - padding;
+
+  const fitsY = screenRect.height <= availH - 2 * padding;
+  const inViewY = fitsY
+    ? screenRect.top >= visibleTop + padding && screenRect.bottom <= visibleBottom - padding
+    : screenRect.top >= visibleTop && screenRect.top <= visibleTop + padding * 2;
+
+  if (inViewX && inViewY) {
+    // Already in view
+    return false;
+  }
+
+  const t = transformManager.getTransform();
+  const offset = getIframeOffset();
+  const c = screenRectToCanvas(screenRect, t, offset);
+
+  let targetX = t.x;
+  let targetY = t.y;
+
+  if (!inViewX) {
+    if (fitsX) {
+      targetX = centerX - offset.x - (c.left + c.width / 2) * t.scale;
+    } else {
+      targetX = visibleLeft + padding - offset.x - c.left * t.scale;
+    }
+  }
+
+  if (!inViewY) {
+    if (fitsY) {
+      targetY = centerY - offset.y - (c.top + c.height / 2) * t.scale;
+    } else {
+      targetY = visibleTop + padding - offset.y - c.top * t.scale;
+    }
+  }
+
+  if (Math.abs(targetX - t.x) < 0.5 && Math.abs(targetY - t.y) < 0.5) {
+    return false;
+  }
+
+  const duration = options?.instant ? 0 : (options?.duration ?? ANIM_PAN_TO_NODE);
+  if (duration <= 0) {
+    moveCanvasTo(targetX, targetY, t.scale);
+  } else {
+    animateCanvasTo(targetX, targetY, t.scale, duration);
+  }
+
+  return true;
+}
+
 // ─── Internal Helpers ───────────────────────────────────────────────────────
 
 /** Compute new transform for zooming at an anchor point */

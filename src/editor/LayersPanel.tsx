@@ -14,6 +14,7 @@ import { containerOverridesAtom } from '@/code/stores/container-query-store';
 import { activeLocaleAtom, isDefaultLocaleAtom } from '@/code/stores/locale-store';
 import { getContentRoot, updateNodeStyles, setStyleContext, isPrimaryViewport, flushAndForceStructuralRender, redirectToFitTextWrapper } from '@/canvas/node-ops';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
+import { ensureNodeVisible } from '@/canvas/transform';
 import { renameVariant } from '@/code/variants/variant-ops';
 import { toggleLock } from '@/canvas/commands';
 import { queueMutation } from '@/code/mutation/mutation-queue';
@@ -796,6 +797,9 @@ export default function LayersPanel() {
         setOverlayEditingId(null);
       }
     }
+
+    // Bring node into viewport if off-screen
+    ensureNodeVisible(effectiveNodeId, vpId);
   }, [setSelectedIds, selectedIds, nodes, editingOverlayId, setOverlayEditingId, activeFilePath]);
 
   // ─── Lock & Visibility ──────────────────────────────────────────────────
@@ -978,6 +982,8 @@ export default function LayersPanel() {
     const vpId = vpIdFromLayerId(layerId);
     if (vpId) setInteractingVpId(vpId);
     trace.action('layers:range-select', { anchor: selectedLayerId, target: layerId, count: rangeIds.length });
+    const effectiveNodeId = redirectToFitTextWrapper(nodeId, nodes) ?? nodeId;
+    ensureNodeVisible(effectiveNodeId, vpId);
   }, [displayLayers, selectedLayerId, selectedIds, nodes, handleSelect, setSelectedIds, setInteractingVpId]);
 
   // Wrap onSelect to detect double-clicks
