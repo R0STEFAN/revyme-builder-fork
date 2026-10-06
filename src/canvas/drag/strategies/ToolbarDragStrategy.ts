@@ -239,7 +239,7 @@ export class ToolbarDragStrategy implements DragStrategy {
         const layout = detectParentLayoutById(frame.id, vpId);
         if (layout === 'flex' || layout === 'grid' || layout === 'block' || isTextContainer) {
           // Layout container — show drop line
-          const direction = isTextContainer ? 'row' : getFlexDirectionById(frame.id, vpId);
+          const direction = (layout === 'flex' || layout === 'grid') ? getFlexDirectionById(frame.id, vpId) : (isTextContainer ? 'row' : getFlexDirectionById(frame.id, vpId));
           const insertIndex = calculateLayoutInsertIndexById(mouseScreen, frame.id, vpId, direction);
           this.dropParentId = frame.id;
           this.dropIndex = insertIndex;
@@ -300,7 +300,7 @@ export class ToolbarDragStrategy implements DragStrategy {
         const isTextContainer = cnNode ? isTextContainerTag(cnNode.type) : false;
         const layout = detectParentLayoutById(cnFrame.id, CANVAS_VP);
         if (layout === 'flex' || layout === 'grid' || layout === 'block' || isTextContainer) {
-          const direction = isTextContainer ? 'row' : getFlexDirectionById(cnFrame.id, CANVAS_VP);
+          const direction = (layout === 'flex' || layout === 'grid') ? getFlexDirectionById(cnFrame.id, CANVAS_VP) : (isTextContainer ? 'row' : getFlexDirectionById(cnFrame.id, CANVAS_VP));
           const insertIndex = calculateLayoutInsertIndexById(mouseScreen, cnFrame.id, CANVAS_VP, direction);
           this.dropParentId = cnFrame.id;
           this.dropIndex = insertIndex;

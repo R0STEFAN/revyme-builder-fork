@@ -1,0 +1,43 @@
+diff --git a/node_modules/@revyme/runtime/dist/index.js b/node_modules/@revyme/runtime/dist/index.js
+index 34d6361..c58473d 100644
+--- a/node_modules/@revyme/runtime/dist/index.js
++++ b/node_modules/@revyme/runtime/dist/index.js
+@@ -1077,6 +1077,7 @@ function RevymeSplitText({ spec, variant, children }) {
+ 	const { nodes, count } = rich ?? plain;
+ 	if (text === null && rich === null) return /* @__PURE__ */ jsx("span", {
+ 		ref: hostRef,
++		style: { display: "contents" },
+ 		children
+ 	});
+ 	const isScroll = resolved.trigger === "scroll";
+@@ -1138,7 +1139,7 @@ function RevymeSplitText({ spec, variant, children }) {
+ 	};
+ 	return /* @__PURE__ */ jsx("span", {
+ 		ref: hostRef,
+-		style: { display: animationType === "line" ? "block" : "inline" },
++		style: { display: "contents" },
+ 		children: nodes.map(render)
+ 	});
+ }
+diff --git a/node_modules/@revyme/runtime/src/split-text.tsx b/node_modules/@revyme/runtime/src/split-text.tsx
+index 8c68143..b2f48bf 100644
+--- a/node_modules/@revyme/runtime/src/split-text.tsx
++++ b/node_modules/@revyme/runtime/src/split-text.tsx
+@@ -487,7 +487,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+   const { nodes, count } = rich ?? plain;
+ 
+   // Not splittable (a component child, an icon) → render verbatim rather than mangling it.
+-  if (text === null && rich === null) return <span ref={hostRef}>{children}</span>;
++  if (text === null && rich === null) return <span ref={hostRef} style={{ display: 'contents' }}>{children}</span>;
+ 
+   const isScroll = resolved.trigger === 'scroll';
+   // Disabled for the ACTIVE scope → both endpoints empty: units mount at
+@@ -550,7 +550,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+   };
+ 
+   return (
+-    <span ref={hostRef} style={{ display: animationType === 'line' ? 'block' : 'inline' }}>
++    <span ref={hostRef} style={{ display: 'contents' }}>
+       {nodes.map(render)}
+     </span>
+   );

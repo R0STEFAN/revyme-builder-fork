@@ -45,7 +45,7 @@ import InputTool from './tools/InputTool';
 import InteractionsTool from './tools/InteractionsTool';
 import SelectionTool from './tools/SelectionTool';
 import VectorContainerTool from './tools/VectorContainerTool';
-import { isTextTag, isFrameTag, canAcceptChildren, isLinkTag } from '@/shared/constants';
+import { isTextTag, isFrameTag, canAcceptChildren, isLinkTag, isTextContainerTag } from '@/shared/constants';
 import { shapeEditingIdAtom } from '@/code/stores/shape-edit-store';
 import type { CanvasNode } from '@/code/parsing/parser';
 import TemplatePicker from './TemplatePicker';
@@ -216,7 +216,8 @@ function PropertiesPanelInner({ isMultiSelect = false }: { isMultiSelect?: boole
         // and FRAME_TAGS holds plain tag names.
         (id) => {
           const t = nodes.get(id)?.type ?? '';
-          return canAcceptChildren(t.startsWith('motion.') ? t.slice(7) : t);
+          const raw = t.startsWith('motion.') ? t.slice(7) : t;
+          return canAcceptChildren(raw) || isTextContainerTag(raw);
         },
       )
       : null,
@@ -262,7 +263,10 @@ function PropertiesPanelInner({ isMultiSelect = false }: { isMultiSelect?: boole
   const linkIsContainer = isLink && Array.isArray(displayNode.children) && displayNode.children.length > 0;
   const isLinkType = isLink && !linkIsContainer;
   const isText = !linkIsContainer && (isTextTag(rawType) || isLinkType);
-  const isFrame = isFrameTag(rawType) || linkIsContainer;
+  const isTextContainer = isTextContainerTag(rawType);
+  const hasChildElements = Array.isArray(displayNode.children) && displayNode.children.length > 0;
+  const canHaveLayout = !isText || isTextContainer || hasChildElements;
+  const isFrame = isFrameTag(rawType) || linkIsContainer || isTextContainer;
   const isSvg = node.type === 'svg' && !isFitSvgWrapper;
   // Sketch wrappers are SVGs marked with `data-sketch="true"` by the
   // SketchCreator. They share the SVG selection branch (Position +
@@ -685,15 +689,12 @@ function PropertiesPanelInner({ isMultiSelect = false }: { isMultiSelect?: boole
             selected node shares the same layout type (multiSelectLayoutType) —
             edits fan out to all via ControlProvider.
 
-            NEVER for text elements: layout is a frame concept. The text
-            multi-column "Block" mode was removed (2026-08-12) — see
-            detectLayoutFlags in LayoutTool for the full rationale — so a
-            text node has no layout to show, and the Adjust control's
-            display:flex plumbing must not surface the frame controls. */}
+            Available for frames, links with children, and text containers (headings, paragraphs,
+            or text with child elements) so users can configure flex/grid/block layout and direction. */}
         {/* NEVER for form controls (input/textarea/select): they're leaf
             elements — flex/grid child layout is meaningless on them, and the
             Input tool owns their padding. */}
-        {!isText && !isContainerSetInstance && !isComponentInstance && !isCodeComponentInstance && !isTemplatedViewport
+        {canHaveLayout && !isContainerSetInstance && !isComponentInstance && !isCodeComponentInstance && !isTemplatedViewport
           && !isInputElement
           && (!isMultiSelect || multiSelectLayoutType !== null) && (
           <LayoutTool
