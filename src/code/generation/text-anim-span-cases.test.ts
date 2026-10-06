@@ -197,4 +197,26 @@ export default function Page() {
     expect(container.querySelector('[data-id="span-1"]')?.textContent).toBe('First line');
     expect(container.querySelector('[data-id="span-2"]')?.textContent).toBe('Second line');
   });
+
+  it('Case 5: RevymeSplitText with styled word in React', async () => {
+    const React = await import('react');
+    const { render: renderReact } = await import('@testing-library/react');
+    const { RevymeSplitText } = await import('@revyme/runtime');
+    const { container } = renderReact(
+      React.createElement('h1', null,
+        React.createElement(RevymeSplitText, { spec: { animationType: 'character' } },
+          'This Text and This ',
+          React.createElement('span', { style: { color: 'rgb(216, 16, 16)' } }, 'Awesome'),
+          ' text',
+        ),
+      ),
+    );
+    console.log('--- Case 5 Rendered React HTML ---');
+    console.log(container.innerHTML);
+
+    const styledSpan = container.querySelector('span[style*="rgb(216, 16, 16)"]') as HTMLElement;
+    console.log('styledSpan:', styledSpan);
+    expect(styledSpan).not.toBeNull();
+    expect(styledSpan.textContent).toBe('Awesome');
+  });
 });
