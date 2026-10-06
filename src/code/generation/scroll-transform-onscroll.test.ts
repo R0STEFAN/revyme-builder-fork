@@ -236,4 +236,52 @@ describe('Dual Start & End scroll offset control', () => {
     expect(detectScrollStartFromOffset(offset)).toBe('top');
     expect(detectScrollEndFromOffset(offset)).toBe('bottom');
   });
+
+  it('detectTriggerFromOffset correctly identifies layerInView for start start, end end without section', () => {
+    expect(detectTriggerFromOffset('["start start", "end end"]', true, false)).toBe('layerInView');
+    expect(detectTriggerFromOffset('["start start", "end end"]', true, true)).toBe('sectionInView');
+  });
+
+  it('switching from sectionInView to layerInView strips useEffect and attaches ref in JSX', () => {
+    // 1. Author as sectionInView
+    const sectionCode = updateScrollAnimInCode(PAGE, {
+      nodeId: 'box',
+      trigger: 'sectionInView',
+      sectionId: 'projects',
+      scrollStart: 'top',
+      scrollEnd: 'bottom',
+      stops: [
+        { progress: 0, props: { x: '0px' } },
+        { progress: 1, props: { x: '-2000px' } },
+      ],
+      transition: { type: 'spring', duration: '0.5', bounce: '0.25' },
+    });
+    expect(sectionCode).toContain("document.getElementById('projects')");
+    expect(sectionCode).not.toContain('ref={boxRef}');
+
+    // 2. Switch to layerInView
+    const layerCode = updateScrollAnimInCode(sectionCode, {
+      nodeId: 'box',
+      trigger: 'layerInView',
+      scrollStart: 'top',
+      scrollEnd: 'bottom',
+      stops: [
+        { progress: 0, props: { x: '0px' } },
+        { progress: 1, props: { x: '-2000px' } },
+      ],
+      transition: { type: 'spring', duration: '0.5', bounce: '0.25' },
+    });
+
+    // useEffect must be completely gone
+    expect(layerCode).not.toContain('document.getElementById');
+    expect(layerCode).not.toContain('useEffect');
+    // ref must be attached to the JSX element
+    expect(layerCode).toContain('ref={boxRef}');
+    expect(parseJSX(layerCode)).not.toBeNull();
+
+    // Round-trip must detect layerInView, NOT sectionInView!
+    const parsedData = getScrollDataForNode(parseScrollHooks(layerCode), 'box');
+    expect(parsedData.source?.sectionId).toBeUndefined();
+    expect(detectTriggerFromOffset(parsedData.source?.offset ?? null, !!parsedData.source?.refVar, !!parsedData.source?.sectionId)).toBe('layerInView');
+  });
 });

@@ -239,10 +239,6 @@ export function detectTriggerFromOffset(offset: string | null, hasRef: boolean, 
     if (trigger === 'sectionInView') continue; // ambiguous with layerInView w/o a section
     if (clean === expected.replace(/\s+/g, ' ').trim()) return trigger as ScrollTrigger;
   }
-  // Legacy: pre-fix files with the old `["start start", "end end"]` offset
-  // get mapped back to sectionInView so the UI shows the right entry on
-  // re-open. Re-saving will rewrite to the new offset shape.
-  if (clean.includes('start start') && clean.includes('end end')) return 'sectionInView';
   if (clean.includes('start end') && clean.includes('end start')) return 'layerInView';
   // Layer-in-View with a custom range emits `["start end", "start <P>%"]`.
   if (/"start end"\s*,\s*"start\s+\d+(?:\.\d+)?%?"/.test(clean)) return 'layerInView';
@@ -632,22 +628,19 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
   result = result.replace(new RegExp(`\\s*const ${cnEsc}Peak = useRef\\(0\\);`, 'g'), '');
   result = result.replace(new RegExp(`\\s*const ${cnEsc}Latched = useTransform\\([\\s\\S]*?\\}\\);`, 'g'), '');
 
+  // Upfront cleanup: always remove any existing useEffect binding ${refName}.current
+  // (e.g. from an earlier section-in-view mode). If the new mode is section-in-view,
+  // hookLines below will re-emit the fresh useEffect.
+  result = result.replace(new RegExp(`\\s*useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[^}]*${refName}\\.current[^}]*\\},\\s*\\[\\]\\);`, 'g'), '');
+
   // Section-mode upfront cleanup: strip any existing ref attribute on JSX
   // AND any prior `const ${refName} = useRef(null);` declaration. Running
   // this BEFORE the parser-based cleanup means we don't depend on the
   // parser finding bindings or the source's refVar to land cleanly —
-  // section mode needs both gone, full stop. The previous useEffect (if
-  // any) is overwritten anyway when the new hookLines re-emit one.
+  // section mode needs both gone, full stop.
   if (useSectionRef) {
     result = result.replace(new RegExp(`\\s*ref=\\{${refName}\\}`, 'g'), '');
     result = result.replace(new RegExp(`\\s*const ${refName} = useRef\\(null\\);`, 'g'), '');
-    // Permissive useEffect match — body can be anything as long as it
-     // references `${refName}.current` and ends with the standard `}, []);`
-     // closer. The earlier strict shape failed once we added the
-     // `|| document.body` fallback to the body, so every save was
-     // appending a fresh useEffect on top of the stale ones (21 dupes
-     // in 21 slider drags before this fix).
-    result = result.replace(new RegExp(`\\s*useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[^}]*${refName}\\.current[^}]*\\},\\s*\\[\\]\\);`, 'g'), '');
   }
 
   // ── Remove old hooks using the scroll parser (handles AI-generated names) ──

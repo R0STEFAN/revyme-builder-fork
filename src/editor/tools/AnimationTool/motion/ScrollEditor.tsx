@@ -161,9 +161,9 @@ function buildScrollConfig(
   }
   // Single-section (sectionInView + 2 stops): the lone "To" stop owns the section.
   const effectiveSectionId =
-    trigger === 'sectionInView' && stops.length === 2
-      ? (stops[1].sectionId || sectionId)
-      : sectionId;
+    trigger === 'sectionInView'
+      ? (stops.length === 2 ? (stops[1].sectionId || sectionId) : sectionId)
+      : '';
   return {
     nodeId, trigger,
     sectionId: effectiveSectionId,
@@ -557,7 +557,7 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
       newTrigger as ScrollAnimConfig['trigger'],
       finalStops,
       trans,
-      secId ?? sectionIdRef.current,
+      secId ?? (newTrigger === 'sectionInView' ? sectionIdRef.current : ''),
       vp ?? effectiveEnd ?? sectionViewportRef.current,
       range ?? layerRangeRef.current,
       layerExitRef.current,
@@ -675,6 +675,10 @@ export function ScrollTransformEditor({ nodeId, scrollData, onSwitchToAppear, mo
                   scrollEndRef.current = 'bottom';
                 }
               } catch {}
+            } else {
+              setSectionId('');
+              sectionIdRef.current = '';
+              seedSecId = '';
             }
             writeToCode(stopsToUse, v, transition, seedSecId, undefined, undefined, nextStart, nextEnd);
             // Animation-mode Section in View is SCRUBBED — after this write

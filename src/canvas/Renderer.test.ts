@@ -841,7 +841,7 @@ describe('Renderer active preview preservation across renders', () => {
   it('patchElement preserves active preview styles and does not stale-clear them', () => {
     const el = document.createElement('div');
     el.setAttribute('data-id', 'box-1');
-    const node: CanvasNode = {
+    const node = {
       id: 'box-1',
       type: 'div',
       name: 'box',
@@ -849,10 +849,12 @@ describe('Renderer active preview preservation across renders', () => {
       children: [],
       styles: { width: '100px', height: '100px' },
       attrs: {},
-    };
+    } as unknown as CanvasNode;
+    const allNodes = new Map([[node.id, node]]);
+    const onNodeMouseDown = () => {};
 
     // First patch: base styles
-    patchElement(el, node, '');
+    patchElement(el, node, allNodes, onNodeMouseDown, '');
     expect(el.style.width).toBe('100px');
     expect(el.style.height).toBe('100px');
 
@@ -860,7 +862,7 @@ describe('Renderer active preview preservation across renders', () => {
     setActivePreviewStyles('box-1', '', { opacity: '0', transform: 'scale(0.5)' });
 
     // Second patch (e.g. project code update or canvas re-render)
-    patchElement(el, node, '');
+    patchElement(el, node, allNodes, onNodeMouseDown, '');
 
     // Preview styles MUST survive with !important priority and not be cleared
     expect(el.style.opacity).toBe('0');
@@ -872,7 +874,7 @@ describe('Renderer active preview preservation across renders', () => {
     setActivePreviewStyles('box-1', '', null);
 
     // Third patch (canvas re-render after close)
-    patchElement(el, node, '');
+    patchElement(el, node, allNodes, onNodeMouseDown, '');
 
     // Stale preview styles must be removed by reconciliation
     expect(el.style.opacity).toBe('');

@@ -324,7 +324,7 @@ class DebugTrace {
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
 
     // Don't clone DOM elements — just record their ID
-    if (value instanceof HTMLElement) {
+    if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) {
       return `<${value.tagName.toLowerCase()} data-node-id="${value.getAttribute('data-node-id') || '?'}">`;
     }
 
