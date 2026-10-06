@@ -21,6 +21,7 @@ import ConfirmDialog from '@/design-system/ConfirmDialog';
 import { settingsOverlayOpenAtom, settingsSectionAtom, websiteMetaAtom } from '@/code/stores/website-settings-store';
 import { isComponentFileAtom } from '@/code/stores/store';
 import { LiveDropdown } from './LiveDropdown';
+import { LocalServerDropdown } from './LocalServerDropdown';
 import { ExportDropdown, type ExportFormat } from './ExportDropdown';
 import ExportConfirmModal, { TRANSFORMATIVE_FORMATS } from '../ui/ExportConfirmModal';
 import { exportProject } from './export-project';
@@ -55,6 +56,44 @@ export default function RightHeader({ previewMode, onTogglePreview }: Props) {
   const [publishError, setPublishError] = useState<{ message: string; upgradable: boolean } | null>(null);
   const [meta, setMeta] = useState<WebsiteMeta | null>(null);
   const [open, setOpen] = useState(false);
+  const [localServerRunning, setLocalServerRunning] = useState(false);
+
+  // Self-host live server status tracking
+  useEffect(() => {
+    if (CLOUD_ENABLED) return;
+    let active = true;
+
+    const checkLocalStatus = async () => {
+      try {
+        const { fetchLocalServerStatus } = await import('@/backend/local-server-client');
+        const { getProjectId } = await import('@/backend/project-id');
+        const s = await fetchLocalServerStatus(getProjectId());
+        if (active) {
+          setLocalServerRunning(s?.status === 'running');
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void checkLocalStatus();
+    const interval = setInterval(checkLocalStatus, 5000);
+    const handleStatusChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && typeof detail.status === 'string') {
+        setLocalServerRunning(detail.status === 'running');
+      } else {
+        void checkLocalStatus();
+      }
+    };
+
+    window.addEventListener('local-server-status-changed', handleStatusChange);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener('local-server-status-changed', handleStatusChange);
+    };
+  }, []);
   // ─── Fake progress ticker ────────────────────────────────────────────
   // 0 → 0.95 over ~25 s on a sigmoid curve so the bar moves fast at the
   // start and decelerates as it approaches the asymptote — "looks like
@@ -238,7 +277,6 @@ export default function RightHeader({ previewMode, onTogglePreview }: Props) {
   // The dropdown's outside-click handler skips clicks on
   // `[data-live-trigger]` so this toggle wins cleanly.
   const handleLiveClick = useCallback(() => {
-    if (!CLOUD_ENABLED) return;
     setOpen((prev) => !prev);
     trace.action('header:live-toggle');
   }, []);
@@ -375,34 +413,48 @@ export default function RightHeader({ previewMode, onTogglePreview }: Props) {
                 }}
               />
             )}
-            <span className="relative tabular-nums">
+            <span className="relative tabular-nums inline-flex items-center justify-center gap-1.5">
+              {!CLOUD_ENABLED && localServerRunning && (
+                <span
+                  data-testid="local-server-live-dot"
+                  className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                />
+              )}
               {publishing && !open ? `${Math.round(progress * 100)}%` : 'Publish'}
             </span>
           </Button>
-          <LiveDropdown
-            open={open}
-            meta={meta}
-            publishing={publishing}
-            publishSuccess={publishSuccess}
-            progress={progress}
-            onPublish={handlePublish}
-            onClose={() => setOpen(false)}
-            onOpenBackups={() => {
-              trace.action('header:open-backups-from-dropdown');
-              setSettingsSection('backups');
-              setSettingsOpen(true);
-            }}
-            onAddDomain={() => {
-              trace.action('header:add-domain-from-dropdown');
-              setSettingsSection('domain');
-              setSettingsOpen(true);
-            }}
-            onOpenStaging={() => {
-              trace.action('header:open-staging-from-dropdown');
-              setSettingsSection('staging');
-              setSettingsOpen(true);
-            }}
-          />
+          {CLOUD_ENABLED ? (
+            <LiveDropdown
+              open={open}
+              meta={meta}
+              publishing={publishing}
+              publishSuccess={publishSuccess}
+              progress={progress}
+              onPublish={handlePublish}
+              onClose={() => setOpen(false)}
+              onOpenBackups={() => {
+                trace.action('header:open-backups-from-dropdown');
+                setSettingsSection('backups');
+                setSettingsOpen(true);
+              }}
+              onAddDomain={() => {
+                trace.action('header:add-domain-from-dropdown');
+                setSettingsSection('domain');
+                setSettingsOpen(true);
+              }}
+              onOpenStaging={() => {
+                trace.action('header:open-staging-from-dropdown');
+                setSettingsSection('staging');
+                setSettingsOpen(true);
+              }}
+            />
+          ) : (
+            <LocalServerDropdown
+              open={open}
+              onClose={() => setOpen(false)}
+              onStatusChange={(s) => setLocalServerRunning(s?.status === 'running')}
+            />
+          )}
         </div>
       </div>
 
