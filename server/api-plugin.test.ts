@@ -50,11 +50,11 @@ interface DispatchResult {
 }
 
 function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
-  let middleware: (req: any, res: any, next: (err?: any) => void) => Promise<void> | void;
+  const middlewares: Array<(req: any, res: any, next: (err?: any) => void) => Promise<void> | void> = [];
   const mockServer = {
     middlewares: {
       use: (fn: any) => {
-        middleware = fn;
+        middlewares.push(fn);
       },
     },
   };
@@ -101,30 +101,35 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
         },
       };
 
-      const next = () => {
-        resolve({
-          status: 404,
-          headers: {},
-          body: null,
-          passedThrough: true,
-        });
-      };
-
-      try {
-        const result = middleware(req, res, next);
-        if (result && typeof (result as any).catch === 'function') {
-          (result as any).catch(reject);
+      const runMiddleware = (idx: number) => {
+        if (idx >= middlewares.length) {
+          resolve({
+            status: 404,
+            headers: {},
+            body: null,
+            passedThrough: true,
+          });
+          return;
         }
 
-        process.nextTick(() => {
-          if (bodyData) {
-            req.emit('data', Buffer.from(bodyData));
+        try {
+          const result = middlewares[idx](req, res, () => runMiddleware(idx + 1));
+          if (result && typeof (result as any).catch === 'function') {
+            (result as any).catch(reject);
           }
-          req.emit('end');
-        });
-      } catch (err) {
-        reject(err);
-      }
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      runMiddleware(0);
+
+      process.nextTick(() => {
+        if (bodyData) {
+          req.emit('data', Buffer.from(bodyData));
+        }
+        req.emit('end');
+      });
     });
   };
 }
@@ -135,7 +140,7 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
 
   beforeEach(() => {
     mockManager = createMockManager();
-    const plugin = selfHostApiPlugin({ manager: mockManager });
+    const plugin = selfHostApiPlugin({ manager: mockManager, autoStartMcpHttp: false });
     dispatch = createDispatcher(plugin);
   });
 
@@ -417,7 +422,7 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
     });
 
     it('defaults to shared localServerManager when no manager option provided', async () => {
-      const defaultPlugin = selfHostApiPlugin();
+      const defaultPlugin = selfHostApiPlugin({ autoStartMcpHttp: false });
       const defaultDispatch = createDispatcher(defaultPlugin);
 
       const res = await defaultDispatch({
@@ -428,6 +433,20 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBeDefined();
       expect(res.body.status.status).toBe('idle');
+    });
+
+    it('handles native MCP bridge status via Vite API plugin', async () => {
+      const res = await dispatch({
+        method: 'GET',
+        url: '/api/mcp/status',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        ok: true,
+        activeTabs: expect.any(Number),
+        pendingRequests: expect.any(Number),
+      });
     });
   });
 });

@@ -10,10 +10,9 @@ description: >-
 This skill guides the AI agent on how to interact with the **Revyme Website Builder** running in the browser via its local **MCP Bridge Server**.
 
 ## 1. Prerequisites Check
-Before executing any tool calls, verify that both the editor and the bridge server are running:
-1. **Editor**: `http://localhost:3333` (started via `npm run dev`)
-2. **MCP Bridge**: `http://localhost:8082` (started via `npm run mcp`)
-3. The browser tab must be active and connected (check `scripts/mcp-bridge-server.ts` logs for active SSE tabs).
+Before executing any tool calls, verify that the builder is running:
+1. **Editor & Native MCP Bridge**: `http://localhost:3333` & `http://localhost:8082` (started automatically via `npm run dev`)
+2. The browser tab must be active and connected (connects via SSE to the bridge).
 
 ---
 

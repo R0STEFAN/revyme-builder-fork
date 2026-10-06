@@ -15,6 +15,8 @@ import {
   deleteFolder,
 } from './storage';
 import { LocalServerManager, localServerManager } from './local-server';
+import { McpBridge, mcpBridge as defaultMcpBridge } from './mcp-bridge';
+
 
 
 const MIME_TYPES: Record<string, string> = {
@@ -81,11 +83,19 @@ function parseMultipartFile(body: Buffer, contentType: string): { filename: stri
 
 export interface SelfHostApiPluginOptions {
   manager?: LocalServerManager;
+  bridge?: McpBridge;
+  mcpPort?: number;
+  autoStartMcpHttp?: boolean;
 }
 
 export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
   const manager = options?.manager || localServerManager;
+  const bridge = options?.bridge || defaultMcpBridge;
+  const mcpPort = options?.mcpPort ?? (process.env.REVYME_MCP_PORT ? parseInt(process.env.REVYME_MCP_PORT, 10) : 8082);
+  const autoStartMcpHttp = options?.autoStartMcpHttp ?? true;
+
   const setupMiddlewares = (middlewares: any) => {
+    middlewares.use(bridge.middleware());
     middlewares.use(async (req: any, res: any, next: any) => {
 
       const url = req.url || '';
@@ -380,9 +390,21 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
     name: 'revyme-selfhost-api',
     configureServer(server) {
       setupMiddlewares(server.middlewares);
+      if (autoStartMcpHttp) {
+        bridge.startHttpServer(mcpPort);
+        server.httpServer?.on('close', () => {
+          void bridge.stopHttpServer();
+        });
+      }
     },
     configurePreviewServer(server) {
       setupMiddlewares(server.middlewares);
+      if (autoStartMcpHttp) {
+        bridge.startHttpServer(mcpPort);
+        server.httpServer?.on('close', () => {
+          void bridge.stopHttpServer();
+        });
+      }
     },
   };
 }
