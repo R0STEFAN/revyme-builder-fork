@@ -2,7 +2,7 @@
 // and canvas-tokens marker system (preset live-update regression).
 
 import { describe, test, it, expect, beforeEach } from 'vitest';
-import { shouldUseInnerHTML } from './Renderer';
+import { shouldUseInnerHTML, setActivePreviewStyles, getActivePreviewStyles, patchElement } from './Renderer';
 import { setElStyle, clearElStyle } from './renderer/style-apply';
 import { applyBindingDataToTree } from './renderer/bindings';
 import { collectionBindingSignature, shouldClearEmptiedText } from './Renderer';
@@ -825,5 +825,59 @@ describe('collectionBindingSignature — static painted content', () => {
     } as unknown as CanvasNode;
     expect(collectionBindingSignature(bound, new Map())).toBe(collectionBindingSignature(bound, new Map()));
     expect(collectionBindingSignature(bound, new Map())).toContain('text=title');
+  });
+});
+
+describe('Renderer active preview preservation across renders', () => {
+  it('stores and retrieves active preview styles per node and viewport prefix', () => {
+    setActivePreviewStyles('node-1', '', { opacity: '0.5', transform: 'scale(1.2)' });
+    expect(getActivePreviewStyles('node-1', '')).toEqual({ opacity: '0.5', transform: 'scale(1.2)' });
+    expect(getActivePreviewStyles('node-1', 'mobile:')).toEqual({ opacity: '0.5', transform: 'scale(1.2)' });
+
+    setActivePreviewStyles('node-1', '', null);
+    expect(getActivePreviewStyles('node-1', '')).toBeUndefined();
+  });
+
+  it('patchElement preserves active preview styles and does not stale-clear them', () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-id', 'box-1');
+    const node: CanvasNode = {
+      id: 'box-1',
+      type: 'div',
+      name: 'box',
+      parentId: null,
+      children: [],
+      styles: { width: '100px', height: '100px' },
+      attrs: {},
+    };
+
+    // First patch: base styles
+    patchElement(el, node, '');
+    expect(el.style.width).toBe('100px');
+    expect(el.style.height).toBe('100px');
+
+    // Activate preview (e.g. user opens 'From' panel with scale(0.5) and opacity 0)
+    setActivePreviewStyles('box-1', '', { opacity: '0', transform: 'scale(0.5)' });
+
+    // Second patch (e.g. project code update or canvas re-render)
+    patchElement(el, node, '');
+
+    // Preview styles MUST survive with !important priority and not be cleared
+    expect(el.style.opacity).toBe('0');
+    expect(el.style.getPropertyPriority('opacity')).toBe('important');
+    expect(el.style.transform).toBe('scale(0.5)');
+    expect(el.style.getPropertyPriority('transform')).toBe('important');
+
+    // Deactivate preview on panel close
+    setActivePreviewStyles('box-1', '', null);
+
+    // Third patch (canvas re-render after close)
+    patchElement(el, node, '');
+
+    // Stale preview styles must be removed by reconciliation
+    expect(el.style.opacity).toBe('');
+    expect(el.style.transform).toBe('');
+    expect(el.style.width).toBe('100px');
+    expect(el.style.height).toBe('100px');
   });
 });

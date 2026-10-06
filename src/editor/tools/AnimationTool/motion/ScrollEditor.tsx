@@ -311,6 +311,7 @@ function StopEditor({ stopsRef, stopIndex, nodeId, triggerRef, transitionRef, se
       props={stopsRef.current[stopIndex]?.props || {}}
       onChange={handleChange}
       preview
+      deferCommit
       mode="scrollStop"
       extraKeys={allStopKeys}
     />

@@ -14,7 +14,7 @@ import type { ViewportConfig, CollectionItem, NodeOverride, FilterGroup, FilterC
 import { renderWidth } from '@/shared/types';
 import { resolveOverlayConfig } from '@/code/parsing/overlay-parser';
 import { trace, pauseDOMObserver, resumeDOMObserver } from '@/shared/debug-trace';
-import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers } from '@/shared/css-utils';
+import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers, toKebab } from '@/shared/css-utils';
 import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag } from '@/shared/constants';
 import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
@@ -753,6 +753,25 @@ export function trackImperativeStyleKeys(el: Element, keys: Iterable<string>): v
  *  (renderer-written + imperatively tracked). Exposed for tests + diagnostics. */
 export function getTrackedStyleKeys(el: Element): ReadonlySet<string> | undefined {
   return _prevPatchedKeys.get(el as HTMLElement);
+}
+
+// ─── Active Motion Preview Tracking ─────────────────────────────────────────
+// Keeps live !important preview styles intact across canvas renders while the
+// preview panel (Appear, Hover, Scroll Stop) is active.
+const _activePreviewStyles = new Map<string, Record<string, string>>();
+
+export function setActivePreviewStyles(nodeId: string, vpPrefix: string, styles: Record<string, string> | null): void {
+  const key = `${vpPrefix}|${nodeId}`;
+  if (!styles || Object.keys(styles).length === 0) {
+    _activePreviewStyles.delete(key);
+  } else {
+    _activePreviewStyles.set(key, styles);
+  }
+}
+
+export function getActivePreviewStyles(nodeId: string, vpPrefix: string): Record<string, string> | undefined {
+  return _activePreviewStyles.get(`${vpPrefix}|${nodeId}`)
+    ?? _activePreviewStyles.get(`|${nodeId}`);
 }
 
 /** Remove keys from an element's stale-clear reconciliation set — the inverse
@@ -2399,6 +2418,7 @@ export function patchElement(
   // branches) aren't affected by the clear.
   const prevKeys = _prevPatchedKeys.get(el);
   const currKeys = new Set(styleEntries.map(([k]) => k));
+  const activePreview = getActivePreviewStyles(node.id, idPrefix);
   if (prevKeys) {
     for (const k of prevKeys) {
       if (!currKeys.has(k)) {
@@ -2410,21 +2430,38 @@ export function patchElement(
         // collapsed to content until the NEXT full rebuild (page switch)
         // re-seeded it (user report 2026-07-31).
         if (isInstanceWrapper && (k === 'width' || k === 'height' || k === 'overflow')) continue;
+        if (activePreview && (k in activePreview || k === 'transform')) continue;
         clearElStyle(el, k);
         trace.dom('renderer:stale-clear-key', { nodeId: node.id, idPrefix, key: k });
       }
     }
   }
-  _prevPatchedKeys.set(el, currKeys);
+  const nextTrackedKeys = new Set(currKeys);
+  if (activePreview) {
+    for (const k of Object.keys(activePreview)) nextTrackedKeys.add(k);
+  }
+  _prevPatchedKeys.set(el, nextTrackedKeys);
   // Read custom-property values via getPropertyValue (bracket access returns
   // undefined for `--x`), so the change-guard below doesn't redundantly re-set.
   const readStyle = (key: string): string =>
     key.startsWith('--') ? el.style.getPropertyValue(key) : (el.style as any)[key];
   for (const [key, v] of styleEntries) {
-    if (v === '' && readStyle(key) !== '') clearElStyle(el, key);
+    if (v === '' && readStyle(key) !== '') {
+      if (activePreview && (key in activePreview || key === 'transform')) continue;
+      clearElStyle(el, key);
+    }
   }
   for (const [key, v] of styleEntries) {
     if (v !== '' && readStyle(key) !== coerceCssNumberToPx(key, v)) setElStyle(el, key, v);
+  }
+  if (activePreview) {
+    for (const [key, value] of Object.entries(activePreview)) {
+      if (!value) continue;
+      const kebab = toKebab(key);
+      try {
+        el.style.setProperty(kebab, value, 'important');
+      } catch { /* skip */ }
+    }
   }
   // A `fixed` node lives inside ONE viewport height on a real screen; the
   // canvas turned it into `absolute`, which measures `bottom` from the bottom
@@ -3882,6 +3919,17 @@ function buildNodeElement(
   // would wipe an earlier insert. Autoplay/loop are forced off in there, so the
   // canvas keeps its frozen-first-frame contract.
   syncBgVideoChild(el, node.bgVideo);
+
+  const activePreview = getActivePreviewStyles(node.id, idPrefix);
+  if (activePreview) {
+    for (const [key, value] of Object.entries(activePreview)) {
+      if (!value) continue;
+      const kebab = toKebab(key);
+      try {
+        el.style.setProperty(kebab, value, 'important');
+      } catch { /* skip */ }
+    }
+  }
 
   return el;
 }

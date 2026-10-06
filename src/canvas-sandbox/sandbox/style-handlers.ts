@@ -3,7 +3,7 @@
 // split); bridge-sandbox assembles these into the `api` dispatch table.
 
 import type { PatchUpdate } from '../sandbox-api';
-import { clearPatchKeyChain, trackImperativeStyleKeys } from '@/canvas/Renderer';
+import { clearPatchKeyChain, trackImperativeStyleKeys, setActivePreviewStyles } from '@/canvas/Renderer';
 import { trace } from '@/shared/debug-trace';
 import { applyStrokeAlignment } from '@/canvas/renderer/style-apply';
 import { resolveResponsiveUnits, getResponsiveVpWidth } from '@/shared/responsive-units';
@@ -277,6 +277,7 @@ export function patchStyles(nodeId: string, vpPrefix: string, styles: Record<str
 const previewInlineSnapshots = new Map<string, Map<string, string>>();
 
 export function previewPatchStyles(nodeId: string, vpPrefix: string, styles: Record<string, string>): void {
+  setActivePreviewStyles(nodeId, vpPrefix, styles);
   if (!contentRoot) return;
   const el = findElByNodeId(contentRoot, vpPrefix, nodeId);
   if (el) {
@@ -296,6 +297,7 @@ export function previewPatchStyles(nodeId: string, vpPrefix: string, styles: Rec
  *  remove. `resting` carries the parent's model-based fallbacks and defines the
  *  base key set; the snapshot's keys are unioned in so nothing injected leaks. */
 export function previewRestoreStyles(nodeId: string, vpPrefix: string, resting: Record<string, string>): void {
+  setActivePreviewStyles(nodeId, vpPrefix, null);
   if (!contentRoot) return;
   const regKey = `${vpPrefix}|${nodeId}`;
   const snap = previewInlineSnapshots.get(regKey);
