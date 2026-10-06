@@ -45,6 +45,7 @@ import { isReplicaViewportAtom, isComponentVariantViewportAtom } from '../code/s
 import { renamingNodeIdAtom, copiedElementStylesAtom } from '../code/stores/context-menu-store';
 import { toast } from 'sonner';
 import { createAndOpenProject } from '../editor/header/menu-builders';
+import { saveProjectNow } from '../editor/header/SaveButton';
 import { nudgeSelection, flushPendingNudge, type NudgeDirection } from './arrow-nudge';
 import { selectAllPageNodeIds } from './selection/select-all';
 import { interactingViewportIdAtom, viewportsConfigAtom } from '../code/stores/viewport-store';
@@ -215,6 +216,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
   // through the same `createAndOpenProject` helper the menu uses, so
   // the keyboard path and the menu path can never drift.
   cleanups.push(keyboard.register({ key: 'n', ctrl: true, alt: true, label: 'New project', category: 'general', handler: () => createAndOpenProject() }));
+  cleanups.push(keyboard.register({ key: 's', ctrl: true, label: 'Save project', category: 'general', handler: () => { void saveProjectNow(); } }));
 
   // ─── Undo/Redo ───────────────────────────────────────────────────
   // Force-flush any pending debounced arrow-nudge before undo/redo so the

@@ -62,7 +62,9 @@ describe('RightHeader in self-host mode (!CLOUD_ENABLED)', () => {
     });
 
     // LocalServerDropdown should close
-    expect(screen.queryByText('Local Live Server')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('Local Live Server')).toBeNull();
+    });
   });
 
   it('displays the green live dot indicator when local server is running', async () => {

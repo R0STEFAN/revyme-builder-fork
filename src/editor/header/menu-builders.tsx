@@ -26,6 +26,7 @@ import { executePaste } from '@/code/features/paste-engine/execute-from-ui';
 import { deleteNode, duplicateSelection } from '@/canvas/commands';
 import { getContentRoot } from '@/canvas/node-ops';
 import { zoomIn, zoomOut, zoomTo100, zoomToFit } from '@/canvas/transform';
+import { saveProjectNow } from './SaveButton';
 import { selectedIdsAtom, selectedNodeAtom, nodesAtom } from '@/code/stores/store';
 import { toolModeAtom } from '@/code/stores/tool-store';
 import { activeFilePathAtom, createPageFile } from '@/code/project/active-file-store';
@@ -399,13 +400,7 @@ export function buildTabs(preferencesSubmenu: DropdownMenuEntry[]): TabSpec[] {
     label: 'File',
     items: [
       // Project-level (real handlers — wired up to the backend).
-      // No Save item — autosave handles persistence (`autosave.ts`
-      // debounces flushes 2 s after each mutation in cloud mode);
-      // a manual Save would be a no-op for the user.
-      // No shortcut on New page — it's a rare action, the keyboard
-      // shortcut would steal Ctrl+N from the browser.
-      // New project's `Ctrl+Alt+N` is registered in
-      // `src/canvas/shortcuts.ts` (search for `menuNewProject`).
+      { id: 'file-save', label: 'Save project', shortcut: 'Ctrl+S', onClick: () => { void saveProjectNow(); } },
       { id: 'file-new-project', label: 'New project', shortcut: 'Ctrl+Alt+N', onClick: () => createAndOpenProject() },
       { id: 'file-new', label: 'New page', onClick: () => menuNewPage() },
       // No bare "Export…": it was a stub that did nothing — "Export code…" below is the real export.

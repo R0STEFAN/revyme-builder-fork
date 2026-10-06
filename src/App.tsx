@@ -16,6 +16,7 @@ import PreviewOverlay from './editor/header/PreviewOverlay';
 import { LeftMenu, LeftPanel, leftPanelAtom } from './editor/left-toolbar';
 import LeftHeader from './editor/header/LeftHeader';
 import RightHeader from './editor/header/RightHeader';
+import SaveButton, { saveProjectNow } from './editor/header/SaveButton';
 import { commitActiveTextEdit } from './canvas/text-edit-committer';
 import TranslationsOverlay from './editor/left-toolbar/panels/locale/TranslationsOverlay';
 import CmsOverlay, { cmsOverlayOpenAtom } from './editor/left-toolbar/panels/cms/CmsOverlay';
@@ -120,6 +121,22 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [setPreviewMode]);
+
+  // Ctrl/Cmd+S → save project. Suppresses browser's native "Save webpage as HTML" dialog.
+  // Monaco editor has its own command handler when focused inside .monaco-editor.
+  useEffect(() => {
+    const onSaveKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== 's') return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest && target.closest('.monaco-editor')) return;
+      e.preventDefault();
+      void saveProjectNow();
+    };
+    window.addEventListener('keydown', onSaveKey);
+    return () => window.removeEventListener('keydown', onSaveKey);
+  }, []);
   // Icon-set masters route the AI chat differently — icon sets
   // keep their own streaming chat.
   // Component master files re-skin the editor accent from blue (--accent)
@@ -224,6 +241,7 @@ export default function App() {
           (the 12px = the cut-notch underlap). */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', marginLeft: 0 }}>
         <Canvas />
+        {!previewMode && !componentEditorOpen && !pluginEditorOpen && !cmsOverlayShowing && !translationsOverlayOpen && <SaveButton />}
         {/* Right panel: PropertiesPanel by default, swap for the
             project-wide comments list while comment mode is active.
             Both panels are 260 px wide so the canvas viewport doesn't
