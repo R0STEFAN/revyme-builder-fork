@@ -10,6 +10,7 @@ import { flushNow } from '@/code/mutation/mutation-queue';
 import { commitActiveTextEdit } from '@/canvas/text-edit-committer';
 import { isComponentFileAtom } from '@/code/stores/store';
 import { useIsViewer } from '@/code/stores/viewer-mode-store';
+import { captureAndSaveProjectThumbnail } from '@/backend/thumbnail-capture';
 import { trace } from '@/shared/debug-trace';
 import { toast } from 'sonner';
 
@@ -28,6 +29,9 @@ export async function saveProjectNow(): Promise<boolean> {
 
     // 3. Persist project snapshot to backend
     await flushSaveNow();
+
+    // 4. Capture & save canvas screenshot thumbnail for dashboard
+    void captureAndSaveProjectThumbnail();
 
     toast.success('Project saved');
     trace.action('project:manual-save-success');

@@ -77,11 +77,29 @@ export function usePreviewThumbnail({
         return;
       }
       const websiteId = getProjectId();
-      if (!websiteId) {
-        trace.error('preview-thumbnail:no-website-id', {});
+      if (!CLOUD_ENABLED) {
+        // Self-hosted mode: persist to disk storage via API & localStorage
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem('revyme:project-preview:' + websiteId, dataUrl);
+          } catch {
+            // ignore localStorage quota errors
+          }
+        }
+        trace.action('preview-thumbnail:received-selfhost', { websiteId, chars: dataUrl.length });
+        fetch(`/api/projects/${encodeURIComponent(websiteId)}/thumbnail`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl }),
+        })
+          .then((res) => {
+            if (res.ok) trace.action('preview-thumbnail:uploaded-selfhost', { websiteId });
+          })
+          .catch((err) =>
+            trace.error('preview-thumbnail:upload-selfhost-failed', { websiteId, error: String(err) }),
+          );
         return;
       }
-      if (!CLOUD_ENABLED) return; // preview_image is a cloud websites-row column
       trace.action('preview-thumbnail:received', { websiteId, chars: dataUrl.length });
       uploadPreviewThumbnail(websiteId, dataUrl)
         .then((url) => trace.action('preview-thumbnail:uploaded', { websiteId, url }))

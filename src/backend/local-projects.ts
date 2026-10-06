@@ -9,6 +9,7 @@ export interface LocalProjectItem {
   createdAt: number;
   isLocalStorageOnly?: boolean;
   folderId?: string | null;
+  previewImage?: string | null;
 }
 
 export interface ProjectFolder {
@@ -20,6 +21,7 @@ export interface ProjectFolder {
 const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
 const FOLDER_PROJECT_PREFIX = 'revyme:project-folder:';
+const PREVIEW_PREFIX = 'revyme:project-preview:';
 const FOLDERS_KEY = 'revyme:folders';
 
 /**
@@ -39,10 +41,15 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
             typeof window !== 'undefined' && window.localStorage
               ? localStorage.getItem(FOLDER_PROJECT_PREFIX + p.id)
               : null;
+          const localPreview =
+            typeof window !== 'undefined' && window.localStorage
+              ? localStorage.getItem(PREVIEW_PREFIX + p.id)
+              : null;
           itemsMap.set(p.id, {
             ...p,
             isLocalStorageOnly: false,
             folderId: localFolderId !== null ? localFolderId : (p.folderId ?? null),
+            previewImage: p.previewImage || localPreview || null,
           });
         }
       }
@@ -69,6 +76,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
             }
             const name = localStorage.getItem(NAME_PREFIX + id) || (id === 'local' ? 'Default Website' : 'Untitled Website');
             const folderId = localStorage.getItem(FOLDER_PROJECT_PREFIX + id) || null;
+            const previewImage = localStorage.getItem(PREVIEW_PREFIX + id) || null;
             itemsMap.set(id, {
               id,
               name,
@@ -77,6 +85,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
               updatedAt: Date.now(),
               isLocalStorageOnly: true,
               folderId,
+              previewImage,
             });
           }
         }
@@ -92,6 +101,10 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
       typeof window !== 'undefined' && window.localStorage
         ? localStorage.getItem(FOLDER_PROJECT_PREFIX + 'local') || null
         : null;
+    const previewImage =
+      typeof window !== 'undefined' && window.localStorage
+        ? localStorage.getItem(PREVIEW_PREFIX + 'local') || null
+        : null;
     itemsMap.set('local', {
       id: 'local',
       name: 'Default Website',
@@ -100,6 +113,7 @@ export async function listAllProjects(): Promise<LocalProjectItem[]> {
       updatedAt: Date.now(),
       isLocalStorageOnly: false,
       folderId,
+      previewImage,
     });
   }
 
@@ -182,6 +196,7 @@ export async function deleteProject(id: string): Promise<boolean> {
     localStorage.removeItem(STORAGE_PREFIX + id);
     localStorage.removeItem(NAME_PREFIX + id);
     localStorage.removeItem(FOLDER_PROJECT_PREFIX + id);
+    localStorage.removeItem(PREVIEW_PREFIX + id);
     ok = true;
   }
 
@@ -207,6 +222,10 @@ export async function duplicateProject(id: string, newName?: string): Promise<Lo
           if (sourceFolder) {
             localStorage.setItem(FOLDER_PROJECT_PREFIX + copy.id, sourceFolder);
           }
+          const sourcePreview = localStorage.getItem(PREVIEW_PREFIX + id);
+          if (sourcePreview) {
+            localStorage.setItem(PREVIEW_PREFIX + copy.id, sourcePreview);
+          }
         }
         return copy;
       }
@@ -228,6 +247,10 @@ export async function duplicateProject(id: string, newName?: string): Promise<Lo
     const sourceFolder = localStorage.getItem(FOLDER_PROJECT_PREFIX + id);
     if (sourceFolder) {
       localStorage.setItem(FOLDER_PROJECT_PREFIX + newId, sourceFolder);
+    }
+    const sourcePreview = localStorage.getItem(PREVIEW_PREFIX + id);
+    if (sourcePreview) {
+      localStorage.setItem(PREVIEW_PREFIX + newId, sourcePreview);
     }
 
     let fileCount = 0;

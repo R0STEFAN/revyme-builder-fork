@@ -5,6 +5,7 @@ import {
   listProjects,
   getProject,
   saveProject,
+  saveProjectThumbnail,
   deleteProject,
   duplicateProject,
   saveUpload,
@@ -173,7 +174,8 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           const name = body.name || 'Untitled Website';
           const data = body.data || { format: 'revyme-v1', files: {} };
           const folderId = body.folderId !== undefined ? body.folderId : null;
-          const saved = saveProject(id, data, name, undefined, folderId);
+          const previewImage = body.previewImage !== undefined ? body.previewImage : null;
+          const saved = saveProject(id, data, name, undefined, folderId, previewImage);
           return sendJson(res, 201, saved);
         } catch (err: any) {
           return sendJson(res, 400, { error: err.message || 'Failed to create project' });
@@ -228,11 +230,50 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         return stream.pipe(res);
       }
 
+      // ─── POST /api/websites/:id/preview-image (unified thumbnail upload) ──
+      const websiteThumbMatch = url.match(/^\/api\/websites\/([^/?#]+)\/preview-image/);
+      if (websiteThumbMatch && method === 'POST') {
+        const id = decodeURIComponent(websiteThumbMatch[1]);
+        try {
+          const bodyBuf = await readBodyBuffer(req);
+          const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          const dataUrl = body.dataUrl || body.previewImage || body.image;
+          if (!dataUrl) {
+            return sendJson(res, 400, { error: 'dataUrl required' });
+          }
+          const saved = saveProjectThumbnail(id, dataUrl);
+          return sendJson(res, 200, { success: true, url: saved?.previewImage || '' });
+        } catch (err: any) {
+          return sendJson(res, 500, { error: err.message || 'Failed to save thumbnail' });
+        }
+      }
+
       // ─── Project detail routes: /api/projects/:id ─────────────────────────
-      const projectRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)(\/duplicate)?/);
+      const projectRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)(\/duplicate|\/thumbnail)?/);
       if (projectRouteMatch) {
         const id = decodeURIComponent(projectRouteMatch[1]);
-        const isDuplicate = !!projectRouteMatch[2];
+        const subRoute = projectRouteMatch[2];
+        const isDuplicate = subRoute === '/duplicate';
+        const isThumbnail = subRoute === '/thumbnail';
+
+        // POST /api/projects/:id/thumbnail
+        if (isThumbnail && method === 'POST') {
+          try {
+            const bodyBuf = await readBodyBuffer(req);
+            const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+            const dataUrl = body.dataUrl || body.previewImage || body.image;
+            if (!dataUrl) {
+              return sendJson(res, 400, { error: 'dataUrl required' });
+            }
+            const saved = saveProjectThumbnail(id, dataUrl);
+            if (!saved) {
+              return sendJson(res, 404, { error: 'Project not found' });
+            }
+            return sendJson(res, 200, { success: true, previewImage: saved.previewImage, url: saved.previewImage });
+          } catch (err: any) {
+            return sendJson(res, 500, { error: err.message || 'Failed to save thumbnail' });
+          }
+        }
 
         // POST /api/projects/:id/duplicate
         if (isDuplicate && method === 'POST') {
@@ -250,7 +291,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
 
         // GET /api/projects/:id
-        if (method === 'GET' && !isDuplicate) {
+        if (method === 'GET' && !isDuplicate && !isThumbnail) {
           const project = getProject(id);
           if (!project) {
             return sendJson(res, 404, { error: 'Project not found' });
@@ -259,17 +300,18 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
 
         // PUT /api/projects/:id
-        if (method === 'PUT' && !isDuplicate) {
+        if (method === 'PUT' && !isDuplicate && !isThumbnail) {
           try {
             const bodyBuf = await readBodyBuffer(req);
             const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
             const data = body.data;
             const name = body.name;
             const folderId = body.folderId;
+            const previewImage = body.previewImage;
             let current = getProject(id);
             if (!current && (data || body.files)) {
               // Creating or importing via PUT
-              const saved = saveProject(id, data || body, name, undefined, folderId);
+              const saved = saveProject(id, data || body, name, undefined, folderId, previewImage);
               return sendJson(res, 200, { success: true, project: saved });
             }
             if (!current) {
@@ -280,7 +322,8 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
               data !== undefined ? data : current.data,
               name !== undefined ? name : current.name,
               undefined,
-              folderId !== undefined ? folderId : current.folderId
+              folderId !== undefined ? folderId : current.folderId,
+              previewImage !== undefined ? previewImage : current.previewImage
             );
             return sendJson(res, 200, { success: true, project: saved });
           } catch (err: any) {
@@ -289,7 +332,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
 
         // DELETE /api/projects/:id
-        if (method === 'DELETE' && !isDuplicate) {
+        if (method === 'DELETE' && !isDuplicate && !isThumbnail) {
           const ok = deleteProject(id);
           if (!ok) {
             return sendJson(res, 404, { error: 'Project not found' });

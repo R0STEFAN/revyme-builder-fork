@@ -403,5 +403,16 @@ export function useRendererSync(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeViewports, vpPositions, isComponentFile, isIconSetMaster, sandboxReady, iframeRenderTick]);
 
+  // Auto-capture thumbnail for dashboard card (best-effort, runs when idle after render)
+  useEffect(() => {
+    if (!sandboxReady || isComponentFile || isIconSetMaster) return;
+    const timer = setTimeout(() => {
+      import('@/backend/thumbnail-capture')
+        .then(({ captureAndSaveProjectThumbnail }) => captureAndSaveProjectThumbnail())
+        .catch(() => {});
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [sandboxReady, isComponentFile, isIconSetMaster, activeFilePath]);
+
   return { hoverSuppressUntilRef };
 }

@@ -448,6 +448,45 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
         pendingRequests: expect.any(Number),
       });
     });
+
+    it('handles project thumbnail upload via POST /api/projects/:id/thumbnail', async () => {
+      // First create project
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: { id: 'test-thumb-proj', name: 'Thumb Test', data: { files: {} } },
+      });
+
+      const dataUrl = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes').toString('base64');
+      const res = await dispatch({
+        method: 'POST',
+        url: '/api/projects/test-thumb-proj/thumbnail',
+        body: { dataUrl },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.previewImage).toMatch(/^\/api\/uploads\/thumbnail-test-thumb-proj\.jpg\?t=\d+$/);
+    });
+
+    it('handles unified preview-image upload via POST /api/websites/:id/preview-image', async () => {
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: { id: 'test-website-thumb', name: 'Website Thumb Test', data: { files: {} } },
+      });
+
+      const dataUrl = 'data:image/jpeg;base64,' + Buffer.from('jpeg-bytes-2').toString('base64');
+      const res = await dispatch({
+        method: 'POST',
+        url: '/api/websites/test-website-thumb/preview-image',
+        body: { dataUrl },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.url).toMatch(/^\/api\/uploads\/thumbnail-test-website-thumb\.jpg\?t=\d+$/);
+    });
   });
 });
 

@@ -15,6 +15,7 @@ export interface ProjectSummary {
   createdAt: number;
   updatedAt: number;
   folderId?: string | null;
+  previewImage?: string | null;
 }
 
 export interface ProjectRecord {
@@ -25,6 +26,7 @@ export interface ProjectRecord {
   updatedAt: number;
   data: any;
   folderId?: string | null;
+  previewImage?: string | null;
 }
 
 /**
@@ -68,6 +70,7 @@ export function listProjects(customRoot?: string): ProjectSummary[] {
         createdAt: parsed.createdAt || Date.now(),
         updatedAt: parsed.updatedAt || Date.now(),
         folderId: parsed.folderId ?? null,
+        previewImage: parsed.previewImage ?? parsed.data?.previewImage ?? null,
       });
     } catch (err) {
       console.error(`[Revyme Storage] Failed to read project ${file}:`, err);
@@ -101,6 +104,7 @@ export function getProject(id: string, customRoot?: string): ProjectRecord | nul
       updatedAt: parsed.updatedAt || Date.now(),
       data: parsed.data || null,
       folderId: parsed.folderId ?? null,
+      previewImage: parsed.previewImage ?? parsed.data?.previewImage ?? null,
     };
   } catch (err) {
     console.error(`[Revyme Storage] Error loading project ${safeId}:`, err);
@@ -116,7 +120,8 @@ export function saveProject(
   data: any,
   name?: string,
   customRoot?: string,
-  folderId?: string | null
+  folderId?: string | null,
+  previewImage?: string | null
 ): ProjectRecord {
   const { projectsDir } = getDataDirs(customRoot);
   const safeId = sanitizeId(id);
@@ -125,6 +130,7 @@ export function saveProject(
   let createdAt = Date.now();
   let existingName = 'Untitled Website';
   let existingFolderId: string | null = null;
+  let existingPreviewImage: string | null = null;
 
   if (fs.existsSync(filePath)) {
     try {
@@ -132,6 +138,7 @@ export function saveProject(
       if (existing.createdAt) createdAt = existing.createdAt;
       if (existing.name) existingName = existing.name;
       if (existing.folderId !== undefined) existingFolderId = existing.folderId;
+      if (existing.previewImage !== undefined) existingPreviewImage = existing.previewImage;
     } catch {
       // ignore read error on overwrite
     }
@@ -139,6 +146,7 @@ export function saveProject(
 
   const finalName = (name && name.trim()) ? name.trim() : existingName;
   const finalFolderId = folderId !== undefined ? folderId : existingFolderId;
+  const finalPreviewImage = previewImage !== undefined ? previewImage : existingPreviewImage;
   const fileCount = data?.files ? Object.keys(data.files).length : 0;
   const updatedAt = Date.now();
 
@@ -150,9 +158,49 @@ export function saveProject(
     updatedAt,
     data,
     folderId: finalFolderId,
+    previewImage: finalPreviewImage,
   };
 
   // Atomic write via temp file
+  const tmpPath = path.join(projectsDir, `${safeId}.tmp.${Date.now()}`);
+  fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf-8');
+  fs.renameSync(tmpPath, filePath);
+
+  return record;
+}
+
+/**
+ * Save or update project thumbnail image.
+ */
+export function saveProjectThumbnail(
+  id: string,
+  dataUrl: string,
+  customRoot?: string
+): ProjectRecord | null {
+  const { uploadsDir, projectsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(id);
+  const project = getProject(id, customRoot);
+  if (!project) return null;
+
+  let previewUrl = dataUrl;
+
+  const match = dataUrl.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
+  if (match) {
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const filename = `thumbnail-${safeId}.${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    previewUrl = `/api/uploads/${filename}?t=${Date.now()}`;
+  }
+
+  const filePath = path.join(projectsDir, `${safeId}.json`);
+  const record: ProjectRecord = {
+    ...project,
+    previewImage: previewUrl,
+    updatedAt: Date.now(),
+  };
+
   const tmpPath = path.join(projectsDir, `${safeId}.tmp.${Date.now()}`);
   fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf-8');
   fs.renameSync(tmpPath, filePath);

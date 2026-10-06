@@ -62,6 +62,8 @@ async function performSave(): Promise<void> {
     pendingSave = false;
     saveFailures = 0;
     trace.action('autosave:success', { id });
+    // Best-effort thumbnail capture for dashboard card preview
+    import('./thumbnail-capture').then(({ captureAndSaveProjectThumbnail }) => captureAndSaveProjectThumbnail(id)).catch(() => {});
   } catch (err) {
     store.set(saveStatusAtom, 'error');
     debounceTimer = null;

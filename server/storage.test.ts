@@ -5,6 +5,7 @@ import {
   listProjects,
   getProject,
   saveProject,
+  saveProjectThumbnail,
   deleteProject,
   duplicateProject,
   saveUpload,
@@ -131,5 +132,20 @@ describe('Self-host storage', () => {
     const unassignedProject = getProject('proj-folder-test', TEST_DATA_DIR);
     expect(unassignedProject).not.toBeNull();
     expect(unassignedProject?.folderId).toBeNull();
+  });
+
+  it('saves and updates project thumbnail', () => {
+    saveProject('thumb-test', { files: {} }, 'Thumbnail Site', TEST_DATA_DIR);
+    const dataUrl = 'data:image/jpeg;base64,' + Buffer.from('fake-jpeg-data').toString('base64');
+    const updated = saveProjectThumbnail('thumb-test', dataUrl, TEST_DATA_DIR);
+
+    expect(updated).not.toBeNull();
+    expect(updated?.previewImage).toMatch(/^\/api\/uploads\/thumbnail-thumb-test\.jpg\?t=\d+$/);
+
+    const loaded = getProject('thumb-test', TEST_DATA_DIR);
+    expect(loaded?.previewImage).toMatch(/^\/api\/uploads\/thumbnail-thumb-test\.jpg\?t=\d+$/);
+
+    const summaries = listProjects(TEST_DATA_DIR);
+    expect(summaries.find(s => s.id === 'thumb-test')?.previewImage).toMatch(/^\/api\/uploads\/thumbnail-thumb-test\.jpg\?t=\d+$/);
   });
 });
