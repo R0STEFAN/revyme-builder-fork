@@ -515,8 +515,22 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
               <ToolInput
                 value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? '' : String(numValue)}
                 onChange={(v) => {
-                  if (isFitMode && fitTextNode) commitFitScale(v);
-                  else if (currentUnit !== 'clamp') setValue(`${parseFloat(v) || 0}${currentUnit}`);
+                  if (isFitMode && fitTextNode) {
+                    commitFitScale(v);
+                  } else if (currentUnit !== 'clamp') {
+                    const trimmed = (v || '').trim();
+                    const match = trimmed.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
+                    if (match) {
+                      const num = parseFloat(match[1]);
+                      const safeNum = Number.isFinite(num) ? num : 0;
+                      const typedUnit = match[2]?.toLowerCase();
+                      const matchedOpt = typedUnit ? FONT_SIZE_UNITS.find(o => o.value.toLowerCase() === typedUnit || o.label.toLowerCase() === typedUnit) : null;
+                      const u = matchedOpt ? matchedOpt.value : currentUnit;
+                      setValue(`${safeNum}${u}`);
+                    } else {
+                      setValue(`${parseFloat(v) || 0}${currentUnit}`);
+                    }
+                  }
                 }}
                 onChangeLive={isFitMode && fitTextNode ? liveFitScale : undefined}
                 onCommit={isFitMode && fitTextNode ? commitFitScale : undefined}

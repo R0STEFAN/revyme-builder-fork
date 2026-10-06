@@ -166,18 +166,83 @@ export function DimensionRow({ label, property, value, onChange, onChangeLive, o
       : showsMeasured ? String(Math.round(computedSize) || 0) : String(parsed.num);
 
   const handleNumChange = (v: string) => {
+    const trimmed = (v || '').trim();
+    if (!trimmed) {
+      onChange('');
+      return;
+    }
+
+    const lower = trimmed.toLowerCase();
+    if (lower === 'fit' || lower === 'auto') {
+      const autoOpt = unitOptions.find(o => !o.disabled && (o.value === 'auto' || o.value === 'fit'));
+      if (autoOpt) {
+        onUnitChange(activeUnit, autoOpt.value as DimUnit);
+        return;
+      }
+    }
+    if (lower === 'fill') {
+      const fillOpt = unitOptions.find(o => !o.disabled && o.value === 'fill');
+      if (fillOpt) {
+        onUnitChange(activeUnit, 'fill');
+        return;
+      }
+    }
+
+    const match = trimmed.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
+    if (match) {
+      const num = parseFloat(match[1]);
+      const safeNum = Number.isFinite(num) ? num : 0;
+      const typedUnit = match[2]?.toLowerCase();
+
+      if (typedUnit) {
+        // User explicitly typed a unit, e.g. "100%", "50vh", "2rem", "200px"
+        const matchedOpt = unitOptions.find(o =>
+          !o.disabled && (
+            o.value.toLowerCase() === typedUnit ||
+            o.label.toLowerCase() === typedUnit
+          )
+        );
+
+        if (matchedOpt) {
+          const targetUnit = matchedOpt.value as DimUnit;
+          const formatted = formatValue(safeNum, targetUnit);
+
+          if (targetUnit === 'auto') {
+            onUnitChange(activeUnit, 'auto');
+            return;
+          }
+          if (targetUnit === 'fill') {
+            onUnitChange(activeUnit, 'fill');
+            return;
+          }
+
+          onChange(formatted);
+          return;
+        }
+      }
+
+      if (isFillMultiplier) {
+        // In fill mode, pass through the raw multiplier value
+        onChange(v);
+        return;
+      }
+
+      // When auto (or a cross-axis fill): typing a value switches to px mode
+      if (showsMeasured) {
+        onUnitChange(activeUnit, 'px', safeNum);
+        return;
+      }
+
+      onChange(formatValue(safeNum, activeUnit));
+      return;
+    }
+
     if (isFillMultiplier) {
-      // In fill mode, pass through the raw multiplier value
       onChange(v);
       return;
     }
-    const num = parseFloat(v) || 0;
-    // When auto (or a cross-axis fill): typing a value switches to px mode
-    if (showsMeasured) {
-      onUnitChange(activeUnit, 'px', num);
-      return;
-    }
-    onChange(formatValue(num, activeUnit));
+
+    onChange(v);
   };
 
   // Live scrub: same formatting as handleNumChange but routes to the imperative patch (no code write). The
@@ -1035,6 +1100,11 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     }
     // Currently in fill mode — changing the multiplier (preserve shrink + basis)
     if (isWidthFillMain) {
+      const unitMatch = v.trim().match(/^(-?[\d.]+)\s*([a-z%]+)$/i);
+      if (unitMatch && unitMatch[2].toLowerCase() !== 'fr') {
+        onUpdateMultiple({ width: v, flex: '' });
+        return;
+      }
       const mult = Math.max(1, parseFloat(v) || 1);
       trace.action('size:width-fill-change', { nodeId, multiplier: mult });
       onUpdate('flex', formatFlex({ ...flex, grow: mult }));
@@ -1060,7 +1130,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
       }
       const newUnit = (v.replace(/[\d.-]/g, '').trim() || 'px') as DimUnit;
       const heightIsAuto = styles.height === 'auto';
-if (heightIsAuto) {
+      if (heightIsAuto) {
         // Width is already the controlling dimension — straight update.
         // CSS keeps height aligned to the ratio for free.
         onUpdate('width', v);
@@ -1069,7 +1139,7 @@ if (heightIsAuto) {
         // matching percentage of parent if the user picked `%`, then
         // flip height to auto.
         let finalWidth = v;
-        if (newUnit === '%' && computed.parentWidth > 0) {
+        if (newUnit === '%' && computed.parentWidth > 0 && !/\d/.test(v)) {
           const pct = (computed.width / computed.parentWidth) * 100;
           finalWidth = `${pct.toFixed(5)}%`;
         }
@@ -1241,6 +1311,11 @@ if (heightIsAuto) {
     }
     // Currently in fill mode — changing the multiplier (preserve shrink + basis)
     if (isHeightFillMain) {
+      const unitMatch = v.trim().match(/^(-?[\d.]+)\s*([a-z%]+)$/i);
+      if (unitMatch && unitMatch[2].toLowerCase() !== 'fr') {
+        onUpdateMultiple({ height: v, flex: '' });
+        return;
+      }
       const mult = Math.max(1, parseFloat(v) || 1);
       trace.action('size:height-fill-change', { nodeId, multiplier: mult });
       onUpdate('flex', formatFlex({ ...flex, grow: mult }));
@@ -1273,7 +1348,7 @@ if (heightIsAuto) {
       } else if (newUnit === '%' || newUnit === 'vh' || newUnit === 'vw' || newUnit === 'svh' || newUnit === 'svw' || newUnit === 'dvh' || newUnit === 'dvw' || newUnit === 'lvh' || newUnit === 'lvw' || newUnit === 'rem' || newUnit === 'em') {
         // Switch control to height. Normalise % from the visible height.
         let finalHeight = v;
-        if (newUnit === '%' && computed.parentHeight > 0) {
+        if (newUnit === '%' && computed.parentHeight > 0 && !/\d/.test(v)) {
           const pct = (computed.height / computed.parentHeight) * 100;
           finalHeight = `${pct.toFixed(5)}%`;
         }

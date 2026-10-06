@@ -49,7 +49,7 @@ interface Props {
  *  `414`; focusing the field reveals the exact value for editing. Only px / %
  *  / viewport units — unitless (line-height 1.6), deg and fr keep decimals. */
 export function roundLengthForDisplay(v: string): string {
-  const m = /^(-?[\d.]+)(px|%|vh|vw)$/.exec((v || '').trim());
+  const m = /^(-?[\d.]+)(px|%|vh|vw|svh|svw|dvh|dvw|lvh|lvw)$/i.exec((v || '').trim());
   if (!m) return v;
   const n = parseFloat(m[1]);
   if (!Number.isFinite(n) || Number.isInteger(n)) return v;
@@ -58,9 +58,9 @@ export function roundLengthForDisplay(v: string): string {
 
 /** Parse "300px" → { num: 300, unit: "px" } */
 function parseNumeric(v: string): { num: number; unit: string } | null {
-  const match = v.match(/^(-?[\d.]+)(px|%|em|rem|vh|vw|deg|fr|)?$/);
+  const match = v.match(/^(-?[\d.]+)(px|%|em|rem|vh|vw|svh|svw|dvh|dvw|lvh|lvw|deg|fr|)?$/i);
   if (!match) return null;
-  return { num: parseFloat(match[1]), unit: match[2] || '' };
+  return { num: parseFloat(match[1]), unit: match[2]?.toLowerCase() || '' };
 }
 
 export default function ToolInput({ value, onChange, onChangeLive, onCommit, step = 1, text, chevronLabel, className, disabled, placeholder, min, max, mirrorNegative }: Props) {
