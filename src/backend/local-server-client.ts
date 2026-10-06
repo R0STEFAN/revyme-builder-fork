@@ -48,18 +48,29 @@ export async function fetchLocalServerStatus(projectId: string): Promise<LocalSe
 
 /**
  * Trigger Next.js production build for a project.
- * Optionally passes memory files to export to disk prior to build.
+ * Optionally passes memory files to export to disk prior to build,
+ * and an optional active branch name.
  */
 export async function buildLocalServer(
   projectId: string,
-  files?: Record<string, string>
+  files?: Record<string, string>,
+  branch?: string
 ): Promise<BuildResult> {
-  trace.action('local-server-client:build', { projectId, fileCount: files ? Object.keys(files).length : 0 });
+  trace.action('local-server-client:build', {
+    projectId,
+    branch,
+    fileCount: files ? Object.keys(files).length : 0,
+  });
   try {
+    const payload: { files?: Record<string, string>; branch?: string } = { files };
+    if (branch !== undefined) {
+      payload.branch = branch;
+    }
+
     const res = await fetch(`/api/local-server/${encodeURIComponent(projectId)}/build`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json().catch(() => ({}));

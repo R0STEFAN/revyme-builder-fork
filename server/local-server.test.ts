@@ -233,6 +233,38 @@ describe('LocalServerManager', () => {
       }
     });
 
+    it('builds from storage branch if branchId is provided', async () => {
+      saveProject('proj-stored-branch', {
+        files: { 'app/page.tsx': 'export default () => <p>Main</p>;' },
+        branches: {
+          'feature-redesign': {
+            files: { 'app/page.tsx': 'export default () => <p>Redesign</p>;' }
+          }
+        }
+      }, 'Stored Project Branch', TEST_STORAGE_DIR);
+
+      const mockChild = createMockChild(3334);
+      mockSpawn.mockImplementation(() => {
+        setTimeout(() => {
+          mockChild.stdout.emit('data', Buffer.from('Compiled successfully'));
+          mockChild.emit('close', 0);
+        }, 10);
+        return mockChild;
+      });
+
+      const prevEnv = process.env.REVYME_DATA_DIR;
+      process.env.REVYME_DATA_DIR = TEST_STORAGE_DIR;
+
+      try {
+        const result = await manager.build('proj-stored-branch', undefined, 'feature-redesign');
+        expect(result.success).toBe(true);
+        const targetDir = manager.getBuildDir('proj-stored-branch');
+        expect(fs.readFileSync(path.join(targetDir, 'app/page.tsx'), 'utf-8')).toContain('Redesign');
+      } finally {
+        process.env.REVYME_DATA_DIR = prevEnv;
+      }
+    });
+
     it('returns error if project does not exist in storage and no files provided', async () => {
       const result = await manager.build('non-existent');
       expect(result.success).toBe(false);

@@ -192,11 +192,23 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       });
 
       expect(res.status).toBe(200);
-      expect(mockManager.build).toHaveBeenCalledWith('proj-123', files);
+      expect(mockManager.build).toHaveBeenCalledWith('proj-123', files, undefined);
       expect(res.body).toEqual({
         success: true,
         log: 'Build finished successfully',
       });
+    });
+
+    it('passes branch parameter to manager.build', async () => {
+      const files = { 'app/page.tsx': 'export default function Page() {}' };
+      const res = await dispatch({
+        method: 'POST',
+        url: '/api/local-server/proj-123/build',
+        body: { files, branch: 'feat-new' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockManager.build).toHaveBeenCalledWith('proj-123', files, 'feat-new');
     });
 
     it('handles build without files payload', async () => {
@@ -207,7 +219,7 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       });
 
       expect(res.status).toBe(200);
-      expect(mockManager.build).toHaveBeenCalledWith('proj-123', undefined);
+      expect(mockManager.build).toHaveBeenCalledWith('proj-123', undefined, undefined);
       expect(res.body).toEqual({
         success: true,
         log: 'Build finished successfully',

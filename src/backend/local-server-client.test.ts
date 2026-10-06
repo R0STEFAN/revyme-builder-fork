@@ -115,6 +115,27 @@ describe('local-server-client', () => {
       });
     });
 
+    it('sends POST request with files and branch name', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, log: 'Build completed in 1.9s' }),
+      });
+
+      const files = { 'pages/index.tsx': 'export default function() {}' };
+      const result = await buildLocalServer('proj-123', files, 'feature-hero');
+
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/local-server/proj-123/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files, branch: 'feature-hero' }),
+      });
+      expect(result).toEqual({
+        success: true,
+        log: 'Build completed in 1.9s',
+      });
+    });
+
     it('sends POST request without files when not specified', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,

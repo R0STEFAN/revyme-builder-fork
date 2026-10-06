@@ -280,7 +280,11 @@ export class LocalServerManager {
     return targetDir;
   }
 
-  async build(projectId: string, files?: Record<string, string>): Promise<{ success: boolean; log: string }> {
+  async build(
+    projectId: string,
+    files?: Record<string, string>,
+    branchId?: string
+  ): Promise<{ success: boolean; log: string }> {
     const safeId = sanitizeId(projectId);
     const record = this.getOrCreateRecord(safeId);
 
@@ -294,7 +298,11 @@ export class LocalServerManager {
         record.lastError = errLog;
         return { success: false, log: errLog };
       }
-      this.exportProject(safeId, stored.data?.files || {});
+      let exportFiles = stored.data?.files || {};
+      if (branchId && stored.data?.branches?.[branchId]?.files) {
+        exportFiles = stored.data.branches[branchId].files;
+      }
+      this.exportProject(safeId, exportFiles);
     }
 
     const targetDir = this.getBuildDir(safeId);

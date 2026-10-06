@@ -331,7 +331,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           try {
             const bodyBuf = await readBodyBuffer(req);
             const body = bodyBuf.length ? JSON.parse(bodyBuf.toString('utf-8')) : {};
-            const result = await manager.build(projectId, body.files);
+            const result = await manager.build(projectId, body.files, body.branch);
             if (result.success) {
               return sendJson(res, 200, { success: true, log: result.log });
             } else {

@@ -167,11 +167,39 @@ describe('LocalServerDropdown', () => {
 
     expect(mutationQueue.flushNow).toHaveBeenCalled();
     expect(readSpy).toHaveBeenCalledWith(projectFsModule.MAIN_BRANCH_ID, { shared: true });
-    expect(localServerClient.buildLocalServer).toHaveBeenCalledWith('test-project-123', {
-      'app/page.tsx': 'export default function Page() { return <div>Hello</div> }',
-      'app/layout.tsx': 'export default function Layout({ children }) { return <html>{children}</html> }',
-    });
+    expect(localServerClient.buildLocalServer).toHaveBeenCalledWith(
+      'test-project-123',
+      {
+        'app/page.tsx': 'export default function Page() { return <div>Hello</div> }',
+        'app/layout.tsx': 'export default function Layout({ children }) { return <html>{children}</html> }',
+      },
+      projectFsModule.MAIN_BRANCH_ID
+    );
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Build succeeded'));
+  });
+
+  it('extracts files from active non-main branch when building', async () => {
+    vi.spyOn(projectFsModule.projectFS, 'getActiveBranchId').mockReturnValue('feature-hero');
+    const featureFiles = new Map([
+      ['app/page.tsx', 'export default function HeroPage() { return <div>Hero</div> }'],
+    ]);
+    const readSpy = vi.spyOn(projectFsModule.projectFS, 'readBranchFiles').mockReturnValue(featureFiles);
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    const buildBtn = screen.getByRole('button', { name: /^build$/i });
+    await act(async () => {
+      fireEvent.click(buildBtn);
+    });
+
+    expect(readSpy).toHaveBeenCalledWith('feature-hero', { shared: true });
+    expect(localServerClient.buildLocalServer).toHaveBeenCalledWith(
+      'test-project-123',
+      {
+        'app/page.tsx': 'export default function HeroPage() { return <div>Hero</div> }',
+      },
+      'feature-hero'
+    );
   });
 
   it('shows error toast when build fails', async () => {
@@ -303,7 +331,7 @@ describe('LocalServerDropdown', () => {
     });
 
     // Check success badge
-    expect(screen.getByText('Build succeeded')).toBeTruthy();
+    expect(screen.getByText(/Build succeeded/)).toBeTruthy();
 
     // Toggle log view
     const viewLogBtn = screen.getByText('View build log');

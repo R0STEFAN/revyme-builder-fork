@@ -3,6 +3,7 @@
 // the local Next.js production server.
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useAtomValue } from 'jotai';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   fetchLocalServerStatus,
@@ -12,8 +13,10 @@ import {
   type LocalServerStatus,
 } from '@/backend/local-server-client';
 import { projectFS, MAIN_BRANCH_ID } from '@/code/project/project-fs';
+import { activeBranchIdAtom } from '@/code/stores/branch-store';
 import { flushNow } from '@/code/mutation/mutation-queue';
 import { getProjectId } from '@/backend/project-id';
+import { BranchIcon } from '@/shared/icons';
 import { toast } from 'sonner';
 import { trace } from '@/shared/debug-trace';
 
@@ -127,6 +130,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
   const [showLog, setShowLog] = useState(false);
 
   const projectId = getProjectId();
+  const currentBranch = useAtomValue(activeBranchIdAtom) || MAIN_BRANCH_ID;
 
   // Outside click listener
   useEffect(() => {
@@ -184,14 +188,17 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
     setBuilding(true);
     setErrorMessage(null);
     setShowLog(false);
-    trace.action('local-server-dropdown:build-start', { projectId });
+
+    const activeBranch = projectFS.getActiveBranchId() || currentBranch || MAIN_BRANCH_ID;
+    trace.action('local-server-dropdown:build-start', { projectId, branch: activeBranch });
 
     try {
       // 1. Flush any pending mutations
       flushNow();
 
-      // 2. Extract current files from projectFS
-      const branchFiles = projectFS.readBranchFiles(MAIN_BRANCH_ID, { shared: true });
+      // 2. Extract current files from projectFS for the active branch
+      const branchFiles = projectFS.readBranchFiles(activeBranch, { shared: true })
+        ?? projectFS.readBranchFiles(MAIN_BRANCH_ID, { shared: true });
       const files: Record<string, string> = {};
       if (branchFiles) {
         for (const [k, v] of branchFiles.entries()) {
@@ -200,15 +207,15 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       }
 
       // 3. Trigger build
-      const result = await buildLocalServer(projectId, files);
+      const result = await buildLocalServer(projectId, files, activeBranch);
       setBuildLog(result.log || null);
 
       if (result.success) {
-        trace.action('local-server-dropdown:build-success', { projectId });
-        toast.success('Build succeeded! Ready to start server.');
+        trace.action('local-server-dropdown:build-success', { projectId, branch: activeBranch });
+        toast.success(`Build succeeded (${activeBranch})! Ready to start server.`);
         await refreshStatus();
       } else {
-        trace.error('local-server-dropdown:build-failed', { projectId, log: result.log });
+        trace.error('local-server-dropdown:build-failed', { projectId, branch: activeBranch, log: result.log });
         const errMsg = result.log || 'Build failed';
         setErrorMessage(errMsg);
         toast.error(`Build failed: ${errMsg.slice(0, 80)}`);
@@ -222,7 +229,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       setBuilding(false);
       void refreshStatus();
     }
-  }, [building, projectId, refreshStatus]);
+  }, [building, currentBranch, projectId, refreshStatus]);
 
   // Handle Start
   const handleStart = useCallback(async () => {
@@ -314,6 +321,24 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--bg-surface,rgba(255,255,255,0.05))] text-[var(--text-secondary)]">
               <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
               <span>{badgeLabel}</span>
+            </span>
+          </div>
+
+          {/* Active branch indicator */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-[var(--text-secondary)] select-none flex items-center gap-1.5">
+              <BranchIcon size={12} className="text-[var(--text-tertiary)]" />
+              <span>Branch</span>
+            </span>
+            <span
+              className={`font-mono text-[11px] px-1.5 py-0.5 rounded border ${
+                currentBranch === MAIN_BRANCH_ID
+                  ? 'text-[var(--text-secondary)] bg-[var(--bg-surface,rgba(255,255,255,0.05))] border-[var(--border-light)]'
+                  : 'text-[var(--accent)] bg-[var(--accent)]/10 border-[var(--accent)]/30 font-medium'
+              }`}
+              title={`Active branch: ${currentBranch}`}
+            >
+              {currentBranch}
             </span>
           </div>
 
@@ -432,7 +457,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
               <div className="flex items-center justify-between gap-1 text-emerald-400">
                 <span className="font-medium truncate leading-tight flex items-center gap-1.5">
                   <Check size={12} />
-                  <span>Build succeeded</span>
+                  <span>Build succeeded ({currentBranch})</span>
                 </span>
                 <button
                   type="button"
