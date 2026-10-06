@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { parseJSXToNodes } from './parser';
+import { projectFS } from '@/code/project/project-fs';
 
 describe('parseJSXToNodes', () => {
   test('parses basic div with data-id and styles', () => {
@@ -1533,5 +1534,21 @@ const canvasNodes = (<>
     expect(canvasNode.attrs).toEqual(pageNode.attrs);
     expect(canvasNode.styles).toEqual(pageNode.styles);
     expect(canvasNode.textContent).toBe(pageNode.textContent);
+  });
+
+  test('resolves collection.length in textContent when imported from @/cms/collection.json', () => {
+    projectFS.writeFile('cms/tattoos.json', JSON.stringify([{ id: '1' }, { id: '2' }, { id: '3' }]));
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <h2 data-id="releases-heading">Physical Sleeves & Archival Editions {tattoos.length}</h2>
+    </div>
+  );
+}`;
+    const heading = parseJSXToNodes(code).get('releases-heading')!;
+    expect(heading.textContent).toBe('Physical Sleeves & Archival Editions 3');
   });
 });

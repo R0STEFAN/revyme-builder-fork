@@ -10,6 +10,7 @@ import { isSvgTag } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
 import { formattedBranchesOfDangerAttr, type FormattedBranches } from '@/shared/rich-message';
 import { parsePageVariables } from '../features/page-variables';
+import { projectFS } from '@/code/project/project-fs';
 
 // Handle ESM/CJS interop
 const traverse = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
@@ -1951,7 +1952,8 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             || tagName === 'Fragment'
             // Page-effects wrapper (renders {children} via the View Transitions
             // API) — pure infrastructure, never a user-authored layer.
-            || tagName === 'PageTransitions') {
+            || tagName === 'PageTransitions'
+            || tagName === 'RevymeSplitText') {
           return;
         }
 
@@ -2021,7 +2023,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
 
         // Transparent wrappers — not visual elements, just JS logic.
         // Don't create a node, let children become children of the parent.
-        if (tagName === 'MotionConfig' || tagName === 'LayoutGroup' || tagName === 'PageTransitions') {
+        if (tagName === 'MotionConfig' || tagName === 'LayoutGroup' || tagName === 'PageTransitions' || tagName === 'RevymeSplitText') {
           return; // continue traversing children normally
         }
 
@@ -2132,14 +2134,31 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             const cleaned = cleanJsxText((child as JSXText).value);
             if (cleaned) textContent += cleaned;
           }
-          if (child.type === 'JSXExpressionContainer' && child.expression.type === 'StringLiteral') {
-            textContent += child.expression.value;
-            // Mark as literal — the runtime value came from a JS string
-            // literal, not raw JSX text, so any `<` / `{` it contains
-            // is plain text (e.g. user pasted source code). Tells the
-            // renderer to skip its `textContent.includes('<')` →
-            // innerHTML fallback for this node.
-            textIsLiteral = true;
+          if (child.type === 'JSXExpressionContainer') {
+            if (child.expression.type === 'StringLiteral') {
+              textContent += child.expression.value;
+              textIsLiteral = true;
+            } else if (
+              child.expression.type === 'MemberExpression' &&
+              child.expression.property.type === 'Identifier' &&
+              child.expression.property.name === 'length' &&
+              child.expression.object.type === 'Identifier'
+            ) {
+              const varName = (child.expression.object as any).name;
+              const slug = cmsImports.get(varName);
+              if (slug) {
+                const raw = projectFS.readFile(`cms/${slug}.json`);
+                if (raw) {
+                  try {
+                    const items = JSON.parse(raw);
+                    if (Array.isArray(items)) {
+                      textContent += String(items.length);
+                      textIsLiteral = true;
+                    }
+                  } catch {}
+                }
+              }
+            }
           }
           // Detect {item.fieldName} text binding inside collection template
           if (activeCtx && child.type === 'JSXExpressionContainer'
@@ -2538,7 +2557,8 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         const hasRichConditionalText = !!conditionalTextRich
           && !el.children.some((c: any) => c.type === 'JSXElement');
 
-        if (hasMixedContent || hasTextAnim || splitWrapper || isTextOverridesContainer || hasRichConditionalText) {
+        const hasLegacyTextAnim = !!hasTextAnim && !splitWrapper;
+        if (hasMixedContent || hasLegacyTextAnim || isTextOverridesContainer || hasRichConditionalText) {
           // Skip traversing inline children — they're in textContent as raw JSX source
           // For text-anim: children are animation artifacts (motion.span), not structural nodes
           // For text-overrides: children are <span data-vp> per-viewport variants, captured in textOverrides
@@ -2563,7 +2583,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (tagName === 'AnimatePresence' || tagName === 'LayoutGroup'
             || tagName === 'MotionConfig' || tagName === 'Fragment'
             || tagName === 'style' || tagName === 'PageTransitions'
-            || tagName === 'Override') {
+            || tagName === 'Override' || tagName === 'RevymeSplitText') {
           return;
         }
         // Glide wrappers (`<motion.div data-glide-item>`) are skipped on enter
@@ -2960,12 +2980,31 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           const cleaned = cleanJsxText(child.value);
           if (cleaned) textContent += cleaned;
         }
-        if (child.type === 'JSXExpressionContainer' && child.expression?.type === 'StringLiteral') {
-          textContent += child.expression.value;
-          // Wrapped in a JS string literal — text is plain runtime data,
-          // not raw JSX. Renderer uses this to skip its `<` →
-          // innerHTML fallback (see Renderer.shouldUseInnerHTML).
-          textIsLiteral = true;
+        if (child.type === 'JSXExpressionContainer') {
+          if (child.expression?.type === 'StringLiteral') {
+            textContent += child.expression.value;
+            textIsLiteral = true;
+          } else if (
+            child.expression?.type === 'MemberExpression' &&
+            child.expression.property.type === 'Identifier' &&
+            child.expression.property.name === 'length' &&
+            child.expression.object.type === 'Identifier'
+          ) {
+            const varName = (child.expression.object as any).name;
+            const slug = cmsImports.get(varName);
+            if (slug) {
+              const raw = projectFS.readFile(`cms/${slug}.json`);
+              if (raw) {
+                try {
+                  const items = JSON.parse(raw);
+                  if (Array.isArray(items)) {
+                    textContent += String(items.length);
+                    textIsLiteral = true;
+                  }
+                } catch {}
+              }
+            }
+          }
         }
       }
 

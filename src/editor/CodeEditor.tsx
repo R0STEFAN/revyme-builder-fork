@@ -251,7 +251,19 @@ export default function CodeEditor() {
     trace.action('code-editor:view-request', { path: viewRequest });
     setViewPath(viewRequest);
     setViewRequest(null);
-  }, [viewRequest, setViewRequest]);
+
+    if (editorRef.current && selectedId) {
+      const selectedNode = getNodesSnapshot().get(selectedId);
+      const tagName = selectedNode?.name || undefined;
+      const targetCode = viewRequest === activeFilePath ? code : (projectFS.readFile(viewRequest) ?? '');
+      const range = getNodeLineRange(targetCode, selectedId, tagName);
+      if (range) {
+        editorRef.current.revealLineInCenter(range.startLine);
+        editorRef.current.setPosition({ lineNumber: range.startLine, column: 1 });
+        editorRef.current.focus();
+      }
+    }
+  }, [viewRequest, setViewRequest, selectedId, code, activeFilePath]);
 
   // Apply read-only imperatively on lock changes
   useEffect(() => {
@@ -383,6 +395,19 @@ export default function CodeEditor() {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       handleManualSaveRef.current();
     });
+
+    // Reveal and focus selected node on initial mount if viewing active file
+    if (selectedId && isViewingActive) {
+      const selectedNode = getNodesSnapshot().get(selectedId);
+      const tagName = selectedNode?.name || undefined;
+      const range = getNodeLineRange(code, selectedId, tagName);
+      if (range) {
+        editor.revealLineInCenter(range.startLine);
+        editor.setPosition({ lineNumber: range.startLine, column: 1 });
+        editor.focus();
+        prevSelectedIdRef.current = selectedId;
+      }
+    }
   };
 
   // Track previous selectedId to detect actual selection changes (vs code-only changes)

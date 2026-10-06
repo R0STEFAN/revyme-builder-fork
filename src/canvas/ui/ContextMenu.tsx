@@ -28,6 +28,7 @@ import { groupSvgs, ungroupSvgs } from '@/code/svg/group-svgs';
 import { buildGroupSvgsOpts } from '@/canvas/svg-group-helper';
 import { setForceRender, syncQueueCode, flushNow, queueMutation } from '@/code/mutation/mutation-queue';
 import { activeFilePathAtom, componentBreadcrumbAtom, isComponentFilePath, isDesignComponentFile } from '@/code/project/active-file-store';
+import { codeEditorOpenAtom, codeEditorViewRequestAtom } from '@/code/stores/left-panel-store';
 import { viewportsConfigAtom, interactingViewportIdAtom, isReplicaViewportAtom, isComponentVariantViewportAtom } from '@/code/stores/viewport-store';
 import { enterComponentFile } from '@/canvas/component-navigation';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
@@ -155,6 +156,8 @@ export default function ContextMenu() {
   const setInteractingVp = useSetAtom(interactingViewportIdAtom);
   const interactingVp = useAtomValue(interactingViewportIdAtom);
   const setComponentEditorFile = useSetAtom(componentEditorFileAtom);
+  const setCodeEditorOpen = useSetAtom(codeEditorOpenAtom);
+  const setCodeEditorViewRequest = useSetAtom(codeEditorViewRequestAtom);
   const setVersion = useSetAtom(projectVersionAtom);
   const [copiedElementStyles, setCopiedElementStyles] = useAtom(copiedElementStylesAtom);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -755,6 +758,18 @@ export default function ContextMenu() {
     close();
   };
 
+  const handleEditCode = () => {
+    if (!nodeId) return;
+    const targetNodeId = (nodeId && !selectedIds.includes(nodeId)) ? nodeId : (selectedIds[0] || nodeId);
+    if (targetNodeId) {
+      setSelectedIds([targetNodeId]);
+    }
+    setCodeEditorViewRequest(activeFilePath);
+    setCodeEditorOpen(true);
+    trace.action('context-menu:edit-code', { nodeId: targetNodeId, filePath: activeFilePath });
+    close();
+  };
+
   // Make Vector Set — meaningful only for SVG
   // selections. Mirror
   // Make Component: open the name modal → on submit, extract the SVG
@@ -979,6 +994,7 @@ export default function ContextMenu() {
 
         <Separator />
 
+        <MenuItem label="Edit Code" onClick={handleEditCode} disabled={!nodeId} />
         <MenuItem label="Rename" shortcut="Alt+R" onClick={handleRename} disabled={!nodeId} />
 
         <MenuItem label={isLocked ? 'Unlock' : 'Lock'} shortcut="Ctrl+L" onClick={handleToggleLock} disabled={!nodeId} />

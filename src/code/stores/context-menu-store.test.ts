@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getDefaultStore } from 'jotai';
 import {
+  contextMenuAtom,
   copiedElementStylesAtom,
   extractCopyableStyles,
   prepareStylesForPaste,
@@ -246,6 +247,14 @@ describe('context-menu-store style copying', () => {
     expect(forVariant.border).toBe('none');
     expect(forVariant.borderWidth).toBe('0px');
     expect(forVariant.boxShadow).toBe('none');
+  });
+
+  it('contextMenu state tracks open and target node for Edit Code', () => {
+    const store = getDefaultStore();
+    store.set(contextMenuAtom, { show: true, x: 100, y: 200, nodeId: 'box-1' });
+    const state = store.get(contextMenuAtom);
+    expect(state.show).toBe(true);
+    expect(state.nodeId).toBe('box-1');
   });
 });
 
