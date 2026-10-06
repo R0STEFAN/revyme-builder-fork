@@ -9,10 +9,29 @@ description: >-
 
 This skill guides the AI agent on how to interact with the **Revyme Website Builder** running in the browser via its local **MCP Bridge Server**.
 
-## 1. Prerequisites Check
-Before executing any tool calls, verify that the builder is running:
-1. **Editor & Native MCP Bridge**: `http://localhost:3333` & `http://localhost:8082` (started automatically via `npm run dev`)
-2. The browser tab must be active and connected (connects via SSE to the bridge).
+## 1. MCP Configuration & Prerequisites
+
+### Client Configuration (`mcp_config.json`)
+For an agent (Antigravity, Claude Desktop, Cursor) to connect to the builder on a machine:
+Add the following configuration to `~/.gemini/config/mcp_config.json` (or your client's MCP config):
+```json
+{
+  "mcpServers": {
+    "revyme-builder": {
+      "command": "npx",
+      "args": ["tsx", "server/mcp-server.ts"],
+      "cwd": "/path/to/revyme-builder-fork"
+    }
+  }
+}
+```
+> **Important**: Set `cwd` to the absolute path of the `revyme-builder-fork` repository on the current machine.
+
+### Runtime Prerequisites
+Before executing any tool calls, ensure that:
+1. **Editor & Bridge are running**: Run `npm run dev` (starts editor on `http://localhost:3333` and HTTP bridge on `http://localhost:8082`).
+2. **Browser tab is open & connected**: Open `http://localhost:3333` in the browser (the browser tab establishes an active SSE connection to port 8082).
+3. **MCP Stdio Server**: The AI agent automatically launches `server/mcp-server.ts` via the `mcp_config.json` entry above (or manually via `npm run mcp`).
 
 ---
 
