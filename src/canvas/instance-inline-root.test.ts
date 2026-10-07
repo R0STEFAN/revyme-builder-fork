@@ -99,6 +99,54 @@ function renderRoot(tag: string, style: string): { el: HTMLElement } {
   return { el: render(container, nodes, rootId) };
 }
 
+describe('fixed instance in a template canvas', () => {
+  const fixedPage = (id: string) => `import React from 'react';
+import Navbar from '@/components/Navbar';
+export default function Page() {
+  return <div data-id="root" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div data-id="section" style={{ position: 'relative', backgroundColor: '#fff', height: '500px' }}>Content</div>
+    <Navbar data-id="nav" style={{ position: 'fixed', top: '0px', left: '0px', order: '-1' }} />
+    <div data-id="${id}" />
+  </div>;
+}`;
+  const navbar = `import React from 'react';
+export default function Navbar({ style }) {
+  return <nav data-id="navbar-root" style={{ width: '100%', height: '60px', zIndex: '100', ...style }}>Nav</nav>;
+}`;
+
+  it('keeps the fixed navbar above the page section on first paint and after a dynamic page switch', () => {
+    (globalThis as any).CSS = (globalThis as any).CSS ?? {};
+    (globalThis as any).CSS.escape = (globalThis as any).CSS.escape
+      ?? ((s: string) => s.replace(/[^a-zA-Z0-9_-]/g, (c: string) => `\\${c}`));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    try {
+      for (const id of ['home', 'gallery-category']) {
+        clearComponentParseCache();
+        const page = fixedPage(id);
+        const fs = new InMemoryProjectFS(new Map([
+          [`app/${id}/page.client.tsx`, page],
+          ['components/Navbar.tsx', navbar],
+        ]));
+        const nodes = parseProjectFile(`app/${id}/page.client.tsx`, fs);
+        renderNodes(container, nodes, null, () => {}, VIEWPORTS, page);
+        const wrapper = container.querySelector('[data-node-id="nav"]') as HTMLElement;
+        const root = container.querySelector('[data-node-id="nav:navbar-root"]') as HTMLElement;
+        expect(wrapper).toBeTruthy();
+        expect(root).toBeTruthy();
+        expect(wrapper.style.position).toBe('absolute');
+        expect(wrapper.style.zIndex).toBe('100');
+        // Re-render with the same ids: the existing wrapper takes the patch path.
+        renderNodes(container, nodes, null, () => {}, VIEWPORTS, page);
+        expect(container.querySelector('[data-node-id="nav"]')).toBe(wrapper);
+        expect(wrapper.style.zIndex).toBe('100');
+      }
+    } finally {
+      container.remove();
+    }
+  });
+});
+
 describe('instance root — inline tags are blockified so the wrapper can measure them', () => {
   it('THE BUG: a MotionLink root reaches the DOM as <a> and is blockified', () => {
     const { el } = renderRoot('MotionLink', "position: 'absolute', padding: '10px 18px', borderRadius: '999px'");

@@ -2534,7 +2534,14 @@ export function patchElement(
   // instance.styles' visual props paint twice (outer + inner via spread)
   // producing the user-reported "doubled padding / shadow" effect.
   const isInstanceWrapper = !!node.isComponentInstance;
-  const styleEntries = Object.entries(resolvedStyles)
+  // The canvas turns a fixed instance into an absolute wrapper. Its master's
+  // z-index lives on the inner root on the live site, but that inner stacking
+  // context cannot raise the wrapper above a sibling page section here.
+  const fixedRoot = isInstanceWrapper && resolvedStyles.position === 'fixed' && !resolvedStyles.zIndex
+    ? allNodes.get(node.children[0]) : null;
+  const fixedRootZ = fixedRoot ? resolveVariantStyles(fixedRoot, variantName, vpWidth).zIndex : undefined;
+  const canvasStyles = fixedRootZ ? { ...resolvedStyles, zIndex: fixedRootZ } : resolvedStyles;
+  const styleEntries = Object.entries(canvasStyles)
     .filter(([key]) => !(isOverlayNode && (key === 'top' || key === 'left' || key === 'right' || key === 'bottom')))
     .filter(([key, value]) => {
       if (isInstanceWrapper) {
@@ -3702,6 +3709,10 @@ function buildNodeElement(
   // outer instance wrapper (which would visibly double padding/border/etc.
   // against the inner root that already has them via the style spread).
   const buildIsInstanceWrapper = !!node.isComponentInstance;
+  const buildFixedRoot = buildIsInstanceWrapper && resolvedStyles.position === 'fixed' && !resolvedStyles.zIndex
+    ? nodes.get(node.children[0]) : null;
+  const buildFixedRootZ = buildFixedRoot ? resolveVariantStyles(buildFixedRoot, variantName, vpWidth).zIndex : undefined;
+  const buildCanvasStyles = buildFixedRootZ ? { ...resolvedStyles, zIndex: buildFixedRootZ } : resolvedStyles;
   const buildIsComponentRootInInstance = !!(node.componentInstanceId && node.isComponentRoot);
   // Variant-scoped locale CSS carrier on first build — see patchElement's
   // isComponentRootInInstance stamp for the rationale/precedence.
@@ -3728,7 +3739,7 @@ function buildNodeElement(
   // key isn't in the new styleEntries, so the inline value lingers forever —
   // the "undo doesn't un-hide the tablet copy until a page switch" bug.
   const buildPatchedKeys = new Set<string>();
-  for (const [key, value] of Object.entries(resolvedStyles)) {
+  for (const [key, value] of Object.entries(buildCanvasStyles)) {
     // Skip empty values on a FRESH element. They're "remove this property"
     // markers (meaningful only when re-patching an element that already has the
     // value — that's why patchElement uses a clear-empties-first two-pass). On a
