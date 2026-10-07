@@ -1,5 +1,13 @@
 import { test, expect } from 'vitest';
-import { runCase } from './harness';
+import { runCase, seedWorld } from './harness';
+import { getViewportWidths, getSortedBreakpointWidths } from '@/code/stores/viewport-store';
+test('seeding a page synchronizes the breakpoint widths used by responsive tools', () => {
+  seedWorld({});
+  expect(getViewportWidths()).toEqual({ desktop: 1440, tablet: 768, mobile: 375 });
+  expect(getSortedBreakpointWidths()).toEqual([1440, 768, 375]);
+  seedWorld({ files: { 'app/page.client.tsx': `/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 900, "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */` } });
+  expect(getViewportWidths()).toEqual({ desktop: 900 });
+});
 test('a wrong EFFECT is caught', async () => {
   const r = await runCase({ id: 'layout/x', domain: 'layout', status: 'supported', feature: 'x', ask: 'x',
     calls: [{ tool: 'set_styles', args: { node_id: 'hero', styles: { backgroundColor: '#111111' } } }],

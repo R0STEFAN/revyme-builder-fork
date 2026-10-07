@@ -46,7 +46,8 @@ describe('SkillsSection', () => {
     fireEvent.change(description, { target: { value: 'Before publishing' } });
     fireEvent.change(content, { target: { value: 'x'.repeat(8100) } });
     fireEvent.click(screen.getByText('Save'));
-    expect(screen.getByTestId('skill-editor-error').textContent).toContain('8,000');
+    expect(screen.getByTestId('skill-editor-error').textContent)
+      .toMatch(/Instructions are limited to 8[,\s]000 characters \(this is 8[,\s]100\)/);
     fireEvent.change(content, { target: { value: 'Check every link.' } });
     fireEvent.click(screen.getByText('Save'));
     expect(getProjectSkill('launch-check')).toMatchObject({ description: 'Before publishing', content: 'Check every link.' });

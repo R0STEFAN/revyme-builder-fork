@@ -674,18 +674,20 @@ describe('flushNow consults the render-skip gate', () => {
 // hold at once, and they pull in opposite directions:
 //   · the entered viewport's hide must be GONE (else the node is invisible in
 //     the viewport the user just dragged it into), and
-//   · every OTHER viewport's hide must SURVIVE — that is what makes a
-//     tablet-only node stay tablet-only after a round trip through the canvas.
+//   · every OTHER viewport's hide must SURVIVE after a round trip through
+//     the canvas, so entering one replica cannot unhide its siblings.
 // It also pins the shape of the fix: the rule is removed from the SOURCE, never
 // papered over with an inline `display`, so nothing is cemented into the user's
 // code by the drag.
 describe('entry unhide — per-viewport display override removal', () => {
+  // Default START-model viewport ends: primary 1200, tablet 1199, mobile 809.
+  // Only replicas own @media bands; the primary is the unbanded base.
   const HIDDEN_ON_BOTH = `<div data-id="root" style={{position: 'relative'}}>
   <style>{\`
-    @media (max-width: 1440px) and (min-width: 768.02px) {
+    @media (max-width: 1199px) and (min-width: 809.02px) {
       [data-id="aura"] { display: none !important; }
     }
-    @media (max-width: 768px) {
+    @media (max-width: 809px) {
       [data-id="aura"] { display: none !important; }
       [data-id="sib"] { display: none !important; }
     }
@@ -700,28 +702,28 @@ describe('entry unhide — per-viewport display override removal', () => {
     initMutationQueue(HIDDEN_ON_BOTH, (code) => { flushed = code; }, () => {}, () => {});
   });
 
-  test('entering DESKTOP drops the desktop hide and keeps the tablet one', () => {
-    queueMutation({ type: 'updateContainerStyle', nodeId: 'aura', maxWidth: 1440, styles: { display: '' } });
+  test('entering TABLET drops the tablet hide and keeps the mobile one', () => {
+    queueMutation({ type: 'updateContainerStyle', nodeId: 'aura', maxWidth: 1199, styles: { display: '' } });
     flushNow();
 
-    // Desktop band is gone…
-    expect(flushed).not.toMatch(/min-width:\s*768\.02px/);
-    // …tablet still hides it (a node extracted from tablet stays tablet-only).
-    expect(flushed).toMatch(/@media \(max-width: 768px\)[\s\S]*\[data-id="aura"\][\s\S]*display: none/);
+    // Tablet band is gone…
+    expect(flushed).not.toMatch(/min-width:\s*809\.02px/);
+    // …mobile still hides it.
+    expect(flushed).toMatch(/@media \(max-width: 809px\)[\s\S]*\[data-id="aura"\][\s\S]*display: none/);
     // No inline display was cemented onto the element by the unhide.
     const aura = parseJSXToNodes(flushed).get('aura');
     expect(aura?.styles.display).toBeUndefined();
   });
 
-  test('entering TABLET drops the tablet hide and keeps the desktop one', () => {
-    queueMutation({ type: 'updateContainerStyle', nodeId: 'aura', maxWidth: 768, styles: { display: '' } });
+  test('entering MOBILE drops the mobile hide and keeps the tablet one', () => {
+    queueMutation({ type: 'updateContainerStyle', nodeId: 'aura', maxWidth: 809, styles: { display: '' } });
     flushNow();
 
-    expect(flushed).toMatch(/min-width:\s*768\.02px[\s\S]*\[data-id="aura"\][\s\S]*display: none/);
-    // aura's tablet rule is gone; sib's is untouched.
-    expect(flushed).toMatch(/@media \(max-width: 768px\)[\s\S]*\[data-id="sib"\][\s\S]*display: none/);
-    const tabletBlock = flushed.slice(flushed.indexOf('@media (max-width: 768px)'));
-    expect(tabletBlock).not.toContain('[data-id="aura"]');
+    expect(flushed).toMatch(/min-width:\s*809\.02px[\s\S]*\[data-id="aura"\][\s\S]*display: none/);
+    // aura's mobile rule is gone; sib's is untouched.
+    expect(flushed).toMatch(/@media \(max-width: 809px\)[\s\S]*\[data-id="sib"\][\s\S]*display: none/);
+    const mobileBlock = flushed.slice(flushed.indexOf('@media (max-width: 809px)'));
+    expect(mobileBlock).not.toContain('[data-id="aura"]');
     expect(parseJSXToNodes(flushed).get('aura')?.styles.display).toBeUndefined();
   });
 });

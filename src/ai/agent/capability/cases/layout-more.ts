@@ -99,10 +99,13 @@ export const LAYOUT_MORE_CASES: CapabilityCase[] = [
   },
   {
     id: 'layout/size-fill-cross', domain: 'layout', status: 'supported',
-    feature: 'Fill in the cross axis is 100%',
+    feature: 'Fill in the cross axis stretches to the flex line',
     ask: 'make the first card as tall as the row',
     calls: [{ tool: 'set_size_units', args: { node_id: 'card-1', height: 'fill' } }],
-    expect: (w) => must(w.node('card-1').styles.height === '100%', `height is ${w.node('card-1').styles.height}`),
+    expect: (w) => {
+      const s = w.node('card-1').styles;
+      must(s.height === 'auto' && s.alignSelf === 'stretch', `cross-axis fill is ${JSON.stringify({ height: s.height, alignSelf: s.alignSelf })}`);
+    },
   },
   {
     id: 'layout/size-fill-no-layout', domain: 'layout', status: 'supported',

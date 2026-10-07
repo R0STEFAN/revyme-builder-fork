@@ -22,6 +22,8 @@ import {
 } from '@/code/mutation/mutation-queue';
 import { resetProjectFS, projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { selectedIdsAtom, seedNodesForCode, codeAtom } from '@/code/stores/store';
+import { parseCanvasConfig } from '@/code/project/canvas-config';
+import { syncViewportWidths } from '@/code/stores/viewport-store';
 import { bumpProjectVersion } from '@/code/project/modify-file';
 import { checkFile } from '@/code/oracle/check-file';
 import { oracleFileKind, isBuilderMaterializedFile } from '@/code/oracle/file-kind';
@@ -122,6 +124,8 @@ function activate(path: string): void {
   store.set(activeFilePathAtom, path);
   setActiveFilePath(path);
   const code = projectFS.readFile(path) ?? '';
+  const viewports = parseCanvasConfig(code)?.viewports ?? [];
+  syncViewportWidths(Object.fromEntries(viewports.map((vp) => [vp.id, vp.width])));
   syncQueueCode(code);
   store.set(codeAtom, code);
   seedNodesForCode(code);

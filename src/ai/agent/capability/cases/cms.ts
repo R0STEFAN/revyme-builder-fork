@@ -7,9 +7,9 @@ type Item = Record<string, any>;
 type Schema = { name: string; slug: string; fields: { id: string; name: string; type: string; options?: string[] }[] };
 
 /** A list container with ONE template row, the shape bind_cms_list expects. */
-const LIST_PAGE = (extra = '') => `'use client';
+const LIST_PAGE = (extra = '', mobile = false) => `'use client';
 
-/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */
+/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1440, "isPrimary": true, "order": 0 }${mobile ? ', { "id": "mobile", "label": "Mobile", "width": 375, "isPrimary": false, "order": 1 }' : ''}], "positions": { "desktop": { "x": 0, "y": 0 }${mobile ? ', "mobile": { "x": 1600, "y": 0 }' : ''} } } */
 
 import React from 'react';
 
@@ -285,7 +285,7 @@ export const CMS_CASES: CapabilityCase[] = [
     id: 'cms/responsive-list-config', domain: 'cms', status: 'supported',
     feature: 'Per-breakpoint list config (filter / sort)',
     ask: 'on mobile, only show the posts that have a cover',
-    files: { [HOME]: LIST_PAGE() },
+    files: { [HOME]: LIST_PAGE('', true) },
     calls: [
       { tool: 'bind_cms_list', args: { node_id: 'post-row', collection_slug: 'blog' } },
       { tool: 'set_list_config', args: { node_id: 'posts', viewport: 375, filters: [{ field: 'cover', operator: 'exists' }] } },

@@ -2257,7 +2257,6 @@ export function createEmptyProject(): Map<string, string> {
     // resolves (modern reset + design tokens). The preview tolerates a
     // missing CSS file, but a real Next build would error without it.
     ['app/globals.css', DEFAULT_TOKENS_CSS],
-    ['components/MarkdownArticle.tsx', MARKDOWN_ARTICLE_COMPONENT],
     ['plugins/DirectusSync.tsx', DIRECTUS_SYNC_PLUGIN_SOURCE],
     // `withResponsiveProps` / `withCursor` / `CursorPortal` now live in the
     // `@revyme/runtime` npm package — no longer seeded as projectFS files.

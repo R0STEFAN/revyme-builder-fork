@@ -18,8 +18,9 @@
 //     messages/*.json) IS included — it's infrastructure, not demo content:
 //     a bare layout crashed every localized page with a missing
 //     NextIntlClientProvider context in preview and on the live build
-//     (2026-07-22). Demo content (about page, CMS, components) still lives
-//     only in `createDefaultProject`.
+//     (2026-07-22). Demo content is reserved for `createDefaultProject`;
+//     code components install lazily. DirectusSync is seeded separately so
+//     the CMS panel can offer its built-in sync action immediately.
 
 import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +29,7 @@ import { createEmptyProject } from './project-fs';
 describe('createEmptyProject', () => {
   const files = createEmptyProject();
 
-  it('contains the page pair + root layout + globals + the i18n runtime scaffold', () => {
+  it('contains the page pair, runtime scaffold, and built-in Directus sync plugin only', () => {
     expect([...files.keys()].sort()).toEqual([
       'app/globals.css',
       'app/layout.tsx',
@@ -37,6 +38,7 @@ describe('createEmptyProject', () => {
       'app/providers.tsx',
       'i18n/config.json',
       'messages/en.json',
+      'plugins/DirectusSync.tsx',
     ]);
   });
 
@@ -61,11 +63,12 @@ describe('createEmptyProject', () => {
     expect(providers).not.toContain('messages/es.json');
   });
 
-  it('omits demo content (no about page, no CMS, no components) but keeps the i18n runtime', () => {
+  it('omits demo content and lazily installed components but keeps the i18n runtime and Directus sync', () => {
     const keys = [...files.keys()];
     expect(keys.some(k => k.startsWith('app/about/'))).toBe(false);
     expect(keys.some(k => k.startsWith('cms/'))).toBe(false);
     expect(keys.some(k => k.startsWith('components/'))).toBe(false);
+    expect(files.get('plugins/DirectusSync.tsx')).toContain('Directus CMS Sync');
     // Runtime scaffold present; messages start EMPTY (no demo copy).
     expect(files.get('app/providers.tsx')).toContain('NextIntlClientProvider');
     expect(files.get('messages/en.json')).toBe('{}');
