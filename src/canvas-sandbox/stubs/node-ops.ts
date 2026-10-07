@@ -19,7 +19,11 @@ export function getContentRoot(): HTMLElement | null {
 }
 export function refreshCanvasTokens(): void {}
 export function getActiveFilePath(): string { return 'app/page.tsx'; }
+let _previewRouteParams: Record<string, string> = {};
+export function setPreviewRouteParams(params: Record<string, string>): void { _previewRouteParams = { ...params }; }
+export function getPreviewRouteParams(): Record<string, string> { return _previewRouteParams; }
 export function getViewportPrefix(id: string): string { return (id === 'desktop' || id === 'default') ? '' : id + '-'; }
+
 export function isPrimaryViewport(id: string): boolean { return id === 'desktop' || id === 'default'; }
 export function setStyleContext() {}
 export function setLocaleStyleCallback() {}

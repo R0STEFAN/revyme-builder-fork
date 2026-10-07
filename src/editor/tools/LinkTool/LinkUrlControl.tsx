@@ -39,6 +39,8 @@ interface LinkUrlControlProps {
   displayOverride?: string;
   /** CMS detail routes for the "CMS" dropdown section. */
   cmsRoutes?: CmsRouteEntry[];
+  /** Open expression / formula editor */
+  onOpenExpression?: () => void;
 }
 
 /** Get all page entries with slug + display name */
@@ -123,7 +125,7 @@ export function slugToPageFile(slug: string): string | null {
  * tool instead of a plain text input.
  */
 export function LinkUrlField({
-  value, onChange, disabled, displayOverride, cmsRoutes,
+  value, onChange, disabled, displayOverride, cmsRoutes, onOpenExpression,
 }: LinkUrlControlProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -269,8 +271,8 @@ export function LinkUrlField({
   trace.fn('LinkUrlField:render', { value, isExternal, pagePart, sectionPart, disabled });
 
   return (
-    <div className="relative flex items-center gap-2 w-full">
-      <div className="relative w-full">
+    <div className="relative flex items-center gap-1.5 w-full min-w-0">
+      <div className="relative flex-1 min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -371,6 +373,16 @@ export function LinkUrlField({
           document.body,
         )}
       </div>
+      {onOpenExpression && !disabled && (
+        <button
+          type="button"
+          onClick={onOpenExpression}
+          title="Dynamic Link Expression (Formula)"
+          className="shrink-0 h-[var(--control-height-sm)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+        >
+          fx
+        </button>
+      )}
     </div>
   );
 }

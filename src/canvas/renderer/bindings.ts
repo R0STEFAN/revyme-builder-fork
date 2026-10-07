@@ -129,6 +129,17 @@ export function applyNodeCmsBindings(
       if (field !== undefined) { const v = bindingData[field]; if (v !== undefined) resolved = String(v ?? ''); }
     }
     if (resolved !== undefined) { applyBoundText(el, resolved); textApplied = true; }
+  } else if (node.textExpression) {
+    try {
+      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.textExpression}); } catch(e) { return ''; }`);
+      const val = fn(bindingData, bindingData, bindingData);
+      if (val !== undefined && val !== null && val !== '') {
+        applyBoundText(el, String(val));
+        textApplied = true;
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // ── ATTR (src / href / alt) ── base attr bindings ∪ node.binding attr ∪ overrides.
@@ -152,6 +163,16 @@ export function applyNodeCmsBindings(
     if (attrName === 'src') { if (resolved) el.setAttribute('src', canvasImageSrc(resolved)); }
     else if (attrName === 'textContent') { applyBoundText(el, resolved); textApplied = true; }
     else if (resolved) el.setAttribute(attrName, resolved);
+  }
+
+  if (node.hrefExpression && !opts.skipHref) {
+    try {
+      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.hrefExpression}); } catch(e) { return ''; }`);
+      const val = fn(bindingData, bindingData, bindingData);
+      if (val) el.setAttribute('href', String(val));
+    } catch {
+      // ignore
+    }
   }
   // `styleKeys` = the inline style props this call OWNS (bound or overridden).
   // The caller records them so a binding that disappears (× on the Fill pill

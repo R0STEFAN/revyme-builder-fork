@@ -138,6 +138,91 @@ export function killProcessTreeSync(
   }
 }
 
+export const PROTECTED_PORTS = new Set([3333, 5173, 5174, 5175, 8082]);
+
+export async function killProcessOnPort(
+  port: number,
+  execFn: typeof exec = exec
+): Promise<void> {
+  if (!port || port <= 0 || PROTECTED_PORTS.has(port)) return;
+
+  if (process.platform === 'win32') {
+    return new Promise<void>((resolve) => {
+      execFn(`netstat -ano | findstr :${port}`, (err, stdout) => {
+        if (err || !stdout) return resolve();
+        const lines = String(stdout).split('\n');
+        const pids = new Set<string>();
+        for (const line of lines) {
+          if (!line.includes(`:${port}`)) continue;
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && /^\d+$/.test(pid) && pid !== '0') {
+            pids.add(pid);
+          }
+        }
+        if (pids.size === 0) return resolve();
+        let remaining = pids.size;
+        for (const pid of pids) {
+          execFn(`taskkill /pid ${pid} /T /F`, () => {
+            remaining--;
+            if (remaining <= 0) resolve();
+          });
+        }
+      });
+    });
+  } else {
+    // Linux / macOS: use fuser or lsof to terminate anything listening on port
+    return new Promise<void>((resolve) => {
+      execFn(
+        `fuser -k -9 ${port}/tcp 2>/dev/null || (lsof -ti :${port} 2>/dev/null | xargs -r kill -9 2>/dev/null) || true`,
+        () => {
+          resolve();
+        }
+      );
+    });
+  }
+}
+
+export function killProcessOnPortSync(
+  port: number,
+  execSyncFn: typeof execSync = execSync
+): void {
+  if (!port || port <= 0 || PROTECTED_PORTS.has(port)) return;
+
+  if (process.platform === 'win32') {
+    try {
+      const output = execSyncFn(`netstat -ano | findstr :${port}`, {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      const lines = String(output).split('\n');
+      for (const line of lines) {
+        if (!line.includes(`:${port}`)) continue;
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && /^\d+$/.test(pid) && pid !== '0') {
+          try {
+            execSyncFn(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  } else {
+    try {
+      execSyncFn(
+        `fuser -k -9 ${port}/tcp 2>/dev/null || (lsof -ti :${port} 2>/dev/null | xargs -r kill -9 2>/dev/null) || true`,
+        { stdio: 'ignore' }
+      );
+    } catch {
+      // ignore
+    }
+  }
+}
+
 const DEFAULT_NEXT_CONFIG = `/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -248,6 +333,21 @@ export class LocalServerManager {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
+    // Clean up stale files from previous exports that no longer exist in current project files
+    const managedPrefixes = ['app', 'components', 'cms', 'i18n', 'messages', 'plugins'];
+    const validRelativePaths = new Set(
+      Object.keys(files)
+        .filter((p) => !isIgnoredFile(p))
+        .map((p) => p.replace(/\\/g, '/'))
+    );
+
+    for (const prefix of managedPrefixes) {
+      const dirPath = path.join(targetDir, prefix);
+      if (fs.existsSync(dirPath)) {
+        this.cleanStaleFiles(dirPath, targetDir, validRelativePaths);
+      }
+    }
+
     // Write all project files, skipping internal metadata paths starting with '_'
     for (const [relativePath, content] of Object.entries(files)) {
       if (isIgnoredFile(relativePath)) {
@@ -278,7 +378,103 @@ export class LocalServerManager {
       fs.writeFileSync(packageJsonPath, DEFAULT_PACKAGE_JSON, 'utf-8');
     }
 
+    // Ensure uploads are synced/linked into public/api/uploads and public/uploads
+    this.syncUploads(targetDir);
+
     return targetDir;
+  }
+
+  private cleanStaleFiles(currentDir: string, targetDir: string, validRelativePaths: Set<string>): void {
+    if (!fs.existsSync(currentDir)) return;
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        this.cleanStaleFiles(fullPath, targetDir, validRelativePaths);
+        try {
+          if (fs.existsSync(fullPath) && fs.readdirSync(fullPath).length === 0) {
+            fs.rmdirSync(fullPath);
+          }
+        } catch {
+          // ignore
+        }
+      } else if (entry.isFile()) {
+        const rel = path.relative(targetDir, fullPath).replace(/\\/g, '/');
+        if (!validRelativePaths.has(rel)) {
+          try {
+            fs.unlinkSync(fullPath);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+  }
+
+  syncUploads(targetDir: string): void {
+    const uploadsDir = getDataDirs().uploadsDir;
+    if (!uploadsDir || !fs.existsSync(uploadsDir)) return;
+
+    const publicDir = path.join(targetDir, 'public');
+    const publicApiDir = path.join(publicDir, 'api');
+    if (!fs.existsSync(publicApiDir)) {
+      fs.mkdirSync(publicApiDir, { recursive: true });
+    }
+
+    const targets = [
+      path.join(publicApiDir, 'uploads'),
+      path.join(publicDir, 'uploads'),
+    ];
+
+    for (const targetPath of targets) {
+      try {
+        let isSymlink = false;
+        try {
+          isSymlink = fs.lstatSync(targetPath).isSymbolicLink();
+        } catch {
+          isSymlink = false;
+        }
+
+        // Replace any symlinks with real directories containing copied files
+        // so that exported production builds and Docker containers are 100% standalone
+        // and do not depend on host machine paths or broken symlinks.
+        if (isSymlink) {
+          try {
+            fs.unlinkSync(targetPath);
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!fs.existsSync(targetPath)) {
+          fs.mkdirSync(targetPath, { recursive: true });
+        }
+
+        this.copyDirFiles(uploadsDir, targetPath);
+      } catch {
+        // ignore errors
+      }
+    }
+  }
+
+  private copyDirFiles(srcDir: string, destDir: string): void {
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const srcFile = path.join(srcDir, entry.name);
+        const destFile = path.join(destDir, entry.name);
+        try {
+          if (!fs.existsSync(destFile) || fs.statSync(srcFile).mtimeMs > fs.statSync(destFile).mtimeMs) {
+            fs.copyFileSync(srcFile, destFile);
+          }
+        } catch {
+          // ignore individual copy errors
+        }
+      }
+    }
   }
 
   async build(
@@ -313,6 +509,16 @@ export class LocalServerManager {
 
     record.status = 'building';
     record.lastError = null;
+
+    // Clean stale .next build cache directory before compiling so Next.js does a 100% fresh build
+    const nextBuildDir = path.join(targetDir, '.next');
+    if (fs.existsSync(nextBuildDir)) {
+      try {
+        fs.rmSync(nextBuildDir, { recursive: true, force: true });
+      } catch {
+        // ignore if locked
+      }
+    }
 
     const nextBin = resolveNextBin();
 
@@ -363,9 +569,32 @@ export class LocalServerManager {
     const safeId = sanitizeId(projectId);
     const record = this.getOrCreateRecord(safeId);
 
-    // If already running on this project, return current status
-    if (record.status === 'running' && record.proc && !record.proc.killed) {
+    // Protected ports check
+    if (PROTECTED_PORTS.has(port)) {
+      const err = `Port ${port} is reserved for builder/editor services. Please select a different port.`;
+      record.status = 'error';
+      record.lastError = err;
       return this.getStatus(safeId);
+    }
+
+    // If already running on this project and same port, return current status
+    if (record.status === 'running' && record.proc && !record.proc.killed && record.port === port) {
+      return this.getStatus(safeId);
+    }
+
+    // If already running with a process, kill it first
+    if (record.proc) {
+      const oldChild = record.proc;
+      const oldPid = record.pid;
+      record.proc = null;
+      record.pid = null;
+      await killProcessTree(oldChild, oldPid, this.execFn);
+    }
+
+    // Force free target port before starting to prevent EADDRINUSE
+    await killProcessOnPort(port, this.execFn);
+    if (process.env.NODE_ENV !== 'test') {
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     const targetDir = this.getBuildDir(safeId);
@@ -373,10 +602,14 @@ export class LocalServerManager {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
+    // Ensure uploads are synced before starting
+    this.syncUploads(targetDir);
+
     const nextBin = resolveNextBin();
 
     record.lastError = null;
     record.isStopping = false;
+    record.port = port;
 
     return new Promise<LocalServerStatus>((resolve) => {
       let settled = false;
@@ -413,7 +646,7 @@ export class LocalServerManager {
           record.status = 'error';
           record.proc = null;
           record.pid = null;
-          record.port = null;
+          record.port = port;
           record.url = null;
           record.lastError = stripAnsi(errorMsg.trim());
           resolve(this.getStatus(safeId));
@@ -482,9 +715,10 @@ export class LocalServerManager {
     });
   }
 
-  async stop(projectId: string): Promise<LocalServerStatus> {
+  async stop(projectId: string, port?: number): Promise<LocalServerStatus> {
     const safeId = sanitizeId(projectId);
     const record = this.servers.get(safeId);
+    const targetPort = port ?? record?.port ?? null;
 
     if (record && record.proc) {
       record.isStopping = true;
@@ -504,6 +738,14 @@ export class LocalServerManager {
     } else if (record) {
       record.status = 'idle';
       record.lastError = null;
+      record.proc = null;
+      record.pid = null;
+      record.port = null;
+      record.url = null;
+    }
+
+    if (targetPort && !PROTECTED_PORTS.has(targetPort)) {
+      await killProcessOnPort(targetPort, this.execFn);
     }
 
     return this.getStatus(safeId);
@@ -551,10 +793,14 @@ export class LocalServerManager {
         killProcessTreeSync(record.proc, record.pid, this.execSyncFn);
         record.proc = null;
         record.pid = null;
-        record.port = null;
-        record.url = null;
-        record.status = 'idle';
       }
+      if (record.port && !PROTECTED_PORTS.has(record.port)) {
+        killProcessOnPortSync(record.port, this.execSyncFn);
+        record.port = null;
+      }
+      record.url = null;
+      record.status = 'idle';
+      record.lastError = null;
     }
     this.servers.clear();
   }

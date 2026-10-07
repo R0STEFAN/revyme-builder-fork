@@ -23,6 +23,11 @@ export function setSandboxCmsCollections(payload: {
   _schemas = payload.schemas || {};
 }
 
+export function listCollections(): string[] {
+  const set = new Set([...Object.keys(_schemas), ...Object.keys(_data)]);
+  return Array.from(set);
+}
+
 export function getCollectionData(slug: string): any[] {
   return _data[slug] ?? [];
 }
@@ -30,3 +35,4 @@ export function getCollectionData(slug: string): any[] {
 export function getCollectionSchema(slug: string): any {
   return _schemas[slug] ?? null;
 }
+

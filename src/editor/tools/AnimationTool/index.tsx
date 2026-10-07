@@ -468,9 +468,30 @@ export default function AnimationTool({ styles: s, onUpdate, glideOnly }: Props)
         ? resolveResponsiveMotionProp(motionInitial, code, scopeCtx)
         : { applies: true, isOverride: false, props: {} };
       if (r.applies) {
-        entries.push({ type: 'appear', summary: 'Appear', key: 'appear',
-          data: { trigger: 'appear', initialProps: r.props, transition: mp.transition || {}, isVariantMode: false, isOverride: r.isOverride } });
+        const isStag = !!node.attrs?.['data-stagger'];
+        const stagVal = node.attrs?.['data-stagger'] || '0.1';
+        entries.push({ type: 'appear', summary: isStag ? `Stagger (${stagVal}s)` : 'Appear', key: 'appear',
+          data: { trigger: 'appear', initialProps: r.props, transition: mp.transition || {}, isVariantMode: false, isOverride: r.isOverride, isStagger: isStag, stagger: isStag ? stagVal : undefined } });
       }
+    } else if (node.attrs?.['data-stagger'] || (() => {
+      const childIds = node.collectionList ? Object.values(node.collectionList.templateIds) : (node.children || []);
+      const firstChild = childIds[0] ? getNodeFromCache(childIds[0]) : null;
+      const childDelay = firstChild?.motionProps?.transition?.delay;
+      return typeof childDelay === 'string' && /\b(index|idx|i)\s*\*/.test(childDelay);
+    })()) {
+      const childIds = node.collectionList ? Object.values(node.collectionList.templateIds) : (node.children || []);
+      const firstChild = childIds[0] ? getNodeFromCache(childIds[0]) : null;
+      const childMp = firstChild?.motionProps;
+      const childDelay = childMp?.transition?.delay;
+      let stagVal = node.attrs?.['data-stagger'] || '0.1';
+      if (!node.attrs?.['data-stagger'] && typeof childDelay === 'string') {
+        const m = childDelay.match(/\b(?:index|idx|i)\s*\*\s*([\d.]+)/);
+        if (m) stagVal = m[1];
+      }
+      const initialProps = (childMp?.initial && !childMp.initial._variantName) ? childMp.initial : { opacity: '0', y: '30' };
+      const transition = childMp?.transition || { type: 'spring', stiffness: '300', damping: '25' };
+      entries.push({ type: 'appear', summary: `Stagger (${stagVal}s)`, key: 'appear',
+        data: { trigger: 'appear', initialProps, transition, isVariantMode: false, isStagger: true, stagger: stagVal } });
     } else if (mp?.whileInView?._variantName && node.motionVariants) {
       const initName = mp.initial?._variantName || '';
       entries.push({ type: 'appear', summary: 'Appear', key: 'appear',
@@ -902,11 +923,31 @@ export default function AnimationTool({ styles: s, onUpdate, glideOnly }: Props)
         writeScrollFx((sp) => { if (!hideHere(sp, 'hover')) delete sp.hover; return sp; }); break;
       case 'tap':
         writeScrollFx((sp) => { if (!hideHere(sp, 'tap')) delete sp.tap; return sp; }); break;
-      case 'appear':
+      case 'appear': {
+        const childIds = node?.collectionList ? Object.values(node.collectionList.templateIds) : (node?.children || []);
+        const firstChild = childIds[0] ? getNodeFromCache(childIds[0]) : null;
+        const childDelay = firstChild?.motionProps?.transition?.delay;
+        const isChildStag = typeof childDelay === 'string' && /\b(index|idx|i)\s*\*/.test(childDelay);
+        const hasStag = !!node?.attrs?.['data-stagger'] || (entry?.data as any)?.isStagger || isChildStag;
+        if (hasStag && node) {
+          queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-stagger': '' } });
+          for (const cid of childIds) {
+            queueMutation({ type: 'removeMotionProp', nodeId: cid, propName: 'initial' });
+            queueMutation({ type: 'removeMotionProp', nodeId: cid, propName: 'whileInView' });
+            queueMutation({ type: 'removeMotionProp', nodeId: cid, propName: 'viewport' });
+            queueMutation({ type: 'removeMotionProp', nodeId: cid, propName: 'transition' });
+          }
+        }
         // Scroll Animation = DISCRETE (On Appear / in-view / direction-triggered).
         // Drop its appear (in-view) AND animation (direction) keys. Does NOT touch
         // the scrubbed Scroll Transform — that's a separate, independent entry.
-        writeScrollFx((sp) => { if (!hideHere(sp, 'appear')) { delete sp.appear; delete sp.animation; } return sp; }); break;
+        writeScrollFx((sp) => { if (!hideHere(sp, 'appear')) { delete sp.appear; delete sp.animation; } return sp; });
+        queueMutation({ type: 'removeMotionProp', nodeId, propName: 'initial' });
+        queueMutation({ type: 'removeMotionProp', nodeId, propName: 'whileInView' });
+        queueMutation({ type: 'removeMotionProp', nodeId, propName: 'viewport' });
+        queueMutation({ type: 'removeMotionProp', nodeId, propName: 'transition' });
+        break;
+      }
       case 'loop':
         writeScrollFx((sp) => { delete sp.loop; return sp; }); break;
       case 'scrollVariant': {
@@ -1109,12 +1150,13 @@ export default function AnimationTool({ styles: s, onUpdate, glideOnly }: Props)
           const ov = anim?.responsive ? (findResponsive(anim.responsive, dirScope) as any) : null;
           if (ov) scrollPayload = { ...scrollPayload, direction: ov.direction ?? scrollPayload.direction, replay: ov.replay ?? scrollPayload.replay, toProps: ov.toProps ?? scrollPayload.toProps };
         }
-        return { title: trigger === 'scroll' ? 'Scroll Animation' : 'Appear Effect',
+        return { title: trigger === 'scroll' ? 'Scroll Animation' : d.isStagger ? 'Stagger Effect' : 'Appear Effect',
           content: <AppearScrollPopup key={nodeId} nodeId={nodeId} node={node} trigger={trigger}
             enterProps={d.initialProps || mp?.initial || {}}
             transition={d.transition || mp?.transition || {}}
             scrollPayload={scrollPayload} scopedDirectionWrite={commitScopedDirection}
             isVariantMode={!!d.isVariantMode} initialName={d.initialName}
+            isStagger={!!d.isStagger} stagger={d.stagger}
             onPickSectionInView={() => setActivePopup('scrollTransform')} /> };
       }
       case 'loop': {

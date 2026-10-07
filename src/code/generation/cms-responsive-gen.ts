@@ -34,7 +34,10 @@ import {
   findCollectionChainHead,
   buildFilterExpression,
   buildSortKeyExpr,
+  insertConstIntoEnclosingFn,
 } from './cms-gen';
+
+export { insertConstIntoEnclosingFn };
 
 // ─── Config model ─────────────────────────────────────────────────────────────
 
@@ -238,19 +241,7 @@ function buildInlineFilterSort(base: ListConfigDims): string {
  *  NOTE: `insertBeforeRenderReturn` (generator-utils, RENDER_RETURN_RE anchor) is the
  *  OTHER deliberate hook-injection strategy — anchored on the render `return (` rather
  *  than the enclosing function's opening brace. Intentionally separate; do not merge. */
-export function insertConstIntoEnclosingFn(code: string, parentId: string, decl: string): string {
-  const elStart = findJSXElementByDataId(code, parentId);
-  if (elStart === -1) return code;
-  const re = /function\s+\w+\s*\([^)]*\)\s*\{/g;
-  let m: RegExpExecArray | null;
-  let braceAt = -1;
-  while ((m = re.exec(code))) {
-    const b = m.index + m[0].length;
-    if (b <= elStart) braceAt = b; else break;
-  }
-  if (braceAt === -1) return code;
-  return code.slice(0, braceAt) + `\n  ${decl}` + code.slice(braceAt);
-}
+
 
 /** Replace OR insert the `const listCfg<Id> = useResponsiveListConfig(...)` declaration. */
 function upsertConfigConst(

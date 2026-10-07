@@ -50,7 +50,11 @@ import { isLayoutFile } from '@/code/project/file-path-kind';
 
 let _activeFilePath: string = 'app/page.tsx';
 export function getActiveFilePath(): string { return _activeFilePath; }
+let _previewRouteParams: Record<string, string> = {};
+export function setPreviewRouteParams(params: Record<string, string>): void { _previewRouteParams = { ...params }; }
+export function getPreviewRouteParams(): Record<string, string> { return _previewRouteParams; }
 let _interactingVpId: string = 'desktop';
+
 let _vpWidth: number = DEFAULT_VIEWPORT_WIDTH;
 let _activeLocale: string = 'en';
 let _isDefaultLocale: boolean = true;

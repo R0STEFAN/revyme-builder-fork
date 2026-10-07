@@ -25,6 +25,7 @@ import {
 import { usePaletteToggle } from '@/editor/command-palette/CommandPalette';
 import { trace } from '@/shared/debug-trace';
 import { useIsViewer, useIsOffline } from '@/code/stores/viewer-mode-store';
+import SaveButton from './header/SaveButton';
 
 // ─── Chevron & Check icons ─────────────────────────────────────────────────
 
@@ -767,6 +768,14 @@ export default function BottomToolbar() {
             >
               Upgrade
             </button>
+          </>
+        )}
+
+        {/* ── Save Project ── */}
+        {!isViewer && (
+          <>
+            <Separator />
+            <SaveButton />
           </>
         )}
       </div>

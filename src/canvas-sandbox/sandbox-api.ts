@@ -110,6 +110,8 @@ export interface RenderInput {
     data: Record<string, any[]>;
     schemas: Record<string, any>;
   };
+  /** Live test route parameters for dynamic routes preview (e.g. { category: 'men', place: 'noga' }). */
+  previewRouteParams?: Record<string, string>;
 }
 
 export interface PatchUpdate {

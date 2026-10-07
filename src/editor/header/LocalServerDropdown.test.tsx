@@ -263,9 +263,65 @@ describe('LocalServerDropdown', () => {
       fireEvent.click(stopBtn);
     });
 
-    expect(localServerClient.stopLocalServer).toHaveBeenCalledWith('test-project-123');
+    expect(localServerClient.stopLocalServer).toHaveBeenCalledWith('test-project-123', 3000);
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('stopped'));
     expect(onStatusChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'idle' }));
+  });
+
+  it('enables stop button and frees port when server is in error state', async () => {
+    vi.mocked(localServerClient.fetchLocalServerStatus).mockResolvedValue({
+      status: 'error',
+      port: 3000,
+      url: null,
+      isBuilt: true,
+      lastBuiltAt: Date.now(),
+      lastError: 'Error: listen EADDRINUSE: address already in use :::3000',
+      pid: null,
+    });
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Error')).toBeTruthy();
+    });
+
+    const stopBtn = screen.getByRole('button', { name: /^stop$/i });
+    expect((stopBtn as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(stopBtn);
+    });
+
+    expect(localServerClient.stopLocalServer).toHaveBeenCalledWith('test-project-123', 3000);
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('freed'));
+  });
+
+  it('shows Free Port & Restart button on EADDRINUSE error and handles click', async () => {
+    vi.mocked(localServerClient.fetchLocalServerStatus).mockResolvedValue({
+      status: 'error',
+      port: 3000,
+      url: null,
+      isBuilt: true,
+      lastBuiltAt: Date.now(),
+      lastError: 'Error: listen EADDRINUSE: address already in use :::3000',
+      pid: null,
+    });
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Port 3000 is occupied/i)).toBeTruthy();
+    });
+
+    const freePortBtn = screen.getByRole('button', { name: /free port & restart/i });
+    expect(freePortBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(freePortBtn);
+    });
+
+    expect(localServerClient.stopLocalServer).toHaveBeenCalledWith('test-project-123', 3000);
+    expect(localServerClient.startLocalServer).toHaveBeenCalledWith('test-project-123', 3000);
   });
 
   it('polls fetchLocalServerStatus periodically while open', async () => {

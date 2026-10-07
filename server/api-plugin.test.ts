@@ -487,6 +487,53 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.url).toMatch(/^\/api\/uploads\/thumbnail-test-website-thumb\.jpg\?t=\d+$/);
     });
+
+    it('handles project bundle export via GET /api/projects/:id/bundle', async () => {
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: {
+          id: 'test-bundle-export',
+          name: 'Bundle Export Test',
+          data: { files: { 'app/page.tsx': '<img src="/api/uploads/non-existent.png" />' } },
+        },
+      });
+
+      const res = await dispatch({
+        method: 'GET',
+        url: '/api/projects/test-bundle-export/bundle',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.format).toBe('revyme-bundle-v1');
+      expect(res.body.name).toBe('Bundle Export Test');
+      expect(res.body.data.files).toBeDefined();
+    });
+
+    it('handles project bundle import via POST /api/projects/import-bundle', async () => {
+      const bundle = {
+        format: 'revyme-bundle-v1',
+        name: 'Imported Bundle Test',
+        data: { files: { 'app/page.tsx': 'export default () => <h1>Imported</h1>' } },
+        assets: {
+          'test-asset-imported.png': {
+            base64: Buffer.from('png-bytes').toString('base64'),
+            mime: 'image/png',
+          },
+        },
+      };
+
+      const res = await dispatch({
+        method: 'POST',
+        url: '/api/projects/import-bundle',
+        body: bundle,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.project.name).toBe('Imported Bundle Test');
+      expect(res.body.assetCount).toBe(1);
+    });
   });
 });
 

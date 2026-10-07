@@ -177,6 +177,10 @@ import {
   createCollectionListInCode, bindFieldInCode, unbindFieldInCode,
   updateCollectionListConfigInCode,
 } from '../generation/cms-gen';
+import {
+  bindTextExpressionInCode, bindHrefExpressionInCode,
+  unbindTextExpressionInCode, unbindHrefExpressionInCode,
+} from '../generation/expression-gen';
 import { setPaginationInCode, removePaginationInCode, ensureLoadMoreComponentFile, ensureSpinnerComponentFile, readPaginationMarker, pruneOrphanedPaginationHooks, paginationUiParentId } from '../generation/cms-pagination-gen';
 import { addSearchFieldInCode, setSearchInputVariableInCode } from '../generation/cms-search-field-gen';
 import { writeResponsiveListConfigInCode, type ResponsiveListConfig } from '../generation/cms-responsive-gen';
@@ -529,6 +533,14 @@ export type Mutation =
   | { type: 'bindField'; nodeId: string; property: string; fieldId: string; itemVar: string; fieldType?: string }
   /** Unbind a node's property from a CMS field and set a static value. */
   | { type: 'unbindField'; nodeId: string; property: string; staticValue: string }
+  /** Bind an element's text content to a dynamic JS expression. */
+  | { type: 'bindTextExpression'; nodeId: string; expression: string }
+  /** Bind an element's href attribute to a dynamic JS expression. */
+  | { type: 'bindHrefExpression'; nodeId: string; expression: string }
+  /** Unbind an element's dynamic text expression and set static text. */
+  | { type: 'unbindTextExpression'; nodeId: string; fallbackText?: string }
+  /** Unbind an element's dynamic href expression and set static href. */
+  | { type: 'unbindHrefExpression'; nodeId: string; fallbackHref?: string }
   /** Per-VARIANT CMS text binding on a raw element inside a .map() in a component master:
    *  rebind that variant to `fieldId` (kind:'field'), unbind→literal default (kind:'literal'),
    *  or clear the variant override (kind:'clear'). Other variants keep the base binding. */
@@ -869,7 +881,7 @@ function bumpVersionForGlobalsCssMutations(mutations: Mutation[]): void {
 
 const OVERLAY_STRUCTURAL_TYPES = new Set<Mutation['type']>([
   'move', 'addCanvasNode', 'removeNode', 'cloneCanvasOverlay',
-  'createOverlay', 'removeOverlay',
+  'createOverlay', 'removeOverlay', 'updateOverlayConfig', 'updateOverlayPosition', 'updateOverlayTrigger',
 ]);
 
 /** Mutations that splice top-level DECLARATIONS (a `useState` pair + a hook
@@ -3692,6 +3704,14 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         return bindFieldInCode(code, mutation.nodeId, mutation.property, mutation.fieldId, mutation.itemVar, mutation.fieldType);
       case 'unbindField':
         return unbindFieldInCode(code, mutation.nodeId, mutation.property, mutation.staticValue);
+      case 'bindTextExpression':
+        return bindTextExpressionInCode(code, mutation.nodeId, mutation.expression);
+      case 'bindHrefExpression':
+        return bindHrefExpressionInCode(code, mutation.nodeId, mutation.expression);
+      case 'unbindTextExpression':
+        return unbindTextExpressionInCode(code, mutation.nodeId, mutation.fallbackText);
+      case 'unbindHrefExpression':
+        return unbindHrefExpressionInCode(code, mutation.nodeId, mutation.fallbackHref);
       case 'setVariantCmsText':
         return setVariantTextBindingInCode(code, mutation.nodeId, mutation.variantName, mutation.override, mutation.itemVar);
       case 'setVariantCmsStyle':

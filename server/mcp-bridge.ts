@@ -192,25 +192,25 @@ export class McpBridge {
       const pathname = url.pathname;
       const method = req.method || 'GET';
 
-      // Set CORS headers for all bridge endpoints
-      if (
-        pathname === '/bridge/events' ||
-        pathname === '/bridge/result' ||
-        pathname === '/rpc' ||
-        pathname === '/api/mcp/status' ||
-        pathname === '/api/mcp/rpc'
-      ) {
-        const origin = req.headers?.origin || '*';
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      // Set CORS headers for all bridge / API endpoints
+      const origin = req.headers?.origin || '*';
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
-        if (method === 'OPTIONS') {
-          res.statusCode = 200;
-          res.end();
-          return;
-        }
+      if (method === 'OPTIONS') {
+        res.statusCode = 200;
+        res.end();
+        return;
+      }
+
+      // Return empty engines array for AI agent engines check if queried on the bridge
+      if (pathname === '/api/agent/engines') {
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        res.end(JSON.stringify({ engines: [] }));
+        return;
       }
 
       // SSE endpoint for editor: GET /bridge/events

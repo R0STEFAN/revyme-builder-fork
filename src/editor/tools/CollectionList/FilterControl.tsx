@@ -1,20 +1,22 @@
-// FilterControl.tsx — Collection List "Filters" row + popup (design-tool parity).
-// The "Filters" row shows a summary and opens a ToolPopup: Match All/Any + filter
-// ROWS (icon + summary + ×) + an "Add…" row that re-opens the field picker.
-// Clicking a filter row PUSHES a "Filter" panel (ToolPopup path navigation — same
-// slide-back chevron as everywhere else, NOT a separate modal) with Field /
-// Condition / Value. CONTROLLED: reads `filterGroup` from props, writes `onChange`.
-// The pushed editor reads live state via a ref so multi-edits never go stale.
-
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { ControlLabel, ControlActionRow, RemoveButton, ToolSelect, ToolInput, ToolSegmentedControl } from '../../controls';
 import ToolRow from '../../controls/ToolRow';
 import ToolPopup, { useToolPopup } from '../../ui/ToolPopup';
 import { collectionDataAtom, collectionSchemasAtom } from '@/code/stores/cms-store';
+import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { cmsItemLabel } from '@/code/project/cms-ops';
 import type { FilterConfig, FilterGroup, CollectionSchema, FieldDefinition, CollectionItem } from '@/shared/types';
-import { operatorsForFieldType, operatorTakesNoValue, filterSummary, fieldsForSortFilter, COLLECTION_VALUE_CLS } from './cms-filter-utils';
+import {
+  operatorsForFieldType,
+  operatorTakesNoValue,
+  filterSummary,
+  fieldsForSortFilter,
+  COLLECTION_VALUE_CLS,
+  buildHierarchicalFields,
+  flattenHierarchicalFields,
+  type HierarchicalField,
+} from './cms-filter-utils';
 import CollectionRowIcon from './CollectionRowIcon';
 import PageVariableChip from '../../controls/PageVariableChip';
 import FilterFieldPicker from './FilterFieldPicker';
@@ -46,6 +48,7 @@ interface EditorData {
   fields: FieldDefinition[];
   fieldDef: (id: string) => FieldDefinition | undefined;
   fieldType: (id: string) => FieldDefinition['type'] | undefined;
+  fieldOptions: { value: string; label: string }[];
   update: (idx: number, patch: Partial<FilterConfig>) => void;
   changeField: (idx: number, fieldId: string) => void;
   onAddPicker: () => void;
@@ -55,6 +58,7 @@ interface EditorData {
   /** A filter whose field no longer exists in the current schema (e.g. after a
    *  Source change) is INACTIVE — shown as a placeholder needing a field re-select. */
   isInactive: (fieldId: string) => boolean;
+  routeParams: string[];
 }
 
 // Native date input styled to match ToolInput (dark color-scheme picker).
@@ -80,8 +84,11 @@ function FiltersPopupBody({
   // date→date picker, number→numeric, boolean→toggle, enum/reference→select).
   const valueWidget = (f: FilterConfig, idx: number) => {
     const d = dataRef.current;
-    // DYNAMIC value (Search Field / Date Picker): the predicate reads a PAGE
-    // variable, so the Value is the bound variable — not an editable literal.
+    // DYNAMIC value (Search Field / Date Picker / Route Param): the predicate reads a PAGE
+    // variable or route param, so the Value is the bound variable — not an editable literal.
+    if (f.valueSource === 'routeParam') {
+      return <PageVariableChip name={`[:${f.valueVar || 'param'}]`} />;
+    }
     if ((f.valueSource === 'searchField' || f.valueSource === 'dateField') && f.valueVar) {
       return <PageVariableChip name={f.valueVar} />;
     }
@@ -127,16 +134,24 @@ function FiltersPopupBody({
       const d = dataRef.current;
       const f = d.filters[idx];
       if (!f) return null;
-      // Inactive = the field is missing from the current schema (post Source change).
-      // Show ONLY a "Select…" field picker (no Condition/Value until re-selected).
+      // Inactive = the root field is missing from the current schema (post Source change).
       const inactive = d.isInactive(f.field);
+      const isRouteParam = f.valueSource === 'routeParam';
+      const options = [
+        ...(inactive ? [{ value: '', label: 'Select…' }] : []),
+        ...d.fieldOptions,
+      ];
+      if (f.field && !options.some(o => o.value === f.field)) {
+        options.unshift({ value: f.field, label: fieldName(f.field) });
+      }
+
       return (
         <div className="flex flex-col gap-2">
           <ToolRow label="Field">
             <ToolSelect
               value={inactive ? '' : f.field}
               onChange={(v) => { if (v) d.changeField(idx, v); }}
-              options={[...(inactive ? [{ value: '', label: 'Select…' }] : []), ...d.fields.map(fl => ({ value: fl.id, label: fl.name }))]}
+              options={options}
             />
           </ToolRow>
           {!inactive && (
@@ -144,7 +159,45 @@ function FiltersPopupBody({
               <ToolSelect value={f.operator} onChange={(v) => d.update(idx, { operator: v as FilterConfig['operator'], value: v === 'between' ? ['', ''] : f.value })} options={operatorsForFieldType(d.fieldType(f.field))} />
             </ToolRow>
           )}
-          {!inactive && !operatorTakesNoValue(f.operator) && (
+          {!inactive && (
+            <ToolRow label="Source">
+              <ToolSegmentedControl
+                value={isRouteParam ? 'routeParam' : 'static'}
+                onChange={(v) => {
+                  if (v === 'routeParam') {
+                    const defaultParam = d.routeParams[0] || 'param';
+                    d.update(idx, { valueSource: 'routeParam', valueVar: f.valueVar || defaultParam, value: '' });
+                  } else {
+                    d.update(idx, { valueSource: undefined, valueVar: undefined, value: '' });
+                  }
+                }}
+                options={[
+                  { value: 'static', label: 'Static' },
+                  { value: 'routeParam', label: 'Route' },
+                ]}
+                size="sm"
+              />
+            </ToolRow>
+          )}
+          {!inactive && isRouteParam && (
+            <ToolRow label="Param">
+              {d.routeParams.length > 0 ? (
+                <ToolSelect
+                  value={f.valueVar ?? d.routeParams[0]}
+                  onChange={(v) => d.update(idx, { valueVar: v })}
+                  options={d.routeParams.map(p => ({ value: p, label: `[:${p}]` }))}
+                />
+              ) : (
+                <ToolInput
+                  text
+                  placeholder="param"
+                  value={f.valueVar ?? ''}
+                  onChange={(v) => d.update(idx, { valueVar: v.replace(/[^a-zA-Z0-9_-]/g, '') })}
+                />
+              )}
+            </ToolRow>
+          )}
+          {!inactive && !isRouteParam && !operatorTakesNoValue(f.operator) && (
             <ToolRow label="Value">{valueWidget(f, idx)}</ToolRow>
           )}
         </div>
@@ -173,10 +226,7 @@ function FiltersPopupBody({
         />
       </ToolRow>
 
-      {/* Filter ROWS (icon + summary + ×, click → pushed editor) + an Add row.
-          Custom label/value split (NOT ToolRow) because ToolRow's value div has
-          no `min-w-0` — long filter summaries would grow it past the Match row's
-          width. `min-w-0` on the value column keeps it aligned + truncating. */}
+      {/* Filter ROWS (icon + summary + ×, click → pushed editor) + an Add row. */}
       <div className="flex items-start justify-between w-full">
         <div className="w-3/4 pl-[18px] -ml-[18px] mr-[2px] pt-1.5">
           <span className="text-xs font-bold text-[var(--text-secondary)] select-none">Filters</span>
@@ -213,24 +263,67 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
   const [autoEditIdx, setAutoEditIdx] = useState<number | null>(null);
   const collectionData = useAtomValue(collectionDataAtom);
   const collectionSchemas = useAtomValue(collectionSchemasAtom);
+  const activeFilePath = useAtomValue(activeFilePathAtom);
+  const routeParams = useMemo(() => {
+    if (!activeFilePath) return [];
+    const matches = Array.from(activeFilePath.matchAll(/\[([^/\]]+)\]/g));
+    const params = matches.map(m => m[1]).filter(p => !p.startsWith('...'));
+    return Array.from(new Set(params));
+  }, [activeFilePath]);
+
   const rowRef = useRef<HTMLDivElement>(null);
   const addRowRef = useRef<HTMLDivElement>(null);
   const filters = filterGroup?.filters ?? [];
   const combinator = filterGroup?.combinator ?? 'and';
   const fields = fieldsForSortFilter(schema);
-  const fieldDef = (id: string): FieldDefinition | undefined => fields.find(f => f.id === id);
-  const fieldType = (id: string) => fieldDef(id)?.type;
-  const fieldName = (id: string): string => fieldDef(id)?.name ?? id;
 
-  // A filter whose field isn't in the loaded schema is INACTIVE (e.g. a per-replica
-  // filter on `name` after the Source changed to a collection with no `name` field).
-  // Guard on `schema` so a still-loading schema doesn't false-flag everything.
-  const isInactive = (fieldId: string): boolean => !!schema && !fields.some(fl => fl.id === fieldId);
+  const hierarchicalFields = useMemo(() => {
+    return buildHierarchicalFields(schema, collectionSchemas, collectionData);
+  }, [schema, collectionSchemas, collectionData]);
+
+  const flattenedFields = useMemo(() => {
+    return flattenHierarchicalFields(hierarchicalFields);
+  }, [hierarchicalFields]);
+
+  const fieldOptions = useMemo(() => {
+    if (flattenedFields.length > 0) {
+      return flattenedFields.map(fl => ({ value: fl.fullPath, label: fl.label }));
+    }
+    return fields.map(fl => ({ value: fl.id, label: fl.name }));
+  }, [flattenedFields, fields]);
+
+  const fieldDef = (id: string): FieldDefinition | undefined => {
+    const root = id.includes('.') ? id.split('.')[0] : id;
+    return fields.find(f => f.id === id || f.id === root);
+  };
+
+  const fieldType = (id: string): FieldDefinition['type'] | undefined => {
+    const flat = flattenedFields.find(fl => fl.fullPath === id);
+    if (flat && flat.type) return flat.type as FieldDefinition['type'];
+    const def = fieldDef(id);
+    if (def?.type) return def.type;
+    if (id.endsWith('slug') || id.endsWith('name') || id.endsWith('title') || id.endsWith('description')) return 'text';
+    if (id.endsWith('id') || id.endsWith('rank') || id.endsWith('count')) return 'number';
+    return 'text';
+  };
+
+  const fieldName = (id: string): string => {
+    const flat = flattenedFields.find(fl => fl.fullPath === id);
+    if (flat) return flat.label;
+    const def = fieldDef(id);
+    if (def) return id.includes('.') ? id.replace(/\./g, ' › ') : def.name;
+    return id.replace(/\./g, ' › ');
+  };
+
+  // A filter is inactive only if its root field is missing from schema
+  const isInactive = (fieldId: string): boolean => {
+    if (!schema) return false;
+    const root = fieldId.includes('.') ? fieldId.split('.')[0] : fieldId;
+    return !fields.some(fl => fl.id === root || fl.id === fieldId);
+  };
+
   const anyInactive = filters.some(f => isInactive(f.field));
 
-  // Don't preview a single filter's content on the panel row — a list can hold
-  // many filters, so show a count (or "Add…" when empty). A missing field shows
-  // "Inactive" (design-tool parity) so the user knows to re-select it. The set lives in the popup.
   const summary = filters.length === 0 ? 'Add…'
     : anyInactive ? 'Inactive'
     : `${filters.length} Filter${filters.length === 1 ? '' : 's'}`;
@@ -240,26 +333,22 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
     onChange(mkGroup(filters.map((f, i) => (i === idx ? { ...f, ...patch } : f)), combinator));
   };
   const remove = (idx: number) => onChange(mkGroup(filters.filter((_, i) => i !== idx), combinator));
-  // Add a STATIC filter for the field chosen in the field-picker (default operator
-  // for its type) → it appears as a row in the Filters popup (click to refine).
+
   const addForField = (fieldId: string) => {
     const op = operatorsForFieldType(fieldType(fieldId))[0].value;
-    const newIdx = filters.length; // index of the about-to-be-added filter
+    const newIdx = filters.length;
     onChange(mkGroup([...filters, { field: fieldId, operator: op, value: '' }], combinator));
     setOpen(true);
-    setAutoEditIdx(newIdx); // slide straight into the editor for the new filter
+    setAutoEditIdx(newIdx);
   };
-  // Field change resets operator to a valid one for the new type.
+
   const changeField = (idx: number, fieldId: string) => {
     const ops = operatorsForFieldType(fieldType(fieldId));
     const cur = filters[idx].operator;
     update(idx, { field: fieldId, operator: ops.some(o => o.value === cur) ? cur : ops[0].value, value: '' });
   };
   const openPicker = () => { setPickerFrom('add'); setPickerOpen(true); };
-  // Options for a reference field's value select = the referenced collection's
-  // items. The value is the item `_id` (what `item.<refField>` holds, so the
-  // generated `===` predicate matches) and the label is its human title — same
-  // contract as the CMS panel's ReferencePicker. Empty when no data/schema yet.
+
   const getRefItems = (slug: string | undefined): { value: string; label: string }[] => {
     if (!slug) return [];
     const items: CollectionItem[] = collectionData.get(slug) ?? [];
@@ -270,9 +359,8 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
     }));
   };
 
-  // Keep the editor's live data fresh every render (the pushed panel reads this).
   const dataRef = useRef<EditorData>(null as unknown as EditorData);
-  dataRef.current = { filters, fields, fieldDef, fieldType, update, changeField, onAddPicker: openPicker, onRemove: remove, getRefItems, isInactive };
+  dataRef.current = { filters, fields, fieldDef, fieldType, fieldOptions, update, changeField, onAddPicker: openPicker, onRemove: remove, getRefItems, isInactive, routeParams };
 
   return (
     <div className="flex items-center justify-between w-full" ref={rowRef}>
@@ -283,14 +371,19 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
         {filters.length > 0 && <RemoveButton onClick={() => onChange(null)} />}
       </ControlActionRow>
 
-      {/* Field picker (standard): search all fields → Static / Dynamic.
-          Dynamic (Search Field) is offered only in the page base context. */}
       <FilterFieldPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         fields={fields}
+        hierarchicalFields={hierarchicalFields}
         anchorRef={pickerFrom === 'add' ? addRowRef : rowRef}
         onPickStatic={addForField}
+        routeParams={routeParams}
+        onPickRouteParam={(fieldId, param) => {
+          const op = operatorsForFieldType(fieldType(fieldId))[0].value;
+          onChange(mkGroup([...filters, { field: fieldId, operator: op, value: '', valueSource: 'routeParam', valueVar: param }], combinator));
+          setOpen(true);
+        }}
         onPickDynamic={allowDynamic && onAddSearchField
           ? (fieldId) => { trace.action('filter-control:add-search-field', { field: fieldId }); onAddSearchField(fieldId); }
           : undefined}

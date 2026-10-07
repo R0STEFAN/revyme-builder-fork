@@ -378,6 +378,27 @@ export function saveUpload(
 }
 
 /**
+ * Save an uploaded file with its exact filename (used during bundle import).
+ */
+export function saveUploadExact(
+  filename: string,
+  buffer: Buffer,
+  customRoot?: string
+): { filename: string; url: string; size: number } {
+  const { uploadsDir } = getDataDirs(customRoot);
+  const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = path.join(uploadsDir, safeName);
+
+  fs.writeFileSync(filePath, buffer);
+
+  return {
+    filename: safeName,
+    url: `/api/uploads/${safeName}`,
+    size: buffer.length,
+  };
+}
+
+/**
  * Get upload file path if it exists safely.
  */
 export function getUploadFilePath(filename: string, customRoot?: string): string | null {

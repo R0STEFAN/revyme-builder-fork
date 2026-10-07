@@ -808,3 +808,42 @@ describe('unbindFieldInCode — the injected literal is entity-escaped', () => {
     expect(out).toContain('>A forty-person practice.<');
   });
 });
+
+describe('updateCollectionListConfigInCode — routeParam dynamic filters', () => {
+  it('generates routeParam filter predicate and injects useParams import and hook', () => {
+    const out = updateCollectionListConfigInCode(
+      CODE_WITH_COLLECTION,
+      'card-list',
+      {
+        combinator: 'and',
+        filters: [
+          { field: 'gender', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'category' },
+          { field: 'bodyPart', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'place' },
+        ],
+      },
+    );
+
+    expect(out).toContain("import { useParams } from 'next/navigation'");
+    expect(out).toContain("!params?.category");
+    expect(out).toContain("!params?.place");
+    expect(parseJSX(out)).toBeTruthy();
+  });
+
+  it('supports contains operator with routeParam', () => {
+    const out = updateCollectionListConfigInCode(
+      CODE_WITH_COLLECTION,
+      'card-list',
+      {
+        combinator: 'and',
+        filters: [
+          { field: 'title', operator: 'contains', value: '', valueSource: 'routeParam', valueVar: 'q' },
+        ],
+      },
+    );
+
+    expect(out).toContain("!params?.q");
+    expect(out).toContain("JSON.stringify(item.title)");
+    expect(parseJSX(out)).toBeTruthy();
+  });
+});
+

@@ -135,13 +135,17 @@ export async function startLocalServer(projectId: string, port?: number): Promis
  * Stop the running local server for a project.
  * Throws an Error on failure.
  */
-export async function stopLocalServer(projectId: string): Promise<LocalServerStatus> {
-  trace.action('local-server-client:stop', { projectId });
+export async function stopLocalServer(projectId: string, port?: number): Promise<LocalServerStatus> {
+  trace.action('local-server-client:stop', { projectId, port });
   try {
-    const res = await fetch(`/api/local-server/${encodeURIComponent(projectId)}/stop`, {
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-    });
+    };
+    if (port !== undefined) {
+      init.body = JSON.stringify({ port });
+    }
+    const res = await fetch(`/api/local-server/${encodeURIComponent(projectId)}/stop`, init);
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

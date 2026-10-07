@@ -149,6 +149,53 @@ describe('LocalServerManager', () => {
       expect(fs.readFileSync(path.join(targetDir, 'next.config.mjs'), 'utf-8')).toBe(customNextConfig);
       expect(fs.readFileSync(path.join(targetDir, 'tsconfig.json'), 'utf-8')).toBe(customTsConfig);
     });
+
+    it('syncs uploaded assets into public/api/uploads and public/uploads', () => {
+      const prevEnv = process.env.REVYME_DATA_DIR;
+      process.env.REVYME_DATA_DIR = TEST_STORAGE_DIR;
+      const uploadsDir = path.join(TEST_STORAGE_DIR, 'uploads');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadsDir, 'sample-image.webp'), 'fake-webp');
+
+      try {
+        const files: Record<string, string> = {
+          'app/page.tsx': 'export default () => <div>Hello</div>;',
+        };
+        const targetDir = manager.exportProject('test-uploads-sync', files);
+
+        const pubApiUploads = path.join(targetDir, 'public', 'api', 'uploads', 'sample-image.webp');
+        const pubUploads = path.join(targetDir, 'public', 'uploads', 'sample-image.webp');
+        expect(fs.existsSync(pubApiUploads)).toBe(true);
+        expect(fs.existsSync(pubUploads)).toBe(true);
+      } finally {
+        process.env.REVYME_DATA_DIR = prevEnv;
+      }
+    });
+
+    it('removes stale files when pages or components are moved or deleted', () => {
+      const initialFiles: Record<string, string> = {
+        'app/about-me/page.tsx': 'export default () => <div>About</div>;',
+        'app/page.tsx': 'export default () => <div>Home</div>;',
+      };
+      const targetDir = manager.exportProject('stale-test', initialFiles);
+      expect(fs.existsSync(path.join(targetDir, 'app/about-me/page.tsx'))).toBe(true);
+
+      // Now page moved to (main)/about-me
+      const updatedFiles: Record<string, string> = {
+        'app/(main)/about-me/page.tsx': 'export default () => <div>About (main)</div>;',
+        'app/(main)/page.tsx': 'export default () => <div>Home (main)</div>;',
+      };
+      manager.exportProject('stale-test', updatedFiles);
+
+      // Old files should be removed
+      expect(fs.existsSync(path.join(targetDir, 'app/about-me/page.tsx'))).toBe(false);
+      expect(fs.existsSync(path.join(targetDir, 'app/about-me'))).toBe(false);
+      expect(fs.existsSync(path.join(targetDir, 'app/page.tsx'))).toBe(false);
+
+      // New files should exist
+      expect(fs.existsSync(path.join(targetDir, 'app/(main)/about-me/page.tsx'))).toBe(true);
+      expect(fs.existsSync(path.join(targetDir, 'app/(main)/page.tsx'))).toBe(true);
+    });
   });
 
   describe('build', () => {

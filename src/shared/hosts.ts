@@ -10,7 +10,7 @@
 // CLOUD_ENABLED — these constants just centralize the strings.
 
 export const CDN_HOST =
-  (import.meta.env.VITE_CDN_HOST as string | undefined) || 'https://assets.revyme.app';
+  (import.meta.env?.VITE_CDN_HOST as string | undefined) || 'https://assets.revyme.app';
 
 /** CDN host without the protocol — for `.includes()` checks against import
  *  sources that may appear with or without `https://`. */

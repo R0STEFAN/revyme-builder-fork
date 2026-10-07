@@ -183,6 +183,10 @@ export function ensureGoogleFontImport(fontFamilyValue: string): void {
   const importRegex = new RegExp(`@import\\s+url\\([^)]*${escapedName.replace(/ /g, '\\+')}[^)]*\\)`);
   if (importRegex.test(css)) return; // Already imported
 
+  // If the font is already declared via @font-face (custom font), do not add a Google Fonts @import
+  const fontFaceRegex = new RegExp(`@font-face\\s*\\{[^}]*font-family:\\s*['"]?${escapedName}['"]?`, 'i');
+  if (fontFaceRegex.test(css)) return;
+
   // Build import URL
   const urlFamily = `family=${name.replace(/ /g, '+')}:wght@300;400;500;600;700`;
   const importLine = `@import url('https://fonts.googleapis.com/css2?${urlFamily}&display=swap');`;

@@ -18,10 +18,11 @@ import { flushNow } from '@/code/mutation/mutation-queue';
  * select gains an "On Appear" option). In Appear mode this component renders the
  * SAME dropdown (so there's never a second Trigger row). Title set by the caller.
  */
-export function AppearScrollPopup({ nodeId, node, trigger, enterProps, transition, scrollPayload, isVariantMode, initialName, scopedDirectionWrite, onPickSectionInView }: {
+export function AppearScrollPopup({ nodeId, node, trigger, enterProps, transition, scrollPayload, isVariantMode, initialName, isStagger, stagger, scopedDirectionWrite, onPickSectionInView }: {
   nodeId: string; node: any; trigger: 'appear' | 'scroll';
   enterProps: Record<string, string>; transition: Record<string, string>;
   scrollPayload: any; isVariantMode: boolean; initialName?: string;
+  isStagger?: boolean; stagger?: string;
   scopedDirectionWrite?: (patch: { direction?: 'down' | 'up'; replay?: boolean; toProps?: Record<string, string> }) => boolean;
   /** Section in View is SCRUBBED, so the effect re-classifies as the separate
    *  Scroll Transform entry after the write — the open popup must FOLLOW it
@@ -65,7 +66,8 @@ export function AppearScrollPopup({ nodeId, node, trigger, enterProps, transitio
         </div>
       </div>
       <AppearPopup key={nodeId} nodeId={nodeId} node={node} enterProps={enterProps}
-        transition={transition} isVariantMode={isVariantMode} initialName={initialName} />
+        transition={transition} isVariantMode={isVariantMode} initialName={initialName}
+        isStagger={isStagger} stagger={stagger} />
     </div>
   );
 }

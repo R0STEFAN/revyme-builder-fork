@@ -79,7 +79,9 @@ import CodeComponentHost from './CodeComponentHost';
 import ContextMenu from './ui/ContextMenu';
 import ComponentBreadcrumb from './ui/ComponentBreadcrumb';
 import SlugPageBreadcrumb from './ui/SlugPageBreadcrumb';
+import DynamicRouteToolbar from './ui/DynamicRouteToolbar';
 import AddVariantUI from './ui/AddVariantUI';
+
 import AddVectorUI from './ui/AddVectorUI';
 import AddFormFieldUI from './ui/AddFormFieldUI';
 import ArrowConnectors from './ui/ArrowConnectors';
@@ -1447,6 +1449,10 @@ export default function Canvas() {
           the collection + a searchable item dropdown to switch the previewed
           record. Self-gates internally. */}
       <SlugPageBreadcrumb />
+
+      {/* Dynamic route breadcrumb + live test parameter inputs (visible on nested dynamic routes) */}
+      <DynamicRouteToolbar />
+
 
       {/* Add Variant button — only shows on component master files when
           a variant root is selected. Self-gates internally. Hidden for

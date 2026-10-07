@@ -21,6 +21,7 @@ import { setSandboxGlobalsCSS } from './stubs/project-fs';
 import { setPushedLayoutCss } from '@/canvas/renderer/responsive';
 import { replayOverlayPlacements } from '@/canvas/renderer/overlay-portals';
 import { setSandboxCmsCollections } from './stubs/cms-ops';
+import { setPreviewRouteParams } from './stubs/node-ops';
 import { renderNodes, setRendererDragLockedNodeIds } from '@/canvas/Renderer';
 import { viewportBandPinOps } from '@/canvas/resize/viewport-band-pin-store';
 import { clearMeasureReplayCache } from './sandbox/measure';
@@ -233,6 +234,7 @@ const api: SandboxApi = {
       // Mirror CMS schemas + item data into the sandbox stubs so collection
       // lists render real ghost copies instead of the empty-state placeholder.
       if (input.cmsCollections) setSandboxCmsCollections(input.cmsCollections);
+      if (input.previewRouteParams) setPreviewRouteParams(input.previewRouteParams);
       // Apply transform BEFORE render so getBoundingClientRect includes pan/zoom
       if (input.transform) {
         setCurrentSandboxTransform({ ...input.transform });

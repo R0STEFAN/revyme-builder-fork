@@ -873,6 +873,90 @@ export default function Page() {
   return clientPath;
 }
 
+/** Normalize a route pattern supporting both Next.js `[param]` / `[...param]`
+ *  and Webstudio `:param` syntax (e.g. `gallery/:category/:place` -> `gallery/[category]/[place]`). */
+export function normalizeRoutePattern(raw: string): string {
+  const trimmed = raw.trim().replace(/^\/+|\/+$/g, '');
+  if (!trimmed) return '';
+  const segments = trimmed.split('/').map(seg => seg.trim()).filter(Boolean);
+  const normalized = segments.map(s => {
+    // Webstudio-style :param
+    if (s.startsWith(':')) {
+      const paramName = s.slice(1).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      return paramName ? `[${paramName}]` : '';
+    }
+    // Next.js catch-all [...slug]
+    const catchAllMatch = s.match(/^\[\.\.\.([a-zA-Z0-9_-]+)\]$/);
+    if (catchAllMatch) {
+      return `[...${catchAllMatch[1].toLowerCase()}]`;
+    }
+    // Next.js dynamic segment [slug]
+    const dynamicMatch = s.match(/^\[([a-zA-Z0-9_-]+)\]$/);
+    if (dynamicMatch) {
+      return `[${dynamicMatch[1].toLowerCase()}]`;
+    }
+    // Static segment: slugify
+    return s.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  }).filter(Boolean);
+
+  return normalized.join('/');
+}
+
+/** Validate a route pattern for dynamic route creation. */
+export function validateRoutePattern(raw: string): string | null {
+  const normalized = normalizeRoutePattern(raw);
+  if (!normalized) return 'Route path cannot be empty';
+  if (!/\[[^/\]]+\]/.test(normalized)) {
+    return 'Dynamic route must contain at least one parameter (e.g. [category] or :category)';
+  }
+  const clientPath = `app/${normalized}/page.client.tsx`;
+  if (projectFS.exists(clientPath)) {
+    return `A page at "/${normalized}" already exists`;
+  }
+  return null;
+}
+
+/** Create a dynamic multi-segment page (e.g. `gallery/[category]/[place]`). */
+export function createDynamicRouteFile(pattern: string, groupDir?: string): string {
+  const normalized = normalizeRoutePattern(pattern);
+  if (!normalized) throw new Error('Invalid route pattern');
+  const baseDir = groupDir || 'app';
+  const serverPath = `${baseDir}/${normalized}/page.tsx`;
+  const clientPath = `${baseDir}/${normalized}/page.client.tsx`;
+  const displayName = `/${normalized}`;
+
+  const serverCode = `import PageClient from './page.client';
+
+export const metadata = {};
+
+export default function Page() {
+  return <PageClient />;
+}
+`;
+
+  const clientCode = `'use client';
+
+${defaultCanvasBlock({ single: true, height: 'auto' })}
+
+import React from 'react';
+
+export default function Page() {
+  return (
+<div data-id="root" data-name="${displayName}" style={{
+  position: 'relative', width: '100%', minHeight: '900px',
+  backgroundColor: '#ffffff'
+}}>
+</div>
+  );
+}`;
+
+  projectFS.writeFile(serverPath, serverCode);
+  projectFS.writeFile(clientPath, clientCode);
+  trace.action('active-file:create-dynamic-page', { clientPath, serverPath, pattern: normalized });
+  syncLocaleRoutes(getI18nConfig());
+  return clientPath;
+}
+
 /** Delete a page. Removes BOTH halves of the page pair (the server
  *  wrapper at `page.tsx` and the client body at `page.client.tsx`) and
  *  GCs comments scoped to either path. Accepts either path on input —

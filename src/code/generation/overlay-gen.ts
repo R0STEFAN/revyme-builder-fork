@@ -512,11 +512,19 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped = false
     if (cfg.fill) overlay.style.backgroundColor = cfg.fill;
     if (cfg.zIndex != null) overlay.style.zIndex = String(cfg.zIndex);
     const onBackdrop = (e) => { if (e.target === overlay && cfg.dismissible !== false) ${setVarName}(false); };
+    const onOverlayClick = (e) => {
+      if (cfg.closeOnLink !== false) {
+        const link = e.target && e.target.closest && e.target.closest('a[href], a, [data-link], [data-cms-nav], [data-cms-link], button, [role="button"]');
+        if (link && overlay.contains(link)) ${setVarName}(false);
+      }
+    };
     overlay.addEventListener('mousedown', onBackdrop);
+    overlay.addEventListener('click', onOverlayClick, true);
     const prevOverflow = document.body.style.overflow;
     if (cfg.pageScroll !== 'auto') document.body.style.overflow = 'hidden';
     return () => {
       overlay.removeEventListener('mousedown', onBackdrop);
+      overlay.removeEventListener('click', onOverlayClick, true);
       document.body.style.overflow = prevOverflow;
     };
   }, [${varName}]);
@@ -588,11 +596,35 @@ export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false)
       if (tr && tr.contains(e.target)) return;
       ${setter}(false);
     };
+    const onOverlayClick = (e) => {
+      const ov = ${findLitJs(overlayId, scoped)};
+      if (!ov || !ov.contains(e.target)) return;
+      const raw = JSON.parse(ov.getAttribute('data-overlay') || '{}');
+      let cfg = raw;
+      if (raw.responsive) {
+        const ww = window.innerWidth;
+        const bps = raw.responsiveBp;
+        const owning = (bps && bps.length)
+          ? bps.filter(b => ww <= b).sort((a, b) => a - b)[0]
+          : Object.keys(raw.responsive).map(Number).filter(n => ww <= n).sort((a, b) => a - b)[0];
+        if (owning !== undefined && raw.responsive[owning]) cfg = { ...raw, ...raw.responsive[owning] };
+      }
+      if (cfg.closeOnLink !== false) {
+        const link = e.target && e.target.closest && e.target.closest('a[href], a, [data-link], [data-cms-nav], [data-cms-link], button, [role="button"]');
+        if (link && ov.contains(link)) ${setter}(false);
+      }
+    };
     position();
     window.addEventListener('resize', position);
     window.addEventListener('scroll', position, true);
     document.addEventListener('mousedown', onOutside);
-    return () => { window.removeEventListener('resize', position); window.removeEventListener('scroll', position, true); document.removeEventListener('mousedown', onOutside); };
+    document.addEventListener('click', onOverlayClick, true);
+    return () => {
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('click', onOverlayClick, true);
+    };
   }, [${varName}]);\n`;
 }
 
@@ -1394,6 +1426,8 @@ export function updateOverlayConfigInCode(
     result = applyOverlayOpenVariantInCode(result, overlayId, config);
   }
 
+  result = healMissingOverlayEffectsInCode(result);
+
   trace.action('overlay-gen:updateConfig:done', { overlayId, vpWidth });
   return result;
 }
@@ -1845,18 +1879,37 @@ export function healMissingOverlayEffectsInCode(code: string): string {
     const varName = stateVarName(ov.overlayId);
     // Only RETURN overlays carry runtime (useState). Canvas overlays are static.
     if (!result.includes(`const [${varName},`)) continue;
-    // Effect already present? (dependency array is unique per overlay.)
-    if (result.includes(`, [${varName}]);`)) continue;
+    const dep = `, [${varName}]);`;
+    const healScoped = isMasterCode(result);
+    const hasEffect = result.includes(dep);
+
+    if (hasEffect) {
+      // Check if existing effect is outdated (missing onOverlayClick)
+      const depIdx = result.indexOf(dep);
+      const before = result.slice(0, depIdx);
+      const start = Math.max(before.lastIndexOf('useLayoutEffect('), before.lastIndexOf('useEffect('));
+      if (start >= 0) {
+        const effectBody = result.slice(start, depIdx);
+        if (effectBody.includes('onOverlayClick')) {
+          continue;
+        }
+        // Outdated effect — remove it so we can re-insert the regenerated one
+        result = removeOverlayEffectBlock(result, varName);
+      } else {
+        continue;
+      }
+    }
+
     // Insert the regenerated effect right after this overlay's useState line.
-    const stateRe = new RegExp(`const \\[${escapeRegExp(varName)},\\s*set\\w+\\] = useState\\(false\\);\\n`);
+    const stateRe = new RegExp(`const \\[${escapeRegExp(varName)},\\s*set\\w+\\] = useState\\(false\\);?\\s*`);
     const m = stateRe.exec(result);
     if (!m) continue;
     const pos = m.index + m[0].length;
-    const healScoped = isMasterCode(result);
     const effect = ov.config.type === 'fixed'
       ? buildFixedOverlayRuntimeEffect(ov.overlayId, healScoped)
       : buildRelativeOverlayPosEffect(ov.overlayId, healScoped);
-    result = result.slice(0, pos) + effect + result.slice(pos);
+    const prefix = result.slice(0, pos).endsWith('\n') ? '' : '\n';
+    result = result.slice(0, pos) + prefix + effect + result.slice(pos);
     if (healScoped) result = ensureMasterOverlayScope(result);
     trace.action('overlay-gen:heal-missing-effect', { overlayId: ov.overlayId, type: ov.config.type });
   }

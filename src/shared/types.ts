@@ -272,9 +272,9 @@ export interface FilterConfig {
   /** Static value. For `between` it's a `[min, max]` tuple. */
   value: any;
   /** Dynamic value source (Phase 4 — search field / date picker bound to a page
-   *  variable). When set (not 'static'), the predicate reads `valueVar` at runtime
+   *  variable, or route parameter like [:category]). When set (not 'static'), the predicate reads `valueVar` at runtime
    *  instead of the literal `value`. */
-  valueSource?: 'static' | 'searchField' | 'dateField';
+  valueSource?: 'static' | 'searchField' | 'dateField' | 'routeParam';
   /** Page-variable name driving a dynamic filter (when valueSource !== 'static'). */
   valueVar?: string;
 }
@@ -409,6 +409,8 @@ export interface OverlayConfig {
    *  instance to this variant; on close it reverts to its base variant. Empty/
    *  undefined = no variant switch. */
   onOpenVariant?: string;
+  /** Whether clicking a link (<a> or [href]) inside the dropdown overlay automatically closes it. Default true. */
+  closeOnLink?: boolean;
 }
 
 /** The subset of OverlayConfig fields that can be overridden per viewport (page
@@ -416,13 +418,13 @@ export interface OverlayConfig {
  *  component-instance overlay can switch the instance to a DIFFERENT variant per
  *  viewport / per outer-component variant. */
 export type OverlayConfigOverride = Partial<Pick<OverlayConfig,
-  'side' | 'align' | 'offsetX' | 'offsetY' | 'collision' | 'collisionPadding' | 'onOpenVariant'>>;
+  'side' | 'align' | 'offsetX' | 'offsetY' | 'collision' | 'collisionPadding' | 'onOpenVariant' | 'closeOnLink'>>;
 
 /** What `updateOverlayConfig` may patch: the per-viewport override fields PLUS
  *  the modal-level base fields (fill/dismissible/zIndex/pageScroll), which are
  *  written to the BASE config only (vpWidth = null), never as a replica override. */
 export type OverlayConfigPatch = OverlayConfigOverride &
-  Partial<Pick<OverlayConfig, 'fill' | 'dismissible' | 'zIndex' | 'pageScroll' | 'enterTransition' | 'exitTransition' | 'easingLinked' | 'onOpenVariant'>>;
+  Partial<Pick<OverlayConfig, 'fill' | 'dismissible' | 'zIndex' | 'pageScroll' | 'enterTransition' | 'exitTransition' | 'easingLinked' | 'onOpenVariant' | 'closeOnLink'>>;
 
 /** Config stored on the trigger node (data-overlay-trigger attribute) */
 export interface OverlayTriggerConfig {

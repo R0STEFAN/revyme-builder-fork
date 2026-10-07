@@ -1,13 +1,7 @@
-// FilterFieldPicker.tsx — standard field picker for adding a Collection List
-// filter. A searchable dropdown of EVERY collection field; each field opens a
-// flyout submenu offering a type-specific DYNAMIC input (Search Field for text,
-// Checkbox for image/boolean, …) and a STATIC condition. This increment wires
-// the STATIC path; the Dynamic options are shown (greyed) for the follow-up that
-// creates the bound canvas input.
-
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { FieldDefinition } from '@/shared/types';
+import type { HierarchicalField } from './cms-filter-utils';
 import { trace } from '@/shared/debug-trace';
 
 /** The type-specific dynamic input label (design-tool parity), or null when the field
@@ -28,6 +22,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   fields: FieldDefinition[];
+  hierarchicalFields?: HierarchicalField[];
   anchorRef: React.RefObject<HTMLElement | null>;
   /** STATIC condition for `fieldId` (wired). */
   onPickStatic: (fieldId: string) => void;
@@ -35,6 +30,10 @@ interface Props {
    *  text fields (the implemented dynamic kind) and only when allowed (page base
    *  context). Absent → the Dynamic option renders greyed. */
   onPickDynamic?: (fieldId: string) => void;
+  /** Route params detected on the active page (e.g. ['category', 'place']). */
+  routeParams?: string[];
+  /** Pick a route param as the dynamic filter value. */
+  onPickRouteParam?: (fieldId: string, param: string) => void;
 }
 
 /** Whether a field type supports a WIRED dynamic input today (Search Field for
@@ -46,25 +45,38 @@ function dynamicWired(type: string | undefined): boolean {
 const ROW = 'group flex items-center justify-between mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer bg-transparent hover:!bg-[var(--accent)] border-none whitespace-nowrap';
 const ROW_LABEL = 'text-xs font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-fg)]';
 
-/** One field row + its left-opening flyout (Dynamic option / Static). The
- *  Dynamic option is clickable only when `onDynamic` is supplied (currently the
- *  Search Field path for text fields); otherwise it shows greyed "coming soon". */
-function FieldRow({ field, onStatic, onDynamic }: { field: FieldDefinition; onStatic: () => void; onDynamic?: () => void }) {
+/** One field row + its cascading flyout (Dynamic option / Route Param / Static / Subfields). */
+function HierarchicalFieldRow({
+  field,
+  onStatic,
+  onDynamic,
+  routeParams,
+  onPickRouteParam,
+  depth = 0,
+}: {
+  field: HierarchicalField;
+  onStatic: (fieldId: string) => void;
+  onDynamic?: (fieldId: string) => void;
+  routeParams?: string[];
+  onPickRouteParam?: (fieldId: string, param: string) => void;
+  depth?: number;
+}) {
   const [showSub, setShowSub] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 0, y: 0, toRight: false });
   const dyn = dynamicInputLabel(field.type);
+  const hasChildren = !!(field.children && field.children.length > 0);
 
   useEffect(() => {
     if (!showSub || !btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
-    setPos({ x: r.left - 8, y: r.top });
+    const toRight = r.left - 230 < 10;
+    const x = toRight ? r.right + 6 : r.left - 6;
+    const y = Math.min(r.top, Math.max(8, window.innerHeight - 340));
+    setPos({ x, y, toRight });
   }, [showSub]);
 
-  // The flyout is portaled to <body> — OUTSIDE the picker's ref — so without this
-  // its mousedown bubbles to the picker's outside-click handler and closes the
-  // picker before the click lands ("Static does nothing"). Stop it (capture).
   useEffect(() => {
     const el = portalRef.current;
     if (!el) return;
@@ -82,32 +94,68 @@ function FieldRow({ field, onStatic, onDynamic }: { field: FieldDefinition; onSt
         </svg>
       </button>
       {showSub && createPortal(
-        <div ref={portalRef} style={{ position: 'fixed', left: pos.x, top: pos.y, transform: 'translateX(-100%)', zIndex: 100031 }}
-          onMouseEnter={() => setShowSub(true)} onMouseLeave={() => setShowSub(false)}>
-          <div style={{ position: 'absolute', top: 0, right: -12, width: 16, height: '100%' }} />
-          {/* Same shell as the main dropdown: same py-1.5, inset rounded rows
-              (ROW), bg-white/10 separator — NOT full-bleed edge-touching rows. */}
-          <div className="min-w-[150px] bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-2xl py-1.5">
-            {dyn && (
+        <div
+          ref={portalRef}
+          style={{
+            position: 'fixed',
+            left: pos.x,
+            top: pos.y,
+            transform: pos.toRight ? 'none' : 'translateX(-100%)',
+            zIndex: 100031 + depth * 2,
+          }}
+          onMouseEnter={() => setShowSub(true)}
+          onMouseLeave={() => setShowSub(false)}
+        >
+          <div style={{ position: 'absolute', top: 0, [pos.toRight ? 'left' : 'right']: -12, width: 16, height: '100%' }} />
+          <div className="min-w-[170px] max-w-[280px] max-h-[380px] overflow-y-auto bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-2xl py-1.5">
+            {/* Direct options for this field / relation itself */}
+            {(dyn || (routeParams && routeParams.length > 0)) && (
               <>
-                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)] opacity-60">Dynamic</div>
-                {onDynamic ? (
-                  // Wired: creates the bound search <input> + page variable on the canvas.
-                  <button type="button" className={ROW} onClick={() => { onDynamic(); }}>
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)] opacity-60">
+                  {hasChildren ? 'Filter Whole Relation' : 'Dynamic'}
+                </div>
+                {onDynamic && dynamicWired(field.type) ? (
+                  <button type="button" className={ROW} onClick={() => onDynamic(field.fullPath)}>
                     <span className={ROW_LABEL}>{dyn}</span>
                   </button>
                 ) : (
-                  // Greyed (no hover): this field type's dynamic input isn't built yet.
-                  <div className="mx-1.5 px-2.5 py-1.5 rounded w-[calc(100%-12px)] whitespace-nowrap opacity-40" title="Coming soon — creates a bound input on the canvas">
-                    <span className={ROW_LABEL}>{dyn}</span>
-                  </div>
+                  (!routeParams || routeParams.length === 0) && dyn ? (
+                    <div className="mx-1.5 px-2.5 py-1.5 rounded w-[calc(100%-12px)] whitespace-nowrap opacity-40" title="Coming soon">
+                      <span className={ROW_LABEL}>{dyn}</span>
+                    </div>
+                  ) : null
                 )}
-                <div className="h-px bg-white/10 mx-2 my-1" />
+                {routeParams && routeParams.map(param => (
+                  <button key={param} type="button" className={ROW} onClick={() => onPickRouteParam?.(field.fullPath, param)}>
+                    <span className={ROW_LABEL}>Route Param ([:{param}])</span>
+                  </button>
+                ))}
               </>
             )}
-            <button type="button" className={ROW} onClick={() => { onStatic(); }}>
-              <span className={ROW_LABEL}>Static</span>
+            <button type="button" className={ROW} onClick={() => onStatic(field.fullPath)}>
+              <span className={ROW_LABEL}>{hasChildren ? 'Static (Whole)' : 'Static'}</span>
             </button>
+
+            {/* Nested Subfields if present */}
+            {hasChildren && (
+              <>
+                <div className="h-px bg-white/10 mx-2 my-1.5" />
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)] opacity-60">
+                  Subfields ({field.name})
+                </div>
+                {field.children!.map(child => (
+                  <HierarchicalFieldRow
+                    key={child.fullPath}
+                    field={child}
+                    onStatic={onStatic}
+                    onDynamic={onDynamic}
+                    routeParams={routeParams}
+                    onPickRouteParam={onPickRouteParam}
+                    depth={depth + 1}
+                  />
+                ))}
+              </>
+            )}
           </div>
         </div>,
         document.body,
@@ -116,20 +164,53 @@ function FieldRow({ field, onStatic, onDynamic }: { field: FieldDefinition; onSt
   );
 }
 
-export default function FilterFieldPicker({ open, onClose, fields, anchorRef, onPickStatic, onPickDynamic }: Props) {
+export default function FilterFieldPicker({
+  open,
+  onClose,
+  fields,
+  hierarchicalFields,
+  anchorRef,
+  onPickStatic,
+  onPickDynamic,
+  routeParams,
+  onPickRouteParam,
+}: Props) {
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxH: number } | null>(null);
-  const [visible, setVisible] = useState(false); // fade-in
+  const [visible, setVisible] = useState(false);
+
+  // Normalize fields into hierarchical representation
+  const fieldTree: HierarchicalField[] = useMemo(() => {
+    if (hierarchicalFields && hierarchicalFields.length > 0) return hierarchicalFields;
+    return fields.map(f => ({
+      id: f.id,
+      name: f.name || f.id,
+      fullPath: f.id,
+      type: f.type || 'text',
+    }));
+  }, [hierarchicalFields, fields]);
+
+  // Flattened list for direct search matching
+  const flatSearchList = useMemo(() => {
+    const list: HierarchicalField[] = [];
+    function collect(nodes: HierarchicalField[]) {
+      for (const node of nodes) {
+        list.push(node);
+        if (node.children && node.children.length > 0) {
+          collect(node.children);
+        }
+      }
+    }
+    collect(fieldTree);
+    return list;
+  }, [fieldTree]);
 
   useEffect(() => {
     if (!open) { setQuery(''); setVisible(false); return; }
     const a = anchorRef.current?.getBoundingClientRect();
     if (a) {
-      // Window-edge aware (like every other dropdown): clamp the box inside the
-      // viewport so it never cuts off at the bottom/right; shift up + cap height
-      // when there isn't room below.
-      const M = 8, W = 240;
+      const M = 8, W = 250;
       const maxH = Math.min(420, window.innerHeight - M * 2);
       let top = a.bottom + 4;
       if (top + maxH > window.innerHeight - M) top = Math.max(M, window.innerHeight - M - maxH);
@@ -138,54 +219,82 @@ export default function FilterFieldPicker({ open, onClose, fields, anchorRef, on
       setPos({ left, top, maxH });
     }
     const raf = requestAnimationFrame(() => setVisible(true));
-    // Outside-click is handled by the context-menu backdrop below (not a
-    // document listener) so the click that closes the picker is also SWALLOWED
-    // — clicking the "Filters" row again closes the picker instead of the row's
-    // onClick re-opening it on the same event.
     return () => { cancelAnimationFrame(raf); };
   }, [open, anchorRef]);
 
   if (!open || !pos) return null;
 
-  const filtered = query.trim()
-    ? fields.filter(f => f.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : fields;
+  const isSearching = !!query.trim();
+  const searchLower = query.trim().toLowerCase();
+  const searchResults = isSearching
+    ? flatSearchList.filter(f => f.fullPath.toLowerCase().includes(searchLower) || f.name.toLowerCase().includes(searchLower))
+    : [];
 
   return createPortal(
     <>
-      {/* Context-menu backdrop — above the ToolPopup (z 100001) but below the
-          dropdown (100030). A mousedown here closes the picker AND is swallowed
-          (prevent/stop) so the click never reaches the element behind it (e.g.
-          the "Filters" row, which would otherwise re-open the picker). */}
       <div
         style={{ position: 'fixed', inset: 0, zIndex: 100029 }}
         onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); trace.action('filter-field-picker:backdrop-close', {}); onClose(); }}
       />
-      <div ref={ref} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: pos.maxH, zIndex: 100030, width: 240, opacity: visible ? 1 : 0 }}
-      className="bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-2xl py-1.5 overflow-y-auto transition-opacity duration-150">
-      {/* Inline search — icon + borderless input + separator (LeftHeader style). */}
-      <div className="flex items-center gap-2 px-3 py-1.5">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-secondary)] shrink-0">
-          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Type to search…"
-          className="flex-1 min-w-0 bg-transparent border-none text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none" />
-      </div>
-      {/* Separator — match the LeftHeader dropdown's hairline (bg-white/10), not
-          the darker --border-light. */}
-      <div className="h-px bg-white/10 mx-2 my-1" />
-      {filtered.length === 0
-        ? <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">No fields</div>
-        : filtered.map(f => (
-            <FieldRow
-              key={f.id}
-              field={f}
-              onStatic={() => { trace.action('filter-field-picker:static', { field: f.id }); onPickStatic(f.id); onClose(); }}
-              onDynamic={onPickDynamic && dynamicWired(f.type)
-                ? () => { trace.action('filter-field-picker:dynamic', { field: f.id }); onPickDynamic(f.id); onClose(); }
-                : undefined}
-            />
-          ))}
+      <div
+        ref={ref}
+        style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: pos.maxH, zIndex: 100030, width: 250, opacity: visible ? 1 : 0 }}
+        className="bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-2xl py-1.5 overflow-y-auto transition-opacity duration-150"
+      >
+        {/* Inline search */}
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-secondary)] shrink-0">
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Type to search…"
+            className="flex-1 min-w-0 bg-transparent border-none text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none"
+          />
+        </div>
+        <div className="h-px bg-white/10 mx-2 my-1" />
+
+        {isSearching ? (
+          searchResults.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">No matching fields</div>
+          ) : (
+            searchResults.map(f => (
+              <HierarchicalFieldRow
+                key={f.fullPath}
+                field={{ ...f, name: f.fullPath.replace(/\./g, ' › ') }}
+                routeParams={routeParams}
+                onStatic={(path) => { trace.action('filter-field-picker:static', { field: path }); onPickStatic(path); onClose(); }}
+                onDynamic={onPickDynamic && dynamicWired(f.type)
+                  ? (path) => { trace.action('filter-field-picker:dynamic', { field: path }); onPickDynamic(path); onClose(); }
+                  : undefined}
+                onPickRouteParam={onPickRouteParam
+                  ? (path, param) => { trace.action('filter-field-picker:route-param', { field: path, param }); onPickRouteParam(path, param); onClose(); }
+                  : undefined}
+              />
+            ))
+          )
+        ) : (
+          fieldTree.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">No fields</div>
+          ) : (
+            fieldTree.map(f => (
+              <HierarchicalFieldRow
+                key={f.fullPath}
+                field={f}
+                routeParams={routeParams}
+                onStatic={(path) => { trace.action('filter-field-picker:static', { field: path }); onPickStatic(path); onClose(); }}
+                onDynamic={onPickDynamic && dynamicWired(f.type)
+                  ? (path) => { trace.action('filter-field-picker:dynamic', { field: path }); onPickDynamic(path); onClose(); }
+                  : undefined}
+                onPickRouteParam={onPickRouteParam
+                  ? (path, param) => { trace.action('filter-field-picker:route-param', { field: path, param }); onPickRouteParam(path, param); onClose(); }
+                  : undefined}
+              />
+            ))
+          )
+        )}
       </div>
     </>,
     document.body,

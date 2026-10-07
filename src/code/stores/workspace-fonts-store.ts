@@ -29,34 +29,63 @@ let _loaded = false;
 let _loading = false;
 const listeners = new Set<() => void>();
 
+const LOCAL_STORAGE_KEY = 'revyme_custom_fonts';
+
+function loadLocalCustomFonts(): WorkspaceFont[] {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCustomFonts(fonts: WorkspaceFont[]): void {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fonts));
+  } catch {}
+}
+
 function notify(): void {
   for (const fn of listeners) fn();
 }
 
 /**
  * Fetch the workspace font library once, then cache. Resolves the owning
- * workspace from the current website, lists its fonts, and pre-registers each
- * face (so previews render). Safe to call repeatedly — it no-ops once loaded
- * or while a load is in flight. Failures leave the library empty (the picker
- * just omits the section).
+ * workspace from the current website, lists its fonts, merges local custom fonts,
+ * and pre-registers each face (so previews render). Safe to call repeatedly.
  */
 export async function ensureWorkspaceFonts(): Promise<void> {
   if (_loaded || _loading) return;
   _loading = true;
   try {
+    const localFonts = loadLocalCustomFonts();
     const websiteId = getProjectId();
-    if (!websiteId || websiteId === 'local') { _loaded = true; return; }
+    let backendFonts: WorkspaceFont[] = [];
 
-    const workspaceId = await backend.getWebsiteWorkspaceId(websiteId);
-    if (!workspaceId) { _loaded = true; return; }
+    if (websiteId && websiteId !== 'local') {
+      try {
+        const workspaceId = await backend.getWebsiteWorkspaceId(websiteId);
+        if (workspaceId) {
+          backendFonts = await backend.listWorkspaceFonts(workspaceId);
+        }
+      } catch (err) {
+        trace.error('workspace-fonts:backend-failed', err);
+      }
+    }
 
-    const fonts = await backend.listWorkspaceFonts(workspaceId);
-    _fonts = fonts;
+    const map = new Map<string, WorkspaceFont>();
+    for (const f of backendFonts) map.set(f.id, f);
+    for (const f of localFonts) map.set(f.id, f);
+    _fonts = Array.from(map.values());
     _loaded = true;
-    trace.action('workspace-fonts:loaded', { count: fonts.length, workspaceId });
+    trace.action('workspace-fonts:loaded', { count: _fonts.length });
 
     // Register every face so the picker renders each in its own typeface.
-    for (const f of fonts) {
+    for (const f of _fonts) {
       loadCustomFont({ family: f.family, url: f.url, weight: f.weight, style: f.style });
     }
     notify();
@@ -67,6 +96,80 @@ export async function ensureWorkspaceFonts(): Promise<void> {
     _loading = false;
     notify();
   }
+}
+
+/** Add a newly uploaded custom font to workspace fonts */
+export function addCustomFont(font: WorkspaceFont): void {
+  const existingIdx = _fonts.findIndex(f => f.id === font.id || (f.family === font.family && f.weight === font.weight && f.style === font.style));
+  if (existingIdx >= 0) {
+    _fonts[existingIdx] = font;
+  } else {
+    _fonts.push(font);
+  }
+  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.uploadedBy === 'user' || f.uploadedBy === 'local');
+  saveLocalCustomFonts(localFonts);
+
+  loadCustomFont({ family: font.family, url: font.url, weight: font.weight, style: font.style });
+  previewWorkspaceFontInCanvas(font.family);
+  applyWorkspaceFontToProject(font.family);
+  notify();
+}
+
+/** Delete a custom font from workspace fonts */
+export function deleteCustomFont(fontId: string): void {
+  _fonts = _fonts.filter(f => f.id !== fontId);
+  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.uploadedBy === 'user' || f.uploadedBy === 'local');
+  saveLocalCustomFonts(localFonts);
+  notify();
+}
+
+/**
+ * Parse a font file name (e.g. "ClashDisplay-Bold.woff2") into
+ * family name, weight, style, and extension.
+ */
+export function parseFontFilename(fileName: string): {
+  family: string;
+  weight: number;
+  style: 'normal' | 'italic';
+  ext: 'woff2' | 'woff' | 'otf' | 'ttf';
+} {
+  const baseName = fileName.replace(/\.[^.]+$/, '');
+  const extMatch = fileName.match(/\.([^.]+)$/);
+  const ext = (extMatch ? extMatch[1].toLowerCase() : 'woff2') as 'woff2' | 'woff' | 'otf' | 'ttf';
+
+  let style: 'normal' | 'italic' = 'normal';
+  if (/italic|oblique/i.test(baseName)) {
+    style = 'italic';
+  }
+
+  let weight = 400;
+  if (/thin|hairline|100/i.test(baseName)) weight = 100;
+  else if (/extralight|ultralight|200/i.test(baseName)) weight = 200;
+  else if (/light|300/i.test(baseName)) weight = 300;
+  else if (/medium|500/i.test(baseName)) weight = 500;
+  else if (/semibold|demibold|600/i.test(baseName)) weight = 600;
+  else if (/extrabold|ultrabold|800/i.test(baseName)) weight = 800;
+  else if (/black|heavy|900/i.test(baseName)) weight = 900;
+  else if (/bold|700/i.test(baseName)) weight = 700;
+
+  // Clean family name
+  let family = baseName
+    .replace(/[-_]?(100|200|300|400|500|600|700|800|900)/g, '')
+    .replace(/[-_]?(thin|hairline|extralight|ultralight|light|regular|normal|medium|semibold|demibold|extrabold|ultrabold|bold|black|heavy)/gi, '')
+    .replace(/[-_]?(italic|oblique)/gi, '')
+    .replace(/[-_]?(variable|vf)/gi, '')
+    .replace(/[-_]?(opsz\d+|wght\d+|\d+pt)/gi, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
+
+  // If camelCase or PascalCase without spaces, e.g. "ClashDisplay" -> "Clash Display"
+  if (!family.includes(' ')) {
+    family = family.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  if (!family) family = baseName;
+
+  return { family, weight, style, ext };
 }
 
 /** Imperative read of the cached library (empty until loaded). */

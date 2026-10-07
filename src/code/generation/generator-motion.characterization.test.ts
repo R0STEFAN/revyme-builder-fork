@@ -41,6 +41,7 @@ import {
   rehydrateScrollFx,
   type ScrollAnimConfig,
 } from './generator-motion';
+import { validateGeneratedCode } from '../mutation/mutation-queue';
 
 // ─── fixtures (modeled on the builder's emitted-code shapes) ─────────────────
 
@@ -452,6 +453,52 @@ describe('characterization: motion prop writes', () => {
           );
         }"
       `);
+  });
+
+  it('updateMotionPropInCode — emits unquoted stagger index expression in transition delay', () => {
+    const out = updateMotionPropInCode(PAGE, 'frame-x', 'transition', { duration: '0.5', delay: 'index * 0.1' });
+    expect(out).toContain('delay: index * 0.1');
+    expect(out).not.toContain("delay: 'index * 0.1'");
+  });
+
+  it('updateMotionPropInCode — inside map with (item, idx) converts index to idx and validates', () => {
+    const pageWithMap = `'use client';
+import React from 'react';
+import items from '@/cms/items.json';
+
+export default function Page() {
+  return (
+    <div data-id="container">
+      {items.map((item, idx) => (
+        <div data-id="card" key={idx} />
+      ))}
+    </div>
+  );
+}`;
+    const out = updateMotionPropInCode(pageWithMap, 'card', 'transition', { duration: '0.5', delay: 'index * 0.1' });
+    expect(out).toContain('delay: idx * 0.1');
+    expect(out).not.toContain('delay: index * 0.1');
+    expect(validateGeneratedCode(out)).toBeNull();
+  });
+
+  it('updateMotionPropInCode — inside map with item => injects index param and validates', () => {
+    const pageWithMap = `'use client';
+import React from 'react';
+import items from '@/cms/items.json';
+
+export default function Page() {
+  return (
+    <div data-id="container">
+      {items.map(item => (
+        <div data-id="card" />
+      ))}
+    </div>
+  );
+}`;
+    const out = updateMotionPropInCode(pageWithMap, 'card', 'transition', { duration: '0.5', delay: 'index * 0.1' });
+    expect(out).toContain('{items.map((item, index) =>');
+    expect(out).toContain('delay: index * 0.1');
+    expect(validateGeneratedCode(out)).toBeNull();
   });
 
   it('removeMotionPropFromCode — strips the attribute', () => {

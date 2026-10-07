@@ -9,9 +9,12 @@
 // `messages/{locale}.json`, so it reads the resolved message and commits
 // through `commitTranslationText` — see content-translation.ts.
 
+import { useState } from 'react';
 import { ToolInput, ControlLabel } from '../../../controls';
 import { LegacyVariableBoundPill } from '../../../controls/VariableBoundPill';
+import { ExpressionBoundPill } from '../../../controls/ExpressionBoundPill';
 import { CmsBoundPill, CmsMissingPill, cmsOrphanInScope } from '../../../controls/CmsBoundPill';
+import ExpressionEditorPopup from '../../../ui/ExpressionEditorPopup';
 import { useControl } from '../../../controls/ControlProvider';
 import { useTextStyles } from '../../../hooks/useTextStyles';
 import { useAtomValue, useAtom } from 'jotai';
@@ -34,6 +37,7 @@ import FormattedContentButton from '../../../ui/FormattedContentButton';
 export function ContentControl() {
   const text = useTextStyles();
   const { node, getValueSource, removeVariable, cmsBinding } = useControl();
+  const [expressionOpen, setExpressionOpen] = useState(false);
   // FIT SVG wrapper: the selection is the `<svg>` wrapper (empty textContent) —
   // the actual text lives in the inner <p> inside its <foreignObject>. Resolve it
   // so Content READS + WRITES the real text (otherwise the field is blank in FIT
@@ -246,6 +250,35 @@ export function ContentControl() {
     );
   }
 
+  // Dynamic expression (formula) text binding — {expression}
+  if (textNode?.textExpression) {
+    return (
+      <div className="flex items-center justify-between w-full">
+        <ControlLabel label="Content" property="textContent" />
+        <ExpressionBoundPill
+          expression={textNode.textExpression}
+          onEdit={() => setExpressionOpen(true)}
+          onClear={() => {
+            trace.action('content-control:unbind-expression', { nodeId: textNode.id });
+            queueMutation({ type: 'unbindTextExpression', nodeId: textNode.id });
+          }}
+        />
+        <ExpressionEditorPopup
+          isOpen={expressionOpen}
+          onClose={() => setExpressionOpen(false)}
+          onApply={(expr) => {
+            queueMutation({ type: 'bindTextExpression', nodeId: textNode.id, expression: expr });
+          }}
+          initialExpression={textNode.textExpression}
+          targetProperty="text"
+          collectionSlug={cmsBinding?.slug}
+          itemVar={cmsBinding?.itemVar}
+          fields={cmsBinding?.fields}
+        />
+      </div>
+    );
+  }
+
   // textContent is a first-class variable property — Create Variable from
   // the dropdown wraps the JSX text in `{propName}` and adds the prop. The
   // legacy ControlProvider routes property === 'textContent' to the
@@ -382,124 +415,150 @@ export function ContentControl() {
         overridden={isOverride}
         onResetOverride={handleResetOverride}
       />
-      <ToolInput
-        value={displayValue}
-        onChange={(v) => {
-          if (!node) return;
-          // Locale routing: when the user is on a non-default locale, the
-          // edit is a translation — write to `i18n/{locale}.json`, not JSX.
-          // This keeps the source-of-truth English text intact. The atom
-          // update is mirrored so the canvas Renderer picks up the change
-          // immediately (it merges localeOverridesAtom into the rendered DOM).
-          if (!isDefaultLocale) {
-            trace.action('content-control:locale-updateText', {
-              nodeId: node.id, locale: activeLocale, newText: v,
-            });
-            setNodeOverride(activeLocale, activeFilePath, node.id, { text: v });
-            const next = new Map(localeOverrides);
-            const existing = next.get(node.id) || {};
-            next.set(node.id, { ...existing, text: v });
-            setLocaleOverrides(next);
-            return;
-          }
-          // TRANSLATED NODE: the words live in `messages/{locale}.json` and
-          // the JSX carries `{t('key')}`. Every JSX write path below is wrong
-          // here — `updateText` finds no JSXText to replace and APPENDS one
-          // beside the surviving t() call, so the element would render its
-          // translation AND the typed text. Route to the message store, which
-          // is what the canvas text editor already does for this exact case
-          // (CanvasTextEditController's default-locale branch).
-          if (translated.isTranslated) {
-            const defaultLocale = i18nConfig?.defaultLocale ?? 'en';
-            trace.action('content-control:updateTranslationText', {
-              nodeId: textNode!.id, locale: activeLocale, defaultLocale, newText: v,
-            });
-            commitTranslationText({
-              filePath: activeFilePath,
-              nodeId: textNode!.id,
-              locale: activeLocale,
-              defaultLocale,
-              text: v,
-            });
-            // Mirror into the override atom so the canvas repaints now.
-            // messages/*.json sits OUTSIDE the parse→render loop — the JSX did
-            // not change, so nothing else would repaint this node.
-            const next = new Map(localeOverrides);
-            const existing = next.get(textNode!.id) || {};
-            next.set(textNode!.id, { ...existing, text: v });
-            setLocaleOverrides(next);
-            return;
-          }
-          // Per-variant text on a component master: edit on a non-
-          // primary variant goes to the matching ternary branch via
-          // `updateVariantText`. If the node doesn't have a variant
-          // ternary yet, the generator wraps the JSX text into one.
-          // Same routing rule as variant style writes.
-          //
-          // EXCEPT when the node is solo on this variant
-          // (`data-replica-solo` set): fall through to the plain
-          // `updateText` path below so the master baseline text
-          // carries what the user typed. Same contract as the
-          // TipTap commit path — solo nodes build the master
-          // values, not per-variant overrides.
-          // Per-variant CMS override: editing the literal stays a per-variant override
-          // (preserves the base item.field binding on other variants).
-          if (isOnNonPrimaryVariant && variantCmsEntry && cmsBinding) {
-            trace.action('content-control:updateVariantCmsText', { nodeId: node.id, variantName: variantKey, newText: v });
-            queueMutation({ type: 'setVariantCmsText', nodeId: node.id, variantName: variantKey, itemVar: cmsBinding.itemVar, override: { kind: 'literal', value: v } });
-            return;
-          }
-          const isSoloOnVariant = !!node.attrs?.['data-replica-solo'];
-          // Route through updateVariantText for a non-primary variant OR whenever the node ALREADY has a
-          // per-variant ternary — including the PRIMARY (variantKey='default' → edits the fallback only).
-          // Plain `updateText` would replace the whole child, wiping the ternary + every variant's binding,
-          // which is why typing on the primary "did nothing" / lost the variable.
-          const hasVariantTernary = isOnComponentMaster && !!node.conditionalText;
-          if (!isSoloOnVariant && (isOnNonPrimaryVariant || hasVariantTernary)) {
-            trace.action('content-control:updateVariantText', {
-              nodeId: node.id, variantName: variantKey, newText: v,
-            });
-            queueMutation({
-              type: 'updateVariantText',
-              nodeId: node.id,
-              variantName: variantKey,
-              text: v,
-            });
-            return;
-          }
+      <div className="flex items-center gap-1.5 w-full min-w-0">
+        <div className="flex-1 min-w-0">
+          <ToolInput
+            value={displayValue}
+            onChange={(v) => {
+              if (!node) return;
+              // Locale routing: when the user is on a non-default locale, the
+              // edit is a translation — write to `i18n/{locale}.json`, not JSX.
+              // This keeps the source-of-truth English text intact. The atom
+              // update is mirrored so the canvas Renderer picks up the change
+              // immediately (it merges localeOverridesAtom into the rendered DOM).
+              if (!isDefaultLocale) {
+                trace.action('content-control:locale-updateText', {
+                  nodeId: node.id, locale: activeLocale, newText: v,
+                });
+                setNodeOverride(activeLocale, activeFilePath, node.id, { text: v });
+                const next = new Map(localeOverrides);
+                const existing = next.get(node.id) || {};
+                next.set(node.id, { ...existing, text: v });
+                setLocaleOverrides(next);
+                return;
+              }
+              // TRANSLATED NODE: the words live in `messages/{locale}.json` and
+              // the JSX carries `{t('key')}`. Every JSX write path below is wrong
+              // here — `updateText` finds no JSXText to replace and APPENDS one
+              // beside the surviving t() call, so the element would render its
+              // translation AND the typed text. Route to the message store, which
+              // is what the canvas text editor already does for this exact case
+              // (CanvasTextEditController's default-locale branch).
+              if (translated.isTranslated) {
+                const defaultLocale = i18nConfig?.defaultLocale ?? 'en';
+                trace.action('content-control:updateTranslationText', {
+                  nodeId: textNode!.id, locale: activeLocale, defaultLocale, newText: v,
+                });
+                commitTranslationText({
+                  filePath: activeFilePath,
+                  nodeId: textNode!.id,
+                  locale: activeLocale,
+                  defaultLocale,
+                  text: v,
+                });
+                // Mirror into the override atom so the canvas repaints now.
+                // messages/*.json sits OUTSIDE the parse→render loop — the JSX did
+                // not change, so nothing else would repaint this node.
+                const next = new Map(localeOverrides);
+                const existing = next.get(textNode!.id) || {};
+                next.set(textNode!.id, { ...existing, text: v });
+                setLocaleOverrides(next);
+                return;
+              }
+              // Per-variant text on a component master: edit on a non-
+              // primary variant goes to the matching ternary branch via
+              // `updateVariantText`. If the node doesn't have a variant
+              // ternary yet, the generator wraps the JSX text into one.
+              // Same routing rule as variant style writes.
+              //
+              // EXCEPT when the node is solo on this variant
+              // (`data-replica-solo` set): fall through to the plain
+              // `updateText` path below so the master baseline text
+              // carries what the user typed. Same contract as the
+              // TipTap commit path — solo nodes build the master
+              // values, not per-variant overrides.
+              // Per-variant CMS override: editing the literal stays a per-variant override
+              // (preserves the base item.field binding on other variants).
+              if (isOnNonPrimaryVariant && variantCmsEntry && cmsBinding) {
+                trace.action('content-control:updateVariantCmsText', { nodeId: node.id, variantName: variantKey, newText: v });
+                queueMutation({ type: 'setVariantCmsText', nodeId: node.id, variantName: variantKey, itemVar: cmsBinding.itemVar, override: { kind: 'literal', value: v } });
+                return;
+              }
+              const isSoloOnVariant = !!node.attrs?.['data-replica-solo'];
+              // Route through updateVariantText for a non-primary variant OR whenever the node ALREADY has a
+              // per-variant ternary — including the PRIMARY (variantKey='default' → edits the fallback only).
+              // Plain `updateText` would replace the whole child, wiping the ternary + every variant's binding,
+              // which is why typing on the primary "did nothing" / lost the variable.
+              const hasVariantTernary = isOnComponentMaster && !!node.conditionalText;
+              if (!isSoloOnVariant && (isOnNonPrimaryVariant || hasVariantTernary)) {
+                trace.action('content-control:updateVariantText', {
+                  nodeId: node.id, variantName: variantKey, newText: v,
+                });
+                queueMutation({
+                  type: 'updateVariantText',
+                  nodeId: node.id,
+                  variantName: variantKey,
+                  text: v,
+                });
+                return;
+              }
 
-          // Solo-replica redirect: a node carrying
-          // `data-replica-solo="<vpId>"` was born on this replica only
-          // (canvas-node drop / creator / dblclick-empty-frame). The
-          // contract is "every edit during solo builds the MASTER" —
-          // text content included. Bypass the `useResponsiveText`
-          // per-vp routing and write to base text directly, so future
-          // unhide on other vps inherits the typed text for free.
-          const isSoloRedirect = !!node.attrs?.['data-replica-solo'];
+              // Solo-replica redirect: a node carrying
+              // `data-replica-solo="<vpId>"` was born on this replica only
+              // (canvas-node drop / creator / dblclick-empty-frame). The
+              // contract is "every edit during solo builds the MASTER" —
+              // text content included. Bypass the `useResponsiveText`
+              // per-vp routing and write to base text directly, so future
+              // unhide on other vps inherits the typed text for free.
+              const isSoloRedirect = !!node.attrs?.['data-replica-solo'];
 
-          // Responsive routing: edit on a non-primary viewport (or any edit
-          // when overrides already exist) goes through `updateTextOverride`
-          // so the right `useResponsiveText` slot is updated. Otherwise the
-          // plain `updateText` path keeps simple text elements clean.
-          if (!isSoloRedirect && (isNonPrimaryVp || hasAnyOverrides)) {
-            trace.action('content-control:updateTextOverride', {
-              nodeId: textNode!.id, vpWidth: interactingWidth, primaryWidth, newText: v,
-            });
-            queueMutation({
-              type: 'updateTextOverride',
-              nodeId: textNode!.id,
-              vpWidth: interactingWidth,
-              primaryWidth,
-              text: v,
-            });
-          } else {
-            // node is non-null here (guarded above) → textNode (= inner FIT text ?? node) is too.
-            trace.action('content-control:updateText', { nodeId: textNode!.id, newText: v, soloRedirect: isSoloRedirect });
-            queueMutation({ type: 'updateText', nodeId: textNode!.id, text: v });
+              // Responsive routing: edit on a non-primary viewport (or any edit
+              // when overrides already exist) goes through `updateTextOverride`
+              // so the right `useResponsiveText` slot is updated. Otherwise the
+              // plain `updateText` path keeps simple text elements clean.
+              if (!isSoloRedirect && (isNonPrimaryVp || hasAnyOverrides)) {
+                trace.action('content-control:updateTextOverride', {
+                  nodeId: textNode!.id, vpWidth: interactingWidth, primaryWidth, newText: v,
+                });
+                queueMutation({
+                  type: 'updateTextOverride',
+                  nodeId: textNode!.id,
+                  vpWidth: interactingWidth,
+                  primaryWidth,
+                  text: v,
+                });
+              } else {
+                // node is non-null here (guarded above) → textNode (= inner FIT text ?? node) is too.
+                trace.action('content-control:updateText', { nodeId: textNode!.id, newText: v, soloRedirect: isSoloRedirect });
+                queueMutation({ type: 'updateText', nodeId: textNode!.id, text: v });
+              }
+            }}
+            text
+            disabled={text.isEditing}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpressionOpen(true)}
+          title="Dynamic Expression (Formula)"
+          className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+        >
+          fx
+        </button>
+      </div>
+      <ExpressionEditorPopup
+        isOpen={expressionOpen}
+        onClose={() => setExpressionOpen(false)}
+        onApply={(expr) => {
+          if (textNode) {
+            queueMutation({ type: 'bindTextExpression', nodeId: textNode.id, expression: expr });
           }
         }}
-        text
-        disabled={text.isEditing}
+        initialExpression=""
+        targetProperty="text"
+        collectionSlug={cmsBinding?.slug}
+        itemVar={cmsBinding?.itemVar}
+        fields={cmsBinding?.fields}
       />
     </div>
   );

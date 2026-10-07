@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getEnclosingMapParamsForNode,
+  ensureEnclosingMapIndexParamInCode,
   bindPropToMapInCode,
   unbindPropFromMapInCode,
   bindToCmsCollectionInCode,
@@ -43,6 +44,33 @@ describe('getEnclosingMapParamsForNode', () => {
   it('null when the node is outside any .map()', () => {
     const code = `<Card data-id="card" title="x" />`;
     expect(getEnclosingMapParamsForNode(code, 'card')).toBeNull();
+  });
+});
+
+describe('ensureEnclosingMapIndexParamInCode', () => {
+  it('keeps existing indexVar if already present', () => {
+    const code = `{works.map((item, idx) => <Card data-id="card" key={idx} />)}`;
+    const res = ensureEnclosingMapIndexParamInCode(code, 'card');
+    expect(res).toEqual({ code, indexVar: 'idx' });
+  });
+
+  it('injects index param for single-param bare arrow: item =>', () => {
+    const code = `{works.map(item => <Card data-id="card" />)}`;
+    const res = ensureEnclosingMapIndexParamInCode(code, 'card');
+    expect(res?.indexVar).toBe('index');
+    expect(res?.code).toBe('{works.map((item, index) => <Card data-id="card" />)}');
+  });
+
+  it('injects index param for single-param parenthesized arrow: (item) =>', () => {
+    const code = `{works.map((item) => <Card data-id="card" />)}`;
+    const res = ensureEnclosingMapIndexParamInCode(code, 'card');
+    expect(res?.indexVar).toBe('index');
+    expect(res?.code).toBe('{works.map((item, index) => <Card data-id="card" />)}');
+  });
+
+  it('returns null if node is not inside any .map()', () => {
+    const code = `<Card data-id="card" />`;
+    expect(ensureEnclosingMapIndexParamInCode(code, 'card')).toBeNull();
   });
 });
 

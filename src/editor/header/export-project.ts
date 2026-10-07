@@ -58,6 +58,22 @@ function download(bytes: Uint8Array<ArrayBuffer> | Blob, filename: string): void
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+export function extractUploadFilenames(files: Iterable<string>): string[] {
+  const filenames = new Set<string>();
+  const regex = /(?:\/api)?\/uploads\/([a-zA-Z0-9_.-]+)/g;
+  for (const text of files) {
+    if (!text || typeof text !== 'string') continue;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      if (m[1]) {
+        const safeName = m[1].split('?')[0].split('#')[0];
+        filenames.add(safeName);
+      }
+    }
+  }
+  return Array.from(filenames);
+}
+
 /** Standalone: MAIN's files (what publishes — never a branch), as a
  *  runnable Next.js project, zipped here and downloaded. */
 async function exportSourceInBrowser(): Promise<boolean> {
@@ -67,12 +83,45 @@ async function exportSourceInBrowser(): Promise<boolean> {
   const name = getDefaultStore().get(projectNameAtom) || null;
   trace.action('export-project:local-start', { files: main.size });
   const built = await buildSourceExport(Object.fromEntries(main), { name, runtimeRange: runtimeRange() });
-  const zip = await buildZip(Object.entries(built.files).map(([path, data]) => ({ path, data })));
+
+  // Gather referenced upload assets and fetch binary data to bundle into public/api/uploads and public/uploads
+  const uploadFiles = extractUploadFilenames(main.values());
+  const uploadEntries: { path: string; data: Uint8Array }[] = [];
+  if (uploadFiles.length > 0) {
+    await Promise.all(
+      uploadFiles.map(async (filename) => {
+        try {
+          const res = await fetch(`/api/uploads/${encodeURIComponent(filename)}`);
+          if (res.ok) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            uploadEntries.push({ path: `public/api/uploads/${filename}`, data: buf });
+            uploadEntries.push({ path: `public/uploads/${filename}`, data: buf });
+          }
+        } catch {
+          // ignore individual fetch errors
+        }
+      })
+    );
+  }
+
+  const zipEntries = [
+    ...Object.entries(built.files).map(([path, data]) => ({ path, data })),
+    ...uploadEntries,
+  ];
+
+  const zip = await buildZip(zipEntries);
   download(zip, built.filename);
   if (built.failed.length > 0) {
     toast(`${built.failed.length} marketplace component${built.failed.length === 1 ? '' : 's'} couldn’t be downloaded — ${built.failed.length === 1 ? 'it stays' : 'they stay'} imported by URL.`);
   }
-  trace.action('export-project:local-success', { filename: built.filename, files: Object.keys(built.files).length, bytes: zip.length, localized: built.downloaded.length, failed: built.failed.length });
+  trace.action('export-project:local-success', {
+    filename: built.filename,
+    files: Object.keys(built.files).length,
+    assets: uploadEntries.length,
+    bytes: zip.length,
+    localized: built.downloaded.length,
+    failed: built.failed.length,
+  });
   return true;
 }
 

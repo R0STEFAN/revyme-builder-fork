@@ -29,7 +29,7 @@ const INLINE_TAGS = new Set(['span', 'strong', 'em', 'br', 'a', 'u', 's', 'mark'
 // data-glide, …) so a declarative Loop's marker survives copy/paste — the
 // paste engine re-emits attrs from the parsed node, and anything missing
 // here silently vanishes from the pasted copy.
-const PARSED_HTML_ATTRS = ['id', 'src', 'alt', 'href', 'target', 'rel', 'type', 'placeholder', 'aria-label', 'role', 'aria-hidden', 'tabindex', 'data-overlay', 'data-overlay-trigger', 'data-smooth-scroll', 'data-keep-params', 'data-sketch', 'data-revyme-track', 'data-slot-pos', 'data-pinned', 'data-replica-solo', 'data-alt-duplicate', 'data-scroll-fx', 'data-glide', 'data-loop', 'poster', 'controls', 'autoplay', 'loop', 'muted', 'preload',
+const PARSED_HTML_ATTRS = ['id', 'src', 'alt', 'href', 'target', 'rel', 'type', 'placeholder', 'aria-label', 'role', 'aria-hidden', 'tabindex', 'data-overlay', 'data-overlay-trigger', 'data-smooth-scroll', 'data-keep-params', 'data-sketch', 'data-revyme-track', 'data-slot-pos', 'data-pinned', 'data-replica-solo', 'data-alt-duplicate', 'data-scroll-fx', 'data-glide', 'data-loop', 'data-stagger', 'poster', 'controls', 'autoplay', 'loop', 'muted', 'preload',
   // Form controls (input/textarea/select/option/button) + the <form> itself.
   // React JSX names (camelCase) so the generated .tsx is React-correct.
   // Also captured on CANVAS nodes: a form/search input dragged or pasted onto
@@ -158,6 +158,10 @@ export interface CanvasNode {
    */
   attrTranslationKeys?: Record<string, string>;
   attrs: Record<string, string>; // src, alt, href, etc.
+  /** Dynamic JS expression driving text content (e.g. `item.name + " in " + item.city`). */
+  textExpression?: string;
+  /** Dynamic JS expression driving href (e.g. `"/gallery/" + item.slug`). */
+  hrefExpression?: string;
   textContent: string;
   hasMixedContent: boolean; // true if textContent contains inline HTML (spans, br, strong, etc.)
   /**
@@ -425,6 +429,7 @@ export interface CanvasNode {
   collectionList?: {
     source: string;           // CMS slug ('team')
     itemVar: string;          // .map() parameter name ('item', 'post', etc.)
+    indexVar?: string | null; // .map() index parameter name ('idx', 'index', etc.)
     templateIds: Record<string, string>;  // layout ID → data-id of template node
     /** Parsed from `slug.filter(item => ...).map(...)` — null when no .filter(). */
     filterGroup?: import('@/shared/types').FilterGroup | null;
@@ -2062,6 +2067,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         let textIsLiteral = false;
         let binding: CanvasNode['binding'] | undefined;
         let textVariable: string | undefined;
+        let textExpression: string | undefined;
         let translationKey: string | undefined;
         // RICH translation shape: `dangerouslySetInnerHTML={{ __html: <hook>.raw('key') }}`
         // on a text tag (no children). The key is the message; the value is
@@ -2257,12 +2263,22 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
               trace.action('parser:conditional-text', { nodeId: id, literals: Object.keys(g.literals), vars: Object.keys(g.vars), rich: Object.keys(g.richs) });
             }
           }
+          // Detect dynamic text expressions (e.g. `item.name + " in " + item.city`, template literals, params.*)
+          if (!variantBindings?.text && !responsiveTextValues && !conditionalText && !binding && !textVariable && !translationKey
+              && child.type === 'JSXExpressionContainer' && child.expression.type !== 'JSXEmptyExpression') {
+            const expr = child.expression as any;
+            if (expr.type !== 'StringLiteral' && expr.start != null && expr.end != null) {
+              textExpression = code.slice(expr.start, expr.end);
+              trace.action('parser:text-expression', { nodeId: id, textExpression });
+            }
+          }
         }
 
         // Detect CMS attribute bindings: src={item.photo}, href={item.link}, alt={item.alt}
         // Multiple bindings supported: text binding goes in `binding`, attribute bindings
         // go in `attrBindings` array so src + alt can coexist.
         const attrBindings: Array<{ field: string; property: 'src' | 'href' | 'alt' }> = [];
+        let hrefExpression: string | undefined;
         if (activeCtx) {
           const bindableAttrs: Array<{ attr: string; prop: 'src' | 'href' | 'alt' }> = [
             { attr: 'src', prop: 'src' },
@@ -2283,6 +2299,21 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
                   binding = { field: a.value.expression.property.name, property: prop };
                 }
                 trace.action('parser:cms-attr-binding', { nodeId: id, field: a.value.expression.property.name, property: prop, itemVar: activeCtx.itemVar });
+              }
+            }
+          }
+        }
+        // Detect general dynamic href expressions (e.g. `"/gallery/" + item.slug` or template literals)
+        for (const a of (opening.attributes as any[])) {
+          if (a.type === 'JSXAttribute' && a.name?.name === 'href') {
+            if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+              const expr = a.value.expression as any;
+              const isSimpleCmsField = activeCtx && expr.type === 'MemberExpression'
+                && expr.object?.type === 'Identifier' && expr.object.name === activeCtx.itemVar
+                && expr.property?.type === 'Identifier';
+              if (!isSimpleCmsField && expr.start != null && expr.end != null) {
+                hrefExpression = code.slice(expr.start, expr.end);
+                trace.action('parser:href-expression', { nodeId: id, hrefExpression });
               }
             }
           }
@@ -2467,6 +2498,8 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         // marker; the post-resolve pass below substitutes the default text
         // into node.textContent once we have the function param defaults.
         if (textVariable) node.textVariable = textVariable;
+        if (textExpression) node.textExpression = textExpression;
+        if (hrefExpression) node.hrefExpression = hrefExpression;
         if (translationKey) node.translationKey = translationKey;
         if (richTranslation) node.richTranslation = true;
         if (formattedTextVariable) node.formattedTextVariable = true;
@@ -2686,11 +2719,12 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         const params = callback.params;
         if (!params || params.length < 1 || params[0].type !== 'Identifier') return;
         const itemVar = params[0].name;
+        const indexVar = (params.length > 1 && params[1].type === 'Identifier') ? params[1].name : null;
 
         // Determine source string
         const source = cmsSlug;
 
-        trace.action('parser:map-detected', { sourceVar: sourceVarName, source, itemVar });
+        trace.action('parser:map-detected', { sourceVar: sourceVarName, source, itemVar, indexVar });
 
         // Push collection context so nested JSXElements get isCollectionTemplate + binding detection
         ctx.collectionContextStack.push({ itemVar, source });
@@ -2726,6 +2760,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
               parentNode.collectionList = {
                 source,
                 itemVar,
+                indexVar,
                 templateIds,
                 filterGroup: parsedFilter,
                 sort: parsedSort,
@@ -2736,7 +2771,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
                 variantConfigs: responsiveCfg ? responsiveCfg.variants : null,
               };
               // For inline arrays, store the actual data on the parent node
-              trace.action('parser:collectionList-set', { parentId: parentDataId, source, itemVar, templateIds });
+              trace.action('parser:collectionList-set', { parentId: parentDataId, source, itemVar, indexVar, templateIds });
               // Stop ONLY once the REAL container is found. Glide ("Flow") and
               // motion inject TRANSPARENT wrapper JSXElements around a .map() —
               // <LayoutGroup>, <motion.div data-glide>, <AnimatePresence> — that
@@ -3704,6 +3739,7 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
   // day comparison), `String(X).toLowerCase()` → X, `X.toLowerCase()` → X, and
   // `String(X)` → X. Leaves a bare `item.field` / string-literal underneath.
   const unwrapStringCoerce = (n: any): any => {
+    while (n?.type === 'ParenthesizedExpression') n = n.expression;
     // Date-day: `String(item.field).slice(0, 10)` → `String(item.field)`.
     if (n?.type === 'CallExpression' && n.callee?.type === 'MemberExpression'
       && n.callee.property?.type === 'Identifier' && n.callee.property.name === 'slice') {
@@ -3716,104 +3752,262 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
     if (n?.type === 'CallExpression' && n.callee?.type === 'Identifier' && n.callee.name === 'String') {
       n = n.arguments?.[0];
     }
+    while (n?.type === 'ParenthesizedExpression') n = n.expression;
     return n;
   };
 
+  function extractParamSubpath(body: any, paramName: string): string | null {
+    let sub: string | null = null;
+    function walk(node: any) {
+      if (!node || sub) return;
+      let n = unwrapStringCoerce(node);
+      if (!n) return;
+      if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') {
+        const parts: string[] = [];
+        let cur = n;
+        while (cur && (cur.type === 'MemberExpression' || cur.type === 'OptionalMemberExpression')) {
+          if (cur.property?.type === 'Identifier') {
+            parts.unshift(cur.property.name);
+          }
+          cur = cur.object;
+        }
+        if (cur && cur.type === 'Identifier' && cur.name === paramName && parts.length > 0) {
+          sub = parts.join('.');
+          return;
+        }
+      }
+      if (Array.isArray(n)) {
+        for (const item of n) walk(item);
+        return;
+      }
+      if (n.body) {
+        if (Array.isArray(n.body)) for (const b of n.body) walk(b);
+        else walk(n.body);
+      }
+      if (n.declarations) {
+        for (const d of n.declarations) walk(d.init);
+      }
+      if (n.expression) walk(n.expression);
+      if (n.left) walk(n.left);
+      if (n.right) walk(n.right);
+      if (n.test) walk(n.test);
+      if (n.consequent) walk(n.consequent);
+      if (n.alternate) walk(n.alternate);
+      if (n.callee) walk(n.callee);
+      if (n.argument) walk(n.argument);
+      if (n.arguments) {
+        for (const a of n.arguments) walk(a);
+      }
+    }
+    walk(body);
+    return sub;
+  }
+
+  function extractFieldPathFromNode(node: any): string | null {
+    let n = unwrapStringCoerce(node);
+    if (!n) return null;
+
+    if (n.type === 'BinaryExpression') {
+      return extractFieldPathFromNode(n.left);
+    }
+
+    if (n.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && n.callee.property?.name === 'some') {
+      const root = extractFieldPathFromNode(n.callee.object);
+      const callback = n.arguments?.[0];
+      const paramName = callback?.params?.[0]?.name;
+      if (root && paramName && callback.body) {
+        const subPath = extractParamSubpath(callback.body, paramName);
+        if (subPath) return `${root}.${subPath}`;
+      }
+      return root;
+    }
+
+    const parts: string[] = [];
+    let cur = n;
+    while (cur && (cur.type === 'MemberExpression' || cur.type === 'OptionalMemberExpression')) {
+      if (cur.property?.type === 'Identifier') {
+        parts.unshift(cur.property.name);
+      }
+      cur = cur.object;
+    }
+    if (cur && cur.type === 'Identifier' && cur.name === 'item' && parts.length > 0) {
+      return parts.join('.');
+    }
+    return null;
+  }
+
   function parseComparison(node: any): import('@/shared/types').FilterConfig | null {
-    if (!node) return null;
-    // .includes(...) / !.includes(...) for contains / not_contains. The generator
-    // now emits a CASE-INSENSITIVE shape: `String(item.field).toLowerCase()
-    // .includes(String("v").toLowerCase())` — unwrap toLowerCase()/String() on
-    // BOTH the field and the value (back-compat: also reads the old bare form).
-    if (node.type === 'CallExpression'
-      && node.callee?.type === 'MemberExpression'
-      && node.callee.property?.type === 'Identifier'
-      && node.callee.property.name === 'includes') {
-      const fieldNode = unwrapStringCoerce(node.callee.object);
-      if (fieldNode?.type === 'MemberExpression' && fieldNode.property?.type === 'Identifier') {
-        const field = fieldNode.property.name;
-        const v = unwrapStringCoerce(node.arguments?.[0]);
-        const value = v?.type === 'StringLiteral' || v?.type === 'NumericLiteral' ? v.value : '';
+    let n = unwrapStringCoerce(node);
+    if (!n) return null;
+
+    // Check ternary / ConditionalExpression: Array.isArray(item.F) ? item.F.some(...) : ...
+    if (n.type === 'ConditionalExpression') {
+      const altResult = parseComparison(n.alternate);
+      if (altResult) {
+        return altResult;
+      }
+      let field: string | null = null;
+      let operator: import('@/shared/types').FilterConfig['operator'] = 'equals';
+      let value: any = '';
+
+      if (n.consequent) {
+        field = extractFieldPathFromNode(n.consequent);
+        if (n.consequent.type === 'UnaryExpression' && n.consequent.operator === '!') {
+          operator = 'not_equals';
+        }
+      }
+      if (!field && n.test?.type === 'CallExpression' && n.test.callee?.type === 'MemberExpression' && n.test.callee.property?.name === 'isArray') {
+        field = extractFieldPathFromNode(n.test.arguments?.[0]);
+      }
+      if (field) {
+        return { field, operator, value };
+      }
+    }
+
+    // .includes(...) / !.includes(...) for contains / not_contains
+    if (n.type === 'CallExpression'
+      && n.callee?.type === 'MemberExpression'
+      && n.callee.property?.type === 'Identifier'
+      && n.callee.property.name === 'includes') {
+      const field = extractFieldPathFromNode(n.callee.object);
+      if (field) {
+        const v = unwrapStringCoerce(n.arguments?.[0]);
+        const value = (v?.type === 'StringLiteral' || v?.type === 'NumericLiteral' || v?.type === 'BooleanLiteral') ? v.value : '';
         return { field, operator: 'contains', value };
       }
     }
-    if (node.type === 'UnaryExpression' && node.operator === '!') {
-      const inner = parseComparison(node.argument);
+    if (n.type === 'UnaryExpression' && n.operator === '!') {
+      const inner = parseComparison(n.argument);
       if (inner?.operator === 'contains') return { ...inner, operator: 'not_contains' };
       if (inner?.operator === 'equals') return { ...inner, operator: 'not_equals' };
       if (inner?.operator === 'exists') return { ...inner, operator: 'exists', value: false };
       return null;
     }
-    if (node.type === 'BinaryExpression') {
-      // Unwrap a date-day LHS (`String(item.field).slice(0, 10) === "2026-06-15"`)
-      // back to the bare member so the date filter round-trips like any other.
-      const left = unwrapStringCoerce(node.left);
-      if (left?.type !== 'MemberExpression' || left.property?.type !== 'Identifier') return null;
-      const field = left.property.name;
-      const v = node.right;
-      const value = v?.type === 'StringLiteral' || v?.type === 'NumericLiteral' ? v.value
-        : v?.type === 'BooleanLiteral' ? v.value
-        : '';
+    if (n.type === 'BinaryExpression') {
+      const field = extractFieldPathFromNode(n.left);
+      if (!field) return null;
+      const v = unwrapStringCoerce(n.right);
+      const value = (v?.type === 'StringLiteral' || v?.type === 'NumericLiteral' || v?.type === 'BooleanLiteral') ? v.value : '';
       const opMap: Record<string, import('@/shared/types').FilterConfig['operator']> = {
         '===': 'equals', '==': 'equals',
         '!==': 'not_equals', '!=': 'not_equals',
         '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte',
       };
-      const op = opMap[node.operator];
+      const op = opMap[n.operator];
       if (!op) return null;
       return { field, operator: op, value };
     }
     return null;
   }
 
-  // `between` = `(item.F >= lo && item.F <= hi)` — an `&&` of two comparisons on
-  // the SAME field. Must be recognized as ONE filter BEFORE `&&` is treated as a
-  // combinator (else it splits into two gt/lt filters).
+  // `between` = `(item.F >= lo && item.F <= hi)`
   function tryParseBetween(node: any): import('@/shared/types').FilterConfig | null {
-    if (node?.type !== 'LogicalExpression' || node.operator !== '&&') return null;
-    const L = node.left, R = node.right;
+    let n = unwrapStringCoerce(node);
+    if (n?.type !== 'LogicalExpression' || n.operator !== '&&') return null;
+    const L = unwrapStringCoerce(n.left), R = unwrapStringCoerce(n.right);
     if (L?.type !== 'BinaryExpression' || R?.type !== 'BinaryExpression') return null;
     if (L.operator !== '>=' || R.operator !== '<=') return null;
-    // Unwrap a date-day LHS (`String(item.field).slice(0,10)`) so a date `between` round-trips.
-    const fieldOf = (n: any) => { const m = unwrapStringCoerce(n?.left); return m?.type === 'MemberExpression' && m.property?.type === 'Identifier' ? m.property.name : null; };
-    const lf = fieldOf(L), rf = fieldOf(R);
+    const lf = extractFieldPathFromNode(L.left);
+    const rf = extractFieldPathFromNode(R.left);
     if (!lf || lf !== rf) return null;
-    const lit = (n: any) => (n?.type === 'NumericLiteral' || n?.type === 'StringLiteral') ? n.value : undefined;
+    const lit = (x: any) => (x?.type === 'NumericLiteral' || x?.type === 'StringLiteral') ? x.value : undefined;
     const lo = lit(L.right), hi = lit(R.right);
     if (lo === undefined || hi === undefined) return null;
     return { field: lf, operator: 'between', value: [lo, hi] };
   }
 
-  // Dynamic-value filters (Phase 4) are guarded `||` predicates — must be matched
-  // as ONE filter BEFORE `||` is treated as the combinator:
-  //   search: `(var === '' || String(item.F).toLowerCase().includes(var.toLowerCase()))`
-  //   date:   `(!var || item.F >= var)`
   function fieldFromIncludes(call: any): string | null {
-    if (call?.type !== 'CallExpression' || call.callee?.type !== 'MemberExpression'
-      || call.callee.property?.name !== 'includes') return null;
-    let obj = call.callee.object;
+    let n = unwrapStringCoerce(call);
+    if (n?.type !== 'CallExpression' || n.callee?.type !== 'MemberExpression'
+      || n.callee.property?.name !== 'includes') return null;
+    let obj = n.callee.object;
     if (obj?.type === 'CallExpression' && obj.callee?.type === 'MemberExpression' && obj.callee.property?.name === 'toLowerCase') obj = obj.callee.object;
     if (obj?.type === 'CallExpression' && obj.callee?.type === 'Identifier' && obj.callee.name === 'String') obj = obj.arguments?.[0];
-    return obj?.type === 'MemberExpression' && obj.property?.type === 'Identifier' ? obj.property.name : null;
+    return extractFieldPathFromNode(obj);
+  }
+  function paramNameFromNode(node: any): string | null {
+    const n = unwrapStringCoerce(node);
+    if (n?.type === 'OptionalMemberExpression' || n?.type === 'MemberExpression') {
+      if (n.object?.type === 'Identifier' && n.object.name === 'params' && n.property?.type === 'Identifier') {
+        return n.property.name;
+      }
+    }
+    return null;
   }
   function tryParseDynamic(node: any): import('@/shared/types').FilterConfig | null {
-    if (node?.type !== 'LogicalExpression' || node.operator !== '||') return null;
-    const L = node.left, R = node.right;
+    let n = unwrapStringCoerce(node);
+    if (n?.type !== 'LogicalExpression' || n.operator !== '||') return null;
+    const L = unwrapStringCoerce(n.left), R = unwrapStringCoerce(n.right);
     // search field
     if (L?.type === 'BinaryExpression' && (L.operator === '===' || L.operator === '==')
       && L.left?.type === 'Identifier' && L.right?.type === 'StringLiteral' && L.right.value === '') {
-      const field = fieldFromIncludes(R);
+      let field: string | null = null;
+      if (R?.type === 'ConditionalExpression') {
+        const alt = parseComparison(R.alternate);
+        if (alt) field = alt.field;
+        if (!field && R.consequent) {
+          field = extractFieldPathFromNode(R.consequent);
+        }
+        if (!field && R.test?.type === 'CallExpression' && R.test.callee?.type === 'MemberExpression' && R.test.callee.property?.name === 'isArray') {
+          field = extractFieldPathFromNode(R.test.arguments?.[0]);
+        }
+      }
+      if (!field) field = fieldFromIncludes(R);
       if (field) return { field, operator: 'contains', value: '', valueSource: 'searchField', valueVar: L.left.name };
     }
     // date field
     if (L?.type === 'UnaryExpression' && L.operator === '!' && L.argument?.type === 'Identifier'
       && R?.type === 'BinaryExpression' && R.operator === '>='
-      && R.left?.type === 'MemberExpression' && R.left.property?.type === 'Identifier'
       && R.right?.type === 'Identifier' && R.right.name === L.argument.name) {
-      return { field: R.left.property.name, operator: 'gte', value: '', valueSource: 'dateField', valueVar: L.argument.name };
+      const field = extractFieldPathFromNode(R.left);
+      if (field) return { field, operator: 'gte', value: '', valueSource: 'dateField', valueVar: L.argument.name };
+    }
+    // route param field
+    if (L?.type === 'UnaryExpression' && L.operator === '!') {
+      const paramName = paramNameFromNode(L.argument);
+      if (paramName) {
+        // 1. Ternary ConditionalExpression
+        if (R?.type === 'ConditionalExpression') {
+          const altParsed = parseComparison(R.alternate);
+          if (altParsed) {
+            return { field: altParsed.field, operator: altParsed.operator, value: '', valueSource: 'routeParam', valueVar: paramName };
+          }
+          let field: string | null = null;
+          let operator: import('@/shared/types').FilterConfig['operator'] = 'equals';
+          if (R.consequent) {
+            field = extractFieldPathFromNode(R.consequent);
+            if (R.consequent.type === 'UnaryExpression' && R.consequent.operator === '!') {
+              operator = 'not_equals';
+            }
+          }
+          if (!field && R.test?.type === 'CallExpression' && R.test.callee?.type === 'MemberExpression' && R.test.callee.property?.name === 'isArray') {
+            field = extractFieldPathFromNode(R.test.arguments?.[0]);
+          }
+          if (field) {
+            return { field, operator, value: '', valueSource: 'routeParam', valueVar: paramName };
+          }
+        }
+        // 2. BinaryExpression
+        if (R?.type === 'BinaryExpression') {
+          const field = extractFieldPathFromNode(R.left);
+          const rightParam = paramNameFromNode(R.right);
+          if (field && (rightParam === paramName || !rightParam)) {
+            const operator = (R.operator === '!==' || R.operator === '!=') ? 'not_equals' : 'equals';
+            return { field, operator, value: '', valueSource: 'routeParam', valueVar: paramName };
+          }
+        }
+        // 3. CallExpression (.includes)
+        if (R?.type === 'CallExpression' && R.callee?.type === 'MemberExpression' && R.callee.property?.name === 'includes') {
+          const field = extractFieldPathFromNode(R.callee.object);
+          if (field) {
+            return { field, operator: 'contains', value: '', valueSource: 'routeParam', valueVar: paramName };
+          }
+        }
+      }
     }
     return null;
   }
+
 
   function flatten(node: any): boolean {
     const dynamic = tryParseDynamic(node);
@@ -3904,6 +4098,15 @@ function extractMotionProps(attrs: (JSXAttribute | any)[], ctx: ParseCtx): Canva
         // (updateMotionPropInCode emits 'Infinity' unquoted).
         else if (oprop.value.type === 'Identifier' && (oprop.value as any).name === 'Infinity') {
           out[key] = 'Infinity';
+        }
+        else if (oprop.value.type === 'BinaryExpression' && oprop.value.operator === '*') {
+          const left = oprop.value.left;
+          const right = oprop.value.right;
+          if (left.type === 'Identifier' && right.type === 'NumericLiteral') {
+            out[key] = `${left.name} * ${right.value}`;
+          } else if (left.type === 'NumericLiteral' && right.type === 'Identifier') {
+            out[key] = `${right.name} * ${left.value}`;
+          }
         }
       }
       return out;

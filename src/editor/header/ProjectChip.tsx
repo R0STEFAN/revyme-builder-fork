@@ -35,21 +35,18 @@ export default function ProjectChip() {
   const displayName = name || 'Untitled';
 
   // `getFileDisplayName` returns the full slug path for nested
-  // pages — e.g. `app/blog/post-1/page.tsx` → `/blog/post-1`. In
-  // this header slot we only have room for the leaf, so we show the
-  // last segment without a leading slash (the divider `/` between
-  // project and page already serves as the path delimiter). The
-  // full slug stays in the title tooltip for context.
+  // pages — e.g. `app/gallery/[category]/[place]/page.client.tsx` → `/gallery/[category]/[place]`.
+  // Show the path without leading slash so the breadcrumb displays the full hierarchy.
   const rawLabel = activeFilePath ? getFileDisplayName(activeFilePath) : '';
   let pageLabel = '';
   if (rawLabel === '/') {
     pageLabel = 'Home';
   } else if (rawLabel.startsWith('/')) {
-    const segments = rawLabel.split('/').filter(Boolean);
-    pageLabel = segments.length > 0 ? segments[segments.length - 1] : rawLabel;
+    pageLabel = rawLabel.replace(/^\//, '');
   } else {
     pageLabel = rawLabel;
   }
+
 
   // Tooltip shows the FULL slug so the user can still identify which
   // nested page they're on when the chip label has been truncated.

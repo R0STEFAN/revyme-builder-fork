@@ -20,8 +20,9 @@ import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor }
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
 import { hasMotionTransformProp, motionPropsToCSSTransform, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { simpleHash } from '@/shared/hash-utils';
-import { getOrCreateCanvasStyleEl, getActiveFilePath } from './node-ops';
-import { getCollectionData, getCollectionSchema } from '@/code/project/cms-ops';
+import { getOrCreateCanvasStyleEl, getActiveFilePath, getPreviewRouteParams } from './node-ops';
+
+import { getCollectionData, getCollectionSchema, listCollections } from '@/code/project/cms-ops';
 import { getLayoutForPage, getLayoutClientPath } from '@/code/project/active-file-store';
 import { projectFS } from '@/code/project/project-fs';
 import {
@@ -62,6 +63,32 @@ export function shouldUseInnerHTML(
   if (textIsLiteral) return false;
   return hasMixedContent || (childrenCount === 0 && textContent.includes('<'));
 }
+
+/**
+ * Safely evaluate a text expression in the canvas preview context (mocking params from route).
+ */
+export function evaluateCanvasTextExpression(expr: string): string {
+  if (!expr) return '';
+  try {
+    const activePath = getActiveFilePath() || '';
+    const matches = Array.from(activePath.matchAll(/\[([^/\]]+)\]/g));
+    const previewParams = getPreviewRouteParams();
+    const params: Record<string, string> = { ...previewParams };
+    for (const m of matches) {
+      const p = m[1];
+      if (params[p] === undefined || params[p] === '') {
+        params[p] = p === 'category' ? 'men' : p === 'place' || p === 'placement' ? 'chest' : p;
+      }
+    }
+    const fn = new Function('params', `try { return (${expr}); } catch(e) { return ''; }`);
+    const res = fn(params);
+    if (res !== undefined && res !== null && res !== '') return String(res);
+  } catch {
+    // fallback
+  }
+  return `{${expr}}`;
+}
+
 
 /**
  * Whether a PATCH should clear text the DOM still holds.
@@ -1773,46 +1800,204 @@ export function renderNodes(
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isDateVal = (v: any): boolean => typeof v === 'string' && DATE_ONLY_RE.test(v);
 
+/**
+ * Safely retrieve a deeply nested field value from a collection item or object.
+ * Supports dot paths like "categories_m2m.slug" or "placements_m2m.placements_id.slug",
+ * and automatically unwraps and aggregates array elements.
+ */
+export function getDeepFieldValue(item: any, fieldPath: string): any {
+  if (!item || !fieldPath) return undefined;
+  if (!fieldPath.includes('.')) {
+    const camel = fieldPath.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const snake = fieldPath.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+    return item[fieldPath] ?? item[camel] ?? item[snake];
+  }
+  const parts = fieldPath.split('.');
+  let current: any = item;
+  for (let i = 0; i < parts.length; i++) {
+    if (current === undefined || current === null) return undefined;
+    const part = parts[i];
+
+    // If current is a foreign key string / number, resolve it first
+    if (typeof current === 'string' || typeof current === 'number') {
+      const allSlugs = listCollections();
+      let foundMatched: any = null;
+      for (const s of allSlugs) {
+        const items = getCollectionData(s) || [];
+        const matched = items.find((it: any) =>
+          String(it._id) === String(current) ||
+          String(it.id) === String(current) ||
+          String(it._slug) === String(current) ||
+          String(it.slug) === String(current)
+        );
+        if (matched) {
+          foundMatched = matched;
+          break;
+        }
+      }
+      if (foundMatched) {
+        current = foundMatched;
+      }
+    }
+
+    if (Array.isArray(current)) {
+      const restPath = parts.slice(i).join('.');
+      const subVals = current
+        .map(elem => {
+          if (elem === undefined || elem === null) return undefined;
+          if (typeof elem === 'string' || typeof elem === 'number') {
+            const allSlugs = listCollections();
+            for (const s of allSlugs) {
+              const items = getCollectionData(s) || [];
+              const matched = items.find((it: any) =>
+                String(it._id) === String(elem) ||
+                String(it.id) === String(elem) ||
+                String(it._slug) === String(elem) ||
+                String(it.slug) === String(elem)
+              );
+              if (matched) {
+                return getDeepFieldValue(matched, restPath);
+              }
+            }
+          }
+          return getDeepFieldValue(elem, restPath);
+        })
+        .filter(v => v !== undefined && v !== null);
+      return subVals.flat();
+    }
+
+    const camel = part.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    const snake = part.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+    current = current[part] ?? current[camel] ?? current[snake];
+  }
+  return current;
+}
+
+/**
+ * Robust matching helper for CMS collection list filtering on canvas.
+ * Handles primitives, arrays, nested relations (M2M / M2O / Directus junctions), and route params.
+ */
+export function matchesValue(target: any, searchVal: any, exact: boolean): boolean {
+  if (searchVal === undefined || searchVal === null || searchVal === '') return true;
+  if (target === undefined || target === null) return false;
+
+  const s = String(searchVal).trim().toLowerCase();
+  if (!s) return true;
+
+  // Array target (e.g. M2M relations, tag arrays, list of IDs)
+  if (Array.isArray(target)) {
+    return target.some(item => matchesValue(item, searchVal, exact));
+  }
+
+  // Object target (e.g. junction row, referenced entity, or object field)
+  if (typeof target === 'object') {
+    for (const key of Object.keys(target)) {
+      const val = target[key];
+      if (val === undefined || val === null) continue;
+      if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+        const valStr = String(val).trim().toLowerCase();
+        if (exact) {
+          if (valStr === s) return true;
+        } else {
+          if (valStr.includes(s)) return true;
+        }
+      } else if (typeof val === 'object') {
+        if (matchesValue(val, searchVal, exact)) return true;
+      }
+    }
+    try {
+      const json = JSON.stringify(target).toLowerCase();
+      if (!exact) {
+        if (json.includes(s)) return true;
+      } else {
+        if (json.includes(`"${s}"`) || json.includes(`:${s},`) || json.includes(`:${s}}`)) return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  // Primitive target (string, number, boolean)
+  const t = String(target).trim().toLowerCase();
+  if (exact ? t === s : t.includes(s)) {
+    return true;
+  }
+
+  // If target is a foreign key ID, check if the referenced entity's slug / name matches
+  if (typeof target === 'string' || typeof target === 'number') {
+    const allSlugs = listCollections();
+    for (const col of allSlugs) {
+      const items = getCollectionData(col) || [];
+      const found = items.find((it: any) =>
+        String(it._id).toLowerCase() === t ||
+        String(it.id).toLowerCase() === t ||
+        String(it._slug).toLowerCase() === t ||
+        String(it.slug).toLowerCase() === t
+      );
+      if (found) {
+        const foundSlug = String(found.slug ?? found._slug ?? '').trim().toLowerCase();
+        const foundName = String(found.name ?? found.title ?? '').trim().toLowerCase();
+        if (exact ? (foundSlug === s || foundName === s) : (foundSlug.includes(s) || foundName.includes(s))) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 function evalFilter(item: CollectionItem, filter: FilterConfig): boolean {
-  const rhs = filter.value;
-  // Dynamic-value filters (search field / date picker) have no author-time value on
-  // the canvas — pass through so the canvas previews every row (the deployed page
-  // applies the real predicate against the live variable). See Phase 4.
-  if (filter.valueSource && filter.valueSource !== 'static') return true;
+  let rhs = filter.value;
+  if (filter.valueSource === 'routeParam') {
+    if (!filter.valueVar) return true;
+    const previewParams = getPreviewRouteParams();
+    const varKey = filter.valueVar.replace(/^:/, '');
+    const routeVal = previewParams[filter.valueVar] ?? previewParams[varKey];
+    if (routeVal === undefined || routeVal === null || routeVal === '') {
+      return true;
+    }
+    rhs = routeVal;
+  } else if (filter.valueSource && filter.valueSource !== 'static') {
+    return true;
+  }
+
   // Date-day comparison (mirrors cms-gen): a date-only value compares against the
   // field's "YYYY-MM-DD" prefix so a full ISO timestamp (_createdAt/_updatedAt) or
   // a date-only field both match, and gt/lt/between compare lexically (chronologically).
+  const rawLhs = getDeepFieldValue(item, filter.field);
   const dateCmp = isDateVal(rhs) || (Array.isArray(rhs) && (isDateVal(rhs[0]) || isDateVal(rhs[1])));
-  const lhs = dateCmp ? String((item as any)[filter.field] ?? '').slice(0, 10) : (item as any)[filter.field];
+  const lhs = dateCmp ? String(rawLhs ?? '').slice(0, 10) : rawLhs;
   switch (filter.operator) {
     case 'between': {
       const [lo, hi] = Array.isArray(rhs) ? rhs : [rhs, rhs];
       if (dateCmp) return lhs >= String(lo) && lhs <= String(hi);
       return Number(lhs) >= Number(lo) && Number(lhs) <= Number(hi);
     }
-    case 'equals': return lhs === rhs;
-    case 'not_equals': return lhs !== rhs;
-    // contains / not_contains are CASE-INSENSITIVE (design-tool parity) — matches the
-    // generated predicate (String(field).toLowerCase().includes(value.toLowerCase())).
-    case 'contains':
-      if (typeof lhs === 'string' && typeof rhs === 'string') return lhs.toLowerCase().includes(rhs.toLowerCase());
-      if (Array.isArray(lhs)) return lhs.includes(rhs as any);
-      return false;
-    case 'not_contains':
-      if (typeof lhs === 'string' && typeof rhs === 'string') return !lhs.toLowerCase().includes(rhs.toLowerCase());
-      if (Array.isArray(lhs)) return !lhs.includes(rhs as any);
-      return true;
+    case 'equals': return matchesValue(lhs, rhs, true);
+    case 'not_equals': return !matchesValue(lhs, rhs, true);
+    case 'contains': return matchesValue(lhs, rhs, false);
+    case 'not_contains': return !matchesValue(lhs, rhs, false);
     case 'gt': return dateCmp ? String(lhs) > String(rhs) : Number(lhs) > Number(rhs);
     case 'gte': return dateCmp ? String(lhs) >= String(rhs) : Number(lhs) >= Number(rhs);
     case 'lt': return dateCmp ? String(lhs) < String(rhs) : Number(lhs) < Number(rhs);
     case 'lte': return dateCmp ? String(lhs) <= String(rhs) : Number(lhs) <= Number(rhs);
+    case 'in':
+      return Array.isArray(rhs)
+        ? rhs.some(r => matchesValue(lhs, r, true))
+        : matchesValue(lhs, rhs, true);
+    case 'not_in':
+      return Array.isArray(rhs)
+        ? !rhs.some(r => matchesValue(lhs, r, true))
+        : !matchesValue(lhs, rhs, true);
     case 'exists': {
-      const present = lhs !== undefined && lhs !== null && lhs !== '';
+      const present = lhs !== undefined && lhs !== null && lhs !== '' && (!Array.isArray(lhs) || lhs.length > 0);
       return rhs === false ? !present : present;
     }
     default: return true;
   }
 }
+
+
 
 type ListOverride = { filterGroup?: FilterGroup | null; sort?: SortConfig[] | null };
 
@@ -2673,6 +2858,8 @@ export function patchElement(
   if (localeInnerJsx !== undefined) {
     resolvedTextContent = localeInnerJsx;
     trace.dom('renderer:locale-inner-jsx', { nodeId: node.id });
+  } else if (!resolvedTextContent && node.textExpression) {
+    resolvedTextContent = evaluateCanvasTextExpression(node.textExpression);
   }
 
   // Mixed content: convert JSX style syntax to HTML and render via innerHTML
@@ -3706,9 +3893,12 @@ function buildNodeElement(
     // build chain entirely: the first paint showed primary text on replica
     // tiles until any later patch pass re-resolved it.
     const buildCond = resolveConditionalText(node, variantName, vpWidth);
-    const buildText = localeOverrides?.get(node.id)?.innerJsx
+    let buildText = localeOverrides?.get(node.id)?.innerJsx
       ?? getResponsiveTextValueForNode(node, vpWidth) ?? (buildCond !== null ? buildCond.text : null)
       ?? getTextOverrideBucketValue(node, vpWidth) ?? node.textContent;
+    if (!buildText && node.textExpression) {
+      buildText = evaluateCanvasTextExpression(node.textExpression);
+    }
     // Same per-branch literal contract as patchElement: the conditional
     // branch's own richness decides, but only when IT is what won the chain.
     const buildCondWon = buildCond !== null

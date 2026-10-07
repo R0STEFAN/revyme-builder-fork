@@ -948,6 +948,64 @@ import team from '@/cms/team.json';
     expect(fg.filters[0]).toEqual({ field: 'updated', operator: 'gte', value: '', valueSource: 'dateField', valueVar: 'fromDate' });
   });
 
+  test('parses a dynamic ROUTE-param filter predicate → valueSource/valueVar', () => {
+    const code = `
+import team from '@/cms/team.json';
+<div data-id="list" style={{}}>
+  {team.filter(item => (!params?.category || String(item.gender).toLowerCase() === String(params.category).toLowerCase()) && (!params?.place || String(item.bodyPart).toLowerCase().includes(String(params.place).toLowerCase()))).map(item => (
+    <div data-id="card" key={idx}>{item.name}</div>
+  ))}
+</div>`;
+    const fg = parseJSXToNodes(code).get('list')!.collectionList!.filterGroup!;
+    expect(fg.filters).toEqual([
+      { field: 'gender', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'category' },
+      { field: 'bodyPart', operator: 'contains', value: '', valueSource: 'routeParam', valueVar: 'place' },
+    ]);
+  });
+
+  test('parses a DEEP dot-path route param filter with ternary and .some() array iteration', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+<div data-id="list" style={{}}>
+  {tattoos.filter(item => (!params?.category || (Array.isArray(item.categories_m2m) ? item.categories_m2m.some((x: any) => String(x?.slug).toLowerCase() === String(params.category).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.category).toLowerCase())) : String(item.categories_m2m.slug).toLowerCase() === String(params.category).toLowerCase())) && (!params?.place || (Array.isArray(item.placements_m2m) ? item.placements_m2m.some((x: any) => String(x?.placements_id?.slug).toLowerCase() === String(params.place).toLowerCase()) : String(item.placements_m2m.placements_id.slug).toLowerCase() === String(params.place).toLowerCase()))).map(item => (
+    <div data-id="card" key={item.id}>{item.name}</div>
+  ))}
+</div>`;
+    const fg = parseJSXToNodes(code).get('list')!.collectionList!.filterGroup!;
+    expect(fg.filters).toEqual([
+      { field: 'categories_m2m.slug', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'category' },
+      { field: 'placements_m2m.placements_id.slug', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'place' },
+    ]);
+  });
+
+  test('parses a DEEP dot-path static filter with ternary', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+<div data-id="list" style={{}}>
+  {tattoos.filter(item => (Array.isArray(item.categories_m2m) ? item.categories_m2m.some((x: any) => String(x?.slug).toLowerCase() === String("men").toLowerCase()) : item.categories_m2m.slug === "men")).map(item => (
+    <div data-id="card" key={item.id}>{item.name}</div>
+  ))}
+</div>`;
+    const fg = parseJSXToNodes(code).get('list')!.collectionList!.filterGroup!;
+    expect(fg.filters).toEqual([
+      { field: 'categories_m2m.slug', operator: 'equals', value: 'men' },
+    ]);
+  });
+
+  test('parses a `contains` static filter inside ternary expression', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+<div data-id="list" style={{}}>
+  {tattoos.filter(item => (Array.isArray(item.title) ? JSON.stringify(item.title).toLowerCase().includes(String("Чоловіче").toLowerCase()) : String(item.title).toLowerCase().includes(String("Чоловіче").toLowerCase()))).map(item => (
+    <div data-id="card" key={item.id}>{item.name}</div>
+  ))}
+</div>`;
+    const fg = parseJSXToNodes(code).get('list')!.collectionList!.filterGroup!;
+    expect(fg.filters).toEqual([
+      { field: 'title', operator: 'contains', value: 'Чоловіче' },
+    ]);
+  });
+
   test('reads pagination back from the data-pagination marker', () => {
     const code = `
 import team from '@/cms/team.json';
@@ -1312,6 +1370,32 @@ const canvasNodes = <>
     expect(nodes.get('title-cn')!.binding).toEqual({ field: 'title', property: 'text' });
   });
 
+  test('collection list parses indexVar and parses motion stagger delay expression', () => {
+    const codeWithStagger = `
+      import blogs from '@/cms/blog.json';
+      import { motion } from 'framer-motion';
+      export default function Page() {
+        return (
+          <div data-id="container">
+            {blogs.map((item, idx) => (
+              <motion.div
+                data-id="row"
+                key={idx}
+                transition={{ type: 'spring', delay: idx * 0.1 }}
+              />
+            ))}
+          </div>
+        );
+      }
+    `;
+    const nodes = parseJSXToNodes(codeWithStagger);
+    const container = nodes.get('container')!;
+    expect(container.collectionList).toBeDefined();
+    expect(container.collectionList!.indexVar).toBe('idx');
+    const row = nodes.get('row')!;
+    expect(row.motionProps?.transition?.delay).toBe('idx * 0.1');
+  });
+
   // Regression: the canvasNodes parser has its OWN (shorter) htmlAttrs list. It was
   // missing `data-search-field` + form attrs, so a Search Field pasted onto the
   // canvas lost its marker → the Input tool showed the full form panel instead of
@@ -1550,5 +1634,46 @@ export default function Page() {
 }`;
     const heading = parseJSXToNodes(code).get('releases-heading')!;
     expect(heading.textContent).toBe('Physical Sleeves & Archival Editions 3');
+  });
+
+  test('captures data-stagger attribute into node.attrs', () => {
+    const code = `
+export default function Page() {
+  return (
+    <div data-id="cards-grid" data-stagger="0.12">
+      <div data-id="card-1">Card 1</div>
+    </div>
+  );
+}`;
+    const grid = parseJSXToNodes(code).get('cards-grid')!;
+    expect(grid.attrs?.['data-stagger']).toBe('0.12');
+  });
+
+  describe('dynamic text and href expressions', () => {
+    test('parses binary expression text into node.textExpression', () => {
+      const code = `
+export default function Page() {
+  return (
+    <div data-id="root">
+      <h1 data-id="title">{item.name + " in " + item.city}</h1>
+    </div>
+  );
+}`;
+      const title = parseJSXToNodes(code).get('title')!;
+      expect(title.textExpression).toBe('item.name + " in " + item.city');
+    });
+
+    test('parses dynamic href expression into node.hrefExpression', () => {
+      const code = `
+export default function Page() {
+  return (
+    <div data-id="root">
+      <a data-id="link" href={"/gallery/" + item.slug}>Click</a>
+    </div>
+  );
+}`;
+      const link = parseJSXToNodes(code).get('link')!;
+      expect(link.hrefExpression).toBe('"/gallery/" + item.slug');
+    });
   });
 });

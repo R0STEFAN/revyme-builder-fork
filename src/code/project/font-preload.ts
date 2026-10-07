@@ -22,6 +22,7 @@ import { projectFS } from './project-fs';
 import { ensureGoogleFontImport } from './preset-ops';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { loadGoogleFont } from '@/shared/font-loader';
+import { isWorkspaceFontFamily } from '@/code/stores/workspace-fonts-store';
 import { trace } from '@/shared/debug-trace';
 
 /** All custom-property declarations: `--name: value` (value up to `;` or `}`). */
@@ -107,6 +108,7 @@ export function preloadProjectFonts(): void {
   const families = collectFontFamilies(files);
   const viewer = isViewerMode();
   for (const fam of families) {
+    if (isWorkspaceFontFamily(fam)) continue;
     loadGoogleFont(fam);
     // Self-heal the @import for preview/live + the canvas iframe stylesheet.
     // Viewers must not mutate project files — their font load still works

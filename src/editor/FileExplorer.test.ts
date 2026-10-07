@@ -212,4 +212,23 @@ describe('buildPageTree — folders for page-less route segments', () => {
     expect(folder!.label).toBe('/ressources');
     expect(folder!.children).toEqual([]);
   });
+
+  test('dynamic routes nest correctly preserving brackets', () => {
+    page('gallery/[category]/[place]');
+    const tree = buildPageTree(0);
+
+    const gallery = tree.find(e => e.label === '/gallery');
+    expect(gallery).toBeDefined();
+    expect(gallery!.type).toBe('folder');
+
+    const category = gallery!.children[0];
+    expect(category).toBeDefined();
+    expect(category.label).toBe('/[category]');
+    expect(category.type).toBe('folder');
+
+    const place = category.children[0];
+    expect(place).toBeDefined();
+    expect(place.label).toBe('/[place]');
+    expect(place.type).toBe('page');
+  });
 });

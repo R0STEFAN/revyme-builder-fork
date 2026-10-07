@@ -48,6 +48,12 @@ export default defineConfig({
     port: 5175,
     strictPort: true,
     cors: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3333',
+        changeOrigin: true,
+      },
+    },
     // CORP cross-origin is enough — the parent (3333) runs under
     // `Cross-Origin-Embedder-Policy: credentialless`, which allows it to
     // embed cross-origin iframes that send CORP. We deliberately do NOT

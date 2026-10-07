@@ -88,6 +88,7 @@ export default function SelfHostDashboard() {
 
   // Hidden file input for project import
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exportingBundleId, setExportingBundleId] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -308,6 +309,87 @@ export default function SelfHostDashboard() {
     }
   };
 
+  const handleExportBundle = async (project: LocalProjectItem) => {
+    try {
+      setExportingBundleId(project.id);
+      toast.info(`Preparing bundle with assets for "${project.name}"...`);
+
+      let bundleData: any = null;
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/bundle`);
+        if (res.ok) {
+          bundleData = await res.json();
+        }
+      } catch {}
+
+      // Fallback for localStorage-only projects
+      if (!bundleData) {
+        let data: any = null;
+        if (window.localStorage) {
+          const raw = localStorage.getItem(`revyme-project-${project.id}`);
+          if (raw) data = JSON.parse(raw);
+        }
+        if (!data) {
+          toast.error('Project data not found');
+          return;
+        }
+
+        const serialized = JSON.stringify(data);
+        const assetMatches = serialized.matchAll(/\/api\/uploads\/([a-zA-Z0-9._-]+)/g);
+        const assetFileNames = Array.from(new Set(Array.from(assetMatches, (m) => m[1])));
+
+        const assets: Record<string, { base64: string; mime?: string; size: number }> = {};
+        for (const fn of assetFileNames) {
+          try {
+            const aRes = await fetch(`/api/uploads/${fn}`);
+            if (aRes.ok) {
+              const blob = await aRes.blob();
+              const b64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const resStr = reader.result as string;
+                  resolve(resStr.split(',')[1] || '');
+                };
+                reader.readAsDataURL(blob);
+              });
+              assets[fn] = { base64: b64, mime: blob.type, size: blob.size };
+            }
+          } catch {}
+        }
+
+        bundleData = {
+          format: 'revyme-bundle-v1',
+          id: project.id,
+          name: project.name,
+          exportedAt: new Date().toISOString(),
+          data,
+          previewImage: project.previewImage || null,
+          folderId: project.folderId || null,
+          assets,
+        };
+      }
+
+      const assetCount = Object.keys(bundleData.assets || {}).length;
+      const blob = new Blob([JSON.stringify(bundleData, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.revyme-bundle.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Bundle downloaded (${assetCount} assets included)`);
+    } catch (err) {
+      toast.error('Failed to export bundle');
+    } finally {
+      setExportingBundleId(null);
+    }
+  };
+
   const handleExportJson = async (project: LocalProjectItem) => {
     try {
       let data: any = null;
@@ -343,7 +425,7 @@ export default function SelfHostDashboard() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Export downloaded');
+      toast.success('JSON export downloaded');
     } catch (err) {
       toast.error('Export failed');
     }
@@ -354,9 +436,31 @@ export default function SelfHostDashboard() {
     if (!file) return;
 
     try {
+      toast.info('Reading project file...');
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const name = parsed.name || file.name.replace(/\.json$/i, '');
+
+      // Check if it's a bundle with assets
+      if (parsed.assets && typeof parsed.assets === 'object' && Object.keys(parsed.assets).length > 0) {
+        const assetCount = Object.keys(parsed.assets).length;
+        toast.info(`Importing bundle with ${assetCount} assets...`);
+        try {
+          const res = await fetch('/api/projects/import-bundle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsed),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            toast.success(`Imported "${json.project?.name || parsed.name}" with ${json.assetCount ?? assetCount} assets!`);
+            await fetchProjects();
+            return;
+          }
+        } catch {}
+      }
+
+      // Standard project import fallback
+      const name = parsed.name || file.name.replace(/\.(json|revyme|revyme-bundle)$/i, '');
       const data = parsed.data || parsed;
 
       const created = await createProject(name, data);
@@ -396,7 +500,7 @@ export default function SelfHostDashboard() {
             type="file"
             ref={fileInputRef}
             onChange={handleImportFile}
-            accept=".json"
+            accept=".json,.revyme,.revyme-bundle"
             className="hidden"
           />
           <Button
@@ -404,7 +508,7 @@ export default function SelfHostDashboard() {
             size="sm"
             onClick={() => fileInputRef.current?.click()}
           >
-            Import JSON
+            Import Project / Bundle
           </Button>
           <Button
             variant="primary"
@@ -850,14 +954,32 @@ export default function SelfHostDashboard() {
 
                       <button
                         type="button"
-                        title="Export JSON"
+                        title="Export Project Bundle (with all assets)"
+                        disabled={exportingBundleId === p.id}
+                        onClick={() => handleExportBundle(p)}
+                        className={`p-1.5 rounded transition-colors ${
+                          exportingBundleId === p.id
+                            ? 'text-amber-400 animate-pulse'
+                            : 'hover:bg-amber-500/10 text-amber-400 hover:text-amber-300'
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                          <line x1="12" y1="22.08" x2="12" y2="12" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        title="Export Code only (JSON)"
                         onClick={() => handleExportJson(p)}
                         className="p-1.5 rounded hover:bg-[var(--bg-hover,rgba(255,255,255,0.08))] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                           <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
+                          <line x1="12" y1="22.08" x2="12" y2="12" />
                         </svg>
                       </button>
 

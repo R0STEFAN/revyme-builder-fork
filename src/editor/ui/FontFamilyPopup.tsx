@@ -7,7 +7,7 @@ import { useSetAtom } from 'jotai';
 import { List, useListRef, type RowComponentProps } from 'react-window';
 import { fetchGoogleFonts, DEFAULT_FONTS, FEELING_CATEGORIES, type FontItem } from '@/shared/google-fonts';
 import { loadGoogleFont, loadFontFromCSSValue, loadCustomFont } from '@/shared/font-loader';
-import { useWorkspaceFonts, ensureWorkspaceFonts, applyWorkspaceFontToProject, previewWorkspaceFontInCanvas } from '@/code/stores/workspace-fonts-store';
+import { useWorkspaceFonts, ensureWorkspaceFonts, applyWorkspaceFontToProject, previewWorkspaceFontInCanvas, addCustomFont, deleteCustomFont, parseFontFilename } from '@/code/stores/workspace-fonts-store';
 import type { WorkspaceFont } from '@/backend/types';
 import ToolPopup from './ToolPopup';
 import { ControlLabel } from '../controls';
@@ -88,7 +88,9 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const listRef = useListRef(null);
   const setSuppressOverlay = useSetAtom(suppressSelectionOverlayAtom);
   const workspaceFonts = useWorkspaceFonts();
@@ -159,15 +161,32 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
 
   // Filter fonts by category + search
   const filteredFonts = useMemo(() => {
+    if (selectedCategory === 'Custom') {
+      return [];
+    }
+
     let filtered = fonts;
 
     if (selectedCategory !== 'All') {
+      const catLower = selectedCategory.toLowerCase();
       filtered = filtered.filter(font => {
+        // Direct category match (e.g. "sans-serif", "serif", "display", "handwriting", "monospace")
+        const fontCat = (font.category || '').toLowerCase();
+        if (
+          fontCat === catLower ||
+          fontCat.replace('-', ' ') === catLower ||
+          fontCat.replace(' ', '-') === catLower ||
+          fontCat.includes(catLower)
+        ) {
+          return true;
+        }
+
+        // Match with tags
         if (!font.tags || !Array.isArray(font.tags)) return false;
         return font.tags.some(tag => {
           const tagName = typeof tag === 'string' ? tag : tag?.name;
           if (!tagName || typeof tagName !== 'string') return false;
-          return tagName.toLowerCase().includes(selectedCategory.toLowerCase());
+          return tagName.toLowerCase().includes(catLower);
         });
       });
     }
@@ -186,12 +205,11 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
   }, [isOpen]);
 
   // Workspace fonts → one representative entry per family (prefer the
-  // closest-to-Regular upright weight), search-filtered. Only shown under the
-  // 'All' category since custom fonts carry no feeling tags. The faces are
-  // already registered with the FontFace API (by the store) so each row paints
-  // in its own typeface.
+  // closest-to-Regular upright weight), search-filtered. Shown under 'All'
+  // and 'Custom' categories. The faces are already registered with the FontFace API
+  // (by the store) so each row paints in its own typeface.
   const workspaceFamilies = useMemo(() => {
-    if (selectedCategory !== 'All') return [] as WorkspaceFont[];
+    if (selectedCategory !== 'All' && selectedCategory !== 'Custom') return [] as WorkspaceFont[];
     const rep = new Map<string, WorkspaceFont>();
     for (const f of workspaceFonts) {
       const cur = rep.get(f.family);
@@ -303,6 +321,67 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
     onClose();
   }, [onChange, onClose, onPreview]);
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['woff2', 'woff', 'ttf', 'otf'].includes(ext || '')) {
+      alert('Please select a valid font file (.woff2, .woff, .ttf, .otf)');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const parsed = parseFontFilename(file.name);
+
+      let fileUrl = '';
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          fileUrl = data.url;
+        }
+      } catch (err) {
+        trace.error('font-upload:server-failed', err);
+      }
+
+      if (!fileUrl) {
+        fileUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const newFont: WorkspaceFont = {
+        id: `local-font-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        family: parsed.family,
+        weight: parsed.weight,
+        style: parsed.style,
+        ext: parsed.ext,
+        fileName: file.name,
+        size: file.size,
+        url: fileUrl,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: 'user',
+      };
+
+      addCustomFont(newFont);
+      handleWorkspaceSelect(newFont);
+    } catch (err: any) {
+      alert(`Failed to upload font: ${err.message || 'Unknown error'}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Cancel any in-flight preview when the popup closes (Escape, outside
   // click, or programmatic close). Without this, mousing OUT of a row
   // and immediately closing leaves the canvas pinned at the preview
@@ -329,21 +408,47 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
 
   const content = (
     <div onMouseLeave={handleContainerLeave}>
-      {/* Search + Category filter */}
+      {/* Search + Category filter + Upload button */}
       <div className={`flex flex-col gap-2 ${inline ? '' : '-mx-3 px-3'} pb-2 border-b border-[var(--border-light)]`}>
-        <div className="relative">
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="w-full bg-[var(--bg-hover)] cut-corners pl-8 pr-2 py-1.5 text-sm focus:outline-none text-[var(--text-primary)]"
+              placeholder="Search fonts..."
+            />
+            <svg className="absolute left-2 top-2 w-3.5 h-3.5 text-[var(--text-secondary)]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          <button
+            type="button"
+            title="Upload custom font (.woff2, .woff, .ttf, .otf)"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center justify-center p-2 bg-[var(--bg-hover)] hover:bg-[var(--accent)] hover:text-[var(--accent-fg)] cut-corners text-[var(--text-secondary)] transition-colors shrink-0 disabled:opacity-50"
+          >
+            {uploading ? (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current" />
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            )}
+          </button>
           <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="w-full bg-[var(--bg-hover)] cut-corners px-8 py-1.5 text-sm focus:outline-none text-[var(--text-primary)]"
-            placeholder="Search fonts..."
+            ref={fileInputRef}
+            type="file"
+            accept=".woff2,.woff,.ttf,.otf"
+            className="hidden"
+            onChange={handleFileChange}
           />
-          <svg className="absolute left-2 top-2 w-3.5 h-3.5 text-[var(--text-secondary)]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
         </div>
         <div className="flex items-center gap-2">
           <ControlLabel label="Category" property="" plain />
@@ -367,16 +472,16 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
         {workspaceFamilies.length > 0 && (
           <div className="mb-1">
             <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-              Workspace fonts
+              {selectedCategory === 'Custom' ? 'Custom fonts' : 'Workspace fonts'}
             </div>
-            <div className="max-h-[150px] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+            <div className={`${selectedCategory === 'Custom' ? 'max-h-[300px]' : 'max-h-[150px]'} overflow-y-auto [&::-webkit-scrollbar]:hidden`}>
               {workspaceFamilies.map(font => {
                 const isSelected = font.family === currentFontName;
                 const cssFamily = `${font.family}, sans-serif`;
                 return (
                   <div
                     key={font.id}
-                    className="py-[2px]"
+                    className="py-[2px] group relative"
                     onClick={() => handleWorkspaceSelect(font)}
                     onMouseDown={e => e.stopPropagation()}
                     // Declare the face in the canvas iframe first — a workspace font isn't in the
@@ -392,15 +497,32 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
                       style={{ fontFamily: `"${font.family}"` }}
                     >
                       <span className="text-sm truncate">{font.family}</span>
-                      <span className={`text-sm flex-shrink-0 ml-2 ${isSelected ? 'text-[var(--accent-fg)]/70' : 'text-[var(--text-secondary)]'}`}>Aa</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        <span className={`text-sm ${isSelected ? 'text-[var(--accent-fg)]/70' : 'text-[var(--text-secondary)]'}`}>Aa</span>
+                        {font.id.startsWith('local-') && (
+                          <button
+                            type="button"
+                            title="Remove custom font"
+                            className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-0.5 text-xs transition-opacity text-[var(--text-secondary)]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteCustomFont(font.id);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] border-t border-[var(--border-light)]">
-              All fonts
-            </div>
+            {selectedCategory === 'All' && (
+              <div className="mt-1 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] border-t border-[var(--border-light)]">
+                All fonts
+              </div>
+            )}
           </div>
         )}
 
@@ -410,9 +532,24 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
           </div>
         ) : filteredFonts.length === 0 ? (
           workspaceFamilies.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-[var(--text-secondary)] text-sm">
-              No fonts found
-            </div>
+            selectedCategory === 'Custom' ? (
+              <div className="flex flex-col items-center justify-center h-36 text-[var(--text-secondary)] text-xs text-center px-4 gap-2">
+                <span>{searchQuery ? 'No fonts found' : 'No custom fonts uploaded yet'}</span>
+                {!searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 bg-[var(--accent)] text-[var(--accent-fg)] cut-corners text-xs font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Upload font
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-32 text-[var(--text-secondary)] text-sm">
+                No fonts found
+              </div>
+            )
           ) : null
         ) : (
           <List

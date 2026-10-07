@@ -999,6 +999,17 @@ describe('updateOverlayConfigInCode — base vs replica overrides', () => {
     expect(readOverlayConfig(code).responsive).toBeUndefined();
     expect(readOverlayConfig(code).responsiveBp).toBeUndefined();
   });
+
+  test('closeOnLink config updates correctly and emits onOverlayClick in runtime effect', () => {
+    let code = make();
+    code = updateOverlayConfigInCode(code, 'dropdown1', { closeOnLink: false }, null);
+    expectParses(code);
+    expect(readOverlayConfig(code).closeOnLink).toBe(false);
+
+    code = updateOverlayConfigInCode(code, 'dropdown1', { closeOnLink: true }, null);
+    expectParses(code);
+    expect(readOverlayConfig(code).closeOnLink).toBe(true);
+  });
 });
 
 // ─── extractOverlayToCanvasInCode (drag trigger out → both become canvas nodes) ─
@@ -1785,6 +1796,33 @@ describe('healMissingOverlayEffectsInCode — restores a dropped positioner', ()
   test('no-op when every overlay already has its effect', () => {
     const code = createOverlayInCode(BASE_CODE_MULTI, 'btn1', 'ov1', makeOverlayConfig({ triggerId: 'btn1' }), makeTriggerConfig({ targetId: 'ov1' }));
     expect(healMissingOverlayEffectsInCode(code)).toBe(code);
+  });
+
+  test('upgrades an outdated effect that was missing onOverlayClick', () => {
+    const code = createOverlayInCode(BASE_CODE_MULTI, 'btn1', 'ov1', makeOverlayConfig({ triggerId: 'btn1' }), makeTriggerConfig({ targetId: 'ov1' }));
+    // Simulate old effect without onOverlayClick
+    const stripped = code.replace(/const onOverlayClick = [\s\S]*?document\.addEventListener\('click', onOverlayClick.*?\);/g, '')
+      .replace(/document\.removeEventListener\('click', onOverlayClick.*?\);/g, '');
+    expect(stripped).not.toContain('onOverlayClick');
+    expect(stripped).toContain(', [ov1Open]);');
+
+    const healed = healMissingOverlayEffectsInCode(stripped);
+    expectParses(healed);
+    expect(healed).toContain('onOverlayClick');
+    expect(healed).toContain('document.addEventListener(\'click\', onOverlayClick, true);');
+  });
+
+  test('upgrades an outdated fixed overlay effect that was missing onOverlayClick', () => {
+    const code = createOverlayInCode(BASE_CODE_MULTI, 'btn1', 'ov1', makeOverlayConfig({ triggerId: 'btn1', type: 'fixed' }), makeTriggerConfig({ targetId: 'ov1' }));
+    const stripped = code.replace(/const onOverlayClick = [\s\S]*?overlay\.addEventListener\('click', onOverlayClick.*?\);/g, '')
+      .replace(/overlay\.removeEventListener\('click', onOverlayClick.*?\);/g, '');
+    expect(stripped).not.toContain('onOverlayClick');
+    expect(stripped).toContain(', [ov1Open]);');
+
+    const healed = healMissingOverlayEffectsInCode(stripped);
+    expectParses(healed);
+    expect(healed).toContain('onOverlayClick');
+    expect(healed).toContain('overlay.addEventListener(\'click\', onOverlayClick, true);');
   });
 });
 

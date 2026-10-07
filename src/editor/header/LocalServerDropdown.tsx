@@ -184,6 +184,11 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
     };
   }, [open, projectId, refreshStatus]);
 
+  const isRunning = status?.status === 'running';
+  const isBuilding = building || status?.status === 'building';
+  const isError = !isBuilding && (status?.status === 'error' || !!errorMessage);
+  const canStop = (isRunning || isError) && !stopping && !isBuilding;
+
   // Handle Build
   const handleBuild = useCallback(async () => {
     if (building) return;
@@ -261,20 +266,24 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
 
   // Handle Stop
   const handleStop = useCallback(async () => {
-    if (stopping || status?.status !== 'running') return;
+    if (stopping || isBuilding) return;
     setStopping(true);
     setErrorMessage(null);
-    trace.action('local-server-dropdown:stop', { projectId });
+    trace.action('local-server-dropdown:stop', { projectId, port });
 
     try {
-      const nextStatus = await stopLocalServer(projectId);
+      const nextStatus = await stopLocalServer(projectId, port);
       setStatus(nextStatus);
       setErrorMessage(nextStatus?.lastError || null);
       onStatusChange?.(nextStatus);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('local-server-status-changed', { detail: nextStatus }));
       }
-      toast.success('Local server stopped');
+      toast.success(
+        isRunning
+          ? 'Local server stopped'
+          : `Server stopped and port ${port} freed`
+      );
     } catch (err: any) {
       const msg = err?.message || 'Failed to stop local server';
       trace.error('local-server-dropdown:stop-error', { projectId, error: msg });
@@ -284,11 +293,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
     } finally {
       setStopping(false);
     }
-  }, [stopping, status?.status, projectId, onStatusChange, refreshStatus]);
-
-  const isRunning = status?.status === 'running';
-  const isBuilding = building || status?.status === 'building';
-  const isError = !isBuilding && (status?.status === 'error' || !!errorMessage);
+  }, [stopping, isBuilding, isRunning, projectId, port, onStatusChange, refreshStatus]);
 
   // Derive badge dot class and text
   let dotClass = 'bg-neutral-500';
@@ -410,8 +415,9 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
             <button
               type="button"
               onClick={handleStop}
-              disabled={!isRunning || stopping}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded cut-corners border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={!canStop}
+              title={isError ? `Force stop and free port ${port}` : 'Stop local server'}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded cut-corners border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               <Square size={11} />
               <span>{stopping ? 'Stopping...' : 'Stop'}</span>
@@ -422,7 +428,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
           {errorMessage ? (
             <div className="mt-1 p-2 rounded bg-red-500/10 border border-red-500/30 text-xs flex flex-col gap-1.5">
               <div className="flex items-start justify-between gap-1 text-red-400">
-                <span className="font-medium truncate leading-tight">
+                <span className="font-medium break-all leading-tight">
                   {errorMessage}
                 </span>
                 <button
@@ -431,12 +437,29 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
                     setErrorMessage(null);
                     setShowLog(false);
                   }}
-                  className="text-red-400 hover:text-red-300 p-0.5 rounded cursor-pointer"
+                  className="text-red-400 hover:text-red-300 p-0.5 rounded cursor-pointer shrink-0"
                   title="Dismiss error"
                 >
                   <X size={12} />
                 </button>
               </div>
+
+              {/* Quick action: Force Free Port & Restart when port collision occurs */}
+              {/EADDRINUSE|already in use|address in use/i.test(errorMessage) && (
+                <div className="pt-1 border-t border-red-500/20 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-red-300/80">Port {port} is occupied</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleStop();
+                      await handleStart();
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 transition-colors cursor-pointer"
+                  >
+                    Free Port & Restart
+                  </button>
+                </div>
+              )}
 
               {buildLog && (
                 <div>

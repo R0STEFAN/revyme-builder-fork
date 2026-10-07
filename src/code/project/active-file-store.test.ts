@@ -26,6 +26,9 @@ import {
   getRouteGroup,
   getLayoutForPage,
   uniqueRouteSlug,
+  normalizeRoutePattern,
+  validateRoutePattern,
+  createDynamicRouteFile,
 } from './active-file-store';
 import { projectFS, resetProjectFS } from './project-fs';
 
@@ -625,3 +628,67 @@ describe('healBreadcrumbTrail', () => {
     expect(healBreadcrumbTrail([], 'components/Header.tsx', exists)).toEqual([]);
   });
 });
+
+// ─── Dynamic Route Helpers ──────────────────────────────────────────────────
+
+describe('Dynamic Route Helpers', () => {
+  describe('normalizeRoutePattern', () => {
+    it('normalizes Next.js style brackets', () => {
+      expect(normalizeRoutePattern('gallery/[category]/[place]')).toBe('gallery/[category]/[place]');
+      expect(normalizeRoutePattern('/gallery/[Category]/[Place]/')).toBe('gallery/[category]/[place]');
+    });
+
+    it('normalizes Webstudio style :param to [param]', () => {
+      expect(normalizeRoutePattern('gallery/:category/:place')).toBe('gallery/[category]/[place]');
+      expect(normalizeRoutePattern('/tattoos/:men/:pleche/')).toBe('tattoos/[men]/[pleche]');
+      expect(normalizeRoutePattern(':slug')).toBe('[slug]');
+    });
+
+    it('handles catch-all [...slug]', () => {
+      expect(normalizeRoutePattern('docs/[...slug]')).toBe('docs/[...slug]');
+    });
+
+    it('cleans leading/trailing slashes and extra whitespace', () => {
+      expect(normalizeRoutePattern('  /shop/ :item / ')).toBe('shop/[item]');
+    });
+  });
+
+  describe('validateRoutePattern', () => {
+    it('rejects empty input', () => {
+      expect(validateRoutePattern('')).toBe('Route path cannot be empty');
+      expect(validateRoutePattern('  ')).toBe('Route path cannot be empty');
+    });
+
+    it('rejects routes without any dynamic parameter', () => {
+      expect(validateRoutePattern('gallery/men/shoulder')).toBe('Dynamic route must contain at least one parameter (e.g. [category] or :category)');
+    });
+
+    it('accepts valid dynamic patterns', () => {
+      expect(validateRoutePattern('gallery/[category]/[place]')).toBeNull();
+      expect(validateRoutePattern('gallery/:category/:place')).toBeNull();
+    });
+
+    it('rejects routes that already exist', () => {
+      projectFS.writeFile('app/gallery/[category]/page.client.tsx', '<div/>');
+      expect(validateRoutePattern('gallery/[category]')).toBe('A page at "/gallery/[category]" already exists');
+    });
+  });
+
+  describe('createDynamicRouteFile', () => {
+    it('creates page pair at dynamic route', () => {
+      const clientPath = createDynamicRouteFile('gallery/:category/:place');
+      expect(clientPath).toBe('app/gallery/[category]/[place]/page.client.tsx');
+      expect(projectFS.exists('app/gallery/[category]/[place]/page.client.tsx')).toBe(true);
+      expect(projectFS.exists('app/gallery/[category]/[place]/page.tsx')).toBe(true);
+
+      const serverCode = projectFS.readFile('app/gallery/[category]/[place]/page.tsx');
+      expect(serverCode).toContain("import PageClient from './page.client'");
+      expect(serverCode).toContain('export const metadata = {}');
+
+      const clientCode = projectFS.readFile('app/gallery/[category]/[place]/page.client.tsx');
+      expect(clientCode).toContain("'use client'");
+      expect(clientCode).toContain('data-name="/gallery/[category]/[place]"');
+    });
+  });
+});
+

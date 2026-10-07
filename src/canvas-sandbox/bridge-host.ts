@@ -172,6 +172,7 @@ export class PostMessageBridge implements CanvasBridge {
     /** Same-file distrusted renders (undo/redo restore): keep culling state —
      *  the file-switch cull reset exists for cross-file id collisions only. */
     preserveCulling?: boolean,
+    previewRouteParams?: Record<string, string>,
   ): void {
     if (transform) this.currentTransform = { ...transform };
     // Maps don't survive structured cloning the way objects do — Comlink
@@ -211,6 +212,7 @@ export class PostMessageBridge implements CanvasBridge {
       defaultLocale,
       transform,
       cmsCollections,
+      previewRouteParams,
       localeOverrides: localeOverridesObj,
       distrustPatchKeys,
       preserveCulling,

@@ -11,6 +11,8 @@ import { useControl } from '../../controls/ControlProvider';
 import { HoistMenuItemProvider, useHoistMenuItem } from '../../controls/hoist-context';
 import type { MenuItem } from '../../controls/control-menu-items';
 import { LegacyVariableBoundPill } from '../../controls/VariableBoundPill';
+import { ExpressionBoundPill } from '../../controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '../../ui/ExpressionEditorPopup';
 import type { VariableIconKey } from '../../controls/VariableTypeIcon';
 
 /** The variable glyph for a nav attr — matches the variable-modal type icon: href = chain (link), the boolean
@@ -23,6 +25,7 @@ function linkAttrIconKey(attrName: string): VariableIconKey {
 import VariableModal from '../../ui/VariableModal';
 import { activeFilePathAtom, isComponentLikeFilePath } from '@/code/project/active-file-store';
 import { pageVariablesAtom } from '@/code/stores/page-variables-store';
+import { collectionSchemasAtom } from '@/code/stores/cms-store';
 import { parseComponentInfoFromSource } from '@/code/components/component-registry';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { getVariableType } from '../../controls/variable-types';
@@ -89,6 +92,8 @@ function LinkVarBoundRow({ label, property, varName, onDetach, overridden, onRes
 
 export default function LinkTool() {
   const { node, nodeId, isReplica, vpWidth } = useControl();
+  const [hrefExpressionOpen, setHrefExpressionOpen] = useState(false);
+  const collectionSchemas = useAtomValue(collectionSchemasAtom);
   // The active replica's banded media-query (for per-viewport link variables). Null on the primary.
   const replicaQuery = (() => {
     if (!isReplica) return null;
@@ -817,7 +822,19 @@ export default function LinkTool() {
             the real href then). On a detail page (or inside a CMS map)
             the dropdown gains a "CMS" section for the collection's
             detail route. */}
-        {hrefVp?.isVar ? (
+        {node?.hrefExpression ? (
+          <div className="flex items-center justify-between w-full">
+            <ControlLabel label="Link To" property="href" plain />
+            <ExpressionBoundPill
+              expression={node.hrefExpression}
+              onEdit={() => setHrefExpressionOpen(true)}
+              onClear={() => {
+                trace.action('link-tool:unbind-href-expression', { nodeId });
+                queueMutation({ type: 'unbindHrefExpression', nodeId: nodeId! });
+              }}
+            />
+          </div>
+        ) : hrefVp?.isVar ? (
           // PER-VIEWPORT variable on THIS replica tile → bound pill + the "Link To" label in purple with the
           // SAME left-chevron + dropdown (Reset Override + Create/Set Variable, all per-tile). Wrapping in
           // HoistMenuItemProvider makes LinkVarBoundRow's label non-plain (standard `<` chevron) — without it,
@@ -840,7 +857,7 @@ export default function LinkTool() {
           // replica, route through createLinkVariableInstant / bindLinkVariable → a per-TILE binding. `overridden`
           // adds the purple accent + Reset Override entry.
           <HoistMenuItemProvider item={makeLinkVarItem('href', 'string', hrefVp.value, 'text', 'Link To')}>
-            <LinkUrlControl value={hrefVp.value} onChange={setHrefVpLiteral} overridden onResetOverride={resetHrefVp} />
+            <LinkUrlControl value={hrefVp.value} onChange={setHrefVpLiteral} overridden onResetOverride={resetHrefVp} onOpenExpression={() => setHrefExpressionOpen(true)} />
           </HoistMenuItemProvider>
         ) : hrefVar ? (
           // BASE variable. On a REPLICA, wrap in the menu so the user can OVERRIDE it per-viewport
@@ -862,6 +879,7 @@ export default function LinkTool() {
               cmsRoutes={slugCollection
                 ? [{ slug: `/${slugCollection}/[slug]`, label: `/${slugCollection}/:slug` }]
                 : undefined}
+              onOpenExpression={() => setHrefExpressionOpen(true)}
             />
           </HoistMenuItemProvider>
         )}
@@ -1051,6 +1069,32 @@ export default function LinkTool() {
               )
             : undefined
           }
+        />
+      )}
+
+      {/* Expression Editor modal for dynamic Link URL formulas */}
+      {nodeId && (
+        <ExpressionEditorPopup
+          isOpen={hrefExpressionOpen}
+          onClose={() => setHrefExpressionOpen(false)}
+          onApply={(expr) => {
+            if (nodeId) {
+              const mutations: any[] = [];
+              if (isComponentFile) {
+                if (node?.type !== 'MotionLink') mutations.push({ type: 'convertToMotionLink', nodeId });
+              } else if (node?.type !== 'Link' && node?.type !== 'a') {
+                mutations.push({ type: 'changeTag', nodeId, newTag: 'Link' });
+                mutations.push({ type: 'updateStyles', nodeId, styles: { textDecoration: 'none', color: 'inherit' } });
+              }
+              mutations.push({ type: 'bindHrefExpression', nodeId, expression: expr });
+              queueMutations(mutations);
+            }
+          }}
+          initialExpression={node?.hrefExpression || ''}
+          targetProperty="href"
+          collectionSlug={slugCollection}
+          itemVar={cmsMapContext?.itemVar}
+          fields={slugCollection ? collectionSchemas.get(slugCollection)?.fields : undefined}
         />
       )}
     </ToolSection>

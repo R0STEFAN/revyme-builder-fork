@@ -9,6 +9,7 @@ import {
   deleteProject,
   duplicateProject,
   saveUpload,
+  saveUploadExact,
   getUploadFilePath,
   listFolders,
   saveFolder,
@@ -182,6 +183,37 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
       }
 
+      // ─── POST /api/projects/import-bundle ─────────────────────────────────
+      if (url === '/api/projects/import-bundle' && method === 'POST') {
+        try {
+          const bodyBuf = await readBodyBuffer(req);
+          const bundle = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          const name = bundle.name || 'Imported Project';
+          const data = bundle.data || { format: 'revyme-v1', files: {} };
+          const assets = bundle.assets || {};
+
+          let savedAssetCount = 0;
+          for (const [filename, assetData] of Object.entries(assets)) {
+            if (assetData && typeof assetData === 'object' && (assetData as any).base64) {
+              const buf = Buffer.from((assetData as any).base64, 'base64');
+              saveUploadExact(filename, buf);
+              savedAssetCount++;
+            }
+          }
+
+          const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const saved = saveProject(newId, data, name, undefined, bundle.folderId ?? null, bundle.previewImage ?? null);
+
+          return sendJson(res, 201, {
+            success: true,
+            project: saved,
+            assetCount: savedAssetCount,
+          });
+        } catch (err: any) {
+          return sendJson(res, 400, { error: err.message || 'Failed to import bundle' });
+        }
+      }
+
       // ─── POST /api/upload ─────────────────────────────────────────────────
       if (url.startsWith('/api/upload') && method === 'POST') {
         try {
@@ -191,6 +223,11 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           let filename = 'upload.bin';
           let fileBuffer = bodyBuf;
 
+          const parsedUrl = new URL(url, 'http://localhost');
+          const isExact = parsedUrl.searchParams.get('exact') === '1' ||
+                          parsedUrl.searchParams.get('exact') === 'true' ||
+                          req.headers['x-exact-filename'] === 'true';
+
           if (contentType.includes('multipart/form-data')) {
             const parsed = parseMultipartFile(bodyBuf, contentType);
             if (parsed) {
@@ -199,14 +236,13 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             }
           } else {
             // Check query param ?filename= or header x-filename
-            const parsedUrl = new URL(url, 'http://localhost');
             const qFile = parsedUrl.searchParams.get('filename') || req.headers['x-filename'];
             if (qFile) {
               filename = decodeURIComponent(qFile);
             }
           }
 
-          const result = saveUpload(filename, fileBuffer);
+          const result = isExact ? saveUploadExact(filename, fileBuffer) : saveUpload(filename, fileBuffer);
           return sendJson(res, 200, result);
         } catch (err: any) {
           return sendJson(res, 500, { error: err.message || 'Failed to save upload' });
@@ -249,12 +285,63 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       }
 
       // ─── Project detail routes: /api/projects/:id ─────────────────────────
-      const projectRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)(\/duplicate|\/thumbnail)?/);
+      const projectRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)(\/duplicate|\/thumbnail|\/bundle)?/);
       if (projectRouteMatch) {
         const id = decodeURIComponent(projectRouteMatch[1]);
         const subRoute = projectRouteMatch[2];
         const isDuplicate = subRoute === '/duplicate';
         const isThumbnail = subRoute === '/thumbnail';
+        const isBundle = subRoute === '/bundle';
+
+        // GET /api/projects/:id/bundle
+        if (isBundle && method === 'GET') {
+          const project = getProject(id);
+          if (!project) {
+            return sendJson(res, 404, { error: 'Project not found' });
+          }
+
+          const serialized = JSON.stringify(project.data || {});
+          const assetMatches = serialized.matchAll(/\/api\/uploads\/([a-zA-Z0-9._-]+)/g);
+          const assetFileNames = Array.from(new Set(Array.from(assetMatches, (m) => m[1])));
+
+          // Also check project previewImage
+          if (project.previewImage && project.previewImage.startsWith('/api/uploads/')) {
+            const previewFile = project.previewImage.replace('/api/uploads/', '').split('?')[0];
+            if (previewFile && !assetFileNames.includes(previewFile)) {
+              assetFileNames.push(previewFile);
+            }
+          }
+
+          const assets: Record<string, { base64: string; mime?: string; size: number }> = {};
+          for (const filename of assetFileNames) {
+            const filePath = getUploadFilePath(filename);
+            if (filePath && fs.existsSync(filePath)) {
+              try {
+                const buf = fs.readFileSync(filePath);
+                const ext = path.extname(filename).toLowerCase();
+                const mime = MIME_TYPES[ext] || 'application/octet-stream';
+                assets[filename] = {
+                  base64: buf.toString('base64'),
+                  mime,
+                  size: buf.length,
+                };
+              } catch {}
+            }
+          }
+
+          const bundle = {
+            format: 'revyme-bundle-v1',
+            id: project.id,
+            name: project.name,
+            exportedAt: new Date().toISOString(),
+            data: project.data,
+            previewImage: project.previewImage || null,
+            folderId: project.folderId || null,
+            assets,
+          };
+
+          return sendJson(res, 200, bundle);
+        }
 
         // POST /api/projects/:id/thumbnail
         if (isThumbnail && method === 'POST') {
@@ -291,7 +378,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
 
         // GET /api/projects/:id
-        if (method === 'GET' && !isDuplicate && !isThumbnail) {
+        if (method === 'GET' && !isDuplicate && !isThumbnail && !isBundle) {
           const project = getProject(id);
           if (!project) {
             return sendJson(res, 404, { error: 'Project not found' });
@@ -300,7 +387,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
 
         // PUT /api/projects/:id
-        if (method === 'PUT' && !isDuplicate && !isThumbnail) {
+        if (method === 'PUT' && !isDuplicate && !isThumbnail && !isBundle) {
           try {
             const bodyBuf = await readBodyBuffer(req);
             const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
@@ -413,7 +500,11 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         // POST /api/local-server/:projectId/stop
         if (action === 'stop' && method === 'POST') {
           try {
-            const status = await manager.stop(projectId);
+            const bodyBuf = await readBodyBuffer(req);
+            const body = bodyBuf.length ? JSON.parse(bodyBuf.toString('utf-8')) : {};
+            const status = body.port !== undefined
+              ? await manager.stop(projectId, body.port)
+              : await manager.stop(projectId);
             return sendJson(res, 200, status);
           } catch (err: any) {
             return sendJson(res, 500, {

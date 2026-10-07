@@ -49,7 +49,7 @@ const GLASS_BASE: React.CSSProperties = {
   boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.2), 0 1px 3px -1px rgba(0, 0, 0, 0.1)',
 };
 
-export default function SaveButton() {
+export default function SaveButton({ className }: { className?: string } = {}) {
   const [saveStatus, setSaveStatus] = useAtom(saveStatusAtom);
   const isViewer = useIsViewer();
   const isComponentFile = useAtomValue(isComponentFileAtom);
@@ -69,12 +69,11 @@ export default function SaveButton() {
   }, [isViewer, isSaving, setSaveStatus]);
 
   // Determine appearance based on status
-  let buttonStyle: React.CSSProperties = { ...GLASS_BASE };
+  let buttonStyle: React.CSSProperties = {};
   let content: React.ReactNode = null;
 
   if (isSaving) {
     buttonStyle = {
-      ...GLASS_BASE,
       background: 'color-mix(in srgb, var(--bg-surface) 90%, transparent)',
       color: 'var(--text-secondary)',
       border: '1px solid var(--border-light)',
@@ -96,7 +95,6 @@ export default function SaveButton() {
     );
   } else if (saveStatus === 'saved') {
     buttonStyle = {
-      ...GLASS_BASE,
       background: 'rgba(34, 197, 94, 0.15)',
       color: '#22c55e',
       border: '1px solid rgba(34, 197, 94, 0.35)',
@@ -119,7 +117,6 @@ export default function SaveButton() {
     );
   } else if (saveStatus === 'error') {
     buttonStyle = {
-      ...GLASS_BASE,
       background: 'rgba(239, 68, 68, 0.15)',
       color: '#ef4444',
       border: '1px solid rgba(239, 68, 68, 0.35)',
@@ -145,7 +142,6 @@ export default function SaveButton() {
   } else {
     // 'unsaved' state
     buttonStyle = {
-      ...GLASS_BASE,
       background: isComponentFile ? 'var(--accent-secondary)' : 'var(--accent)',
       color: 'var(--accent-fg, #ffffff)',
       border: '1px solid transparent',
@@ -178,7 +174,10 @@ export default function SaveButton() {
       title="Save project (Ctrl+S / Cmd+S). Edits are autosaved automatically."
       data-testid="header-save-button"
       data-tutorial="canvas-save-button"
-      className="fixed top-[11px] right-[272px] z-[9001] cut-corners h-[30px] px-3 text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer select-none transition-all duration-150 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+      className={
+        className ??
+        'flex items-center justify-center h-[32px] px-2.5 cut-corners cut-border text-xs font-semibold gap-1.5 cursor-pointer select-none transition-all duration-150 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed'
+      }
       style={buttonStyle}
     >
       {content}

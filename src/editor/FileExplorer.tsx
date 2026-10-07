@@ -9,6 +9,7 @@ import {
   movePageFile, createRouteGroup, getRouteGroup, getPageSlug,
   switchActiveFile, createNotFoundPageFile, NOT_FOUND_PATH, notFoundExists,
   componentBreadcrumbAtom, filePathToAbPagePath,
+  createDynamicRouteFile, validateRoutePattern, normalizeRoutePattern,
 } from '../code/project/active-file-store';
 import { createTemplate, validateTemplateName } from '../code/project/template-ops';
 import { createCmsIndexPageFile, createCmsDetailPageFile, findCmsPageFile, prettyCollectionName } from '../code/project/cms-page-ops';
@@ -94,6 +95,16 @@ function ChevronIcon({ open }: { open: boolean }) {
       style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}
     >
       <polyline points="9 6 15 12 9 18" />
+    </svg>
+  );
+}
+
+function DynamicRouteIcon({ size = 14, className, style }: { size?: number; className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M4 3H2v10h2" />
+      <path d="M12 3h2v10h-2" />
+      <path d="M7 6l2 2-2 2" />
     </svg>
   );
 }
@@ -555,6 +566,8 @@ export default function FileExplorer() {
   // browser window.prompt these flows used before.
   const [routeGroupModalOpen, setRouteGroupModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [dynamicRouteModalOpen, setDynamicRouteModalOpen] = useState(false);
+  const [dynamicRouteParentDir, setDynamicRouteParentDir] = useState<string | undefined>(undefined);
   // entry.id of the row currently in inline-rename mode (page or
   // variant). Cleared on commit or Esc by the SidebarRow input.
   const [renamingEntryId, setRenamingEntryId] = useState<string | null>(null);
@@ -979,6 +992,22 @@ export default function FileExplorer() {
     trace.action('FileExplorer.addTemplate', { name: clean });
   }, [setVersion, activeFile]);
 
+  // Runs after the user submits the dynamic route pattern in the modal.
+  const performAddDynamicRoute = useCallback((pattern: string) => {
+    flushNow();
+    try {
+      const filePath = createDynamicRouteFile(pattern, dynamicRouteParentDir);
+      setVersion(v => v + 1); bumpTreeNow();
+      setSelectedIds([]);
+      setActiveFile(filePath);
+      setDynamicRouteModalOpen(false);
+      fitAllOnNextRender();
+      trace.action('FileExplorer.addDynamicRoute', { filePath, pattern, groupDir: dynamicRouteParentDir });
+    } catch (e) {
+      trace.error('FileExplorer.addDynamicRoute:error', e);
+    }
+  }, [dynamicRouteParentDir, setActiveFile, setSelectedIds, setVersion, bumpTreeNow]);
+
   // Outside click + Escape handled by DropdownMenu component
 
   // ─── Delete ────────────────────────────────────────────────────────────
@@ -1333,6 +1362,7 @@ export default function Page() {
             items={(() => {
               const items: DropdownMenuEntry[] = [
                 { id: 'new-page', label: 'New Page', icon: <PageDocumentIcon size={14} />, onClick: () => addPage() },
+                { id: 'new-dynamic-route', label: 'New Dynamic Route', icon: <DynamicRouteIcon size={14} />, onClick: () => { setDynamicRouteParentDir(undefined); setDynamicRouteModalOpen(true); } },
                 { id: 'new-folder', label: 'New Folder', icon: <PageFolderIcon size={14} />, onClick: () => addFolder() },
               ];
               // 404 page — only one allowed per project. Hide the
@@ -1656,22 +1686,24 @@ export default function Page() {
               // the corresponding page.tsx wrapper automatically.
               if (entry.type === 'page') {
                 const oldPath = entry.filePath;
-                // A `[slug]` segment is a ROUTE, not a name: the sluggifier
-                // below strips the brackets, so renaming a detail page would
-                // quietly turn `/[slug]` into `/slug` and every item URL
-                // would 404. The collection names that page.
-                if (/\[[^/\]]+\]/.test(oldPath)) {
+                // A CMS detail page is named by its collection.
+                const isCmsDetail = Array.from(collectionSchemas.keys()).some(colSlug => findCmsPageFile(colSlug, 'detail') === oldPath);
+                if (isCmsDetail) {
                   trace.action('FileExplorer.renamePage-bail', { reason: 'dynamic-segment', oldPath });
                   alert('A collection detail page is named by its collection — its [slug] is the route itself.');
                   return;
                 }
-                const m = oldPath.match(/^(app(?:\/\([^)]+\))?)\/([^/]+)\/page\.client\.tsx$/);
+                const m = oldPath.match(/^(app(?:\/\([^)]+\))?)\/(.+)\/page\.client\.tsx$/);
                 if (!m) return;  // home page (app/page.client.tsx) doesn't have a slug to rename
                 const prefix = m[1];
-                const slug = trimmed.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
-                if (!slug) return;
-                const newPath = `${prefix}/${slug}/page.client.tsx`;
+                const normalized = normalizeRoutePattern(trimmed);
+                if (!normalized) return;
+                const newPath = `${prefix}/${normalized}/page.client.tsx`;
                 if (newPath === oldPath) return;
+                if (projectFS.exists(newPath)) {
+                  alert(`A page at "/${normalized}" already exists.`);
+                  return;
+                }
                 trace.action('FileExplorer.renamePage', { from: oldPath, to: newPath });
                 flushNow();
                 movePageFile(oldPath, newPath);
@@ -1901,6 +1933,17 @@ export default function Page() {
         // Templates share the component-system accent — purple fill, white
         // label — everywhere else in the app; the modal has to match.
         accent="secondary"
+      />
+      <NameInputModal
+        isOpen={dynamicRouteModalOpen}
+        onClose={() => setDynamicRouteModalOpen(false)}
+        onSubmit={performAddDynamicRoute}
+        title="New Dynamic Route"
+        description="Supports Next.js [param] and :param syntax (e.g. gallery/[category]/[place])"
+        placeholder="gallery/[category]/[place]"
+        defaultValue=""
+        submitLabel="Create Dynamic Route"
+        validate={validateRoutePattern}
       />
     </div>
   );

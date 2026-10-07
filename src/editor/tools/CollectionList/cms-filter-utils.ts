@@ -131,11 +131,216 @@ const OP_SUMMARY: Record<FilterConfig['operator'], string> = {
 
 /** Human-readable one-line summary for a filter row (e.g. "Category is News"). */
 export function filterSummary(f: FilterConfig, fieldName: string): string {
-  if (f.valueSource === 'searchField') return `${fieldName} matches search`;
-  if (f.valueSource === 'dateField') return `${fieldName} from date`;
+  const displayField = fieldName.replace(/\./g, ' › ');
+  if (f.valueSource === 'searchField') return `${displayField} matches search`;
+  if (f.valueSource === 'dateField') return `${displayField} from date`;
+  if (f.valueSource === 'routeParam') return `${displayField} is [:${f.valueVar}]`;
   const op = OP_SUMMARY[f.operator] ?? f.operator;
-  if (operatorTakesNoValue(f.operator)) return `${fieldName} ${op}`;
-  if (f.operator === 'between' && Array.isArray(f.value)) return `${fieldName} ${op} ${f.value[0]}–${f.value[1]}`;
+  if (operatorTakesNoValue(f.operator)) return `${displayField} ${op}`;
+  if (f.operator === 'between' && Array.isArray(f.value)) return `${displayField} ${op} ${f.value[0]}–${f.value[1]}`;
   const v = f.value === '' || f.value == null ? '…' : String(f.value);
-  return `${fieldName} ${op} ${v}`;
+  return `${displayField} ${op} ${v}`;
 }
+
+export interface HierarchicalField {
+  id: string;
+  name: string;
+  fullPath: string;
+  type?: FieldType | string;
+  children?: HierarchicalField[];
+}
+
+function discoverObjectKeys(samples: any[], prefixPath: string): HierarchicalField[] {
+  const map = new Map<string, HierarchicalField>();
+  for (const s of samples) {
+    if (!s || typeof s !== 'object') continue;
+    for (const k of Object.keys(s)) {
+      if (k.startsWith('_') && k !== '_id' && k !== '_slug') continue;
+      if (!map.has(k)) {
+        const val = s[k];
+        const subType = typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : (val && typeof val === 'object') ? 'object' : 'text';
+        let grandChildren: HierarchicalField[] | undefined;
+        if (val && typeof val === 'object') {
+          grandChildren = discoverObjectKeys(Array.isArray(val) ? val : [val], `${prefixPath}.${k}`);
+        }
+        map.set(k, {
+          id: k,
+          name: k,
+          fullPath: `${prefixPath}.${k}`,
+          type: subType,
+          children: grandChildren && grandChildren.length > 0 ? grandChildren : undefined,
+        });
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+function discoverChildrenForField(
+  fieldId: string,
+  referenceCollection: string | undefined,
+  sampleItems: any[],
+  collectionSchemas?: Map<string, CollectionSchema>,
+  collectionData?: Map<string, any[]>,
+  visitedCollections = new Set<string>(),
+  depth = 1,
+): HierarchicalField[] {
+  if (depth > 5) return [];
+  const childrenMap = new Map<string, HierarchicalField>();
+
+  // 1. If referenceCollection is explicitly provided on field
+  if (referenceCollection && collectionSchemas?.has(referenceCollection) && !visitedCollections.has(referenceCollection)) {
+    const refSchema = collectionSchemas.get(referenceCollection)!;
+    const subFields = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth);
+    for (const sf of subFields) {
+      childrenMap.set(sf.id, {
+        ...sf,
+        fullPath: `${fieldId}.${sf.fullPath}`,
+      });
+    }
+  }
+
+  // 2. Infer related collection by field naming convention (e.g. categories_m2m / categoriesM2m / category_id -> categories)
+  if (collectionSchemas) {
+    const cleanId = fieldId.toLowerCase().replace(/_m2m|m2m|_id|id$/i, '').trim();
+    for (const [slug, refSchema] of collectionSchemas.entries()) {
+      const cleanSlug = slug.toLowerCase();
+      if ((cleanSlug === cleanId || cleanSlug === cleanId + 's' || cleanSlug + 's' === cleanId) && !visitedCollections.has(slug)) {
+        const subFields = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth);
+        for (const sf of subFields) {
+          if (!childrenMap.has(sf.id)) {
+            childrenMap.set(sf.id, {
+              ...sf,
+              fullPath: `${fieldId}.${sf.fullPath}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Inspect live sample items in data
+  for (const sample of sampleItems.slice(0, 10)) {
+    const val = (sample as any)[fieldId];
+    if (!val) continue;
+
+    if (Array.isArray(val)) {
+      for (const elem of val) {
+        if (elem && typeof elem === 'object') {
+          for (const key of Object.keys(elem)) {
+            if (key.startsWith('_') && key !== '_id' && key !== '_slug') continue;
+            if (!childrenMap.has(key)) {
+              const subVal = elem[key];
+              const subType = typeof subVal === 'number' ? 'number' : typeof subVal === 'boolean' ? 'boolean' : (subVal && typeof subVal === 'object') ? 'object' : 'text';
+
+              let subChildren: HierarchicalField[] | undefined;
+              if (subVal && typeof subVal === 'object') {
+                const nestedSamples = Array.isArray(subVal) ? subVal : [subVal];
+                subChildren = discoverObjectKeys(nestedSamples, `${fieldId}.${key}`);
+              } else if (collectionSchemas && (key.endsWith('_id') || key.endsWith('Id') || key.endsWith('_m2m'))) {
+                const subClean = key.toLowerCase().replace(/_m2m|m2m|_id|id$/i, '').trim();
+                for (const [slug, refSchema] of collectionSchemas.entries()) {
+                  if (slug.toLowerCase() === subClean || slug.toLowerCase() === subClean + 's') {
+                    const nested = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth + 1);
+                    if (nested.length > 0) {
+                      subChildren = nested.map(n => ({ ...n, fullPath: `${fieldId}.${key}.${n.fullPath}` }));
+                    }
+                  }
+                }
+              }
+
+              childrenMap.set(key, {
+                id: key,
+                name: key,
+                fullPath: `${fieldId}.${key}`,
+                type: subType,
+                children: subChildren && subChildren.length > 0 ? subChildren : undefined,
+              });
+            }
+          }
+        }
+      }
+    } else if (typeof val === 'object' && val !== null) {
+      for (const key of Object.keys(val)) {
+        if (key.startsWith('_') && key !== '_id' && key !== '_slug') continue;
+        if (!childrenMap.has(key)) {
+          const subVal = val[key];
+          const subType = typeof subVal === 'number' ? 'number' : typeof subVal === 'boolean' ? 'boolean' : (subVal && typeof subVal === 'object') ? 'object' : 'text';
+          let subChildren: HierarchicalField[] | undefined;
+          if (subVal && typeof subVal === 'object') {
+            const nestedSamples = Array.isArray(subVal) ? subVal : [subVal];
+            subChildren = discoverObjectKeys(nestedSamples, `${fieldId}.${key}`);
+          }
+          childrenMap.set(key, {
+            id: key,
+            name: key,
+            fullPath: `${fieldId}.${key}`,
+            type: subType,
+            children: subChildren && subChildren.length > 0 ? subChildren : undefined,
+          });
+        }
+      }
+    }
+  }
+
+  return Array.from(childrenMap.values());
+}
+
+/**
+ * Builds a hierarchical tree of fields for a collection schema, resolving nested
+ * relation subfields and discovered array/object fields.
+ */
+export function buildHierarchicalFields(
+  schema: CollectionSchema | null,
+  collectionSchemas?: Map<string, CollectionSchema>,
+  collectionData?: Map<string, any[]>,
+  visitedCollections = new Set<string>(),
+  depth = 0,
+): HierarchicalField[] {
+  if (!schema || depth > 5) return [];
+  const currSlug = schema.slug;
+  const sampleItems = collectionData?.get(currSlug) || [];
+
+  const baseFields = fieldsForSortFilter(schema);
+  const result: HierarchicalField[] = [];
+
+  for (const f of baseFields) {
+    const item: HierarchicalField = {
+      id: f.id,
+      fullPath: f.id,
+      name: f.name || f.id,
+      type: f.type || 'text',
+    };
+
+    const children = discoverChildrenForField(
+      f.id,
+      f.referenceCollection,
+      sampleItems,
+      collectionSchemas,
+      collectionData,
+      new Set([...visitedCollections, currSlug]),
+      depth + 1,
+    );
+
+    if (children && children.length > 0) {
+      item.children = children;
+    }
+
+    result.push(item);
+  }
+
+  return result;
+}
+
+export function flattenHierarchicalFields(tree: HierarchicalField[], prefixLabel = ''): { fullPath: string; label: string; type: string }[] {
+  const list: { fullPath: string; label: string; type: string }[] = [];
+  for (const node of tree) {
+    const label = prefixLabel ? `${prefixLabel} › ${node.name}` : node.name;
+    list.push({ fullPath: node.fullPath, label, type: String(node.type || 'text') });
+    if (node.children && node.children.length > 0) {
+      list.push(...flattenHierarchicalFields(node.children, label));
+    }
+  }
+  return list;
+}
+

@@ -189,7 +189,6 @@ export function PageTransitions({ children }: { children: React.ReactNode }) {
       const eff = resolvePageEffect(PAGE_EFFECTS as any, location.pathname, dest.pathname);
       if (!eff) return;
       e.preventDefault();
-      e.stopImmediatePropagation();
       const styleEl = document.createElement('style');
       styleEl.id = 'revyme-vt-active';
       styleEl.textContent = buildViewTransitionCSS(eff.exit, eff.enter);

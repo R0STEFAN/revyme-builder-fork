@@ -911,6 +911,19 @@ function OverlayControls({ nodeId, overlayConfig, allTriggers }: {
             onChange={(v) => updatePosition({ collisionPadding: Math.max(0, parseFloat(v) || 0) })} />
         </div>
       </div>
+
+      {/* Close on Link — whether clicking a link inside the dropdown automatically closes it */}
+      <div className="flex items-center justify-between w-full">
+        <ControlLabel label="Close on Link" property="" plain />
+        <div className="w-full">
+          <ToolSegmentedControl
+            value={overlayConfig.closeOnLink !== false ? 'yes' : 'no'}
+            onChange={(v) => updateBase({ closeOnLink: v === 'yes' })}
+            options={DISMISSIBLE_OPTIONS}
+            size="sm"
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,8 @@
 import { trace } from './debug-trace';
 import { CLOUD_ENABLED } from './cloud-flag';
 
+import catalogFonts from './google-fonts-catalog.json';
+
 // Google Fonts catalog source. In CLOUD mode we go through the backend proxy
 // (`/api/media/fonts`) so Revyme's key stays server-side and never ships in
 // the browser bundle. In STANDALONE / self-hosted mode there's no backend, so
@@ -24,28 +26,21 @@ export interface FontItem {
   tags: { name: string; weight: number }[];
 }
 
-/** Default system fonts — fallback when API is unavailable */
-export const DEFAULT_FONTS: FontItem[] = [
-  { family: 'Arial', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Helvetica', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Times New Roman', variants: ['regular', '700'], category: 'serif', tags: [] },
-  { family: 'Georgia', variants: ['regular', '700'], category: 'serif', tags: [] },
-  { family: 'Courier New', variants: ['regular', '700'], category: 'monospace', tags: [] },
-  { family: 'Verdana', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Tahoma', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Trebuchet MS', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Comic Sans MS', variants: ['regular', '700'], category: 'cursive', tags: [] },
-  { family: 'Impact', variants: ['regular'], category: 'fantasy', tags: [] },
-  { family: 'Roboto', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Open Sans', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Lato', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Montserrat', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-  { family: 'Poppins', variants: ['regular', '700'], category: 'sans-serif', tags: [] },
-];
+/** Complete Google Fonts catalog as default fallback when API key is unavailable */
+export const DEFAULT_FONTS: FontItem[] = catalogFonts as FontItem[];
 
-/** Feeling categories extracted from Google Fonts tags */
+/** Standard and feeling categories for Google Fonts */
 export const FEELING_CATEGORIES = [
   'All',
+  'Custom',
+  'Cyrillic',
+  // Standard typography classifications
+  'Sans Serif',
+  'Serif',
+  'Display',
+  'Handwriting',
+  'Monospace',
+  // Mood / Feeling categories from Google Fonts tags
   'Business',
   'Fancy',
   'Calm',

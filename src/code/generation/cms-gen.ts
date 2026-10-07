@@ -4,7 +4,7 @@
 
 import { trace } from '@/shared/debug-trace';
 import { escapeJsxText } from '@/code/parsing/rich-text-runs';
-import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine } from './generator-utils';
+import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport } from './generator-utils';
 import type { FilterGroup, SortConfig } from '@/shared/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -84,26 +84,83 @@ function ensureCmsImport(code: string, slug: string): string {
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isDateVal = (v: any): boolean => typeof v === 'string' && DATE_ONLY_RE.test(v);
 
+/**
+ * Infer the referenced CMS collection slug from a relation field name.
+ * e.g. "categoriesM2m" -> "categories", "placements_m2m" -> "placements", "category" -> "categories".
+ */
+export function inferReferencedCollectionSlug(fieldName: string): string {
+  if (!fieldName) return '';
+  const root = fieldName.includes('.') ? fieldName.split('.')[0] : fieldName;
+  const stripped = root.replace(/(?:M2m|_m2m|M2o|_m2o|Ids?|_ids?)$/i, '');
+  if (stripped.endsWith('y')) {
+    return stripped.slice(0, -1) + 'ies';
+  }
+  if (!stripped.endsWith('s')) {
+    return stripped + 's';
+  }
+  return stripped;
+}
+
 export function buildFilterExpression(fg: FilterGroup): string {
   const conditions = fg.filters.map(f => {
+    const isDeep = f.field.includes('.');
+    const rootField = isDeep ? f.field.split('.')[0] : f.field;
+    const subPath = isDeep ? f.field.split('.').slice(1).join('?.') : '';
+    const refSlug = isDeep ? inferReferencedCollectionSlug(rootField) : '';
+
     // Dynamic value (Phase 4) — the predicate reads a page variable (search input /
     // date picker) at runtime, with an empty-guard so a blank input matches all.
     if (f.valueSource === 'searchField' && f.valueVar) {
-      return `(${f.valueVar} === '' || String(item.${f.field}).toLowerCase().includes(${f.valueVar}.toLowerCase()))`;
+      if (isDeep && refSlug) {
+        return `(${f.valueVar} === '' || (Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase().includes(${f.valueVar}.toLowerCase()) || JSON.stringify(x).toLowerCase().includes(${f.valueVar}.toLowerCase()); const str = String(x).toLowerCase(); if (str.includes(${f.valueVar}.toLowerCase())) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase().includes(${f.valueVar}.toLowerCase()) : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase().includes(${f.valueVar}.toLowerCase()) : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase().includes(${f.valueVar}.toLowerCase())))))`;
+      }
+      return `(${f.valueVar} === '' || (Array.isArray(item.${rootField}) ? JSON.stringify(item.${rootField}).toLowerCase().includes(${f.valueVar}.toLowerCase()) : String(item.${f.field}).toLowerCase().includes(${f.valueVar}.toLowerCase())))`;
     }
     if (f.valueSource === 'dateField' && f.valueVar) {
       return `(!${f.valueVar} || item.${f.field} >= ${f.valueVar})`;
+    }
+    if (f.valueSource === 'routeParam' && f.valueVar) {
+      if (f.operator === 'contains') {
+        if (isDeep && refSlug) {
+          return `(!params?.${f.valueVar} || (Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()) || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()); const str = String(x).toLowerCase(); if (str.includes(String(params.${f.valueVar}).toLowerCase())) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()) : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()) : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase())))))`;
+        }
+        return `(!params?.${f.valueVar} || (Array.isArray(item.${rootField}) ? JSON.stringify(item.${rootField}).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()) : String(item.${f.field}).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase())))`;
+      }
+      if (f.operator === 'not_equals') {
+        if (isDeep && refSlug) {
+          return `(!params?.${f.valueVar} || !(Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()); const str = String(x).toLowerCase(); if (str === String(params.${f.valueVar}).toLowerCase()) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase()))))`;
+        }
+        return `(!params?.${f.valueVar} || (Array.isArray(item.${f.field}) ? !item.${f.field}.some((x: any) => (typeof x === 'object' ? (x?.slug === params.${f.valueVar} || x?.categories_id?.slug === params.${f.valueVar} || String(x?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase()) : String(x).toLowerCase() === String(params.${f.valueVar}).toLowerCase())) : String(item.${f.field}).toLowerCase() !== String(params.${f.valueVar}).toLowerCase()))`;
+      }
+      if (isDeep && refSlug) {
+        return `(!params?.${f.valueVar} || (Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()); const str = String(x).toLowerCase(); if (str === String(params.${f.valueVar}).toLowerCase()) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase()))))`;
+      }
+      return `(!params?.${f.valueVar} || (Array.isArray(item.${f.field}) ? item.${f.field}.some((x: any) => (typeof x === 'object' ? (x?.slug === params.${f.valueVar} || x?.categories_id?.slug === params.${f.valueVar} || String(x?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase())) : String(x).toLowerCase() === String(params.${f.valueVar}).toLowerCase())) : String(item.${f.field}).toLowerCase() === String(params.${f.valueVar}).toLowerCase()))`;
     }
     // Date-aware LHS for comparison operators (see DATE_ONLY_RE note above).
     const dateCmp = isDateVal(f.value) || (Array.isArray(f.value) && (isDateVal(f.value[0]) || isDateVal(f.value[1])));
     const lhs = dateCmp ? `String(item.${f.field}).slice(0, 10)` : `item.${f.field}`;
     switch (f.operator) {
-      case 'equals': return `${lhs} === ${JSON.stringify(f.value)}`;
-      case 'not_equals': return `${lhs} !== ${JSON.stringify(f.value)}`;
-      // contains / not_contains are CASE-INSENSITIVE (design-tool parity) — "the"
-      // matches "The Truth…" as well as "…the spreadsheet".
-      case 'contains': return `String(item.${f.field}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase())`;
-      case 'not_contains': return `!String(item.${f.field}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase())`;
+      case 'equals':
+        if (isDeep && refSlug) {
+          return `(Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()); const str = String(x).toLowerCase(); if (str === String(${JSON.stringify(f.value)}).toLowerCase()) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase())))`;
+        }
+        return `${lhs} === ${JSON.stringify(f.value)}`;
+      case 'not_equals':
+        if (isDeep && refSlug) {
+          return `!(Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()); const str = String(x).toLowerCase(); if (str === String(${JSON.stringify(f.value)}).toLowerCase()) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase() : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase() === String(${JSON.stringify(f.value)}).toLowerCase())))`;
+        }
+        return `${lhs} !== ${JSON.stringify(f.value)}`;
+      case 'contains':
+        if (isDeep && refSlug) {
+          return `(Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) || JSON.stringify(x).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()); const str = String(x).toLowerCase(); if (str.includes(String(${JSON.stringify(f.value)}).toLowerCase())) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()))))`;
+        }
+        return `(Array.isArray(item.${rootField}) ? JSON.stringify(item.${rootField}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : String(item.${f.field}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()))`;
+      case 'not_contains':
+        if (isDeep && refSlug) {
+          return `!(Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) || JSON.stringify(x).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()); const str = String(x).toLowerCase(); if (str.includes(String(${JSON.stringify(f.value)}).toLowerCase())) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()))))`;
+        }
+        return `!(Array.isArray(item.${rootField}) ? JSON.stringify(item.${rootField}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()) : String(item.${f.field}).toLowerCase().includes(String(${JSON.stringify(f.value)}).toLowerCase()))`;
       case 'gt': return `${lhs} > ${JSON.stringify(f.value)}`;
       case 'gte': return `${lhs} >= ${JSON.stringify(f.value)}`;
       case 'lt': return `${lhs} < ${JSON.stringify(f.value)}`;
@@ -121,6 +178,7 @@ export function buildFilterExpression(fg: FilterGroup): string {
   const joiner = fg.combinator === 'or' ? ' || ' : ' && ';
   return conditions.join(joiner);
 }
+
 
 /** One sort key → a parenthesized 3-branch comparator that returns 0 on a tie so
  *  the next `||`-joined key can break it. asc: `>` ⇒ +1; desc: `>` ⇒ -1. */
@@ -743,10 +801,45 @@ export function updateCollectionListConfigInCode(
   const absoluteStart = closing.contentStart + slugStart;
   const absoluteEnd = closing.contentStart + oldChainEnd;
 
-  const result = code.slice(0, absoluteStart) + newChainWithMap + code.slice(absoluteEnd);
+  let result = code.slice(0, absoluteStart) + newChainWithMap + code.slice(absoluteEnd);
+
+  const hasRouteParamFilter = filterGroup?.filters.some(f => f.valueSource === 'routeParam');
+  if (hasRouteParamFilter) {
+    result = ensureNamedImport(result, 'next/navigation', ['useParams']);
+    if (!/\bconst\s+params\s*=\s*useParams\s*\(\s*\)/.test(result)) {
+      result = insertConstIntoEnclosingFn(result, parentId, 'const params = useParams();');
+    }
+  }
+
+  if (filterGroup && filterGroup.filters.length > 0) {
+    for (const f of filterGroup.filters) {
+      if (f.field.includes('.')) {
+        const root = f.field.split('.')[0];
+        const refSlug = inferReferencedCollectionSlug(root);
+        if (refSlug) {
+          result = ensureCmsImport(result, refSlug);
+        }
+      }
+    }
+  }
 
   trace.action('cms-gen:updateCollectionConfig:done', { parentId, slug });
   return result;
+}
+
+/** Insert a const declaration right at the top of the function enclosing parentId. */
+export function insertConstIntoEnclosingFn(code: string, parentId: string, decl: string): string {
+  const elStart = findJSXElementByDataId(code, parentId);
+  if (elStart === -1) return code;
+  const re = /function\s+\w+\s*\([^)]*\)\s*\{/g;
+  let m: RegExpExecArray | null;
+  let braceAt = -1;
+  while ((m = re.exec(code))) {
+    const b = m.index + m[0].length;
+    if (b <= elStart) braceAt = b; else break;
+  }
+  if (braceAt === -1) return code;
+  return code.slice(0, braceAt) + `\n  ${decl}` + code.slice(braceAt);
 }
 
 /** Skip whitespace backward and return the index of the first non-whitespace char. */

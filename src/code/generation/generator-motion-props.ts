@@ -9,6 +9,7 @@ import { scopeTest, testToScope, ensureMediaQueryHook, ensureMediaGate, detectVa
 import { wrapInstanceWithMotionConfig } from './generator-motion-transition';
 import { parseObjLiteral } from './generator-motion-loop';
 import { type FxScopeOverride } from './generator-motion-scroll-fx';
+import { ensureEnclosingMapIndexParamInCode } from './map-gen';
 
 // ─── Motion Props Manipulation ────────────────────────────────────────
 
@@ -26,6 +27,15 @@ export function updateMotionPropInCode(
   props: Record<string, string>,
 ): string {
   trace.fn('generator.updateMotionPropInCode', { nodeId, propName, props });
+
+  let effectiveProps = { ...props };
+  if (propName === 'transition' && effectiveProps.delay && /\b(index|idx|i)\s*\*/.test(effectiveProps.delay)) {
+    const mapEnsured = ensureEnclosingMapIndexParamInCode(code, nodeId);
+    if (mapEnsured) {
+      code = mapEnsured.code;
+      effectiveProps.delay = effectiveProps.delay.replace(/\b(index|idx|i)\b/, mapEnsured.indexVar);
+    }
+  }
 
   const idPattern = `data-id="${nodeId}"`;
   const idIdx = findJSXDataIdIndex(code, nodeId);
@@ -54,7 +64,7 @@ export function updateMotionPropInCode(
     const converted = convertToMotionLinkInCode(code, nodeId);
     if (converted !== code) {
       trace.action('generator:link-to-motionlink-for-motion-prop', { nodeId, propName });
-      return updateMotionPropInCode(converted, nodeId, propName, props);
+      return updateMotionPropInCode(converted, nodeId, propName, effectiveProps);
     }
   }
 
@@ -85,7 +95,7 @@ export function updateMotionPropInCode(
 
   if (isComponentInstanceTag) {
     if (propName === 'transition') {
-      return wrapInstanceWithMotionConfig(code, nodeId, props);
+      return wrapInstanceWithMotionConfig(code, nodeId, effectiveProps);
     }
     trace.action('generator:motion-prop-skipped-on-component-instance', { nodeId, tagName, propName });
     return code;
@@ -142,9 +152,11 @@ export function updateMotionPropInCode(
     if (v.startsWith('{') && v.endsWith('}')) return true;
     // Boolean.
     if (v === 'true' || v === 'false') return true;
+    // Stagger index expression (e.g. index * 0.1, idx * 0.1, i * 0.1)
+    if (/\b(index|idx|i)\s*\*/.test(v)) return true;
     return false;
   };
-  const propEntries = Object.entries(props)
+  const propEntries = Object.entries(effectiveProps)
     // Skip internal markers (e.g. `_scope`, `_variantName`) — they're parser
     // annotations, never real animated props, and must not be written back.
     .filter(([k, v]) => v !== '' && v !== undefined && !k.startsWith('_'))
@@ -284,7 +296,7 @@ function rebuildScopedExpr(base: string, overrides: Map<string, string>): string
 /** Format an animation props map as a `{ k: v, … }` object literal (numbers,
  *  arrays, booleans unquoted; strings single-quoted; `_`-markers dropped). */
 function formatMotionPropObject(props: Record<string, string>): string {
-  const lit = (v: string) => v !== '' && (!isNaN(Number(v)) || /^\[.*\]$/.test(v) || v === 'true' || v === 'false');
+  const lit = (v: string) => v !== '' && (!isNaN(Number(v)) || /^\[.*\]$/.test(v) || v === 'true' || v === 'false' || /\b(index|idx|i)\s*\*/.test(v));
   const entries = Object.entries(props)
     .filter(([k, v]) => v !== '' && v !== undefined && !k.startsWith('_'))
     .map(([k, v]) => `${k}: ${lit(v) ? v : `'${v}'`}`)

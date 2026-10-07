@@ -178,7 +178,8 @@ export async function captureElement(
       trace.action('canvas-sandbox:captureElement', { nodeId, vpPrefix, format: opts.format, width: norm.width, height: norm.height });
       const base = {
         pixelRatio: opts.pixelRatio,
-        cacheBust: true,
+        cacheBust: false,
+        imagePlaceholder: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
         backgroundColor: opts.backgroundColor,
         width: norm.width,
         height: norm.height,

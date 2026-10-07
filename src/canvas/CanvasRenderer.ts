@@ -49,6 +49,8 @@ export interface RenderInput {
   /** CMS schemas + item data mirrored into the iframe stub so collection
    *  list ghost copies render against real rows. See bridge-host's render. */
   cmsCollections?: { data: Record<string, any[]>; schemas: Record<string, any> };
+  /** Live test route parameters for dynamic routes preview (e.g. { category: 'men', place: 'noga' }). */
+  previewRouteParams?: Record<string, string>;
 }
 
 /** Shallow ref-equality over record values (same keys, Object.is values). */
@@ -86,6 +88,7 @@ export class CanvasRenderer {
     localeOverrides?: RenderInput['localeOverrides'];
     cmsSchemas?: Record<string, unknown>;
     cmsData?: Record<string, unknown>;
+    previewRouteParams?: Record<string, string>;
   } | null = null;
 
   private isDuplicateForward(input: RenderInput, viewportsJson: string): boolean {
@@ -101,7 +104,8 @@ export class CanvasRenderer {
       p.defaultLocale === input.defaultLocale &&
       p.localeOverrides === input.localeOverrides &&
       shallowRecordEqual(p.cmsSchemas, input.cmsCollections?.schemas) &&
-      shallowRecordEqual(p.cmsData, input.cmsCollections?.data)
+      shallowRecordEqual(p.cmsData, input.cmsCollections?.data) &&
+      shallowRecordEqual(p.previewRouteParams, input.previewRouteParams)
     );
   }
 
@@ -117,6 +121,7 @@ export class CanvasRenderer {
       localeOverrides: input.localeOverrides,
       cmsSchemas: input.cmsCollections?.schemas,
       cmsData: input.cmsCollections?.data,
+      previewRouteParams: input.previewRouteParams,
     };
   }
 
@@ -297,6 +302,7 @@ export class CanvasRenderer {
       // Same-file distrust (undo) keeps culling — the file-switch cull reset
       // guards cross-file id collisions and would cost a full re-measure here.
       opts?.distrustPatchKeys ? true : undefined,
+      input.previewRouteParams,
     );
     this.rememberForward(input, viewportsJson);
     // The owed structural render (if any) just reached the iframe.
@@ -339,6 +345,8 @@ export class CanvasRenderer {
       // File switch / full refresh: never trust per-element patch keys
       // stamped by a previous file's render (data-ids collide across files).
       true,
+      undefined,
+      input.previewRouteParams,
     );
     // Forced renders bypass the duplicate check but still count as the
     // last forwarded state for subsequent regular renders.

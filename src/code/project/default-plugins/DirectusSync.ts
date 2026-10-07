@@ -1,6 +1,7 @@
 // DirectusSync.ts — Full-featured Directus CMS synchronization plugin for Revyme.
 // Supports both Admin API (/collections, /fields) and direct Items API (/items/<collection>)
-// with automatic schema inference, field validation, merging, and syncing.
+// with automatic schema inference, field validation, merging, syncing,
+// and optional local asset downloading into Revyme project storage.
 
 export const DIRECTUS_SYNC_PLUGIN_SOURCE = `// Directus CMS Sync — Revyme plugin
 import { createPlugin } from '@revyme/plugin-sdk';
@@ -41,26 +42,40 @@ function App({ plugin }) {
   const [revymeCollections, setRevymeCollections] = useState([]);
   const [selectedRevymeSlug, setSelectedRevymeSlug] = useState('');
   const [revymeFields, setRevymeFields] = useState([]);
+  const [replaceExisting, setReplaceExisting] = useState(true);
 
   // Field validation / diff
   const [missingFields, setMissingFields] = useState([]);
   const [mergeChoice, setMergeChoice] = useState('merge'); // 'merge' | 'switch-new'
 
-  // Step 3: Syncing
+  // Step 3: Asset mode & Syncing
+  const [assetMode, setAssetMode] = useState('local'); // 'local' | 'remote'
   const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
   const [syncSuccess, setSyncSuccess] = useState('');
 
-  // Load saved credentials
+  // Load saved credentials & preferences
   useEffect(() => {
     try {
       const savedUrl = localStorage.getItem('revyme:directus:url');
       const savedToken = localStorage.getItem('revyme:directus:token');
       const savedColl = localStorage.getItem('revyme:directus:last-coll');
+      const savedAssetMode = localStorage.getItem('revyme:directus:asset-mode');
       if (savedUrl) setUrl(savedUrl);
       if (savedToken) setToken(savedToken);
       if (savedColl) setCollectionInput(savedColl);
+      if (savedAssetMode === 'local' || savedAssetMode === 'remote') {
+        setAssetMode(savedAssetMode);
+      }
     } catch {}
   }, []);
+
+  const handleAssetModeChange = (mode) => {
+    setAssetMode(mode);
+    try {
+      localStorage.setItem('revyme:directus:asset-mode', mode);
+    } catch {}
+  };
 
   // Fetch Revyme CMS collections
   const loadRevymeCollections = async () => {
@@ -262,10 +277,132 @@ function App({ plugin }) {
     if (['integer', 'biginteger', 'float', 'decimal', 'number'].includes(dt)) return 'number';
     if (dt === 'boolean') return 'boolean';
     if (['date', 'datetime', 'timestamp', 'time'].includes(dt)) return 'date';
-    if (iface.includes('image') || dt === 'image' || dt === 'file' || iface.includes('file') || name.includes('img') || name.includes('image') || name.includes('photo')) return 'image';
+    if (iface.includes('image') || dt === 'image' || dt === 'file' || iface.includes('file') || name.includes('img') || name.includes('image') || name.includes('photo') || name.includes('thumb') || name.includes('avatar') || name.includes('cover')) return 'image';
     if (iface.includes('wysiwyg') || iface.includes('markdown') || dt === 'richtext' || dt === 'rich-text') return 'richtext';
     if (dt === 'tags' || dt === 'array' || dt === 'm2m' || dt === 'multi-reference' || iface.includes('m2m') || iface.includes('tags') || iface.includes('select-multiple') || name.includes('_m2m') || name.includes('m2m')) return 'tags';
     return 'text';
+  };
+
+  // Downloads asset from Directus (CORS-safe) and saves it locally in Revyme
+  const localizeAsset = async (assetVal, baseUrl, headers, assetCache) => {
+    if (!assetVal) return '';
+
+    let assetId = '';
+    let targetUrl = '';
+    let fallbackFileName = 'asset';
+
+    if (typeof assetVal === 'string') {
+      const trimmed = assetVal.trim();
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+        assetId = trimmed;
+        targetUrl = \`\${baseUrl}/assets/\${assetId}\`;
+        fallbackFileName = assetId;
+      } else if (/^https?:\\/\\//i.test(trimmed)) {
+        targetUrl = trimmed;
+        const m = trimmed.match(/\\/assets\\/([^/?#]+)/i);
+        if (m) {
+          assetId = m[1];
+          fallbackFileName = assetId;
+        } else {
+          assetId = trimmed;
+          fallbackFileName = trimmed.split('/').pop()?.split('?')[0] || 'asset';
+        }
+      } else {
+        if (trimmed.startsWith('/api/uploads/') || trimmed.startsWith('data:')) {
+          return trimmed;
+        }
+        assetId = trimmed;
+        targetUrl = \`\${baseUrl}/assets/\${assetId}\`;
+        fallbackFileName = assetId;
+      }
+    } else if (typeof assetVal === 'object' && assetVal !== null) {
+      const fileObj = assetVal.directus_files_id && typeof assetVal.directus_files_id === 'object'
+        ? assetVal.directus_files_id
+        : assetVal;
+      const fileId = fileObj.id || fileObj.filename_disk || assetVal.directus_files_id;
+      if (fileId && typeof fileId === 'string') {
+        assetId = fileId;
+        targetUrl = \`\${baseUrl}/assets/\${assetId}\`;
+        fallbackFileName = fileObj.filename_download || fileObj.filename_disk || assetId;
+      } else {
+        return '';
+      }
+    }
+
+    if (!targetUrl) return '';
+
+    if (assetCache.has(assetId)) {
+      return assetCache.get(assetId);
+    }
+
+    try {
+      const res = await directusFetch(targetUrl, { headers });
+      if (!res.ok) {
+        console.warn(\`[DirectusSync] Asset download returned HTTP \${res.status}: \${targetUrl}\`);
+        return targetUrl;
+      }
+
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) return targetUrl;
+
+      let ext = '';
+      if (fallbackFileName.includes('.')) {
+        ext = fallbackFileName.split('.').pop() || '';
+      }
+      if (!ext || ext.length > 5) {
+        const mime = (blob.type || '').toLowerCase();
+        if (mime.includes('webp')) ext = 'webp';
+        else if (mime.includes('png')) ext = 'png';
+        else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+        else if (mime.includes('svg')) ext = 'svg';
+        else if (mime.includes('gif')) ext = 'gif';
+        else if (mime.includes('avif')) ext = 'avif';
+        else ext = 'jpg';
+      }
+
+      const baseName = fallbackFileName.replace(/\\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'asset';
+      const cleanFileName = \`\${baseName}.\${ext}\`;
+
+      let uploadedUrl = '';
+
+      // Try SDK assets.uploadImage
+      try {
+        if (plugin?.revyme?.assets?.uploadImage) {
+          const file = new File([blob], cleanFileName, { type: blob.type || 'image/jpeg' });
+          const uploadRes = await plugin.revyme.assets.uploadImage(file);
+          if (uploadRes?.url) {
+            uploadedUrl = uploadRes.url;
+          }
+        }
+      } catch (sdkErr) {
+        console.warn('[DirectusSync] SDK uploadImage error, trying fallback:', sdkErr);
+      }
+
+      // Direct /api/upload fallback
+      if (!uploadedUrl || uploadedUrl.startsWith('data:')) {
+        const host = getHostOrigin();
+        const uploadRes = await fetch(\`\${host}/api/upload?filename=\${encodeURIComponent(cleanFileName)}\`, {
+          method: 'POST',
+          headers: { 'Content-Type': blob.type || 'application/octet-stream' },
+          body: blob,
+        });
+        if (uploadRes.ok) {
+          const json = await uploadRes.json();
+          if (json?.url) {
+            uploadedUrl = json.url;
+          }
+        }
+      }
+
+      if (uploadedUrl) {
+        assetCache.set(assetId, uploadedUrl);
+        return uploadedUrl;
+      }
+    } catch (err) {
+      console.warn(\`[DirectusSync] Failed to localize asset \${assetId}:\`, err);
+    }
+
+    return targetUrl;
   };
 
   // Sync Data
@@ -274,6 +411,7 @@ function App({ plugin }) {
     setSyncing(true);
     setError('');
     setSyncSuccess('');
+    setSyncStatus('Fetching collection data...');
     const { baseUrl } = parseDirectusInput(url);
     const headers = {};
     if (token.trim()) headers['Authorization'] = \`Bearer \${token.trim()}\`;
@@ -307,13 +445,22 @@ function App({ plugin }) {
       }
 
       // 3. Fetch all items
+      setSyncStatus('Downloading items from Directus...');
       const itemsRes = await directusFetch(\`\${baseUrl}/items/\${selectedDirectusColl}?limit=-1\`, { headers });
       if (!itemsRes.ok) throw new Error(\`Failed to fetch Directus items: \${itemsRes.status}\`);
       const itemsJson = await itemsRes.json();
       const rawItems = itemsJson.data || [];
 
-      // 4. Map & Add Items
-      const mappedItems = rawItems.map(item => {
+      // 4. Map & Add Items (with local asset download when requested)
+      const assetCache = new Map();
+      let downloadedAssetCount = 0;
+      const mappedItems = [];
+
+      for (let i = 0; i < rawItems.length; i++) {
+        const item = rawItems[i];
+        if (assetMode === 'local') {
+          setSyncStatus(\`Localizing assets (\${i + 1}/\${rawItems.length} items)... (\${assetCache.size} downloaded)\`);
+        }
         const slug = item.slug || item.title || item.name || \`item-\${item.id}\`;
         const cleanSlug = String(slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || \`item-\${Date.now()}\`;
         const fieldData = {};
@@ -323,20 +470,41 @@ function App({ plugin }) {
           const df = directusFields.find(f => f.field === k || f.name === k);
           const fType = df ? mapFieldType(df) : 'text';
 
+          const isImageField = fType === 'image' || (
+            typeof v === 'string' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) &&
+            (k.toLowerCase().includes('img') || k.toLowerCase().includes('image') || k.toLowerCase().includes('photo') || k.toLowerCase().includes('pic') || k.toLowerCase().includes('file') || k.toLowerCase().includes('thumb') || k.toLowerCase().includes('avatar') || k.toLowerCase().includes('cover') || k.toLowerCase().includes('asset'))
+          );
+
           // 1. Image handling
-          if (fType === 'image') {
-            if (typeof v === 'string') {
-              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
-                fieldData[k] = \`\${baseUrl}/assets/\${v}\`;
+          if (isImageField) {
+            if (assetMode === 'local') {
+              if (Array.isArray(v)) {
+                fieldData[k] = await Promise.all(v.map(async (entry) => {
+                  const loc = await localizeAsset(entry, baseUrl, headers, assetCache);
+                  if (loc && !loc.startsWith('http')) downloadedAssetCount++;
+                  return loc || String(entry);
+                }));
               } else {
-                fieldData[k] = v;
+                const loc = await localizeAsset(v, baseUrl, headers, assetCache);
+                if (loc && !loc.startsWith('http')) downloadedAssetCount++;
+                fieldData[k] = loc || String(v);
               }
-            } else if (typeof v === 'object' && v !== null) {
-              const fileId = v.id || v.filename_disk;
-              if (fileId) fieldData[k] = \`\${baseUrl}/assets/\${fileId}\`;
-              else fieldData[k] = String(v);
             } else {
-              fieldData[k] = String(v);
+              // Remote URLs
+              if (typeof v === 'string') {
+                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+                  fieldData[k] = \`\${baseUrl}/assets/\${v}\`;
+                } else {
+                  fieldData[k] = v;
+                }
+              } else if (typeof v === 'object' && v !== null) {
+                const fileId = v.id || v.filename_disk;
+                if (fileId) fieldData[k] = \`\${baseUrl}/assets/\${fileId}\`;
+                else fieldData[k] = String(v);
+              } else {
+                fieldData[k] = String(v);
+              }
             }
           }
           // 2. Many-to-many / arrays (tags)
@@ -353,20 +521,39 @@ function App({ plugin }) {
           }
         }
 
-        return { slug: cleanSlug, fieldData };
-      });
+        mappedItems.push({ slug: cleanSlug, fieldData });
+      }
+
+      setSyncStatus('Saving items to Revyme CMS...');
+
+      // If existing collection and replaceExisting is checked, remove previous items first
+      if (targetMode === 'existing' && replaceExisting) {
+        try {
+          const prevItems = await plugin.revyme.cms.getItems(targetSlug);
+          if (prevItems && prevItems.length > 0) {
+            await plugin.revyme.cms.removeItems(targetSlug, prevItems.map(p => p.id));
+          }
+        } catch (cleanupErr) {
+          console.warn('[DirectusSync] Could not clear existing items:', cleanupErr);
+        }
+      }
 
       if (mappedItems.length > 0) {
         await plugin.revyme.cms.addItems(targetSlug, mappedItems);
       }
 
-      setSyncSuccess(\`Successfully synced \${mappedItems.length} items into collection "\${targetSlug}"!\`);
+      const successDetail = assetMode === 'local'
+        ? \` (\${assetCache.size} asset(s) downloaded and stored locally in project)\`
+        : ' (using Directus remote URLs)';
+
+      setSyncSuccess(\`Successfully synced \${mappedItems.length} items into collection "\${targetSlug}"\${successDetail}!\`);
       plugin.revyme.ui?.notify?.(\`Directus sync complete (\${mappedItems.length} items)\`, 'success');
       await loadRevymeCollections();
     } catch (err) {
       setError(err.message || 'Sync failed');
     } finally {
       setSyncing(false);
+      setSyncStatus('');
     }
   };
 
@@ -510,15 +697,26 @@ function App({ plugin }) {
                 {revymeCollections.length === 0 ? (
                   <div style={{ fontSize: 11, color: '#fca5a5' }}>No collections exist in Revyme yet. Please select &quot;Create New&quot;.</div>
                 ) : (
-                  <select
-                    value={selectedRevymeSlug}
-                    onChange={e => setSelectedRevymeSlug(e.target.value)}
-                    style={{ width: '100%', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
-                  >
-                    {revymeCollections.map(c => (
-                      <option key={c.id} value={c.id}>{c.name || c.id}</option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={selectedRevymeSlug}
+                      onChange={e => setSelectedRevymeSlug(e.target.value)}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 4, background: '#27272a', border: '1px solid #3f3f46', color: '#fff', fontSize: 12 }}
+                    >
+                      {revymeCollections.map(c => (
+                        <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                      ))}
+                    </select>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginTop: 6, fontSize: 11, color: '#e4e4e7' }}>
+                      <input
+                        type="checkbox"
+                        checked={replaceExisting}
+                        onChange={e => setReplaceExisting(e.target.checked)}
+                      />
+                      Replace existing items in collection
+                    </label>
+                  </>
                 )}
 
                 {/* Field Validation & Mismatch Warning */}
@@ -556,20 +754,71 @@ function App({ plugin }) {
             )}
           </div>
 
+          {/* 3. Images & Assets Storage Mode */}
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 11, color: '#eab308' }}>3. Images & Assets Storage</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#1c1c1f', padding: '10px', borderRadius: 6, border: '1px solid #333' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="assetMode"
+                  checked={assetMode === 'local'}
+                  onChange={() => handleAssetModeChange('local')}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 11, color: '#fff' }}>
+                    Download to Project (Recommended)
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.65, marginTop: 2, lineHeight: 1.35 }}>
+                    Saves all images into Revyme project storage. The project becomes completely standalone — images work offline, have no CORS issues, and remain intact even if Directus is deleted.
+                  </div>
+                </div>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="assetMode"
+                  checked={assetMode === 'remote'}
+                  onChange={() => handleAssetModeChange('remote')}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 11, color: '#fff' }}>
+                    Keep as Directus URLs
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.65, marginTop: 2, lineHeight: 1.35 }}>
+                    Links directly to original Directus URLs. Faster sync, but requires Directus to remain online and allow cross-origin requests.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Sync Progress Indicator */}
+          {syncing && (
+            <div style={{ padding: '8px 10px', borderRadius: 4, background: 'rgba(234, 179, 8, 0.12)', border: '1px solid rgba(234, 179, 8, 0.3)', color: '#fde047', fontSize: 11, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#eab308' }} />
+              {syncStatus || 'Syncing...'}
+            </div>
+          )}
+
           {/* Sync Button & Disconnect */}
-          <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
+          <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
             <button
               type="button"
               onClick={handleSync}
               disabled={syncing || (targetMode === 'existing' && revymeCollections.length === 0)}
-              style={{ flex: 1, padding: '8px 12px', background: '#eab308', color: '#000', fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', opacity: syncing ? 0.7 : 1 }}
+              style={{ flex: 1, padding: '8px 12px', background: '#eab308', color: '#000', fontWeight: 600, border: 'none', borderRadius: 4, cursor: syncing ? 'wait' : 'pointer', opacity: syncing ? 0.7 : 1 }}
             >
-              {syncing ? 'Syncing...' : 'Sync Collection Now'}
+              {syncing ? (syncStatus || 'Syncing...') : 'Sync Collection Now'}
             </button>
             <button
               type="button"
               onClick={() => setConnected(false)}
-              style={{ padding: '8px 10px', background: '#27272a', color: '#aaa', border: '1px solid #3f3f46', borderRadius: 4, cursor: 'pointer' }}
+              disabled={syncing}
+              style={{ padding: '8px 10px', background: '#27272a', color: '#aaa', border: '1px solid #3f3f46', borderRadius: 4, cursor: syncing ? 'not-allowed' : 'pointer' }}
             >
               Change Server
             </button>

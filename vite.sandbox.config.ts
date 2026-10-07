@@ -74,6 +74,12 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     cors: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3333',
+        changeOrigin: true,
+      },
+    },
     // CORP `cross-origin` lets the parent (3333) embed sandbox responses under
     // its `Cross-Origin-Embedder-Policy: credentialless` policy. Without this
     // header on the iframe HTML + JS, the parent would refuse to load it.

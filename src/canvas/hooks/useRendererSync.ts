@@ -28,7 +28,9 @@ import {
   i18nConfigAtom,
 } from '@/code/stores/locale-store';
 import { collectionSchemasAtom, localizedCollectionDataAtom } from '@/code/stores/cms-store';
-import { cmsPageMetaAtom, activePreviewItemAtom } from '@/code/stores/cms-page-store';
+import { cmsPageMetaAtom, activePreviewItemAtom, activePreviewRouteParamsAtom } from '@/code/stores/cms-page-store';
+import { setPreviewRouteParams } from '../node-ops';
+
 import {
   viewportPositionsAtom,
   interactingViewportIdAtom,
@@ -122,7 +124,13 @@ export function useRendererSync(
   const cmsData = useAtomValue(localizedCollectionDataAtom);
   const cmsPageMeta = useAtomValue(cmsPageMetaAtom);
   const previewItem = useAtomValue(activePreviewItemAtom);
+  const activeRouteParams = useAtomValue(activePreviewRouteParamsAtom);
   const vpPositions = useAtomValue(viewportPositionsAtom);
+
+  useEffect(() => {
+    setPreviewRouteParams(activeRouteParams);
+  }, [activeRouteParams]);
+
 
   const setSelectedIds = useSetAtom(selectedIdsAtom);
   const setHoveredId = useSetAtom(hoveredIdAtom);
@@ -299,6 +307,7 @@ export function useRendererSync(
         schemas: Object.fromEntries(cmsSchemas),
         data: Object.fromEntries(cmsData),
       },
+      previewRouteParams: activeRouteParams,
     };
     trace.action('renderer:render', {
       isFileSwitch,
@@ -309,6 +318,7 @@ export function useRendererSync(
       isComponentFile,
       sandboxReady,
     });
+    setPreviewRouteParams(activeRouteParams);
     if (isFileSwitch) {
       // File switch: bypass every skip flag (textEditing / gradient /
       // interacting / canvasUpdating). Without this the iframe stays
@@ -337,7 +347,8 @@ export function useRendererSync(
     // re-renders the canvas immediately (otherwise the panel would update
     // but ghost copies on canvas would stay stale until another mutation
     // triggered a render).
-  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeRouteParams, activeFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // ─── Viewport headers render effect ─────────────────────────────────────
   // Render viewport headers — separate effect so iframeRenderTick can re-fire

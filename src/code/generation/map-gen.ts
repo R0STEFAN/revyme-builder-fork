@@ -496,6 +496,46 @@ export function getEnclosingMapParamsForNode(code: string, nodeId: string): { it
   return found ? { iterVar: found.iterVar, indexVar: found.indexVar } : null;
 }
 
+/**
+ * Ensure that the nearest enclosing `.map(...)` for `nodeId` has an index parameter.
+ * If it already has an index parameter (e.g. `(item, idx)` or `(item, index)`),
+ * returns the existing `code` and the found `indexVar`.
+ * If it has only a single parameter (e.g. `item =>` or `(item) =>`), rewrites the map
+ * callback parameter to include `index` (e.g. `(item, index) =>`) and returns the updated `code`
+ * and `'index'`.
+ */
+export function ensureEnclosingMapIndexParamInCode(
+  code: string,
+  nodeId: string,
+): { code: string; indexVar: string } | null {
+  const found = findEnclosingMapForNode(code, nodeId);
+  if (!found) return null;
+
+  if (found.indexVar) {
+    return { code, indexVar: found.indexVar };
+  }
+
+  // Need to inject index parameter into .map()
+  const openParen = code.indexOf('(', found.mapDotIdx);
+  if (openParen === -1) return null;
+  const arrowIdx = code.indexOf('=>', openParen + 1);
+  if (arrowIdx === -1) return null;
+
+  const rawParams = code.slice(openParen + 1, arrowIdx);
+  const trimmed = rawParams.trim();
+  let newParams: string;
+  if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+    const inner = trimmed.slice(1, -1).trim();
+    newParams = `(${inner}, index)`;
+  } else {
+    newParams = `(${trimmed}, index)`;
+  }
+
+  const newCode = code.slice(0, openParen + 1) + rawParams.replace(trimmed, newParams) + code.slice(arrowIdx);
+  trace.action('map-gen:ensureEnclosingMapIndexParam', { nodeId, prev: trimmed, next: newParams });
+  return { code: newCode, indexVar: 'index' };
+}
+
 /** The SOURCE EXPRESSION of the nearest enclosing `.map()` — the array being
  *  mapped (`collection1.slice(1)`, `__applyListConfig(collection1, cfg)`,
  *  `card1Data`) plus its iterator. The CMS detach path uses it to resolve which
