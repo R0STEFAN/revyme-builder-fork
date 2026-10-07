@@ -16,6 +16,7 @@ import {
   stripOverlaysNestedInOverlaysInCode,
   syncOverlayAppearTransformInCode,
   healMissingOverlayEffectsInCode,
+  buildRelativeOverlayPosEffect,
   transferRootOverlayToInstanceInCode,
   transferDescendantOverlaysToMasterInCode,
   reattachPastedOverlayInCode,
@@ -1810,6 +1811,36 @@ describe('healMissingOverlayEffectsInCode — restores a dropped positioner', ()
     expectParses(healed);
     expect(healed).toContain('onOverlayClick');
     expect(healed).toContain('document.addEventListener(\'click\', onOverlayClick, true);');
+  });
+
+  test('a legacy document capture handler closes only on Yes when a link is clicked without navigation', () => {
+    const effect = buildRelativeOverlayPosEffect('ov1', true);
+    const listener = new Function('useLayoutEffect', 'ov1Open', 'ovFind', 'window', 'document', 'setOv1Open', effect);
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-id', 'ov1');
+    overlay.setAttribute('data-overlay', JSON.stringify({ triggerId: 'trigger', closeOnLink: true }));
+    const link = document.createElement('a');
+    link.href = '#same-page';
+    overlay.appendChild(link);
+    const trigger = document.createElement('button');
+    trigger.setAttribute('data-id', 'trigger');
+    document.body.append(trigger, overlay);
+    const setOpen = (value: boolean) => { if (value === false) closed++; };
+    let closed = 0;
+    let cleanup: (() => void) | undefined;
+    listener((effect: () => void | (() => void)) => { cleanup = effect() || undefined; }, true,
+      (id: string) => id === 'ov1' ? overlay : trigger, window, document, setOpen);
+    try {
+      link.click();
+      expect(closed).toBe(1);
+      overlay.setAttribute('data-overlay', JSON.stringify({ triggerId: 'trigger', closeOnLink: false }));
+      link.click();
+      expect(closed).toBe(1);
+    } finally {
+      cleanup?.();
+      overlay.remove();
+      trigger.remove();
+    }
   });
 
   test('upgrades an outdated fixed overlay effect that was missing onOverlayClick', () => {

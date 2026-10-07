@@ -1,10 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath } from './source-export';
+import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath, prepareSiteFiles } from './source-export';
+import { createOverlayInCode } from '../generation/overlay-gen';
+import { PAGE_TRANSITIONS_SOURCE } from '../generation/page-transitions-gen';
 
 const PAGE = "'use client';\nexport default function Page() { return <div data-id=\"root\" />; }\n";
 const NOW = new Date('2026-09-30T12:00:00Z');
 
 describe('buildSourceExport (standalone Next.js export)', () => {
+  it('upgrades legacy dropdown and transition controllers in a template component before building', async () => {
+    const master = createOverlayInCode(`'use client';
+import React, { useState, useLayoutEffect } from 'react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+function Navbar({ style, ...rest }: { style?: React.CSSProperties; [key: string]: any }) {
+  return <LayoutGroup><motion.nav data-id="navbar" {...rest} style={{ ...style }}><button data-id="trigger">Menu</button></motion.nav></LayoutGroup>;
+}
+export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
+      type: 'relative', triggerId: 'trigger', side: 'bottom', align: 'start', offsetX: 0, offsetY: 0, closeOnLink: true,
+    }, { targetId: 'menu', trigger: 'click', dismiss: 'outside' });
+    const legacyMaster = master.replace(/const onOverlayClick = [\s\S]*?document\.addEventListener\('click', onOverlayClick.*?\);/g, '')
+      .replace(/document\.removeEventListener\('click', onOverlayClick.*?\);/g, '');
+    expect(legacyMaster).not.toContain('onOverlayClick');
+    const legacyTransition = PAGE_TRANSITIONS_SOURCE.replace('e.preventDefault();', 'e.preventDefault();\n      e.stopImmediatePropagation();');
+    const input = {
+      'components/Navbar.tsx': legacyMaster,
+      'app/(site)/page-transitions.tsx': legacyTransition,
+      'app/(site)/LayoutClient.tsx': '<Navbar />{children}',
+    };
+    const prepared = prepareSiteFiles(input);
+    expect(prepared['components/Navbar.tsx']).toContain('onOverlayClick');
+    expect(prepared['app/(site)/page-transitions.tsx']).not.toContain('stopImmediatePropagation');
+    expect(input['components/Navbar.tsx']).toBe(legacyMaster);
+    const exported = await buildSourceExport(input, { name: null, runtimeRange: '^1', now: NOW });
+    expect(exported.files['components/Navbar.tsx']).toBe(prepared['components/Navbar.tsx']);
+    expect(exported.files['app/(site)/page-transitions.tsx']).toBe(prepared['app/(site)/page-transitions.tsx']);
+  });
+
+  it('upgrades a generated controller at the app root without changing unrelated files', () => {
+    const legacy = PAGE_TRANSITIONS_SOURCE.replace('e.preventDefault();', 'e.preventDefault();\n      e.stopImmediatePropagation();');
+    const files = prepareSiteFiles({
+      'app/page-transitions.tsx': legacy,
+      'app/custom.tsx': 'export const custom = true;',
+    });
+    expect(files['app/page-transitions.tsx']).not.toContain('stopImmediatePropagation');
+    expect(files['app/custom.tsx']).toBe('export const custom = true;');
+  });
+
   it('ships the project minus builder metadata, plus the Next.js scaffold', async () => {
     const out = await buildSourceExport({
       'app/page.client.tsx': PAGE,

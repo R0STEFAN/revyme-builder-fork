@@ -15,6 +15,7 @@ import {
 import { projectFS, MAIN_BRANCH_ID } from '@/code/project/project-fs';
 import { activeBranchIdAtom } from '@/code/stores/branch-store';
 import { flushNow } from '@/code/mutation/mutation-queue';
+import { prepareSiteFiles } from '@/code/project/source-export';
 import { getProjectId } from '@/backend/project-id';
 import { BranchIcon } from '@/shared/icons';
 import { toast } from 'sonner';
@@ -214,7 +215,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       }
 
       // 3. Trigger build
-      const result = await buildLocalServer(projectId, files, activeBranch);
+      const result = await buildLocalServer(projectId, prepareSiteFiles(files), activeBranch);
       setBuildLog(result.log || null);
 
       if (result.success) {
