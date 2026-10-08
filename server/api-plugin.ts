@@ -20,6 +20,9 @@ import {
   getProjectVersion,
   restoreProjectVersion,
   deleteProjectVersion,
+  listUploads,
+  deleteUpload,
+  getStorageInfo,
 } from './storage';
 import { LocalServerManager, localServerManager } from './local-server';
 import { McpBridge, mcpBridge as defaultMcpBridge } from './mcp-bridge';
@@ -219,6 +222,43 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
       }
 
+      // ─── GET /api/upload ──────────────────────────────────────────────────
+      if (url.startsWith('/api/upload') && method === 'GET') {
+        const parsedUrl = new URL(url, 'http://localhost');
+        const typeParam = parsedUrl.searchParams.get('type');
+        if (typeParam === 'storage') {
+          return sendJson(res, 200, getStorageInfo());
+        }
+        const uploads = listUploads(typeParam === 'video' ? 'video' : typeParam === 'image' ? 'image' : undefined);
+        return sendJson(res, 200, { uploads });
+      }
+
+      // ─── DELETE /api/upload ───────────────────────────────────────────────
+      if (url.startsWith('/api/upload') && method === 'DELETE') {
+        try {
+          const parsedUrl = new URL(url, 'http://localhost');
+          let keys: string[] = [];
+          const keyParam = parsedUrl.searchParams.get('key') || parsedUrl.searchParams.get('keys');
+          if (keyParam) {
+            keys = keyParam.split(',').map(s => s.trim()).filter(Boolean);
+          } else {
+            const bodyBuf = await readBodyBuffer(req);
+            if (bodyBuf.length > 0) {
+              const body = JSON.parse(bodyBuf.toString('utf-8'));
+              if (Array.isArray(body.keys)) keys = body.keys;
+              else if (typeof body.key === 'string') keys = [body.key];
+            }
+          }
+          let deletedCount = 0;
+          for (const key of keys) {
+            if (deleteUpload(key)) deletedCount++;
+          }
+          return sendJson(res, 200, { success: true, deleted: deletedCount });
+        } catch (err: any) {
+          return sendJson(res, 500, { error: err.message || 'Failed to delete upload' });
+        }
+      }
+
       // ─── POST /api/upload ─────────────────────────────────────────────────
       if (url.startsWith('/api/upload') && method === 'POST') {
         try {
@@ -252,6 +292,150 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         } catch (err: any) {
           return sendJson(res, 500, { error: err.message || 'Failed to save upload' });
         }
+      }
+
+      // ─── Snapshots / Backups routes: /api/snapshots ───────────────────────
+      const snapshotMatch = url.match(/^\/api\/snapshots(?:\/([^/?#]+)(?:\/(restore))?)?(?:\?.*)?$/);
+      if (snapshotMatch) {
+        const parsedUrl = new URL(url, 'http://localhost');
+        const websiteId = parsedUrl.searchParams.get('websiteId') || 'local';
+        const snapId = snapshotMatch[1] ? decodeURIComponent(snapshotMatch[1]) : null;
+        const isRestore = snapshotMatch[2] === 'restore';
+
+        // GET /api/snapshots?websiteId=...
+        if (method === 'GET' && !snapId) {
+          const versions = listProjectVersions(websiteId);
+          const snapshots = versions.map((v) => ({
+            id: v.id,
+            website_id: websiteId,
+            kind: v.source,
+            deploy_meta: null,
+            created_at: new Date(v.timestamp).toISOString(),
+            label: v.label || null,
+            created_by: null,
+          }));
+          return sendJson(res, 200, {
+            snapshots,
+            effectivePlan: 'studio',
+            liveSnapshotId: snapshots[0]?.id || null,
+          });
+        }
+
+        // POST /api/snapshots/:id/restore
+        if (method === 'POST' && snapId && isRestore) {
+          const result = restoreProjectVersion(websiteId, snapId);
+          if (!result.success) {
+            return sendJson(res, 404, { error: result.error || 'Failed to restore snapshot' });
+          }
+          return sendJson(res, 200, { success: true, project: result.project });
+        }
+
+        // DELETE /api/snapshots/:id
+        if (method === 'DELETE' && snapId && !isRestore) {
+          const ok = deleteProjectVersion(websiteId, snapId);
+          return sendJson(res, 200, { success: ok });
+        }
+
+        // PATCH /api/snapshots/:id (update label)
+        if (method === 'PATCH' && snapId) {
+          return sendJson(res, 200, { success: true });
+        }
+      }
+
+      // ─── GET /api/analytics ───────────────────────────────────────────────
+      if (url.startsWith('/api/analytics') && method === 'GET') {
+        const now = Date.now();
+        const days = 90;
+        const viewsByDay: Array<{ date: string; views: number }> = [];
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(now - i * 86400000);
+          const dateStr = d.toISOString().slice(0, 10);
+          viewsByDay.push({ date: dateStr, views: Math.floor(20 + Math.sin(i / 3) * 15 + Math.random() * 10) });
+        }
+        return sendJson(res, 200, {
+          totalViews: viewsByDay.reduce((a, b) => a + b.views, 0),
+          uniqueVisitors: Math.round(viewsByDay.reduce((a, b) => a + b.views, 0) * 0.72),
+          topPages: [
+            { path: '/', views: 640 },
+            { path: '/about', views: 180 },
+            { path: '/pricing', views: 120 },
+            { path: '/contact', views: 85 },
+          ],
+          topCountries: [
+            { country: 'Ukraine', views: 450 },
+            { country: 'United States', views: 280 },
+            { country: 'Germany', views: 140 },
+            { country: 'United Kingdom', views: 90 },
+          ],
+          topSources: [
+            { source: 'Direct', views: 520 },
+            { source: 'Google', views: 310 },
+            { source: 'GitHub', views: 110 },
+            { source: 'Twitter / X', views: 80 },
+          ],
+          topDevices: [
+            { device: 'Desktop', views: 680 },
+            { device: 'Mobile', views: 310 },
+            { device: 'Tablet', views: 30 },
+          ],
+          viewsByDay,
+          advanced: true,
+        });
+      }
+
+      // ─── A/B Tests routes: /api/ab-tests ──────────────────────────────────
+      if (url.startsWith('/api/ab-tests')) {
+        if (method === 'GET') {
+          return sendJson(res, 200, {
+            tests: [],
+            canManage: true,
+            isStudio: true,
+            caps: { maxVariants: 10, maxGoals: 10, maxConcurrent: 10 },
+          });
+        }
+        if (method === 'POST') {
+          const bodyBuf = await readBodyBuffer(req);
+          const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          return sendJson(res, 201, {
+            test: {
+              id: `ab-${Date.now()}`,
+              website_id: body.websiteId || 'local',
+              page_path: body.pagePath || 'page',
+              name: body.name || 'New A/B Test',
+              status: 'draft',
+              variants: body.variants || [{ id: 'control', name: 'Control', weight: 50 }, { id: 'variant-b', name: 'Variant B', weight: 50 }],
+              goals: body.goals || [{ id: 'goal-1', type: 'visit', name: 'Page Visit' }],
+              audience: null,
+              winner: null,
+              started_at: null,
+              ended_at: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          });
+        }
+        if (method === 'PATCH' || method === 'DELETE') {
+          return sendJson(res, 200, { success: true });
+        }
+      }
+
+      // ─── GET /api/websites/:id ────────────────────────────────────────────
+      const websiteDetailMatch = url.match(/^\/api\/websites\/([^/?#]+)(?:\/(forms\/usage|domain))?/);
+      if (websiteDetailMatch && method === 'GET') {
+        const id = decodeURIComponent(websiteDetailMatch[1]);
+        const sub = websiteDetailMatch[2];
+        if (sub === 'forms/usage') {
+          return sendJson(res, 200, { plan: 'paid', cap: null, used: 0, heldThisMonth: 0, held: 0 });
+        }
+        return sendJson(res, 200, {
+          id,
+          name: 'Local Website',
+          plan: 'studio',
+          planStatus: 'active',
+          hide_watermark: false,
+          custom_domain: null,
+          domain_status: 'verified',
+        });
       }
 
       // ─── GET /api/uploads/:file ───────────────────────────────────────────

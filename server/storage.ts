@@ -441,6 +441,86 @@ export function getUploadFilePath(filename: string, customRoot?: string): string
   return null;
 }
 
+export interface UploadRecord {
+  key: string;
+  url: string;
+  name: string;
+  size: number;
+  type: 'image' | 'video';
+  createdAt: string;
+}
+
+export function listUploads(type?: 'image' | 'video', customRoot?: string): UploadRecord[] {
+  const { uploadsDir } = getDataDirs(customRoot);
+  if (!fs.existsSync(uploadsDir)) return [];
+  const files = fs.readdirSync(uploadsDir);
+  const videoExts = new Set(['.mp4', '.webm', '.mov', '.m4v', '.ogg']);
+  const records: UploadRecord[] = [];
+  for (const file of files) {
+    const filePath = path.join(uploadsDir, file);
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) continue;
+      const ext = path.extname(file).toLowerCase();
+      const isVideo = videoExts.has(ext);
+      const fileType: 'image' | 'video' = isVideo ? 'video' : 'image';
+      if (type && fileType !== type) continue;
+      records.push({
+        key: file,
+        url: `/api/uploads/${file}`,
+        name: file,
+        size: stat.size,
+        type: fileType,
+        createdAt: stat.mtime.toISOString(),
+      });
+    } catch {
+      // ignore
+    }
+  }
+  return records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function deleteUpload(filename: string, customRoot?: string): boolean {
+  const { uploadsDir } = getDataDirs(customRoot);
+  const safeName = path.basename(filename);
+  const filePath = path.join(uploadsDir, safeName);
+  if (fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function getStorageInfo(customRoot?: string): { used: number; limit: number; total: number; percentage: number } {
+  const { uploadsDir, projectsDir } = getDataDirs(customRoot);
+  let totalBytes = 0;
+  const countDir = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const p = path.join(dir, entry.name);
+      if (entry.isFile()) {
+        try { totalBytes += fs.statSync(p).size; } catch {}
+      } else if (entry.isDirectory()) {
+        countDir(p);
+      }
+    }
+  };
+  countDir(uploadsDir);
+  countDir(projectsDir);
+  const limit = 10 * 1024 * 1024 * 1024; // 10 GB
+  return {
+    used: totalBytes,
+    limit,
+    total: limit,
+    percentage: Math.min(100, Math.round((totalBytes / limit) * 100)),
+  };
+}
+
 function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
