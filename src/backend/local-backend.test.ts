@@ -152,7 +152,7 @@ _fd('flushSaveNow', () => {
 
   _fit('cancels the debounce and persists the CURRENT snapshot before resolving', async () => {
     const calls: Array<Record<string, string>> = [];
-    const spy = _fvi.spyOn(_backend, 'saveProject').mockImplementation(async (_id, data) => {
+    const spy = _fvi.spyOn(_backend, 'saveProject').mockImplementation(async (_id: string, data: any) => {
       calls.push({ ...(data.files as Record<string, string>) });
     });
     try {
@@ -172,7 +172,7 @@ _fd('flushSaveNow', () => {
     let releaseFirst: () => void = () => {};
     const gate = new Promise<void>((r) => { releaseFirst = r; });
     let n = 0;
-    const spy = _fvi.spyOn(_backend, 'saveProject').mockImplementation(async (_id, data) => {
+    const spy = _fvi.spyOn(_backend, 'saveProject').mockImplementation(async (_id: string, data: any) => {
       n++;
       if (n === 1) await gate; // first save hangs (snapshot = v1)
       calls.push((data.files as Record<string, string>)['app/y.tsx']);

@@ -29,6 +29,21 @@ export interface ProjectRecord {
   previewImage?: string | null;
 }
 
+export interface ProjectVersionSummary {
+  id: string;
+  projectId: string;
+  branchId: string;
+  timestamp: number;
+  label?: string;
+  source: 'manual' | 'autosave' | 'restore';
+  fileCount: number;
+  changesSummary?: string;
+}
+
+export interface ProjectVersionRecord extends ProjectVersionSummary {
+  data: any;
+}
+
 /**
  * Resolve data directory paths.
  * Default: ./data relative to current working directory, or REVYME_DATA_DIR env var.
@@ -38,6 +53,7 @@ export function getDataDirs(customRoot?: string) {
   const projectsDir = path.join(root, 'projects');
   const uploadsDir = path.join(root, 'uploads');
   const foldersFile = path.join(root, 'folders.json');
+  const versionsDir = path.join(root, 'versions');
 
   if (!fs.existsSync(projectsDir)) {
     fs.mkdirSync(projectsDir, { recursive: true });
@@ -45,8 +61,11 @@ export function getDataDirs(customRoot?: string) {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
+  if (!fs.existsSync(versionsDir)) {
+    fs.mkdirSync(versionsDir, { recursive: true });
+  }
 
-  return { root, projectsDir, uploadsDir, foldersFile };
+  return { root, projectsDir, uploadsDir, foldersFile, versionsDir };
 }
 
 /**
@@ -212,7 +231,7 @@ export function saveProjectThumbnail(
  * Delete a project by ID.
  */
 export function deleteProject(id: string, customRoot?: string): boolean {
-  const { projectsDir } = getDataDirs(customRoot);
+  const { projectsDir, versionsDir } = getDataDirs(customRoot);
   const safeId = sanitizeId(id);
   const filePath = path.join(projectsDir, `${safeId}.json`);
 
@@ -221,6 +240,16 @@ export function deleteProject(id: string, customRoot?: string): boolean {
   }
 
   fs.unlinkSync(filePath);
+
+  const projectVersionsDir = path.join(versionsDir, safeId);
+  if (fs.existsSync(projectVersionsDir)) {
+    try {
+      fs.rmSync(projectVersionsDir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup error
+    }
+  }
+
   return true;
 }
 
@@ -415,3 +444,271 @@ export function getUploadFilePath(filename: string, customRoot?: string): string
 function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
+
+// ─── Version History on Disk (Cap 100 / Branch-aware) ───────────────────────
+
+export const MAX_PROJECT_VERSIONS = 100;
+
+function isDataIdentical(dataA: any, dataB: any): boolean {
+  if (!dataA || !dataB) return false;
+  const filesA = dataA.files || {};
+  const filesB = dataB.files || {};
+  const keysA = Object.keys(filesA);
+  const keysB = Object.keys(filesB);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (filesA[k] !== filesB[k]) return false;
+  }
+  const branchesA = JSON.stringify(dataA.branches || null);
+  const branchesB = JSON.stringify(dataB.branches || null);
+  return branchesA === branchesB;
+}
+
+/**
+ * Save a new project version snapshot to disk.
+ * Enforces deduplication against latest version on same branch,
+ * and maintains a maximum of 100 versions per project (FIFO rotation).
+ */
+export function saveProjectVersion(
+  id: string,
+  data: any,
+  options?: {
+    branchId?: string;
+    source?: 'manual' | 'autosave' | 'restore';
+    label?: string;
+    changesSummary?: string;
+  },
+  customRoot?: string
+): ProjectVersionRecord | null {
+  if (!data || typeof data !== 'object' || !data.files) {
+    return null;
+  }
+
+  const { versionsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(id);
+  const projectVersionsDir = path.join(versionsDir, safeId);
+  const manifestPath = path.join(projectVersionsDir, 'manifest.json');
+
+  if (!fs.existsSync(projectVersionsDir)) {
+    fs.mkdirSync(projectVersionsDir, { recursive: true });
+  }
+
+  let manifest: ProjectVersionSummary[] = [];
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      if (Array.isArray(parsed)) manifest = parsed;
+    } catch {
+      manifest = [];
+    }
+  }
+
+  const branchId = options?.branchId || data?.activeBranchId || 'main';
+
+  // Deduplication check: compare against latest version of the same branch
+  const latestSameBranch = manifest.find((v) => v.branchId === branchId);
+  if (latestSameBranch) {
+    const latestFilePath = path.join(projectVersionsDir, `${sanitizeId(latestSameBranch.id)}.json`);
+    if (fs.existsSync(latestFilePath)) {
+      try {
+        const latestRecord: ProjectVersionRecord = JSON.parse(fs.readFileSync(latestFilePath, 'utf-8'));
+        if (isDataIdentical(latestRecord.data, data)) {
+          // If manual save over autosave without changes, upgrade label without duplicate
+          if (options?.source === 'manual' && latestSameBranch.source !== 'manual') {
+            latestSameBranch.source = 'manual';
+            if (options.label) latestSameBranch.label = options.label;
+            latestRecord.source = 'manual';
+            if (options.label) latestRecord.label = options.label;
+            fs.writeFileSync(latestFilePath, JSON.stringify(latestRecord, null, 2), 'utf-8');
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+            return latestRecord;
+          }
+          return null; // identical, skip saving duplicate
+        }
+      } catch {
+        // ignore read error
+      }
+    }
+  }
+
+  const now = Date.now();
+  const source = options?.source || 'autosave';
+  const versionId = `ver-${now}-${source}-${Math.random().toString(36).slice(2, 6)}`;
+  const fileCount = Object.keys(data.files).length;
+
+  const record: ProjectVersionRecord = {
+    id: versionId,
+    projectId: safeId,
+    branchId,
+    timestamp: now,
+    label: options?.label || (source === 'manual' ? 'Manual save' : source === 'restore' ? 'Before restore' : 'Autosave'),
+    source,
+    fileCount,
+    changesSummary: options?.changesSummary,
+    data,
+  };
+
+  const versionFilePath = path.join(projectVersionsDir, `${versionId}.json`);
+  const tmpPath = path.join(projectVersionsDir, `${versionId}.tmp.${now}`);
+  fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf-8');
+  fs.renameSync(tmpPath, versionFilePath);
+
+  const summary: ProjectVersionSummary = {
+    id: versionId,
+    projectId: safeId,
+    branchId,
+    timestamp: now,
+    label: record.label,
+    source,
+    fileCount,
+    changesSummary: record.changesSummary,
+  };
+
+  manifest.unshift(summary);
+
+  // FIFO pruning: cap to MAX_PROJECT_VERSIONS (100)
+  if (manifest.length > MAX_PROJECT_VERSIONS) {
+    const toRemove = manifest.slice(MAX_PROJECT_VERSIONS);
+    manifest = manifest.slice(0, MAX_PROJECT_VERSIONS);
+    for (const old of toRemove) {
+      const oldFilePath = path.join(projectVersionsDir, `${sanitizeId(old.id)}.json`);
+      if (fs.existsSync(oldFilePath)) {
+        try {
+          fs.unlinkSync(oldFilePath);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  const manifestTmp = path.join(projectVersionsDir, `manifest.tmp.${now}`);
+  fs.writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2), 'utf-8');
+  fs.renameSync(manifestTmp, manifestPath);
+
+  return record;
+}
+
+/**
+ * List all saved versions for a project, optionally filtered by branchId.
+ */
+export function listProjectVersions(
+  id: string,
+  branchId?: string,
+  customRoot?: string
+): ProjectVersionSummary[] {
+  const { versionsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(id);
+  const manifestPath = path.join(versionsDir, safeId, 'manifest.json');
+
+  if (!fs.existsSync(manifestPath)) {
+    return [];
+  }
+
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    if (branchId) {
+      return parsed.filter((v: ProjectVersionSummary) => v.branchId === branchId);
+    }
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get full project version record by ID.
+ */
+export function getProjectVersion(
+  id: string,
+  versionId: string,
+  customRoot?: string
+): ProjectVersionRecord | null {
+  const { versionsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(id);
+  const safeVersionId = sanitizeId(versionId);
+  const filePath = path.join(versionsDir, safeId, `${safeVersionId}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Restore a version snapshot: auto-checkpoints current state to disk
+ * as "Before restore" and updates data/projects/{id}.json.
+ */
+export function restoreProjectVersion(
+  id: string,
+  versionId: string,
+  customRoot?: string
+): { success: boolean; project?: ProjectRecord; version?: ProjectVersionRecord; error?: string } {
+  const version = getProjectVersion(id, versionId, customRoot);
+  if (!version || !version.data) {
+    return { success: false, error: 'Version not found' };
+  }
+
+  const current = getProject(id, customRoot);
+  // Auto-checkpoint current state as "Before restore" so restore is 100% reversible
+  if (current && current.data && current.data.files && Object.keys(current.data.files).length > 0) {
+    saveProjectVersion(id, current.data, {
+      branchId: version.branchId || current.data.activeBranchId || 'main',
+      source: 'restore',
+      label: 'Before restore',
+    }, customRoot);
+  }
+
+  // Update active project file on disk
+  const savedProject = saveProject(
+    id,
+    version.data,
+    current?.name,
+    customRoot,
+    current?.folderId,
+    current?.previewImage
+  );
+
+  return { success: true, project: savedProject, version };
+}
+
+/**
+ * Delete a specific version by ID.
+ */
+export function deleteProjectVersion(
+  id: string,
+  versionId: string,
+  customRoot?: string
+): boolean {
+  const { versionsDir } = getDataDirs(customRoot);
+  const safeId = sanitizeId(id);
+  const safeVersionId = sanitizeId(versionId);
+  const projectVersionsDir = path.join(versionsDir, safeId);
+  const filePath = path.join(projectVersionsDir, `${safeVersionId}.json`);
+  const manifestPath = path.join(projectVersionsDir, 'manifest.json');
+
+  if (fs.existsSync(filePath)) {
+    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  }
+
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest: ProjectVersionSummary[] = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      const updated = manifest.filter((v) => v.id !== versionId);
+      fs.writeFileSync(manifestPath, JSON.stringify(updated, null, 2), 'utf-8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+

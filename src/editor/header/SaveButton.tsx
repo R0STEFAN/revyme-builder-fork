@@ -28,7 +28,7 @@ export async function saveProjectNow(): Promise<boolean> {
     flushNow();
 
     // 3. Persist project snapshot to backend
-    await flushSaveNow();
+    await flushSaveNow({ source: 'manual', label: 'Manual save' });
 
     // 4. Capture & save canvas screenshot thumbnail for dashboard
     void captureAndSaveProjectThumbnail();

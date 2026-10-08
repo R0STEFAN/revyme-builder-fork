@@ -15,6 +15,11 @@ import {
   saveFolder,
   renameFolder,
   deleteFolder,
+  saveProjectVersion,
+  listProjectVersions,
+  getProjectVersion,
+  restoreProjectVersion,
+  deleteProjectVersion,
 } from './storage';
 import { LocalServerManager, localServerManager } from './local-server';
 import { McpBridge, mcpBridge as defaultMcpBridge } from './mcp-bridge';
@@ -284,6 +289,50 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
       }
 
+      // ─── Project version routes: /api/projects/:id/versions ───────────────
+      const versionRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)\/versions(?:\/([^/?#]+)(?:\/(restore))?)?(?:\?.*)?$/);
+      if (versionRouteMatch) {
+        const id = decodeURIComponent(versionRouteMatch[1]);
+        const versionId = versionRouteMatch[2] ? decodeURIComponent(versionRouteMatch[2]) : null;
+        const isRestore = versionRouteMatch[3] === 'restore';
+
+        // GET /api/projects/:id/versions (list all, optional ?branchId=...)
+        if (method === 'GET' && !versionId) {
+          const queryPart = (url.split('?')[1] || '');
+          const params = new URLSearchParams(queryPart);
+          const branchId = params.get('branchId') || undefined;
+          const versions = listProjectVersions(id, branchId);
+          return sendJson(res, 200, { versions, count: versions.length });
+        }
+
+        // GET /api/projects/:id/versions/:versionId
+        if (method === 'GET' && versionId && !isRestore) {
+          const version = getProjectVersion(id, versionId);
+          if (!version) {
+            return sendJson(res, 404, { error: 'Version not found' });
+          }
+          return sendJson(res, 200, version);
+        }
+
+        // POST /api/projects/:id/versions/:versionId/restore
+        if (method === 'POST' && versionId && isRestore) {
+          const result = restoreProjectVersion(id, versionId);
+          if (!result.success) {
+            return sendJson(res, 404, { error: result.error || 'Failed to restore version' });
+          }
+          return sendJson(res, 200, { success: true, project: result.project, version: result.version });
+        }
+
+        // DELETE /api/projects/:id/versions/:versionId
+        if (method === 'DELETE' && versionId && !isRestore) {
+          const ok = deleteProjectVersion(id, versionId);
+          if (!ok) {
+            return sendJson(res, 404, { error: 'Version not found' });
+          }
+          return sendJson(res, 200, { success: true });
+        }
+      }
+
       // ─── Project detail routes: /api/projects/:id ─────────────────────────
       const projectRouteMatch = url.match(/^\/api\/projects\/([^/?#]+)(\/duplicate|\/thumbnail|\/bundle)?/);
       if (projectRouteMatch) {
@@ -399,6 +448,15 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             if (!current && (data || body.files)) {
               // Creating or importing via PUT
               const saved = saveProject(id, data || body, name, undefined, folderId, previewImage);
+              const verData = data || body;
+              if (verData && verData.files) {
+                saveProjectVersion(id, verData, {
+                  branchId: body.branchId,
+                  source: body.source || 'manual',
+                  label: body.label,
+                  changesSummary: body.changesSummary,
+                });
+              }
               return sendJson(res, 200, { success: true, project: saved });
             }
             if (!current) {
@@ -412,6 +470,15 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
               folderId !== undefined ? folderId : current.folderId,
               previewImage !== undefined ? previewImage : current.previewImage
             );
+            const verData = data !== undefined ? data : current.data;
+            if (verData && verData.files) {
+              saveProjectVersion(id, verData, {
+                branchId: body.branchId,
+                source: body.source || 'autosave',
+                label: body.label,
+                changesSummary: body.changesSummary,
+              });
+            }
             return sendJson(res, 200, { success: true, project: saved });
           } catch (err: any) {
             return sendJson(res, 500, { error: err.message || 'Failed to save project' });

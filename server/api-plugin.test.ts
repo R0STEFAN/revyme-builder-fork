@@ -534,6 +534,131 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(res.body.project.name).toBe('Imported Bundle Test');
       expect(res.body.assetCount).toBe(1);
     });
+
+    it('records versions on disk during project save and supports branch filtering, restore, and delete', async () => {
+      const projId = `test-ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      // 1. Create a project
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: { id: projId, name: 'Version Test', data: { files: { 'app/page.tsx': 'v1' } } },
+      });
+
+      // 2. Save an update (autosave) on branch main
+      const putRes = await dispatch({
+        method: 'PUT',
+        url: `/api/projects/${projId}`,
+        body: {
+          data: { files: { 'app/page.tsx': 'v2' } },
+          branchId: 'main',
+          source: 'autosave',
+          label: 'Autosave v2',
+          changesSummary: 'Updated app/page.tsx',
+        },
+      });
+      expect(putRes.status).toBe(200);
+
+      // 3. Save a manual update on branch feat-a
+      await dispatch({
+        method: 'PUT',
+        url: `/api/projects/${projId}`,
+        body: {
+          data: { files: { 'app/page.tsx': 'v3-feat' } },
+          branchId: 'feat-a',
+          source: 'manual',
+          label: 'Manual save v3',
+        },
+      });
+
+      // 4. List all versions
+      const listAll = await dispatch({
+        method: 'GET',
+        url: `/api/projects/${projId}/versions`,
+      });
+      expect(listAll.status).toBe(200);
+      expect(listAll.body.count).toBe(2);
+      expect(listAll.body.versions[0].source).toBe('manual');
+      expect(listAll.body.versions[0].branchId).toBe('feat-a');
+      expect(listAll.body.versions[1].source).toBe('autosave');
+      expect(listAll.body.versions[1].branchId).toBe('main');
+
+      // 5. Filter by branchId
+      const listMain = await dispatch({
+        method: 'GET',
+        url: `/api/projects/${projId}/versions?branchId=main`,
+      });
+      expect(listMain.status).toBe(200);
+      expect(listMain.body.count).toBe(1);
+      expect(listMain.body.versions[0].branchId).toBe('main');
+
+      // 6. Get single version detail
+      const vId = listAll.body.versions[0].id;
+      const getV = await dispatch({
+        method: 'GET',
+        url: `/api/projects/${projId}/versions/${vId}`,
+      });
+      expect(getV.status).toBe(200);
+      expect(getV.body.data.files['app/page.tsx']).toBe('v3-feat');
+
+      // 7. Restore an older version (v2 from main)
+      const v2Id = listAll.body.versions[1].id;
+      const restoreRes = await dispatch({
+        method: 'POST',
+        url: `/api/projects/${projId}/versions/${v2Id}/restore`,
+      });
+      expect(restoreRes.status).toBe(200);
+      expect(restoreRes.body.success).toBe(true);
+      expect(restoreRes.body.project.data.files['app/page.tsx']).toBe('v2');
+
+      // Verify "Before restore" checkpoint was saved to versions
+      const listAfterRestore = await dispatch({
+        method: 'GET',
+        url: `/api/projects/${projId}/versions`,
+      });
+      expect(listAfterRestore.body.versions[0].label).toBe('Before restore');
+      expect(listAfterRestore.body.versions[0].source).toBe('restore');
+
+      // 8. Delete a version
+      const delRes = await dispatch({
+        method: 'DELETE',
+        url: `/api/projects/${projId}/versions/${vId}`,
+      });
+      expect(delRes.status).toBe(200);
+      expect(delRes.body.success).toBe(true);
+    });
+
+    it('caps saved versions to 100 on disk with FIFO rotation', async () => {
+      const projId = `test-fifo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: { id: projId, name: 'FIFO Test', data: { files: { 'app/page.tsx': 'init' } } },
+      });
+
+      // Save 105 distinct versions
+      for (let i = 1; i <= 105; i++) {
+        await dispatch({
+          method: 'PUT',
+          url: `/api/projects/${projId}`,
+          body: {
+            data: { files: { 'app/page.tsx': `v-${i}` } },
+            source: 'autosave',
+            label: `Version ${i}`,
+          },
+        });
+      }
+
+      const listRes = await dispatch({
+        method: 'GET',
+        url: `/api/projects/${projId}/versions`,
+      });
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.count).toBe(100);
+      // Newest should be version 105
+      expect(listRes.body.versions[0].label).toBe('Version 105');
+      // Oldest kept should be version 6 (1-5 were pruned)
+      expect(listRes.body.versions[99].label).toBe('Version 6');
+    });
   });
 });
 

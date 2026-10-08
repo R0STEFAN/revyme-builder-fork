@@ -79,6 +79,13 @@ export interface RevymeUser {
 
 type WebsiteRole = 'owner' | 'editor' | 'viewer';
 
+export interface ProjectSaveMeta {
+  source?: 'manual' | 'autosave' | 'restore';
+  label?: string;
+  branchId?: string;
+  changesSummary?: string;
+}
+
 export interface ProjectBackend {
   /** Get the currently authenticated user. Returns null if not authenticated. */
   getUser(): Promise<RevymeUser | null>;
@@ -87,7 +94,7 @@ export interface ProjectBackend {
   loadProject(id: string): Promise<ProjectData | null>;
 
   /** Save the full project snapshot. */
-  saveProject(id: string, data: ProjectData): Promise<void>;
+  saveProject(id: string, data: ProjectData, meta?: ProjectSaveMeta): Promise<void>;
 
   /** Update the website's canonical name (`websites.name`) — the value the
    *  dashboard tile shows. Called when the user renames the project from the

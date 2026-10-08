@@ -1,7 +1,7 @@
 // local-backend.ts — Standalone (no cloud) implementation supporting both
 // disk server storage (/api/projects) and localStorage fallback.
 
-import type { ProjectBackend, ProjectData, RevymeUser, WorkspaceFont } from './types';
+import type { ProjectBackend, ProjectData, ProjectSaveMeta, RevymeUser, WorkspaceFont } from './types';
 import { isKnownProjectFormat } from './types';
 import { trace } from '@/shared/debug-trace';
 
@@ -55,7 +55,7 @@ export class LocalBackend implements ProjectBackend {
     }
   }
 
-  async saveProject(id: string, data: ProjectData): Promise<void> {
+  async saveProject(id: string, data: ProjectData, meta?: ProjectSaveMeta): Promise<void> {
     const key = STORAGE_PREFIX + id;
     try {
       localStorage.setItem(key, JSON.stringify(data));
@@ -71,13 +71,80 @@ export class LocalBackend implements ProjectBackend {
         await fetch(`/api/projects/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data, name }),
+          body: JSON.stringify({
+            data,
+            name,
+            source: meta?.source,
+            label: meta?.label,
+            branchId: meta?.branchId,
+            changesSummary: meta?.changesSummary,
+          }),
         });
         trace.action('backend:save-project', { id, source: 'server', fileCount: Object.keys(data.files).length });
       } catch {
         // offline / mock
       }
     }
+  }
+
+  async listVersions(id: string, branchId?: string): Promise<any[]> {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}/versions${query}`);
+        if (res.ok) {
+          const json = await res.json();
+          return json.versions || [];
+        }
+      } catch {
+        // offline
+      }
+    }
+    return [];
+  }
+
+  async getVersion(id: string, versionId: string): Promise<any | null> {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch {
+        // offline
+      }
+    }
+    return null;
+  }
+
+  async restoreVersion(id: string, versionId: string): Promise<{ success: boolean; project?: any; version?: any } | null> {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/restore`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch {
+        // offline
+      }
+    }
+    return null;
+  }
+
+  async deleteVersion(id: string, versionId: string): Promise<boolean> {
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`, {
+          method: 'DELETE',
+        });
+        return res.ok;
+      } catch {
+        // offline
+      }
+    }
+    return false;
   }
 
   async renameWebsite(id: string, name: string): Promise<void> {

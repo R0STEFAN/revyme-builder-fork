@@ -9,6 +9,7 @@ import { saveStatusAtom } from './save-store';
 import type { ProjectData } from './types';
 import { projectFS } from '../code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
+import { bumpVersionHistorySignal } from './version-history-store';
 
 const DEBOUNCE_MS = 2000;
 /** Bounded auto-retry after a failed save. Without it, `pendingSave` stayed
@@ -21,6 +22,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSave = false;
 let isSaving = false;
 let currentSave: Promise<void> | null = null;
+let nextSaveMeta: { source: 'manual' | 'autosave' | 'restore'; label?: string } = { source: 'autosave', label: 'Autosave' };
 
 function getStore() {
   return getDefaultStore();
@@ -51,17 +53,24 @@ async function performSave(): Promise<void> {
     return;
   }
   const data = buildProjectData();
+  const saveMeta = {
+    ...nextSaveMeta,
+    branchId: projectFS.getActiveBranchId(),
+  };
+  // Reset back to autosave for subsequent background saves
+  nextSaveMeta = { source: 'autosave', label: 'Autosave' };
 
   store.set(saveStatusAtom, 'saving');
   isSaving = true;
-  trace.action('autosave:start', { id, fileCount: Object.keys(data.files).length, branches: data.branches ? Object.keys(data.branches).length : 0 });
+  trace.action('autosave:start', { id, fileCount: Object.keys(data.files).length, branches: data.branches ? Object.keys(data.branches).length : 0, branchId: saveMeta.branchId, source: saveMeta.source });
 
   try {
-    await backend.saveProject(id, data);
+    await backend.saveProject(id, data, saveMeta);
     store.set(saveStatusAtom, 'saved');
     pendingSave = false;
     saveFailures = 0;
     trace.action('autosave:success', { id });
+    bumpVersionHistorySignal();
     // Best-effort thumbnail capture for dashboard card preview
     import('./thumbnail-capture').then(({ captureAndSaveProjectThumbnail }) => captureAndSaveProjectThumbnail(id)).catch(() => {});
   } catch (err) {
@@ -100,7 +109,13 @@ function startSave(): Promise<void> {
  *  save runs UNCONDITIONALLY (not gated on pendingSave): a redundant save
  *  is harmless, and it also covers a non-leader collab tab (whose
  *  triggerAutosave early-returns without ever setting pendingSave). */
-export async function flushSaveNow(): Promise<void> {
+export async function flushSaveNow(opts?: { source?: 'manual' | 'autosave' | 'restore'; label?: string }): Promise<void> {
+  if (opts?.source) {
+    nextSaveMeta = {
+      source: opts.source,
+      label: opts.label || (opts.source === 'manual' ? 'Manual save' : undefined),
+    };
+  }
   if (debounceTimer !== null) {
     clearTimeout(debounceTimer);
     debounceTimer = null;

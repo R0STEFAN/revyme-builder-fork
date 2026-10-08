@@ -26,6 +26,7 @@ import { usePaletteToggle } from '@/editor/command-palette/CommandPalette';
 import { trace } from '@/shared/debug-trace';
 import { useIsViewer, useIsOffline } from '@/code/stores/viewer-mode-store';
 import SaveButton from './header/SaveButton';
+import HistoryButton from './header/HistoryButton';
 
 // ─── Chevron & Check icons ─────────────────────────────────────────────────
 
@@ -771,11 +772,14 @@ export default function BottomToolbar() {
           </>
         )}
 
-        {/* ── Save Project ── */}
+        {/* ── Save & History ── */}
         {!isViewer && (
           <>
             <Separator />
-            <SaveButton />
+            <div className="flex items-center gap-1.5">
+              <SaveButton />
+              <HistoryButton />
+            </div>
           </>
         )}
       </div>
