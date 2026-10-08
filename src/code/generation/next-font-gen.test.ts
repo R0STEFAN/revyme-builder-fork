@@ -45,12 +45,23 @@ describe('next-font-gen', () => {
         identifier: 'Comfortaa',
         variable: '--font-comfortaa',
         weights: ['300', '400', '500', '600', '700'],
+        subsets: ['latin', 'cyrillic'],
         display: 'swap',
         importUrl: 'https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&display=swap',
       });
       expect(fonts[1]?.family).toBe('Playfair Display');
       expect(fonts[1]?.identifier).toBe('Playfair_Display');
       expect(fonts[1]?.variable).toBe('--font-playfair-display');
+    });
+
+    it('filters invalid weights strictly against the Google Fonts catalog (e.g. Syne rejects 300)', () => {
+      const css = "@import url('https://fonts.googleapis.com/css2?family=Syne:wght@300;400;500;600;700&display=swap');";
+      const fonts = extractGoogleFontsFromCSS(css);
+      expect(fonts).toHaveLength(1);
+      expect(fonts[0]?.family).toBe('Syne');
+      // 300 is not in Syne catalog variants, so it is filtered out!
+      expect(fonts[0]?.weights).toEqual(['400', '500', '600', '700']);
+      expect(fonts[0]?.weights).not.toContain('300');
     });
 
     it('returns empty array if no Google Fonts are imported', () => {

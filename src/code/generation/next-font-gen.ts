@@ -6,14 +6,68 @@
 // in app/layout.tsx.
 
 import { trace } from '@/shared/debug-trace';
+import catalogFonts from '@/shared/google-fonts-catalog.json';
 
 export interface GoogleFontSpec {
   family: string;
   identifier: string;
   variable: string;
   weights?: string[];
+  subsets: string[];
   display?: string;
   importUrl: string;
+}
+
+const fontCatalogMap = new Map<string, { family: string; variants: string[]; isCyrillic: boolean }>();
+
+for (const item of (catalogFonts as any[])) {
+  const isCyrillic = (item.tags || []).some((t: any) => t.name?.includes('Cyrillic'));
+  fontCatalogMap.set(item.family.toLowerCase(), {
+    family: item.family,
+    variants: item.variants || [],
+    isCyrillic,
+  });
+}
+
+/**
+ * Returns strictly valid font weights for a Google Font according to the catalog.
+ * E.g. Syne only supports ['400', '500', '600', '700', '800'] (rejects invalid '300').
+ */
+export function getSupportedWeightsForFont(family: string, requestedWeights?: string[]): string[] | undefined {
+  const entry = fontCatalogMap.get(family.toLowerCase());
+  if (!entry || !entry.variants || entry.variants.length === 0) {
+    return requestedWeights && requestedWeights.length > 0 ? requestedWeights : undefined;
+  }
+
+  const supported = new Set<string>();
+  for (const v of entry.variants) {
+    if (v === 'regular' || v === 'italic') {
+      supported.add('400');
+    } else {
+      const m = v.match(/^(\d+)/);
+      if (m) supported.add(m[1]);
+    }
+  }
+
+  if (supported.size === 0) return undefined;
+
+  if (requestedWeights && requestedWeights.length > 0) {
+    const valid = requestedWeights.filter((w) => supported.has(w));
+    if (valid.length > 0) return valid;
+  }
+
+  return Array.from(supported).sort();
+}
+
+/**
+ * Returns valid subsets for a Google Font (includes 'cyrillic' if supported by the font).
+ */
+export function getSubsetsForFont(family: string): string[] {
+  const entry = fontCatalogMap.get(family.toLowerCase());
+  if (entry?.isCyrillic) {
+    return ['latin', 'cyrillic'];
+  }
+  return ['latin'];
 }
 
 /**
@@ -75,11 +129,11 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
       if (!familyName || seenFamilies.has(familyName.toLowerCase())) continue;
       seenFamilies.add(familyName.toLowerCase());
 
-      let weights: string[] | undefined;
+      let rawRequestedWeights: string[] | undefined;
       if (spec) {
         const wghtMatch = spec.match(/wght@([0-9;.,]+)/);
         if (wghtMatch && wghtMatch[1]) {
-          const rawWeights = wghtMatch[1]
+          const parsed = wghtMatch[1]
             .split(';')
             .map((w) => {
               // Handle "0,400" or "400..900" or "400"
@@ -88,12 +142,15 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
               return val.includes('..') ? val.split('..')[0] : val;
             })
             .filter((w) => w && /^\d+$/.test(w));
-          if (rawWeights.length > 0) {
-            weights = Array.from(new Set(rawWeights));
+          if (parsed.length > 0) {
+            rawRequestedWeights = Array.from(new Set(parsed));
           }
         }
       }
 
+      // Filter and validate weights strictly against catalog
+      const weights = getSupportedWeightsForFont(familyName, rawRequestedWeights);
+      const subsets = getSubsetsForFont(familyName);
       const display = params.get('display') || 'swap';
 
       fonts.push({
@@ -101,6 +158,7 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
         identifier: fontNameToNextFontIdentifier(familyName),
         variable: fontNameToCssVar(familyName),
         weights,
+        subsets,
         display,
         importUrl: url,
       });
@@ -135,7 +193,10 @@ export function transformLayoutWithNextFonts(layoutCode: string, fonts: GoogleFo
           ? `\n  weight: [${spec.weights.map((w) => `'${w}'`).join(', ')}],`
           : '';
 
-      return `const ${varName} = ${spec.identifier}({\n  subsets: ['latin', 'cyrillic'],${weightsConfig}\n  variable: '${spec.variable}',\n  display: '${spec.display || 'swap'}',\n});`;
+      const subsets = spec.subsets && spec.subsets.length > 0 ? spec.subsets : ['latin'];
+      const subsetsStr = subsets.map((s) => `'${s}'`).join(', ');
+
+      return `const ${varName} = ${spec.identifier}({\n  subsets: [${subsetsStr}],${weightsConfig}\n  variable: '${spec.variable}',\n  display: '${spec.display || 'swap'}',\n});`;
     })
     .join('\n\n');
 
