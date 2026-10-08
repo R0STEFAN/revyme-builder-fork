@@ -252,9 +252,9 @@ export default function SettingsOverlay() {
   // the project's siteConfig. Applies to the LIVE site within seconds — no
   // republish (for sites published on the hideWatermark-aware worker).
   const [showBadge, setShowBadge] = useState(true);
-  const [badgeLoaded, setBadgeLoaded] = useState(false);
+  const [badgeLoaded, setBadgeLoaded] = useState(true);
   useEffect(() => {
-    if (!CLOUD_ENABLED || !websiteId) return;
+    if (!websiteId) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -262,7 +262,7 @@ export default function SettingsOverlay() {
         if (!res.ok) return;
         const row = await res.json() as { hide_watermark?: boolean };
         if (!cancelled) { setShowBadge(!(row.hide_watermark ?? false)); setBadgeLoaded(true); }
-      } catch { /* toggle stays at default-on, disabled until loaded */ }
+      } catch { /* toggle stays at default-on */ }
     })();
     return () => { cancelled = true; };
   }, [websiteId]);
@@ -873,18 +873,16 @@ export default function SettingsOverlay() {
                 rewrites the site's edge KV, so the live site follows within
                 seconds. Hidden entirely in OSS/self-hosted builds — there is
                 no worker injecting a badge there. */}
-            {CLOUD_ENABLED && (
-              <SettingsRow label="Made in Revyme badge">
-                <div className="flex items-center justify-between gap-3 py-1">
-                  <p className="text-xs text-[var(--text-tertiary)]">
-                    Show the small &ldquo;Made in Revyme&rdquo; badge on your published site.
-                  </p>
-                  <div className={badgeLoaded ? '' : 'opacity-40 pointer-events-none'}>
-                    <Toggle value={showBadge} onChange={handleToggleBadge} />
-                  </div>
+            <SettingsRow label="Made in Revyme badge">
+              <div className="flex items-center justify-between gap-3 py-1">
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Show the small &ldquo;Made in Revyme&rdquo; badge on your published site.
+                </p>
+                <div className={badgeLoaded ? '' : 'opacity-40 pointer-events-none'}>
+                  <Toggle value={showBadge} onChange={handleToggleBadge} />
                 </div>
-              </SettingsRow>
-            )}
+              </div>
+            </SettingsRow>
           </SettingsGroup>
 
           {/* ─── Appearance ─── */}

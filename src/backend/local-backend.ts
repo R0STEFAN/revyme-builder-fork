@@ -210,7 +210,18 @@ export class LocalBackend implements ProjectBackend {
   }
 
   async deleteAssets(_id: string, keys: string[]): Promise<void> {
-    trace.action('backend:delete-assets', { source: 'local-noop', count: keys.length });
+    trace.action('backend:delete-assets', { source: 'local', count: keys.length });
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        await fetch('/api/upload', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keys }),
+        });
+      } catch {
+        // offline / mock
+      }
+    }
   }
 
   async fetchMediaBytes(remoteUrl: string): Promise<Blob> {

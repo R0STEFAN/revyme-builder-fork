@@ -55,10 +55,8 @@ import { suspendBuilderTheme, resumeBuilderTheme } from '@/editor/builder-theme'
 // that calls `playSketchDraw` from `@revyme/runtime`; the canvas just
 // shows the static committed `d` for each stroke.
 
-// Register cloud plugin sections (Plans, Domain, Analytics, Submit) —
-// cloud mode only. Standalone/OSS builds get just the core Website
-// settings section; the SettingsOverlay renders whatever is registered.
-if (CLOUD_ENABLED) initCloudPlugin();
+// Register all settings sections (Pages SEO, Domain, Backups, Analytics, A/B Tests, Skills, AI/MCP, etc.)
+initCloudPlugin();
 
 export default function App() {
   // Lifted to atom so MenuTabs (View → Toggle preview) and the Ctrl+P

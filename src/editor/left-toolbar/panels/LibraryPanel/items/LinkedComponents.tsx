@@ -34,9 +34,6 @@ import { IconSetIcon } from './IconSetRow';
 // Hides itself entirely when the project has no CDN imports.
 
 export function LinkedComponentsList({ kind = 'component' }: { kind?: 'component' | 'vector' }) {
-  // Cloud-only: linked components are CDN-hosted Revyme infrastructure.
-  if (!CLOUD_ENABLED) return null;
-
   const projectVersion = useAtomValue(projectVersionAtom);
   const ensureMetadata = useEnsureCdnMetadata();
   const metadataCache = useCdnMetadataCache();

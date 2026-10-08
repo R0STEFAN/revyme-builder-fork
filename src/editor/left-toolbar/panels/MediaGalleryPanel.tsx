@@ -222,7 +222,7 @@ export default function MediaGalleryPanel() {
   // True while a list fetch is in flight — drives the skeleton grid so the
   // panel never flashes "No images uploaded yet" before the data lands.
   // Starts true in cloud mode (a fetch always fires on mount).
-  const [loadingList, setLoadingList] = useState(!!CLOUD_ENABLED);
+  const [loadingList, setLoadingList] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Multi-select (shift+click / shift+sweep) — keyed by R2 object key.
@@ -233,14 +233,12 @@ export default function MediaGalleryPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const projectId = getProjectId();
-  const isCloud = !!CLOUD_ENABLED;
   const noun: 'image' | 'video' = tab === 'images' ? 'image' : 'video';
 
   trace.fn('MediaGalleryPanel:render', { tab, count: uploads.length, selected: selectedKeys.size });
 
   // Fetch existing uploads + storage info
   const fetchUploads = useCallback(async () => {
-    if (!isCloud) { setLoadingList(false); return; }
     setLoadingList(true);
     try {
       const [uploadsRes, storageRes] = await Promise.all([
@@ -254,13 +252,15 @@ export default function MediaGalleryPanel() {
       }
       if (storageRes.ok) {
         const data = await storageRes.json();
-        setStorage({ currentUsageMB: data.currentUsageMB, storageLimitMB: data.storageLimitMB });
+        const currentMB = data.used != null ? +(data.used / (1024 * 1024)).toFixed(1) : (data.currentUsageMB ?? 0);
+        const limitMB = data.limit != null ? +(data.limit / (1024 * 1024)).toFixed(0) : (data.storageLimitMB ?? 500);
+        setStorage({ currentUsageMB: currentMB, storageLimitMB: limitMB });
       }
     } catch (err) {
       trace.error('media:fetch-failed', err);
     }
     setLoadingList(false);
-  }, [projectId, tab, isCloud]);
+  }, [projectId, tab]);
 
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
 
@@ -526,7 +526,7 @@ export default function MediaGalleryPanel() {
                 kind={tab === 'images' ? 'image' : 'video'}
                 mediaKey={deriveUploadKey(item)}
                 isSelected={(() => { const k = deriveUploadKey(item); return !!k && selectedKeys.has(k); })()}
-                canDelete={isCloud}
+                canDelete={true}
                 onShiftPointerDown={beginShiftGesture}
                 onPlainPointerDown={() => { if (selectedKeys.size) setSelectedKeys(new Set()); }}
                 onRequestDelete={requestDelete}
