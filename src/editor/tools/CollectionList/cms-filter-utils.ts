@@ -4,6 +4,7 @@
 // Sort editor panels.
 
 import type { FilterConfig, FieldDefinition, CollectionSchema } from '@/shared/types';
+import { trace } from '@/shared/debug-trace';
 
 type FieldType = FieldDefinition['type'];
 
@@ -150,6 +151,15 @@ export interface HierarchicalField {
   children?: HierarchicalField[];
 }
 
+/** Attach a relative subtree without losing the parent path on its descendants. */
+function prefixFieldPaths(field: HierarchicalField, prefix: string): HierarchicalField {
+  return {
+    ...field,
+    fullPath: `${prefix}.${field.fullPath}`,
+    children: field.children?.map(child => prefixFieldPaths(child, prefix)),
+  };
+}
+
 function discoverObjectKeys(samples: any[], prefixPath: string): HierarchicalField[] {
   const map = new Map<string, HierarchicalField>();
   for (const s of samples) {
@@ -193,10 +203,7 @@ function discoverChildrenForField(
     const refSchema = collectionSchemas.get(referenceCollection)!;
     const subFields = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth);
     for (const sf of subFields) {
-      childrenMap.set(sf.id, {
-        ...sf,
-        fullPath: `${fieldId}.${sf.fullPath}`,
-      });
+      childrenMap.set(sf.id, prefixFieldPaths(sf, fieldId));
     }
   }
 
@@ -209,10 +216,7 @@ function discoverChildrenForField(
         const subFields = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth);
         for (const sf of subFields) {
           if (!childrenMap.has(sf.id)) {
-            childrenMap.set(sf.id, {
-              ...sf,
-              fullPath: `${fieldId}.${sf.fullPath}`,
-            });
+            childrenMap.set(sf.id, prefixFieldPaths(sf, fieldId));
           }
         }
       }
@@ -243,7 +247,7 @@ function discoverChildrenForField(
                   if (slug.toLowerCase() === subClean || slug.toLowerCase() === subClean + 's') {
                     const nested = buildHierarchicalFields(refSchema, collectionSchemas, collectionData, visitedCollections, depth + 1);
                     if (nested.length > 0) {
-                      subChildren = nested.map(n => ({ ...n, fullPath: `${fieldId}.${key}.${n.fullPath}` }));
+                      subChildren = nested.map(n => prefixFieldPaths(n, `${fieldId}.${key}`));
                     }
                   }
                 }
@@ -298,6 +302,7 @@ export function buildHierarchicalFields(
   depth = 0,
 ): HierarchicalField[] {
   if (!schema || depth > 5) return [];
+  if (depth === 0) trace.fn('cms-filter-utils:build-hierarchical-fields', { collection: schema.slug });
   const currSlug = schema.slug;
   const sampleItems = collectionData?.get(currSlug) || [];
 
@@ -343,4 +348,3 @@ export function flattenHierarchicalFields(tree: HierarchicalField[], prefixLabel
   }
   return list;
 }
-
