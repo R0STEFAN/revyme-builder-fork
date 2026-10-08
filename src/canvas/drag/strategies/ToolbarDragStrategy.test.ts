@@ -408,4 +408,25 @@ export default Hero;
     expect(updates[0].descriptor!.styles.position).not.toBe('absolute');
     expect(updates[0].descriptor!.styles.flex).toBeUndefined();
   });
+
+  it('preserves component display name in descriptor for data-name emission', () => {
+    const strategy = new ToolbarDragStrategy();
+    const compItem = makeItem({
+      id: 'component:SuFeSe',
+      elementType: 'SuFeSe',
+      name: 'nav',
+      defaultStyles: { position: 'relative', width: '100%', height: '80px' },
+    });
+    strategy.setToolbarItem(compItem);
+    strategy.onStart(makeContext());
+    strategy._setTestState({
+      isOverCanvas: true,
+      dropParentId: 'parent-1',
+      dropIndex: 0,
+    });
+    const updates = strategy.onEnd(makeContext());
+    expect(updates).toHaveLength(1);
+    expect(updates[0].descriptor!.tag).toBe('SuFeSe');
+    expect(updates[0].descriptor!.name).toBe('nav');
+  });
 });

@@ -212,7 +212,7 @@ export function LinkedComponentRow({
    *  diamond glyph in SidebarRow's purple default. */
   kind?: 'component' | 'vector';
 }) {
-  const handleDrag = useComponentDrag(url, tagName);
+  const handleDrag = useComponentDrag(url, tagName, label);
   // CDN-linked components have no local master to navigate into, so for
   // viewers the row is inert — same as code components in the Library.
   const isViewer = useIsViewer();

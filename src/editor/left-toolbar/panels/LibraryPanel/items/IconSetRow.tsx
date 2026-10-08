@@ -41,7 +41,7 @@ export const IconSetRow = React.memo(function IconSetRow({
   // The tag lookup goes through the regular import resolver, which
   // already handles `icons/` (resolveImportPath uses path-based stripping
   // of '@/').
-  const handleDrag = useComponentDrag(filePath, internalName);
+  const handleDrag = useComponentDrag(filePath, internalName, label);
   // Viewers may click into a vector set's master to inspect/comment,
   // but dragging an instance onto the canvas is an edit — disable drag.
   const isViewer = useIsViewer();

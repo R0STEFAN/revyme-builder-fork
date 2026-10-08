@@ -13,6 +13,7 @@ import {
   getCodeComponentInsertSize,
   CODE_COMPONENT_FALLBACK_SIZE,
 } from '@/code/components/component-registry';
+import { getComponentDisplayName } from '@/code/components/component-ops';
 import { hasComponentControls } from '@/code/components/controls-parser';
 import { getCachedCdnMetadata } from '@/cloud/components/cdn-metadata-hook';
 import { startToolbarDrag } from '@/canvas/drag/toolbar-drag-bridge';
@@ -85,7 +86,7 @@ function localInsertSize(code: string): { width?: string; height?: string } {
  *  `onClick={onEdit}` still fires (the click event is dispatched
  *  after pointerup regardless of pointerdown's preventDefault).
  */
-export function useComponentDrag(filePath: string, elementType: string) {
+export function useComponentDrag(filePath: string, elementType: string, displayName?: string) {
   // Wired here (not at the call site) so the same drag handler can
   // commit a folder-move atom bump if the user drops on a folder row,
   // without the row component needing to know anything about it.
@@ -99,6 +100,8 @@ export function useComponentDrag(filePath: string, elementType: string) {
     const startX = e.clientX;
     const startY = e.clientY;
     const startEvent = e.nativeEvent;
+    const resolvedDisplayName = displayName
+      ?? (filePath.startsWith('components/') ? (getComponentDisplayName(filePath) ?? undefined) : undefined);
     // Icon-set files render different content based on the `name` prop:
     // without `name` the component returns its MASTER VIEW (the full grid
     // of every icon in the set) which is correct for the master canvas
@@ -116,6 +119,7 @@ export function useComponentDrag(filePath: string, elementType: string) {
     const item: ToolbarItem = isIconSet ? {
       id: `iconSet:${elementType}`,
       elementType,
+      name: resolvedDisplayName,
       defaultStyles: {
         position: 'relative',
         width: '240px',
@@ -127,6 +131,7 @@ export function useComponentDrag(filePath: string, elementType: string) {
     } : isCdnLink ? {
       id: `cdn:${elementType}`,
       elementType,
+      name: resolvedDisplayName,
       cdnUrl: filePath,
       // CODE COMPONENTS ARE FIXED-SIZE ON THE CANVAS — a sizeless
       // instance collapses whenever the bundle's root draws via
@@ -164,6 +169,7 @@ export function useComponentDrag(filePath: string, elementType: string) {
       //     here is harmless in that path.
       id: `component:${elementType}`,
       elementType,
+      name: resolvedDisplayName,
       // DESIGN components inherit the master ROOT's authored width/height (the
       // PRIMARY variant's dimensions — e.g. FAQItem → 760px / auto) so the
       // dropped instance matches the master instead of a forced 300×200 box.
@@ -455,7 +461,7 @@ export function useComponentDrag(filePath: string, elementType: string) {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
-  }, [filePath, elementType, bumpVersion]);
+  }, [filePath, elementType, displayName, bumpVersion]);
 
   return handlePointerDown;
 }

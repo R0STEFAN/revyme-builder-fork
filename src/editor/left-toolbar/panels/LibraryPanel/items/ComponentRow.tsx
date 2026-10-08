@@ -47,7 +47,7 @@ export const ComponentRow = React.memo(function ComponentRow({
   label, filePath, isActive, onEdit, menuItems, inlineEdit, onShiftClick, isMultiSelected, right,
 }: RowProps) {
   const internalName = filePath.replace('components/', '').replace('.tsx', '');
-  const handleDrag = useComponentDrag(filePath, internalName);
+  const handleDrag = useComponentDrag(filePath, internalName, label);
   // Viewers may click a design component to navigate into its master
   // for inspection/comment, but dragging it onto the canvas is an edit
   // — disable the drag handler.
@@ -100,7 +100,7 @@ export const CodeComponentRow = React.memo(function CodeComponentRow({
   label, filePath, isActive, onEdit, menuItems, inlineEdit, onShiftClick, isMultiSelected, right,
 }: RowProps) {
   const internalName = filePath.replace('components/', '').replace('.tsx', '');
-  const handleDrag = useComponentDrag(filePath, internalName);
+  const handleDrag = useComponentDrag(filePath, internalName, label);
   // Code components are fully inert for viewers — there's no inspectable
   // canvas master to navigate into, so clicking, dragging, and the
   // context menu (all edit actions) are all disabled.
