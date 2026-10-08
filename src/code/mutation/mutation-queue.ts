@@ -1744,9 +1744,9 @@ export function syncImports(code: string): string {
   // Only process page/component files (have export default function)
   if (!code.includes('export default function') && !code.includes('export default ')) return code;
 
-  // Skip layout.tsx (server component) — has metadata export, incompatible with 'use client'.
+  // Skip layout.tsx and server component wrappers — have metadata/generateMetadata export, incompatible with 'use client'.
   // LayoutClient.tsx is a client component and should NOT be skipped (has LayoutClient, not RootLayout).
-  if (code.includes('export const metadata') || code.includes('RootLayout')) return code;
+  if (code.includes('export const metadata') || code.includes('generateMetadata') || code.includes('RootLayout')) return code;
 
   // Split code into import block and body. Block comments at the top of the
   // file (`/** @canvas {...} */`, `/** @pageVariables {...} */`) are

@@ -188,6 +188,11 @@ const canvasNodes = <><OnCanvas data-id="oc" data-canvas-node="true" /></>;`;
     expect(syncImports(code)).toBe(code);
   });
 
+  test('skips CMS detail server wrappers exporting generateMetadata', () => {
+    const code = "import PageClient from './page.client';\nexport async function generateMetadata({ params }) {}\nexport default function Page() { return <PageClient />; }";
+    expect(syncImports(code)).toBe(code);
+  });
+
   // ─── No-Op When Unchanged ─────────────────────────────────────────
 
   test('returns same code if imports are already correct', () => {

@@ -35,6 +35,10 @@ export function prepareSiteFiles(input: Record<string, string>): Record<string, 
     } else if (/^(app|components)\/.*\.(tsx|jsx)$/.test(path) && code.includes('data-overlay=')) {
       files[path] = healMissingOverlayEffectsInCode(code);
     }
+    // Server Component export guard: generateMetadata and metadata must never have 'use client'
+    if (files[path] && (files[path].includes('generateMetadata') || files[path].includes('export const metadata'))) {
+      files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
+    }
   }
   return files;
 }
