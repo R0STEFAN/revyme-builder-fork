@@ -185,7 +185,33 @@ Always apply animations using Revyme's native semantic tools (`set_motion`, `set
 
 ---
 
-## 5. References & Deep Dives
+## 5. Preserving Existing Pages & Safety Rules (CRITICAL)
+
+When creating new pages, styling elements, or adding features, you must protect the integrity of the user's existing website:
+
+### A. Never Overwrite Unrelated Pages / The Active Home Page
+- **Check Project Layout First**: Before creating a page, call `revyme_list_files` (or `listFiles`). Notice whether the project uses Next.js Route Groups (e.g. `app/(Main)/page.client.tsx`, `app/(Main)/LayoutClient.tsx`).
+- **Create New Pages in the Correct Folder**:
+  - When asked to create `/about`, `/pricing`, or any other subpage, submit `app/(Main)/about/page.client.tsx` and `app/(Main)/about/page.tsx` (if using route groups) or `app/about/page.client.tsx` and `app/about/page.tsx`.
+  - **NEVER overwrite the Home page** (`app/(Main)/page.client.tsx`) when fulfilling requests for a different page.
+- **Beware of Active Canvas Context**:
+  - Semantic tools like `add_node`, `set_motion`, `set_styles`, etc. operate on the **currently active file** in the editor (`result.activeFilePath` from `revyme_get_context`).
+  - If the user is currently viewing the Home page on canvas, running `add_node` without navigating to the target page will add nodes to the Home page!
+  - When authoring a separate page, use `revyme_submit_files` with the explicit file path.
+
+### B. Preserve Shared Component Masters & CMS
+- Components in `components/` (e.g. `PortalHero.tsx`, `ThrowableDeck.tsx`, `SuFeSe.tsx` Navbar, `WeVuXi.tsx` Footer) and collections in `cms/` are shared across multiple pages and templates.
+- **Do not delete, gut, or break shared components** when working on a new subpage. Reuse them or build new dedicated components.
+- If a component requires hooks like `useScroll` or `useState`, ensure it is self-contained so other consumer pages or Next.js SSR builds don't fail with undefined variable errors.
+
+### C. Mandatory Build & Prerender Verification
+Always verify that all pages still build cleanly:
+- Trigger build: `POST http://localhost:3333/api/local-server/local/build` or query `GET http://localhost:3333/api/local-server/local/status`.
+- Ensure all routes (`/`, `/_not-found`, and your new pages) compile with `0 errors` and static prerender succeeds.
+
+---
+
+## 6. References & Deep Dives
 - Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.
 - Read [references/motion-choreography.md](./references/motion-choreography.md) for full animation physics, springs, easing presets, and choreography recipes.
 - Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all available semantic tools.
