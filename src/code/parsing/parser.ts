@@ -3758,18 +3758,48 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
 
   function extractParamSubpath(body: any, paramName: string): string | null {
     let sub: string | null = null;
+    const unwrapSub = (node: any): any => {
+      let cur = node;
+      while (cur) {
+        if (cur.type === 'ParenthesizedExpression') { cur = cur.expression; continue; }
+        if (cur.type === 'CallExpression' && cur.callee?.type === 'MemberExpression'
+          && cur.callee.property?.type === 'Identifier'
+          && (cur.callee.property.name === 'slice' || cur.callee.property.name === 'toLowerCase' || cur.callee.property.name === 'includes')) {
+          cur = cur.callee.object;
+          continue;
+        }
+        if (cur.type === 'CallExpression' && cur.callee?.type === 'Identifier' && (cur.callee.name === 'String' || cur.callee.name === 'Boolean' || cur.callee.name === 'Number')) {
+          cur = cur.arguments?.[0];
+          continue;
+        }
+        if (cur.type === 'CallExpression' && cur.callee?.type === 'MemberExpression'
+          && cur.callee.object?.type === 'Identifier' && cur.callee.object.name === 'JSON'
+          && cur.callee.property?.name === 'stringify') {
+          cur = cur.arguments?.[0];
+          continue;
+        }
+        break;
+      }
+      return cur;
+    };
+
     function walk(node: any) {
       if (!node || sub) return;
-      let n = unwrapStringCoerce(node);
+      let n = unwrapSub(node);
       if (!n) return;
       if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') {
         const parts: string[] = [];
         let cur = n;
-        while (cur && (cur.type === 'MemberExpression' || cur.type === 'OptionalMemberExpression')) {
-          if (cur.property?.type === 'Identifier') {
-            parts.unshift(cur.property.name);
+        while (cur) {
+          cur = unwrapSub(cur);
+          if (cur && (cur.type === 'MemberExpression' || cur.type === 'OptionalMemberExpression')) {
+            if (cur.property?.type === 'Identifier') {
+              parts.unshift(cur.property.name);
+            }
+            cur = cur.object;
+          } else {
+            break;
           }
-          cur = cur.object;
         }
         if (cur && cur.type === 'Identifier' && cur.name === paramName && parts.length > 0) {
           sub = parts.join('.');

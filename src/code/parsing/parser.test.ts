@@ -978,6 +978,20 @@ import tattoos from '@/cms/tattoos.json';
     ]);
   });
 
+  test('parses a DEEP dot-path route param filter with .includes() on subfield', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+<div data-id="list" style={{}}>
+  {tattoos.filter(item => (!params?.place || (Array.isArray(item.placements_m2m) ? item.placements_m2m.some((x: any) => String(x?.slug).toLowerCase().includes(String(params.place).toLowerCase())) : String(item.placements_m2m.slug).toLowerCase().includes(String(params.place).toLowerCase())))).map(item => (
+    <div data-id="card" key={item.id}>{item.name}</div>
+  ))}
+</div>`;
+    const fg = parseJSXToNodes(code).get('list')!.collectionList!.filterGroup!;
+    expect(fg.filters).toEqual([
+      { field: 'placements_m2m.slug', operator: 'contains', value: '', valueSource: 'routeParam', valueVar: 'place' },
+    ]);
+  });
+
   test('parses a DEEP dot-path static filter with ternary', () => {
     const code = `
 import tattoos from '@/cms/tattoos.json';
