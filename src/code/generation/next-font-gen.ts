@@ -13,7 +13,7 @@ export interface GoogleFontSpec {
   identifier: string;
   variable: string;
   weights?: string[];
-  subsets: string[];
+  subsets?: string[];
   display?: string;
   importUrl: string;
 }
