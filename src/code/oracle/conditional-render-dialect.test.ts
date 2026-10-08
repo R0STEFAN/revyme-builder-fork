@@ -14,7 +14,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { checkFile } from './check-file';
-import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const codesOf = (code: string, kind: 'page' | 'component' | 'code-component' = 'page') =>
   checkFile(code, { kind }).map((x) => x.code);
@@ -355,12 +356,25 @@ describe('the readable-handler allowlist tracks the generators', () => {
   it('accepts every on*= attribute the generators actually emit', () => {
     const roots = ['src/code/generation', 'src/code/features', 'src/code/animations', 'src/code/components'];
     const emitted = new Set<string>();
+    const scanDir = (dir: string) => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          scanDir(full);
+        } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
+          const content = fs.readFileSync(full, 'utf-8');
+          const matches = content.matchAll(/\b(on[A-Z][a-zA-Z]+)=\{/g);
+          for (const m of matches) {
+            emitted.add(m[1]);
+          }
+        }
+      }
+    };
     for (const root of roots) {
-      let out = '';
-      try { out = execSync(`grep -rhoE "\\bon[A-Z][a-zA-Z]+=\\{" ${root} 2>/dev/null || true`).toString(); } catch { /* none */ }
-      for (const m of out.split('\n')) { const n = m.replace('={', '').trim(); if (n) emitted.add(n); }
+      scanDir(root);
     }
-    expect(emitted.size, 'grep found no handlers — the probe broke').toBeGreaterThan(5);
+    expect(emitted.size, 'file scan found no handlers — the probe broke').toBeGreaterThan(5);
     const rejected = [...emitted].filter((h) => {
       const code = `'use client';
 export default function Page() {
