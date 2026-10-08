@@ -199,15 +199,44 @@ Forms submit to basic endpoints without visual step-branching or field validatio
 
 ---
 
-## 4. Suggested Implementation Roadmap
+## 4. Impact vs. Complexity Matrix & Suggested Roadmap
 
-| Priority | Feature | Estimated Effort | Impact |
-|---|---|---|---|
-| 🟢 **High** | 1. Visual Formula & Computed Expressions | 3–4 Days | Unlocks dynamic CMS calculations without manual code |
-| 🟢 **High** | 2. Polymorphic Radix UI Primitives | 4–5 Days | Accessible Accordions, Tabs, Modals out of the box |
-| 🟡 **Medium** | 3. Automated a11y & SEO Linter | 2–3 Days | High-ranking SEO and accessibility guarantee |
-| 🟡 **Medium** | 4. Side-by-Side i18n Translation Matrix | 2–3 Days | 10x faster multi-language website creation |
-| 🔵 **Advanced** | 5. 2D Visual CSS Grid Matrix Builder | 1–2 Weeks | Bento-grid and complex layouts designed visually |
+### 4.1 Prioritization Matrix (Impact vs. Effort)
+
+```
+ ▲ HIGH IMPACT
+ │
+ │  ┌────────────────────────────────────────┬────────────────────────────────────────┐
+ │  │  🚀 QUICK WINS (High Impact, Low Effort)│  ⭐ STRATEGIC (High Impact, High Effort)│
+ │  │                                        │                                        │
+ │  │  • Side-by-Side i18n Translation Matrix│  • Polymorphic Radix UI Primitives     │
+ │  │    (2–3 days | 10x faster localization)│    (4–5 days | accessible Tabs/Modals) │
+ │  │                                        │                                        │
+ │  │  • Automated a11y & SEO Live Linter    │  • Visual Formula & Computed Expression│
+ │  │    (2–3 days | guarantees 100% a11y)   │    (3–4 days | Airtable/Excel formulas)│
+ │  │                                        │                                        │
+ │  │                                        │  • 2D Visual CSS Grid Matrix Builder   │
+ │  │                                        │    (1–2 weeks | visual Bento grids)    │
+ │  ├────────────────────────────────────────┼────────────────────────────────────────┤
+ │  │  💤 LOW PRIORITY (Low Impact, Low Effort)│ ⚠️ RE-EVALUATE (Low Impact, High Effort)│
+ │  │                                        │                                        │
+ │  │  • Single-value token renaming UI      │  • Full Custom Visual State Engine     │
+ │  │    (existing CSS vars already work)    │    (high overhead vs React state)      │
+ │  │                                        │                                        │
+ │  └────────────────────────────────────────┴────────────────────────────────────────┘
+ └───────────────────────────────────────────────────────────────────────────────────────►
+   LOW EFFORT                                                             HIGH EFFORT
+```
+
+### 4.2 Detailed Implementation Table
+
+| Priority | Feature | Estimated Effort | Impact | Key Benefit |
+|---|---|---|---|---|
+| 🟢 **High** | 1. Visual Formula & Computed Expressions | 3–4 Days | ⭐ Strategic | Unlocks dynamic CMS calculations without manual code |
+| 🟢 **High** | 2. Polymorphic Radix UI Primitives | 4–5 Days | ⭐ Strategic | Accessible Accordions, Tabs, Modals out of the box |
+| 🟡 **Medium** | 3. Automated a11y & SEO Linter | 2–3 Days | 🚀 Quick Win | High-ranking SEO and accessibility guarantee |
+| 🟡 **Medium** | 4. Side-by-Side i18n Translation Matrix | 2–3 Days | 🚀 Quick Win | 10x faster multi-language website creation |
+| 🔵 **Advanced** | 5. 2D Visual CSS Grid Matrix Builder | 1–2 Weeks | ⭐ Strategic | Bento-grid and complex layouts designed visually |
 
 ---
 

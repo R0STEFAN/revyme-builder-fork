@@ -24,7 +24,36 @@
 
 ---
 
-## 2. Phased Architectural Roadmap
+## 2. Impact vs. Complexity Matrix & Roadmap
+
+### 2.1 Prioritization Matrix (Impact vs. Effort)
+
+```
+ ▲ HIGH IMPACT
+ │
+ │  ┌────────────────────────────────────────┬────────────────────────────────────────┐
+ │  │  🚀 QUICK WINS (High Impact, Low Effort)│  ⭐ STRATEGIC (High Impact, High Effort)│
+ │  │                                        │                                        │
+ │  │  • Framer Motion LazyMotion (`m.*`)    │  • Automated next/image Pipeline       │
+ │  │    (1–2 days | -15-20 KiB JS bundle)   │    (3–4 days | -70% mobile bandwidth)  │
+ │  │                                        │                                        │
+ │  │  • next.config tuning (Brotli, pkg opt)│  • Viewport next/dynamic for 3D/WebGL  │
+ │  │    (1 hour | faster delivery)          │    (2–3 days | isolates Spline/ThreeJS)│
+ │  │                                        │                                        │
+ │  │                                        │  • RSC Island Architecture             │
+ │  │                                        │    (1–2 weeks | zero-JS static markup) │
+ │  ├────────────────────────────────────────┼────────────────────────────────────────┤
+ │  │  💤 LOW PRIORITY (Low Impact, Low Effort)│ ⚠️ RE-EVALUATE (Low Impact, High Effort)│
+ │  │                                        │                                        │
+ │  │  • Micro-optimizing static CSS tokens  │  • Custom runtime replacement          │
+ │  │    (minimal bundle difference)         │    (massive rewrite with high risk)    │
+ │  │                                        │                                        │
+ │  └────────────────────────────────────────┴────────────────────────────────────────┘
+ └───────────────────────────────────────────────────────────────────────────────────────►
+   LOW EFFORT                                                             HIGH EFFORT
+```
+
+### 2.2 Phased Architectural Roadmap
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────┐
