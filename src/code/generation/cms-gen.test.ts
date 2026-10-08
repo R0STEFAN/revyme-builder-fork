@@ -845,5 +845,18 @@ describe('updateCollectionListConfigInCode — routeParam dynamic filters', () =
     expect(out).toContain("JSON.stringify(item.title)");
     expect(parseJSX(out)).toBeTruthy();
   });
+
+  it('generates M2M routeParam filter expression without hardcoded categories_id', () => {
+    const expr = buildFilterExpression({
+      combinator: 'and',
+      filters: [
+        { field: 'placements_m2m', operator: 'equals', value: '', valueSource: 'routeParam', valueVar: 'place' },
+      ],
+    });
+
+    expect(expr).toContain('item.placements_m2m.some');
+    expect(expr).not.toContain('categories_id');
+  });
 });
+
 
