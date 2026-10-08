@@ -8,7 +8,7 @@ import {
   findClosingTag,
   findJSXElementByDataId,
   findCollectionChainHead,
-  buildChainCode, healBoundImageSizing } from './cms-gen';
+  buildChainCode, healBoundImageSizing, buildFilterExpression } from './cms-gen';
 
 describe('findClosingTag — self-closing same-tag children', () => {
   // Regression: a container with self-closing <div … /> children (CMS card
