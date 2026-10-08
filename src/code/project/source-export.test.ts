@@ -112,6 +112,33 @@ export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
     expect(out.failed).toEqual([A]);
   });
 
+  it('automatically converts Google Fonts @import to next/font/google in exported layout', async () => {
+    const layout = `import './globals.css';
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`;
+    const tokens = `@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap');
+:root {
+  --font-heading: 'Comfortaa', sans-serif;
+}`;
+    const out = await buildSourceExport({
+      'app/layout.tsx': layout,
+      'app/page.client.tsx': PAGE,
+      'app/page.tsx': "import P from './page.client';\nexport default function Page() { return <P />; }\n",
+      'styles/tokens.css': tokens,
+    }, { name: 'Font Site', runtimeRange: '^1', now: NOW });
+
+    expect(out.files['app/layout.tsx']).toContain("import { Comfortaa } from 'next/font/google';");
+    expect(out.files['app/layout.tsx']).toContain('${comfortaa.variable}');
+    expect(out.files['styles/tokens.css']).not.toContain('@import url(');
+    expect(out.files['styles/tokens.css']).toContain("var(--font-comfortaa), 'Comfortaa', sans-serif");
+  });
+
   it('slugs and metadata paths', () => {
     expect(exportSlug('  My Site!! ')).toBe('my-site');
     expect(exportSlug('')).toBe('revyme-site');
