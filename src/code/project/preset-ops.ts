@@ -14,6 +14,9 @@ import {
 import type { PresetToken } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { parseVarRef } from '@/shared/css-utils';
+import catalogFonts from '@/shared/google-fonts-catalog.json';
+
+const googleFontNames = new Set((catalogFonts as any[]).map((f: any) => f.family.toLowerCase()));
 
 const TOKENS_PATH = 'app/globals.css';
 
@@ -174,6 +177,9 @@ export function ensureGoogleFontImport(fontFamilyValue: string): void {
 
   // Skip system fonts
   if (SYSTEM_FONTS.some(sf => name.toLowerCase().includes(sf))) return;
+
+  // Skip non-Google fonts (e.g. custom workspace fonts)
+  if (!googleFontNames.has(name.toLowerCase())) return;
 
   const css = projectFS.readFile(TOKENS_PATH);
   if (!css) return;

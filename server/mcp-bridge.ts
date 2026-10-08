@@ -42,12 +42,44 @@ export class McpBridge {
   /**
    * Dispatch an RPC method to the connected browser editor via SSE
    */
-  public sendToEditor(method: string, params: any = {}, timeoutMs?: number): Promise<any> {
+  public async sendToEditor(method: string, params: any = {}, timeoutMs?: number): Promise<any> {
     if (this.sseClients.size === 0) {
-      return Promise.reject(
-        new Error(
-          'Revyme editor is not connected. Open http://localhost:3333 in your browser.'
-        )
+      // If this process has no direct SSE clients connected (e.g. running as stdio MCP server),
+      // try forwarding the RPC request to the running bridge HTTP endpoint.
+      const endpoints = Array.from(new Set([
+        `http://localhost:${this.port}/rpc`,
+        `http://localhost:3333/rpc`,
+      ]));
+
+      for (const endpoint of endpoints) {
+        try {
+          const timeout = timeoutMs ?? this.requestTimeoutMs;
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeout);
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method, params }),
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (res.ok) {
+            const data: any = await res.json();
+            if (data.ok) return data.result;
+            if (data.error) throw new Error(data.error);
+          }
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError') {
+            throw new Error(`Timed out waiting for response from Revyme editor (method: ${method})`);
+          }
+          if (fetchErr.message && !fetchErr.message.includes('fetch failed') && !fetchErr.message.includes('ECONNREFUSED')) {
+            throw fetchErr;
+          }
+        }
+      }
+
+      throw new Error(
+        'Revyme editor is not connected. Open http://localhost:3333 in your browser.'
       );
     }
 

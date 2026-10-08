@@ -78,15 +78,22 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
         req.headers['content-type'] = 'application/json';
       }
 
-      const res = {
+      const chunks: Buffer[] = [];
+      const res = Object.assign(new EventEmitter(), {
         statusCode: 200,
         headers: {} as Record<string, string>,
         setHeader(name: string, val: string) {
           this.headers[name.toLowerCase()] = val;
         },
+        write(chunk: any) {
+          if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          return true;
+        },
         end(data?: any) {
-          const raw = data ? data.toString('utf-8') : '';
-          let parsed = raw;
+          if (data) chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+          const totalBuffer = Buffer.concat(chunks);
+          const raw = totalBuffer.toString('utf-8');
+          let parsed: any = raw;
           try {
             parsed = JSON.parse(raw);
           } catch {
@@ -99,7 +106,7 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
             passedThrough: false,
           });
         },
-      };
+      });
 
       const runMiddleware = (idx: number) => {
         if (idx >= middlewares.length) {
@@ -658,6 +665,69 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(listRes.body.versions[0].label).toBe('Version 105');
       // Oldest kept should be version 6 (1-5 were pruned)
       expect(listRes.body.versions[99].label).toBe('Version 6');
+    });
+
+    it('handles file upload via POST /api/upload and serves it via GET /api/uploads/:file without collision with GET /api/upload', async () => {
+      const boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW';
+      const fileContent = 'PNG_MOCK_IMAGE_DATA_12345';
+      const multipartBody = [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="my-directus-test.png"',
+        'Content-Type: image/png',
+        '',
+        fileContent,
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      // 1. Upload the file
+      const uploadRes = await dispatch({
+        method: 'POST',
+        url: '/api/upload',
+        body: multipartBody,
+        headers: {
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+      });
+      expect(uploadRes.status).toBe(200);
+      expect(uploadRes.body.filename).toContain('my-directus-test.png');
+      expect(uploadRes.body.url).toMatch(/^\/api\/uploads\/.+my-directus-test\.png$/);
+
+      const uploadedUrl = uploadRes.body.url;
+      const uploadedFile = uploadRes.body.filename;
+
+      // 2. Fetch the uploaded file directly (GET /api/uploads/:file)
+      const fileRes = await dispatch({
+        method: 'GET',
+        url: uploadedUrl,
+      });
+      expect(fileRes.status).toBe(200);
+      expect(fileRes.headers['content-type']).toBe('image/png');
+      expect(fileRes.body).toBe(fileContent);
+
+      // 3. GET /api/upload should return the list of uploads and NOT intercept the file endpoint
+      const listRes = await dispatch({
+        method: 'GET',
+        url: '/api/upload?type=image',
+      });
+      expect(listRes.status).toBe(200);
+      expect(Array.isArray(listRes.body.uploads)).toBe(true);
+      const found = listRes.body.uploads.find((u: any) => u.key === uploadedFile);
+      expect(found).toBeDefined();
+
+      // 4. DELETE /api/upload removes the file
+      const deleteRes = await dispatch({
+        method: 'DELETE',
+        url: `/api/upload?key=${encodeURIComponent(uploadedFile)}`,
+      });
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body.deleted).toBe(1);
+
+      // 5. Subsequent GET /api/uploads/:file should 404
+      const afterDeleteRes = await dispatch({
+        method: 'GET',
+        url: uploadedUrl,
+      });
+      expect(afterDeleteRes.status).toBe(404);
     });
   });
 });

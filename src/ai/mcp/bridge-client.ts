@@ -58,7 +58,7 @@ import { hasComponentControls } from '@/code/components/controls-parser';
 import { createVectorSetFromSvgs, looksLikeSvg, MAX_ICONS_PER_SET, MAX_SVG_FILE_BYTES, type PreflightSvg } from '@/code/icons/create-vector-set-from-svgs';
 import { isComponentUrl, importComponentFromUrl } from '@/cloud/components/component-paste';
 
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8082';
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || (typeof window !== 'undefined' ? '' : 'http://localhost:8082');
 
 type BridgeHandler = (params: any) => Promise<unknown>;
 
@@ -393,8 +393,9 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
    *  create_pages mirrors FileExplorer's addCmsPage (the builder scaffolds —
    *  guaranteed-parseable index/detail pages the model then restyles via
    *  normal submits). */
-  async manageCms(params: { action: string; args?: Record<string, unknown> }) {
-    const { action, args = {} } = params;
+  async manageCms(params: { action: string; args?: Record<string, unknown>; [key: string]: any }) {
+    const { action, args, ...rest } = params;
+    const effectiveArgs = (args && typeof args === 'object' && Object.keys(args).length > 0) ? args : rest;
     const READ_ACTIONS = new Set(['list_collections', 'get_collection']);
     // CMS writes go straight to projectFS (createBlankCollection /
     // executeCmsTool → cms-ops.writeFile), BYPASSING the mutation queue — so
@@ -427,7 +428,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // not a data rule — an MCP client is never scoped to the open panel. Same
     // validated op underneath (createBlankCollection).
     if (action === 'create_collection') {
-      const name = String(args.name ?? '').trim();
+      const name = String(effectiveArgs.name ?? '').trim();
       if (!name) throw new Error('create_collection requires a non-empty name.');
       const slug = createBlankCollection(name);
       const store = getDefaultStore();
@@ -440,18 +441,18 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     if (CMS_TOOL_ACTIONS.has(action)) {
       // Errors come back as { error } in the response (the agent's
       // self-correction contract) — pass through so the model can fix its args.
-      const result = executeCmsTool(action, args);
+      const result = executeCmsTool(action, effectiveArgs);
       if (!(result.response as any)?.error) await persistIfWrite();
       trace.action('mcp-bridge:cms-tool', { action, error: (result.response as any)?.error });
       return result.response;
     }
 
     if (action === 'create_pages') {
-      const slug = String(args.collection ?? '');
+      const slug = String(effectiveArgs.collection ?? '');
       if (!listCollections().includes(slug)) {
         throw new Error(`Collection "${slug}" does not exist — create it first (create_collection).`);
       }
-      const kind = String(args.kind ?? 'both');
+      const kind = String(effectiveArgs.kind ?? 'both');
       flushNow();
       const written: string[] = [];
       if (kind === 'index' || kind === 'both') written.push(createCmsIndexPageFile(slug));
@@ -469,7 +470,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // first. Mirrors FileExplorer's createPageFile (server wrapper +
     // page.client.tsx pair). Idempotent: returns the existing path untouched.
     if (action === 'create_page') {
-      const name = String(args.name ?? '').trim();
+      const name = String(effectiveArgs.name ?? '').trim();
       if (!name) throw new Error('create_page requires a non-empty `name` (e.g. "Pricing").');
       // Optional TEMPLATE placement: put the page inside an existing route group so
       // it inherits that template's shared chrome (header/footer). Pass `group` = the
@@ -478,8 +479,8 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       // plain top-level route. Validated against the real filesystem so a typo
       // bounces instead of silently scaffolding an orphan route.
       let groupDir: string | undefined;
-      const grp = String(args.group ?? '').trim().replace(/\/+$/, '');
-      const tpl = String(args.template ?? '').trim();
+      const grp = String(effectiveArgs.group ?? '').trim().replace(/\/+$/, '');
+      const tpl = String(effectiveArgs.template ?? '').trim();
       if (grp) groupDir = grp;
       else if (tpl) groupDir = `app/(${tpl.replace(/^\(|\)$/g, '')})`;
       if (groupDir) {
@@ -518,10 +519,10 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // routes. The model then authors the returned LayoutClient (the shared
     // chrome around one {children}) and strips that chrome from the moved pages.
     if (action === 'create_template') {
-      const name = String(args.name ?? '').trim();
+      const name = String(effectiveArgs.name ?? '').trim();
       const allPages = listPageFiles();
       let pages: string[];
-      const requested = args.pages;
+      const requested = effectiveArgs.pages;
       if (requested == null || requested === 'all') {
         pages = allPages;
       } else if (Array.isArray(requested)) {
@@ -545,6 +546,16 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     }
 
     throw new Error(`manageCms: unknown action "${action}" — use list_collections | get_collection | create_collection | rename_collection | delete_collection | add_field | update_field | remove_field | add_item | update_item | remove_item | set_item_translation | create_pages | create_page | create_template.`);
+  },
+
+  async modifyFile(params: { path: string; code: string }) {
+    if (!params?.path) throw new Error('modifyFile: path required');
+    modifyProjectFile(params.path, () => params.code, { skipParseGate: true });
+    const store = getDefaultStore();
+    store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+    triggerAutosave({ force: true });
+    await flushSaveNow();
+    return { success: true, path: params.path };
   },
 
   async readFile({ path }: { path: string }) {

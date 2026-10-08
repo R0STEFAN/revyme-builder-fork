@@ -34,6 +34,7 @@ const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.mp4': 'video/mp4',
@@ -222,8 +223,38 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         }
       }
 
+      // ─── GET /api/uploads/:file ───────────────────────────────────────────
+      if (url.startsWith('/api/uploads/') && (method === 'GET' || method === 'HEAD')) {
+        const rawFilename = url.replace('/api/uploads/', '').split('?')[0];
+        let filename = rawFilename;
+        try {
+          filename = decodeURIComponent(rawFilename);
+        } catch {}
+        const filePath = getUploadFilePath(filename);
+        if (!filePath) {
+          res.statusCode = 404;
+          return res.end('Not found');
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const mime = MIME_TYPES[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        if (method === 'HEAD') {
+          try {
+            const stat = fs.statSync(filePath);
+            res.setHeader('Content-Length', String(stat.size));
+          } catch {}
+          return res.end();
+        }
+        const stream = fs.createReadStream(filePath);
+        return stream.pipe(res);
+      }
+
+      const isUploadEndpoint = url === '/api/upload' || url.startsWith('/api/upload?') || url === '/api/upload/' || url.startsWith('/api/upload/?');
+
       // ─── GET /api/upload ──────────────────────────────────────────────────
-      if (url.startsWith('/api/upload') && method === 'GET') {
+      if (isUploadEndpoint && method === 'GET') {
         const parsedUrl = new URL(url, 'http://localhost');
         const typeParam = parsedUrl.searchParams.get('type');
         if (typeParam === 'storage') {
@@ -234,7 +265,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       }
 
       // ─── DELETE /api/upload ───────────────────────────────────────────────
-      if (url.startsWith('/api/upload') && method === 'DELETE') {
+      if (isUploadEndpoint && method === 'DELETE') {
         try {
           const parsedUrl = new URL(url, 'http://localhost');
           let keys: string[] = [];
@@ -260,7 +291,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       }
 
       // ─── POST /api/upload ─────────────────────────────────────────────────
-      if (url.startsWith('/api/upload') && method === 'POST') {
+      if (isUploadEndpoint && method === 'POST') {
         try {
           const contentType = req.headers['content-type'] || '';
           const bodyBuf = await readBodyBuffer(req);
@@ -438,22 +469,6 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         });
       }
 
-      // ─── GET /api/uploads/:file ───────────────────────────────────────────
-      if (url.startsWith('/api/uploads/') && method === 'GET') {
-        const filename = url.replace('/api/uploads/', '').split('?')[0];
-        const filePath = getUploadFilePath(filename);
-        if (!filePath) {
-          res.statusCode = 404;
-          return res.end('Not found');
-        }
-
-        const ext = path.extname(filename).toLowerCase();
-        const mime = MIME_TYPES[ext] || 'application/octet-stream';
-        res.setHeader('Content-Type', mime);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        const stream = fs.createReadStream(filePath);
-        return stream.pipe(res);
-      }
 
       // ─── POST /api/websites/:id/preview-image (unified thumbnail upload) ──
       const websiteThumbMatch = url.match(/^\/api\/websites\/([^/?#]+)\/preview-image/);

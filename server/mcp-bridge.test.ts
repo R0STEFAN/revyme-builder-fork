@@ -52,10 +52,12 @@ describe('McpBridge', () => {
   let bridge: McpBridge;
 
   beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fetch failed ECONNREFUSED')));
     bridge = new McpBridge({ requestTimeoutMs: 1000 });
   });
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await bridge.stopHttpServer();
   });
 
@@ -181,7 +183,15 @@ describe('McpBridge', () => {
       });
 
       const next = vi.fn();
-      const rpcPromise = middleware(rpcReq, rpcRes, next);
+      const endPromise = new Promise<void>((resolve) => {
+        const origEnd = rpcRes.end;
+        rpcRes.end = function (chunk?: string) {
+          origEnd.call(this, chunk);
+          resolve();
+        };
+      });
+
+      middleware(rpcReq, rpcRes, next);
 
       // Emit data and end
       rpcReq.emit('data', Buffer.from(bodyData));
@@ -193,7 +203,7 @@ describe('McpBridge', () => {
         { statusCode: 200, headers: {}, setHeader() {}, end() {} }
       );
 
-      await rpcPromise;
+      await endPromise;
       expect(rpcRes.statusCode).toBe(200);
       const parsed = JSON.parse(rpcRes.writtenData.join(''));
       expect(parsed).toEqual({
@@ -211,10 +221,18 @@ describe('McpBridge', () => {
       });
 
       const next = vi.fn();
-      const p = middleware(req, res, next);
+      const endPromise = new Promise<void>((resolve) => {
+        const origEnd = res.end;
+        res.end = function (chunk?: string) {
+          origEnd.call(this, chunk);
+          resolve();
+        };
+      });
+
+      middleware(req, res, next);
       req.emit('data', Buffer.from(bodyData));
       req.emit('end');
-      await p;
+      await endPromise;
 
       expect(res.statusCode).toBe(400);
       const parsed = JSON.parse(res.writtenData.join(''));

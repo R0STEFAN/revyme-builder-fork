@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { FieldDefinition } from '@/shared/types';
 import type { HierarchicalField } from './cms-filter-utils';
@@ -64,18 +64,61 @@ function HierarchicalFieldRow({
   const [showSub, setShowSub] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x: 0, y: 0, toRight: false });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState({ x: 0, y: 0, toRight: false, btnTop: 0, btnBottom: 0 });
   const dyn = dynamicInputLabel(field.type);
   const hasChildren = !!(field.children && field.children.length > 0);
 
-  useEffect(() => {
-    if (!showSub || !btnRef.current) return;
+  const updatePos = useCallback(() => {
+    if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
     const toRight = r.left - 230 < 10;
-    const x = toRight ? r.right + 6 : r.left - 6;
-    const y = Math.min(r.top, Math.max(8, window.innerHeight - 340));
-    setPos({ x, y, toRight });
-  }, [showSub]);
+    const x = toRight ? r.right + 4 : r.left - 4;
+    
+    // Default: align top of flyout with the hovered row button
+    let y = r.top;
+    const flyoutH = portalRef.current?.offsetHeight || 160;
+    
+    // If flyout would overflow bottom of viewport, shift up so bottom of flyout aligns with button bottom
+    if (y + flyoutH > window.innerHeight - 8) {
+      y = Math.max(8, Math.min(r.bottom - flyoutH, window.innerHeight - flyoutH - 8));
+    }
+    
+    setPos({ x, y, toRight, btnTop: r.top, btnBottom: r.bottom });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (showSub) {
+      updatePos();
+      const raf = requestAnimationFrame(updatePos);
+      window.addEventListener('resize', updatePos);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener('resize', updatePos);
+      };
+    }
+  }, [showSub, updatePos]);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setShowSub(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setShowSub(false);
+    }, 120);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const el = portalRef.current;
@@ -86,7 +129,7 @@ function HierarchicalFieldRow({
   });
 
   return (
-    <div onMouseEnter={() => setShowSub(true)} onMouseLeave={() => setShowSub(false)}>
+    <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       <button ref={btnRef} type="button" className={ROW} onClick={() => setShowSub(v => !v)}>
         <span className={ROW_LABEL}>{field.name}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-secondary)] group-hover:text-[var(--accent-fg)] shrink-0 ml-2">
@@ -103,10 +146,21 @@ function HierarchicalFieldRow({
             transform: pos.toRight ? 'none' : 'translateX(-100%)',
             zIndex: 100031 + depth * 2,
           }}
-          onMouseEnter={() => setShowSub(true)}
-          onMouseLeave={() => setShowSub(false)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
-          <div style={{ position: 'absolute', top: 0, [pos.toRight ? 'left' : 'right']: -12, width: 16, height: '100%' }} />
+          <div
+            style={{
+              position: 'absolute',
+              top: Math.min(0, (pos.btnTop || pos.y) - pos.y),
+              [pos.toRight ? 'left' : 'right']: -16,
+              width: 20,
+              height: Math.max(
+                portalRef.current?.offsetHeight || 160,
+                (pos.btnBottom || pos.y + 30) - Math.min(pos.y, pos.btnTop || pos.y)
+              ),
+            }}
+          />
           <div className="min-w-[170px] max-w-[280px] max-h-[380px] overflow-y-auto bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] shadow-2xl py-1.5">
             {/* Direct options for this field / relation itself */}
             {(dyn || (routeParams && routeParams.length > 0)) && (

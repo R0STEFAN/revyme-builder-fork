@@ -22,6 +22,10 @@ export interface TileRect {
  */
 export function deriveUploadKey(item: { url: string; key?: string }): string | null {
   if (item.key) return item.key;
+  if (!item.url) return null;
+  if (item.url.startsWith('/api/uploads/')) {
+    return item.url.replace(/^\/api\/uploads\//, '').split('?')[0] || null;
+  }
   try {
     const u = new URL(item.url);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;

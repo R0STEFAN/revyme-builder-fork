@@ -127,6 +127,10 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
       const familyName = decodeURIComponent(rawFamily.replace(/\+/g, ' ')).trim();
 
       if (!familyName || seenFamilies.has(familyName.toLowerCase())) continue;
+      if (!fontCatalogMap.has(familyName.toLowerCase())) {
+        trace.action('next-font-gen:skipNonCatalogFont', { familyName });
+        continue;
+      }
       seenFamilies.add(familyName.toLowerCase());
 
       let rawRequestedWeights: string[] | undefined;

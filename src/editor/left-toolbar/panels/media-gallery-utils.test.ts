@@ -16,6 +16,13 @@ describe('deriveUploadKey', () => {
       .toBe('u1/site/images/uploaded/b.webp');
   });
 
+  it('extracts filename key from local /api/uploads/ URLs', () => {
+    expect(deriveUploadKey({ url: '/api/uploads/photo1.webp' }))
+      .toBe('photo1.webp');
+    expect(deriveUploadKey({ url: '/api/uploads/photo2.jpg?v=123' }))
+      .toBe('photo2.jpg');
+  });
+
   it('returns null for standalone data:/blob: rows (nothing to delete)', () => {
     expect(deriveUploadKey({ url: 'data:image/png;base64,AAAA' })).toBeNull();
     expect(deriveUploadKey({ url: 'blob:http://localhost/xyz' })).toBeNull();
