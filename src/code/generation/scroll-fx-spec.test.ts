@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import _generate from '@babel/generator';
-import { decomposeAllScrollConflicts, composeAllScrollAppearConflicts, updateMotionPropInCode, setMotionPropScopedValue, setLoopInCode, updateScrollDirectionAnimInCode, updateScrollAnimInCode, updateScrollSpeedInCode, removeScrollSpeedScopeBranch, getSpeedResponsive, getScrollFx, setScrollFxInCode, buildScrollFxSpec, clearNodeScrollFx, dormantizeScrollFx, rehydrateScrollFx } from './generator-motion';
+import { decomposeAllScrollConflicts, composeAllScrollAppearConflicts, updateMotionPropInCode, setMotionPropScopedValue, setLoopInCode, updateScrollDirectionAnimInCode, updateScrollAnimInCode, updateScrollSpeedInCode, removeScrollSpeedScopeBranch, getSpeedResponsive, getScrollFx, setScrollFxInCode, buildScrollFxSpec, clearNodeScrollFx, dormantizeScrollFx, rehydrateScrollFx, robustClearScrollFx } from './generator-motion';
 import { parseJSX } from '@/code/parsing/ast-utils';
 import { syncImports, validateGeneratedCode } from '@/code/mutation/mutation-queue';
 import { presentOn } from '@/code/animations/presence';
@@ -433,5 +433,33 @@ export default function Page() {
     expect(re).toContain('useScroll');
     expect(re).toContain('useTransform');
     expect(validateGeneratedCode(syncImports(re))).toBeNull();
+  });
+
+  it('robustClearScrollFx sweeps useMotionValueEvent containing setter references like setSiteNavScrolled', () => {
+    const codeWithSetter = `'use client';
+import React, { useState } from 'react';
+import { motion, useScroll, useMotionValueEvent } from 'framer-motion';
+
+export default function Page() {
+  const [siteNavScrolled, setSiteNavScrolled] = useState(false);
+  const { scrollY } = useScroll();
+  useMotionValueEvent(scrollY, "change", (y) => {
+    const prev = scrollY.getPrevious() ?? 0;
+    if (y > prev && y > 60) setSiteNavScrolled(true);
+    else if (y < prev) setSiteNavScrolled(false);
+  });
+  return (
+    <motion.nav data-id="site-nav" animate={siteNavScrolled ? { opacity: 0 } : { opacity: 1 }}>
+      <h1>Nav</h1>
+    </motion.nav>
+  );
+}`;
+    const cleared = robustClearScrollFx(codeWithSetter, 'site-nav');
+    expect(cleared).not.toContain('setSiteNavScrolled');
+    expect(cleared).not.toContain('siteNavScrolled');
+    expect(cleared).not.toContain('useMotionValueEvent(');
+    const synced = syncImports(cleared);
+    expect(synced).not.toContain('useMotionValueEvent');
+    expect(validateGeneratedCode(synced)).toBeNull();
   });
 });

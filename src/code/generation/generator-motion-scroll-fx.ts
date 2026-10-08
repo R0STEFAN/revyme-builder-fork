@@ -593,9 +593,10 @@ export function clearNodeScrollFx(code: string, nodeId: string): string {
 // Same carve-out precedent as `<cn>Variants` in removeScrollFxConst.
 const TEXT_ANIM_TAIL = 'T[ea](?:\\d|SP\\b|Ref\\b)';
 
-/** `<cn><Uppercase>` matcher that skips the text-anim hook family. */
+/** `<cn><Uppercase>` or `set<Cn><Uppercase>` matcher that skips the text-anim hook family. */
 function scrollFxVarRe(e: string): RegExp {
-  return new RegExp(`${e}(?!${TEXT_ANIM_TAIL})[A-Z]`);
+  const cap = e.length > 0 ? e.charAt(0).toUpperCase() + e.slice(1) : e;
+  return new RegExp(`(?:${e}(?!${TEXT_ANIM_TAIL})[A-Z]|set${cap}(?!${TEXT_ANIM_TAIL})[A-Z]|set${e}(?!${TEXT_ANIM_TAIL})[A-Z])`);
 }
 
 /** True when the node's TEXT-ANIM hooks read the node's `<cn>Ref` as their
