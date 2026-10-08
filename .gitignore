@@ -27,6 +27,7 @@ playwright-report/
 lessons/
 docs/*
 !docs/readme/
+!docs/*.md
 plans/
 todo/
 refactor-plan/
