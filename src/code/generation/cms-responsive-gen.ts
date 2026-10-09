@@ -334,8 +334,35 @@ export function writeResponsiveListConfigInCode(
     : removeConfigConst(result, cfgVar);
   result = ensureResponsiveListHooks(result);
 
+  const openingTag = code.slice(elStart, closing.contentStart);
+  const paginationVar = opts.paginationVar || (/data-pagination="/.test(openingTag) ? paginationVarForId(parentId) : null);
+  if (paginationVar) {
+    const preSliceExpr = upgraded
+      ? `__applyListConfig(${slug}, ${cfgVar})`
+      : `${slug}${buildInlineFilterSort(cfg.base)}`;
+    const newGuard = `${paginationVar} < ${preSliceExpr}.length`;
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <LoadMore data-id="loadmore-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <button data-id="loadmore-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+    const refVar = paginationVar + 'Ref';
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+  }
+
   trace.action('cms-responsive:write:done', { parentId, slug, upgraded });
   return result;
+}
+
+function paginationVarForId(id: string): string {
+  const s = id.replace(/[^a-zA-Z0-9]/g, '');
+  return 'vis' + s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // ─── Breakpoint sync (resize / add / remove viewport) ─────────────────────────

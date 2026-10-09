@@ -314,8 +314,7 @@ export default function Page() {
 }`;
     const out = setPaginationInCode(upgraded, 'list', { mode: 'loadMore', perPage: 3 });
     expect(out).toContain('__applyListConfig(advisors, listCfgList).slice(0, visList)');
-    expect(out).toContain(`<${LOADMORE_COMPONENT_NAME} data-id="loadmore-list"`);
-    expect(out).toContain('visList < advisors.length');           // slug resolved from __applyListConfig
+    expect(out).toContain('visList < __applyListConfig(advisors, listCfgList).length');           // filtered expression checked
     expect(out).toContain('data-pagination="loadMore:3"');
     parses(out);
   });
@@ -390,5 +389,49 @@ function Blogs({ style }) {
 }
 export default Blogs;`;
     expect(syncImports(master)).toMatch(/import React, \{ useState \} from 'react';/);
+  });
+});
+
+describe('filtered collection pagination guard — hiding Load More when exhausted', () => {
+  const FILTERED_PAGE = `import React from 'react';
+import blog from '@/cms/blog.json';
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="list" style={{ display: 'flex', flexDirection: 'column' }}>
+      {blog.filter(item => item.category === 'news').map((item, idx) => <div data-id="row" key={idx}>{item.title}</div>)}
+    </div>
+  </div>;
+}`;
+
+  it('evaluates Load More guard against filtered expression length', () => {
+    const out = setPaginationInCode(FILTERED_PAGE, 'list', { mode: 'loadMore', perPage: 3 });
+    expect(out).toContain(`{${VAR} < blog.filter(item => item.category === 'news').length && <LoadMore data-id="loadmore-list"`);
+    expect(out).toContain(`{blog.filter(item => item.category === 'news').slice(0, ${VAR}).map`);
+    parses(out);
+  });
+
+  it('omits unnecessary .sort(...) from guard condition when both filter and sort are present', () => {
+    const SORTED_FILTERED = `import React from 'react';
+import blog from '@/cms/blog.json';
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="list" style={{ display: 'flex', flexDirection: 'column' }}>
+      {blog.filter(item => item.category === 'news').sort((a, b) => (a.order > b.order ? 1 : -1)).map((item, idx) => <div data-id="row" key={idx}>{item.title}</div>)}
+    </div>
+  </div>;
+}`;
+    const out = setPaginationInCode(SORTED_FILTERED, 'list', { mode: 'loadMore', perPage: 3 });
+    expect(out).toContain(`{${VAR} < blog.filter(item => item.category === 'news').length && <LoadMore data-id="loadmore-list"`);
+    expect(out).toContain(`.slice(0, ${VAR}).map`);
+    parses(out);
+  });
+
+  it('removes pagination cleanly when guarded by a complex filter expression', () => {
+    const on = setPaginationInCode(FILTERED_PAGE, 'list', { mode: 'loadMore', perPage: 3 });
+    const off = removePaginationInCode(on, 'list');
+    expect(off).not.toContain('loadmore-list');
+    expect(off).not.toContain(VAR);
+    expect(off).toContain("{blog.filter(item => item.category === 'news').map");
+    parses(off);
   });
 });

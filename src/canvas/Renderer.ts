@@ -2014,8 +2014,8 @@ function applyChainConfig(
   /** Active variant (master artboard / resolved instance variant) — selects the
    *  per-variant override. */
   variantName?: string,
-): CollectionItem[] {
-  if (!cfg) return raw;
+): { items: CollectionItem[]; matchingCount: number } {
+  if (!cfg) return { items: raw, matchingCount: raw.length };
   let data = raw;
 
   // Resolve effective filter/sort = base ← per-viewport bucket ← per-variant
@@ -2056,6 +2056,10 @@ function applyChainConfig(
       return 0;
     });
   }
+
+  // Count of items matching filters/sorting before pagination or static slice
+  const matchingCount = data.length;
+
   // Skip the first `offset` items, then preview page 1 (pagination) / honor the
   // static limit. Mirrors the generated `.slice(offset, offset+N)` so the canvas
   // shows the same window the deployed page renders.
@@ -2067,7 +2071,40 @@ function applyChainConfig(
   } else if (off > 0) {
     data = data.slice(off);
   }
-  return data;
+  return { items: data, matchingCount };
+}
+
+/**
+ * Synchronize the visibility of pagination UI elements (<LoadMore>, sentinel) on the canvas.
+ * When all items matching active filters/sort fit within the current preview page
+ * (matchingCount <= offset + perPage) or none match, hide the button so the canvas
+ * preview faithfully matches deployed React conditional rendering `{vis < items.length && <LoadMore />}`.
+ */
+function syncPaginationVisibility(
+  containerEl: HTMLElement,
+  nodeId: string,
+  idPrefix: string,
+  pagination: { perPage: number } | null | undefined,
+  offset: number | null | undefined,
+  matchingCount: number,
+): void {
+  if (!pagination || !(pagination.perPage > 0)) return;
+  const off = offset && offset > 0 ? offset : 0;
+  const shouldHide = matchingCount <= (off + pagination.perPage);
+  const pagEl = (containerEl.querySelector(`[data-node-id="${idPrefix}loadmore-${nodeId}"]`)
+    || containerEl.querySelector(`[data-node-id="${idPrefix}sentinel-${nodeId}"]`)
+    || containerEl.querySelector(`[data-id="loadmore-${nodeId}"]`)
+    || containerEl.querySelector(`[data-id="sentinel-${nodeId}"]`)) as HTMLElement | null;
+  if (!pagEl) return;
+  if (shouldHide) {
+    pagEl.style.display = 'none';
+    pagEl.setAttribute('data-pagination-hidden', 'true');
+    trace.action('renderer:pagination-hidden', { nodeId, matchingCount, perPage: pagination.perPage });
+  } else if (pagEl.getAttribute('data-pagination-hidden')) {
+    pagEl.style.removeProperty('display');
+    pagEl.removeAttribute('data-pagination-hidden');
+    trace.action('renderer:pagination-restored', { nodeId, matchingCount, perPage: pagination.perPage });
+  }
 }
 
 // ─── DOM Differ ─────────────────────────────────────────────────────────────
@@ -2961,7 +2998,8 @@ export function patchElement(
     // Per-tile variant wins over base variantName, then componentVariant — shared resolve-core helper.
     // (`__listVariant ?? undefined` below normalizes the null fallback exactly as the old `?? undefined`.)
     const __listVariant = resolveActiveVariant(node, { vpWidth, variant: variantName });
-    const data = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    syncPaginationVisibility(el, node.id, idPrefix, node.collectionList.pagination, node.collectionList.offset, matchingCount);
 
     // Template was dragged OUT / removed (`.map(() => null)` → templateIds empty, or
     // its node no longer exists): the list can't render rows. Drop any stale ghosts +
@@ -3995,7 +4033,8 @@ function buildNodeElement(
     // Per-tile variant wins over base variantName, then componentVariant — shared resolve-core helper.
     // (`__listVariant ?? undefined` below normalizes the null fallback exactly as the old `?? undefined`.)
     const __listVariant = resolveActiveVariant(node, { vpWidth, variant: variantName });
-    const data = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    syncPaginationVisibility(el, node.id, idPrefix, node.collectionList.pagination, node.collectionList.offset, matchingCount);
     const schema = getCollectionSchema(source);
     const hasLayouts = !!(schema?.layouts && schema.layouts.length > 1);
 

@@ -18,6 +18,7 @@ import {
   findClosingTag,
   COLLECTION_MAP_CALL_RE,
   extractCollectionSlug,
+  findCollectionChainHead,
 } from './cms-gen';
 import { insertConstIntoEnclosingFn, listConfigVar } from './cms-responsive-gen';
 import { ensureTextNodeNowrap } from './label-nowrap';
@@ -289,6 +290,63 @@ export function ensureSpinnerComponentFile(): void {
   trace.action('cms-pagination:ensureSpinnerComponentFile', { path: SPINNER_COMPONENT_PATH, upgraded: isOldAutoGen });
 }
 
+/** Find the matching closing paren for an opening paren at openIdx. */
+function findMatchingParenForward(str: string, openIdx: number): number {
+  let depth = 0;
+  let inString: string | null = null;
+  for (let i = openIdx; i < str.length; i++) {
+    const ch = str[i];
+    if (inString) {
+      if (ch === inString && str[i - 1] !== '\\') inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inString = ch;
+      continue;
+    }
+    if (ch === '(') depth++;
+    if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** Strip .sort(...) segment from an inline expression if present, as sorting doesn't change array length. */
+function stripSortFromChain(expr: string): string {
+  const sortIdx = expr.indexOf('.sort(');
+  if (sortIdx === -1) return expr;
+  const openParen = sortIdx + '.sort'.length;
+  const closeParen = findMatchingParenForward(expr, openParen);
+  if (closeParen !== -1) {
+    return (expr.slice(0, sortIdx) + expr.slice(closeParen + 1)).trim();
+  }
+  return expr;
+}
+
+/** Extract the collection expression preceding .slice() / .map() so pagination guards
+ *  can check filtered items length rather than raw collection size. */
+export function extractFilteredCollectionExpr(content: string, mapDotIdx: number, fallbackSlug: string): string {
+  const sliceMatch = /\.slice\(\s*0\s*,\s*[^)]+\)\s*$/.exec(content.slice(0, mapDotIdx));
+  const chainEnd = sliceMatch ? sliceMatch.index : mapDotIdx;
+
+  const applyIdx = content.lastIndexOf('__applyListConfig(', mapDotIdx);
+  if (applyIdx >= 0 && applyIdx < chainEnd) {
+    const expr = content.slice(applyIdx, chainEnd).trim();
+    if (expr) return expr;
+  }
+
+  const head = findCollectionChainHead(content, mapDotIdx);
+  if (head && head.slugStart < chainEnd) {
+    let expr = content.slice(head.slugStart, chainEnd).trim();
+    expr = stripSortFromChain(expr);
+    if (expr) return expr;
+  }
+
+  return fallbackSlug;
+}
+
 /**
  * Enable/replace pagination on the collection list `parentId`.
  *  - rewrites the chain's `.slice(...)` to `.slice(0, <stateVar>)` (or inserts it before `.map(`);
@@ -320,6 +378,7 @@ export function setPaginationInCode(
   // head (findCollectionChainHead returns null on the latter → pagination silently bailed).
   const slug = extractCollectionSlug(content, mapMatch.index);
   if (!slug) { trace.error('cms-pagination:set', { message: 'no chain head', parentId }); return code; }
+  const filteredExpr = extractFilteredCollectionExpr(content, mapMatch.index, slug);
 
   const stateVar = paginationStateVar(parentId);
   const setter = setterFor(stateVar);
@@ -337,8 +396,11 @@ export function setPaginationInCode(
   //   loadMore → a <LoadMore> COMPONENT instance whose event prop `onLoadMore`
   //     is the page setter (design-tool parity: a real component, not a raw button);
   //   infinite → an IntersectionObserver sentinel <div>.
+  //
+  // Guard condition checks filteredExpr.length (not raw unfiltered slug.length)
+  // so the button/sentinel hides when all items matching active filters/sort are displayed.
   if (mode === 'loadMore') {
-    newContent += `\n      {${stateVar} < ${slug}.length && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={() => ${setter}((c) => c + ${perPage})} />}\n    `;
+    newContent += `\n      {${stateVar} < ${filteredExpr}.length && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={() => ${setter}((c) => c + ${perPage})} />}\n    `;
   } else {
     // Infinite scroll: the sentinel is the IntersectionObserver target AND shows
     // the animated Spinner loader while more rows can load (hidden once exhausted).
@@ -347,7 +409,7 @@ export function setPaginationInCode(
     // (flex column default) — otherwise its full-width box made the spinner's
     // hit-area swallow hovers/clicks across the whole list. Now it hugs the
     // spinner and centres itself.
-    newContent += `\n      {${stateVar} < ${slug}.length && <div ref={${refVar}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+    newContent += `\n      {${stateVar} < ${filteredExpr}.length && <div ref={${refVar}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
   }
 
   let result = working.slice(0, closing.contentStart) + newContent + working.slice(closing.closeTagStart);
@@ -388,11 +450,11 @@ export function removePaginationInCode(code: string, parentId: string): string {
   // Strip the data-pagination attr.
   result = result.replace(new RegExp(`\\s*data-pagination="[^"]*"`), '');
   // Strip the Load More COMPONENT instance block (`{cond && <LoadMore .../>}`).
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < \\w+\\.length && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
+  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
   // (legacy) Strip an old raw-button Load More block, if any remains.
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < \\w+\\.length && <button data-id="loadmore-${parentId}"[\\s\\S]*?</button>\\}`), '');
+  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <button data-id="loadmore-${parentId}"[\\s\\S]*?</button>\\}`), '');
   // Strip the infinite-scroll sentinel+Spinner block (`{cond && <div ref>...<Spinner/></div>}`).
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < \\w+\\.length && <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
+  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
   // (legacy) Strip an old self-closing sentinel div, if any remains.
   result = result.replace(new RegExp(`\\s*<div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
   // Drop the LoadMore + Spinner imports if no instance of each remains.

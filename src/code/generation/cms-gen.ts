@@ -829,6 +829,25 @@ export function updateCollectionListConfigInCode(
     }
   }
 
+  // Keep pagination guard (Load More / sentinel) synchronized with the updated filter/sort
+  if (paginationVar) {
+    const newFilteredHead = buildChainCode(slug, filterGroup, null, undefined, null, offset, head.localized);
+    const newGuard = `${paginationVar} < ${newFilteredHead}.length`;
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <LoadMore data-id="loadmore-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <button data-id="loadmore-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+    const refVar = paginationVar + 'Ref';
+    result = result.replace(
+      new RegExp(`(\\{)${paginationVar} < [\\s\\S]*?(&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}")`),
+      `$1${newGuard} $2`,
+    );
+  }
+
   trace.action('cms-gen:updateCollectionConfig:done', { parentId, slug });
   return result;
 }

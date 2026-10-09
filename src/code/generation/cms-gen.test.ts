@@ -859,4 +859,46 @@ describe('updateCollectionListConfigInCode — routeParam dynamic filters', () =
   });
 });
 
+describe('updateCollectionListConfigInCode — pagination guard synchronization', () => {
+  const PAGINATED_PAGE = `import React, { useState } from 'react';
+import blog from '@/cms/blog.json';
+import LoadMore from '@/components/LoadMore';
+export default function Page() {
+  const [visList, setVisList] = useState(3);
+  return <div data-id="root">
+    <div data-id="list" data-pagination="loadMore:3" style={{ display: 'flex', flexDirection: 'column' }}>
+      {blog.slice(0, visList).map((item, idx) => <div data-id="row" key={idx}>{item.title}</div>)}
+      {visList < blog.length && <LoadMore data-id="loadmore-list" data-pagination-ui="true" onLoadMore={() => setVisList((c) => c + 3)} />}
+    </div>
+  </div>;
+}`;
+
+  it('updates the Load More guard when filters are added to a paginated list', () => {
+    const out = updateCollectionListConfigInCode(
+      PAGINATED_PAGE,
+      'list',
+      { combinator: 'and', filters: [{ field: 'category', operator: 'equals', value: 'tech' }] },
+    );
+    expect(out).toContain('{visList < blog.filter(item => item.category === "tech").length && <LoadMore data-id="loadmore-list"');
+    expect(out).toContain('{blog.filter(item => item.category === "tech").slice(0, visList).map');
+    expect(parseJSX(out)).toBeTruthy();
+  });
+
+  it('restores raw slug.length in the guard when all filters are cleared', () => {
+    const WITH_FILTER = updateCollectionListConfigInCode(
+      PAGINATED_PAGE,
+      'list',
+      { combinator: 'and', filters: [{ field: 'category', operator: 'equals', value: 'tech' }] },
+    );
+    const CLEARED = updateCollectionListConfigInCode(
+      WITH_FILTER,
+      'list',
+      { combinator: 'and', filters: [] },
+    );
+    expect(CLEARED).toContain('{visList < blog.length && <LoadMore data-id="loadmore-list"');
+    expect(CLEARED).toContain('{blog.slice(0, visList).map');
+    expect(parseJSX(CLEARED)).toBeTruthy();
+  });
+});
+
 
