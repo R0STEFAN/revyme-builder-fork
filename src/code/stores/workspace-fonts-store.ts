@@ -21,6 +21,7 @@ import { getProjectId } from '@/backend/project-id';
 import { loadCustomFont, loadCustomFontInCanvas } from '@/shared/font-loader';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { addWorkspaceFontFacesToCss } from '@/code/project/preset-ops';
+import { projectFS } from '@/code/project/project-fs';
 import { forceCanvasRender } from '@/canvas/node-ops';
 import type { WorkspaceFont } from '@/backend/types';
 
@@ -54,8 +55,78 @@ function notify(): void {
 }
 
 /**
+ * Parse custom @font-face declarations from CSS to discover uploaded/imported fonts.
+ */
+export function parseCustomFontsFromCss(css: string): WorkspaceFont[] {
+  if (!css || !css.includes('@font-face')) return [];
+  const fonts: WorkspaceFont[] = [];
+  const fontFaceRegex = /@font-face\s*\{([^}]+)\}/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = fontFaceRegex.exec(css)) !== null) {
+    const block = match[1];
+    const famMatch = block.match(/font-family:\s*['"]?([^'";]+)['"]?/i);
+    const srcMatch = block.match(/url\(['"]?([^'")]+)['"]?\)/i);
+    if (!famMatch || !srcMatch) continue;
+
+    const family = famMatch[1].trim();
+    const url = srcMatch[1].trim();
+    const weightMatch = block.match(/font-weight:\s*(\d+)/i);
+    const weight = weightMatch ? parseInt(weightMatch[1], 10) : 400;
+    const styleMatch = block.match(/font-style:\s*(normal|italic|oblique)/i);
+    const style = (styleMatch && styleMatch[1].toLowerCase() === 'italic') ? 'italic' : 'normal';
+
+    const extMatch = url.match(/\.(woff2|woff|ttf|otf)(?:[?#]|$)/i);
+    const ext = (extMatch ? extMatch[1].toLowerCase() : 'woff2') as 'woff2' | 'woff' | 'ttf' | 'otf';
+
+    fonts.push({
+      id: `discovered-${family.replace(/\s+/g, '-').toLowerCase()}-${weight}-${style}`,
+      family,
+      weight,
+      style,
+      ext,
+      fileName: url.split('/').pop()?.split('?')[0] || `${family}.${ext}`,
+      size: 0,
+      url,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: 'discovered',
+    });
+  }
+  return fonts;
+}
+
+/**
+ * Synchronize custom fonts discovered in project CSS into the workspace fonts store
+ * and local storage so they appear in the font picker and can be re-used.
+ */
+export function syncProjectCustomFontsFromCss(css: string): WorkspaceFont[] {
+  const discovered = parseCustomFontsFromCss(css);
+  if (discovered.length === 0) return [];
+
+  let changed = false;
+  for (const font of discovered) {
+    const existing = _fonts.some(f => f.family === font.family && f.weight === font.weight && f.style === font.style);
+    if (!existing) {
+      _fonts.push(font);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.id.startsWith('discovered-') || f.uploadedBy === 'user' || f.uploadedBy === 'local' || f.uploadedBy === 'discovered');
+    saveLocalCustomFonts(localFonts);
+    for (const f of discovered) {
+      loadCustomFont({ family: f.family, url: f.url, weight: f.weight, style: f.style });
+    }
+    notify();
+  }
+  return discovered;
+}
+
+/**
  * Fetch the workspace font library once, then cache. Resolves the owning
  * workspace from the current website, lists its fonts, merges local custom fonts,
+ * discovers any custom fonts defined in project globals.css,
  * and pre-registers each face (so previews render). Safe to call repeatedly.
  */
 export async function ensureWorkspaceFonts(): Promise<void> {
@@ -80,6 +151,22 @@ export async function ensureWorkspaceFonts(): Promise<void> {
     const map = new Map<string, WorkspaceFont>();
     for (const f of backendFonts) map.set(f.id, f);
     for (const f of localFonts) map.set(f.id, f);
+
+    // Auto-discover custom fonts declared in app/globals.css
+    try {
+      const globalsCss = projectFS.readFile('app/globals.css');
+      if (globalsCss) {
+        const discovered = parseCustomFontsFromCss(globalsCss);
+        for (const f of discovered) {
+          const key = `${f.family}__${f.weight}__${f.style}`;
+          const already = Array.from(map.values()).some(existing => `${existing.family}__${existing.weight}__${existing.style}` === key);
+          if (!already) {
+            map.set(f.id, f);
+          }
+        }
+      }
+    } catch {}
+
     _fonts = Array.from(map.values());
     _loaded = true;
     trace.action('workspace-fonts:loaded', { count: _fonts.length });
@@ -106,7 +193,7 @@ export function addCustomFont(font: WorkspaceFont): void {
   } else {
     _fonts.push(font);
   }
-  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.uploadedBy === 'user' || f.uploadedBy === 'local');
+  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.id.startsWith('discovered-') || f.uploadedBy === 'user' || f.uploadedBy === 'local' || f.uploadedBy === 'discovered');
   saveLocalCustomFonts(localFonts);
 
   loadCustomFont({ family: font.family, url: font.url, weight: font.weight, style: font.style });
@@ -118,7 +205,7 @@ export function addCustomFont(font: WorkspaceFont): void {
 /** Delete a custom font from workspace fonts */
 export function deleteCustomFont(fontId: string): void {
   _fonts = _fonts.filter(f => f.id !== fontId);
-  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.uploadedBy === 'user' || f.uploadedBy === 'local');
+  const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.id.startsWith('discovered-') || f.uploadedBy === 'user' || f.uploadedBy === 'local' || f.uploadedBy === 'discovered');
   saveLocalCustomFonts(localFonts);
   notify();
 }

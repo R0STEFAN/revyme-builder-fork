@@ -213,10 +213,36 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const saved = saveProject(newId, data, name, undefined, bundle.folderId ?? null, bundle.previewImage ?? null);
 
+          // Extract any custom fonts from globals.css if not already in bundle.customFonts
+          let customFonts = bundle.customFonts;
+          if (!customFonts && data?.files?.['app/globals.css']) {
+            const globalsCss = data.files['app/globals.css'];
+            const fontFaceRegex = /@font-face\s*\{([^}]+)\}/gi;
+            const parsedFonts: any[] = [];
+            let ffMatch: RegExpExecArray | null;
+            while ((ffMatch = fontFaceRegex.exec(globalsCss)) !== null) {
+              const block = ffMatch[1];
+              const famMatch = block.match(/font-family:\s*['"]?([^'";]+)['"]?/i);
+              const srcMatch = block.match(/url\(['"]?([^'")]+)['"]?\)/i);
+              if (!famMatch || !srcMatch) continue;
+              const family = famMatch[1].trim();
+              const fontUrl = srcMatch[1].trim();
+              const weightMatch = block.match(/font-weight:\s*(\d+)/i);
+              const weight = weightMatch ? parseInt(weightMatch[1], 10) : 400;
+              const styleMatch = block.match(/font-style:\s*(normal|italic|oblique)/i);
+              const style = styleMatch && styleMatch[1].toLowerCase() === 'italic' ? 'italic' : 'normal';
+              const extMatch = fontUrl.match(/\.(woff2|woff|ttf|otf)(?:[?#]|$)/i);
+              const ext = extMatch ? extMatch[1].toLowerCase() : 'woff2';
+              parsedFonts.push({ family, weight, style, ext, url: fontUrl });
+            }
+            if (parsedFonts.length > 0) customFonts = parsedFonts;
+          }
+
           return sendJson(res, 201, {
             success: true,
             project: saved,
             assetCount: savedAssetCount,
+            customFonts,
           });
         } catch (err: any) {
           return sendJson(res, 400, { error: err.message || 'Failed to import bundle' });
@@ -549,12 +575,12 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           }
 
           const serialized = JSON.stringify(project.data || {});
-          const assetMatches = serialized.matchAll(/\/api\/uploads\/([a-zA-Z0-9._-]+)/g);
+          const assetMatches = serialized.matchAll(/(?:\/api)?\/uploads\/([a-zA-Z0-9._-]+)/g);
           const assetFileNames = Array.from(new Set(Array.from(assetMatches, (m) => m[1])));
 
           // Also check project previewImage
-          if (project.previewImage && project.previewImage.startsWith('/api/uploads/')) {
-            const previewFile = project.previewImage.replace('/api/uploads/', '').split('?')[0];
+          if (project.previewImage && /(?:\/api)?\/uploads\//.test(project.previewImage)) {
+            const previewFile = project.previewImage.replace(/(?:\/api)?\/uploads\//, '').split('?')[0];
             if (previewFile && !assetFileNames.includes(previewFile)) {
               assetFileNames.push(previewFile);
             }
@@ -577,6 +603,27 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             }
           }
 
+          // Extract any custom fonts declared in globals.css
+          const globalsCss = project.data?.files?.['app/globals.css'] || '';
+          const fontFaceRegex = /@font-face\s*\{([^}]+)\}/gi;
+          const customFonts: any[] = [];
+          let ffMatch: RegExpExecArray | null;
+          while ((ffMatch = fontFaceRegex.exec(globalsCss)) !== null) {
+            const block = ffMatch[1];
+            const famMatch = block.match(/font-family:\s*['"]?([^'";]+)['"]?/i);
+            const srcMatch = block.match(/url\(['"]?([^'")]+)['"]?\)/i);
+            if (!famMatch || !srcMatch) continue;
+            const family = famMatch[1].trim();
+            const fontUrl = srcMatch[1].trim();
+            const weightMatch = block.match(/font-weight:\s*(\d+)/i);
+            const weight = weightMatch ? parseInt(weightMatch[1], 10) : 400;
+            const styleMatch = block.match(/font-style:\s*(normal|italic|oblique)/i);
+            const style = styleMatch && styleMatch[1].toLowerCase() === 'italic' ? 'italic' : 'normal';
+            const extMatch = fontUrl.match(/\.(woff2|woff|ttf|otf)(?:[?#]|$)/i);
+            const ext = extMatch ? extMatch[1].toLowerCase() : 'woff2';
+            customFonts.push({ family, weight, style, ext, url: fontUrl });
+          }
+
           const bundle = {
             format: 'revyme-bundle-v1',
             id: project.id,
@@ -586,6 +633,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             previewImage: project.previewImage || null,
             folderId: project.folderId || null,
             assets,
+            customFonts: customFonts.length > 0 ? customFonts : undefined,
           };
 
           return sendJson(res, 200, bundle);

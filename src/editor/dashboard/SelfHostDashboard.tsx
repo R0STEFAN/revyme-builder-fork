@@ -22,6 +22,7 @@ import Modal from '@/design-system/Modal';
 import ConfirmDialog from '@/design-system/ConfirmDialog';
 import { toast } from 'sonner';
 import { trace } from '@/shared/debug-trace';
+import { parseCustomFontsFromCss, syncProjectCustomFontsFromCss } from '@/code/stores/workspace-fonts-store';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -335,7 +336,7 @@ export default function SelfHostDashboard() {
         }
 
         const serialized = JSON.stringify(data);
-        const assetMatches = serialized.matchAll(/\/api\/uploads\/([a-zA-Z0-9._-]+)/g);
+        const assetMatches = serialized.matchAll(/(?:\/api)?\/uploads\/([a-zA-Z0-9._-]+)/g);
         const assetFileNames = Array.from(new Set(Array.from(assetMatches, (m) => m[1])));
 
         const assets: Record<string, { base64: string; mime?: string; size: number }> = {};
@@ -357,6 +358,9 @@ export default function SelfHostDashboard() {
           } catch {}
         }
 
+        const globalsCss = data?.files?.['app/globals.css'];
+        const customFonts = globalsCss ? parseCustomFontsFromCss(globalsCss) : undefined;
+
         bundleData = {
           format: 'revyme-bundle-v1',
           id: project.id,
@@ -366,6 +370,7 @@ export default function SelfHostDashboard() {
           previewImage: project.previewImage || null,
           folderId: project.folderId || null,
           assets,
+          customFonts: customFonts && customFonts.length > 0 ? customFonts : undefined,
         };
       }
 
@@ -452,11 +457,21 @@ export default function SelfHostDashboard() {
           });
           if (res.ok) {
             const json = await res.json();
+            const globalsCss = parsed.data?.files?.['app/globals.css'] || parsed.files?.['app/globals.css'];
+            if (globalsCss) {
+              syncProjectCustomFontsFromCss(globalsCss);
+            }
             toast.success(`Imported "${json.project?.name || parsed.name}" with ${json.assetCount ?? assetCount} assets!`);
             await fetchProjects();
             return;
           }
         } catch {}
+      }
+
+      // Sync custom fonts in standard import fallback as well
+      const globalsCss = parsed.data?.files?.['app/globals.css'] || parsed.files?.['app/globals.css'];
+      if (globalsCss) {
+        syncProjectCustomFontsFromCss(globalsCss);
       }
 
       // Standard project import fallback

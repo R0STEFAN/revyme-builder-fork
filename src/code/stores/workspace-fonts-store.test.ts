@@ -5,6 +5,8 @@ import {
   deleteCustomFont,
   ensureWorkspaceFonts,
   isWorkspaceFontFamily,
+  parseCustomFontsFromCss,
+  syncProjectCustomFontsFromCss,
 } from './workspace-fonts-store';
 import type { WorkspaceFont } from '@/backend/types';
 
@@ -81,6 +83,61 @@ describe('workspace-fonts-store', () => {
       expect(isWorkspaceFontFamily('MyBrandFont')).toBe(false);
       const afterDelete = JSON.parse(localStorage.getItem('revyme_custom_fonts') || '[]');
       expect(afterDelete).toHaveLength(0);
+    });
+  });
+
+  describe('parseCustomFontsFromCss', () => {
+    it('extracts custom @font-face declarations from css', () => {
+      const css = `
+/* Workspace custom fonts */
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/api/uploads/123-CabinetGrotesk-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gilroy';
+  src: url('/uploads/456-Gilroy-Italic.ttf') format('truetype');
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+      `;
+
+      const parsed = parseCustomFontsFromCss(css);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0]).toMatchObject({
+        family: 'Cabinet Grotesk',
+        weight: 700,
+        style: 'normal',
+        ext: 'woff2',
+        url: '/api/uploads/123-CabinetGrotesk-Bold.woff2',
+      });
+      expect(parsed[1]).toMatchObject({
+        family: 'Gilroy',
+        weight: 300,
+        style: 'italic',
+        ext: 'ttf',
+        url: '/uploads/456-Gilroy-Italic.ttf',
+      });
+    });
+
+    it('syncs discovered fonts into workspace fonts and localStorage', () => {
+      const css = `
+@font-face {
+  font-family: 'Imported Font';
+  src: url('/api/uploads/imported.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+      `;
+      syncProjectCustomFontsFromCss(css);
+      expect(isWorkspaceFontFamily('Imported Font')).toBe(true);
+      const stored = JSON.parse(localStorage.getItem('revyme_custom_fonts') || '[]');
+      expect(stored.some((f: any) => f.family === 'Imported Font')).toBe(true);
     });
   });
 });

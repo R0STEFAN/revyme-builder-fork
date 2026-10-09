@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { collectFontFamilies, resolveVarRefs, extractFamilyName } from './font-preload';
+import { collectFontFamilies, resolveVarRefs, extractFamilyName, hasCustomFontFace } from './font-preload';
 
 describe('resolveVarRefs', () => {
   const tokens = new Map([
@@ -102,5 +102,13 @@ describe('collectFontFamilies', () => {
       'cms/posts.json': '{ "fontFamily": "NotAFont" }',
     });
     expect(families.size).toBe(0);
+  });
+
+  test('identifies custom @font-face declarations via hasCustomFontFace', () => {
+    const files = {
+      'app/globals.css': `@font-face {\n  font-family: 'MyBrandFont';\n  src: url('/api/uploads/font.woff2') format('woff2');\n}`,
+    };
+    expect(hasCustomFontFace('MyBrandFont', files)).toBe(true);
+    expect(hasCustomFontFace('GoogleFont', files)).toBe(false);
   });
 });

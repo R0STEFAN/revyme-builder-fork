@@ -22,7 +22,7 @@ import { projectFS } from './project-fs';
 import { ensureGoogleFontImport } from './preset-ops';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { loadGoogleFont } from '@/shared/font-loader';
-import { isWorkspaceFontFamily } from '@/code/stores/workspace-fonts-store';
+import { isWorkspaceFontFamily, syncProjectCustomFontsFromCss } from '@/code/stores/workspace-fonts-store';
 import { trace } from '@/shared/debug-trace';
 
 /** All custom-property declarations: `--name: value` (value up to `;` or `}`). */
@@ -94,6 +94,17 @@ export function collectFontFamilies(files: Record<string, string>): Set<string> 
   return families;
 }
 
+/** Check whether a font family is declared via @font-face in any CSS file in the project. */
+export function hasCustomFontFace(fam: string, files: Record<string, string>): boolean {
+  if (!fam) return false;
+  const escaped = fam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp(`@font-face\\s*\\{[^}]*font-family:\\s*['"]?${escaped}['"]?`, 'i');
+  for (const [path, code] of Object.entries(files)) {
+    if (path.endsWith('.css') && rx.test(code)) return true;
+  }
+  return false;
+}
+
 /** Load every Google Font the project references and make sure each has its
  *  @import in app/globals.css. Called on editor load and on page switch —
  *  cheap to re-run: loadGoogleFont dedupes by family, ensureGoogleFontImport
@@ -105,10 +116,17 @@ export function preloadProjectFonts(): void {
     const code = projectFS.readFile(path);
     if (code) files[path] = code;
   }
+
+  // Auto-sync any custom @font-face rules into workspace fonts store
+  const globalsCss = files['app/globals.css'];
+  if (globalsCss) {
+    syncProjectCustomFontsFromCss(globalsCss);
+  }
+
   const families = collectFontFamilies(files);
   const viewer = isViewerMode();
   for (const fam of families) {
-    if (isWorkspaceFontFamily(fam)) continue;
+    if (isWorkspaceFontFamily(fam) || hasCustomFontFace(fam, files)) continue;
     loadGoogleFont(fam);
     // Self-heal the @import for preview/live + the canvas iframe stylesheet.
     // Viewers must not mutate project files — their font load still works

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { selfHostApiPlugin } from './api-plugin';
 import { LocalServerManager, type LocalServerStatus } from './local-server';
+import { saveUploadExact } from './storage';
 
 function createMockManager(overrides: Partial<Record<keyof LocalServerManager, any>> = {}) {
   const defaultStatus: LocalServerStatus = {
@@ -540,6 +541,63 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.project.name).toBe('Imported Bundle Test');
       expect(res.body.assetCount).toBe(1);
+    });
+
+    it('exports and imports custom fonts in project bundle with metadata', async () => {
+      // 1. Save an upload font file
+      saveUploadExact('my-test-font.woff2', Buffer.from('mock-woff2-binary-data'));
+
+      // 2. Create project referencing font via both /api/uploads/ and /uploads/
+      const css = `
+@font-face {
+  font-family: 'Test Custom Font';
+  src: url('/uploads/my-test-font.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+      `;
+      await dispatch({
+        method: 'POST',
+        url: '/api/projects',
+        body: {
+          id: 'test-font-bundle-proj',
+          name: 'Font Bundle Project',
+          data: {
+            files: {
+              'app/globals.css': css,
+              'app/page.tsx': '<h1 style={{ fontFamily: "Test Custom Font" }}>Title</h1>',
+            },
+          },
+        },
+      });
+
+      // 3. Export bundle
+      const exportRes = await dispatch({
+        method: 'GET',
+        url: '/api/projects/test-font-bundle-proj/bundle',
+      });
+
+      expect(exportRes.status).toBe(200);
+      expect(exportRes.body.assets['my-test-font.woff2']).toBeDefined();
+      expect(exportRes.body.assets['my-test-font.woff2'].mime).toBe('font/woff2');
+      expect(exportRes.body.customFonts).toBeDefined();
+      expect(exportRes.body.customFonts[0]).toMatchObject({
+        family: 'Test Custom Font',
+        weight: 700,
+        style: 'normal',
+      });
+
+      // 4. Import bundle
+      const importRes = await dispatch({
+        method: 'POST',
+        url: '/api/projects/import-bundle',
+        body: exportRes.body,
+      });
+
+      expect(importRes.status).toBe(201);
+      expect(importRes.body.success).toBe(true);
+      expect(importRes.body.assetCount).toBe(1);
+      expect(importRes.body.customFonts).toBeDefined();
     });
 
     it('records versions on disk during project save and supports branch filtering, restore, and delete', async () => {
