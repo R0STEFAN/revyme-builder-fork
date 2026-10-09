@@ -153,3 +153,21 @@ export function parseCodeComponentDefaultSize(code: string): CodeComponentDefaul
   trace.fn('controls-parser:default-size', out);
   return out;
 }
+
+/**
+ * Recursively find a control definition by prop name, traversing `group` controls.
+ */
+export function findControlDef(
+  controls: Record<string, ComponentControlDef> | undefined | null,
+  propName: string,
+): ComponentControlDef | undefined {
+  if (!controls) return undefined;
+  if (controls[propName]) return controls[propName];
+  for (const c of Object.values(controls)) {
+    if (c.type === 'group' && c.controls) {
+      const nested = findControlDef(c.controls, propName);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}

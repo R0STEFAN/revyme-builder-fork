@@ -7,6 +7,8 @@
  * accepts children + how many.
  */
 import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { render } from '@testing-library/react';
 import {
   LENS_BOX_COMPONENT, MAGNET_BOX_COMPONENT,
   MARQUEE_COMPONENT, CAROUSEL_COMPONENT, RIBBON_MARQUEE_COMPONENT,
@@ -103,6 +105,7 @@ describe('Effect Code components', () => {
   it('Carousel exposes group + transition controls', () => {
     const meta = parseComponentControlsMeta(CAROUSEL_COMPONENT)!;
     expect(meta.controls.transitionConfig?.type).toBe('transition');
+    expect(meta.controls.swipe?.type).toBe('toggle');
     expect(meta.controls.effects?.type).toBe('group');
     expect(meta.controls.arrows?.type).toBe('group');
     expect(meta.controls.dots?.type).toBe('group');
@@ -115,5 +118,23 @@ describe('Effect Code components', () => {
     expect(parseComponentControlsMeta(MARQUEE_COMPONENT)!.controls.fade?.type).toBe('group');
     expect(parseComponentControlsMeta(MARQUEE_3D_COMPONENT)!.controls.tilt?.type).toBe('group');
     expect(parseComponentControlsMeta(HORIZONTAL_SCROLL_COMPONENT)!.controls.fade?.type).toBe('group');
+  });
+
+  it('Carousel renders active slide with AnimatePresence and controls', () => {
+    const Comp = compileCodeComponent(CAROUSEL_COMPONENT, 'Carousel') as React.ComponentType<any>;
+    expect(Comp).not.toBeNull();
+    const { container, getByText } = render(
+      React.createElement(Comp, { loop: true }, [
+        React.createElement('div', { key: 's1' }, 'Slide 1'),
+        React.createElement('div', { key: 's2' }, 'Slide 2'),
+        React.createElement('div', { key: 's3' }, 'Slide 3'),
+      ])
+    );
+    expect(getByText('Slide 1')).toBeDefined();
+    // Arrows should be present
+    expect(container.querySelector('button[aria-label="Previous"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Next"]')).not.toBeNull();
+    // 3 Dots should be present
+    expect(container.querySelectorAll('button[aria-label^="Go to slide"]').length).toBe(3);
   });
 });

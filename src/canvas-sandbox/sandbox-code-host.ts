@@ -35,9 +35,20 @@ function makeInner(
   Component: React.ComponentType<any>,
   props: Record<string, any>,
   vpWidth: number,
+  preview = false,
 ): React.ReactElement {
   const { __slotChildren, ...rest } = props;
-  const kids = Array.isArray(__slotChildren) ? buildSlotChildren(__slotChildren) : [];
+  const kids = Array.isArray(__slotChildren)
+    ? buildSlotChildren(__slotChildren, {
+        compileComponent: (codeOrUrl: string, name: string) => {
+          if (codeOrUrl.startsWith('http://') || codeOrUrl.startsWith('https://')) {
+            return getCdnComponent(codeOrUrl);
+          }
+          return compileCodeComponent(codeOrUrl, name, { previewMode: preview });
+        },
+        vpWidth,
+      })
+    : [];
   return React.createElement(Component, { ...rest, __canvasViewportWidth: vpWidth }, ...kids);
 }
 
@@ -357,7 +368,7 @@ function reRenderWithCurrentSize(entry: MountedComponent): void {
   if (entry.hasUserDims.width) liveStyle.width = `${w}px`;
   if (entry.hasUserDims.height) liveStyle.height = `${h}px`;
   const liveProps = { ...entry.props, style: liveStyle };
-  const inner = makeInner(entry.Component, liveProps, entry.vpWidth);
+  const inner = makeInner(entry.Component, liveProps, entry.vpWidth, entry.preview);
   // CDN imports + vector sets: keep the same MotionConfig wrapper on every
   // resize tick so framer-motion's layout-FLIP doesn't re-acquire its
   // default transition mid-drag and start animating again.
@@ -461,7 +472,7 @@ export function mountCodeComponent(
         width: hasUserDim(coercedProps.style, 'width'),
         height: hasUserDim(coercedProps.style, 'height'),
       };
-      const inner = makeInner(existing.Component, coercedProps, containerVpWidth);
+      const inner = makeInner(existing.Component, coercedProps, containerVpWidth, preview);
       // CDN imports + vector sets: suppress framer-motion animations on the
       // canvas. Resize / variant-switch should be instant here; the
       // animations are only meaningful in live preview / production.
@@ -512,7 +523,7 @@ export function mountCodeComponent(
       const root = createRoot(container, { identifierPrefix: elementSvgScope(container) });
       const coercedProps = coerceProps(cProps);
 
-      const inner = makeInner(Component, coercedProps, containerVpWidth);
+      const inner = makeInner(Component, coercedProps, containerVpWidth, preview);
       // CDN imports + vector sets → wrap in MotionConfig with disabled
       // transitions so layout-FLIP / variant transitions / animate=…
       // are instant on the canvas. See same wrapper in the props-only
@@ -636,6 +647,9 @@ export function updateCodeComponentProps(
     const variant = entry.container.closest('[data-viewport]')?.getAttribute('data-viewport') ?? null;
     const cProps = resolveVariantProps(props, variant);
     const coercedProps = coerceProps(cProps);
+    if (coercedProps.__slotChildren === undefined && entry.props.__slotChildren !== undefined) {
+      coercedProps.__slotChildren = entry.props.__slotChildren;
+    }
     const propsHash = hashProps(cProps, entry.vpWidth);
     // Same props (with the same vpWidth) as last render → skip. Avoids
     // redundant React commits during continuous resize / slider drags.
@@ -644,7 +658,7 @@ export function updateCodeComponentProps(
     entry.props = coercedProps;
     entry.propsHash = propsHash;
 
-    entry.root.render(makeInner(entry.Component, coercedProps, entry.vpWidth));
+    entry.root.render(makeInner(entry.Component, coercedProps, entry.vpWidth, entry.preview));
   }
 }
 

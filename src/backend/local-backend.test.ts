@@ -225,3 +225,53 @@ describe('LocalBackend — format tag is a hint, not a gate', () => {
     expect(await backend.loadProject('local')).toBeNull();
   });
 });
+
+describe('LocalBackend — server error resilience', () => {
+  let backend: LocalBackend;
+  beforeEach(() => {
+    localStorage.clear();
+    backend = new LocalBackend();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('throws when server returns 500 and project is not in localStorage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    }));
+    await expect(backend.loadProject('proj-123')).rejects.toThrow('Failed to load project "proj-123" from server: Server returned HTTP 500');
+  });
+
+  it('throws when server fetch fails with network error and project is not in localStorage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Failed to fetch')));
+    await expect(backend.loadProject('proj-123')).rejects.toThrow('Failed to load project "proj-123" from server: Failed to fetch');
+  });
+
+  it('falls back to localStorage if server fails with network error but localStorage has project', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Failed to fetch')));
+    localStorage.setItem('revyme-project-proj-123', JSON.stringify({
+      format: 'revyme-v1',
+      files: { 'app/page.tsx': 'cached work' },
+    }));
+    const loaded = await backend.loadProject('proj-123');
+    expect(loaded).not.toBeNull();
+    expect(loaded!.files['app/page.tsx']).toBe('cached work');
+  });
+
+  it('refuses to save an empty project with 0 files to prevent clobbering', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    localStorage.setItem('revyme-project-proj-123', JSON.stringify({
+      format: 'revyme-v1',
+      files: { 'app/page.tsx': 'valid content' },
+    }));
+    await backend.saveProject('proj-123', { format: 'revyme-v1', files: {} });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // LocalStorage still has previous valid work
+    const raw = JSON.parse(localStorage.getItem('revyme-project-proj-123')!);
+    expect(raw.files['app/page.tsx']).toBe('valid content');
+  });
+});

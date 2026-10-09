@@ -559,7 +559,11 @@ export default function CodeComponentHost() {
           // templateSlotNodes), so serialize against both.
           const tplNodes = templateSlotNodesRef.current;
           const slotSource = tplNodes ? new Map([...tplNodes, ...nodes]) : nodes;
-          const slotKids = serializeSlotChildren(connectedIds, slotSource, slotConnectionsRef.current);
+          const getCode = (file: string) => file.startsWith('http') ? file : (projectFS.readFile(file) || null);
+          const slotKids = serializeSlotChildren(connectedIds, slotSource, slotConnectionsRef.current, {
+            getCode,
+            getProps: (n) => extractCodeComponentProps(n),
+          });
           if (slotKids.length > 0) props.__slotChildren = slotKids;
           const vpWidths = getViewportWidths();
           const vpWidth = vpWidths['desktop'] || 1440;

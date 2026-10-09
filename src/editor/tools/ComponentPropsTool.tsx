@@ -23,7 +23,7 @@ import { useCdnSource } from '@/cloud/components/cdn-source-hook';
 import { useCdnMetadataCache, useEnsureCdnMetadata } from '@/cloud/components/cdn-metadata-hook';
 import { linkedComponentModalUrlAtom } from '@/cloud/components/linked-component-modal-store';
 import { parseComponentName } from '@/code/components/component-ops';
-import type { ComponentControlDef } from '@/code/components/controls-parser';
+import { findControlDef, type ComponentControlDef } from '@/code/components/controls-parser';
 import { ToolRow, ToolInput, ToolSlider, ToolSelect, ToolDivider, ControlLabel, resolveControl, ToolSegmentedControl } from '../controls';
 import { resolveVariableEditor } from '../controls/variable-editor-registry';
 import { UnifiedControlProvider } from '../controls/unified';
@@ -844,7 +844,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     if (!selectedId || !componentInfo) return;
     setPreviewValues((p) => (p[propName] === value ? p : { ...p, [propName]: value }));
 
-    const controlDef = controlsMeta?.controls?.[propName];
+    const controlDef = findControlDef(controlsMeta?.controls, propName);
     // Booleans MUST be JSX expressions (`prop={false}`), never strings
     // (`prop="false"`) — the string "false" is truthy in JS, so a boolean link
     // variable (New Tab / Smooth Scroll) set to false would still read as true
@@ -1041,7 +1041,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     // Hold the chosen value on screen through the async commit/parse churn.
     setPropOptimistic(propName, value);
 
-    const controlDef = controlsMeta?.controls?.[propName];
+    const controlDef = findControlDef(controlsMeta?.controls, propName);
     // Booleans MUST be JSX expressions (`prop={false}`), never strings
     // (`prop="false"`) — the string "false" is truthy in JS, so a boolean link
     // variable (New Tab / Smooth Scroll) set to false would still read as true

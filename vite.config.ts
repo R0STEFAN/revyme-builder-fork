@@ -369,6 +369,42 @@ function debugTracePlugin(): Plugin {
   };
 }
 
+/**
+ * Vite plugin: in standalone / self-hosted mode, redirects root path (/)
+ * directly to /dashboard and prints the dashboard URL when starting dev server.
+ */
+function dashboardRedirectPlugin(cloudMode: boolean): Plugin {
+  return {
+    name: 'dashboard-redirect',
+    configureServer(server) {
+      if (cloudMode) return;
+
+      // 302 redirect / to /dashboard
+      server.middlewares.use((req: any, res: any, next: any) => {
+        const rawUrl = req.url || '';
+        const pathname = rawUrl.split('?')[0];
+        if (pathname === '/' || pathname === '') {
+          const search = rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?')) : '';
+          res.statusCode = 302;
+          res.setHeader('Location', `/dashboard${search}`);
+          res.end();
+          return;
+        }
+        next();
+      });
+
+      const origPrintUrls = server.printUrls;
+      server.printUrls = () => {
+        if (origPrintUrls) {
+          origPrintUrls.call(server);
+        }
+        const port = server.config.server.port || 3333;
+        console.log(`  \x1b[32m➜\x1b[0m  \x1b[1mDashboard\x1b[0m: \x1b[36mhttp://localhost:${port}/dashboard\x1b[0m`);
+      };
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const cloudMode = env.VITE_REVYME_CLOUD === 'true';
@@ -377,6 +413,7 @@ export default defineConfig(({ mode }) => {
     react(),
     tailwindcss(),
     debugTracePlugin(),
+    dashboardRedirectPlugin(cloudMode),
     ...(cloudMode ? [] : [selfHostApiPlugin()]),
   ],
   // In cloud mode assets must be served under /builder/ so Next.js rewrite proxy can forward them.

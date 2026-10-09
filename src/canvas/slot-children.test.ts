@@ -247,4 +247,91 @@ describe('slot-target eligibility — block the component\'s own hierarchy', () 
     expect(el.props.dangerouslySetInnerHTML).toBeUndefined();
     expect(el.props.children).toBe('just words');
   });
+
+  // ─── Code component inside slot ──────────────────────────────────────────
+  it('serializeSlotChildren serializes code component metadata when getCode and getProps provided', () => {
+    const nodes = new Map<string, CanvasNode>();
+    nodes.set('carousel-1', node({
+      id: 'carousel-1',
+      type: 'Carousel',
+      isCanvasNode: true,
+      isCodeComponent: true,
+      componentFile: 'components/Carousel.tsx',
+      componentProps: { arrowsShow: 'false' },
+    }));
+
+    const out = serializeSlotChildren(['carousel-1'], nodes, undefined, {
+      getCode: (file) => file === 'components/Carousel.tsx' ? 'export default function Carousel() {}' : null,
+      getProps: (n) => ({ arrowsShow: false }),
+    });
+
+    expect(out).toHaveLength(1);
+    expect(out[0].isCodeComponent).toBe(true);
+    expect(out[0].code).toBe('export default function Carousel() {}');
+    expect(out[0].codeComponentProps).toEqual({ arrowsShow: false });
+  });
+
+  it('buildSlotChildren compiles and instantiates code component with children and props', () => {
+    let compiledWithName = '';
+    const MockComp = (props: any) => {
+      return props.children;
+    };
+
+    const els = buildSlotChildren([
+      {
+        type: 'Carousel',
+        styles: { width: '100%', height: '100%', position: 'absolute', left: '100px' },
+        attrs: {},
+        isCodeComponent: true,
+        code: 'mock-code',
+        codeComponentProps: { arrowsShow: false, dotsShow: false },
+        children: [
+          {
+            type: 'img',
+            styles: { width: '100px' },
+            attrs: { src: 'test.jpg' },
+            children: [],
+          },
+        ],
+      },
+    ], {
+      compileComponent: (code, name) => {
+        compiledWithName = name;
+        return MockComp as any;
+      },
+      vpWidth: 1200,
+    });
+
+    expect(els).toHaveLength(1);
+    expect(compiledWithName).toBe('Carousel');
+    const el = els[0] as any;
+    expect(el.type).toBe(MockComp);
+    expect(el.props.arrowsShow).toBe(false);
+    expect(el.props.dotsShow).toBe(false);
+    expect(el.props.__canvasViewportWidth).toBe(1200);
+    // Root position should be stripped
+    expect(el.props.style.left).toBeUndefined();
+    expect(el.props.style.width).toBe('100%');
+    // Child slide should be passed as children
+    expect(el.props.children).toBeDefined();
+  });
+
+  it('buildSlotChildren falls back to tag when compileComponent returns null', () => {
+    const els = buildSlotChildren([
+      {
+        type: 'Carousel',
+        styles: { width: '100%' },
+        attrs: {},
+        isCodeComponent: true,
+        code: 'mock-code',
+        children: [],
+      },
+    ], {
+      compileComponent: () => null,
+    });
+
+    expect(els).toHaveLength(1);
+    const el = els[0] as any;
+    expect(el.type).toBe('div');
+  });
 });

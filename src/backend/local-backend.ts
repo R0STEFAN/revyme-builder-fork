@@ -14,6 +14,8 @@ export class LocalBackend implements ProjectBackend {
   }
 
   async loadProject(id: string): Promise<ProjectData | null> {
+    let serverError: Error | null = null;
+
     // 1. Try server storage first when in browser
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
@@ -30,9 +32,17 @@ export class LocalBackend implements ProjectBackend {
             trace.action('backend:load-project', { id, source: 'server', fileCount: Object.keys(json.data.files).length });
             return json.data as ProjectData;
           }
+        } else if (res.status >= 500) {
+          serverError = new Error(`Server returned HTTP ${res.status}`);
         }
-      } catch {
-        // server unreachable / test environment
+      } catch (err) {
+        // In Node/vitest test environment without an origin, relative fetch throws Invalid/Failed to parse URL.
+        const isRelativeUrlError =
+          err instanceof TypeError &&
+          (err.message.includes('Invalid URL') || err.message.includes('Failed to parse URL'));
+        if (!isRelativeUrlError) {
+          serverError = err instanceof Error ? err : new Error(String(err));
+        }
       }
     }
 
@@ -40,22 +50,38 @@ export class LocalBackend implements ProjectBackend {
     const key = STORAGE_PREFIX + id;
     try {
       const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      const data = JSON.parse(raw) as ProjectData;
-      const fileCount = data?.files ? Object.keys(data.files).length : 0;
-      if (fileCount === 0) return null;
-      if (!isKnownProjectFormat(data.format)) {
-        trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
+      if (raw) {
+        const data = JSON.parse(raw) as ProjectData;
+        const fileCount = data?.files ? Object.keys(data.files).length : 0;
+        if (fileCount > 0) {
+          if (!isKnownProjectFormat(data.format)) {
+            trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
+          }
+          trace.action('backend:load-project', { id, source: 'localStorage', fileCount });
+          return data;
+        }
       }
-      trace.action('backend:load-project', { id, source: 'localStorage', fileCount });
-      return data;
     } catch (err) {
       trace.error('local-backend:load-error', { id, error: String(err) });
-      return null;
     }
+
+    // 3. If the server was unreachable or failed with 5xx, and localStorage did not have it,
+    // throw to prevent the caller (ProjectLoader) from treating this as an empty project and overwriting it.
+    if (serverError) {
+      trace.error('local-backend:server-unreachable', { id, error: serverError.message });
+      throw new Error(`Failed to load project "${id}" from server: ${serverError.message}`);
+    }
+
+    return null;
   }
 
   async saveProject(id: string, data: ProjectData, meta?: ProjectSaveMeta): Promise<void> {
+    const fileCount = data?.files ? Object.keys(data.files).length : 0;
+    if (fileCount === 0) {
+      trace.error('local-backend:refuse-empty-save', { id });
+      return;
+    }
+
     const key = STORAGE_PREFIX + id;
     try {
       localStorage.setItem(key, JSON.stringify(data));

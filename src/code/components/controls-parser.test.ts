@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parseComponentControlsMeta, hasComponentControls, parseCodeComponentDefaultSize } from './controls-parser';
+import { parseComponentControlsMeta, hasComponentControls, parseCodeComponentDefaultSize, findControlDef } from './controls-parser';
 
 const CODE_COMPONENT_CODE = `'use client';
 
@@ -140,5 +140,62 @@ export default function X() {}`;
   test('null per missing axis', () => {
     expect(parseCodeComponentDefaultSize('/** @defaultWidth 600 */')).toEqual({ width: 600, height: null });
     expect(parseCodeComponentDefaultSize(CODE_COMPONENT_CODE)).toEqual({ width: null, height: null });
+  });
+});
+
+describe('findControlDef', () => {
+  const controls = {
+    autoplay: { type: 'toggle' as const, label: 'Auto Play', default: true },
+    arrows: {
+      type: 'group' as const,
+      label: 'Arrows',
+      controls: {
+        arrowsShow: { type: 'toggle' as const, label: 'Show', default: true },
+        arrowsSize: { type: 'number' as const, label: 'Size', default: 36 },
+      },
+    },
+    effects: {
+      type: 'group' as const,
+      label: 'Effects',
+      controls: {
+        nestedGroup: {
+          type: 'group' as const,
+          label: 'Nested',
+          controls: {
+            deepProp: { type: 'color' as const, label: 'Deep', default: '#ff0000' },
+          },
+        },
+      },
+    },
+  };
+
+  test('finds top-level controls', () => {
+    const def = findControlDef(controls, 'autoplay');
+    expect(def).toBeDefined();
+    expect(def?.type).toBe('toggle');
+    expect(def?.label).toBe('Auto Play');
+  });
+
+  test('finds controls nested inside a group', () => {
+    const showDef = findControlDef(controls, 'arrowsShow');
+    expect(showDef).toBeDefined();
+    expect(showDef?.type).toBe('toggle');
+    expect(showDef?.label).toBe('Show');
+
+    const sizeDef = findControlDef(controls, 'arrowsSize');
+    expect(sizeDef).toBeDefined();
+    expect(sizeDef?.type).toBe('number');
+  });
+
+  test('finds controls nested inside multiple group levels', () => {
+    const deepDef = findControlDef(controls, 'deepProp');
+    expect(deepDef).toBeDefined();
+    expect(deepDef?.type).toBe('color');
+  });
+
+  test('returns undefined for non-existent controls', () => {
+    expect(findControlDef(controls, 'nonExistent')).toBeUndefined();
+    expect(findControlDef(null, 'anything')).toBeUndefined();
+    expect(findControlDef(undefined, 'anything')).toBeUndefined();
   });
 });

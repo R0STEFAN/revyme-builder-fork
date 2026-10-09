@@ -53,6 +53,10 @@ async function performSave(): Promise<void> {
     return;
   }
   const data = buildProjectData();
+  if (!data.files || Object.keys(data.files).length === 0) {
+    trace.error('autosave:aborted-empty-project', { id });
+    return;
+  }
   const saveMeta = {
     ...nextSaveMeta,
     branchId: projectFS.getActiveBranchId(),

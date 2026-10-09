@@ -55,8 +55,16 @@ export default function ProjectLoader() {
   const isDashboardRoute =
     typeof window !== 'undefined' &&
     (window.location.pathname === '/dashboard' || window.location.pathname.startsWith('/dashboard/'));
+  const isRootRoute =
+    typeof window !== 'undefined' &&
+    window.location.pathname === '/';
 
   useEffect(() => {
+    if (!CLOUD_ENABLED && isRootRoute) {
+      window.location.replace('/dashboard');
+      return;
+    }
+
     if (!CLOUD_ENABLED && isDashboardRoute) {
       return;
     }
@@ -302,6 +310,9 @@ export default function ProjectLoader() {
           trace.error('project-loader:branches-hydrate-failed', { error: String(err) });
         }
       } else {
+        if (!CLOUD_ENABLED && id !== 'local') {
+          throw new Error(`Project "${id}" was not found or contains no files. It may have been deleted, moved, or failed to load.`);
+        }
         projectFS.loadSnapshot(createEmptyProject());
         trace.action('project-loader:seeded-empty', { fileCount: projectFS.listFiles().length });
         // Brand-new cloud website (dashboard creates rows with zero files):
@@ -547,6 +558,10 @@ export default function ProjectLoader() {
 
     return () => { cancelled = true; };
   }, [setUser, setActiveFile, openCmsEditor]);
+
+  if (!CLOUD_ENABLED && isRootRoute) {
+    return null;
+  }
 
   // Self-hosted dashboard route
   if (!CLOUD_ENABLED && isDashboardRoute) {

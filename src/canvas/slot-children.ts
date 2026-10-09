@@ -25,6 +25,14 @@ export interface SerializedSlotNode {
    *  2026-07-26). Mirrors the Renderer's `shouldUseInnerHTML` branch. */
   hasMixedContent?: boolean;
   children: SerializedSlotNode[];
+  isCodeComponent?: boolean;
+  code?: string;
+  codeComponentProps?: Record<string, any>;
+}
+
+export interface SerializeSlotNodeOptions {
+  getCode?: (file: string) => string | null;
+  getProps?: (node: CanvasNode) => Record<string, any>;
 }
 
 /** IDs of every node ABOVE `nodeId` in the tree (parent, grandparent, …).
@@ -72,6 +80,7 @@ function serializeSlotNode(
   nodes: Map<string, CanvasNode>,
   slotConnections?: Map<string, string[]>,
   visited: Set<string> = new Set(),
+  opts?: SerializeSlotNodeOptions,
 ): SerializedSlotNode | null {
   const n = nodes.get(id);
   if (!n) return null;
@@ -79,7 +88,7 @@ function serializeSlotNode(
   visited.add(id);
 
   const inlineChildren = (n.children || [])
-    .map(c => serializeSlotNode(c, nodes, slotConnections, visited))
+    .map(c => serializeSlotNode(c, nodes, slotConnections, visited, opts))
     .filter((c): c is SerializedSlotNode => c !== null);
 
   // If this node has its OWN slot connections (it's a slot-bearing component
@@ -101,7 +110,7 @@ function serializeSlotNode(
   const slotKids = slotConnections?.get(id) ?? [];
   const slotChildren = slotKids
     .map(cid => {
-      const sn = serializeSlotNode(cid, nodes, slotConnections, visited);
+      const sn = serializeSlotNode(cid, nodes, slotConnections, visited, opts);
       if (!sn) return null;
       const stripped = { ...sn.styles };
       delete stripped.position;
@@ -113,6 +122,12 @@ function serializeSlotNode(
     })
     .filter((c): c is SerializedSlotNode => c !== null);
 
+  const isCode = !!(n.isCodeComponent && n.componentFile);
+  const code = (isCode && opts?.getCode) ? opts.getCode(n.componentFile!) : undefined;
+  const codeComponentProps = isCode
+    ? (opts?.getProps ? opts.getProps(n) : undefined)
+    : undefined;
+
   return {
     type: n.type,
     styles: { ...(n.styles || {}) },
@@ -120,6 +135,9 @@ function serializeSlotNode(
     textContent: n.textContent,
     hasMixedContent: n.hasMixedContent,
     children: [...inlineChildren, ...slotChildren],
+    isCodeComponent: isCode || undefined,
+    code: (code != null) ? code : undefined,
+    codeComponentProps,
   };
 }
 
@@ -131,10 +149,16 @@ export function serializeSlotChildren(
   connectedIds: string[],
   nodes: Map<string, CanvasNode>,
   slotConnections?: Map<string, string[]>,
+  opts?: SerializeSlotNodeOptions,
 ): SerializedSlotNode[] {
   return connectedIds
-    .map(cid => serializeSlotNode(cid, nodes, slotConnections))
+    .map(cid => serializeSlotNode(cid, nodes, slotConnections, undefined, opts))
     .filter((c): c is SerializedSlotNode => c !== null);
+}
+
+export interface BuildSlotChildrenOptions {
+  compileComponent?: (code: string, name: string) => React.ComponentType<any> | null;
+  vpWidth?: number;
 }
 
 /**
@@ -145,7 +169,12 @@ export function serializeSlotChildren(
  * own `left/top`, which is real in-frame positioning — stripping those
  * would freeze nested children at the wrong spot.
  */
-function buildOne(sn: SerializedSlotNode, key: string, isRoot: boolean): React.ReactElement {
+function buildOne(
+  sn: SerializedSlotNode,
+  key: string,
+  isRoot: boolean,
+  opts?: BuildSlotChildrenOptions,
+): React.ReactElement {
   const style: Record<string, any> = { ...sn.styles };
   if (isRoot) {
     delete style.position;
@@ -163,10 +192,6 @@ function buildOne(sn: SerializedSlotNode, key: string, isRoot: boolean): React.R
     props[k] = v;
   }
 
-  // Only plain HTML tags render as ghosts; component-instance slot children
-  // fall back to a div (rare — slot content is normally frames).
-  const tag = /^[a-z]/.test(sn.type) ? sn.type : 'div';
-
   // RICH TEXT — `textContent` holds raw inner JSX, so convert it to HTML and
   // inject as markup. As a plain text child React escaped it and the ghost
   // painted `<span style={{ color: 'rgb(255,255,255)' }}>hi</span>` literally
@@ -174,20 +199,49 @@ function buildOne(sn: SerializedSlotNode, key: string, isRoot: boolean): React.R
   // MODEL children (its spans aren't nodes), so nothing is lost by replacing
   // them — and `dangerouslySetInnerHTML` may not coexist with children.
   if (sn.hasMixedContent && sn.textContent) {
+    const tag = /^[a-z]/.test(sn.type) ? sn.type : 'div';
     props.dangerouslySetInnerHTML = { __html: jsxStyleToHTML(sn.textContent) };
     return React.createElement(tag, props);
   }
 
   const kids = sn.children.length > 0
-    ? sn.children.map((c, i) => buildOne(c, String(i), false))
+    ? sn.children.map((c, i) => buildOne(c, String(i), false, opts))
     : (sn.textContent || undefined);
+
+  // When a code component (e.g. Carousel) is wired inside a slot, compile
+  // and instantiate it with its component props and slot children rather than
+  // dumping child slides into an unstyled fallback div.
+  if (sn.isCodeComponent && sn.code && opts?.compileComponent) {
+    const Comp = opts.compileComponent(sn.code, sn.type);
+    if (Comp) {
+      const mergedProps: Record<string, any> = {
+        ...(sn.codeComponentProps || {}),
+        ...props,
+        style: {
+          ...(sn.codeComponentProps?.style || {}),
+          ...style,
+        },
+        key,
+        __canvasViewportWidth: opts.vpWidth,
+      };
+      const childrenArgs = Array.isArray(kids) ? kids : (kids !== undefined ? [kids] : []);
+      return React.createElement(Comp, mergedProps, ...childrenArgs);
+    }
+  }
+
+  // Only plain HTML tags render as ghosts; component-instance slot children
+  // fall back to a div (rare — slot content is normally frames).
+  const tag = /^[a-z]/.test(sn.type) ? sn.type : 'div';
 
   return React.createElement(tag, props, kids);
 }
 
 /** Rebuild serialized slot children as React ghost elements. */
-export function buildSlotChildren(serialized: SerializedSlotNode[]): React.ReactNode[] {
-  return serialized.map((sn, i) => buildOne(sn, String(i), true));
+export function buildSlotChildren(
+  serialized: SerializedSlotNode[],
+  opts?: BuildSlotChildrenOptions,
+): React.ReactNode[] {
+  return serialized.map((sn, i) => buildOne(sn, String(i), true, opts));
 }
 
 /**
