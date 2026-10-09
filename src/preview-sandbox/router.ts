@@ -72,11 +72,11 @@ export function buildRouteTable(files: Map<string, string>): Route[] {
         paramNames.push(catchAll[1]);
         continue;
       }
-      // Dynamic segment: `[slug]`.
-      const dyn = s.match(/^\[(.+)\]$/);
+      // Dynamic segment: `[slug]` or `[:slug]`.
+      const dyn = s.match(/^\[(?::)?(.+)\]$/);
       if (dyn) {
         urlSegs.push('([^/]+)');
-        paramNames.push(dyn[1]);
+        paramNames.push(dyn[1].replace(/^:/, ''));
         continue;
       }
       // Static — escape regex metas just in case.
@@ -120,7 +120,12 @@ export function resolveRoute(routes: Route[], url: string): Route | null {
     const m = url.match(r.pattern);
     if (m) {
       const params: Record<string, string> = {};
-      r.paramNames.forEach((name, i) => { params[name] = m[i + 1] ?? ''; });
+      r.paramNames.forEach((name, i) => {
+        const val = m[i + 1] ?? '';
+        const clean = name.replace(/^:/, '');
+        params[clean] = val;
+        params[':' + clean] = val;
+      });
       return { ...r, params };
     }
   }

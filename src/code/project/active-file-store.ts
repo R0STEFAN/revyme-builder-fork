@@ -338,8 +338,8 @@ export function filePathToSlug(filePath: string): string {
   if (filePath.startsWith('app/')) {
     const stripped = filePath
       .replace(/^app\//, '')
-      // Strip route group folder: (marketing)/about/page.client.tsx → about/page.client.tsx
-      .replace(/\([^)]+\)\//, '');
+      // Strip route group folder(s): (marketing)/about/page.client.tsx → about/page.client.tsx
+      .replace(/\([^)]+\)\//g, '');
     // Match both halves of the page pair so callers can pass either
     // `page.tsx` (server wrapper) or `page.client.tsx` (canvas body).
     if (stripped === 'page.tsx' || stripped === 'page.client.tsx') return 'home';

@@ -100,7 +100,7 @@ export const activePreviewItemAtom = atom<Record<string, any> | null>((get) => {
  */
 export function extractRouteParamNames(filePath: string): string[] {
   if (!filePath) return [];
-  const matches = Array.from(filePath.matchAll(/\[(?:\.\.\.)?([a-zA-Z0-9_-]+)\]/g));
+  const matches = Array.from(filePath.matchAll(/\[(?:\.\.\.|:)?([a-zA-Z0-9_-]+)\]/g));
   return Array.from(new Set(matches.map(m => m[1])));
 }
 
@@ -276,8 +276,10 @@ export const activePreviewRouteParamsAtom = atom<Record<string, string>>((get) =
   const result: Record<string, string> = {};
 
   for (const name of paramNames) {
-    if (fileParams[name] !== undefined) {
+    if (fileParams[name] !== undefined && fileParams[name] !== '') {
       result[name] = fileParams[name];
+    } else if (fileParams[':' + name] !== undefined && fileParams[':' + name] !== '') {
+      result[name] = fileParams[':' + name];
     } else if (name === 'slug' && activeSlug) {
       result[name] = activeSlug;
     } else {
@@ -302,6 +304,25 @@ export const activePreviewRouteParamsAtom = atom<Record<string, string>>((get) =
         }
       }
 
+      // If no dedicated collection was found, search any collection that has items with a property matching `name`
+      if (!foundSlug) {
+        for (const [, items] of allData) {
+          if (Array.isArray(items) && items.length > 0) {
+            const first = items.find(item => item && (item[name] !== undefined || item[name + 's'] !== undefined));
+            if (first) {
+              const val = first[name] ?? first[name + 's'];
+              if (typeof val === 'string' && val.trim()) {
+                foundSlug = val.trim();
+                break;
+              } else if (typeof val === 'object' && val !== null) {
+                foundSlug = String(val.slug ?? val._slug ?? val.name ?? val.id ?? '').trim();
+                if (foundSlug) break;
+              }
+            }
+          }
+        }
+      }
+
       if (foundSlug) {
         result[name] = foundSlug;
       } else if (name === 'category') {
@@ -309,7 +330,7 @@ export const activePreviewRouteParamsAtom = atom<Record<string, string>>((get) =
       } else if (name === 'place' || name === 'placement') {
         result[name] = 'noga';
       } else {
-        result[name] = '';
+        result[name] = name;
       }
     }
   }

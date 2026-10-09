@@ -12,7 +12,7 @@
 // the editor's imperative DOM patcher, the preview runs a real React tree.
 // Both read from the same ProjectFS but render via different paths.
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { flushNow } from '@/code/mutation/mutation-queue';
@@ -20,7 +20,7 @@ import { activeFilePathAtom, filePathToSlug, isComponentFilePath, getVariantBase
 import { templateGroupFromLayoutFile, templatePreviewRoute } from '@/preview/template-preview';
 import { migrateLegacyDarkBlock } from '@/code/project/preset-ops';
 import { canvasThemeMode } from '@/canvas/canvas-theme';
-import { activePreviewSlugAtom } from '@/code/stores/cms-page-store';
+import { activePreviewSlugAtom, activePreviewRouteParamsAtom, extractRouteParamNames } from '@/code/stores/cms-page-store';
 import { selectedNodeAtom, codeAtom, getNodesSnapshot } from '@/code/stores/store';
 import { interactingViewportIdAtom, interactingViewportRenderWidthAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
 import { startOf } from '@/code/project/breakpoint-ladder';
@@ -84,6 +84,59 @@ function resolveVariantOverride(filePath: string):
   return basePagePath ? { variantFilePath: filePath, basePagePath } : null;
 }
 
+/** Resolves the preview URL pathname for a given file in the project.
+ *  Handles component files ('/'), A/B variants, route-group templates,
+ *  dynamic routes with active params (multi-param and filtered collections),
+ *  CMS detail pages with active slug substitution, and standard pages. */
+export function getPreviewPageUrl(
+  filePath: string,
+  activePreviewSlug?: string | null,
+  routeParams?: Record<string, string> | null,
+): string {
+  if (isComponentFilePath(filePath)) {
+    return '/';
+  }
+  const variantInfo = resolveVariantOverride(filePath);
+  if (variantInfo) {
+    const baseSlug = filePathToSlug(variantInfo.basePagePath);
+    return '/' + (baseSlug === 'home' ? '' : baseSlug);
+  }
+  const tplGroup = templateGroupFromLayoutFile(filePath);
+  if (tplGroup) {
+    return templatePreviewRoute(tplGroup).url;
+  }
+  const slug = filePathToSlug(filePath);
+  if (!slug || slug === 'home') return '/';
+
+  let urlPath = slug;
+  if (urlPath.includes('[')) {
+    urlPath = urlPath.replace(/\[(?:\.\.\.|:)?([a-zA-Z0-9_-]+)\]/g, (match, rawName) => {
+      const cleanName = rawName.replace(/^:/, '');
+      // 1. Try explicit routeParams (cleanName, rawName, or :cleanName)
+      if (routeParams) {
+        if (routeParams[cleanName]) return encodeURIComponent(routeParams[cleanName]);
+        if (routeParams[rawName]) return encodeURIComponent(routeParams[rawName]);
+        if (routeParams[':' + cleanName]) return encodeURIComponent(routeParams[':' + cleanName]);
+        const lowerKey = Object.keys(routeParams).find(
+          k => k.toLowerCase() === cleanName.toLowerCase() || k.toLowerCase() === `:${cleanName}`.toLowerCase()
+        );
+        if (lowerKey && routeParams[lowerKey]) return encodeURIComponent(routeParams[lowerKey]);
+      }
+      // 2. If cleanName is 'slug' and activePreviewSlug is provided
+      if (cleanName === 'slug' && activePreviewSlug) {
+        return encodeURIComponent(activePreviewSlug);
+      }
+      // 3. Fallback: if only one dynamic segment in filePath and activePreviewSlug is provided
+      const totalParams = extractRouteParamNames(filePath);
+      if (totalParams.length === 1 && activePreviewSlug) {
+        return encodeURIComponent(activePreviewSlug);
+      }
+      return match;
+    });
+  }
+  return '/' + urlPath;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -135,6 +188,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   // into the path on initial nav lets the preview open on the same item the
   // user was designing against, rather than 404'ing on `[slug]`.
   const activePreviewSlug = useAtomValue(activePreviewSlugAtom);
+  const activeRouteParams = useAtomValue(activePreviewRouteParamsAtom);
   // Selection + interacting variant — used to seed the component preview's
   // `initialVariant` so the iframe opens in the same variant the user was
   // editing (e.g. clicking inside variant-2's hierarchy and pressing Play
@@ -161,6 +215,16 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   const [previewHeight, setPreviewHeight] = useState(PRESETS.desktop.height);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // URL to boot the preview iframe at. Seeds from the currently active file
+  // so the preview immediately opens on the page the user was editing on canvas
+  // instead of always booting at / and waiting for postMessage navigation.
+  const initialPath = useMemo(
+    () => getPreviewPageUrl(activeFilePath, activePreviewSlug, activeRouteParams),
+    // Re-evaluate on open transitions, parameter changes, or manual reload clicks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, reloadKey, activeRouteParams]
+  );
 
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440);
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 900);
@@ -294,7 +358,10 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   // post project files after that arrives, otherwise the message lands
   // before the in-iframe listener is mounted.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setIframeReady(false);
+      return;
+    }
     setIframeReady(false);
     const handler = (e: MessageEvent) => {
       // No origin filter — the iframe may be served from PREVIEW_ORIGIN,
@@ -508,24 +575,11 @@ export default function PreviewOverlay({ open, onClose }: Props) {
       return;
     }
 
-    const slug = filePathToSlug(activeFilePath);
-    if (!slug || slug === 'home') return;
-
-    let urlPath = slug;
-    if (urlPath.includes('[')) {
-      // Replace EVERY `[name]` (or `[...name]`) segment with the active
-      // preview slug. We don't try to match by segment name — the CMS
-      // detail-page pattern is one dynamic segment per route, and the
-      // editor exposes exactly one `activePreviewSlug` per active file.
-      if (!activePreviewSlug) return;
-      urlPath = urlPath.replace(/\[[^\]]+\]/g, activePreviewSlug);
-    }
-
-    const url = '/' + urlPath;
-    iframe.contentWindow.postMessage({ type: 'preview:navigate', url }, POST_MESSAGE_TARGET);
-    trace.action('preview-overlay:initial-nav', { url, activeFilePath, dynamic: slug.includes('[') });
+    const targetUrl = getPreviewPageUrl(activeFilePath, activePreviewSlug, activeRouteParams);
+    iframe.contentWindow.postMessage({ type: 'preview:navigate', url: targetUrl }, POST_MESSAGE_TARGET);
+    trace.action('preview-overlay:initial-nav', { url: targetUrl, activeFilePath, dynamic: activeFilePath.includes('[') });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, iframeReady, reloadKey]);
+  }, [open, iframeReady, reloadKey, readyTick, activeRouteParams]);
 
   // ESC closes the overlay. (Browser-level shortcut — clicks inside the
   // iframe don't bubble out, so the parent owns this.)
@@ -769,7 +823,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
             <iframe
               key={reloadKey}
               ref={iframeRef}
-              src={PREVIEW_ORIGIN + '/'}
+              src={`${PREVIEW_ORIGIN}${initialPath}`}
               className="w-full h-full"
               style={{ border: 'none', display: 'block' }}
               // No `sandbox` attribute on purpose. The preview lives at
