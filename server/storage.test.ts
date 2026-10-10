@@ -10,6 +10,9 @@ import {
   duplicateProject,
   saveUpload,
   getUploadFilePath,
+  listUploads,
+  deleteUpload,
+  getStorageInfo,
   listFolders,
   saveFolder,
   renameFolder,
@@ -147,5 +150,38 @@ describe('Self-host storage', () => {
 
     const summaries = listProjects(TEST_DATA_DIR);
     expect(summaries.find(s => s.id === 'thumb-test')?.previewImage).toMatch(/^\/api\/uploads\/thumbnail-thumb-test\.jpg\?t=\d+$/);
+  });
+
+  it('isolates uploads by projectId and calculates project-scoped storage', () => {
+    const bufA = Buffer.from('photo A content for project A');
+    const bufB = Buffer.from('photo B content for project B');
+
+    const upA = saveUpload('photoA.png', bufA, TEST_DATA_DIR, 'project-a');
+    const upB = saveUpload('photoB.png', bufB, TEST_DATA_DIR, 'project-b');
+
+    // Listing for project-a should only contain photoA
+    const listA = listUploads(undefined, TEST_DATA_DIR, 'project-a');
+    expect(listA.length).toBe(1);
+    expect(listA[0].key).toBe(upA.key);
+    expect(listA[0].projectId).toBe('project-a');
+
+    // Listing for project-b should only contain photoB
+    const listB = listUploads(undefined, TEST_DATA_DIR, 'project-b');
+    expect(listB.length).toBe(1);
+    expect(listB[0].key).toBe(upB.key);
+    expect(listB[0].projectId).toBe('project-b');
+
+    // Unscoped listing returns both
+    const listAll = listUploads(undefined, TEST_DATA_DIR);
+    expect(listAll.length).toBe(2);
+
+    // Storage info scoped to project-a reflects only project-a uploads
+    const storageA = getStorageInfo(TEST_DATA_DIR, 'project-a');
+    expect(storageA.used).toBe(bufA.length);
+
+    // Deleting upA removes it from project-a
+    expect(deleteUpload(upA.key, TEST_DATA_DIR)).toBe(true);
+    expect(listUploads(undefined, TEST_DATA_DIR, 'project-a').length).toBe(0);
+    expect(listUploads(undefined, TEST_DATA_DIR, 'project-b').length).toBe(1);
   });
 });

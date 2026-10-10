@@ -4,6 +4,7 @@
 import type { ProjectBackend, ProjectData, ProjectSaveMeta, RevymeUser, WorkspaceFont } from './types';
 import { isKnownProjectFormat } from './types';
 import { trace } from '@/shared/debug-trace';
+import { getProjectId } from './project-id';
 
 const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
@@ -203,19 +204,23 @@ export class LocalBackend implements ProjectBackend {
     return null;
   }
 
-  async uploadAsset(_id: string, file: File): Promise<string> {
+  async uploadAsset(id: string, file: File): Promise<string> {
     // 1. Try server storage upload first
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
-        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+        const websiteId = id || getProjectId() || 'local';
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}&websiteId=${encodeURIComponent(websiteId)}`, {
           method: 'POST',
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+            'x-website-id': websiteId,
+          },
           body: file,
         });
         if (res.ok) {
           const json = await res.json();
           if (json?.url) {
-            trace.action('backend:upload-asset', { source: 'server', name: file.name, url: json.url });
+            trace.action('backend:upload-asset', { source: 'server', name: file.name, url: json.url, websiteId });
             return json.url;
           }
         }
@@ -235,14 +240,15 @@ export class LocalBackend implements ProjectBackend {
     return url;
   }
 
-  async deleteAssets(_id: string, keys: string[]): Promise<void> {
-    trace.action('backend:delete-assets', { source: 'local', count: keys.length });
+  async deleteAssets(id: string, keys: string[]): Promise<void> {
+    trace.action('backend:delete-assets', { source: 'local', id, count: keys.length });
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
-        await fetch('/api/upload', {
+        const websiteId = id || getProjectId() || 'local';
+        await fetch(`/api/upload?websiteId=${encodeURIComponent(websiteId)}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keys }),
+          body: JSON.stringify({ websiteId, keys }),
         });
       } catch {
         // offline / mock

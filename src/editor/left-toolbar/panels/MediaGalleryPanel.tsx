@@ -14,7 +14,7 @@
 // selected tile then bulk-deletes the whole selection. Cloud-only (the
 // standalone object URLs have no server object to delete).
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { CLOUD_ENABLED } from '@/shared/cloud-flag';
 import { ToolSegmentedControl } from '@/editor/controls';
 import { trace } from '@/shared/debug-trace';
@@ -25,7 +25,16 @@ import { startToolbarDrag } from '@/canvas/drag/toolbar-drag-bridge';
 import { type ToolbarItem } from '@/canvas/drag/toolbar-item-config';
 import { ConfirmModal } from '@/editor/overlays/settings-shared';
 import { MULTI_SELECT_OUTLINE } from './LibraryPanel/shared/section-utils';
-import { deriveUploadKey, keysInSweep, sweepAutoScrollStep, deleteConfirmMessage, type TileRect } from './media-gallery-utils';
+import {
+  deriveUploadKey,
+  keysInSweep,
+  sweepAutoScrollStep,
+  deleteConfirmMessage,
+  rangeSelectKeys,
+  toggleSelectAllKeys,
+  getSelectionState,
+  type TileRect,
+} from './media-gallery-utils';
 
 const TAB_OPTIONS = [
   { value: 'images', label: 'Images' },
@@ -40,41 +49,27 @@ interface UploadedFile {
 }
 
 /** 5 px movement threshold before a tile pointerdown is treated as a drag.
- *  Below this, releasing the pointer is a no-op (no click action — the
- *  panel is drag-only). At/above, the toolbar drag pipeline kicks in.
- *  Same value LibraryPanel uses (`LIBRARY_DRAG_THRESHOLD_PX`). */
+ *  Below this, releasing the pointer is treated as a click/selection. */
 const MEDIA_DRAG_THRESHOLD_PX = 5;
 
 /** Shared drag logic for media tiles. Mirrors LibraryPanel's
- *  `useComponentDrag` exactly — kicks off `startToolbarDrag` once the
+ *  `useComponentDrag` — kicks off `startToolbarDrag` once the
  *  cursor moves more than `MEDIA_DRAG_THRESHOLD_PX` from the
- *  pointerdown position, with a `ToolbarItem` describing the image /
- *  video to drop. Drop targeting (drop-line indicator, parent-
- *  highlight, layout-vs-canvas insertion) is handled by
- *  `ToolbarDragStrategy` downstream — same path Insert panel cards use. */
-function useMediaDrag(url: string, kind: 'image' | 'video') {
+ *  pointerdown position. When released under the threshold, triggers
+ *  `onTileClick`. */
+function useMediaDrag(url: string, kind: 'image' | 'video', onTileClick?: (e: PointerEvent) => void) {
   return useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
     const startX = e.clientX;
     const startY = e.clientY;
     const startEvent = e.nativeEvent;
-    // Snapshot the tile's actual rendered size — the panel's grid-cols-2
-    // + aspect-square layout means tiles are typically ~112×112, but
-    // resizing the panel changes that. Reading from the live DOM lets
-    // the drag ghost match exactly what the user sees in the gallery
-    // instead of using a hard-coded fallback.
     const tile = e.currentTarget as HTMLElement;
     const rect = tile.getBoundingClientRect();
     const ghostW = Math.round(rect.width)  || 200;
     const ghostH = Math.round(rect.height) || 150;
     const item: ToolbarItem = kind === 'image' ? {
       id: `media-image:${url}`,
-      // Drop as a normal <div> with the image as a CSS BACKGROUND, not a bare
-      // <img>. It then behaves like any frame: it fills/crops via
-      // `background-size: cover`, can hold children + overlays, and is styled
-      // like a div (the reference's "image fill" model). The dropped element uses the
-      // canonical 200×150 insert size; the ghost matches the gallery tile.
       elementType: 'div',
       name: 'Image',
       defaultStyles: {
@@ -84,17 +79,11 @@ function useMediaDrag(url: string, kind: 'image' | 'video') {
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        // No placeholder fill: a grey bg is invisible behind an opaque photo
-        // (cover fills the box) but shows through every transparent pixel of a
-        // PNG/WebP cutout (logos, icons, 3D assets) — making them look "not
-        // transparent". Dropping with no fill respects the image's alpha.
       },
       ghostSize: { width: ghostW, height: ghostH },
     } : {
       id: `media-video:${url}`,
       elementType: 'video',
-      // Same split as image: dropped element keeps the canonical
-      // 320×240 insert size; ghost matches the gallery tile.
       defaultStyles: {
         display: 'block',
         width: '320px',
@@ -121,84 +110,114 @@ function useMediaDrag(url: string, kind: 'image' | 'video') {
       trace.action('media-panel:drag-start', { kind, url });
       startToolbarDrag(item, startEvent);
     };
-    const onUp = () => { cleanup(); };
+    const onUp = (upEvent: PointerEvent) => {
+      cleanup();
+      if (!dragStarted && onTileClick) {
+        onTileClick(upEvent);
+      }
+    };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
-  }, [url, kind]);
+  }, [url, kind, onTileClick]);
 }
 
-/** Single tile in the gallery grid. Wraps the image/video preview in a
- *  `<div onPointerDown={handleDrag}>` exactly like LibraryPanel's
- *  ComponentRow — bare div, no forwardRef / memo layers between the
- *  React listener tree and the DOM target (those layers caused
- *  drop-line indicator dropouts in earlier wiring; see LibraryPanel
- *  lines 406-415 for the rationale). */
-const MediaTile = React.memo(function MediaTile({ url, kind, mediaKey, isSelected, canDelete, onShiftPointerDown, onPlainPointerDown, onRequestDelete }: {
+/** Single tile in the gallery grid with selection checkbox, drag to canvas,
+ *  hover delete button, and selection overlay. */
+const MediaTile = React.memo(function MediaTile({
+  url,
+  kind,
+  mediaKey,
+  isSelected,
+  hasAnySelected,
+  canDelete,
+  onShiftPointerDown,
+  onPlainClick,
+  onCtrlClick,
+  onToggleSelect,
+  onRequestDelete,
+}: {
   url: string;
   kind: 'image' | 'video';
-  /** R2 object key — the deletable identity. Null → standalone blob URL. */
   mediaKey: string | null;
   isSelected: boolean;
+  hasAnySelected: boolean;
   canDelete: boolean;
-  /** Shift held on pointerdown → the panel's sweep/toggle machinery. */
   onShiftPointerDown: (key: string, e: React.PointerEvent) => void;
-  /** Plain pointerdown (drag intent) — panel clears any multi-selection. */
-  onPlainPointerDown: () => void;
+  onPlainClick: (key: string) => void;
+  onCtrlClick: (key: string) => void;
+  onToggleSelect: (key: string) => void;
   onRequestDelete: (key: string) => void;
 }) {
-  const handleDrag = useMediaDrag(url, kind);
+  const handleDrag = useMediaDrag(url, kind, (upEvent) => {
+    if (!mediaKey) return;
+    if (upEvent.ctrlKey || upEvent.metaKey) {
+      onCtrlClick(mediaKey);
+    } else {
+      onPlainClick(mediaKey);
+    }
+  });
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.shiftKey && mediaKey) {
-      // Selection gesture — never arms the canvas drag. stopPropagation is
-      // LOAD-BEARING: without it the event bubbles to the grid container's
-      // own shift handler, which restarts the gesture with NO toggle target
-      // — so shift+clicking an already-selected tile never removed it.
       e.preventDefault();
       e.stopPropagation();
       onShiftPointerDown(mediaKey, e);
       return;
     }
-    onPlainPointerDown();
     handleDrag(e);
   };
+
   return (
     <div
       data-media-key={mediaKey ?? undefined}
       onPointerDown={onPointerDown}
-      // Selected: border snaps to accent with NO transition — with the base
-      // white border + `transition-colors`, every tile joining the selection
-      // flashed white→blue under the instant outline (the reported fringe).
-      className={`group relative aspect-square cut-corners cut-border overflow-hidden border cursor-grab active:cursor-grabbing ${
+      className={`group relative aspect-square cut-corners cut-border overflow-hidden border cursor-grab active:cursor-grabbing select-none ${
         isSelected
           ? 'border-[var(--accent)] [--cut-border-color:var(--accent)] transition-none'
           : 'border-[var(--border-light)] [--cut-border-color:var(--border-light)] hover:border-[var(--accent)] hover:[--cut-border-color:var(--accent)] transition-colors'
       }`}
       style={isSelected ? MULTI_SELECT_OUTLINE : undefined}
-      title="Drag to canvas"
+      title="Click to select, drag to canvas"
     >
       {kind === 'image' ? (
         <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" loading="lazy" draggable={false} />
       ) : (
         <video src={url} className="w-full h-full object-cover pointer-events-none" muted />
       )}
-      {/* Selected: light accent wash over the artwork so membership reads at
-          a glance (the outline alone was easy to miss between busy thumbs). */}
+      {/* Selected: light accent wash over the artwork */}
       {isSelected && (
         <div
           className="pointer-events-none absolute inset-0"
           style={{ background: 'var(--accent, #4c8df6)', opacity: 0.22 }}
         />
       )}
-      {/* Hover delete — dark grey disc, white ×. pointerdown is stopped so
-          clicking it never starts a canvas drag. */}
+      {/* Selection checkbox top-left */}
+      {mediaKey && (
+        <button
+          type="button"
+          aria-label={isSelected ? 'Deselect asset' : 'Select asset'}
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(mediaKey); }}
+          className={`absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded border transition-all cursor-pointer ${
+            isSelected
+              ? 'bg-[var(--accent)] border-[var(--accent)] text-white opacity-100 shadow-sm'
+              : `bg-black/50 border-white/60 text-white hover:border-white hover:bg-black/70 ${hasAnySelected ? 'opacity-90' : 'opacity-0 group-hover:opacity-100'}`
+          }`}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isSelected ? 'opacity-100' : 'opacity-0 hover:opacity-60'}>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
+      )}
+      {/* Hover delete — dark grey disc, white × */}
       {canDelete && mediaKey && (
         <button
           type="button"
           aria-label="Delete asset"
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
           onClick={(e) => { e.stopPropagation(); onRequestDelete(mediaKey); }}
-          className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 transition-opacity cursor-pointer"
+          className="absolute top-1.5 right-1.5 z-10 flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 transition-opacity cursor-pointer"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
             <path d="M6 6l12 12" />
@@ -219,21 +238,35 @@ export default function MediaGalleryPanel() {
   const [tab, setTab] = useState('images');
   const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
-  // True while a list fetch is in flight — drives the skeleton grid so the
-  // panel never flashes "No images uploaded yet" before the data lands.
-  // Starts true in cloud mode (a fetch always fires on mount).
   const [loadingList, setLoadingList] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  // Multi-select (shift+click / shift+sweep) — keyed by R2 object key.
+  // Multi-select (click, shift+click range, shift+sweep, checkbox) — keyed by R2 object key / filename.
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   // Pending delete confirmation — the keys the ConfirmModal will remove.
   const [confirmKeys, setConfirmKeys] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const projectId = getProjectId();
   const noun: 'image' | 'video' = tab === 'images' ? 'image' : 'video';
+
+  const allUploadKeys = useMemo(
+    () => uploads.map((u) => deriveUploadKey(u)).filter(Boolean) as string[],
+    [uploads]
+  );
+  const { allSelected, someSelected } = useMemo(
+    () => getSelectionState(allUploadKeys, selectedKeys),
+    [allUploadKeys, selectedKeys]
+  );
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
 
   trace.fn('MediaGalleryPanel:render', { tab, count: uploads.length, selected: selectedKeys.size });
 
@@ -264,27 +297,27 @@ export default function MediaGalleryPanel() {
 
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
 
-  // Tab switch invalidates the selection AND the visible list — without the
-  // clear, the previous tab's items linger under the new tab until its own
-  // fetch lands (images briefly shown under Videos).
-  useEffect(() => { setSelectedKeys(new Set()); setUploads([]); }, [tab]);
+  // Tab switch invalidates the selection AND the visible list
+  useEffect(() => {
+    setSelectedKeys(new Set());
+    setLastSelectedKey(null);
+    setUploads([]);
+  }, [tab]);
 
-  // Escape clears the multi-selection (the ConfirmModal handles its own).
+  // Escape clears multi-selection
   useEffect(() => {
     if (selectedKeys.size === 0) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !confirmKeys) setSelectedKeys(new Set());
+      if (e.key === 'Escape' && !confirmKeys) {
+        setSelectedKeys(new Set());
+        setLastSelectedKey(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedKeys.size, confirmKeys]);
 
-  // Clicking anywhere OUTSIDE the gallery grid clears the multi-selection —
-  // same dismissal model as canvas selection. Capture phase so it fires even
-  // when the clicked surface (canvas iframe chrome, other panels) stops
-  // propagation. Skipped while the confirm modal is open: its buttons live
-  // in a document.body portal, which would read as "outside" and wipe the
-  // selection under a still-open modal.
+  // Outside click clears multi-selection
   useEffect(() => {
     if (selectedKeys.size === 0) return;
     const onDown = (e: PointerEvent) => {
@@ -293,10 +326,34 @@ export default function MediaGalleryPanel() {
       if (cont && e.target instanceof Node && cont.contains(e.target)) return;
       trace.action('media-select:clear-outside', { had: selectedKeys.size });
       setSelectedKeys(new Set());
+      setLastSelectedKey(null);
     };
     window.addEventListener('pointerdown', onDown, true);
     return () => window.removeEventListener('pointerdown', onDown, true);
   }, [selectedKeys.size, confirmKeys]);
+
+  // Keyboard shortcuts: Ctrl+A / Cmd+A to select all, Delete / Backspace to remove
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        const cont = scrollRef.current;
+        if (cont && (cont.contains(document.activeElement) || cont.contains(e.target as Node))) {
+          e.preventDefault();
+          setSelectedKeys(new Set(allUploadKeys));
+          if (allUploadKeys.length > 0) setLastSelectedKey(allUploadKeys[0]);
+        }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKeys.size > 0 && !confirmKeys) {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+        setConfirmKeys([...selectedKeys]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [allUploadKeys, selectedKeys, confirmKeys]);
 
   // Handle file upload
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,22 +366,62 @@ export default function MediaGalleryPanel() {
       const url = await backend.uploadAsset(projectId, file);
       setUploads(prev => [{ url, size: file.size }, ...prev]);
       trace.action('media:upload-success', { url });
-      // Re-fetch storage so the usage chip updates immediately.
+      // Re-fetch storage so usage updates
       fetchUploads();
     } catch (err) {
       trace.error('media:upload-failed', err);
       setUploadError(err instanceof Error ? err.message : 'Upload failed');
     }
     setUploading(false);
-    // Reset input so same file can be re-uploaded
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [projectId, fetchUploads]);
 
-  // ─── Shift+click toggle / shift+drag marquee sweep ───────────────────────
-  // A shift pointerdown arms BOTH: released within the drag threshold it's a
-  // TOGGLE of that tile; moved beyond it, it's a marquee sweep in the scroll
-  // container's CONTENT space (so the anchor stays put while auto-scroll
-  // extends the selection up/down at the edges).
+  // Tile selection handlers
+  const handlePlainClick = useCallback((key: string) => {
+    setSelectedKeys(new Set([key]));
+    setLastSelectedKey(key);
+    trace.action('media-select:single', { key });
+  }, []);
+
+  const handleCtrlClick = useCallback((key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    setLastSelectedKey(key);
+    trace.action('media-select:ctrl-toggle', { key });
+  }, []);
+
+  const handleToggleSelect = useCallback((key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    setLastSelectedKey(key);
+    trace.action('media-select:checkbox-toggle', { key });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    const next = toggleSelectAllKeys(allUploadKeys, selectedKeys);
+    setSelectedKeys(next);
+    if (next.size > 0) {
+      setLastSelectedKey(allUploadKeys[0] || null);
+    } else {
+      setLastSelectedKey(null);
+    }
+    trace.action('media-select:toggle-all', { size: next.size });
+  }, [allUploadKeys, selectedKeys]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedKeys(new Set());
+    setLastSelectedKey(null);
+  }, []);
+
+  // ─── Shift+click range selection / shift+drag marquee sweep ──────────────
   const sweepRef = useRef<{
     anchor: { x: number; y: number };
     base: Set<string>;
@@ -399,14 +496,14 @@ export default function MediaGalleryPanel() {
       cleanup();
       if (!s) return;
       if (!s.moved && s.toggleKey) {
-        // Plain shift+CLICK — toggle the tile in/out of the selection.
+        // Shift+CLICK without moving — Range selection from anchor to target!
+        const targetKey = s.toggleKey;
         setSelectedKeys((prev) => {
-          const next = new Set(prev);
-          if (next.has(s.toggleKey!)) next.delete(s.toggleKey!);
-          else next.add(s.toggleKey!);
-          trace.action('media-select:toggle', { key: s.toggleKey, size: next.size });
+          const next = rangeSelectKeys(allUploadKeys, prev, targetKey, lastSelectedKey);
+          trace.action('media-select:range', { targetKey, anchor: lastSelectedKey, size: next.size });
           return next;
         });
+        setLastSelectedKey(targetKey);
       }
     };
     const cleanup = () => {
@@ -421,8 +518,7 @@ export default function MediaGalleryPanel() {
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
 
-    // Edge auto-scroll loop — keeps scrolling (and re-selecting) while the
-    // pointer parks near the container's top/bottom edge mid-sweep.
+    // Edge auto-scroll loop during marquee sweep
     const tick = () => {
       const s = sweepRef.current;
       if (!s) return;
@@ -437,9 +533,9 @@ export default function MediaGalleryPanel() {
       s.raf = requestAnimationFrame(tick);
     };
     sweepRef.current.raf = requestAnimationFrame(tick);
-  }, [selectedKeys, recomputeSweep]);
+  }, [selectedKeys, recomputeSweep, allUploadKeys, lastSelectedKey]);
 
-  // Shift+drag started on the grid's EMPTY space sweeps too (no toggle target).
+  // Shift+drag started on empty space sweeps marquee
   const onGridPointerDown = useCallback((e: React.PointerEvent) => {
     if (!e.shiftKey || e.button !== 0) return;
     e.preventDefault();
@@ -448,8 +544,6 @@ export default function MediaGalleryPanel() {
 
   // ─── Delete flow ─────────────────────────────────────────────────────────
   const requestDelete = useCallback((key: string) => {
-    // × on a tile that's part of a multi-selection deletes the WHOLE
-    // selection; otherwise just that tile.
     const keys = selectedKeys.size > 1 && selectedKeys.has(key) ? [...selectedKeys] : [key];
     trace.action('media-delete:request', { count: keys.length });
     setConfirmKeys(keys);
@@ -462,6 +556,7 @@ export default function MediaGalleryPanel() {
       await backend.deleteAssets(projectId, confirmKeys);
       trace.action('media-delete:done', { count: confirmKeys.length });
       setSelectedKeys(new Set());
+      setLastSelectedKey(null);
       setConfirmKeys(null);
       await fetchUploads();
     } catch (err) {
@@ -483,7 +578,7 @@ export default function MediaGalleryPanel() {
         <ToolSegmentedControl value={tab} onChange={setTab} options={TAB_OPTIONS} />
       </div>
 
-      {/* Error banner (e.g. 402 storage cap reached) */}
+      {/* Error banner */}
       {uploadError && (
         <div className="px-3 mt-3">
           <div className="px-2.5 py-1.5 cut-corners cut-border bg-red-500/10 border border-red-500/20 text-[11px] text-red-500 dark:text-red-400 leading-snug">
@@ -515,6 +610,49 @@ export default function MediaGalleryPanel() {
         </button>
       </div>
 
+      {/* Selection toolbar & "Select all" control */}
+      {uploads.length > 0 && (
+        <div className="flex items-center justify-between px-3 pt-3 pb-1 text-xs text-[var(--text-secondary)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              ref={selectAllCheckboxRef}
+              checked={allSelected}
+              onChange={handleToggleSelectAll}
+              className="w-3.5 h-3.5 rounded accent-[var(--accent)] cursor-pointer"
+            />
+            <span className="text-[11px] font-medium text-[var(--text-secondary)]">
+              {selectedKeys.size > 0
+                ? `Selected ${selectedKeys.size} of ${allUploadKeys.length}`
+                : `Select all (${allUploadKeys.length})`}
+            </span>
+          </label>
+          {selectedKeys.size > 0 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors px-1.5 py-0.5 rounded cursor-pointer"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmKeys([...selectedKeys])}
+                className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                title={`Delete ${selectedKeys.size} selected ${noun}s`}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Delete ({selectedKeys.size})
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Gallery grid */}
       {uploads.length > 0 ? (
         <div ref={scrollRef} onPointerDown={onGridPointerDown} className="flex-1 overflow-y-auto scrollbar-hide p-3">
@@ -526,17 +664,18 @@ export default function MediaGalleryPanel() {
                 kind={tab === 'images' ? 'image' : 'video'}
                 mediaKey={deriveUploadKey(item)}
                 isSelected={(() => { const k = deriveUploadKey(item); return !!k && selectedKeys.has(k); })()}
+                hasAnySelected={selectedKeys.size > 0}
                 canDelete={true}
                 onShiftPointerDown={beginShiftGesture}
-                onPlainPointerDown={() => { if (selectedKeys.size) setSelectedKeys(new Set()); }}
+                onPlainClick={handlePlainClick}
+                onCtrlClick={handleCtrlClick}
+                onToggleSelect={handleToggleSelect}
                 onRequestDelete={requestDelete}
               />
             ))}
           </div>
         </div>
       ) : loadingList ? (
-        // Pulsating skeleton tiles (same grid + aspect as the real tiles) while
-        // the first fetch is in flight — never flash "No images" before data.
         <div className="flex-1 overflow-y-auto scrollbar-hide p-3" aria-hidden>
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (

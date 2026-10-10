@@ -70,7 +70,7 @@ export default function UploadControl({
           formData.append('source', uploadSource);
           formData.append('websiteId', websiteId);
 
-          const res = await fetch('/api/upload', { method: 'POST', body: formData });
+          const res = await fetch(`/api/upload?websiteId=${encodeURIComponent(websiteId)}`, { method: 'POST', body: formData });
           const data = await res.json();
 
           if (!res.ok) {
@@ -99,7 +99,7 @@ export default function UploadControl({
         formData.append('source', uploadSource);
         formData.append('websiteId', websiteId);
 
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const res = await fetch(`/api/upload?websiteId=${encodeURIComponent(websiteId)}`, { method: 'POST', body: formData });
         const data = await res.json();
 
         if (res.ok && data.url) {

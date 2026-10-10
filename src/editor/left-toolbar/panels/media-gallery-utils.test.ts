@@ -3,7 +3,16 @@
 // auto-scroll velocity, and the confirm copy.
 
 import { describe, it, expect } from 'vitest';
-import { deriveUploadKey, keysInSweep, sweepAutoScrollStep, deleteConfirmMessage, type TileRect } from './media-gallery-utils';
+import {
+  deriveUploadKey,
+  keysInSweep,
+  sweepAutoScrollStep,
+  deleteConfirmMessage,
+  rangeSelectKeys,
+  toggleSelectAllKeys,
+  getSelectionState,
+  type TileRect,
+} from './media-gallery-utils';
 
 describe('deriveUploadKey', () => {
   it('prefers the explicit R2 key when present', () => {
@@ -87,5 +96,102 @@ describe('deleteConfirmMessage', () => {
   it('bulk copy with count + noun', () => {
     expect(deleteConfirmMessage(7, 'image')).toBe('This will delete 7 images from the website. Continue?');
     expect(deleteConfirmMessage(2, 'video')).toBe('This will delete 2 videos from the website. Continue?');
+  });
+});
+
+describe('rangeSelectKeys', () => {
+  const allKeys = ['k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'k9'];
+
+  it('selects all items in range from 1st to 10th (Shift+click forward)', () => {
+    const initialSelection = new Set(['k0']);
+    const next = rangeSelectKeys(allKeys, initialSelection, 'k9', 'k0');
+    expect(Array.from(next)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8', 'k9']);
+  });
+
+  it('selects all items in reverse range (e.g. from 8th to 3rd)', () => {
+    const initialSelection = new Set(['k8']);
+    const next = rangeSelectKeys(allKeys, initialSelection, 'k3', 'k8');
+    expect(Array.from(next).sort()).toEqual(['k3', 'k4', 'k5', 'k6', 'k7', 'k8']);
+  });
+
+  it('defaults to starting from index 0 if anchorKey is null or not found', () => {
+    const initialSelection = new Set<string>();
+    const next = rangeSelectKeys(allKeys, initialSelection, 'k4', null);
+    expect(Array.from(next)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4']);
+  });
+
+  it('preserves existing selections outside the range while selecting range', () => {
+    const initialSelection = new Set(['special_key']);
+    const next = rangeSelectKeys(allKeys, initialSelection, 'k2', 'k0');
+    expect(next.has('special_key')).toBe(true);
+    expect(next.has('k0')).toBe(true);
+    expect(next.has('k1')).toBe(true);
+    expect(next.has('k2')).toBe(true);
+  });
+
+  it('returns unchanged set if targetKey is not in allKeys', () => {
+    const initialSelection = new Set(['k1']);
+    const next = rangeSelectKeys(allKeys, initialSelection, 'unknown_key', 'k1');
+    expect(Array.from(next)).toEqual(['k1']);
+  });
+});
+
+describe('toggleSelectAllKeys', () => {
+  const allKeys = ['k0', 'k1', 'k2', 'k3'];
+
+  it('selects all keys when current selection is empty', () => {
+    const next = toggleSelectAllKeys(allKeys, new Set());
+    expect(Array.from(next)).toEqual(['k0', 'k1', 'k2', 'k3']);
+  });
+
+  it('selects all keys when only some are selected', () => {
+    const next = toggleSelectAllKeys(allKeys, new Set(['k1']));
+    expect(Array.from(next)).toEqual(['k0', 'k1', 'k2', 'k3']);
+  });
+
+  it('clears selection when all keys are already selected', () => {
+    const next = toggleSelectAllKeys(allKeys, new Set(['k0', 'k1', 'k2', 'k3']));
+    expect(Array.from(next)).toEqual([]);
+  });
+
+  it('handles empty allKeys gracefully', () => {
+    const next = toggleSelectAllKeys([], new Set());
+    expect(Array.from(next)).toEqual([]);
+  });
+});
+
+describe('getSelectionState', () => {
+  const allKeys = ['a', 'b', 'c'];
+
+  it('detects none selected', () => {
+    expect(getSelectionState(allKeys, new Set())).toEqual({
+      allSelected: false,
+      someSelected: false,
+      count: 0,
+    });
+  });
+
+  it('detects partial selection (indeterminate state)', () => {
+    expect(getSelectionState(allKeys, new Set(['b']))).toEqual({
+      allSelected: false,
+      someSelected: true,
+      count: 1,
+    });
+  });
+
+  it('detects all selected', () => {
+    expect(getSelectionState(allKeys, new Set(['a', 'b', 'c']))).toEqual({
+      allSelected: true,
+      someSelected: false,
+      count: 3,
+    });
+  });
+
+  it('handles empty allKeys', () => {
+    expect(getSelectionState([], new Set())).toEqual({
+      allSelected: false,
+      someSelected: false,
+      count: 0,
+    });
   });
 });

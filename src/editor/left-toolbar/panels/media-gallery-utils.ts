@@ -87,3 +87,67 @@ export function deleteConfirmMessage(count: number, noun: 'image' | 'video'): st
     ? `This will delete ${count} ${noun}s from the website. Continue?`
     : 'This will delete this asset from the website. Continue?';
 }
+
+/**
+ * Compute the new set of selected keys after a Shift+Click range selection.
+ * Finds the index of `anchorKey` (or 0 if null/not found) and `targetKey` in `allKeys`,
+ * and adds all keys between those indices into `currentSelection`.
+ */
+export function rangeSelectKeys(
+  allKeys: string[],
+  currentSelection: Set<string>,
+  targetKey: string,
+  anchorKey: string | null,
+): Set<string> {
+  const targetIndex = allKeys.indexOf(targetKey);
+  if (targetIndex === -1) return new Set(currentSelection);
+
+  let anchorIndex = anchorKey ? allKeys.indexOf(anchorKey) : 0;
+  if (anchorIndex === -1) anchorIndex = 0;
+
+  const start = Math.min(anchorIndex, targetIndex);
+  const end = Math.max(anchorIndex, targetIndex);
+
+  const next = new Set(currentSelection);
+  for (let i = start; i <= end; i++) {
+    next.add(allKeys[i]);
+  }
+  return next;
+}
+
+/**
+ * Toggle select all keys. If all keys are currently selected, clears selection;
+ * otherwise selects all keys in `allKeys`.
+ */
+export function toggleSelectAllKeys(
+  allKeys: string[],
+  currentSelection: Set<string>,
+): Set<string> {
+  if (allKeys.length === 0) return new Set();
+  const allSelected = allKeys.every((k) => currentSelection.has(k));
+  if (allSelected) {
+    return new Set();
+  }
+  return new Set(allKeys);
+}
+
+/**
+ * Get selection status (allSelected, someSelected, count of selected items).
+ */
+export function getSelectionState(
+  allKeys: string[],
+  currentSelection: Set<string>,
+): { allSelected: boolean; someSelected: boolean; count: number } {
+  if (allKeys.length === 0) {
+    return { allSelected: false, someSelected: false, count: 0 };
+  }
+  let count = 0;
+  for (const k of allKeys) {
+    if (currentSelection.has(k)) count++;
+  }
+  return {
+    allSelected: count === allKeys.length,
+    someSelected: count > 0 && count < allKeys.length,
+    count,
+  };
+}

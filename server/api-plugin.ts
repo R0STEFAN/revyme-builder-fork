@@ -61,34 +61,54 @@ function sendJson(res: any, status: number, data: any) {
   res.end(JSON.stringify(data));
 }
 
-function parseMultipartFile(body: Buffer, contentType: string): { filename: string; buffer: Buffer } | null {
+function parseMultipartFile(body: Buffer, contentType: string): { filename: string; buffer: Buffer; fields?: Record<string, string> } | null {
   const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
   if (!boundaryMatch) return null;
   const boundary = boundaryMatch[1] || boundaryMatch[2];
   const boundaryBuffer = Buffer.from(`--${boundary}`);
 
-  const startIdx = body.indexOf(boundaryBuffer);
-  if (startIdx === -1) return null;
+  let currentIdx = body.indexOf(boundaryBuffer);
+  if (currentIdx === -1) return null;
 
-  // Find header separator \r\n\r\n
   const headerSep = Buffer.from('\r\n\r\n');
-  const headerStart = startIdx + boundaryBuffer.length;
-  const headerEnd = body.indexOf(headerSep, headerStart);
-  if (headerEnd === -1) return null;
-
-  const headerStr = body.slice(headerStart, headerEnd).toString('utf-8');
-  const filenameMatch = headerStr.match(/filename="([^"]+)"/i);
-  const filename = filenameMatch ? filenameMatch[1] : 'upload.bin';
-
-  const dataStart = headerEnd + headerSep.length;
-  // End is next boundary \r\n--boundary
   const nextBoundary = Buffer.from(`\r\n--${boundary}`);
-  const dataEnd = body.indexOf(nextBoundary, dataStart);
-  if (dataEnd === -1) return null;
+  let fileResult: { filename: string; buffer: Buffer } | null = null;
+  const fields: Record<string, string> = {};
 
+  while (currentIdx !== -1) {
+    const partStart = currentIdx + boundaryBuffer.length;
+    // Check for trailing -- indicating end of multipart
+    if (body.slice(partStart, partStart + 2).toString() === '--') break;
+
+    const headerEnd = body.indexOf(headerSep, partStart);
+    if (headerEnd === -1) break;
+
+    const headerStr = body.slice(partStart, headerEnd).toString('utf-8');
+    const dataStart = headerEnd + headerSep.length;
+    const dataEnd = body.indexOf(nextBoundary, dataStart);
+    if (dataEnd === -1) break;
+
+    const partData = body.slice(dataStart, dataEnd);
+    const nameMatch = headerStr.match(/name="([^"]+)"/i);
+    const filenameMatch = headerStr.match(/filename="([^"]+)"/i);
+
+    if (filenameMatch) {
+      fileResult = {
+        filename: filenameMatch[1] || 'upload.bin',
+        buffer: partData,
+      };
+    } else if (nameMatch) {
+      fields[nameMatch[1]] = partData.toString('utf-8').trim();
+    }
+
+    currentIdx = body.indexOf(boundaryBuffer, dataEnd);
+  }
+
+  if (!fileResult) return null;
   return {
-    filename,
-    buffer: body.slice(dataStart, dataEnd),
+    filename: fileResult.filename,
+    buffer: fileResult.buffer,
+    fields,
   };
 }
 
@@ -283,10 +303,19 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       if (isUploadEndpoint && method === 'GET') {
         const parsedUrl = new URL(url, 'http://localhost');
         const typeParam = parsedUrl.searchParams.get('type');
+        const websiteId = parsedUrl.searchParams.get('websiteId') ||
+                          parsedUrl.searchParams.get('projectId') ||
+                          (req.headers['x-website-id'] as string) ||
+                          (req.headers['x-project-id'] as string) ||
+                          undefined;
         if (typeParam === 'storage') {
-          return sendJson(res, 200, getStorageInfo());
+          return sendJson(res, 200, getStorageInfo(undefined, websiteId));
         }
-        const uploads = listUploads(typeParam === 'video' ? 'video' : typeParam === 'image' ? 'image' : undefined);
+        const uploads = listUploads(
+          typeParam === 'video' ? 'video' : typeParam === 'image' ? 'image' : undefined,
+          undefined,
+          websiteId
+        );
         return sendJson(res, 200, { uploads });
       }
 
@@ -330,11 +359,22 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
                           parsedUrl.searchParams.get('exact') === 'true' ||
                           req.headers['x-exact-filename'] === 'true';
 
+          let websiteId = parsedUrl.searchParams.get('websiteId') ||
+                          parsedUrl.searchParams.get('projectId') ||
+                          (req.headers['x-website-id'] as string) ||
+                          (req.headers['x-project-id'] as string);
+
           if (contentType.includes('multipart/form-data')) {
             const parsed = parseMultipartFile(bodyBuf, contentType);
             if (parsed) {
               filename = parsed.filename;
               fileBuffer = parsed.buffer;
+              if (!websiteId && parsed.fields?.websiteId) {
+                websiteId = parsed.fields.websiteId;
+              }
+              if (!websiteId && parsed.fields?.projectId) {
+                websiteId = parsed.fields.projectId;
+              }
             }
           } else {
             // Check query param ?filename= or header x-filename
@@ -344,7 +384,10 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             }
           }
 
-          const result = isExact ? saveUploadExact(filename, fileBuffer) : saveUpload(filename, fileBuffer);
+          websiteId = websiteId || 'local';
+          const result = isExact
+            ? saveUploadExact(filename, fileBuffer, undefined, websiteId)
+            : saveUpload(filename, fileBuffer, undefined, websiteId);
           return sendJson(res, 200, result);
         } catch (err: any) {
           return sendJson(res, 500, { error: err.message || 'Failed to save upload' });

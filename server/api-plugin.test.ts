@@ -787,6 +787,73 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       });
       expect(afterDeleteRes.status).toBe(404);
     });
+
+    it('isolates uploads per project via websiteId query and form fields', async () => {
+      // 1. Upload for project-1 with multipart field websiteId
+      const boundary = '----WebKitFormBoundaryProjectScope123';
+      const file1 = 'IMAGE_DATA_PROJECT_1';
+      const body1 = [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="proj1-image.png"',
+        'Content-Type: image/png',
+        '',
+        file1,
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="websiteId"',
+        '',
+        'site-alpha',
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      const upload1 = await dispatch({
+        method: 'POST',
+        url: '/api/upload',
+        body: body1,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      });
+      expect(upload1.status).toBe(200);
+
+      // 2. Upload for project-2 with query parameter websiteId
+      const file2 = 'IMAGE_DATA_PROJECT_2';
+      const body2 = [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="proj2-image.png"',
+        'Content-Type: image/png',
+        '',
+        file2,
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      const upload2 = await dispatch({
+        method: 'POST',
+        url: '/api/upload?websiteId=site-beta',
+        body: body2,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      });
+      expect(upload2.status).toBe(200);
+
+      // 3. GET /api/upload?websiteId=site-alpha returns only site-alpha uploads
+      const listAlpha = await dispatch({
+        method: 'GET',
+        url: '/api/upload?websiteId=site-alpha&type=image',
+      });
+      expect(listAlpha.status).toBe(200);
+      expect(listAlpha.body.uploads.some((u: any) => u.key === upload1.body.filename)).toBe(true);
+      expect(listAlpha.body.uploads.some((u: any) => u.key === upload2.body.filename)).toBe(false);
+
+      // 4. GET /api/upload?websiteId=site-beta returns only site-beta uploads
+      const listBeta = await dispatch({
+        method: 'GET',
+        url: '/api/upload?websiteId=site-beta&type=image',
+      });
+      expect(listBeta.status).toBe(200);
+      expect(listBeta.body.uploads.some((u: any) => u.key === upload2.body.filename)).toBe(true);
+      expect(listBeta.body.uploads.some((u: any) => u.key === upload1.body.filename)).toBe(false);
+
+      // 5. Clean up
+      await dispatch({ method: 'DELETE', url: `/api/upload?key=${encodeURIComponent(upload1.body.filename)}` });
+      await dispatch({ method: 'DELETE', url: `/api/upload?key=${encodeURIComponent(upload2.body.filename)}` });
+    });
   });
 });
 
