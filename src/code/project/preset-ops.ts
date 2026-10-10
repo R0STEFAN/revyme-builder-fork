@@ -269,6 +269,26 @@ export function addWorkspaceFontFacesToCss(css: string, fonts: WorkspaceFontFace
 }
 
 /**
+ * Remove @font-face rules for specified families (and/or URLs) from globals.css.
+ * Cleans up the Workspace custom fonts comment header if no custom fonts remain.
+ */
+export function removeWorkspaceFontFacesFromCss(css: string, families: string[]): string {
+  if (!css || !css.includes('@font-face') || families.length === 0) return css;
+  let next = css;
+  for (const fam of families) {
+    if (!fam) continue;
+    const escaped = fam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`@font-face\\s*\\{[^}]*font-family:\\s*['"]?${escaped}['"]?[^}]*\\}\\s*\\n?`, 'gi');
+    next = next.replace(regex, '');
+  }
+  // If no @font-face declarations remain anywhere, remove the section comment header
+  if (!/@font-face/.test(next)) {
+    next = next.replace(/\n?\/\* Workspace custom fonts \*\/\s*\n?/, '\n');
+  }
+  return next;
+}
+
+/**
  * Resolve a var(--name) reference to its token value.
  * Returns null if not found.
  */

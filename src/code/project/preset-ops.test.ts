@@ -1,7 +1,7 @@
 // preset-ops.test.ts — token-resolution helpers used for editor preview swatches.
 
 import { describe, test, expect } from 'vitest';
-import { resolveCssTokens, resolveTokenValue, addWorkspaceFontFacesToCss, addDarkTokenValueToCSS, type WorkspaceFontFaceSpec } from './preset-ops';
+import { resolveCssTokens, resolveTokenValue, addWorkspaceFontFacesToCss, removeWorkspaceFontFacesFromCss, addDarkTokenValueToCSS, type WorkspaceFontFaceSpec } from './preset-ops';
 import type { PresetToken } from '@/shared/types';
 
 const TOKENS: PresetToken[] = [
@@ -143,5 +143,58 @@ describe('addDarkTokenValueToCSS', () => {
     const out = addDarkTokenValueToCSS(css, 'color-text', '#fff');
     expect(out).toContain('--color-text: #fff;');
     expect(out).not.toContain('#eee');
+  });
+});
+
+describe('removeWorkspaceFontFacesFromCss', () => {
+  test('removes @font-face rules matching family names', () => {
+    const css = `
+:root { --x: 1; }
+
+/* Workspace custom fonts */
+@font-face {
+  font-family: 'Compacta Mobsters';
+  src: url('/font1.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CompactaMobsters';
+  src: url('/font1.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Other Font';
+  src: url('/other.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+`;
+    const cleaned = removeWorkspaceFontFacesFromCss(css, ['Compacta Mobsters', 'CompactaMobsters']);
+    expect(cleaned).not.toContain('Compacta Mobsters');
+    expect(cleaned).not.toContain('CompactaMobsters');
+    expect(cleaned).toContain('Other Font');
+    expect(cleaned).toContain('/* Workspace custom fonts */');
+  });
+
+  test('cleans up header comment when all @font-face rules are removed', () => {
+    const css = `
+:root { --x: 1; }
+
+/* Workspace custom fonts */
+@font-face {
+  font-family: 'Single Font';
+  src: url('/single.woff2') format('woff2');
+  font-weight: 400;
+}
+`;
+    const cleaned = removeWorkspaceFontFacesFromCss(css, ['Single Font']);
+    expect(cleaned).not.toContain('@font-face');
+    expect(cleaned).not.toContain('/* Workspace custom fonts */');
+    expect(cleaned).toContain(':root { --x: 1; }');
   });
 });

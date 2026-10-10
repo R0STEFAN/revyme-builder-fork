@@ -7,12 +7,14 @@ import {
   isWorkspaceFontFamily,
   parseCustomFontsFromCss,
   syncProjectCustomFontsFromCss,
+  resetWorkspaceFontsForTesting,
 } from './workspace-fonts-store';
 import type { WorkspaceFont } from '@/backend/types';
 
 describe('workspace-fonts-store', () => {
   beforeEach(() => {
     localStorage.clear();
+    resetWorkspaceFontsForTesting();
   });
 
   describe('parseFontFilename', () => {
@@ -58,7 +60,7 @@ describe('workspace-fonts-store', () => {
   });
 
   describe('custom font storage', () => {
-    it('adds and persists custom font locally', async () => {
+    it('adds and persists custom font locally per project', async () => {
       const font: WorkspaceFont = {
         id: 'local-font-1',
         family: 'MyBrandFont',
@@ -75,13 +77,13 @@ describe('workspace-fonts-store', () => {
       addCustomFont(font);
       expect(isWorkspaceFontFamily('MyBrandFont')).toBe(true);
 
-      const stored = JSON.parse(localStorage.getItem('revyme_custom_fonts') || '[]');
+      const stored = JSON.parse(localStorage.getItem('revyme:custom_fonts:local') || '[]');
       expect(stored).toHaveLength(1);
       expect(stored[0].family).toBe('MyBrandFont');
 
       deleteCustomFont('local-font-1');
       expect(isWorkspaceFontFamily('MyBrandFont')).toBe(false);
-      const afterDelete = JSON.parse(localStorage.getItem('revyme_custom_fonts') || '[]');
+      const afterDelete = JSON.parse(localStorage.getItem('revyme:custom_fonts:local') || '[]');
       expect(afterDelete).toHaveLength(0);
     });
   });
@@ -136,8 +138,46 @@ describe('workspace-fonts-store', () => {
       `;
       syncProjectCustomFontsFromCss(css);
       expect(isWorkspaceFontFamily('Imported Font')).toBe(true);
-      const stored = JSON.parse(localStorage.getItem('revyme_custom_fonts') || '[]');
+      const stored = JSON.parse(localStorage.getItem('revyme:custom_fonts:local') || '[]');
       expect(stored.some((f: any) => f.family === 'Imported Font')).toBe(true);
+    });
+  });
+
+  describe('project isolation and migration', () => {
+    it('migrates legacy revyme_custom_fonts to project-scoped storage', () => {
+      const legacyFont: WorkspaceFont = {
+        id: 'legacy-1',
+        family: 'LegacyFont',
+        weight: 400,
+        style: 'normal',
+        ext: 'woff2',
+        fileName: 'legacy.woff2',
+        size: 1000,
+        url: '/legacy.woff2',
+        uploadedAt: '2026-10-01T00:00:00.000Z',
+        uploadedBy: 'user',
+      };
+      localStorage.setItem('revyme_custom_fonts', JSON.stringify([legacyFont]));
+
+      // Calling ensureWorkspaceFonts or addCustomFont should read and migrate legacy fonts
+      const font2: WorkspaceFont = {
+        id: 'local-2',
+        family: 'FontTwo',
+        weight: 700,
+        style: 'normal',
+        ext: 'woff2',
+        fileName: 'two.woff2',
+        size: 2000,
+        url: '/two.woff2',
+        uploadedAt: '2026-10-01T00:00:00.000Z',
+        uploadedBy: 'user',
+      };
+      addCustomFont(font2);
+
+      const scoped = JSON.parse(localStorage.getItem('revyme:custom_fonts:local') || '[]');
+      expect(scoped.some((f: any) => f.family === 'LegacyFont')).toBe(true);
+      expect(scoped.some((f: any) => f.family === 'FontTwo')).toBe(true);
+      expect(localStorage.getItem('revyme_custom_fonts')).toBeNull();
     });
   });
 });

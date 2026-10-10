@@ -950,6 +950,11 @@ describe('parseComponentName', () => {
     const code = `/** @name "First" */\n/** @name "Second" */`;
     expect(parseComponentName(code)).toBe('First');
   });
+
+  test('parses @label annotation from code component', () => {
+    const code = `'use client';\n/** @label "data" */\n/** @controls {} */\nexport default function Foo() {}`;
+    expect(parseComponentName(code)).toBe('data');
+  });
 });
 
 // ─── setComponentName ──────────────────────────────────────────────────────
@@ -961,6 +966,14 @@ describe('setComponentName', () => {
     expect(updated).toContain('/** @name "New Name" */');
     expect(updated).not.toContain('Old Name');
     expect(parseComponentName(updated)).toBe('New Name');
+  });
+
+  test('updates @label annotation when renaming code component', () => {
+    const code = `'use client';\n/** @label "data" */\n/** @controls {} */\nexport default function Foo() {}`;
+    const updated = setComponentName(code, 'Data');
+    expect(updated).toContain('/** @label "Data" */');
+    expect(updated).not.toContain('@label "data"');
+    expect(parseComponentName(updated)).toBe('Data');
   });
 
   test('inserts annotation when none exists, after imports', () => {

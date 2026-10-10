@@ -499,7 +499,7 @@ export default function FontFamilyPopup({ value, onChange, isOpen, onClose, anch
                       <span className="text-sm truncate">{font.family}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                         <span className={`text-sm ${isSelected ? 'text-[var(--accent-fg)]/70' : 'text-[var(--text-secondary)]'}`}>Aa</span>
-                        {font.id.startsWith('local-') && (
+                        {(font.id.startsWith('local-') || font.id.startsWith('discovered-') || font.uploadedBy === 'user' || font.uploadedBy === 'discovered' || font.uploadedBy === 'local') && (
                           <button
                             type="button"
                             title="Remove custom font"

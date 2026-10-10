@@ -41,6 +41,7 @@ import * as t from '@babel/types';
 import { trace } from '@/shared/debug-trace';
 import { setPropTypeInCode } from './prop-meta';
 import { getCollectionData, getCollectionSchema } from '../project/cms-ops';
+import { hasComponentControls } from './controls-parser';
 
 /** Strip a CSS `url('…')`/`url(…)` wrapper → bare URL. Local copy on purpose —
  *  the editor runtime stubs `cms-ops`, so importing a helper from it crashes
@@ -196,18 +197,19 @@ export function generateInternalName(): string {
 // ─── @name annotation helpers ──────────────────────────────────────────────
 
 const NAME_REGEX = /\/\*\*?\s*@name\s+"([^"]*)"\s*\*\//;
+const LABEL_REGEX = /\/\*\*?\s*@label\s*"([^"]*)"\s*\*\//;
 
-/** Read the @name annotation from a component file. Returns null if not found. */
+/** Read the @name or @label annotation from a component file. Returns null if not found. */
 export function getComponentDisplayName(filePath: string): string | null {
   const code = projectFS.readFile(filePath);
   if (!code) return null;
-  const match = code.match(NAME_REGEX);
+  const match = code.match(NAME_REGEX) || code.match(LABEL_REGEX);
   return match ? match[1] : null;
 }
 
-/** Read the @name annotation from component code string. */
+/** Read the @name or @label annotation from component code string. */
 export function parseComponentName(code: string): string | null {
-  const match = code.match(NAME_REGEX);
+  const match = code.match(NAME_REGEX) || code.match(LABEL_REGEX);
   return match ? match[1] : null;
 }
 
@@ -227,8 +229,8 @@ export function getComponentExportName(code: string): string | null {
 }
 
 /**
- * Update the @name annotation in a component file's code. Replaces the
- * existing `/** @name "..." *\/` block if present, or inserts a new one
+ * Update the @name or @label annotation in a component file's code. Replaces the
+ * existing `/** @name "..." *\/` or `/** @label "..." *\/` block if present, or inserts a new one
  * at the top of the file (after `'use client'` if present, otherwise as
  * the first line). Used by the Library panel's Rename action — the
  * display label users see comes from this annotation, not from the
@@ -242,18 +244,24 @@ export function setComponentName(code: string, newName: string): string {
   const trimmed = newName.trim();
   if (!trimmed) return code;
   const escaped = trimmed.replace(/"/g, '\\"');
-  const annotation = `/** @name "${escaped}" */`;
+  const nameAnnotation = `/** @name "${escaped}" */`;
+  const labelAnnotation = `/** @label "${escaped}" */`;
 
-  if (NAME_REGEX.test(code)) {
-    return code.replace(NAME_REGEX, annotation);
+  let updated = code;
+  if (LABEL_REGEX.test(updated)) {
+    updated = updated.replace(LABEL_REGEX, labelAnnotation);
+  }
+  if (NAME_REGEX.test(updated)) {
+    return updated.replace(NAME_REGEX, nameAnnotation);
   }
 
-  // No existing annotation — insert one after the last leading import /
+  // No existing @name annotation — insert one after the last leading import /
   // 'use client' / comment block. Mirrors the same anchor logic that
   // `addComponentCursorInCode` and the design-component templates use:
   // keep annotations clustered with the other top-of-file metadata
   // rather than buried inside the component body.
-  const lines = code.split('\n');
+  const annotation = nameAnnotation;
+  const lines = updated.split('\n');
   let insertAt = 0;
   let inBlockComment = false; // inside a /* … */ that spans MULTIPLE lines
   for (let i = 0; i < lines.length; i++) {

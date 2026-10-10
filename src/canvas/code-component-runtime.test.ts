@@ -234,5 +234,89 @@ export default withResponsiveProps(Boom);
       expect(Component).not.toBeNull();                                  // module-eval succeeds
       expect(() => renderToStaticMarkup(createElement(Component as any))).toThrow(); // render throws → gate bounces
     });
+
+    it('compiles and renders a component using Children without explicit import', () => {
+      const code = `
+'use client';
+/** @label "SlotWrapper" */
+/** @controls {} */
+import { withResponsiveProps } from '@revyme/runtime';
+
+function SlotWrapper({ children, ...props }) {
+  const isEmpty = Children.count(children) === 0;
+  return <div {...props}>{isEmpty ? 'empty' : children}</div>;
+}
+export default withResponsiveProps(SlotWrapper);
+`;
+      const Component = compileCodeComponent(code, 'SlotWrapper');
+      expect(Component).not.toBeNull();
+      const html = renderToStaticMarkup(createElement(Component as any, null, createElement('span', null, 'child')));
+      expect(html).toContain('<span>child</span>');
+    });
+
+    it('compiles and renders a component with import React, { Children } from "react"', () => {
+      const code = `
+'use client';
+/** @label "SlotWrapper2" */
+/** @controls {} */
+import React, { Children } from 'react';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function SlotWrapper2({ children, ...props }) {
+  const count = Children.count(children);
+  return <div {...props}>Count: {count}</div>;
+}
+export default withResponsiveProps(SlotWrapper2);
+`;
+      const Component = compileCodeComponent(code, 'SlotWrapper2');
+      expect(Component).not.toBeNull();
+      const html = renderToStaticMarkup(createElement(Component as any, null, createElement('span', null, 'child')));
+      expect(html).toContain('Count: 1');
+    });
+
+    it('compiles and renders a dynamic attributes objectList component', () => {
+      const code = `
+'use client';
+/** @label "DynamicDataWrapper" */
+/** @controls {
+  "attributes": {
+    "type": "objectList",
+    "label": "Attributes",
+    "itemLabel": "name",
+    "default": [],
+    "item": {
+      "controls": {
+        "name": { "type": "text", "label": "Name" },
+        "value": { "type": "text", "label": "Value" }
+      }
+    }
+  }
+} */
+import React, { Children } from 'react';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function DynamicDataWrapper({ children, attributes = [], ...props }) {
+  const attrs = {};
+  for (const item of (attributes || [])) {
+    if (item && item.name) {
+      attrs[item.name.startsWith('data-') ? item.name : 'data-' + item.name] = item.value || '';
+    }
+  }
+  return <div {...props} {...attrs}>{children}</div>;
+}
+export default withResponsiveProps(DynamicDataWrapper);
+`;
+      const Component = compileCodeComponent(code, 'DynamicDataWrapper');
+      expect(Component).not.toBeNull();
+      const html = renderToStaticMarkup(createElement(Component as any, {
+        attributes: [
+          { name: 'umami-event', value: 'click-lead' },
+          { name: 'custom-tag', value: 'premium' }
+        ]
+      }, createElement('button', null, 'Click')));
+      expect(html).toContain('data-umami-event="click-lead"');
+      expect(html).toContain('data-custom-tag="premium"');
+      expect(html).toContain('<button>Click</button>');
+    });
   });
 });

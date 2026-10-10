@@ -20,7 +20,7 @@ import { backend } from '@/backend';
 import { getProjectId } from '@/backend/project-id';
 import { loadCustomFont, loadCustomFontInCanvas } from '@/shared/font-loader';
 import { modifyProjectFile } from '@/code/project/modify-file';
-import { addWorkspaceFontFacesToCss } from '@/code/project/preset-ops';
+import { addWorkspaceFontFacesToCss, removeWorkspaceFontFacesFromCss } from '@/code/project/preset-ops';
 import { projectFS } from '@/code/project/project-fs';
 import { forceCanvasRender } from '@/canvas/node-ops';
 import type { WorkspaceFont } from '@/backend/types';
@@ -28,16 +28,37 @@ import type { WorkspaceFont } from '@/backend/types';
 let _fonts: WorkspaceFont[] = [];
 let _loaded = false;
 let _loading = false;
+let _loadedProjectId: string | null = null;
 const listeners = new Set<() => void>();
 
-const LOCAL_STORAGE_KEY = 'revyme_custom_fonts';
+const STORAGE_KEY_PREFIX = 'revyme:custom_fonts:';
+const LEGACY_STORAGE_KEY = 'revyme_custom_fonts';
+
+function getProjectCustomFontsKey(): string {
+  const projectId = getProjectId() || 'local';
+  return `${STORAGE_KEY_PREFIX}${projectId}`;
+}
 
 function loadLocalCustomFonts(): WorkspaceFont[] {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    const key = getProjectCustomFontsKey();
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+
+    // One-time migration from legacy un-scoped key for the current project
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyRaw) {
+      try {
+        const legacyFonts = JSON.parse(legacyRaw);
+        if (Array.isArray(legacyFonts) && legacyFonts.length > 0) {
+          localStorage.setItem(key, JSON.stringify(legacyFonts));
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+          return legacyFonts;
+        }
+      } catch {}
+    }
+    return [];
   } catch {
     return [];
   }
@@ -46,7 +67,8 @@ function loadLocalCustomFonts(): WorkspaceFont[] {
 function saveLocalCustomFonts(fonts: WorkspaceFont[]): void {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fonts));
+    const key = getProjectCustomFontsKey();
+    localStorage.setItem(key, JSON.stringify(fonts));
   } catch {}
 }
 
@@ -130,7 +152,9 @@ export function syncProjectCustomFontsFromCss(css: string): WorkspaceFont[] {
  * and pre-registers each face (so previews render). Safe to call repeatedly.
  */
 export async function ensureWorkspaceFonts(): Promise<void> {
-  if (_loaded || _loading) return;
+  const currentProjectId = getProjectId() || 'local';
+  if (_loaded && _loadedProjectId === currentProjectId) return;
+  if (_loading) return;
   _loading = true;
   try {
     const localFonts = loadLocalCustomFonts();
@@ -169,7 +193,8 @@ export async function ensureWorkspaceFonts(): Promise<void> {
 
     _fonts = Array.from(map.values());
     _loaded = true;
-    trace.action('workspace-fonts:loaded', { count: _fonts.length });
+    _loadedProjectId = currentProjectId;
+    trace.action('workspace-fonts:loaded', { count: _fonts.length, projectId: currentProjectId });
 
     // Register every face so the picker renders each in its own typeface.
     for (const f of _fonts) {
@@ -179,6 +204,7 @@ export async function ensureWorkspaceFonts(): Promise<void> {
   } catch (err) {
     trace.error('workspace-fonts:load-failed', err);
     _loaded = true;
+    _loadedProjectId = currentProjectId;
   } finally {
     _loading = false;
     notify();
@@ -187,6 +213,16 @@ export async function ensureWorkspaceFonts(): Promise<void> {
 
 /** Add a newly uploaded custom font to workspace fonts */
 export function addCustomFont(font: WorkspaceFont): void {
+  const currentProjectId = getProjectId() || 'local';
+  if (!_loaded || _loadedProjectId !== currentProjectId) {
+    const local = loadLocalCustomFonts();
+    const map = new Map<string, WorkspaceFont>();
+    for (const f of _fonts) map.set(f.id, f);
+    for (const f of local) map.set(f.id, f);
+    _fonts = Array.from(map.values());
+    _loaded = true;
+    _loadedProjectId = currentProjectId;
+  }
   const existingIdx = _fonts.findIndex(f => f.id === font.id || (f.family === font.family && f.weight === font.weight && f.style === font.style));
   if (existingIdx >= 0) {
     _fonts[existingIdx] = font;
@@ -202,11 +238,33 @@ export function addCustomFont(font: WorkspaceFont): void {
   notify();
 }
 
-/** Delete a custom font from workspace fonts */
+/** Delete a custom font from workspace fonts and clean up its CSS declarations */
 export function deleteCustomFont(fontId: string): void {
+  const currentProjectId = getProjectId() || 'local';
+  if (!_loaded || _loadedProjectId !== currentProjectId) {
+    const local = loadLocalCustomFonts();
+    const map = new Map<string, WorkspaceFont>();
+    for (const f of _fonts) map.set(f.id, f);
+    for (const f of local) map.set(f.id, f);
+    _fonts = Array.from(map.values());
+    _loaded = true;
+    _loadedProjectId = currentProjectId;
+  }
+  const target = _fonts.find(f => f.id === fontId);
+  const targetFamily = target?.family;
   _fonts = _fonts.filter(f => f.id !== fontId);
   const localFonts = _fonts.filter(f => f.id.startsWith('local-') || f.id.startsWith('discovered-') || f.uploadedBy === 'user' || f.uploadedBy === 'local' || f.uploadedBy === 'discovered');
   saveLocalCustomFonts(localFonts);
+
+  // If we know the family being deleted, also remove its @font-face rules from globals.css
+  if (targetFamily) {
+    const aliases = [targetFamily];
+    const unspaced = targetFamily.replace(/\s+/g, '');
+    if (unspaced && unspaced !== targetFamily) aliases.push(unspaced);
+    modifyProjectFile('app/globals.css', css => removeWorkspaceFontFacesFromCss(css, aliases));
+    forceCanvasRender();
+  }
+
   notify();
 }
 
@@ -276,9 +334,31 @@ export function applyWorkspaceFontToProject(family: string): void {
   const familyFonts = _fonts.filter(f => f.family === family);
   if (familyFonts.length === 0) return;
 
-  const specs = familyFonts.map(f => ({
-    family: f.family, url: f.url, weight: f.weight, style: f.style, ext: f.ext,
-  }));
+  const specs: import('@/code/project/preset-ops').WorkspaceFontFaceSpec[] = [];
+  for (const f of familyFonts) {
+    specs.push({
+      family: f.family, url: f.url, weight: f.weight, style: f.style, ext: f.ext,
+    });
+    // For single-face custom fonts (default 400), also declare weight: 700
+    // so bold elements and tags (<strong>, <b>) still resolve this custom face
+    if (f.weight === 400 && !familyFonts.some(other => other.weight === 700)) {
+      specs.push({
+        family: f.family, url: f.url, weight: 700, style: f.style, ext: f.ext,
+      });
+    }
+    // Also declare alias without spaces if family has spaces (e.g. "CompactaMobsters")
+    const unspaced = f.family.replace(/\s+/g, '');
+    if (unspaced && unspaced !== f.family) {
+      specs.push({
+        family: unspaced, url: f.url, weight: f.weight, style: f.style, ext: f.ext,
+      });
+      if (f.weight === 400 && !familyFonts.some(other => other.weight === 700)) {
+        specs.push({
+          family: unspaced, url: f.url, weight: 700, style: f.style, ext: f.ext,
+        });
+      }
+    }
+  }
 
   // modifyProjectFile flushes any pending mutation (e.g. the fontFamily write
   // that just queued) before reading globals.css, so neither clobbers the other.
@@ -291,7 +371,13 @@ export function applyWorkspaceFontToProject(family: string): void {
  *  iframe right now — the project only declares it (globals.css) once the font is picked. */
 export function previewWorkspaceFontInCanvas(family: string): void {
   for (const f of _fonts) {
-    if (f.family === family) loadCustomFontInCanvas({ family: f.family, url: f.url, weight: f.weight, style: f.style });
+    if (f.family === family) {
+      loadCustomFontInCanvas({ family: f.family, url: f.url, weight: f.weight, style: f.style });
+      const unspaced = f.family.replace(/\s+/g, '');
+      if (unspaced && unspaced !== f.family) {
+        loadCustomFontInCanvas({ family: unspaced, url: f.url, weight: f.weight, style: f.style });
+      }
+    }
   }
 }
 
@@ -308,4 +394,12 @@ function subscribe(fn: () => void): () => void {
 /** React hook — the workspace font library, reactive to load completion. */
 export function useWorkspaceFonts(): WorkspaceFont[] {
   return useSyncExternalStore(subscribe, getWorkspaceFonts, getWorkspaceFonts);
+}
+
+/** Reset in-memory cached fonts state (useful in tests when switching project or clearing storage). */
+export function resetWorkspaceFontsForTesting(): void {
+  _fonts = [];
+  _loaded = false;
+  _loading = false;
+  _loadedProjectId = null;
 }

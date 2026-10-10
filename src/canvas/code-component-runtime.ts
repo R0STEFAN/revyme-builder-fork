@@ -3,7 +3,7 @@
 
 import { transform } from '@babel/standalone';
 import { simpleHash } from '@/shared/hash-utils';
-import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect, useReducer, useContext, createContext, forwardRef, memo, lazy, Suspense, Fragment } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect, useReducer, useContext, createContext, forwardRef, memo, lazy, Suspense, Fragment, Children, cloneElement, isValidElement } from 'react';
 import * as motionRuntime from 'framer-motion';
 import * as revymeRuntime from '@revyme/runtime';
 import * as ReactJSXRuntime from 'react/jsx-runtime';
@@ -159,7 +159,7 @@ const nextIntlStub = {
 
 // Module scope for Code component code execution — pre-loaded ES modules
 const MODULE_MAP: Record<string, any> = {
-  'react': { ...React, default: React, useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect, useReducer, useContext, createContext, forwardRef, memo, lazy, Suspense, Fragment, createElement: React.createElement },
+  'react': { ...React, default: React, Children, cloneElement, isValidElement, useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect, useReducer, useContext, createContext, forwardRef, memo, lazy, Suspense, Fragment, createElement: React.createElement },
   'framer-motion': motionRuntime,
   // `@revyme/runtime` is the new home for `withResponsiveProps`, `withCursor`,
   // `CursorPortal`, `useStaticCanvas`, etc. Generated user code (post-2026-05-06)
@@ -365,6 +365,12 @@ export function compileCodeComponent(
         !/from\s*['"]framer-motion['"]/.test(cleanCode)) {
       trace.action('code-component-runtime:auto-inject-motion-import', { componentName });
       cleanCode = `import { motion } from 'framer-motion';\n` + cleanCode;
+    }
+
+    // Auto-inject missing Children import if code component references Children.<method>
+    if (/\bChildren\./.test(cleanCode) &&
+        !/import\s+[^;]*\bChildren\b[^;]*from\s*['"]react['"]/.test(cleanCode)) {
+      cleanCode = `import { Children } from 'react';\n` + cleanCode;
     }
 
     // 3. Convert imports to require calls for our module scope
