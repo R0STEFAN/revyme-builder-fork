@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { agentToolManifest, agentToolCall, agentRunStart, agentRunEnd, agentRunAbort, LAZY_RUN_IDLE_MS } from './bridge-tools';
+import { agentToolManifest, agentToolCall, agentRunStart, agentRunEnd, agentRunAbort, agentContext, LAZY_RUN_IDLE_MS } from './bridge-tools';
+import { registerBeforeAgentTurn } from './turn-hooks';
 import { projectFS, resetProjectFS, MAIN_BRANCH_ID } from '@/code/project/project-fs';
 import { isBranchLocked } from '@/code/stores/agent-run-lock-store';
 import { getDefaultStore } from 'jotai';
@@ -15,6 +16,14 @@ export default function Page() {
 }`;
 
 describe('agent bridge tools', () => {
+  it('refuses external agent context when the pending panel commit fails', () => {
+    const off = registerBeforeAgentTurn(() => false);
+    try {
+      expect(() => agentContext()).toThrow(/save/i);
+    } finally {
+      off();
+    }
+  });
   beforeEach(() => {
     resetProjectFS(new Map([['app/page.client.tsx', PAGE]]));
     // The queue splices into the ACTIVE file's code — point both the editor

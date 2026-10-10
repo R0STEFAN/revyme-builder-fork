@@ -141,7 +141,10 @@ export function isExternalRunActive(): boolean {
  * the same knowledge. Settles the panel first, like the chat does.
  */
 export function agentContext(): { contextBlock: string; surface: { kind: string; skill: string | null }; branch: string } {
-  runBeforeAgentTurn();
+  if (!runBeforeAgentTurn()) {
+    trace.action('agent-context:refused-unsaved-editor', {});
+    throw new Error('Could not save the current editor changes. Fix the save issue and try again.');
+  }
   const surface = readAgentSurface();
   return { contextBlock: buildAgentContextBlock(surface), surface: surfaceForRequest(surface), branch: projectFS.getActiveBranchId() };
 }

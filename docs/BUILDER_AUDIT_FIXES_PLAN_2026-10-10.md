@@ -19,7 +19,7 @@
 - Human code-editor saves may use skipParseGate for unfinished source; generated structural changes must remain parseable.
 - One implementer at a time. Model routing: GPT-6 Sol for integration tasks; GPT-6 Luna for local mechanical tasks. All agents receive isolated context.
 - Implementers do not commit: report exact files and checks; coordinator independently verifies, dispatches review, then commits each task as a local stage checkpoint.
-- node_modules is reused from the main checkout. Do not install packages into that shared directory. If dependencies must change, notify coordinator before installation.
+- node_modules was initially reused from the main checkout; the coordinator replaced the symlink with a private worktree copy before dependency changes. Install only in the private worktree directory. Never mutate main checkout dependencies.
 - Existing audit fixtures are available under docs/audits/2026-10-10 (ignored). Move durable regression cases to src alongside the responsible module. Do not retain assertions that require the bug.
 - Each task report records coverage for every assigned AUD ID, test commands/results, RED evidence, risks and any contract changes.
 
@@ -233,4 +233,5 @@ expect(getHistoryState().canUndo).toBe(true);
 
 - Stage 0: plan created against latest user commit; TypeScript passes. Baseline: 12,992 tests pass; one oracle inventory test fails for the four newly registered components. This is explicitly assigned to Tasks 6 and 8; oracle stays strict.
 - Task 1: complete — AUD-00/01/02/11; 112 related tests and TypeScript pass; independent review closed all findings. Adapter revisions protect local/server recovery ordering; requests with a usable local copy have a 5-second bound.
-- Task 2–9: pending.
+- Task 2: complete. Component editor commits through safe file writes, records undo/redo with editor location, schedules autosave, repairs empty files and blocks stale-source AI turns with draft/queued-request retry. Final related 143 tests plus 7 retry tests passed; independent checks 65 plus 18 passed; TypeScript passed; task review approved after two fix rounds.
+- Task 3–9: pending.

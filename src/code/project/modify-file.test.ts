@@ -137,6 +137,13 @@ describe('modifyProjectFile', () => {
     expect(mockFS.writeFile).not.toHaveBeenCalled();
   });
 
+  test('writes into an existing empty component master', () => {
+    mockFS.readFile.mockReturnValue('');
+    const result = modifyProjectFile('components/Empty.tsx', () => 'export default function Empty(){return null}', { skipParseGate: true });
+    expect(result).toBe('export default function Empty(){return null}');
+    expect(mockFS.writeFile).toHaveBeenCalledWith('components/Empty.tsx', 'export default function Empty(){return null}');
+  });
+
   test('syncs queue to new code after write', () => {
     let callCount = 0;
     mockFS.readFile.mockImplementation(() => {

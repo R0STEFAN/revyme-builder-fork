@@ -11,6 +11,7 @@ import { projectVersionAtom, projectFS } from '@/code/project/project-fs';
 import { translationsOverlayOpenAtom } from '@/code/stores/left-panel-store';
 import { activeLocaleAtom } from '@/code/stores/locale-store';
 import { activeFilePathAtom, switchActiveFile, setSwitchCameraHandler, componentBreadcrumbAtom } from '@/code/project/active-file-store';
+import { componentEditorFileAtom, componentEditorPropsAtom } from '@/code/stores/component-editor-store';
 import { applyPageCameraForSwitch, initCameraPersist } from '@/canvas/transform';
 import { setBumpVersion, consumeGestureVersionBump } from '@/code/project/modify-file';
 import { initHistory, pushHistory, syncHistoryCode } from '@/code/mutation/history';
@@ -136,8 +137,16 @@ export function useMutationQueueLifecycle({
             ? store.get(activeLocaleAtom)
             : null,
           breadcrumb: [...store.get(componentBreadcrumbAtom)],
+          componentEditorFile: store.get(componentEditorFileAtom),
+          componentEditorProps: { ...store.get(componentEditorPropsAtom) },
         }),
         set: (loc) => {
+          if (loc.componentEditorFile !== undefined) {
+            if (loc.componentEditorProps) store.set(componentEditorPropsAtom, { ...loc.componentEditorProps });
+            if (store.get(componentEditorFileAtom) !== loc.componentEditorFile) {
+              store.set(componentEditorFileAtom, loc.componentEditorFile);
+            }
+          }
           // Component breadcrumb trail — the ancestor files above the master
           // the undo/redo lands on. Without this the hand-pushed stack keeps
           // the master the user just left (nested Make Component undone) as

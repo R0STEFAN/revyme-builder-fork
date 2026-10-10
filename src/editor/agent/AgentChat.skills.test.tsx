@@ -22,6 +22,7 @@ import { saveProjectSkill } from '@/code/stores/project-skills-store';
 import { activeAgentChatIdAtom, loadedAgentChatIdAtom, getAgentChat } from '@/code/stores/agent-chats-store';
 import { agentStatusAtom, agentConversationAtom, agentQueuedRequestAtom } from '@/code/stores/agent-chat-store';
 import { streamAgentTurn } from '@/ai/agent/agent-client';
+import { registerBeforeAgentTurn } from '@/ai/agent/turn-hooks';
 
 const store = getDefaultStore();
 
@@ -99,7 +100,74 @@ describe('sending with a skill', () => {
   });
 });
 
+it('keeps the draft and does not start an agent turn when a pre-turn save refuses', async () => {
+  const off = registerBeforeAgentTurn(() => false);
+  try {
+    render(<AgentChat />);
+    await waitFor(() => expect(box().disabled).toBe(false));
+    type('make the glow bigger');
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(box().value).toBe('make the glow bigger');
+    expect(streamAgentTurn).not.toHaveBeenCalled();
+    expect(store.get(agentConversationAtom)).toEqual([]);
+    expect(store.get(agentStatusAtom)).toBe('idle');
+  } finally {
+    off();
+  }
+});
+
 describe('a request queued from Settings', () => {
+  it('shows Retry after refusal and sends the exact Settings request once after recovery without clearing the draft', async () => {
+    let refuse = true;
+    const off = registerBeforeAgentTurn(() => !refuse);
+    try {
+      render(<AgentChat />);
+      await waitFor(() => expect(box().disabled).toBe(false));
+      type('my separate draft');
+      act(() => { store.set(agentQueuedRequestAtom, { text: '  Generate the original skill.  ', nonce: 501 }); });
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Retry queued request' })).toBeTruthy());
+      expect(screen.getByTestId('agent-queued-retry').textContent).toContain('Generate the original skill.');
+      expect(streamAgentTurn).not.toHaveBeenCalled();
+      expect(box().value).toBe('my separate draft');
+
+      refuse = false;
+      expect(streamAgentTurn).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry queued request' }));
+      await waitFor(() => expect(streamAgentTurn).toHaveBeenCalledTimes(1));
+      const sent = vi.mocked(streamAgentTurn).mock.calls[0][0].messages;
+      expect(sent[sent.length - 1]?.content[0]).toEqual({ type: 'text', text: '  Generate the original skill.  ' });
+      expect(box().value).toBe('my separate draft');
+      await waitFor(() => expect(screen.queryByTestId('agent-queued-retry')).toBeNull());
+      act(() => { store.set(agentQueuedRequestAtom, { text: '  Generate the original skill.  ', nonce: 501 }); });
+      expect(streamAgentTurn).toHaveBeenCalledTimes(1);
+    } finally {
+      off();
+    }
+  });
+
+  it('replaces the retry target with a newer Settings request and never sends the old one', async () => {
+    let refuse = true;
+    const off = registerBeforeAgentTurn(() => !refuse);
+    try {
+      render(<AgentChat />);
+      await waitFor(() => expect(box().disabled).toBe(false));
+      type('untouched draft');
+      act(() => { store.set(agentQueuedRequestAtom, { text: 'Old Settings request', nonce: 601 }); });
+      await waitFor(() => expect(screen.getByTestId('agent-queued-retry').textContent).toContain('Old Settings request'));
+      act(() => { store.set(agentQueuedRequestAtom, { text: 'New Settings request', nonce: 602 }); });
+      await waitFor(() => expect(screen.getByTestId('agent-queued-retry').textContent).toContain('New Settings request'));
+      expect(screen.getByTestId('agent-queued-retry').textContent).not.toContain('Old Settings request');
+      refuse = false;
+      fireEvent.click(screen.getByRole('button', { name: 'Retry queued request' }));
+      await waitFor(() => expect(streamAgentTurn).toHaveBeenCalledTimes(1));
+      const sent = vi.mocked(streamAgentTurn).mock.calls[0][0].messages;
+      expect(sent[sent.length - 1]?.content[0]).toEqual({ type: 'text', text: 'New Settings request' });
+      expect(box().value).toBe('untouched draft');
+    } finally {
+      off();
+    }
+  });
+
   it('is sent once — even with two panels mounted over the chat — and leaves the draft alone', async () => {
     render(<><AgentChat /><AgentChat /></>);
     await waitFor(() => expect((screen.getAllByRole('textbox')[0] as HTMLTextAreaElement).disabled).toBe(false));

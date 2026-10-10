@@ -7,12 +7,12 @@
 //
 // A panel registers a hook that settles that (the component editor saves its
 // buffer, exactly as its Save button would); the chat runs the hooks before it
-// builds the turn's context. Deliberately tiny and synchronous: a hook that
-// could fail or wait would turn "send a message" into something that can hang.
+// builds the turn's context. Deliberately tiny and synchronous: a hook can
+// refuse a turn, but cannot wait on network persistence.
 
 import { trace } from '@/shared/debug-trace';
 
-type BeforeTurnHook = () => void;
+type BeforeTurnHook = () => boolean | void;
 
 const hooks = new Set<BeforeTurnHook>();
 
@@ -22,14 +22,17 @@ export function registerBeforeAgentTurn(hook: BeforeTurnHook): () => void {
   return () => { hooks.delete(hook); };
 }
 
-/** Run every hook. One that throws is traced and skipped — it must never cost
- *  the user their message. */
-export function runBeforeAgentTurn(): void {
+/** Settle every panel synchronously. A refusal keeps the draft in the chat;
+ *  callers must not start a turn against stale ProjectFS content. */
+export function runBeforeAgentTurn(): boolean {
+  let ready = true;
   for (const hook of [...hooks]) {
     try {
-      hook();
+      if (hook() === false) ready = false;
     } catch (err) {
       trace.error('agent-turn-hooks:hook-threw', err);
+      ready = false;
     }
   }
+  return ready;
 }

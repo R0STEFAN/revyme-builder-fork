@@ -64,6 +64,8 @@ export { humanizeFailure };
 /** The last queued request sent (agentQueuedRequestAtom). Module-level: the
  *  chat body is mounted by several panels at once, and only ONE may send it. */
 let consumedQueuedNonce = -1;
+/** A refused Settings request waits for an explicit Retry, never an incidental rerender. */
+let attemptedQueuedNonce = -1;
 
 /** "." → ".." → "..." on a slow cycle. A static ellipsis reads as a frozen
  *  row; the movement is the only thing that says the run is still alive
@@ -453,6 +455,7 @@ export default function AgentChat() {
 
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
+  const [pendingQueued, setPendingQueued] = useState<{ text: string; nonce: number } | null>(null);
   // THE COMPOSER GROWS WITH WHAT IS TYPED. It was a fixed two rows, so a real
   // request — a few sentences — scrolled out of its own box after the second
   // line and had to be written blind. Two rows at rest, growing to a cap, then
@@ -541,10 +544,23 @@ export default function AgentChat() {
 
   // `override`: a request queued from outside the chat (Settings → Skills) —
   // sent as is, leaving whatever the user is typing (and attaching) alone.
-  const send = useCallback(async (override?: string) => {
+  const send = useCallback(async (override?: string, queuedNonce?: number) => {
     const fromDraft = override === undefined;
-    const text = (override ?? input).trim();
-    if ((!text && (!fromDraft || attachments.length === 0)) || status === 'running') return;
+    const text = fromDraft ? input.trim() : override!;
+    if ((!text.trim() && (!fromDraft || attachments.length === 0)) || status === 'running') return;
+
+    // Settle buffered editor changes before consuming the draft or creating a
+    // chat turn. A refused save must leave the user's request available.
+    if (!runBeforeAgentTurn()) {
+      setError('Could not save the current editor changes. Fix the save issue and try again.');
+      if (queuedNonce !== undefined) setPendingQueued({ text, nonce: queuedNonce });
+      trace.action('agent-panel:turn-blocked-unsaved-editor', {});
+      return;
+    }
+    if (queuedNonce !== undefined) {
+      consumedQueuedNonce = queuedNonce;
+      setPendingQueued(null);
+    }
 
     const images: AgentTurnImage[] = fromDraft ? attachments.map(({ full, thumb, width, height }) => ({ full, thumb, width, height })) : [];
     // Skills the message names with /name ride this turn's context.
@@ -618,10 +634,8 @@ export default function AgentChat() {
     };
 
     try {
-      // Settle the panel FIRST (the component editor saves its buffer), then
-      // read where the user is ONCE, so the description and the manual the
-      // service attaches can never disagree about the surface.
-      runBeforeAgentTurn();
+      // Read the surface after the pre-turn commit, so the description and
+      // manual the service attaches agree about where the user is working.
       const surface = readAgentSurface();
       trace.action('agent-panel:turn-start', { surface: surface.kind, images: images.length });
       for await (const ev of streamAgentTurn({
@@ -716,10 +730,19 @@ export default function AgentChat() {
   // Sent once, by whichever mounted chat gets here first.
   const queued = useAtomValue(agentQueuedRequestAtom);
   useEffect(() => {
-    if (!queued || status === 'running' || !configured || consumedQueuedNonce === queued.nonce) return;
-    consumedQueuedNonce = queued.nonce;
+    if (!queued) { setPendingQueued(null); return; }
+    if (consumedQueuedNonce === queued.nonce) {
+      setPendingQueued(prev => prev?.nonce === queued.nonce ? null : prev);
+      return;
+    }
+    if (status === 'running' || !configured) return;
+    if (attemptedQueuedNonce === queued.nonce) {
+      setPendingQueued(prev => prev?.nonce === queued.nonce ? prev : { text: queued.text, nonce: queued.nonce });
+      return;
+    }
+    attemptedQueuedNonce = queued.nonce;
     trace.action('agent-panel:queued-request', { chars: queued.text.length });
-    void send(queued.text);
+    void send(queued.text, queued.nonce);
   }, [queued, status, configured, send]);
 
   const stop = () => {
@@ -847,6 +870,12 @@ export default function AgentChat() {
 
 
           {error && <div className="py-2 text-[11px] text-[var(--accent-danger,#dc2626)]">{error}</div>}
+          {pendingQueued && queued?.nonce === pendingQueued.nonce && consumedQueuedNonce !== pendingQueued.nonce && (
+            <div data-testid="agent-queued-retry" role="status" className="flex items-center gap-2 py-2 text-[11px] text-[var(--text-secondary)]">
+              <span className="min-w-0 flex-1 truncate" title={pendingQueued.text}>Settings request: {pendingQueued.text}</span>
+              <button type="button" aria-label="Retry queued request" disabled={status === 'running'} onClick={() => void send(pendingQueued.text, pendingQueued.nonce)} className="shrink-0 text-[var(--accent-secondary)] underline">Retry</button>
+            </div>
+          )}
         </div>
         <div aria-hidden className="agent-edge-blur agent-edge-blur-top" />
         <div aria-hidden className="agent-edge-blur agent-edge-blur-bottom" />

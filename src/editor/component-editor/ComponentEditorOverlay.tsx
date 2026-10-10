@@ -5,10 +5,15 @@
 // Opens when componentEditorFileAtom is non-null. Closes on X or Escape.
 
 import { useState, useCallback, useEffect, useRef, useMemo, type PointerEvent as ReactPointerEvent } from 'react';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { componentEditorFileAtom, componentEditorPropsAtom } from '@/code/stores/component-editor-store';
 import { registerBeforeAgentTurn } from '@/ai/agent/turn-hooks';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
+import { modifyProjectFile } from '@/code/project/modify-file';
+import { flushNow } from '@/code/mutation/mutation-queue';
+import { pushHistoryImmediate, rebaselineHistory, sealPendingHistory } from '@/code/mutation/history';
+import { triggerAutosave } from '@/backend/autosave';
+import { isCanvasBusy } from '@/code/stores/agent-run-lock-store';
 import { parseComponentControlsMeta } from '@/code/components/controls-parser';
 import ComponentCodePane from './ComponentCodePane';
 import ComponentPreviewPane from './ComponentPreviewPane';
@@ -20,7 +25,6 @@ import { trace } from '@/shared/debug-trace';
 export default function ComponentEditorOverlay() {
   const [filePath, setFilePath] = useAtom(componentEditorFileAtom);
   const [props, setProps] = useAtom(componentEditorPropsAtom);
-  const bumpVersion = useSetAtom(projectVersionAtom);
 
   const [code, setCode] = useState('');
   const [savedCode, setSavedCode] = useState('');
@@ -112,37 +116,64 @@ export default function ComponentEditorOverlay() {
   // HERE, after the fact — a rejection reached only the console, the model was
   // never told, and the unsaved AI code was still written on close. None of it
   // exists any more: nothing but the user types into this buffer now.
+  const commitBuffer = useCallback((source: string): boolean => {
+    if (!filePath || codeRef.current === savedCodeRef.current) return true;
+    if (isCanvasBusy()) {
+      trace.action('component-editor:commit-refused-canvas-busy', { filePath, source });
+      return false;
+    }
+
+    // Settle the active canvas file before taking the history boundary. The
+    // master may be a different file, so its content must never seed the queue.
+    flushNow();
+    sealPendingHistory();
+    const buffer = codeRef.current;
+    const before = projectFS.readFile(filePath);
+    if (before == null) {
+      trace.error('component-editor:commit-missing-file', { filePath, source });
+      return false;
+    }
+    if (before === buffer) {
+      savedCodeRef.current = buffer;
+      setSavedCode(buffer);
+      return true;
+    }
+
+    // Other writers may have changed the master without recording a human
+    // history step. Undoing this commit must return to that exact disk state.
+    rebaselineHistory();
+    const committed = modifyProjectFile(filePath, () => buffer, { skipParseGate: true });
+    if (committed == null || projectFS.readFile(filePath) !== committed) {
+      trace.action('component-editor:commit-refused', { filePath, source });
+      return false;
+    }
+    if (committed !== before) {
+      pushHistoryImmediate('');
+      triggerAutosave({ force: true });
+    }
+    codeRef.current = committed;
+    savedCodeRef.current = committed;
+    setCode(committed);
+    setSavedCode(committed);
+    trace.action('component-editor:commit', { filePath, source, size: committed.length });
+    return true;
+  }, [filePath]);
+
   useEffect(() => {
     if (!filePath) return;
-    return registerBeforeAgentTurn(() => {
-      if (codeRef.current === savedCodeRef.current) return;
-      projectFS.writeFile(filePath, codeRef.current);
-      bumpVersion(v => v + 1);
-      setSavedCode(codeRef.current);
-      trace.action('component-editor:save-before-agent-turn', { filePath, size: codeRef.current.length });
-    });
-  }, [filePath, bumpVersion]);
+    return registerBeforeAgentTurn(() => commitBuffer('before-agent-turn'));
+  }, [filePath, commitBuffer]);
 
   const handleClose = useCallback(() => {
-    // Write ONLY a buffer that differs from what's on disk RIGHT NOW — never
-    // re-impose a stale unedited copy over an externally-updated file.
-    if (filePath && codeRef.current !== savedCode
-      && codeRef.current !== projectFS.readFile(filePath)) {
-      projectFS.writeFile(filePath, codeRef.current);
-      bumpVersion(v => v + 1);
-    }
+    if (!commitBuffer('close')) return;
     setFilePath(null);
     setProps({});
     trace.action('component-editor:close', { filePath });
-  }, [filePath, savedCode, setFilePath, setProps, bumpVersion]);
+  }, [filePath, commitBuffer, setFilePath, setProps]);
 
   const handleSave = useCallback(() => {
-    if (!filePath) return;
-    projectFS.writeFile(filePath, codeRef.current);
-    bumpVersion(v => v + 1);
-    setSavedCode(codeRef.current);
-    trace.action('component-editor:save', { filePath, size: codeRef.current.length });
-  }, [filePath, bumpVersion]);
+    commitBuffer('save');
+  }, [commitBuffer]);
 
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode);

@@ -99,7 +99,7 @@ export function modifyProjectFile(
   //    Only sync the queue's `currentCode` when modifying the ACTIVE
   //    PAGE — other files don't own the queue's base.
   const preFlushCode = projectFS.readFile(filePath);
-  if (!preFlushCode) return null;
+  if (preFlushCode == null) return null;
   if (isQueueOwned && dragStateOps.get()) {
     // GESTURE WINDOW: the queue's `currentCode` — not ProjectFS — is the
     // source of truth. The deferred-drag-flush stashes every flush's
@@ -123,7 +123,7 @@ export function modifyProjectFile(
 
   // 2. Read fresh code (now includes all flushed mutations)
   const code = projectFS.readFile(filePath);
-  if (!code) return null;
+  if (code == null) return null;
 
   // 3. Apply transform
   let result: string;
@@ -201,7 +201,7 @@ export function modifyProjectFile(
   //    `currentCode` — see the comment at the top of this function.
   if (isQueueOwned) {
     const freshCode = projectFS.readFile(filePath);
-    if (freshCode) syncQueueCode(freshCode);
+    if (freshCode != null) syncQueueCode(freshCode);
   }
 
   trace.fn('modifyProjectFile', { filePath, changed: finalResult !== code, isQueueOwned, isJsxFile });
@@ -225,4 +225,3 @@ export function isBlockingModifyViolation(code: string): boolean {
   if (code.startsWith('FORBIDDEN_')) return true;
   return false;
 }
-

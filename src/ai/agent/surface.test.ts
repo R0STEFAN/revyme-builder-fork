@@ -102,10 +102,18 @@ describe('describeSurface', () => {
 });
 
 describe('before-turn hooks', () => {
+  it('reports an explicit refusal while still running the remaining synchronous hooks', () => {
+    const calls: string[] = [];
+    const offA = registerBeforeAgentTurn(() => false);
+    const offB = registerBeforeAgentTurn(() => { calls.push('after'); });
+    expect(runBeforeAgentTurn()).toBe(false);
+    expect(calls).toEqual(['after']);
+    offA(); offB();
+  });
   it('run in registration order and unregister cleanly', () => {
     const calls: string[] = [];
-    const offA = registerBeforeAgentTurn(() => calls.push('a'));
-    const offB = registerBeforeAgentTurn(() => calls.push('b'));
+    const offA = registerBeforeAgentTurn(() => { calls.push('a'); });
+    const offB = registerBeforeAgentTurn(() => { calls.push('b'); });
     runBeforeAgentTurn();
     offA();
     runBeforeAgentTurn();
@@ -114,11 +122,11 @@ describe('before-turn hooks', () => {
     expect(calls).toEqual(['a', 'b', 'b']);
   });
 
-  it('a hook that throws never costs the user their message', () => {
+  it('a throwing hook reports refusal without interrupting other hooks', () => {
     const calls: string[] = [];
     const off1 = registerBeforeAgentTurn(() => { throw new Error('boom'); });
-    const off2 = registerBeforeAgentTurn(() => calls.push('after'));
-    expect(() => runBeforeAgentTurn()).not.toThrow();
+    const off2 = registerBeforeAgentTurn(() => { calls.push('after'); });
+    expect(runBeforeAgentTurn()).toBe(false);
     expect(calls).toEqual(['after']);
     off1(); off2();
   });

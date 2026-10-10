@@ -52,6 +52,10 @@ export interface UiLocation {
    *  master). Undo/redo of a navigation-changing op (nested Make Component,
    *  file ops) must restore it with the active file or the bar goes stale. */
   breadcrumb?: string[];
+  /** Code component editor surface; null means the overlay is closed. */
+  componentEditorFile?: string | null;
+  /** Preview controls visible alongside that master. */
+  componentEditorProps?: Record<string, unknown>;
 }
 
 interface HistoryEntry {
