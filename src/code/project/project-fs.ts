@@ -119,6 +119,11 @@ import {
   TYPING_TEXT_COMPONENT,
   ROTATING_TEXT_3D_COMPONENT,
   VIDEO_TEXT_COMPONENT,
+  IMAGE_SEQUENCE_COMPONENT,
+  GRADIENT_TEXT_COMPONENT,
+  PARTICLE_FIELD_COMPONENT,
+  MODEL_VIEWER_COMPONENT,
+  SPLINE_SCENE_COMPONENT,
 } from './default-code-components';
 
 // ─── Interface ──────────────────────────────────────────────────────────────
@@ -2503,6 +2508,11 @@ const BUILT_IN_COMPONENTS: [string, string][] = [
   // here keeps the canonical text-effect set discoverable via the
   // built-in registry (the AI service may import `@/components/TypingEffect`).
   ['components/TypingEffect.tsx', TYPING_EFFECT_COMPONENT],
+  ['components/ImageSequence.tsx', IMAGE_SEQUENCE_COMPONENT],
+  ['components/GradientText.tsx', GRADIENT_TEXT_COMPONENT],
+  ['components/ParticleField.tsx', PARTICLE_FIELD_COMPONENT],
+  ['components/ModelViewer.tsx', MODEL_VIEWER_COMPONENT],
+  ['components/SplineScene.tsx', SPLINE_SCENE_COMPONENT],
 ];
 
 /**

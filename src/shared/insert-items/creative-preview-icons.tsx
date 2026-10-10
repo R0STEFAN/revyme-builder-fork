@@ -1507,3 +1507,143 @@ export function EffectAccordionIcon() {
   );
 }
 
+// ─── ImageSequence ──────────────────────────────────────────────────────────
+export function EffectImageSequenceIcon() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setFrame(f => (f + 1) % 4), 600);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="w-full h-full flex items-center justify-center p-2">
+      <div className="relative flex items-center justify-center w-[72px] h-[40px] rounded bg-black/40 border border-white/20 overflow-hidden shadow-sm">
+        <div className="absolute top-0.5 inset-x-1 flex justify-between">
+          {[0, 1, 2, 3, 4].map(i => (
+            <div key={i} className="w-1.5 h-1 rounded-[1px] bg-white/30" />
+          ))}
+        </div>
+        <div className="flex items-center gap-1 mt-1">
+          {[0, 1, 2, 3].map(i => (
+            <div
+              key={i}
+              className="rounded transition-all duration-200"
+              style={{
+                width: frame === i ? 16 : 8,
+                height: 18,
+                background: frame === i ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' : 'rgba(255,255,255,0.15)',
+                border: frame === i ? '1px solid rgba(255,255,255,0.6)' : 'none',
+              }}
+            />
+          ))}
+        </div>
+        <div className="absolute bottom-0.5 inset-x-1 flex justify-between">
+          {[0, 1, 2, 3, 4].map(i => (
+            <div key={i} className="w-1.5 h-1 rounded-[1px] bg-white/30" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── GradientText ──────────────────────────────────────────────────────────
+export function CreativeGradientTextIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <span
+        className="text-[13px] font-extrabold tracking-wider uppercase"
+        style={{
+          background: 'linear-gradient(90deg, #a855f7, #38bdf8, #f472b6, #a855f7)',
+          backgroundSize: '200% auto',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          animation: 'gradientFlow 3s linear infinite',
+        }}
+      >
+        Gradient
+      </span>
+      <style>{`
+        @keyframes gradientFlow {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── ParticleField ─────────────────────────────────────────────────────────
+export function EffectParticleFieldIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded">
+      <svg viewBox="0 0 80 44" className="w-[80px] h-[44px]">
+        <line x1="15" y1="12" x2="35" y2="24" stroke="rgba(56, 189, 248, 0.4)" strokeWidth="1" />
+        <line x1="35" y1="24" x2="65" y2="16" stroke="rgba(56, 189, 248, 0.4)" strokeWidth="1" />
+        <line x1="35" y1="24" x2="48" y2="34" stroke="rgba(168, 85, 247, 0.4)" strokeWidth="1" />
+        <line x1="15" y1="12" x2="22" y2="32" stroke="rgba(56, 189, 248, 0.3)" strokeWidth="1" />
+        <line x1="22" y1="32" x2="48" y2="34" stroke="rgba(168, 85, 247, 0.3)" strokeWidth="1" />
+        <line x1="48" y1="34" x2="70" y2="30" stroke="rgba(56, 189, 248, 0.3)" strokeWidth="1" />
+        <line x1="65" y1="16" x2="70" y2="30" stroke="rgba(56, 189, 248, 0.3)" strokeWidth="1" />
+
+        <circle cx="15" cy="12" r="2.5" fill="#38bdf8" />
+        <circle cx="35" cy="24" r="3" fill="#7dd3fc" />
+        <circle cx="65" cy="16" r="2.5" fill="#38bdf8" />
+        <circle cx="22" cy="32" r="2" fill="#a855f7" />
+        <circle cx="48" cy="34" r="2.5" fill="#c084fc" />
+        <circle cx="70" cy="30" r="2" fill="#38bdf8" />
+      </svg>
+    </div>
+  );
+}
+
+// ─── MarkdownArticle ───────────────────────────────────────────────────────
+export function ArticleMarkdownIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center p-2">
+      <div className="w-[68px] h-[40px] rounded bg-white/5 border border-white/10 p-1.5 flex flex-col gap-1 shadow-sm">
+        <div className="flex items-center gap-1">
+          <div className="w-2.5 h-2 rounded-[2px] bg-amber-400 font-bold text-[6px] text-black flex items-center justify-center">M</div>
+          <div className="w-8 h-1.5 rounded-sm bg-white/80" />
+        </div>
+        <div className="w-full h-1 rounded-sm bg-white/30" />
+        <div className="w-3/4 h-1 rounded-sm bg-white/20" />
+        <div className="flex items-center gap-1 mt-0.5">
+          <div className="w-1 h-1 rounded-full bg-amber-400/80" />
+          <div className="w-10 h-1 rounded-sm bg-white/30" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ModelViewer ───────────────────────────────────────────────────────────
+export function EffectModelViewerIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <svg viewBox="0 0 32 32" width={28} height={28} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-indigo-400">
+        <path d="M16 3L28 9.5V22.5L16 29L4 22.5V9.5L16 3Z" strokeLinejoin="round" />
+        <path d="M16 3V16M28 9.5L16 16M4 9.5L16 16" strokeLinejoin="round" />
+        <path d="M16 16V29" strokeLinejoin="round" />
+        <circle cx="16" cy="16" r="2" fill="currentColor" />
+      </svg>
+    </div>
+  );
+}
+
+// ─── SplineScene ───────────────────────────────────────────────────────────
+export function EffectSplineSceneIcon() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <svg viewBox="0 0 32 32" width={28} height={28} fill="none" strokeWidth={2} strokeLinecap="round">
+        <path d="M6 24C8 12 14 6 20 8C26 10 26 22 18 24C12 25 8 18 12 12" stroke="url(#splineGrad)" />
+        <defs>
+          <linearGradient id="splineGrad" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ec4899" />
+            <stop offset="1" stopColor="#8b5cf6" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+

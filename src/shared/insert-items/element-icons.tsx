@@ -33,6 +33,12 @@ import {
   EffectLocaleSwitcherIcon,
   EffectCopyButtonIcon,
   EffectAccordionIcon,
+  EffectImageSequenceIcon,
+  CreativeGradientTextIcon,
+  EffectParticleFieldIcon,
+  ArticleMarkdownIcon,
+  EffectModelViewerIcon,
+  EffectSplineSceneIcon,
 } from '@/shared/insert-items/creative-preview-icons';
 import { CHIP_SHADOW, CHIP_SURFACE } from '@/shared/insert-items/cms-field-glyphs';
 
@@ -1742,6 +1748,12 @@ export const ELEMENT_ICON_MAP: Record<string, React.FC> = {
   effectCopyButton: EffectCopyButtonIcon,
   effectAccordion: EffectAccordionIcon,
   accordion: EffectAccordionIcon,
+  effectImageSequence: EffectImageSequenceIcon,
+  creativeGradientText: CreativeGradientTextIcon,
+  effectParticleField: EffectParticleFieldIcon,
+  articleMarkdown: ArticleMarkdownIcon,
+  effectModelViewer: EffectModelViewerIcon,
+  effectSplineScene: EffectSplineSceneIcon,
   // Legacy flat icons (kept for back-compat with any out-of-tree
   // iconKey references; not used by the current EFFECTS_ITEMS list).
   carousel: CarouselIconCreative,

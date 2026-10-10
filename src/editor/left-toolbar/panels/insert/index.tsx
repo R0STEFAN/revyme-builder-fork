@@ -2,7 +2,7 @@
 // Hover-driven: hovering a sidebar category opens the secondary detail panel.
 // Secondary panel is full-height, same width as first sidebar, opens cleanly to the right.
 
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { trace } from '@/shared/debug-trace';
@@ -69,6 +69,25 @@ import 'react-social-icons/linkedin';
 import 'react-social-icons/pinterest';
 import 'react-social-icons/tiktok';
 
+// ─── Tooltip Context ───────────────────────────────────────────────────────
+
+interface TooltipState {
+  name: string;
+  description: string;
+  top: number;
+  left: number;
+}
+
+interface InsertTooltipContextValue {
+  showTooltip: (name: string, description: string, el: HTMLElement) => void;
+  hideTooltip: () => void;
+}
+
+const InsertTooltipContext = createContext<InsertTooltipContextValue>({
+  showTooltip: () => {},
+  hideTooltip: () => {},
+});
+
 // ─── Gradient Card (for Creative/Utility items with gradientColors) ───────
 
 /** Some utility iconKeys (`noiseFilmGrain`, `dividerWave`, `patternGrid`,
@@ -98,6 +117,7 @@ import { isPreviewIcon, hexToRgba } from '@/shared/insert-items/icon-style-utils
  * the label doesn't disappear into the panel background.
  */
 function GradientCard({ item }: { item: InsertItem }) {
+  const { showTooltip, hideTooltip } = useContext(InsertTooltipContext);
   const IconComponent = ELEMENT_ICON_MAP[item.iconKey];
   const colors = item.gradientColors || ['#444', '#333'];
   const accent = colors[0];
@@ -129,16 +149,26 @@ function GradientCard({ item }: { item: InsertItem }) {
   // (YouTube, Spotify, Calendly etc.) render visually but pointerdown does
   // nothing, so the user can't drop them onto the canvas.
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    hideTooltip();
     const config = getToolbarItemConfig(item.id);
     if (!config) return;
     e.preventDefault();
     trace.action('insert-panel:drag-start', { itemId: item.id });
     startToolbarDrag(config, e.nativeEvent);
-  }, [item.id]);
+  }, [item.id, hideTooltip]);
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (item.description) {
+      showTooltip(item.name, item.description, e.currentTarget);
+    }
+  }, [item.name, item.description, showTooltip]);
 
   return (
     <div
       onPointerDown={handlePointerDown}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={hideTooltip}
+      title={item.description ? `${item.name} — ${item.description}` : item.name}
       className="flex flex-col items-center gap-2 p-4 cut-corners cursor-pointer transition-all group hover:scale-[1.03]"
       style={bgStyle}
     >
@@ -186,7 +216,10 @@ interface GridCardProps {
 }
 
 function GridCard({ item }: GridCardProps) {
+  const { showTooltip, hideTooltip } = useContext(InsertTooltipContext);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    hideTooltip();
     // Sections-library cards build their ToolbarItem from the blueprint
     // source (fresh ids per drag); everything else looks up the static
     // catalogue. Either way it's the same native toolbar drag.
@@ -197,7 +230,13 @@ function GridCard({ item }: GridCardProps) {
     e.preventDefault();
     trace.action('insert-panel:drag-start', { itemId: item.id });
     startToolbarDrag(config, e.nativeEvent);
-  }, [item.id, item.sectionBlueprintId]);
+  }, [item.id, item.sectionBlueprintId, hideTooltip]);
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (item.description) {
+      showTooltip(item.name, item.description, e.currentTarget);
+    }
+  }, [item.name, item.description, showTooltip]);
 
   // Items with gradientColors get a gradient background card
   if (item.gradientColors && item.gradientColors.length > 0) {
@@ -213,6 +252,9 @@ function GridCard({ item }: GridCardProps) {
       <div
         data-toolbar-item={item.id}
         onPointerDown={handlePointerDown}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={hideTooltip}
+        title={item.description ? `${item.name} — ${item.description}` : item.name}
         className="flex flex-col cut-corners bg-[var(--button-secondary-bg)] hover:bg-[var(--button-secondary-hover)] cursor-grab transition-all group overflow-hidden"
       >
         <div className="w-full overflow-hidden">
@@ -244,6 +286,9 @@ function GridCard({ item }: GridCardProps) {
       <div
         data-toolbar-item={item.id}
         onPointerDown={handlePointerDown}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={hideTooltip}
+        title={item.description ? `${item.name} — ${item.description}` : item.name}
         className="flex flex-col cut-corners bg-[var(--button-secondary-bg)] hover:bg-[var(--button-secondary-hover)] cursor-grab transition-all group overflow-hidden"
       >
         <div className="w-full overflow-hidden">
@@ -277,6 +322,9 @@ function GridCard({ item }: GridCardProps) {
     <div
       data-toolbar-item={item.id}
       onPointerDown={handlePointerDown}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={hideTooltip}
+      title={item.description ? `${item.name} — ${item.description}` : item.name}
       // Theme-mirrored subtle fill so each element reads as a distinct
       // tile in both modes — `bg-white/[0.06]` only lifted off the dark
       // panel; on the light panel it was invisible.
@@ -302,6 +350,8 @@ interface SecondaryPanelContentProps {
 
 function SecondaryPanelContent({ category }: SecondaryPanelContentProps) {
   trace.fn('InsertOverlay:SecondaryPanelContent.render', { category: category.id });
+
+  const { hideTooltip } = useContext(InsertTooltipContext);
 
   // Lets the "Create Collection" empty-state button switch the sidebar
   // from Insert → CMS so the user lands in the panel where they can
@@ -381,7 +431,10 @@ function SecondaryPanelContent({ category }: SecondaryPanelContentProps) {
     : 'grid-cols-2';
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-hide">
+    <div
+      onScroll={hideTooltip}
+      className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-hide"
+    >
       {category.sections.map(section => (
         <div key={section.id}>
           {/* Section labels render in Title Case (e.g. "Forms") — no
@@ -419,6 +472,30 @@ export default function InsertOverlay() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Tooltip state for hovering items with descriptions
+  const [cardTooltip, setCardTooltip] = useState<TooltipState | null>(null);
+
+  const hideTooltip = useCallback(() => {
+    setCardTooltip(null);
+  }, []);
+
+  const showTooltip = useCallback((name: string, description: string, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    const targetLeft = Math.min(window.innerWidth - 260, rect.right + 12);
+    const targetTop = Math.max(12, Math.min(window.innerHeight - 120, rect.top));
+    setCardTooltip({
+      name,
+      description,
+      top: targetTop,
+      left: targetLeft,
+    });
+  }, []);
+
+  const tooltipContextValue = useMemo<InsertTooltipContextValue>(() => ({
+    showTooltip,
+    hideTooltip,
+  }), [showTooltip, hideTooltip]);
+
   // ── Search ──────────────────────────────────────────────────────────────
   // Two layers: the raw input value (re-renders on every keystroke for
   // controlled-input UX) and a debounced version that drives the actual
@@ -442,14 +519,16 @@ export default function InsertOverlay() {
 
   const scheduleClose = useCallback(() => {
     cancelClose();
+    hideTooltip();
     closeTimerRef.current = setTimeout(() => {
       setActiveCategory(null);
       trace.action('insert-overlay:close-secondary');
     }, 200);
-  }, [cancelClose]);
+  }, [cancelClose, hideTooltip]);
 
   const handleCategoryHover = useCallback((categoryId: string) => {
     cancelClose();
+    hideTooltip();
     setActiveCategory(categoryId);
     // Note: search text is INTENTIONALLY left alone here. The portal
     // priority below routes `activeCategory` ahead of `searchActive`,
@@ -593,7 +672,8 @@ export default function InsertOverlay() {
           if (
             categoryMatches ||
             sectionMatches ||
-            item.name.toLowerCase().includes(q)
+            item.name.toLowerCase().includes(q) ||
+            (item.description && item.description.toLowerCase().includes(q))
           ) {
             if (!seen.has(item.id)) {
               matched.push(item);
@@ -628,138 +708,157 @@ export default function InsertOverlay() {
   ));
 
   return (
-    <div
-      className="flex flex-col h-full overflow-y-auto"
-      onMouseLeave={scheduleClose}
-      onMouseEnter={cancelClose}
-    >
-      {/* Sidebar -- fills the 256px panel */}
-      <div className="flex flex-col flex-1">
-        {/* Search input — typing here filters EVERY InsertItem across
-            Insert + Creative + CMS categories and opens a results panel
-            to the right of the sidebar (same slot the hover-based
-            category panel uses, just with search results instead).
-            Theme-mirrored bg / hover / focus tints match the
-            PageSelector search styling so the two read as the same
-            tier of input. ESC clears + closes. */}
-        {/* `pt-[12px]` matches the rail's top padding so the input sits on the
-            same line as the Vibe icon beside it. */}
-        <div className="px-2 pb-2 pt-[12px]">
-          <div className="relative">
-            <svg
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none"
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSearchQuery(v);
-                // The user typing means search becomes the focus —
-                // drop any hover-opened active category so its sidebar
-                // row stops looking selected behind the search panel.
-                // Going back to category browsing is just a hover away
-                // (see `handleCategoryHover` which also clears the
-                // search reciprocally).
-                if (v.length > 0 && activeCategory !== null) {
-                  setActiveCategory(null);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setSearchQuery('');
-                  setDebouncedQuery('');
-                  (e.currentTarget as HTMLInputElement).blur();
-                }
-              }}
-              onFocus={cancelClose}
-              placeholder="Search elements…"
-              className="w-full pl-7 pr-2 py-1.5 text-xs bg-black/[0.06] hover:bg-black/[0.09] focus:bg-black/[0.12] dark:bg-white/[0.1] dark:hover:bg-white/[0.14] dark:focus:bg-white/[0.18] cut-corners text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none transition-colors"
-            />
+    <InsertTooltipContext.Provider value={tooltipContextValue}>
+      <div
+        className="flex flex-col h-full overflow-y-auto"
+        onMouseLeave={scheduleClose}
+        onMouseEnter={cancelClose}
+      >
+        {/* Sidebar -- fills the 256px panel */}
+        <div className="flex flex-col flex-1">
+          {/* Search input — typing here filters EVERY InsertItem across
+              Insert + Creative + CMS categories and opens a results panel
+              to the right of the sidebar (same slot the hover-based
+              category panel uses, just with search results instead).
+              Theme-mirrored bg / hover / focus tints match the
+              PageSelector search styling so the two read as the same
+              tier of input. ESC clears + closes. */}
+          {/* `pt-[12px]` matches the rail's top padding so the input sits on the
+              same line as the Vibe icon beside it. */}
+          <div className="px-2 pb-2 pt-[12px]">
+            <div className="relative">
+              <svg
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none"
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSearchQuery(v);
+                  // The user typing means search becomes the focus —
+                  // drop any hover-opened active category so its sidebar
+                  // row stops looking selected behind the search panel.
+                  // Going back to category browsing is just a hover away
+                  // (see `handleCategoryHover` which also clears the
+                  // search reciprocally).
+                  if (v.length > 0 && activeCategory !== null) {
+                    setActiveCategory(null);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setSearchQuery('');
+                    setDebouncedQuery('');
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+                onFocus={cancelClose}
+                placeholder="Search elements…"
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-black/[0.06] hover:bg-black/[0.09] focus:bg-black/[0.12] dark:bg-white/[0.1] dark:hover:bg-white/[0.14] dark:focus:bg-white/[0.18] cut-corners text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          <SectionLabel size="md">Insert</SectionLabel>
+
+          {/* Main categories */}
+          <div className="px-2">
+            {renderCategoryRows(renderedCategories)}
+          </div>
+
+          {/* Divider */}
+          <div className="mx-3 my-1.5 border-t border-[var(--border-light)]" />
+
+          {/* CMS — its own top-level group, sibling to Insert and Creative.
+              Surfaces Collections + Fields as two separate rows so each
+              opens its own secondary panel. */}
+          <SectionLabel size="xs">CMS</SectionLabel>
+          <div className="px-2">
+            {renderCategoryRows(cmsCategories)}
+          </div>
+
+          {/* Divider */}
+          <div className="mx-3 my-1.5 border-t border-[var(--border-light)]" />
+
+          {/* Creative — promoted from a single Insert row into its OWN
+              top-level group. Each of the five ex-sections (Effects /
+              Backgrounds / Text Effects / Containers / Cursors) is a
+              sibling row that opens its own secondary panel. Categories
+              defined in `CREATIVE_CATEGORIES`. */}
+          <SectionLabel size="xs">CREATIVE</SectionLabel>
+          <div className="px-2 pb-2">
+            {renderCategoryRows(CREATIVE_CATEGORIES)}
           </div>
         </div>
 
-        <SectionLabel size="md">Insert</SectionLabel>
+        {/* Secondary panel — full-height sidebar via portal, adjacent to the first.
+            The category title (Utility / Integrations / Elements …) is NOT
+            rendered up top; the active item in the primary sidebar is the
+            source of truth for which category is open, and a header here
+            just duplicated that affordance. Content opens directly. */}
+        {/* Secondary panel — hover-based category wins over search when
+            BOTH are active, so the user can pick a specific category from
+            the sidebar without losing their search text. Mouse-out of the
+            category clears `activeCategoryData` and the panel falls back
+            to the SearchResultsPanel automatically (if there's still
+            query text). Either state on its own works as expected:
+            search-only when nothing is hovered, hover-only when search
+            is empty. Clearing both → portal closes. */}
+        {(activeCategoryData || searchActive) && createPortal(
+          <div
+            data-editor-panel="left-secondary"
+            // z-[9999] is one above the bottom toolbar (z-[9998] in
+            // editor/BottomToolbar.tsx). The old z-[5000] meant the
+            // toolbar floated over the bottom edge of the secondary panel
+            // — annoying when scanning shape / layout tiles that sit low
+            // in the panel. Now the secondary sidebar covers the toolbar
+            // along its full height while open.
+            className="fixed z-[9999] bg-[var(--bg-surface)] border-r border-[var(--border-light)] flex flex-col shadow-2xl"
+            style={{
+              left: MENU_WIDTH + SIDEBAR_WIDTH,
+              top: 0,
+              width: SECONDARY_WIDTH,
+              height: '100vh',
+            }}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            {activeCategoryData ? (
+              <SecondaryPanelContent category={activeCategoryData} />
+            ) : (
+              <SearchResultsPanel
+                query={debouncedQuery}
+                groups={searchResults}
+              />
+            )}
+          </div>,
+          document.body,
+        )}
 
-        {/* Main categories */}
-        <div className="px-2">
-          {renderCategoryRows(renderedCategories)}
-        </div>
-
-        {/* Divider */}
-        <div className="mx-3 my-1.5 border-t border-[var(--border-light)]" />
-
-        {/* CMS — its own top-level group, sibling to Insert and Creative.
-            Surfaces Collections + Fields as two separate rows so each
-            opens its own secondary panel. */}
-        <SectionLabel size="xs">CMS</SectionLabel>
-        <div className="px-2">
-          {renderCategoryRows(cmsCategories)}
-        </div>
-
-        {/* Divider */}
-        <div className="mx-3 my-1.5 border-t border-[var(--border-light)]" />
-
-        {/* Creative — promoted from a single Insert row into its OWN
-            top-level group. Each of the five ex-sections (Effects /
-            Backgrounds / Text Effects / Containers / Cursors) is a
-            sibling row that opens its own secondary panel. Categories
-            defined in `CREATIVE_CATEGORIES`. */}
-        <SectionLabel size="xs">CREATIVE</SectionLabel>
-        <div className="px-2 pb-2">
-          {renderCategoryRows(CREATIVE_CATEGORIES)}
-        </div>
+        {/* Floating Card Tooltip */}
+        {cardTooltip && (activeCategoryData || searchActive) && createPortal(
+          <div
+            key="insert-card-tooltip"
+            className="fixed z-[10001] w-[260px] p-2.5 cut-corners bg-[var(--bg-surface)] border border-[var(--border-light)] shadow-2xl pointer-events-none transition-all duration-150 backdrop-blur-md"
+            style={{ top: cardTooltip.top, left: cardTooltip.left }}
+          >
+            <div className="text-[12px] font-semibold text-[var(--text-primary)] mb-1 leading-snug">
+              {cardTooltip.name}
+            </div>
+            <div className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
+              {cardTooltip.description}
+            </div>
+          </div>,
+          document.body,
+        )}
       </div>
-
-      {/* Secondary panel — full-height sidebar via portal, adjacent to the first.
-          The category title (Utility / Integrations / Elements …) is NOT
-          rendered up top; the active item in the primary sidebar is the
-          source of truth for which category is open, and a header here
-          just duplicated that affordance. Content opens directly. */}
-      {/* Secondary panel — hover-based category wins over search when
-          BOTH are active, so the user can pick a specific category from
-          the sidebar without losing their search text. Mouse-out of the
-          category clears `activeCategoryData` and the panel falls back
-          to the SearchResultsPanel automatically (if there's still
-          query text). Either state on its own works as expected:
-          search-only when nothing is hovered, hover-only when search
-          is empty. Clearing both → portal closes. */}
-      {(activeCategoryData || searchActive) && createPortal(
-        <div
-          data-editor-panel="left-secondary"
-          // z-[9999] is one above the bottom toolbar (z-[9998] in
-          // editor/BottomToolbar.tsx). The old z-[5000] meant the
-          // toolbar floated over the bottom edge of the secondary panel
-          // — annoying when scanning shape / layout tiles that sit low
-          // in the panel. Now the secondary sidebar covers the toolbar
-          // along its full height while open.
-          className="fixed z-[9999] bg-[var(--bg-surface)] border-r border-[var(--border-light)] flex flex-col shadow-2xl"
-          style={{
-            left: MENU_WIDTH + SIDEBAR_WIDTH,
-            top: 0,
-            width: SECONDARY_WIDTH,
-            height: '100vh',
-          }}
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-        >
-          {activeCategoryData ? (
-            <SecondaryPanelContent category={activeCategoryData} />
-          ) : (
-            <SearchResultsPanel
-              query={debouncedQuery}
-              groups={searchResults}
-            />
-          )}
-        </div>,
-        document.body,
-      )}
-    </div>
+    </InsertTooltipContext.Provider>
   );
 }
 
@@ -784,6 +883,8 @@ function SearchResultsPanel({ query, groups }: SearchResultsPanelProps) {
     matchCount: groups.reduce((n, g) => n + g.items.length, 0),
   });
 
+  const { hideTooltip } = useContext(InsertTooltipContext);
+
   if (groups.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 p-8 text-center">
@@ -799,7 +900,10 @@ function SearchResultsPanel({ query, groups }: SearchResultsPanelProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-hide">
+    <div
+      onScroll={hideTooltip}
+      className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-hide"
+    >
       {groups.map(group => (
         <div key={group.id}>
           <h3 className="text-[11px] font-semibold text-[var(--text-secondary)] mb-2.5 px-1">

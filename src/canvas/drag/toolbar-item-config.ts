@@ -582,6 +582,7 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-localeSwitcher':  { tag: 'LocaleSwitcher',  width: 100, height: 36 },
   'cs-copyButton':      { tag: 'CopyButton',      width: 160, height: 48 },
   'cs-accordion':       { tag: 'Accordion',       width: 391, height: 200 },
+  'cs-markdownArticle': { tag: 'MarkdownArticle', width: 760, height: 600 },
   // Creative — text effects (port batch 1). Defaults sized big enough
   // for the rendered animation to be visible on first drop without the
   // user needing to resize. SpinningText is square because the chars
@@ -593,6 +594,7 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-hangingCurved':   { tag: 'HangingCurved',   width: 800, height: 200 },
   'cs-magneticText':    { tag: 'MagneticText',    width: 600, height: 120 },
   'cs-textPressure':    { tag: 'TextPressure',    width: 600, height: 160 },
+  'cs-gradientText':    { tag: 'GradientText',    width: 600, height: 160 },
   // Port batch 2 — typing-cycle, 3D cylinder, video-masked text,
   // count-up number. `cs-counter` reuses the existing AnimatedCounter
   // code component (no separate Counter file — the single code component covers the
@@ -615,6 +617,10 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-threeDMarquee':   { tag: 'Marquee3D',        width: 720, height: 520 },
   'cs-imageTrail':      { tag: 'MotionTrail',      width: 640, height: 420 },
   'cs-horizontalScroll':{ tag: 'HorizontalScroll', width: 800, height: 340 },
+  'cs-imageSequence':   { tag: 'ImageSequence',    width: 600, height: 400 },
+  'cs-particleField':   { tag: 'ParticleField',    width: 600, height: 400 },
+  'cs-modelViewer':     { tag: 'ModelViewer',      width: 600, height: 400 },
+  'cs-splineScene':     { tag: 'SplineScene',      width: 600, height: 400 },
   // Cursors — region hotspots, no slot. The bounding box defines the
   // cursor zone; default 600×400 is large enough to be a meaningful
   // hover area without dominating the page on first drop.
