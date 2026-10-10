@@ -83,6 +83,42 @@ describe('RevymeBackend — project load/save', () => {
     expect(await backend.loadProject('1')).toBeNull();
   });
 
+  it('rejects an HTTP failure rather than treating it as an empty project', async () => {
+    setResponse({ error: 'unavailable' }, { status: 503 });
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow(/503/);
+  });
+
+  it('rejects a network failure rather than treating it as an empty project', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow('network down');
+  });
+
+  it('rejects malformed row JSON', async () => {
+    setResponse({ id: '1', json: '{broken' });
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow();
+  });
+
+  it('rejects a missing row JSON field rather than confirming emptiness', async () => {
+    setResponse({ id: '1', name: 'A' });
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow(/snapshot/);
+  });
+
+  it('rejects a malformed files payload rather than hydrating it', async () => {
+    setResponse({ id: '1', json: JSON.stringify({ format: 'revyme-v1', files: 'broken' }) });
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow(/snapshot/);
+  });
+
+  it('rejects a snapshot containing a non-string file body', async () => {
+    setResponse({ id: '1', json: JSON.stringify({ format: 'revyme-v1', files: { 'app/globals.css': 1 } }) });
+    await expect(new RevymeBackend().loadProject('1')).rejects.toThrow(/snapshot/);
+  });
+
+  it('loads files with an unknown format tag', async () => {
+    const data = { format: 'future-v3', files: { 'app/page.tsx': 'real work' } };
+    setResponse({ id: '1', json: JSON.stringify(data) });
+    expect(await new RevymeBackend().loadProject('1')).toEqual(data);
+  });
+
   it('saveProject sends the snapshot as a JSON string', async () => {
     setResponse({ ok: true });
     const backend = new RevymeBackend();

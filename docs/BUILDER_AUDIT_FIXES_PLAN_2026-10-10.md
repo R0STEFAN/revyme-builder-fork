@@ -82,7 +82,7 @@ expect(store.get(saveStatusAtom)).toBe('error');
 
 ```ts
 expect(projectFS.readFile(masterPath)).toContain('LOCAL CHANGE');
-expect(canUndo()).toBe(true);
+expect(getHistoryState().canUndo).toBe(true);
 await vi.advanceTimersByTimeAsync(3000);
 expect(saveProject).toHaveBeenCalled();
 ```
@@ -105,7 +105,7 @@ expect(saveProject).toHaveBeenCalled();
 
 ```ts
 expect(() => parseJSX(projectFS.readFile(pagePath)!)).not.toThrow();
-expect(readInstanceProps(code, componentName, secondId)).toMatchObject({ title: 'B' });
+expect(parseInstanceProps(code, secondId, componentName).get('title')).toBe('B');
 // Adapt assertions to the existing exported function names; do not change public APIs just for tests.
 ```
 
@@ -222,9 +222,9 @@ expect(JSON.parse(transitionValue)).toEqual({ duration: 0.3 });
 
 ```ts
 expect(projectFS.exists(copyPath)).toBe(true);
-expect(new Set(originalIds).intersection(new Set(copyIds)).size).toBe(0);
-// Use a portable Set overlap assertion if the TS target lacks intersection().
-expect(canUndo()).toBe(true);
+expect(copyIds.filter(id => originalIds.includes(id)).length).toBe(0);
+// IDs and their internal references must agree after remapping.
+expect(getHistoryState().canUndo).toBe(true);
 ```
 
 - [ ] Related Library/component/history suites + TypeScript; review. Coordinator then runs full suite/builds and whole-branch review and records final checkpoint SHAs.
@@ -232,4 +232,5 @@ expect(canUndo()).toBe(true);
 ## Completion log
 
 - Stage 0: plan created against latest user commit; TypeScript passes. Baseline: 12,992 tests pass; one oracle inventory test fails for the four newly registered components. This is explicitly assigned to Tasks 6 and 8; oracle stays strict.
-- Task 1–9: pending.
+- Task 1: complete — AUD-00/01/02/11; 112 related tests and TypeScript pass; independent review closed all findings. Adapter revisions protect local/server recovery ordering; requests with a usable local copy have a 5-second bound.
+- Task 2–9: pending.

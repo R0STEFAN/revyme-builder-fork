@@ -7,13 +7,15 @@
 // the same headless wiring the harness uses (resetProjectFS + real mutation
 // queue + node seed), so these tests exercise the REAL write path.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDefaultStore } from 'jotai';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { getCurrentCode, syncQueueCode, initMutationQueue } from '@/code/mutation/mutation-queue';
 import { resetProjectFS, projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { selectedIdsAtom, seedNodesForCode } from '@/code/stores/store';
-import { resolvePageTarget, setPageTool } from './set-page';
+import { activatePageForAgent, resolvePageTarget, setPageTool } from './set-page';
+import * as autosaveModule from '@/backend/autosave';
+import { trace } from '@/shared/debug-trace';
 import { createPageTool } from './action-layer-rich';
 import { setActiveFilePath } from '@/code/mutation/mutation-queue';
 import { bumpProjectVersion } from '@/code/project/modify-file';
@@ -114,6 +116,18 @@ describe('resolvePageTarget', () => {
 });
 
 describe('set_page tool', () => {
+  it('handles a failed background persistence attempt after page activation', async () => {
+    const save = vi.spyOn(autosaveModule, 'flushSaveNow').mockRejectedValueOnce(new Error('503'));
+    const error = vi.spyOn(trace, 'error').mockImplementation(() => {});
+    try {
+      activatePageForAgent(ABOUT);
+      await Promise.resolve();
+      expect(error).toHaveBeenCalledWith('set-page:save-error', expect.any(Error));
+    } finally {
+      save.mockRestore();
+      error.mockRestore();
+    }
+  });
   it('fails clearly on a missing page, changes nothing', async () => {
     const before = getDefaultStore().get(activeFilePathAtom);
     const res = await exec(setPageTool, { page: 'contact' });

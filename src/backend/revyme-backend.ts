@@ -48,15 +48,25 @@ export class RevymeBackend implements ProjectBackend {
       const res = await fetch(url(`/api/websites/${id}`), { credentials: 'include' });
       if (!res.ok) {
         trace.error('backend:load-project', { id, status: res.status });
-        return null;
+        throw new Error(`Load failed: HTTP ${res.status}`);
       }
       const row = await res.json() as { id: string; name: string; json: string };
       let data: Partial<ProjectData> | null = null;
       try {
-        data = row.json ? JSON.parse(row.json) as Partial<ProjectData> : null;
+        if (typeof row?.json !== 'string' || row.json.length === 0) {
+          throw new Error('Invalid project snapshot: missing JSON');
+        }
+        data = JSON.parse(row.json) as Partial<ProjectData>;
+        if (!data || typeof data !== 'object' || Array.isArray(data) ||
+          (data.files !== undefined && (typeof data.files !== 'object' || data.files === null || Array.isArray(data.files)))) {
+          throw new Error('Invalid project snapshot: malformed files');
+        }
+        if (data.files && Object.values(data.files).some(content => typeof content !== 'string')) {
+          throw new Error('Invalid project snapshot: file contents must be strings');
+        }
       } catch (err) {
         trace.error('backend:load-project-parse', { id, error: String(err) });
-        return null;
+        throw err;
       }
       // A row that HAS files is a real project — never discard it over an
       // unrecognised format tag. Returning null makes ProjectLoader seed an
@@ -76,7 +86,7 @@ export class RevymeBackend implements ProjectBackend {
       return data as ProjectData;
     } catch (err) {
       trace.error('backend:load-project', err);
-      return null;
+      throw err;
     }
   }
 

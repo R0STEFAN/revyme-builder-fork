@@ -59,6 +59,147 @@ describe('LocalBackend', () => {
     expect(await backend.loadProject('local')).toEqual(data);
   });
 
+  it('rejects when storage quota and server PUT both fail', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('quota'); } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('full', { status: 500 })));
+    await expect(backend.saveProject('local', { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } })).rejects.toThrow();
+  });
+
+  it('succeeds when server PUT succeeds despite storage quota', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('quota'); } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+    await expect(backend.saveProject('local', { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } })).resolves.toBeUndefined();
+  });
+
+  it('retains local recovery but reports a failed server PUT', async () => {
+    const data = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('full', { status: 500 })));
+    await expect(backend.saveProject('local', data)).rejects.toThrow();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    expect(await backend.loadProject('local')).toEqual(data);
+  });
+
+  it('prefers known unsynced local work over an older valid server snapshot', async () => {
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } };
+    const stale = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'old server copy' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('full', { status: 500 })));
+    await expect(backend.saveProject('local', latest)).rejects.toThrow();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: stale }), { status: 200 })));
+    expect(await new LocalBackend().loadProject('local')).toEqual(latest);
+  });
+
+  it('keeps recovery metadata with the snapshot when a second storage write would exceed quota', async () => {
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } };
+    const stale = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'old server copy' } };
+    const storage = localStorage;
+    const realSet = storage.setItem.bind(storage);
+    let writes = 0;
+    vi.spyOn(storage, 'setItem').mockImplementation((key, value) => {
+      if (++writes > 1) throw new Error('quota');
+      realSet(key, value);
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('full', { status: 500 })));
+    await expect(backend.saveProject('local', latest)).rejects.toThrow();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: stale }), { status: 200 })));
+    expect(await new LocalBackend().loadProject('local')).toEqual(latest);
+  });
+
+  it('still attempts a server PUT when the optional cached name cannot be read', async () => {
+    const storage = localStorage;
+    const realGet = storage.getItem.bind(storage);
+    vi.spyOn(storage, 'getItem').mockImplementation((key) => {
+      if (key.startsWith('revyme:project-name:')) throw new Error('name cache unavailable');
+      return realGet(key);
+    });
+    const put = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', put);
+    await expect(backend.saveProject('local', { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } })).resolves.toBeUndefined();
+    expect(put).toHaveBeenCalledOnce();
+  });
+
+  it('loads an acknowledged newer server snapshot over an older unsynced local copy', async () => {
+    const old = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'old local copy' } };
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'new server copy' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('offline', { status: 500 })));
+    await expect(backend.saveProject('local', old)).rejects.toThrow();
+    const oldStored = JSON.parse(localStorage.getItem('revyme-project-local')!);
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    const put = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', put);
+    await expect(backend.saveProject('local', latest)).resolves.toBeUndefined();
+    const serverStored = JSON.parse(put.mock.calls[0][1].body).data;
+    expect(serverStored.__revymePersistenceRevision).toBeGreaterThan(oldStored.__revymePersistenceRevision);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: serverStored }), { status: 200 })));
+    vi.resetModules();
+    const { LocalBackend: ReloadedBackend } = await import('./local-backend');
+    expect(await new ReloadedBackend().loadProject('local')).toEqual(latest);
+  });
+
+  it('loads the acknowledged server revision after local cleanup fails', async () => {
+    const old = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'old local copy' } };
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'new server copy' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('offline', { status: 500 })));
+    await expect(backend.saveProject('local', old)).rejects.toThrow();
+    const realSet = localStorage.setItem.bind(localStorage);
+    let writes = 0;
+    vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (++writes === 2) throw new Error('blocked cleanup');
+      realSet(key, value);
+    });
+    const put = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', put);
+    await expect(backend.saveProject('local', latest)).resolves.toBeUndefined();
+    const serverStored = JSON.parse(put.mock.calls[0][1].body).data;
+    expect(JSON.parse(localStorage.getItem('revyme-project-local')!).__revymeUnsynced).toBe(true);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: serverStored }), { status: 200 })));
+    vi.resetModules();
+    const { LocalBackend: ReloadedBackend } = await import('./local-backend');
+    expect(await new ReloadedBackend().loadProject('local')).toEqual(latest);
+  });
+
+  it('returns unsynced local recovery after a stalled server GET and aborts it', async () => {
+    vi.useFakeTimers();
+    try {
+      const data = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'local recovery' } };
+      localStorage.setItem('revyme-project-local', JSON.stringify({
+        ...data, __revymeUnsynced: true, __revymePersistenceRevision: 10,
+      }));
+      const signals: AbortSignal[] = [];
+      vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit = {}) => {
+        if (init.signal) signals.push(init.signal);
+        return new Promise<Response>(() => {});
+      }));
+      const loading = Promise.all([backend.loadProject('local'), backend.getWebsiteName('local')]);
+      let settled = false;
+      void loading.then(() => { settled = true; });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(settled).toBe(true);
+      expect(await loading).toEqual([data, null]);
+      expect(signals).toHaveLength(2);
+      expect(signals.every(signal => signal.aborted)).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not acknowledge a server-only save when the older local revision cannot be read', async () => {
+    const old = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'old local copy' } };
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'new server copy' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('offline', { status: 500 })));
+    await expect(backend.saveProject('local', old)).rejects.toThrow();
+    const realGet = localStorage.getItem.bind(localStorage);
+    vi.spyOn(localStorage, 'getItem').mockImplementation((key) => {
+      if (key === 'revyme-project-local') throw new Error('storage blocked');
+      return realGet(key);
+    });
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    const put = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', put);
+    await expect(backend.saveProject('local', latest)).rejects.toThrow(/revision/);
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('returns null for a missing project', async () => {
     expect(await backend.loadProject('missing')).toBeNull();
   });
@@ -268,7 +409,7 @@ describe('LocalBackend — server error resilience', () => {
       format: 'revyme-v1',
       files: { 'app/page.tsx': 'valid content' },
     }));
-    await backend.saveProject('proj-123', { format: 'revyme-v1', files: {} });
+    await expect(backend.saveProject('proj-123', { format: 'revyme-v1', files: {} })).rejects.toThrow(/empty/);
     expect(fetchSpy).not.toHaveBeenCalled();
     // LocalStorage still has previous valid work
     const raw = JSON.parse(localStorage.getItem('revyme-project-proj-123')!);

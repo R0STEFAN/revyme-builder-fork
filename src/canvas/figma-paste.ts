@@ -257,8 +257,11 @@ async function runFigmaPaste(
     // user is likely to navigate straight back to the dashboard, and a
     // multi-MB project existing only in memory is one hard nav from gone
     // ("went to dashboard, came back, blank canvas", 2026-08-07).
-    // Fire-and-forget: the toast doesn't wait on the PUT.
-    void flushSaveNow();
+    // The import is placed synchronously; surface a failed background PUT.
+    void flushSaveNow().catch(err => {
+      trace.error('figma-paste:save-error', { error: String(err) });
+      toast.error('Import could not be saved');
+    });
     if (result.createdIds.length > 0) store.set(selectedIdsAtom, [result.createdIds[0]]);
     toast.success(`Imported ${result.createdIds.length} layer${result.createdIds.length === 1 ? '' : 's'} from Figma`, { id: toastId });
   } else {

@@ -8,6 +8,42 @@ import { getProjectId } from './project-id';
 
 const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
+const UNSYNCED_FIELD = '__revymeUnsynced';
+const REVISION_FIELD = '__revymePersistenceRevision';
+const observedRevisions = new Map<string, number>();
+const PROJECT_GET_TIMEOUT_MS = 5_000;
+
+async function fetchProjectRow(id: string): Promise<{ res: Response; json: any }> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Project GET timed out after ${PROJECT_GET_TIMEOUT_MS}ms`));
+    }, PROJECT_GET_TIMEOUT_MS);
+  });
+  try {
+    // Race also covers fetch mocks/transports that do not settle on abort and
+    // a response body whose JSON stream stalls after headers arrive.
+    return await Promise.race([
+      (async () => {
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { signal: controller.signal });
+        return { res, json: res.ok ? await res.json() : null };
+      })(),
+      timeout,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function readRevision(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function observeRevision(id: string, revision: number | null): void {
+  if (revision !== null) observedRevisions.set(id, Math.max(observedRevisions.get(id) ?? 0, revision));
+}
 
 export class LocalBackend implements ProjectBackend {
   async getUser(): Promise<RevymeUser | null> {
@@ -16,22 +52,47 @@ export class LocalBackend implements ProjectBackend {
 
   async loadProject(id: string): Promise<ProjectData | null> {
     let serverError: Error | null = null;
+    const readLocal = (): { data: ProjectData; unsynced: boolean; revision: number | null } | null => {
+      const raw = localStorage.getItem(STORAGE_PREFIX + id);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as ProjectData & { [UNSYNCED_FIELD]?: boolean; [REVISION_FIELD]?: number };
+      const { [UNSYNCED_FIELD]: unsynced, [REVISION_FIELD]: rawRevision, ...data } = stored;
+      const fileCount = data?.files ? Object.keys(data.files).length : 0;
+      if (fileCount === 0) return null;
+      const revision = readRevision(rawRevision);
+      observeRevision(id, revision);
+      if (!isKnownProjectFormat(data.format)) {
+        trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
+      }
+      return { data: data as ProjectData, unsynced: unsynced === true, revision };
+    };
+
+    // A failed server PUT leaves an older row behind. The local snapshot is
+    // the newer recovery copy until a later PUT acknowledges it.
+    let local: ReturnType<typeof readLocal> = null;
+    try {
+      local = readLocal();
+    } catch (err) {
+      trace.error('local-backend:load-error', { id, error: String(err) });
+    }
 
     // 1. Try server storage first when in browser
+    let server: { data: ProjectData; revision: number | null } | null = null;
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
-        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        const { res, json } = await fetchProjectRow(id);
         if (res.ok) {
-          const json = await res.json();
           if (json?.data && typeof json.data === 'object' && json.data.files && Object.keys(json.data.files).length > 0) {
             if (json.name && window.localStorage) {
-              localStorage.setItem(NAME_PREFIX + id, json.name);
+              try { localStorage.setItem(NAME_PREFIX + id, json.name); } catch { /* optional cached name */ }
             }
-            if (!isKnownProjectFormat(json.data.format)) {
-              trace.error('local-backend:unknown-format', { id, format: json.data.format, fileCount: Object.keys(json.data.files).length });
+            const { [REVISION_FIELD]: rawRevision, [UNSYNCED_FIELD]: _unsynced, ...serverData } = json.data;
+            const revision = readRevision(rawRevision);
+            observeRevision(id, revision);
+            if (!isKnownProjectFormat(serverData.format)) {
+              trace.error('local-backend:unknown-format', { id, format: serverData.format, fileCount: Object.keys(serverData.files).length });
             }
-            trace.action('backend:load-project', { id, source: 'server', fileCount: Object.keys(json.data.files).length });
-            return json.data as ProjectData;
+            server = { data: serverData as ProjectData, revision };
           }
         } else if (res.status >= 500) {
           serverError = new Error(`Server returned HTTP ${res.status}`);
@@ -47,23 +108,23 @@ export class LocalBackend implements ProjectBackend {
       }
     }
 
+    // An unsynced local copy beats a legacy server row, or a server row
+    // carrying an older revision. An acknowledged equal/newer server revision
+    // wins even if quota prevented clearing the local recovery marker.
+    if (local?.unsynced && (!server || server.revision === null ||
+      (local.revision !== null && server.revision < local.revision))) {
+      trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
+      return local.data;
+    }
+    if (server) {
+      trace.action('backend:load-project', { id, source: 'server', fileCount: Object.keys(server.data.files).length });
+      return server.data;
+    }
+
     // 2. Fall back to localStorage
-    const key = STORAGE_PREFIX + id;
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const data = JSON.parse(raw) as ProjectData;
-        const fileCount = data?.files ? Object.keys(data.files).length : 0;
-        if (fileCount > 0) {
-          if (!isKnownProjectFormat(data.format)) {
-            trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
-          }
-          trace.action('backend:load-project', { id, source: 'localStorage', fileCount });
-          return data;
-        }
-      }
-    } catch (err) {
-      trace.error('local-backend:load-error', { id, error: String(err) });
+    if (local) {
+      trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
+      return local.data;
     }
 
     // 3. If the server was unreachable or failed with 5xx, and localStorage did not have it,
@@ -80,26 +141,49 @@ export class LocalBackend implements ProjectBackend {
     const fileCount = data?.files ? Object.keys(data.files).length : 0;
     if (fileCount === 0) {
       trace.error('local-backend:refuse-empty-save', { id });
-      return;
+      throw new Error('Cannot save an empty project');
     }
 
     const key = STORAGE_PREFIX + id;
+    // ProjectLoader normally observes both copies before edits begin. Read
+    // local metadata again so direct saves also advance its revision.
+    let localRevisionReadable = true;
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      const old = localStorage.getItem(key);
+      if (old) observeRevision(id, readRevision((JSON.parse(old) as Record<string, unknown>)[REVISION_FIELD]));
+    } catch (err) {
+      localRevisionReadable = false;
+      trace.error('local-backend:revision-read-error', { id, error: String(err) });
+    }
+    const revision = Math.max(Date.now(), observedRevisions.get(id) ?? 0) + 1;
+    observeRevision(id, revision);
+    const serverData = { ...data, [REVISION_FIELD]: revision };
+    let localSaved = false;
+    let localError: unknown;
+    try {
+      // Keep the recovery flag in the same atomic storage write as the
+      // snapshot. A second key can fail quota after the data write succeeds.
+      localStorage.setItem(key, JSON.stringify({ ...serverData, [UNSYNCED_FIELD]: true }));
+      localSaved = true;
       trace.action('backend:save-project', { id, source: 'localStorage', fileCount: Object.keys(data.files).length });
-    } catch {
-      // ignore localStorage quota error if storage is full
+    } catch (err) {
+      localError = err;
+      trace.error('local-backend:local-save-error', { id, error: String(err) });
+    }
+    if (!localSaved && !localRevisionReadable) {
+      throw new Error('Cannot order server save against unreadable local recovery revision');
     }
 
     // Also persist to server storage API
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
-        const name = localStorage.getItem(NAME_PREFIX + id) || undefined;
-        await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+        let name: string | undefined;
+        try { name = localStorage.getItem(NAME_PREFIX + id) || undefined; } catch { /* optional cached name */ }
+        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            data,
+            data: serverData,
             name,
             source: meta?.source,
             label: meta?.label,
@@ -107,11 +191,22 @@ export class LocalBackend implements ProjectBackend {
             changesSummary: meta?.changesSummary,
           }),
         });
+        if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        if (localSaved) {
+          try { localStorage.setItem(key, JSON.stringify(serverData)); } catch { /* recovery flag may outlive a successful PUT */ }
+        }
         trace.action('backend:save-project', { id, source: 'server', fileCount: Object.keys(data.files).length });
-      } catch {
-        // offline / mock
+        return;
+      } catch (err) {
+        const isRelativeUrlError = err instanceof TypeError &&
+          (err.message.includes('Invalid URL') || err.message.includes('Failed to parse URL'));
+        if (!isRelativeUrlError || !localSaved) {
+          trace.error('local-backend:server-save-error', { id, error: String(err) });
+          throw err;
+        }
       }
     }
+    if (!localSaved) throw localError instanceof Error ? localError : new Error('Local save failed');
   }
 
   async listVersions(id: string, branchId?: string): Promise<any[]> {
@@ -192,9 +287,8 @@ export class LocalBackend implements ProjectBackend {
   async getWebsiteName(id: string): Promise<string | null> {
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
-        const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        const { res, json } = await fetchProjectRow(id);
         if (res.ok) {
-          const json = await res.json();
           if (json?.name) return json.name;
         }
       } catch {

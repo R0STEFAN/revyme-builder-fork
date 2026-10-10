@@ -22,6 +22,10 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSave = false;
 let isSaving = false;
 let currentSave: Promise<void> | null = null;
+let dirtyRevision = 0;
+let savedRevision = 0;
+let saveGeneration = 0;
+let debounceReady = false;
 let nextSaveMeta: { source: 'manual' | 'autosave' | 'restore'; label?: string } = { source: 'autosave', label: 'Autosave' };
 
 function getStore() {
@@ -45,17 +49,21 @@ export function buildProjectData(): ProjectData {
 async function performSave(): Promise<void> {
   const store = getStore();
   const id = getProjectId();
+  const revision = dirtyRevision;
+  const generation = saveGeneration;
   // An unresolved project id means this client never finished booting into a
   // real website (or is a stale HMR generation from before the id resolved) —
   // its PUT /api/websites/local can only 401 or, worse, clobber. Never ship it.
   if (CLOUD_ENABLED && id === 'local') {
     trace.action('autosave:skipped-unresolved-project-id', { id });
-    return;
+    store.set(saveStatusAtom, 'error');
+    throw new Error('Cannot save before the project id resolves');
   }
   const data = buildProjectData();
   if (!data.files || Object.keys(data.files).length === 0) {
     trace.error('autosave:aborted-empty-project', { id });
-    return;
+    store.set(saveStatusAtom, 'error');
+    throw new Error('Cannot save an empty project');
   }
   const saveMeta = {
     ...nextSaveMeta,
@@ -70,26 +78,31 @@ async function performSave(): Promise<void> {
 
   try {
     await backend.saveProject(id, data, saveMeta);
-    store.set(saveStatusAtom, 'saved');
-    pendingSave = false;
+    if (generation !== saveGeneration || _disposed) return;
+    savedRevision = Math.max(savedRevision, revision);
+    pendingSave = dirtyRevision > savedRevision;
+    store.set(saveStatusAtom, pendingSave ? 'unsaved' : 'saved');
     saveFailures = 0;
-    trace.action('autosave:success', { id });
+    trace.action('autosave:success', { id, revision, pendingSave });
     bumpVersionHistorySignal();
     // Best-effort thumbnail capture for dashboard card preview
     import('./thumbnail-capture').then(({ captureAndSaveProjectThumbnail }) => captureAndSaveProjectThumbnail(id)).catch(() => {});
   } catch (err) {
+    if (generation !== saveGeneration || _disposed) throw err;
     store.set(saveStatusAtom, 'error');
-    debounceTimer = null;
+    pendingSave = true;
     trace.error('autosave:error', err);
     saveFailures++;
     if (saveFailures <= MAX_RETRIES && !_disposed && !isHeld) {
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         debounceTimer = null;
-        startSave();
+        debounceReady = true;
+        void startSave().catch(() => {});
       }, RETRY_MS);
       trace.action('autosave:retry-scheduled', { attempt: saveFailures, inMs: RETRY_MS });
     }
+    throw err;
   } finally {
     isSaving = false;
   }
@@ -97,8 +110,16 @@ async function performSave(): Promise<void> {
 
 /** Start a save and track its promise so `flushSaveNow` can await it. */
 function startSave(): Promise<void> {
+  if (currentSave) return currentSave;
+  if (_disposed || isHeld) return Promise.reject(new Error('Autosave is unavailable while held or disposed'));
+  debounceReady = false;
   const p = performSave().finally(() => {
-    if (currentSave === p) currentSave = null;
+    if (currentSave === p) {
+      currentSave = null;
+      if (pendingSave && debounceReady && debounceTimer === null && saveFailures === 0 && !_disposed && !isHeld) {
+        void startSave().catch(() => {});
+      }
+    }
   });
   currentSave = p;
   return p;
@@ -114,6 +135,7 @@ function startSave(): Promise<void> {
  *  is harmless, and it also covers a non-leader collab tab (whose
  *  triggerAutosave early-returns without ever setting pendingSave). */
 export async function flushSaveNow(opts?: { source?: 'manual' | 'autosave' | 'restore'; label?: string }): Promise<void> {
+  if (isHeld || _disposed) throw new Error('Cannot save while autosave is held or disposed');
   if (opts?.source) {
     nextSaveMeta = {
       source: opts.source,
@@ -124,11 +146,19 @@ export async function flushSaveNow(opts?: { source?: 'manual' | 'autosave' | 're
     clearTimeout(debounceTimer);
     debounceTimer = null;
   }
-  if (currentSave) {
-    try { await currentSave; } catch { /* status handled in performSave */ }
-  }
+  dirtyRevision++;
+  pendingSave = true;
+  debounceReady = true;
+  const generation = saveGeneration;
   trace.action('autosave:flush-now');
-  await startSave();
+  while (pendingSave || currentSave) {
+    if (generation !== saveGeneration) throw new Error('Save cancelled');
+    if (debounceTimer !== null) { clearTimeout(debounceTimer); debounceTimer = null; }
+    debounceReady = true;
+    await startSave();
+    if (generation !== saveGeneration) throw new Error('Save cancelled');
+  }
+  if (generation !== saveGeneration) throw new Error('Save cancelled');
 }
 
 /** Save-leader gate. CollaborationProvider calls `setIsSaveLeader()` on
@@ -179,11 +209,17 @@ export function setAutosaveHeld(held: boolean): void {
   if (isHeld === held) return;
   isHeld = held;
   trace.action('autosave:held-changed', { held, pendingSave });
+  if (held && debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+    debounceReady = false;
+  }
   if (!held && pendingSave && !_disposed) {
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      startSave();
+      debounceReady = true;
+      void startSave().catch(() => {});
     }, DEBOUNCE_MS);
   }
 }
@@ -194,6 +230,7 @@ export function triggerAutosave(opts?: { force?: boolean }): void {
     // Remember that something wants saving, but don't schedule — the
     // release path re-arms the debounce.
     pendingSave = true;
+    dirtyRevision++;
     getStore().set(saveStatusAtom, 'unsaved');
     trace.action('autosave:deferred-while-held');
     return;
@@ -215,13 +252,15 @@ export function triggerAutosave(opts?: { force?: boolean }): void {
   }
 
   pendingSave = true;
+  dirtyRevision++;
   saveFailures = 0; // fresh user intent — a new edit re-earns the retry budget
   getStore().set(saveStatusAtom, 'unsaved');
 
   if (debounceTimer !== null) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    startSave();
+    debounceReady = true;
+    void startSave().catch(() => {});
   }, DEBOUNCE_MS);
 
   trace.action('autosave:queued', { debounceMs: DEBOUNCE_MS });
@@ -238,6 +277,9 @@ export function cancelPendingAutosave(): void {
     debounceTimer = null;
   }
   pendingSave = false;
+  saveGeneration++;
+  debounceReady = false;
+  savedRevision = dirtyRevision;
   trace.action('autosave:cancelled-pending');
 }
 
@@ -274,12 +316,16 @@ function onBeforeUnloadSave(e: BeforeUnloadEvent): void {
       return;
     }
     const data = buildProjectData();
+    if (!data.files || Object.keys(data.files).length === 0) {
+      trace.error('autosave:beacon-skipped-empty-project', { id });
+      return;
+    }
 
     if (!CLOUD_ENABLED) {
       // Local mode: LocalBackend's saveProject is a synchronous
       // localStorage.setItem under the hood, so a fire-and-forget call
       // completes before the tab unloads. No beacon transport needed.
-      void backend.saveProject(id, data);
+      void backend.saveProject(id, data).catch(err => trace.error('autosave:unload-local-save-error', err));
       trace.action('autosave:unload-local-save', { id });
       return;
     }
@@ -302,7 +348,7 @@ function onBeforeUnloadSave(e: BeforeUnloadEvent): void {
       e.preventDefault();
       e.returnValue = '';
       setTimeout(() => {
-        if (!_disposed && pendingSave && !isSaving && !isHeld) void startSave();
+        if (!_disposed && pendingSave && !isSaving && !isHeld) void startSave().catch(() => {});
       }, 0);
     }
 }

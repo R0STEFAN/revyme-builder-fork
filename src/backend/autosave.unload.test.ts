@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { triggerAutosave, cancelPendingAutosave, setAutosaveHeld } from './autosave';
 import { backend } from './index';
+import { resetProjectFS } from '@/code/project/project-fs';
 
 vi.mock('./index', () => ({
   backend: { saveProject: vi.fn(async () => {}) },
@@ -34,6 +35,7 @@ function fireBeforeUnload(): Event {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  resetProjectFS(new Map([['app/page.client.tsx', 'source']]));
   vi.mocked(backend.saveProject).mockReset().mockResolvedValue(undefined);
   sendBeacon.mockReset().mockReturnValue(true);
 });
@@ -47,6 +49,12 @@ afterEach(async () => {
 });
 
 describe('beforeunload beacon', () => {
+  it('never beacons an empty snapshot', () => {
+    resetProjectFS(new Map());
+    triggerAutosave();
+    fireBeforeUnload();
+    expect(sendBeacon).not.toHaveBeenCalled();
+  });
   it('beacon sent → no leave-confirmation dialog', () => {
     triggerAutosave(); // pendingSave, debounce not yet fired
     const e = fireBeforeUnload();

@@ -24,13 +24,19 @@ vi.mock('./node-ops', () => ({
   getActiveFilePath: vi.fn(() => '/page.tsx'),
 }));
 vi.mock('@/code/stores/viewport-store', () => ({ getViewportWidths: vi.fn(() => []) }));
-vi.mock('@/code/stores/store', () => ({ selectedIdsAtom: {}, nodesAtom: {} }));
+vi.mock('@/code/stores/store', async () => {
+  const { atom } = await import('jotai');
+  return { selectedIdsAtom: atom<string[]>([]), nodesAtom: atom(new Map()) };
+});
 vi.mock('@/shared/font-loader', () => ({ loadGoogleFont: vi.fn() }));
 vi.mock('@/code/project/preset-ops', () => ({ ensureGoogleFontImport: vi.fn() }));
 
-import { uploadClipboardAssets } from './figma-paste';
+import { handleFigmaPaste, uploadClipboardAssets } from './figma-paste';
 import { backend } from '@/backend';
 import { toast } from 'sonner';
+import { flushSaveNow } from '@/backend/autosave';
+import { convertFigmaPayload } from '@/code/import/figma/convert';
+import { executePaste } from '@/code/features/paste-engine';
 
 // Valid base64 PNG headers (magic bytes pass sniffImageMime) — distinct strings
 // so they count as distinct assets.
@@ -97,4 +103,13 @@ describe('uploadClipboardAssets', () => {
     expect(backend.uploadAsset).not.toHaveBeenCalled();
     expect(progress).toEqual([]);
   });
+});
+
+it('reports a failed background save after placing Figma layers', async () => {
+  vi.mocked(convertFigmaPayload).mockReturnValue({ nodes: [], rootNodeIds: [] } as never);
+  vi.mocked(executePaste).mockReturnValue({ success: true, createdIds: [] } as never);
+  vi.mocked(flushSaveNow).mockRejectedValueOnce(new Error('503'));
+  await handleFigmaPaste({} as never);
+  await Promise.resolve();
+  expect(toast.error).toHaveBeenCalledWith('Import could not be saved');
 });

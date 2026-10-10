@@ -100,9 +100,9 @@ export function activatePageForAgent(clientPath: string): string | null {
   //    before the pointer moves (invariant #2: the queue owns the write path).
   flushNow();
   // D-T5: persist the flushed pre-switch state before the pointer moves, so a
-  // crash/refresh in the switch window cannot lose it (flushSaveNow never
-  // rejects — fire-and-forget is safe).
-  void flushSaveNow();
+  // crash/refresh in the switch window cannot lose it. The activation is
+  // synchronous, so report an asynchronous persistence failure separately.
+  void flushSaveNow().catch(err => trace.error('set-page:save-error', err));
 
   // 4. Switch BOTH halves of the active-file identity.
   store.set(selectedIdsAtom, []);
