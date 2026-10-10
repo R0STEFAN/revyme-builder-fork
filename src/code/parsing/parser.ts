@@ -6,7 +6,7 @@ import _traverse from '@babel/traverse';
 import type { JSXElement, JSXAttribute, JSXExpressionContainer, ObjectExpression, ObjectProperty, StringLiteral, NumericLiteral, JSXText } from '@babel/types';
 import { isTruthy } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
-import { isSvgTag } from '@/shared/constants';
+import { isSvgTag, isCustomDataAttr } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
 import { formattedBranchesOfDangerAttr, type FormattedBranches } from '@/shared/rich-message';
 import { parsePageVariables } from '../features/page-variables';
@@ -1493,11 +1493,22 @@ function extractElementAttrs(opening: any, tagName: string, ctx: ParseCtx): {
     if (isUppercaseTag && !skipAttrs.has(attrName)) {
       // Component prop — capture it
       const val = getAttr(opening.attributes, attrName);
-      if (val) attrs[attrName] = val;
-    } else if (htmlAttrs.includes(attrName)) {
-      const val = getAttr(opening.attributes, attrName);
-      if (val) {
+      if (val !== null) {
         attrs[attrName] = val;
+      } else if (attr.value === null && isCustomDataAttr(attrName)) {
+        attrs[attrName] = 'true';
+      } else if (attr.value?.type === 'JSXExpressionContainer' && isCustomDataAttr(attrName)) {
+        const expr = attr.value.expression as any;
+        if (expr?.type === 'BooleanLiteral' || expr?.type === 'NumericLiteral') {
+          attrs[attrName] = String(expr.value);
+        }
+      }
+    } else if (htmlAttrs.includes(attrName) || isCustomDataAttr(attrName)) {
+      const val = getAttr(opening.attributes, attrName);
+      if (val !== null) {
+        attrs[attrName] = val;
+      } else if (attr.value === null && isCustomDataAttr(attrName)) {
+        attrs[attrName] = 'true';
       } else if (attr.value?.type === 'JSXExpressionContainer') {
         // Expression-form HTML attr → a component VARIABLE. Two shapes
         // the Link tool's "Create Variable" produces:
@@ -1508,30 +1519,36 @@ function extractElementAttrs(opening: any, tagName: string, ctx: ParseCtx): {
         // render the purple bound-variable pill. The conditional case
         // records the TEST identifier — the boolean prop driving it.
         const expr = attr.value.expression as any;
-        // Responsive raw-element attr (`type={__mq0 ? 'date' : 'text'}` /
-        // `type={variant === 'm' ? … }`) → surface the BASE value so the
-        // canvas + Input tool show the primary; the per-viewport/variant
-        // value is read from code by the Input tool. Checked first so an
-        // `__mq`/`variant` test isn't mistaken for a `var:` binding.
-        const respBase = responsiveAttrFallback(expr);
-        if (respBase != null) {
-          attrs[attrName] = respBase;
-          const full = parseResponsiveAttrExpr(expr, ctx.gateWidthMap);
-          if (full && (Object.keys(full.viewport).length || Object.keys(full.variant).length)) {
-            responsiveAttrsAccum[attrName] = { viewport: full.viewport, variant: full.variant };
+        if (expr?.type === 'BooleanLiteral' && isCustomDataAttr(attrName)) {
+          attrs[attrName] = String(expr.value);
+        } else if (expr?.type === 'NumericLiteral' && isCustomDataAttr(attrName)) {
+          attrs[attrName] = String(expr.value);
+        } else {
+          // Responsive raw-element attr (`type={__mq0 ? 'date' : 'text'}` /
+          // `type={variant === 'm' ? … }`) → surface the BASE value so the
+          // canvas + Input tool show the primary; the per-viewport/variant
+          // value is read from code by the Input tool. Checked first so an
+          // `__mq`/`variant` test isn't mistaken for a `var:` binding.
+          const respBase = responsiveAttrFallback(expr);
+          if (respBase != null) {
+            attrs[attrName] = respBase;
+            const full = parseResponsiveAttrExpr(expr, ctx.gateWidthMap);
+            if (full && (Object.keys(full.viewport).length || Object.keys(full.variant).length)) {
+              responsiveAttrsAccum[attrName] = { viewport: full.viewport, variant: full.variant };
+            }
+          } else if (expr?.type === 'CallExpression'
+              && expr.callee?.type === 'Identifier'
+              && expr.arguments?.length === 1
+              && expr.arguments[0]?.type === 'StringLiteral') {
+            // Translation-call attr — `placeholder={t('key')}` (any hook name).
+            attrTranslationKeys = attrTranslationKeys ?? {};
+            attrTranslationKeys[attrName] = expr.arguments[0].value as string;
+            trace.action('parser:attr-translation-key', { attrName, key: expr.arguments[0].value });
+          } else if (expr?.type === 'Identifier') {
+            attrs[attrName] = `var:${expr.name}`;
+          } else if (expr?.type === 'ConditionalExpression' && expr.test?.type === 'Identifier') {
+            attrs[attrName] = `var:${expr.test.name}`;
           }
-        } else if (expr?.type === 'CallExpression'
-            && expr.callee?.type === 'Identifier'
-            && expr.arguments?.length === 1
-            && expr.arguments[0]?.type === 'StringLiteral') {
-          // Translation-call attr — `placeholder={t('key')}` (any hook name).
-          attrTranslationKeys = attrTranslationKeys ?? {};
-          attrTranslationKeys[attrName] = expr.arguments[0].value as string;
-          trace.action('parser:attr-translation-key', { attrName, key: expr.arguments[0].value });
-        } else if (expr?.type === 'Identifier') {
-          attrs[attrName] = `var:${expr.name}`;
-        } else if (expr?.type === 'ConditionalExpression' && expr.test?.type === 'Identifier') {
-          attrs[attrName] = `var:${expr.test.name}`;
         }
       }
     }

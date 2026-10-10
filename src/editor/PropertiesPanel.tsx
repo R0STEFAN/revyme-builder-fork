@@ -25,6 +25,7 @@ import TextStyleTool from './tools/TextStyleTool';
 import StylesTool from './tools/StylesTool';
 import CursorTool from './tools/CursorTool';
 import AccessibilityTool from './tools/AccessibilityTool';
+import AttributesTool from './tools/AttributesTool';
 import ScrollSectionTool from './tools/ScrollSectionTool';
 import CodeOverridesTool from './tools/CodeOverridesTool';
 import LinkTool from './tools/LinkTool';
@@ -825,6 +826,12 @@ function PropertiesPanelInner({ isMultiSelect = false }: { isMultiSelect?: boole
             {!isContainerSetInstance && !isComponentInstance && (
               <>
                 <AccessibilityTool />
+                <ToolDivider />
+              </>
+            )}
+            {!isContainerSetInstance && (
+              <>
+                <AttributesTool />
                 <ToolDivider />
               </>
             )}

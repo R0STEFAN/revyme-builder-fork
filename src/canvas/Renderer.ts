@@ -15,7 +15,7 @@ import { renderWidth } from '@/shared/types';
 import { resolveOverlayConfig } from '@/code/parsing/overlay-parser';
 import { trace, pauseDOMObserver, resumeDOMObserver } from '@/shared/debug-trace';
 import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers, toKebab } from '@/shared/css-utils';
-import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag } from '@/shared/constants';
+import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag, isCustomDataAttr } from '@/shared/constants';
 import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
 import { hasMotionTransformProp, motionPropsToCSSTransform, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
@@ -2803,6 +2803,13 @@ export function patchElement(
     // (overlays are moved from viewport tree to a portal sibling)
   }
 
+  // Clean up removed custom data-* attributes so canvas DOM stays 100% in sync with code
+  for (const attr of Array.from(el.attributes)) {
+    if (isCustomDataAttr(attr.name) && !node.attrs?.[attr.name]) {
+      el.removeAttribute(attr.name);
+    }
+  }
+
   // Patch SVG-specific attributes (must use setAttribute with kebab-case names).
   // For GEOMETRY attrs (d/points/coords) prefer the VARIANT-RESOLVED value
   // (baseStyles = resolveVariantStyles, which merges the active variant's
@@ -3641,6 +3648,15 @@ function buildNodeElement(
   el.setAttribute('data-node-id', idPrefix + node.id + idSuffix);
   el.setAttribute('data-id', node.id);
 
+  if (node.attrs) {
+    for (const [key, value] of Object.entries(node.attrs)) {
+      if (key === 'href') continue;  // Skip href on canvas
+      // Variable binding (`var:<name>`) — not a literal DOM value (see patchElement).
+      if (typeof value === 'string' && value.startsWith('var:')) continue;
+      el.setAttribute(key, node.responsiveAttrs ? resolveResponsiveAttr(node, key, value, vpWidth, variantName) : value);
+    }
+  }
+
   // Images: load EAGERLY on the canvas. `loading="lazy"` uses the iframe
   // viewport for its intersection check, but the canvas content is panned/
   // scaled via a `translate3d`+`scale` transform on `contentRoot`, so the
@@ -3880,14 +3896,6 @@ function buildNodeElement(
     trace.dom('renderer:image-fill-resolved', { nodeId: node.id });
   }
 
-  if (node.attrs) {
-    for (const [key, value] of Object.entries(node.attrs)) {
-      if (key === 'href') continue;  // Skip href on canvas
-      // Variable binding (`var:<name>`) — not a literal DOM value (see patchElement).
-      if (typeof value === 'string' && value.startsWith('var:')) continue;
-      el.setAttribute(key, node.responsiveAttrs ? resolveResponsiveAttr(node, key, value, vpWidth, variantName) : value);
-    }
-  }
 
   // Apply SVG-specific attributes (must use setAttribute, not style)
   if (isSvg && node.attrs) {

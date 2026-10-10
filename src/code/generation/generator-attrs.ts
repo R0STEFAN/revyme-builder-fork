@@ -77,10 +77,18 @@ export function updateHtmlAttrsInCode(
       const attrRegex = new RegExp(`(\\s)(${key}=)(?:"[^"]*"|'[^']*')`);
       if (attrRegex.test(tagStr)) {
         tagStr = tagStr.replace(attrRegex, `$1$2${lit}`);
-      } else if (tagStr.endsWith('/>')) {
-        tagStr = tagStr.slice(0, -2) + ` ${key}=${lit} />`;
       } else {
-        tagStr = tagStr.slice(0, -1) + ` ${key}=${lit}>`;
+        // Insert new attribute before style prop if present, matching standard JSX ordering (attrs -> style -> close)
+        const styleMatch = tagStr.match(/(\s+)style\s*=/);
+        if (styleMatch && styleMatch.index !== undefined) {
+          const insertIdx = styleMatch.index;
+          const ws = styleMatch[1];
+          tagStr = tagStr.slice(0, insertIdx) + `${ws}${key}=${lit}` + tagStr.slice(insertIdx);
+        } else if (tagStr.endsWith('/>')) {
+          tagStr = tagStr.slice(0, -2) + ` ${key}=${lit} />`;
+        } else {
+          tagStr = tagStr.slice(0, -1) + ` ${key}=${lit}>`;
+        }
       }
     }
   }

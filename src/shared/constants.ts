@@ -416,3 +416,61 @@ export const ZERO_WIDTH_SPACE = '​';
 export function isPrimaryViewport(vpId: string): boolean {
   return vpId === 'desktop' || vpId === 'default';
 }
+
+/**
+ * Internal data-* attributes owned and managed by the builder runtime,
+ * parser, motion system, canvas renderer, or effect pipelines.
+ * Custom Attributes UI must not allow creating, modifying, or deleting these.
+ */
+export const SYSTEM_DATA_ATTRS: ReadonlySet<string> = new Set([
+  'data-id',
+  'data-name',
+  'data-viewport',
+  'data-viewport-primary',
+  'data-viewport-header',
+  'data-canvas-node',
+  'data-node-id',
+  'data-overlay',
+  'data-overlay-trigger',
+  'data-overlay-node',
+  'data-smooth-scroll',
+  'data-keep-params',
+  'data-sketch',
+  'data-revyme-track',
+  'data-slot-pos',
+  'data-pinned',
+  'data-replica-solo',
+  'data-alt-duplicate',
+  'data-scroll-fx',
+  'data-glide',
+  'data-loop',
+  'data-stagger',
+  'data-form',
+  'data-search-field',
+  'data-select-icon',
+  'data-responsive',
+  'data-text-anim',
+  'data-text-overrides',
+  'data-graphic',
+  'data-culled',
+  'data-editing',
+  'data-shape-editing',
+  'data-text-edit-outline',
+  'data-shape-edit-overlay',
+  'data-pagination-hidden',
+  'data-collection-empty-hidden',
+  'data-live-important',
+  'data-lift-inline-snapshot',
+  'data-lift-tracked-keys',
+  'data-lift-preserved-props',
+  'data-i18n-orphan',
+  'data-var-orphan',
+  'data-stroke-align',
+  'data-layout-placeholder',
+  'data-placeholder-id',
+]);
+
+/** True when an attribute is a user-defined custom data-* attribute. */
+export function isCustomDataAttr(attr: string): boolean {
+  return attr.startsWith('data-') && !SYSTEM_DATA_ATTRS.has(attr);
+}

@@ -68,6 +68,24 @@ describe('updateHtmlAttrsInCode — single-quoted (JSON) attrs', () => {
     const out = updateHtmlAttrsInCode(code, 't', { 'data-overlay-trigger': '' });
     expect(out).not.toContain('data-overlay-trigger');
   });
+
+  it('inserts new attribute before style prop in JSX', () => {
+    const input = `<CTAButton data-id="cta-btn-root" data-name="CTA Button" style={{ width: '204px' }} />`;
+    const out = updateHtmlAttrsInCode(input, 'cta-btn-root', { 'data-1': 'wert' });
+    expect(out).toBe(`<CTAButton data-id="cta-btn-root" data-name="CTA Button" data-1="wert" style={{ width: '204px' }} />`);
+  });
+
+  it('inserts new attribute before style prop in multiline JSX tag', () => {
+    const input = `<CTAButton\n  data-id="cta-btn-root"\n  data-name="CTA Button"\n  style={{ width: '204px' }}\n/>`;
+    const out = updateHtmlAttrsInCode(input, 'cta-btn-root', { 'data-1': 'wert' });
+    expect(out).toBe(`<CTAButton\n  data-id="cta-btn-root"\n  data-name="CTA Button"\n  data-1="wert"\n  style={{ width: '204px' }}\n/>`);
+  });
+
+  it('appends before closing bracket when no style prop is present', () => {
+    const input = `<div data-id="box" data-name="Box"></div>`;
+    const out = updateHtmlAttrsInCode(input, 'box', { 'data-1': 'wert' });
+    expect(out).toBe(`<div data-id="box" data-name="Box" data-1="wert"></div>`);
+  });
 });
 
 // ─── stripDataResponsiveInSubtree — exit-to-canvas sheds breakpoint overrides ─

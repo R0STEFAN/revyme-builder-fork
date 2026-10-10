@@ -1690,4 +1690,27 @@ export default function Page() {
       expect(link.hrefExpression).toBe('"/gallery/" + item.slug');
     });
   });
+
+  describe('custom data attributes', () => {
+    test('extracts custom data-* attributes into node.attrs', () => {
+      const code = `
+export default function Page() {
+  return (
+    <div data-id="root" data-test="custom-val" data-active data-count={42}>
+      <span data-id="text" data-tooltip="Helpful info">Hello</span>
+    </div>
+  );
+}`;
+      const nodes = parseJSXToNodes(code);
+      const root = nodes.get('root')!;
+      expect(root.attrs['data-test']).toBe('custom-val');
+      expect(root.attrs['data-active']).toBe('true');
+      expect(root.attrs['data-count']).toBe('42');
+      // System data attributes like data-id must stay out of attrs
+      expect(root.attrs['data-id']).toBeUndefined();
+
+      const text = nodes.get('text')!;
+      expect(text.attrs['data-tooltip']).toBe('Helpful info');
+    });
+  });
 });

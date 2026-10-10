@@ -62,11 +62,11 @@ export default function ToolSection({ title, children, defaultOpen = true, colla
           // Sentence case in the default UI stack (the display-font experiment
           // was retired 2026-08-20) — same face as the row labels, one size up
           // and semibold so the heading role still reads.
-          className={`text-xs font-semibold text-[var(--text-primary)] ${collapsible ? 'cursor-pointer select-none' : ''} ${collapsible && !isOpen ? 'opacity-50' : ''}`}
+          className={`text-xs font-semibold text-[var(--text-primary)] ${collapsible ? 'cursor-pointer select-none flex-1' : ''} ${collapsible && !isOpen ? 'opacity-50' : ''}`}
         >
           {title}
         </span>
-        <span ref={actionRef} className="flex items-center">{action}</span>
+        <span ref={actionRef} className="flex items-center shrink-0">{action}</span>
       </div>
       {isOpen && showContent && (
         <div className="flex flex-col py-0.5 gap-[var(--control-gap)] pl-3">
