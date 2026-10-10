@@ -265,6 +265,38 @@ export function deleteCustomFont(fontId: string): void {
     forceCanvasRender();
   }
 
+  // Delete the physical font file from server uploads / storage if it has a file URL or key
+  if (target?.url) {
+    let uploadKey: string | null = null;
+    if (target.url.startsWith('/api/uploads/')) {
+      uploadKey = target.url.replace(/^\/api\/uploads\//, '').split('?')[0];
+    } else if (target.url.startsWith('/uploads/')) {
+      uploadKey = target.url.replace(/^\/uploads\//, '').split('?')[0];
+    } else {
+      try {
+        const u = new URL(target.url);
+        if (u.protocol === 'http:' || u.protocol === 'https:') {
+          const pathPart = u.pathname.replace(/^\/+/, '');
+          if (pathPart.startsWith('api/uploads/')) {
+            uploadKey = pathPart.replace(/^api\/uploads\//, '').split('?')[0];
+          } else if (pathPart.startsWith('uploads/')) {
+            uploadKey = pathPart.replace(/^uploads\//, '').split('?')[0];
+          } else {
+            uploadKey = pathPart;
+          }
+        }
+      } catch {
+        // ignore non-URL formats like data:
+      }
+    }
+
+    if (uploadKey) {
+      backend.deleteAssets(currentProjectId, [uploadKey]).catch(err => {
+        trace.error('workspace-fonts:delete-asset-failed', err);
+      });
+    }
+  }
+
   notify();
 }
 

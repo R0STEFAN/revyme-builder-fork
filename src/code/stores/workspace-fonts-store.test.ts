@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   parseFontFilename,
   addCustomFont,
@@ -9,6 +9,7 @@ import {
   syncProjectCustomFontsFromCss,
   resetWorkspaceFontsForTesting,
 } from './workspace-fonts-store';
+import { backend } from '@/backend';
 import type { WorkspaceFont } from '@/backend/types';
 
 describe('workspace-fonts-store', () => {
@@ -60,7 +61,9 @@ describe('workspace-fonts-store', () => {
   });
 
   describe('custom font storage', () => {
-    it('adds and persists custom font locally per project', async () => {
+    it('adds and persists custom font locally per project and deletes file asset', async () => {
+      const deleteAssetsSpy = vi.spyOn(backend, 'deleteAssets').mockResolvedValue();
+
       const font: WorkspaceFont = {
         id: 'local-font-1',
         family: 'MyBrandFont',
@@ -85,6 +88,9 @@ describe('workspace-fonts-store', () => {
       expect(isWorkspaceFontFamily('MyBrandFont')).toBe(false);
       const afterDelete = JSON.parse(localStorage.getItem('revyme:custom_fonts:local') || '[]');
       expect(afterDelete).toHaveLength(0);
+
+      expect(deleteAssetsSpy).toHaveBeenCalledWith('local', ['test.woff2']);
+      deleteAssetsSpy.mockRestore();
     });
   });
 
