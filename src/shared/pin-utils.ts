@@ -1,6 +1,8 @@
 // pin-utils.ts — Pure functions for pin control logic.
 // No DOM, no React, no side effects — fully testable.
 
+import { foldEffectiveTransform, hasMotionTransformProp } from './motion-transform';
+
 export interface PinState {
   left: boolean;
   top: boolean;
@@ -222,6 +224,10 @@ export function calculateAlignment(
   const hasRight = isSet(styles.right);
 
   const existingTransform = styles.transform || '';
+  // Component variants store rotate/scale/x/y as independent motion props.
+  // Fold the effective transform for measurement, keeping the authored CSS
+  // string separate so rebuilding a pin does not duplicate those channels.
+  const paintedTransform = foldEffectiveTransform({ styles, variantKey: 'default' });
   // A rotated / scaled / skewed element: `elementRect` is the PAINTED
   // axis-aligned box (the bridge measures the transformed element), while
   // `left/top/width/height` position the UNROTATED layout box. The user
@@ -231,7 +237,7 @@ export function calculateAlignment(
   // conversion is one offset per axis: (painted − layout) / 2. (Before: the
   // layout width was used as the "visual" width — a 1119×76 bar rotated 90°
   // in a 1119-wide parent got left: 0 for left, centre AND right, 2026-09-08.)
-  const hasVisualTransform = /rotate|scale|skew/i.test(existingTransform);
+  const hasVisualTransform = /rotate|scale|skew/i.test(paintedTransform);
 
   // Layout (unrotated) size.
   let visualWidth: number;
@@ -265,8 +271,8 @@ export function calculateAlignment(
     if (/%$/.test(raw)) return (parseFloat(raw) / 100) * size || 0;
     return parseFloat(raw) || 0;
   };
-  const tx = translatePx(extractTranslateX(existingTransform), visualWidth);
-  const ty = translatePx(extractTranslateY(existingTransform), visualHeight);
+  const tx = translatePx(extractTranslateX(paintedTransform), visualWidth);
+  const ty = translatePx(extractTranslateY(paintedTransform), visualHeight);
   // Painted-edge targets expressed as the LEFT/TOP of the layout box under a px pin:
   //   painted left  = left − dxC + tx  → left = target + dxC − tx
   //   painted right = parentW − right + dxC + tx → right = parentW − target − dxC − tx … see each branch.
@@ -482,7 +488,7 @@ export function calculateAlignment(
   // rotation RESET (it wipes the entry's `rotate`), and any stale string
   // translate is evicted by the generators on the `x`/`y` write
   // ("one channel per axis").
-  const isShorthandCentred = isSet(styles.x) || isSet(styles.y);
+  const isShorthandCentred = isSet(styles.x) || isSet(styles.y) || hasMotionTransformProp(styles);
   if (isShorthandCentred && typeof u.transform === 'string') {
     const horizontal = direction === 'left' || direction === 'center-h' || direction === 'right';
     const val = horizontal ? extractTranslateX(u.transform) : extractTranslateY(u.transform);

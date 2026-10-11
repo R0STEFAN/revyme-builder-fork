@@ -516,3 +516,39 @@ describe('calculateAlignment — rotated element aligns its painted box', () => 
     expect(calculateAlignment('center-h', plain, { width: 200, height: 100 }, { width: 1000, height: 500 })).toEqual({ left: '400px' });
   });
 });
+
+describe('calculateAlignment — component motion transforms', () => {
+  const parent = { width: 100, height: 100 };
+  // A 64 × 4 line rotated ±45° paints a 48.08 × 48.08 bounding box.
+  const painted = { width: 48.08, height: 48.08 };
+  const box = { position: 'absolute', width: '64px', height: '4px', left: '8px', top: '15px' };
+
+  test.each(['45', '-45'])('centres the layout box when rotation is stored as rotate: %s', (rotate) => {
+    const styles = { ...box, rotate };
+    expect(calculateAlignment('center-h', styles, painted, parent)).toEqual({ left: '18px' });
+    expect(calculateAlignment('center-v', styles, painted, parent)).toEqual({ top: '48px' });
+  });
+
+  test('compensates motion x/y without changing the rotation or translate channels', () => {
+    const styles = { ...box, rotate: '45', x: '6', y: '-3' };
+    expect(calculateAlignment('center-h', styles, painted, parent)).toEqual({ left: '12px' });
+    expect(calculateAlignment('center-v', styles, painted, parent)).toEqual({ top: '51px' });
+  });
+
+  test('centres a px-pinned line with motion percentage translates', () => {
+    const styles = { ...box, rotate: '-45', x: '-50%', y: '-50%' };
+    expect(calculateAlignment('center-h', styles, painted, parent)).toEqual({ left: '50px' });
+    expect(calculateAlignment('center-v', styles, painted, parent)).toEqual({ top: '50px' });
+  });
+
+  test('unpinned line with motion rotation centres via motion shorthand (x/y), not transform string', () => {
+    const styles = { width: '64px', height: '4px', rotate: '45' };
+    const uH = calculateAlignment('center-h', styles, painted, parent);
+    expect(uH).toEqual({ left: '50%', right: '', x: '-50%' });
+    expect('transform' in uH).toBe(false);
+
+    const uV = calculateAlignment('center-v', styles, painted, parent);
+    expect(uV).toEqual({ top: '50%', bottom: '', y: '-50%' });
+    expect('transform' in uV).toBe(false);
+  });
+});
