@@ -802,6 +802,7 @@ export class CanvasDragOrchestrator {
               children: convertChildren(desc.children),
             },
             index: update.newIndex,
+            insertBeforeId: update.insertBeforeId,
           });
         } else {
           // Dropping on canvas outside viewports — addCanvasNode (floating

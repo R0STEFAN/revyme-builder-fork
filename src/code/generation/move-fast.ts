@@ -138,6 +138,10 @@ export function moveNodeIntoParentFast(
   if (!isPlainChildContext(code, span)) return null;
   if (nodeId === newParentId) return null;
 
+  // Bail to AST path if the moved node is wrapped in Glide or AnimatePresence
+  const precedingSource = code.slice(Math.max(0, span.tagStart - 200), span.tagStart);
+  if (precedingSource.includes('data-glide-item') || precedingSource.includes('AnimatePresence')) return null;
+
   // Strip `data-canvas-node="true"` from the MOVED element's opening tag only
   // (moving into a parent makes it a flow/child, not a floating canvas node).
   // Descendants keep theirs — a nested canvas node is impossible, but be exact.
@@ -171,8 +175,15 @@ export function moveNodeIntoParentFast(
   const childrenStart = pOpenGt + 1;
   const childrenEnd = pCloseRel;
   const childrenText = without.slice(childrenStart, childrenEnd);
-  // Empty-map refill (`=> null` collection list) is a special AST case.
-  if (childrenText.includes('.map(')) return null;
+  // Empty-map refill (`=> null` collection list) and indirect wrappers (Glide, LayoutGroup, PageTransitions) need AST path.
+  if (
+    childrenText.includes('.map(') ||
+    childrenText.includes('data-glide') ||
+    childrenText.includes('LayoutGroup') ||
+    childrenText.includes('PageTransitions') ||
+    childrenText.includes('MotionConfig') ||
+    childrenText.includes('AnimatePresence')
+  ) return null;
 
   let insertAt: number;
   if (insertIndex == null || insertIndex < 0) {

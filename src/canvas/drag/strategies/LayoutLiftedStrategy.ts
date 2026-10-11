@@ -38,7 +38,7 @@ import { dropLineOps } from '@/canvas/selection/drop-line-store';
 import { parentHighlightOps } from '@/canvas/selection/parent-highlight-store';
 import { trace } from '@/shared/debug-trace';
 import { nodeAcceptsChildren } from '@/shared/constants';
-import { calculateLayoutInsertIndexById, computeReorderAssignments } from '../reparent-utils';
+import { calculateLayoutInsertIndexById, computeReorderAssignments, computeLayoutInsertAnchorId } from '../reparent-utils';
 import { rankToOrder, pickPlaceholderOrder, normalizeFlowSpans } from './order-positioning';
 import { commitOrderAssignments, computeLayoutBrackets } from './order-commit';
 import { queueMutation, flushNow, getCurrentCode, hasPendingDeferredFanOut } from '@/code/mutation/mutation-queue';
@@ -2464,6 +2464,17 @@ export class LayoutLiftedStrategy implements DragStrategy {
         insertIndex: this.intendedInsertIndex,
       });
 
+      const draggedIds = sortedCross.map(n => n.id);
+      const baseAnchorId = this.intendedInsertIndex >= 0
+        ? computeLayoutInsertAnchorId(
+            this.intendedParentId,
+            this.currentVpId,
+            this.intendedInsertIndex,
+            draggedIds,
+            (id) => getNodeFromCache(id)?.styles?.order,
+          )
+        : undefined;
+
       let crossOffset = 0;
       for (const node of sortedCross) {
         patchNodeStyles(contentEl, node.id, vpPrefix, { pointerEvents: '' });
@@ -2473,6 +2484,7 @@ export class LayoutLiftedStrategy implements DragStrategy {
           type: 'move',
           newParentId: this.intendedParentId,
           newIndex: this.intendedInsertIndex >= 0 ? this.intendedInsertIndex + crossOffset : undefined,
+          insertBeforeId: crossOffset === 0 ? baseAnchorId : undefined,
           styles: {
             position: 'relative',
             left: '',

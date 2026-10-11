@@ -8,6 +8,7 @@ import {
   readInstanceDimBranches, ensureInstanceHugMarkerInCode,
 } from './instance-auto-size';
 import { parseProjectFile } from '@/code/parsing/project-parser';
+import { parseJSXToNodes } from '../parsing/parser';
 import { InMemoryProjectFS } from '@/code/project/project-fs';
 import { checkFile } from '@/code/oracle/check-file';
 
@@ -228,6 +229,66 @@ describe('setInstanceDimStyleWriteInCode — the routed dim write', () => {
     expect(wrapper.hugDims?.height).toEqual(['default']);
     const root = nodes.get(`${INST}:${INST}`) as any;
     expect(root.styles?.height).toBe('219px');                             // master value intact, no '' merge
+  });
+
+  test.each([
+    'style={{}}',
+    "style={{ position: 'relative', }}",
+    "style={{\n position: 'relative',\n}}",
+    '',
+  ])('first width write parses: %s', (attrs) => {
+    const input = `export default function LayoutClient({children}) {
+      return <div data-id="root"><Card data-id="card" ${attrs}/>{children}</div>;
+    }`;
+    const out = setInstanceDimStyleWriteInCode(input, 'card', 'width', null, '100%');
+    expect(() => parse(out, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+    expect(parseJSXToNodes(out).get('card')?.styles.width).toBe('100%');
+  });
+
+  test('cycle width 100% -> 50% -> 320px -> reset', () => {
+    let code = `export default function LayoutClient({children}) {
+      return <div data-id="root"><Card data-id="card" style={{ position: 'relative', }}/>{children}</div>;
+    }`;
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'width', null, '100%');
+    expect(parseJSXToNodes(code).get('card')?.styles.width).toBe('100%');
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'width', null, '50%');
+    expect(parseJSXToNodes(code).get('card')?.styles.width).toBe('50%');
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'width', null, '320px');
+    expect(parseJSXToNodes(code).get('card')?.styles.width).toBe('320px');
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'width', null, '');
+    expect(parseJSXToNodes(code).get('card')?.styles.width).toBeUndefined();
+    expect(() => parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+    expect(code).not.toContain(',,');
+  });
+
+  test('width and height sequentially on the same instance', () => {
+    let code = `export default function Page() {
+      return <div data-id="root"><Card data-id="card" /></div>;
+    }`;
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'width', null, '86%');
+    code = setInstanceDimStyleWriteInCode(code, 'card', 'height', null, '200px');
+    expect(() => parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+    const node = parseJSXToNodes(code).get('card');
+    expect(node?.styles.width).toBe('86%');
+    expect(node?.styles.height).toBe('200px');
+  });
+
+  test('idempotency — writing same value twice is a clean no-op', () => {
+    const input = `export default function Page() {
+      return <div data-id="root"><Card data-id="card" style={{ width: '100%' }} /></div>;
+    }`;
+    const once = setInstanceDimStyleWriteInCode(input, 'card', 'width', null, '100%');
+    const twice = setInstanceDimStyleWriteInCode(once, 'card', 'width', null, '100%');
+    expect(() => parse(twice, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+    expect(parseJSXToNodes(twice).get('card')?.styles.width).toBe('100%');
+  });
+
+  test('unowned style expression (identifier/binding) is left unchanged', () => {
+    const input = `export default function Page({ customStyle }) {
+      return <div data-id="root"><Card data-id="card" style={customStyle} /></div>;
+    }`;
+    const out = setInstanceDimStyleWriteInCode(input, 'card', 'width', null, '100%');
+    expect(out).toBe(input);
   });
 });
 

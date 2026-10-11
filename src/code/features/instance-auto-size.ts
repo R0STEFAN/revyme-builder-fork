@@ -27,6 +27,10 @@
 // back on first touch — every dim write path runs it before writing.
 
 import { trace } from '@/shared/debug-trace';
+import { parseJSX, findFirstElementByDataId, findAttribute } from '@/code/parsing/ast-utils';
+import { parseExpression } from '@babel/parser';
+import * as t from '@babel/types';
+import { generate } from '@/code/generation/generator-utils';
 
 const q = (v: string) => `'${v}'`;
 
@@ -145,32 +149,73 @@ function findStyleEntry(body: string, key: string): { start: number; end: number
 export type DimBranches = { branches: { variant: string | null; value: string }[]; ident: string };
 
 export function parseDimBranchesFull(expr: string): DimBranches | null {
-  const leaf = (s: string): string | null => {
-    const m = s.match(/^'([^']*)'$/);
-    if (m) return m[1];
-    if (s === 'undefined') return HUG;
+  const trimmed = expr.trim();
+  if (!trimmed) return null;
+  let parsed: t.Expression;
+  try {
+    parsed = parseExpression(trimmed, { plugins: ['typescript', 'jsx'] });
+  } catch {
+    return null;
+  }
+
+  const leaf = (node: t.Expression): string | null => {
+    if (t.isStringLiteral(node)) return node.value;
+    if (t.isTemplateLiteral(node) && node.expressions.length === 0 && node.quasis.length === 1) {
+      return node.quasis[0].value.raw;
+    }
+    if (t.isIdentifier(node) && node.name === 'undefined') return HUG;
     return null;
   };
-  const flat = leaf(expr.trim());
+
+  const flat = leaf(parsed);
   if (flat !== null) return { branches: [{ variant: null, value: flat }], ident: 'initialVariant' };
+
+  let curr: t.Expression = parsed;
   const branches: { variant: string | null; value: string }[] = [];
   let ident = 'initialVariant';
-  let rest = expr.trim();
-  for (let guard = 0; guard < 12; guard++) {
-    const m = rest.match(/^(initialVariant|variant)\s*===\s*'([^']+)'\s*\?\s*('[^']*'|undefined)\s*:\s*([\s\S]+)$/);
-    if (!m) break;
-    const v = leaf(m[3]);
-    if (v === null) return null;
-    ident = m[1];
-    branches.push({ variant: m[2], value: v });
-    rest = m[4].trim();
+  let isChain = false;
+
+  for (let guard = 0; guard < 20; guard++) {
+    if (!t.isConditionalExpression(curr)) break;
+    isChain = true;
+    const test = curr.test;
+    let identName: string | null = null;
+    let variantVal: string | null = null;
+
+    if (t.isBinaryExpression(test) && (test.operator === '===' || test.operator === '==')) {
+      if (
+        t.isIdentifier(test.left) &&
+        (test.left.name === 'variant' || test.left.name === 'initialVariant') &&
+        t.isStringLiteral(test.right)
+      ) {
+        identName = test.left.name;
+        variantVal = test.right.value;
+      } else if (
+        t.isIdentifier(test.right) &&
+        (test.right.name === 'variant' || test.right.name === 'initialVariant') &&
+        t.isStringLiteral(test.left)
+      ) {
+        identName = test.right.name;
+        variantVal = test.left.value;
+      }
+    }
+
+    if (!identName || variantVal === null) return null;
+    ident = identName;
+    const val = leaf(curr.consequent);
+    if (val === null) return null;
+    branches.push({ variant: variantVal, value: val });
+    curr = curr.alternate;
   }
-  const tail = leaf(rest);
-  if (tail === null || branches.length === 0) {
-    return branches.length === 0 && tail !== null ? { branches: [{ variant: null, value: tail }], ident } : null;
+
+  if (isChain) {
+    const tail = leaf(curr);
+    if (tail === null || branches.length === 0) return null;
+    branches.push({ variant: null, value: tail });
+    return { branches, ident };
   }
-  branches.push({ variant: null, value: tail });
-  return { branches, ident };
+
+  return null;
 }
 
 export function parseDimBranches(expr: string): { variant: string | null; value: string }[] | null {
@@ -213,15 +258,10 @@ export function readInstanceDimBranches(code: string, nodeId: string, dim: 'widt
     const full = parseDimBranchesFull(attrExpr);
     return { channel: 'prop', branches: full?.branches ?? [], ident: full?.ident ?? 'initialVariant' };
   }
-  const tagSpan = findTagByDataId(code, nodeId);
-  if (tagSpan) {
-    const tag = code.slice(tagSpan.start, tagSpan.end);
-    const span = styleBodySpan(tag);
-    const entry = span ? findStyleEntry(tag.slice(span.start, span.end), dim) : null;
-    if (entry) {
-      const full = parseDimBranchesFull(entry.expr);
-      if (full) return { channel: 'style', branches: full.branches, ident: full.ident };
-    }
+  const entry = styleDimEntry(code, nodeId, dim);
+  if (entry) {
+    const full = parseDimBranchesFull(entry.expr);
+    if (full) return { channel: 'style', branches: full.branches, ident: full.ident };
   }
   return { channel: 'none', branches: [], ident: 'initialVariant' };
 }
@@ -229,41 +269,119 @@ export function readInstanceDimBranches(code: string, nodeId: string, dim: 'widt
 /** The raw style expression for a dim on the instance tag, or null when the
  *  tag has no style entry for it. */
 function styleDimEntry(code: string, nodeId: string, dim: 'width' | 'height'): { expr: string } | null {
-  const tagSpan = findTagByDataId(code, nodeId);
-  if (!tagSpan) return null;
-  const tag = code.slice(tagSpan.start, tagSpan.end);
-  const span = styleBodySpan(tag);
-  const entry = span ? findStyleEntry(tag.slice(span.start, span.end), dim) : null;
-  return entry ? { expr: entry.expr } : null;
+  const ast = parseJSX(code);
+  if (!ast) return null;
+  let result: { expr: string } | null = null;
+  findFirstElementByDataId(ast, nodeId, (_path, element) => {
+    const styleAttr = findAttribute(element.openingElement, 'style');
+    if (!styleAttr || styleAttr.value?.type !== 'JSXExpressionContainer') return;
+    const styleExpr = styleAttr.value.expression;
+    if (styleExpr.type !== 'ObjectExpression') {
+      result = { expr: generate(styleExpr, { jsescOption: { quotes: 'single' } }).code };
+      return;
+    }
+    const prop = styleExpr.properties.find(
+      (p): p is t.ObjectProperty =>
+        p.type === 'ObjectProperty' &&
+        ((p.key.type === 'Identifier' && p.key.name === dim) ||
+         (p.key.type === 'StringLiteral' && p.key.value === dim))
+    );
+    if (prop) {
+      result = { expr: generate(prop.value, { jsescOption: { quotes: 'single' } }).code };
+    }
+  });
+  return result;
 }
 
 /** Write (or replace) the instance style's `<dim>:` entry; null removes it. */
 function writeInstanceStyleDim(code: string, nodeId: string, dim: 'width' | 'height', expr: string | null): string {
-  const tagSpan = findTagByDataId(code, nodeId);
-  if (!tagSpan) return code;
-  const tag = code.slice(tagSpan.start, tagSpan.end);
-  const span = styleBodySpan(tag);
-  if (!span) return code;
-  const entry = findStyleEntry(tag.slice(span.start, span.end), dim);
-  if (entry) {
-    const absStart = tagSpan.start + span.start + entry.start;
-    const absEnd = tagSpan.start + span.start + entry.end;
-    if (expr === null) {
-      return code.slice(0, absStart) + code.slice(absEnd);
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let touched = false;
+  let unowned = false;
+
+  findFirstElementByDataId(ast, nodeId, (path, element) => {
+    const opening = element.openingElement;
+    let styleAttr = findAttribute(opening, 'style') as t.JSXAttribute | null;
+
+    if (!styleAttr) {
+      if (expr === null) {
+        path.stop();
+        return;
+      }
+      const emptyObj = t.objectExpression([]);
+      const jsxExpr = t.jsxExpressionContainer(emptyObj);
+      styleAttr = t.jsxAttribute(t.jsxIdentifier('style'), jsxExpr);
+      opening.attributes.push(styleAttr);
     }
-    // findStyleEntry absorbs ONE separating comma into the span — trailing
-    // when the entry sits mid-object, leading when it's last. Restore
-    // whichever was absorbed, or the entry after this one loses its comma
-    // (`…'100%'  flex:` — the parse-gate bounce on the images grid,
-    // 2026-08-15).
-    const spanText = code.slice(absStart, absEnd);
-    const lead = spanText.startsWith(',') ? ', ' : '';
-    const trail = spanText.endsWith(',') ? ',' : '';
-    return code.slice(0, absStart) + `${lead}${dim}: ${expr}${trail}` + code.slice(absEnd);
+
+    if (styleAttr.value?.type !== 'JSXExpressionContainer') {
+      unowned = true;
+      path.stop();
+      return;
+    }
+
+    const objExpr = styleAttr.value.expression;
+    if (objExpr.type !== 'ObjectExpression') {
+      unowned = true;
+      path.stop();
+      return;
+    }
+
+    const existingIdx = objExpr.properties.findIndex(
+      (p): p is t.ObjectProperty =>
+        p.type === 'ObjectProperty' &&
+        ((p.key.type === 'Identifier' && p.key.name === dim) ||
+         (p.key.type === 'StringLiteral' && p.key.value === dim))
+    );
+
+    if (expr === null) {
+      if (existingIdx !== -1) {
+        objExpr.properties.splice(existingIdx, 1);
+        touched = true;
+      }
+    } else {
+      let parsedExpr: t.Expression;
+      try {
+        parsedExpr = parseExpression(expr, { plugins: ['typescript', 'jsx'] });
+      } catch (err) {
+        trace.error('instance-auto-size:parse-expr-failed', { nodeId, dim, expr, error: String(err) });
+        path.stop();
+        return;
+      }
+
+      if (existingIdx !== -1) {
+        (objExpr.properties[existingIdx] as t.ObjectProperty).value = parsedExpr;
+        touched = true;
+      } else {
+        const newProp = t.objectProperty(t.identifier(dim), parsedExpr);
+        const spreadIdx = objExpr.properties.findIndex((p) => p.type === 'SpreadElement');
+        if (spreadIdx !== -1) {
+          objExpr.properties.splice(spreadIdx, 0, newProp);
+        } else {
+          objExpr.properties.push(newProp);
+        }
+        touched = true;
+      }
+    }
+
+    path.stop();
+  });
+
+  if (unowned) {
+    trace.action('instance-auto-size:unowned-style-expr', { nodeId, dim });
+    return code;
   }
-  if (expr === null) return code;
-  const insertAt = tagSpan.start + span.end;
-  return code.slice(0, insertAt) + `, ${dim}: ${expr}` + code.slice(insertAt);
+
+  if (!touched) return code;
+
+  try {
+    return generate(ast, { retainLines: true, jsescOption: { quotes: 'single' } }, code).code;
+  } catch (err) {
+    trace.error('instance-auto-size:write-generate-failed', { nodeId, dim, error: String(err) });
+    return code;
+  }
 }
 
 /** Write (or replace) a plain string attr on the instance tag; null removes it. */

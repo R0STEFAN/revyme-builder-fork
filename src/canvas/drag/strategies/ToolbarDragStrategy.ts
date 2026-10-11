@@ -15,7 +15,7 @@ import { queueMutation } from '@/code/mutation/mutation-queue';
 import { recenteredPosition } from './drop-recenter';
 import { getDefaultStore } from 'jotai';
 import { selectedIdsAtom } from '@/code/stores/store';
-import { calculateLayoutInsertIndexById, applyLayoutEdgeMagnet, computeLayoutInsertOrderUpdates } from '../reparent-utils';
+import { calculateLayoutInsertIndexById, applyLayoutEdgeMagnet, computeLayoutInsertOrderUpdates, computeLayoutInsertAnchorId } from '../reparent-utils';
 import { commitOrderAssignments } from './order-commit';
 import { detectParentLayoutById, getFlexDirectionById } from '../types';
 import { nodeAcceptsChildren, isTextContainerTag } from '@/shared/constants';
@@ -445,6 +445,16 @@ export class ToolbarDragStrategy implements DragStrategy {
       ? findNodeRect(this.dropParentId, this.currentVpId ?? '')
       : null;
 
+    const baseAnchorId = (this.dropParentId && this.dropIndex !== undefined && this.currentVpId)
+      ? computeLayoutInsertAnchorId(
+          this.dropParentId,
+          this.currentVpId,
+          this.dropIndex,
+          [],
+          (id) => context.nodes.get(id)?.styles?.order,
+        )
+      : undefined;
+
     for (let itemIdx = 0; itemIdx < itemsToDrop.length; itemIdx++) {
       const curItem = itemsToDrop[itemIdx];
       const nodeId = generateNodeId(curItem.elementType === 'div' ? 'frame' : curItem.elementType);
@@ -531,12 +541,14 @@ export class ToolbarDragStrategy implements DragStrategy {
         },
         newParentId: this.dropParentId ?? undefined,
         newIndex: itemDropIndex,
+        insertBeforeId: itemIdx === 0 ? baseAnchorId : undefined,
       };
 
       trace.action('toolbar-drag:drop', {
         nodeId,
         parentId: this.dropParentId,
         index: itemDropIndex,
+        insertBeforeId: itemIdx === 0 ? baseAnchorId : undefined,
         tag: curItem.elementType,
         vpId: this.currentVpId,
         isReplicaDrop,

@@ -13,7 +13,8 @@
 // This works because both measurements are in screen space (same transform context),
 // and dividing by scale converts screen-pixel deltas to CSS-pixel values.
 
-import { findVisibleChildRects, findNodeRect } from '@/canvas/node-ops';
+import { findVisibleChildRects, findNodeRect, getActiveFilePath } from '@/canvas/node-ops';
+import { isLayoutFile } from '@/code/project/file-path-kind';
 import { getNodeFromCache } from '@/code/stores/store';
 import { detectParentLayoutById, getFlexDirectionById } from './types';
 import { trace } from '@/shared/debug-trace';
@@ -149,9 +150,11 @@ export function computeLayoutInsertAnchorId(
     findVisibleChildRects(parentId, vpId).filter(c => !draggedSet.has(c.id)),
     getNodeOrder,
   );
+  const isLayout = isLayoutFile(getActiveFilePath());
   for (let i = Math.max(0, insertIndex); i < existing.length; i++) {
     const id = existing[i].id;
-    if (id.startsWith('layout::') || id === 'children-slot') continue;
+    if (id.startsWith('layout::')) continue;
+    if (id === 'children-slot' && !isLayout) continue;
     return id;
   }
   return undefined; // append at end

@@ -23,6 +23,7 @@ import { stripScrollTextHooks } from './text-anim-gen';
 import { parseVariantConfig } from '../variants/variant-config';
 import { removeSlotHoistedCanvasNodeInCode } from './slot-ops';
 import { extractComponentPropDefaults } from '../parsing/parser';
+import { collectLogicalChildSlots, insertLogicalChild, removeLogicalChild } from './jsx-child-slots';
 
 /**
  * Update style properties of a node in JSX code.
@@ -1745,115 +1746,66 @@ export function reorderNodeInCode(
   const ast = parseJSX(code);
   if (!ast) return code;
 
-  // Step 1: Find and remove the node
-  // Widened: the thing spliced is the node's SLOT — for a gated node the
-  // conditional container, for a collection row template the `{…map()}`
-  // container. Neither is a JSXElement.
+  // Step 1: Ensure target parent exists first
+  let targetParent: t.JSXElement | null = null;
+  findFirstElementByDataId(ast, targetParentId, (_path, el) => {
+    targetParent = el;
+  });
+  if (!targetParent) return code;
+
+  // Step 2: Remove the node/slot
   let removedNode: t.JSXElement | t.JSXExpressionContainer | null = null;
 
-  findFirstElementByDataId(ast, nodeId, (path) => {
-    // Splice the SLOT, not the element. When the node is variant-wrapped its
-    // `parentPath` is a LogicalExpression, so the old `isJSXElement()` test
-    // failed, nothing was removed — and Step 2 then inserted the clone anyway.
-    // The node ended up in the file TWICE: once inside its wrapper, once bare
-    // at the new index, which the layers tree faithfully showed as two rows.
-    // A collection-list ROW TEMPLATE lives inside `{coll.map(… => <el/>)}` —
-    // its parent is the arrow function, so the plain splice below matched
-    // nothing and the clone was inserted anyway, duplicating the template (the
-    // "sdf" row duplicated by a drag, user report 2026-09-19). The container is
-    // the slot the parent actually lists, so the list moves as a unit.
-    const slot = variantVisibilitySlotPath(path) !== path
-      ? variantVisibilitySlotPath(path)
-      : (mapContainerSlotPath(path) ?? path);
-    removedNode = t.cloneNode(slot.node, true);
+  // Try same-parent logical slot removal first
+  removedNode = removeLogicalChild(targetParent, nodeId);
 
-    const parent = slot.parentPath;
-    if (parent?.isJSXElement() || parent?.isJSXFragment()) {
-      const idx = parent.node.children.indexOf(slot.node);
-      if (idx !== -1) {
-        parent.node.children.splice(idx, 1);
-        if (idx > 0 && idx <= parent.node.children.length) {
-          const prev = parent.node.children[idx - 1];
-          if (prev?.type === 'JSXText' && prev.value.trim() === '') {
-            parent.node.children.splice(idx - 1, 1);
+  if (!removedNode) {
+    // Cross-parent reorder: find the node anywhere in the AST and remove its slot
+    findFirstElementByDataId(ast, nodeId, (path) => {
+      if (
+        path.parentPath?.node &&
+        t.isJSXElement(path.parentPath.node) &&
+        path.parentPath.node.openingElement.attributes.some(
+          (a: any) => t.isJSXAttribute(a) && a.name.name === 'data-glide-item',
+        )
+      ) {
+        const wrapper = path.parentPath.node;
+        removedNode = t.cloneNode(wrapper, true);
+        const parent = path.parentPath.parentPath;
+        if (parent?.isJSXElement() || parent?.isJSXFragment()) {
+          const idx = parent.node.children.indexOf(wrapper);
+          if (idx !== -1) {
+            parent.node.children.splice(idx, 1);
+          }
+        }
+      } else {
+        const slot = variantVisibilitySlotPath(path) !== path
+          ? variantVisibilitySlotPath(path)
+          : (mapContainerSlotPath(path) ?? path);
+        removedNode = t.cloneNode(slot.node, true);
+
+        const parent = slot.parentPath;
+        if (parent?.isJSXElement() || parent?.isJSXFragment()) {
+          const idx = parent.node.children.indexOf(slot.node);
+          if (idx !== -1) {
+            parent.node.children.splice(idx, 1);
+            if (idx > 0 && idx <= parent.node.children.length) {
+              const prev = parent.node.children[idx - 1];
+              if (prev?.type === 'JSXText' && prev.value.trim() === '') {
+                parent.node.children.splice(idx - 1, 1);
+              }
+            }
           }
         }
       }
-    }
-    path.stop();
-  });
+      path.stop();
+    });
+  }
 
   if (!removedNode) return code;
 
-  // Step 2: Insert at new index in target parent
-  findFirstElementByDataId(ast, targetParentId, (path) => {
-    // Reorderable CONTENT slots = data-id'd elements + expressions ({children}
-    // occupies the placeholder slot on canvas). ANCHORS = elements WITHOUT a
-    // data-id (e.g. a leading <style> media-query block injected into a layout
-    // root) — chrome the node cache does NOT track, so the drag system's
-    // newIndex does NOT count them. If an anchor consumed a slot index, every
-    // target index would shift by one and the move would silently land one slot
-    // short (a CTA dropped "after {children}" stays before it). So keep anchors
-    // pinned at their content offset and index only over the content slots.
-    const content: t.JSXElement['children'][number][] = [];
-    const anchors: { node: t.JSXElement['children'][number]; after: number }[] = [];
-
-    for (const child of path.node.children) {
-      if (child.type === 'JSXElement') {
-        const hasDataId = child.openingElement.attributes.some(
-          (a: any) => t.isJSXAttribute(a) && a.name.name === 'data-id'
-        );
-        // An `AnimatePresence` carries no data-id of its own but WRAPS a node
-        // that has one, so it occupies that node's slot. Classified as an
-        // anchor it would be pinned at a fixed content offset — the node it
-        // holds could never be reordered, and every sibling index past it would
-        // shift.
-        const isVisibilityWrapper = child.openingElement.name.type === 'JSXIdentifier'
-          && child.openingElement.name.name === 'AnimatePresence';
-        if (hasDataId || isVisibilityWrapper) content.push(child);
-        else anchors.push({ node: child, after: content.length });
-      } else if (child.type === 'JSXExpressionContainer') {
-        content.push(child);
-      }
-    }
-
-    // Remove the moved node from the content slots (it may already be gone if
-    // Step 1 removed it from this same parent). Matched through wrappers: the
-    // slot holding a variant-hidden node is the wrapper, not the node.
-    const removeIdx = content.findIndex(n => slotHoldsNodeId(n, nodeId));
-    if (removeIdx >= 0) content.splice(removeIdx, 1);
-
-    // Insert at the target CONTENT slot index.
-    let targetIdx = newIndex;
-    if (targetIdx > content.length) targetIdx = content.length;
-    content.splice(targetIdx, 0, removedNode!);
-
-    // Rebuild: weave anchors back in at their original content offsets so a
-    // leading <style> stays first and never absorbs a reorder slot.
-    const ordered: t.JSXElement['children'][number][] = [];
-    let ai = 0;
-    for (let i = 0; i <= content.length; i++) {
-      while (ai < anchors.length && anchors[ai].after === i) { ordered.push(anchors[ai].node); ai++; }
-      if (i < content.length) ordered.push(content[i]);
-    }
-    while (ai < anchors.length) { ordered.push(anchors[ai].node); ai++; }
-
-    const newChildren: t.JSXElement['children'] = [t.jsxText('\n    ')];
-    for (const node of ordered) {
-      newChildren.push(node as any);
-      newChildren.push(t.jsxText('\n    '));
-    }
-
-    if (newChildren.length > 0) {
-      const last = newChildren[newChildren.length - 1];
-      if (last.type === 'JSXText') {
-        (last as t.JSXText).value = '\n  ';
-      }
-    }
-
-    path.node.children = newChildren;
-    path.stop();
-  });
+  // Step 3: Insert into targetParent using logical child slots
+  insertLogicalChild(targetParent, removedNode, newIndex);
 
   try {
     return generate(ast, { retainLines: false, concise: false }, code).code;
@@ -2670,6 +2622,37 @@ export function moveNodeInCode(
   let removedWrapper: t.JSXElement | t.JSXExpressionContainer | null = null;
 
   findFirstElementByDataId(ast, nodeId, (path) => {
+    // Glide ("Flow") item wrapper: remove the whole motion.div wrapper from its parent
+    // so no empty husk is left behind.
+    if (
+      path.parentPath?.node &&
+      t.isJSXElement(path.parentPath.node) &&
+      path.parentPath.node.openingElement.attributes.some(
+        (a: any) => t.isJSXAttribute(a) && a.name.name === 'data-glide-item',
+      )
+    ) {
+      const glideWrapper = path.parentPath.node;
+      removedNode = (newParentId === null || isMovingToRoot)
+        ? t.cloneNode(path.node, true)
+        : t.cloneNode(glideWrapper, true);
+      const parent = path.parentPath.parentPath;
+      if (parent?.isJSXElement() || parent?.isJSXFragment()) {
+        const idx = parent.node.children.indexOf(glideWrapper);
+        if (idx !== -1) {
+          parent.node.children.splice(idx, 1);
+          if (idx > 0 && idx <= parent.node.children.length) {
+            const prev = parent.node.children[idx - 1];
+            if (prev?.type === 'JSXText' && prev.value.trim() === '') {
+              parent.node.children.splice(idx - 1, 1);
+            }
+          }
+        }
+      }
+      trace.action('generator:moveNodeInCode-removed-glide-wrapper', { nodeId });
+      path.stop();
+      return;
+    }
+
     removedNode = t.cloneNode(path.node, true);
 
     // A gated node is not a direct child — its slot is the wrapper. Check this
@@ -3294,65 +3277,8 @@ export function moveNodeInCode(
           });
         }
       }
-      // ANCHOR-FIRST: splice before the named sibling. Immune to every
-      // index-space divergence (CSS `order` reorders, `<style>` children,
-      // siblings the rect walk missed). Falls through to the index logic
-      // when the anchor isn't a JSX child here (template node in another
-      // file) — and to append when neither resolves.
-      if (insertBeforeId) {
-        const children = path.node.children;
-        let anchorPos = -1;
-        for (let i = 0; i < children.length; i++) {
-          const c = children[i];
-          if (c.type !== 'JSXElement') continue;
-          const hit = c.openingElement.attributes.some((a: t.JSXAttribute | t.JSXSpreadAttribute) =>
-            a.type === 'JSXAttribute' && a.name.name === 'data-id'
-            && a.value?.type === 'StringLiteral' && a.value.value === insertBeforeId);
-          if (hit) { anchorPos = i; break; }
-        }
-        if (anchorPos >= 0) {
-          trace.action('generator:moveNodeInCode-anchor-insert', { nodeId, insertBeforeId });
-          children.splice(anchorPos, 0, t.jsxText('\n    '), removedNode!);
-          path.stop();
-          return;
-        }
-        trace.action('generator:moveNodeInCode-anchor-missing', { nodeId, insertBeforeId });
-      }
-      if (insertIndex != null && insertIndex >= 0) {
-        // Insert at specific index among JSXElement + JSXExpressionContainer children.
-        // Expressions like {children} occupy a visual slot on canvas and must be counted.
-        // `<style>` elements do NOT: they render no box, so every visual index
-        // producer (drop line, reorder, computeLayoutInsertOrderUpdates) is
-        // blind to them — counting one here shifted the whole insert a slot
-        // early on any page whose root leads with a responsive-override
-        // `<style>` block ("line showed below Capabilities, landed above",
-        // templated page 2026-08-05).
-        const children = path.node.children;
-        let slotCount = 0;
-        let insertPos = children.length; // fallback: append at end
-
-        for (let i = 0; i < children.length; i++) {
-          const c = children[i];
-          const isStyleEl = c.type === 'JSXElement'
-            && c.openingElement.name.type === 'JSXIdentifier'
-            && c.openingElement.name.name === 'style';
-          if ((c.type === 'JSXElement' && !isStyleEl) || c.type === 'JSXExpressionContainer') {
-            if (slotCount === insertIndex) {
-              insertPos = i;
-              break;
-            }
-            slotCount++;
-          }
-        }
-
-        // Insert whitespace + node at the calculated position
-        children.splice(insertPos, 0, t.jsxText('\n    '), removedNode!);
-      } else {
-        // Append at end (default)
-        path.node.children.push(t.jsxText('\n    '));
-        path.node.children.push(removedNode!);
-        path.node.children.push(t.jsxText('\n  '));
-      }
+      // Insert using unified logical child slots
+      insertLogicalChild(path.node as t.JSXElement, removedNode!, insertIndex ?? 0, insertBeforeId);
       path.stop();
     });
     if (!parentFound) {
@@ -3502,8 +3428,9 @@ export function addNodeInCode(
   parentId: string,
   node: AddNodeDef,
   index?: number,
+  insertBeforeId?: string,
 ): string {
-  trace.fn('generator.addNodeInCode', { parentId, nodeId: node.id, index });
+  trace.fn('generator.addNodeInCode', { parentId, nodeId: node.id, index, insertBeforeId });
 
   // NOTE: an icon-set master is NOT a component file — its shapes
   // must stay plain `<svg>`, never `motion.svg` (motion shapes break thumbnails,
@@ -3517,13 +3444,13 @@ export function addNodeInCode(
   const jsxStr = buildNodeJSX(node, isComponentFile);
 
   // FAST PATH: append as last child (no index = append, no Babel needed)
-  if (index === undefined) {
+  if (index === undefined && !insertBeforeId) {
     const fast = addNodeFast(code, parentId, jsxStr);
     if (fast !== null) return fast;
   }
 
-  // SLOW PATH: full AST (for specific index insertion)
-  return addNodeAST(code, parentId, jsxStr, index);
+  // SLOW PATH: full AST (for specific index insertion or when wrappers present)
+  return addNodeAST(code, parentId, jsxStr, index, insertBeforeId);
 }
 
 /** Fast path: find parent's closing tag and insert JSX before it. O(1), no Babel. */
@@ -3556,12 +3483,31 @@ function addNodeFast(code: string, parentId: string, jsxStr: string): string | n
   // handled by the shared depth matcher from generator-utils).
   const insertPos = findMatchingCloseTagIndex(code, tagName, openingEnd + 1);
   if (insertPos === -1) return null; // malformed / couldn't find matching close
+
+  const childrenText = code.slice(openingEnd + 1, insertPos);
+  // Indirect wrappers (Glide, LayoutGroup, PageTransitions, MotionConfig, AnimatePresence, CMS .map, {children}) need AST path.
+  if (
+    childrenText.includes('.map(') ||
+    childrenText.includes('data-glide') ||
+    childrenText.includes('LayoutGroup') ||
+    childrenText.includes('PageTransitions') ||
+    childrenText.includes('MotionConfig') ||
+    childrenText.includes('AnimatePresence') ||
+    childrenText.includes('{children}')
+  ) return null;
+
   // Found the matching closing tag — insert before it
   return code.slice(0, insertPos) + '\n    ' + jsxStr + '\n  ' + code.slice(insertPos);
 }
 
 /** Slow path: full AST for index-specific insertion. */
-function addNodeAST(code: string, parentId: string, jsxStr: string, index?: number): string {
+function addNodeAST(
+  code: string,
+  parentId: string,
+  jsxStr: string,
+  index?: number,
+  insertBeforeId?: string,
+): string {
   const ast = parseJSX(code);
   if (!ast) return code;
 
@@ -3588,27 +3534,18 @@ function addNodeAST(code: string, parentId: string, jsxStr: string, index?: numb
     // Drop target may be self-closing (e.g. an empty background layer) — open it
     // up so the pushed child isn't discarded / left unterminated by the generator.
     ensureParentCanHoldChildren(path.node);
-    const children = path.node.children;
-
-    if (index === undefined) {
-      children.push(t.jsxText('\n    '));
-      children.push(newElement!);
-      children.push(t.jsxText('\n  '));
-    } else {
-      const elementIndices: number[] = [];
-      children.forEach((child: any, i: number) => {
-        if (child.type === 'JSXElement') elementIndices.push(i);
-      });
-
-      const insertBefore = index < elementIndices.length
-        ? elementIndices[index]
-        : children.length;
-
-      children.splice(insertBefore, 0,
-        t.jsxText('\n    '),
-        newElement!,
-      );
-    }
+    const effectiveIndex = index ?? (insertBeforeId ? 0 : 999999);
+    const slots = collectLogicalChildSlots(path.node);
+    const resolvedSibling = insertBeforeId
+      ? slots.find((s) => s.id === insertBeforeId)?.id
+      : (index !== undefined && index < slots.length ? slots[index]?.id : undefined);
+    trace.action('generator:add-node-logical', {
+      parentId,
+      requestedIndex: index,
+      anchorId: insertBeforeId,
+      resolvedLogicalSibling: resolvedSibling,
+    });
+    insertLogicalChild(path.node, newElement!, effectiveIndex, insertBeforeId);
     path.stop();
   });
 

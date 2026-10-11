@@ -107,7 +107,7 @@ import { setScrollVariantInCode, dormantizeScrollVariant, rehydrateScrollVariant
 import { removeTemplateVarFromCode } from '../generation/template-route-gen';
 import { setInstanceFxInCode, dormantizeInstanceFx, rehydrateInstanceFx, stripDeadFxStyleRefs } from '../generation/instance-fx-gen';
 import { setScrollFxInCode, removeScrollSpeedScopeBranch, dormantizeScrollFx, rehydrateScrollFx, writeCanvasNodeScrollFx, updateVariantEntryTransition, setElementTransitionVar, setVariantTransitionPropVar, setMotionConfigBaseVar, readTransitionVarRef } from '../generation/generator-motion';
-import { setGlideInCode, hasGlide, getGlide } from '../generation/glide-gen';
+import { setGlideInCode, hasGlide, getGlide, sweepEmptyGlideWrappers } from '../generation/glide-gen';
 import { wireFormSubmitInCode, ensureFormRouteFile } from '../generation/form-gen';
 import {
   convertSubmitButtonInCode,
@@ -252,7 +252,7 @@ export type Mutation =
   | { type: 'updateInstancePropBase'; nodeId: string; componentName: string; prop: string; value: string }
   // ─── Structure mutations ────────────────────────────────────────────────
   /** Insert a new element inside a parent. Requires unique id. Index is optional insert position. */
-  | { type: 'addNode'; parentId: string; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[] }; index?: number }
+  | { type: 'addNode'; parentId: string; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[] }; index?: number; insertBeforeId?: string }
   /** Add a new absolute-positioned element to the canvas root (no parent). */
   | { type: 'addCanvasNode'; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[] } }
   /** Replica drag-out of a CMS collection list: COPY the literal `.map()` subtree
@@ -1172,6 +1172,12 @@ export function flushNow(scope?: QueueScope): void {
 
     const mutations = coalesceMoves(queue.splice(0));
     const codeBefore = currentCode; // pre-mutation baseline for the syntax gate
+    const needsSyntaxGate = mutations.some(m =>
+      SYNC_SYNTAX_GATED_TYPES.has(m.type) ||
+      (m.type === 'updateStyles' &&
+       (m.styles.width !== undefined || m.styles.height !== undefined) &&
+       isDesignInstanceNode(m.nodeId)),
+    );
     let code = healDuplicateLayoutAttrs(currentCode);
     for (const m of mutations) {
       code = applyMutation(code, m);
@@ -1276,7 +1282,6 @@ export function flushNow(scope?: QueueScope): void {
     // drag-drop and every creator ends in flushNow) and the drop path
     // deliberately DEFERS its parse for frame budget — validating them here
     // would undo that. They keep the async `processQueue` validation.
-    const needsSyntaxGate = mutations.some(m => SYNC_SYNTAX_GATED_TYPES.has(m.type));
     if (needsSyntaxGate) {
       const syncValidationError = validateGeneratedCode(code);
       // Only block damage THIS flush caused. If the file was ALREADY invalid
@@ -2136,14 +2141,23 @@ export function coalesceMoves(mutations: Mutation[]): Mutation[] {
 }
 
 function reglideInsertedParents(code: string, mutations: Mutation[]): string {
+  const pids = new Set<string>();
   for (const m of mutations) {
-    const pid = m.type === 'move' ? m.newParentId : m.type === 'addNode' ? m.parentId : null;
-    if (pid && hasGlide(code, pid)) {
+    if (m.type === 'move') {
+      if (m.newParentId) pids.add(m.newParentId);
+    } else if (m.type === 'addNode') {
+      if (m.parentId) pids.add(m.parentId);
+    } else if (m.type === 'reorder') {
+      if (m.parentId) pids.add(m.parentId);
+    }
+  }
+  for (const pid of pids) {
+    if (hasGlide(code, pid)) {
       const spec = getGlide(code, pid);
       if (spec) code = setGlideInCode(code, pid, spec);
     }
   }
-  return code;
+  return sweepEmptyGlideWrappers(code);
 }
 
 function processQueue(): void {
@@ -2538,7 +2552,7 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         );
 
       case 'addNode': {
-        let next = addNodeInCode(code, mutation.parentId, mutation.node, mutation.index);
+        let next = addNodeInCode(code, mutation.parentId, mutation.node, mutation.index, mutation.insertBeforeId);
         // CMS field auto-bind: a drop from the Insert > CMS > Fields panel
         // carries a `data-cms-field="<slug>:<fieldId>"` hint. If it lands
         // inside a `.map(…)` ancestor we rewrite its text to the iterator
