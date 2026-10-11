@@ -190,7 +190,7 @@ export async function captureElement(
       if (opts.format === 'jpeg') return await htmlToImage.toJpeg(el, { ...base, quality: 0.95 });
       return await htmlToImage.toPng(el, base);
     } catch (err) {
-      trace.error('canvas-sandbox:captureElement-failed', err);
+      trace.warn('canvas-sandbox:captureElement-failed', err);
       return null;
     }
 }

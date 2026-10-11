@@ -46,6 +46,7 @@ export default defineConfig({
   plugins: [react(), runtimeBridgeImportmapPlugin()],
   server: {
     port: 5175,
+    forwardConsole: false,
     strictPort: true,
     cors: true,
     proxy: {

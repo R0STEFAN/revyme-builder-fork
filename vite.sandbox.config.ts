@@ -72,6 +72,7 @@ export default defineConfig({
   plugins: [react(), sandboxStubsPlugin(), runtimeBridgeImportmapPlugin()],
   server: {
     port: 5174,
+    forwardConsole: false,
     strictPort: true,
     cors: true,
     proxy: {

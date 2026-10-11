@@ -9,6 +9,30 @@ import { subscribeBuilderTheme } from './editor/builder-theme';
 // the atom and the light/dark switch thereafter.
 subscribeBuilderTheme();
 
+// Circuit-breaker: stop runaway unhandledrejection / error cascades from
+// looping indefinitely and freezing the browser or leaking memory.
+if (typeof window !== 'undefined') {
+  let cascadeCount = 0;
+  let lastCascadeTime = 0;
+  window.addEventListener(
+    'unhandledrejection',
+    (e) => {
+      const now = Date.now();
+      if (now - lastCascadeTime < 1000) {
+        cascadeCount++;
+        if (cascadeCount > 30) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      } else {
+        cascadeCount = 1;
+        lastCascadeTime = now;
+      }
+    },
+    true
+  );
+}
+
 // Bind <Provider> to the global default store so non-React code paths
 // (e.g. the dev-only `__e2e` hook in ProjectLoader, mutation queue
 // callbacks) can read/write the same atoms React subscribes to. Without

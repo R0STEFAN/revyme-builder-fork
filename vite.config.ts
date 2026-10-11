@@ -421,6 +421,9 @@ export default defineConfig(({ mode }) => {
   base: cloudMode ? '/builder/' : '/',
   server: {
     port: 3333,
+    // Disable Vite 6's experimental forwardConsole agent auto-hook to prevent
+    // infinite recursive rejection loops when WebSocket reconnects.
+    forwardConsole: false,
     watch: {
       ignored: ['**/debug_output/**', '**/debug-code*.jsx', '**/data/**'],
     },

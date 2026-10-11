@@ -1,0 +1,15 @@
+diff --git a/node_modules/vite/dist/client/client.mjs b/node_modules/vite/dist/client/client.mjs
+index 943d56c..ce4e175 100644
+--- a/node_modules/vite/dist/client/client.mjs
++++ b/node_modules/vite/dist/client/client.mjs
+@@ -435,7 +435,9 @@ const createWebSocketModuleRunnerTransport = (options) => {
+ 			ws?.close();
+ 		},
+ 		send(data) {
+-			ws.send(JSON.stringify(data));
++			if (ws && ws.readyState === 1 /* OPEN */) {
++				ws.send(JSON.stringify(data));
++			}
+ 		}
+ 	};
+ };

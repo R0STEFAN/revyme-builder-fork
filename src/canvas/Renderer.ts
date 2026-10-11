@@ -4090,7 +4090,7 @@ function buildNodeElement(
         templateNode = templateNode || nodes.get(templateIds['default'] || Object.values(templateIds)[0]);
 
         if (!templateNode) {
-          trace.error('renderer:collection-template-not-found', {
+          trace.warn('renderer:collection-template-not-found', {
             nodeId: node.id, source, index: i, itemId: item._id,
           });
           continue;
