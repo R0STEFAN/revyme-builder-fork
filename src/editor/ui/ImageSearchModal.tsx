@@ -10,6 +10,7 @@ import { trace } from '@/shared/debug-trace';
 import Modal from '@/design-system/Modal';
 import { backend } from '@/backend';
 import { getProjectId } from '@/backend/project-id';
+import { deriveUploadKey } from '@/editor/left-toolbar/panels/media-gallery-utils';
 
 // Unsplash search. In CLOUD mode it goes through the backend proxy
 // (`/api/media/unsplash`) so Revyme's key stays server-side and out of the
@@ -51,6 +52,13 @@ interface Asset3D {
   keywords: string[];
 }
 
+interface UploadedMediaItem {
+  url: string;
+  thumbnailUrl?: string;
+  key?: string;
+  size?: number;
+}
+
 type Tab = 'unsplash' | 'upload' | 'create' | '3d';
 
 export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSearchModalProps) {
@@ -65,7 +73,8 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
   const unsplashGridRef = useRef<HTMLDivElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<{ url: string; thumbnailUrl?: string; size?: number }[]>([]);
+  const [loadingUploads, setLoadingUploads] = useState(false);
+  const [uploads, setUploads] = useState<UploadedMediaItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   // ── Admin-only 3D assets tab ──
   const [isAdmin, setIsAdmin] = useState(false);
@@ -148,19 +157,26 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
   }, [isOpen, searchUnsplash]);
 
   // Load the project's already-uploaded images for the Upload tab (mirrors
-  // MediaGalleryPanel.fetchUploads — same endpoint + response shape, cloud-
-  // gated). So the Upload tab shows the website's media, not just a drop zone.
+  // MediaGalleryPanel.fetchUploads — same endpoint + response shape).
+  // Works in both cloud and local/self-hosted modes.
   const fetchUploadedMedia = useCallback(async () => {
-    if (!CLOUD_ENABLED) return;
+    setLoadingUploads(true);
     try {
       const res = await fetch(`/api/upload?websiteId=${getProjectId()}&type=image`);
       if (res.ok) {
         const data = await res.json();
-        setUploads(data.uploads || []);
-        trace.action('image-search:uploads-loaded', { count: data.uploads?.length ?? 0 });
+        const rawUploads: UploadedMediaItem[] = data.uploads || [];
+        const filtered = rawUploads.filter((u) => {
+          const key = deriveUploadKey(u) || '';
+          return !key.startsWith('thumbnail-') && !u.url.includes('/thumbnail-');
+        });
+        setUploads(filtered);
+        trace.action('image-search:uploads-loaded', { count: filtered.length });
       }
     } catch (err) {
       trace.error('image-search:uploads-fetch-failed', err);
+    } finally {
+      setLoadingUploads(false);
     }
   }, []);
 
@@ -370,15 +386,21 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
               </label>
               {/* The website's already-uploaded images — same library as the
                   LeftPanel Media gallery. Click one to use it as the fill. */}
-              {uploads.map((item, i) => (
+              {loadingUploads && Array.from({ length: 11 }).map((_, i) => (
+                <div key={i} className="aspect-square cut-corners overflow-hidden animate-pulse bg-gradient-to-r from-[var(--grid-line)] via-[var(--bg-hover)] to-[var(--grid-line)]" />
+              ))}
+              {!loadingUploads && uploads.map((item, i) => (
                 <button
-                  key={item.url + i}
+                  key={item.key || (item.url + i)}
                   onClick={() => handleSelect(item.url)}
-                  className="relative group cursor-pointer aspect-square cut-corners overflow-hidden"
+                  title={item.key || item.url}
+                  className="relative group cursor-pointer aspect-square cut-corners overflow-hidden bg-[var(--bg-surface)]"
                 >
-                  <div
-                    className="w-full h-full bg-cover bg-center transition-transform group-hover:scale-105"
-                    style={{ backgroundImage: `url(${item.thumbnailUrl || item.url})` }}
+                  <img
+                    src={item.thumbnailUrl || item.url}
+                    alt=""
+                    loading="lazy"
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105 pointer-events-none"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
                 </button>
