@@ -14,13 +14,48 @@ import { flushNow } from '@/code/mutation/mutation-queue';
 import { pushHistoryImmediate, rebaselineHistory, sealPendingHistory } from '@/code/mutation/history';
 import { triggerAutosave } from '@/backend/autosave';
 import { isCanvasBusy } from '@/code/stores/agent-run-lock-store';
-import { parseComponentControlsMeta } from '@/code/components/controls-parser';
+import { parseComponentControlsMeta, type ComponentControlDef } from '@/code/components/controls-parser';
 import ComponentCodePane from './ComponentCodePane';
 import ComponentPreviewPane from './ComponentPreviewPane';
 import ComponentPropsPanel from './ComponentPropsPanel';
 import Breadcrumb from '@/design-system/Breadcrumb';
 import Button from '@/design-system/Button';
 import { trace } from '@/shared/debug-trace';
+
+/**
+ * Recursively collect default values from a controls map, flattening nested `group` controls.
+ */
+export function extractControlDefaults(controls: Record<string, ComponentControlDef>): Record<string, any> {
+  const defaults: Record<string, any> = {};
+  for (const [key, def] of Object.entries(controls)) {
+    if (def.type === 'group' && def.controls) {
+      Object.assign(defaults, extractControlDefaults(def.controls));
+    } else if (def.default !== undefined) {
+      defaults[key] = def.default;
+    }
+  }
+  return defaults;
+}
+
+/**
+ * Merge current props with defaults from controls:
+ * - Recursively flattens defaults for nested `group` controls.
+ * - Preserves already-set values including false, 0, and empty strings.
+ */
+export function mergePropsWithDefaults(
+  controls: Record<string, ComponentControlDef> | undefined | null,
+  prev: Record<string, any>,
+): Record<string, any> {
+  if (!controls) return prev;
+  const defaults = extractControlDefaults(controls);
+  const merged: Record<string, any> = { ...defaults };
+  for (const [key, val] of Object.entries(prev)) {
+    if (val !== undefined) {
+      merged[key] = val;
+    }
+  }
+  return merged;
+}
 
 export default function ComponentEditorOverlay() {
   const [filePath, setFilePath] = useAtom(componentEditorFileAtom);
@@ -43,13 +78,7 @@ export default function ComponentEditorOverlay() {
   // Initialize props from @controls defaults when controls change
   useEffect(() => {
     if (!controls) return;
-    setProps(prev => {
-      const merged: Record<string, any> = {};
-      for (const [key, def] of Object.entries(controls)) {
-        merged[key] = key in prev ? prev[key] : def.default;
-      }
-      return merged;
-    });
+    setProps(prev => mergePropsWithDefaults(controls, prev));
   }, [controls, setProps]);
 
   const handlePropChange = useCallback((key: string, value: any) => {
