@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 
 export interface ProjectFolder {
   id: string;
@@ -52,6 +53,7 @@ export function getDataDirs(customRoot?: string) {
   const root = customRoot || process.env.REVYME_DATA_DIR || path.resolve(process.cwd(), 'data');
   const projectsDir = path.join(root, 'projects');
   const uploadsDir = path.join(root, 'uploads');
+  const thumbnailsDir = path.join(root, 'thumbnails');
   const foldersFile = path.join(root, 'folders.json');
   const versionsDir = path.join(root, 'versions');
   const uploadsMetaFile = path.join(root, 'uploads-meta.json');
@@ -62,11 +64,14 @@ export function getDataDirs(customRoot?: string) {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
+  if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
+  }
   if (!fs.existsSync(versionsDir)) {
     fs.mkdirSync(versionsDir, { recursive: true });
   }
 
-  return { root, projectsDir, uploadsDir, foldersFile, versionsDir, uploadsMetaFile };
+  return { root, projectsDir, uploadsDir, thumbnailsDir, foldersFile, versionsDir, uploadsMetaFile };
 }
 
 /**
@@ -519,9 +524,14 @@ export function saveUpload(
   };
   writeUploadsMeta(meta, customRoot);
 
+  if (!isVideo) {
+    ensureThumbnail(filename, customRoot).catch(() => {});
+  }
+
   return {
     filename,
     url: `/api/uploads/${filename}`,
+    thumbnailUrl: isVideo ? undefined : `/api/uploads/thumb/${filename}`,
     size: buffer.length,
     key: filename,
   };
@@ -535,7 +545,7 @@ export function saveUploadExact(
   buffer: Buffer,
   customRoot?: string,
   projectId = 'local'
-): { filename: string; url: string; size: number; key: string } {
+): { filename: string; url: string; thumbnailUrl?: string; size: number; key: string } {
   const { uploadsDir } = getDataDirs(customRoot);
   const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
   const filePath = path.join(uploadsDir, safeName);
@@ -557,9 +567,14 @@ export function saveUploadExact(
   };
   writeUploadsMeta(meta, customRoot);
 
+  if (!isVideo) {
+    ensureThumbnail(safeName, customRoot).catch(() => {});
+  }
+
   return {
     filename: safeName,
     url: `/api/uploads/${safeName}`,
+    thumbnailUrl: isVideo ? undefined : `/api/uploads/thumb/${safeName}`,
     size: buffer.length,
     key: safeName,
   };
@@ -579,9 +594,65 @@ export function getUploadFilePath(filename: string, customRoot?: string): string
   return null;
 }
 
+/**
+ * Get cached thumbnail file path if it exists on disk.
+ */
+export function getThumbnailFilePath(filename: string, customRoot?: string): string | null {
+  const { thumbnailsDir } = getDataDirs(customRoot);
+  const safeName = path.basename(filename).split('?')[0];
+  const thumbPath = path.join(thumbnailsDir, `${safeName}.webp`);
+
+  if (fs.existsSync(thumbPath)) {
+    return thumbPath;
+  }
+  return null;
+}
+
+/**
+ * Generate (if needed) and return the absolute filesystem path to the thumbnail for the given file.
+ * Returns null if the original file does not exist or if image processing fails (e.g. SVG or corrupt image).
+ */
+export async function ensureThumbnail(filename: string, customRoot?: string): Promise<string | null> {
+  const { uploadsDir, thumbnailsDir } = getDataDirs(customRoot);
+  const safeName = path.basename(filename).split('?')[0];
+  const originalPath = path.join(uploadsDir, safeName);
+
+  if (!fs.existsSync(originalPath)) {
+    return null;
+  }
+
+  const thumbName = `${safeName}.webp`;
+  const thumbPath = path.join(thumbnailsDir, thumbName);
+
+  if (fs.existsSync(thumbPath)) {
+    return thumbPath;
+  }
+
+  const tmpPath = path.join(thumbnailsDir, `${thumbName}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    await sharp(originalPath, { failOnError: false })
+      .rotate()
+      .resize(240, 240, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toFile(tmpPath);
+
+    fs.renameSync(tmpPath, thumbPath);
+    return thumbPath;
+  } catch {
+    if (fs.existsSync(tmpPath)) {
+      try { fs.unlinkSync(tmpPath); } catch {}
+    }
+    if (fs.existsSync(thumbPath)) {
+      return thumbPath;
+    }
+    return null;
+  }
+}
+
 export interface UploadRecord {
   key: string;
   url: string;
+  thumbnailUrl?: string;
   name: string;
   size: number;
   type: 'image' | 'video';
@@ -614,6 +685,7 @@ export function listUploads(type?: 'image' | 'video', customRoot?: string, proje
       records.push({
         key: file,
         url: `/api/uploads/${file}`,
+        thumbnailUrl: fileType === 'image' ? `/api/uploads/thumb/${file}` : undefined,
         name: fileMeta?.originalName || file,
         size: stat.size,
         type: fileType,
@@ -628,9 +700,10 @@ export function listUploads(type?: 'image' | 'video', customRoot?: string, proje
 }
 
 export function deleteUpload(filename: string, customRoot?: string): boolean {
-  const { uploadsDir } = getDataDirs(customRoot);
-  const safeName = path.basename(filename);
+  const { uploadsDir, thumbnailsDir } = getDataDirs(customRoot);
+  const safeName = path.basename(filename).split('?')[0];
   const filePath = path.join(uploadsDir, safeName);
+  const thumbPath = path.join(thumbnailsDir, `${safeName}.webp`);
   let deleted = false;
   if (fs.existsSync(filePath)) {
     try {
@@ -638,6 +711,13 @@ export function deleteUpload(filename: string, customRoot?: string): boolean {
       deleted = true;
     } catch {
       deleted = false;
+    }
+  }
+  if (fs.existsSync(thumbPath)) {
+    try {
+      fs.unlinkSync(thumbPath);
+    } catch {
+      // ignore
     }
   }
   const meta = readUploadsMeta(customRoot);

@@ -11,6 +11,8 @@ import {
   saveUpload,
   saveUploadExact,
   getUploadFilePath,
+  getThumbnailFilePath,
+  ensureThumbnail,
   listFolders,
   saveFolder,
   renameFolder,
@@ -267,6 +269,51 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         } catch (err: any) {
           return sendJson(res, 400, { error: err.message || 'Failed to import bundle' });
         }
+      }
+
+      // ─── GET /api/uploads/thumb/:file ─────────────────────────────────────
+      if (url.startsWith('/api/uploads/thumb/') && (method === 'GET' || method === 'HEAD')) {
+        const rawFilename = url.replace('/api/uploads/thumb/', '').split('?')[0];
+        let filename = rawFilename;
+        try {
+          filename = decodeURIComponent(rawFilename);
+        } catch {}
+
+        const thumbPath = await ensureThumbnail(filename);
+        if (thumbPath && fs.existsSync(thumbPath)) {
+          res.setHeader('Content-Type', 'image/webp');
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          if (method === 'HEAD') {
+            try {
+              const stat = fs.statSync(thumbPath);
+              res.setHeader('Content-Length', String(stat.size));
+            } catch {}
+            return res.end();
+          }
+          const stream = fs.createReadStream(thumbPath);
+          return stream.pipe(res);
+        }
+
+        // Fallback to original image if thumbnail cannot be generated or format is not convertible
+        const filePath = getUploadFilePath(filename);
+        if (!filePath) {
+          res.statusCode = 404;
+          return res.end('Not found');
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const mime = MIME_TYPES[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        if (method === 'HEAD') {
+          try {
+            const stat = fs.statSync(filePath);
+            res.setHeader('Content-Length', String(stat.size));
+          } catch {}
+          return res.end();
+        }
+        const stream = fs.createReadStream(filePath);
+        return stream.pipe(res);
       }
 
       // ─── GET /api/uploads/:file ───────────────────────────────────────────

@@ -70,7 +70,9 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
 
       const bodyData =
         opts.body !== undefined
-          ? typeof opts.body === 'string'
+          ? Buffer.isBuffer(opts.body)
+            ? opts.body
+            : typeof opts.body === 'string'
             ? opts.body
             : JSON.stringify(opts.body)
           : null;
@@ -134,7 +136,7 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
 
       process.nextTick(() => {
         if (bodyData) {
-          req.emit('data', Buffer.from(bodyData));
+          req.emit('data', Buffer.isBuffer(bodyData) ? bodyData : Buffer.from(bodyData));
         }
         req.emit('end');
       });
@@ -853,6 +855,67 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       // 5. Clean up
       await dispatch({ method: 'DELETE', url: `/api/upload?key=${encodeURIComponent(upload1.body.filename)}` });
       await dispatch({ method: 'DELETE', url: `/api/upload?key=${encodeURIComponent(upload2.body.filename)}` });
+    });
+
+    it('serves lightweight webp thumbnails and deletes them on cleanup', async () => {
+      const sharp = (await import('sharp')).default;
+      const imgBuf = await sharp({
+        create: { width: 500, height: 400, channels: 3, background: { r: 50, g: 150, b: 250 } }
+      }).png().toBuffer();
+
+      const boundary = '----WebKitFormBoundaryThumbTest123';
+      const body = Buffer.concat([
+        Buffer.from([
+          `--${boundary}`,
+          'Content-Disposition: form-data; name="file"; filename="gallery-photo.png"',
+          'Content-Type: image/png',
+          '',
+          '',
+        ].join('\r\n')),
+        imgBuf,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const uploadRes = await dispatch({
+        method: 'POST',
+        url: '/api/upload',
+        body,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      });
+      expect(uploadRes.status).toBe(200);
+      const filename = uploadRes.body.filename;
+      expect(uploadRes.body.thumbnailUrl).toBe(`/api/uploads/thumb/${filename}`);
+
+      // 1. GET /api/uploads/thumb/:file generates and serves WebP thumbnail
+      const thumbRes = await dispatch({
+        method: 'GET',
+        url: `/api/uploads/thumb/${filename}`,
+      });
+      expect(thumbRes.status).toBe(200);
+      expect(thumbRes.headers['content-type']).toBe('image/webp');
+      expect(thumbRes.headers['cache-control']).toContain('immutable');
+
+      // 2. Second GET serves cached thumbnail from disk
+      const thumbRes2 = await dispatch({
+        method: 'GET',
+        url: `/api/uploads/thumb/${filename}`,
+      });
+      expect(thumbRes2.status).toBe(200);
+      expect(thumbRes2.headers['content-type']).toBe('image/webp');
+
+      // 3. DELETE removes original and thumbnail
+      const delRes = await dispatch({
+        method: 'DELETE',
+        url: `/api/upload?key=${encodeURIComponent(filename)}`,
+      });
+      expect(delRes.status).toBe(200);
+
+      // 4. After deletion, GET thumb returns 404
+      const afterDel = await dispatch({
+        method: 'GET',
+        url: `/api/uploads/thumb/${filename}`,
+      });
+      expect(afterDel.status).toBe(404);
     });
   });
 });

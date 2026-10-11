@@ -14,7 +14,8 @@
 // selected tile then bulk-deletes the whole selection. Cloud-only (the
 // standalone object URLs have no server object to delete).
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react';
+import { List, useListRef, type RowComponentProps } from 'react-window';
 import { CLOUD_ENABLED } from '@/shared/cloud-flag';
 import { ToolSegmentedControl } from '@/editor/controls';
 import { trace } from '@/shared/debug-trace';
@@ -33,6 +34,7 @@ import {
   rangeSelectKeys,
   toggleSelectAllKeys,
   getSelectionState,
+  computeGridTileRects,
   type TileRect,
 } from './media-gallery-utils';
 
@@ -43,6 +45,7 @@ const TAB_OPTIONS = [
 
 interface UploadedFile {
   url: string;
+  thumbnailUrl?: string;
   key?: string;
   size?: number;
   lastModified?: string;
@@ -95,7 +98,8 @@ export function makeMediaToolbarItem(url: string, kind: 'image' | 'video', ghost
 function useMediaDrag(
   url: string,
   kind: 'image' | 'video',
-  batchItems?: ToolbarItem[],
+  isSelected: boolean,
+  getBatchItems?: () => ToolbarItem[] | undefined,
   onTileClick?: (e: PointerEvent) => void
 ) {
   return useCallback((e: React.PointerEvent) => {
@@ -109,9 +113,12 @@ function useMediaDrag(
     const ghostW = Math.round(rect.width)  || 200;
     const ghostH = Math.round(rect.height) || 150;
     const item: ToolbarItem = makeMediaToolbarItem(url, kind, ghostW, ghostH);
-    if (batchItems && batchItems.length > 1) {
-      const filtered = batchItems.filter((b) => b.id !== item.id);
-      item.batch = [item, ...filtered];
+    if (isSelected && getBatchItems) {
+      const batchItems = getBatchItems();
+      if (batchItems && batchItems.length > 1) {
+        const filtered = batchItems.filter((b) => b.id !== item.id);
+        item.batch = [item, ...filtered];
+      }
     }
     let dragStarted = false;
     const cleanup = () => {
@@ -138,18 +145,18 @@ function useMediaDrag(
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
-  }, [url, kind, batchItems, onTileClick]);
+  }, [url, kind, isSelected, getBatchItems, onTileClick]);
 }
 
 /** Single tile in the gallery grid with selection checkbox, drag to canvas,
  *  hover delete button, and selection overlay. */
 const MediaTile = React.memo(function MediaTile({
   url,
+  thumbnailUrl,
   kind,
   mediaKey,
   isSelected,
-  batchItems,
-  hasAnySelected,
+  getBatchItems,
   canDelete,
   onShiftPointerDown,
   onPlainClick,
@@ -158,11 +165,11 @@ const MediaTile = React.memo(function MediaTile({
   onRequestDelete,
 }: {
   url: string;
+  thumbnailUrl?: string;
   kind: 'image' | 'video';
   mediaKey: string | null;
   isSelected: boolean;
-  batchItems?: ToolbarItem[];
-  hasAnySelected: boolean;
+  getBatchItems?: () => ToolbarItem[] | undefined;
   canDelete: boolean;
   onShiftPointerDown: (key: string, e: React.PointerEvent) => void;
   onPlainClick: (key: string) => void;
@@ -170,7 +177,7 @@ const MediaTile = React.memo(function MediaTile({
   onToggleSelect: (key: string) => void;
   onRequestDelete: (key: string) => void;
 }) {
-  const handleDrag = useMediaDrag(url, kind, isSelected ? batchItems : undefined, (upEvent) => {
+  const handleDrag = useMediaDrag(url, kind, isSelected, getBatchItems, (upEvent) => {
     if (!mediaKey) return;
     if (upEvent.ctrlKey || upEvent.metaKey) {
       onCtrlClick(mediaKey);
@@ -202,9 +209,21 @@ const MediaTile = React.memo(function MediaTile({
       title="Click to select, drag to canvas"
     >
       {kind === 'image' ? (
-        <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" loading="lazy" draggable={false} />
+        <img
+          src={thumbnailUrl || url}
+          alt=""
+          className="w-full h-full object-cover pointer-events-none"
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+        />
       ) : (
-        <video src={url} className="w-full h-full object-cover pointer-events-none" muted />
+        <video
+          src={url}
+          className="w-full h-full object-cover pointer-events-none"
+          preload="none"
+          muted
+        />
       )}
       {/* Selected: light accent wash over the artwork */}
       {isSelected && (
@@ -223,7 +242,7 @@ const MediaTile = React.memo(function MediaTile({
           className={`absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded border transition-all cursor-pointer ${
             isSelected
               ? 'bg-[var(--accent)] border-[var(--accent)] text-white opacity-100 shadow-sm'
-              : `bg-black/50 border-white/60 text-white hover:border-white hover:bg-black/70 ${hasAnySelected ? 'opacity-90' : 'opacity-0 group-hover:opacity-100'}`
+              : 'bg-black/50 border-white/60 text-white hover:border-white hover:bg-black/70 opacity-0 group-hover:opacity-100 [[data-has-selection=true]_&]:opacity-90'
           }`}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isSelected ? 'opacity-100' : 'opacity-0 hover:opacity-60'}>
@@ -250,6 +269,80 @@ const MediaTile = React.memo(function MediaTile({
   );
 });
 
+interface MediaRowExtraProps {
+  uploads: UploadedFile[];
+  selectedKeys: Set<string>;
+  getBatchItems: () => ToolbarItem[] | undefined;
+  onShiftPointerDown: (key: string, e: React.PointerEvent) => void;
+  onPlainClick: (key: string) => void;
+  onCtrlClick: (key: string) => void;
+  onToggleSelect: (key: string) => void;
+  onRequestDelete: (key: string) => void;
+  tab: string;
+}
+
+function MediaRow({
+  index,
+  style,
+  uploads,
+  selectedKeys,
+  getBatchItems,
+  onShiftPointerDown,
+  onPlainClick,
+  onCtrlClick,
+  onToggleSelect,
+  onRequestDelete,
+  tab,
+}: RowComponentProps<MediaRowExtraProps>) {
+  const leftItem = uploads[index * 2];
+  const rightItem = uploads[index * 2 + 1];
+  const kind = tab === 'images' ? 'image' : 'video';
+
+  const leftKey = leftItem ? deriveUploadKey(leftItem) : null;
+  const rightKey = rightItem ? deriveUploadKey(rightItem) : null;
+
+  return (
+    <div style={style} className="px-3 pb-2">
+      <div className="grid grid-cols-2 gap-2 h-full">
+        {leftItem && (
+          <MediaTile
+            url={leftItem.url}
+            thumbnailUrl={leftItem.thumbnailUrl}
+            kind={kind}
+            mediaKey={leftKey}
+            isSelected={!!leftKey && selectedKeys.has(leftKey)}
+            getBatchItems={getBatchItems}
+            canDelete={true}
+            onShiftPointerDown={onShiftPointerDown}
+            onPlainClick={onPlainClick}
+            onCtrlClick={onCtrlClick}
+            onToggleSelect={onToggleSelect}
+            onRequestDelete={onRequestDelete}
+          />
+        )}
+        {rightItem ? (
+          <MediaTile
+            url={rightItem.url}
+            thumbnailUrl={rightItem.thumbnailUrl}
+            kind={kind}
+            mediaKey={rightKey}
+            isSelected={!!rightKey && selectedKeys.has(rightKey)}
+            getBatchItems={getBatchItems}
+            canDelete={true}
+            onShiftPointerDown={onShiftPointerDown}
+            onPlainClick={onPlainClick}
+            onCtrlClick={onCtrlClick}
+            onToggleSelect={onToggleSelect}
+            onRequestDelete={onRequestDelete}
+          />
+        ) : (
+          <div />
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface StorageInfo {
   currentUsageMB: string;
   storageLimitMB: string;
@@ -269,10 +362,43 @@ export default function MediaGalleryPanel() {
   const [confirmKeys, setConfirmKeys] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useListRef(null);
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 256, height: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const updateSize = () => {
+      const cr = el.getBoundingClientRect();
+      if (cr.width > 0 && cr.height > 0) {
+        setDimensions({ width: Math.round(cr.width), height: Math.round(cr.height) });
+      }
+    };
+    updateSize();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setDimensions({ width: Math.round(width), height: Math.round(height) });
+        }
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [uploads.length, loadingList]);
+
   const projectId = getProjectId();
   const noun: 'image' | 'video' = tab === 'images' ? 'image' : 'video';
+
+  const tilePadding = 12; // px-3
+  const tileGap = 8;      // gap-2
+  const availableWidth = Math.max(0, dimensions.width - tilePadding * 2);
+  const tileWidth = Math.max(1, Math.floor((availableWidth - tileGap) / 2));
+  const rowHeight = tileWidth + tileGap;
+  const rowCount = Math.ceil(uploads.length / 2);
 
   const allUploadKeys = useMemo(
     () => uploads.map((u) => deriveUploadKey(u)).filter(Boolean) as string[],
@@ -292,6 +418,28 @@ export default function MediaGalleryPanel() {
     });
     return selectedUploads.map((u) => makeMediaToolbarItem(u.url, kind));
   }, [uploads, selectedKeys, tab]);
+
+  const selectedBatchItemsRef = useRef(selectedBatchItems);
+  useEffect(() => {
+    selectedBatchItemsRef.current = selectedBatchItems;
+  }, [selectedBatchItems]);
+
+  const getBatchItems = useCallback(() => selectedBatchItemsRef.current, []);
+
+  const selectedKeysRef = useRef(selectedKeys);
+  useEffect(() => {
+    selectedKeysRef.current = selectedKeys;
+  }, [selectedKeys]);
+
+  const lastSelectedKeyRef = useRef(lastSelectedKey);
+  useEffect(() => {
+    lastSelectedKeyRef.current = lastSelectedKey;
+  }, [lastSelectedKey]);
+
+  const allUploadKeysRef = useRef(allUploadKeys);
+  useEffect(() => {
+    allUploadKeysRef.current = allUploadKeys;
+  }, [allUploadKeys]);
 
   useEffect(() => {
     if (selectAllCheckboxRef.current) {
@@ -358,7 +506,7 @@ export default function MediaGalleryPanel() {
     if (selectedKeys.size === 0) return;
     const onDown = (e: PointerEvent) => {
       if (confirmKeys) return;
-      const cont = scrollRef.current;
+      const cont = containerRef.current;
       if (cont && e.target instanceof Node && cont.contains(e.target)) return;
       trace.action('media-select:clear-outside', { had: selectedKeys.size });
       setSelectedKeys(new Set());
@@ -372,7 +520,7 @@ export default function MediaGalleryPanel() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
-        const cont = scrollRef.current;
+        const cont = containerRef.current;
         if (cont && (cont.contains(document.activeElement) || cont.contains(e.target as Node))) {
           e.preventDefault();
           setSelectedKeys(new Set(allUploadKeys));
@@ -403,7 +551,10 @@ export default function MediaGalleryPanel() {
       const results = await Promise.allSettled(
         files.map(async (file) => {
           const url = await backend.uploadAsset(projectId, file);
-          return { url, size: file.size, key: file.name };
+          const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif)$/i.test(file.name);
+          const filename = url.replace(/^\/api\/uploads\//, '').split('?')[0];
+          const thumbnailUrl = isImage && filename ? `/api/uploads/thumb/${filename}` : undefined;
+          return { url, thumbnailUrl, size: file.size, key: filename || file.name };
         })
       );
       const successful: UploadedFile[] = [];
@@ -488,52 +639,34 @@ export default function MediaGalleryPanel() {
     raf: number;
   } | null>(null);
 
-  const tileRects = useCallback((): TileRect[] => {
-    const cont = scrollRef.current;
-    if (!cont) return [];
-    const cr = cont.getBoundingClientRect();
-    const rects: TileRect[] = [];
-    cont.querySelectorAll<HTMLElement>('[data-media-key]').forEach((el) => {
-      const key = el.dataset.mediaKey!;
-      const r = el.getBoundingClientRect();
-      rects.push({
-        key,
-        left: r.left - cr.left + cont.scrollLeft,
-        top: r.top - cr.top + cont.scrollTop,
-        right: r.right - cr.left + cont.scrollLeft,
-        bottom: r.bottom - cr.top + cont.scrollTop,
-      });
-    });
-    return rects;
-  }, []);
-
   const recomputeSweep = useCallback(() => {
     const s = sweepRef.current;
-    const cont = scrollRef.current;
-    if (!s || !cont) return;
-    const cr = cont.getBoundingClientRect();
+    const listEl = listRef.current?.element;
+    if (!s || !listEl) return;
+    const cr = listEl.getBoundingClientRect();
     const b = {
-      x: s.lastClient.x - cr.left + cont.scrollLeft,
-      y: s.lastClient.y - cr.top + cont.scrollTop,
+      x: s.lastClient.x - cr.left + listEl.scrollLeft,
+      y: s.lastClient.y - cr.top + listEl.scrollTop,
     };
-    const swept = keysInSweep(tileRects(), s.anchor, b);
+    const rects = computeGridTileRects(allUploadKeysRef.current, dimensions.width, tileGap, 2, tilePadding, 0);
+    const swept = keysInSweep(rects, s.anchor, b);
     setSelectedKeys(new Set([...s.base, ...swept]));
-  }, [tileRects]);
+  }, [dimensions.width, tileGap, tilePadding]);
 
   const beginShiftGesture = useCallback((toggleKey: string | null, e: React.PointerEvent) => {
-    const cont = scrollRef.current;
-    if (!cont) return;
-    const cr = cont.getBoundingClientRect();
+    const listEl = listRef.current?.element;
+    if (!listEl) return;
+    const cr = listEl.getBoundingClientRect();
     sweepRef.current = {
-      anchor: { x: e.clientX - cr.left + cont.scrollLeft, y: e.clientY - cr.top + cont.scrollTop },
-      base: new Set(selectedKeys),
+      anchor: { x: e.clientX - cr.left + listEl.scrollLeft, y: e.clientY - cr.top + listEl.scrollTop },
+      base: new Set(selectedKeysRef.current),
       startClient: { x: e.clientX, y: e.clientY },
       lastClient: { x: e.clientX, y: e.clientY },
       moved: false,
       toggleKey,
       raf: 0,
     };
-    trace.action('media-sweep:begin', { toggleKey, selected: selectedKeys.size });
+    trace.action('media-sweep:begin', { toggleKey, selected: selectedKeysRef.current.size });
 
     const onMove = (ev: PointerEvent) => {
       const s = sweepRef.current;
@@ -547,21 +680,7 @@ export default function MediaGalleryPanel() {
       }
       recomputeSweep();
     };
-    const onUp = () => {
-      const s = sweepRef.current;
-      cleanup();
-      if (!s) return;
-      if (!s.moved && s.toggleKey) {
-        // Shift+CLICK without moving — Range selection from anchor to target!
-        const targetKey = s.toggleKey;
-        setSelectedKeys((prev) => {
-          const next = rangeSelectKeys(allUploadKeys, prev, targetKey, lastSelectedKey);
-          trace.action('media-select:range', { targetKey, anchor: lastSelectedKey, size: next.size });
-          return next;
-        });
-        setLastSelectedKey(targetKey);
-      }
-    };
+
     const cleanup = () => {
       const s = sweepRef.current;
       if (s?.raf) cancelAnimationFrame(s.raf);
@@ -570,6 +689,25 @@ export default function MediaGalleryPanel() {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
+
+    const onUp = () => {
+      const s = sweepRef.current;
+      cleanup();
+      if (!s) return;
+      if (!s.moved && s.toggleKey) {
+        // Shift+CLICK without moving — Range selection from anchor to target!
+        const targetKey = s.toggleKey;
+        const allKeys = allUploadKeysRef.current;
+        const anchor = lastSelectedKeyRef.current;
+        setSelectedKeys((prev) => {
+          const next = rangeSelectKeys(allKeys, prev, targetKey, anchor);
+          trace.action('media-select:range', { targetKey, anchor, size: next.size });
+          return next;
+        });
+        setLastSelectedKey(targetKey);
+      }
+    };
+
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
@@ -577,19 +715,20 @@ export default function MediaGalleryPanel() {
     // Edge auto-scroll loop during marquee sweep
     const tick = () => {
       const s = sweepRef.current;
-      if (!s) return;
+      const el = listRef.current?.element;
+      if (!s || !el) return;
       if (s.moved) {
-        const rect = cont.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
         const step = sweepAutoScrollStep(s.lastClient.y, rect.top, rect.bottom);
         if (step !== 0) {
-          cont.scrollTop += step;
+          el.scrollTop += step;
           recomputeSweep();
         }
       }
       s.raf = requestAnimationFrame(tick);
     };
     sweepRef.current.raf = requestAnimationFrame(tick);
-  }, [selectedKeys, recomputeSweep, allUploadKeys, lastSelectedKey]);
+  }, [recomputeSweep]);
 
   // Shift+drag started on empty space sweeps marquee
   const onGridPointerDown = useCallback((e: React.PointerEvent) => {
@@ -622,6 +761,28 @@ export default function MediaGalleryPanel() {
     }
     setDeleting(false);
   }, [confirmKeys, deleting, projectId, fetchUploads]);
+
+  const rowProps: MediaRowExtraProps = useMemo(() => ({
+    uploads,
+    selectedKeys,
+    getBatchItems,
+    onShiftPointerDown: beginShiftGesture,
+    onPlainClick: handlePlainClick,
+    onCtrlClick: handleCtrlClick,
+    onToggleSelect: handleToggleSelect,
+    onRequestDelete: requestDelete,
+    tab,
+  }), [
+    uploads,
+    selectedKeys,
+    getBatchItems,
+    beginShiftGesture,
+    handlePlainClick,
+    handleCtrlClick,
+    handleToggleSelect,
+    requestDelete,
+    tab,
+  ]);
 
   const storageLabel = storage ? `${storage.currentUsageMB} / ${storage.storageLimitMB} MB` : '0.0 / 500 MB';
 
@@ -711,53 +872,53 @@ export default function MediaGalleryPanel() {
       )}
 
       {/* Gallery grid */}
-      {uploads.length > 0 ? (
-        <div ref={scrollRef} onPointerDown={onGridPointerDown} className="flex-1 overflow-y-auto scrollbar-hide p-3">
-          <div className="grid grid-cols-2 gap-2">
-            {uploads.map((item, i) => (
-              <MediaTile
-                key={item.url + i}
-                url={item.url}
-                kind={tab === 'images' ? 'image' : 'video'}
-                mediaKey={deriveUploadKey(item)}
-                isSelected={(() => { const k = deriveUploadKey(item); return !!k && selectedKeys.has(k); })()}
-                batchItems={selectedBatchItems}
-                hasAnySelected={selectedKeys.size > 0}
-                canDelete={true}
-                onShiftPointerDown={beginShiftGesture}
-                onPlainClick={handlePlainClick}
-                onCtrlClick={handleCtrlClick}
-                onToggleSelect={handleToggleSelect}
-                onRequestDelete={requestDelete}
-              />
-            ))}
+      <div
+        ref={containerRef}
+        data-has-selection={someSelected || allSelected ? 'true' : 'false'}
+        onPointerDown={onGridPointerDown}
+        className="flex-1 min-h-0 overflow-hidden flex flex-col pt-2"
+      >
+        {uploads.length > 0 ? (
+          <List
+            listRef={listRef}
+            rowCount={rowCount}
+            rowHeight={rowHeight}
+            rowComponent={MediaRow}
+            rowProps={rowProps}
+            style={{
+              height: '100%',
+              width: '100%',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            } as CSSProperties}
+            className="scrollbar-hide flex-1 min-h-0"
+          />
+        ) : loadingList ? (
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-3" aria-hidden>
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-square cut-corners cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--bg-hover)] animate-pulse"
+                  style={{ animationDelay: `${i * 90}ms` }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ) : loadingList ? (
-        <div className="flex-1 overflow-y-auto scrollbar-hide p-3" aria-hidden>
-          <div className="grid grid-cols-2 gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-square cut-corners cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--bg-hover)] animate-pulse"
-                style={{ animationDelay: `${i * 90}ms` }}
-              />
-            ))}
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 text-center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p className="text-xs text-[var(--text-secondary)]">No {tab} uploaded yet</p>
+            <p className="text-[10px] text-[var(--text-disabled)] max-w-[180px] leading-relaxed">
+              Upload {tab} to see them here
+            </p>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 text-center">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          <p className="text-xs text-[var(--text-secondary)]">No {tab} uploaded yet</p>
-          <p className="text-[10px] text-[var(--text-disabled)] max-w-[180px] leading-relaxed">
-            Upload {tab} to see them here
-          </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Delete confirmation */}
       <ConfirmModal

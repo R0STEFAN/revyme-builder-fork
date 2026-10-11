@@ -65,10 +65,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
   const unsplashGridRef = useRef<HTMLDivElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  // Already-uploaded project media — the SAME source the LeftPanel
-  // MediaGalleryPanel reads (`/api/upload?...&type=image`), so the Upload tab
-  // lists the website's existing images instead of only an empty drop zone.
-  const [uploads, setUploads] = useState<{ url: string; size?: number }[]>([]);
+  const [uploads, setUploads] = useState<{ url: string; thumbnailUrl?: string; size?: number }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   // ── Admin-only 3D assets tab ──
   const [isAdmin, setIsAdmin] = useState(false);
@@ -381,7 +378,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
                 >
                   <div
                     className="w-full h-full bg-cover bg-center transition-transform group-hover:scale-105"
-                    style={{ backgroundImage: `url(${item.url})` }}
+                    style={{ backgroundImage: `url(${item.thumbnailUrl || item.url})` }}
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
                 </button>

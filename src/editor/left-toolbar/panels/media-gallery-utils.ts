@@ -15,6 +15,38 @@ export interface TileRect {
 }
 
 /**
+ * Mathematically compute TileRect coordinates for a multi-column square grid.
+ * Runs in pure memory without querying the DOM, eliminating forced reflows / layout thrashing.
+ */
+export function computeGridTileRects(
+  keys: string[],
+  containerWidth: number,
+  gap = 8,
+  columns = 2,
+  padding = 12,
+  paddingTop = padding,
+): TileRect[] {
+  if (keys.length === 0 || containerWidth <= 0) return [];
+  const availableWidth = Math.max(0, containerWidth - padding * 2);
+  const tileWidth = Math.max(1, Math.floor((availableWidth - (columns - 1) * gap) / columns));
+  const tileHeight = tileWidth;
+
+  return keys.map((key, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    const left = padding + col * (tileWidth + gap);
+    const top = paddingTop + row * (tileHeight + gap);
+    return {
+      key,
+      left,
+      top,
+      right: left + tileWidth,
+      bottom: top + tileHeight,
+    };
+  });
+}
+
+/**
  * The R2 object key for an upload row — what the DELETE endpoint consumes.
  * The list endpoint returns `key` directly; rows appended right after an
  * upload only carry `url` (`${R2_PUBLIC_URL}/${key}`), so fall back to the

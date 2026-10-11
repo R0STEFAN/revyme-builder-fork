@@ -11,6 +11,7 @@ import {
   rangeSelectKeys,
   toggleSelectAllKeys,
   getSelectionState,
+  computeGridTileRects,
   type TileRect,
 } from './media-gallery-utils';
 
@@ -193,5 +194,68 @@ describe('getSelectionState', () => {
       someSelected: false,
       count: 0,
     });
+  });
+});
+
+describe('computeGridTileRects', () => {
+  it('returns empty array when keys are empty or container width is invalid', () => {
+    expect(computeGridTileRects([], 256)).toEqual([]);
+    expect(computeGridTileRects(['a', 'b'], 0)).toEqual([]);
+    expect(computeGridTileRects(['a', 'b'], -10)).toEqual([]);
+  });
+
+  it('correctly calculates 2-column square tiles with padding and gap', () => {
+    // container: 256, padding: 12 on each side -> 232 available
+    // gap: 8 -> tileWidth = (232 - 8) / 2 = 112
+    const keys = ['k0', 'k1', 'k2', 'k3'];
+    const rects = computeGridTileRects(keys, 256, 8, 2, 12);
+
+    expect(rects).toHaveLength(4);
+
+    // Row 0, Col 0: left = 12, top = 12, width = 112, height = 112
+    expect(rects[0]).toEqual({
+      key: 'k0',
+      left: 12,
+      top: 12,
+      right: 124,
+      bottom: 124,
+    });
+
+    // Row 0, Col 1: left = 12 + 112 + 8 = 132, top = 12
+    expect(rects[1]).toEqual({
+      key: 'k1',
+      left: 132,
+      top: 12,
+      right: 244,
+      bottom: 124,
+    });
+
+    // Row 1, Col 0: left = 12, top = 12 + 112 + 8 = 132
+    expect(rects[2]).toEqual({
+      key: 'k2',
+      left: 12,
+      top: 132,
+      right: 124,
+      bottom: 244,
+    });
+
+    // Row 1, Col 1: left = 132, top = 132
+    expect(rects[3]).toEqual({
+      key: 'k3',
+      left: 132,
+      top: 132,
+      right: 244,
+      bottom: 244,
+    });
+  });
+
+  it('integrates seamlessly with keysInSweep without DOM access', () => {
+    const keys = Array.from({ length: 20 }, (_, i) => `item-${i}`);
+    const rects = computeGridTileRects(keys, 256, 8, 2, 12);
+
+    // Sweep marquee over column 0 (left: 0 to 125, top: 0 to 300)
+    // Should select items in col 0 of rows 0, 1, 2 -> item-0, item-2, item-4
+    const hit = keysInSweep(rects, { x: 0, y: 0 }, { x: 125, y: 300 });
+    expect(hit).toEqual(['item-0', 'item-2', 'item-4']);
   });
 });

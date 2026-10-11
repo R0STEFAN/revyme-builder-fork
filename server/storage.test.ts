@@ -10,6 +10,8 @@ import {
   duplicateProject,
   saveUpload,
   getUploadFilePath,
+  getThumbnailFilePath,
+  ensureThumbnail,
   listUploads,
   deleteUpload,
   getStorageInfo,
@@ -187,5 +189,41 @@ describe('Self-host storage', () => {
     expect(deleteUpload(upA.key, TEST_DATA_DIR)).toBe(true);
     expect(listUploads(undefined, TEST_DATA_DIR, 'project-a').length).toBe(0);
     expect(listUploads(undefined, TEST_DATA_DIR, 'project-b').length).toBe(1);
+  });
+
+  it('generates, caches on disk, and deletes image thumbnails', async () => {
+    const sharp = (await import('sharp')).default;
+    const imgBuf = await sharp({
+      create: { width: 1000, height: 800, channels: 3, background: { r: 10, g: 200, b: 100 } }
+    }).png().toBuffer();
+
+    const upload = saveUpload('big-banner.png', imgBuf, TEST_DATA_DIR, 'proj-thumbs');
+    expect(upload.thumbnailUrl).toBe(`/api/uploads/thumb/${upload.filename}`);
+
+    const list = listUploads('image', TEST_DATA_DIR, 'proj-thumbs');
+    expect(list[0].thumbnailUrl).toBe(`/api/uploads/thumb/${upload.filename}`);
+
+    // Generate/ensure thumbnail on disk
+    const thumbPath = await ensureThumbnail(upload.filename, TEST_DATA_DIR);
+    expect(thumbPath).not.toBeNull();
+    expect(fs.existsSync(thumbPath!)).toBe(true);
+    expect(thumbPath!.endsWith('.webp')).toBe(true);
+
+    // Verify thumbnail is cached on disk
+    const cachedPath = getThumbnailFilePath(upload.filename, TEST_DATA_DIR);
+    expect(cachedPath).toBe(thumbPath);
+
+    // Verify thumbnail dimensions fit inside 240x240
+    const meta = await sharp(thumbPath!).metadata();
+    expect(meta.format).toBe('webp');
+    expect(meta.width).toBeLessThanOrEqual(240);
+    expect(meta.height).toBeLessThanOrEqual(240);
+
+    // Deleting upload must remove both original file and thumbnail from disk
+    const deleted = deleteUpload(upload.filename, TEST_DATA_DIR);
+    expect(deleted).toBe(true);
+    expect(fs.existsSync(thumbPath!)).toBe(false);
+    expect(getUploadFilePath(upload.filename, TEST_DATA_DIR)).toBeNull();
+    expect(getThumbnailFilePath(upload.filename, TEST_DATA_DIR)).toBeNull();
   });
 });
