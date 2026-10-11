@@ -23,7 +23,7 @@ export const MOTION_TRAIL_COMPONENT = `'use client';
   }}
 } */
 
-import { useRef, useEffect, useState, Children, cloneElement, isValidElement } from 'react';
+import React, { useRef, useEffect, useState, Children, cloneElement, isValidElement } from 'react';
 import { withResponsiveProps, useStaticCanvas } from '@revyme/runtime';
 
 // One trail stamp — its own React mount of the source item, with a CSS
@@ -35,6 +35,25 @@ function TrailStamp({ x, y, angle, src, fadeMs, fadeScale, rotate }) {
     return function () { cancelAnimationFrame(id); };
   }, []);
   const rot = rotate ? ' rotate(' + angle + 'deg)' : '';
+
+  // Neutralize canvas-workspace absolute positioning and editor attributes
+  const cleaned = isValidElement(src)
+    ? cloneElement(src, {
+        'data-id': undefined,
+        'data-canvas-node': undefined,
+        'data-name': undefined,
+        style: {
+          ...(src.props && src.props.style ? src.props.style : {}),
+          position: 'relative',
+          left: 'auto',
+          top: 'auto',
+          right: 'auto',
+          bottom: 'auto',
+          margin: '0',
+        },
+      })
+    : src;
+
   return (
     <div style={{
       position: 'absolute', left: 0, top: 0, margin: 0,
@@ -42,8 +61,11 @@ function TrailStamp({ x, y, angle, src, fadeMs, fadeScale, rotate }) {
       transition: 'opacity ' + fadeMs + 'ms ease-out, transform ' + fadeMs + 'ms ease-out',
       transform: 'translate(-50%,-50%) translate(' + x + 'px,' + y + 'px) scale(' + (exited ? fadeScale : 1) + ')' + rot,
       opacity: exited ? 0 : 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     }}>
-      {src}
+      {cleaned}
     </div>
   );
 }
@@ -51,18 +73,33 @@ function TrailStamp({ x, y, angle, src, fadeMs, fadeScale, rotate }) {
 function MotionTrail({ threshold = 70, rotate = false, fadeMs = 700, fadeScale = 0.3, children, ...props }) {
   const boxRef = useRef(null);
   const poolRef = useRef(null);
-  const items = Children.toArray(children);
+
+  // Flatten children (unpack single fragments or arrays)
+  const rawList = Children.toArray(children);
+  const items = [];
+  rawList.forEach(function (child) {
+    if (isValidElement(child) && child.type === React.Fragment) {
+      items.push.apply(items, Children.toArray(child.props.children));
+    } else if (child != null) {
+      items.push(child);
+    }
+  });
+
   const isEmpty = items.length === 0;
   const isStatic = useStaticCanvas();
   // Live trail stamps — React state list, each one a real component mount.
   const [stamps, setStamps] = useState([]);
   const idRef = useRef(0);
+  const idxRef = useRef(0);
+  const posRef = useRef({ x: 0, y: 0, primed: false });
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const timeoutsRef = useRef([]);
 
   useEffect(() => {
     const pool = poolRef.current;
     if (!pool) return;
-    // Neutralise every direct child of the pool (catches user-component
-    // instances too — they don't forward data-canvas-node to their DOM root).
+    // Neutralise every direct child of the pool
     Array.from(pool.children).forEach(function (c) {
       const s = c.style;
       s.position = 'relative';
@@ -72,40 +109,46 @@ function MotionTrail({ threshold = 70, rotate = false, fadeMs = 700, fadeScale =
   }, [children]);
 
   useEffect(() => {
-    if (isStatic) return;
-    if (items.length === 0) return;
+    if (isEmpty) return;
     const box = boxRef.current;
     if (!box) return;
-
-    let lastX = 0, lastY = 0, primed = false, idx = 0;
-    const timeouts = [];
 
     function onMove(ev) {
       const r = box.getBoundingClientRect();
       const x = ev.clientX - r.left, y = ev.clientY - r.top;
-      if (!primed) { lastX = x; lastY = y; primed = true; return; }
-      const dx = x - lastX, dy = y - lastY;
+      const pos = posRef.current;
+      if (!pos.primed) { pos.x = x; pos.y = y; pos.primed = true; return; }
+      const dx = x - pos.x, dy = y - pos.y;
       if (Math.sqrt(dx * dx + dy * dy) >= threshold) {
         const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        lastX = x; lastY = y;
+        pos.x = x; pos.y = y;
+        const currentItems = itemsRef.current;
+        if (currentItems.length === 0) return;
         idRef.current++;
         const id = idRef.current;
-        const srcIdx = idx % items.length;
-        idx++;
+        const srcIdx = idxRef.current % currentItems.length;
+        idxRef.current++;
         setStamps(function (prev) { return prev.concat([{ id: id, x: x, y: y, angle: angle, srcIdx: srcIdx }]); });
         const t = setTimeout(function () {
           setStamps(function (prev) { return prev.filter(function (s) { return s.id !== id; }); });
         }, fadeMs + 80);
-        timeouts.push(t);
+        timeoutsRef.current.push(t);
       }
     }
 
+    function onLeave() {
+      posRef.current.primed = false;
+    }
+
     box.addEventListener('mousemove', onMove);
+    box.addEventListener('mouseleave', onLeave);
     return function () {
       box.removeEventListener('mousemove', onMove);
-      timeouts.forEach(function (t) { clearTimeout(t); });
+      box.removeEventListener('mouseleave', onLeave);
+      timeoutsRef.current.forEach(function (t) { clearTimeout(t); });
+      timeoutsRef.current = [];
     };
-  }, [threshold, fadeMs, fadeScale, rotate, items, isStatic]);
+  }, [threshold, fadeMs, fadeScale, rotate, isEmpty]);
 
   if (isEmpty) {
     return (
@@ -137,35 +180,26 @@ function MotionTrail({ threshold = 70, rotate = false, fadeMs = 700, fadeScale =
       data-name={props['data-name']}
       style={{ position: 'relative',  overflow: 'hidden', ...props.style }}
     >
-      {/* Source pool — invisible on live (only stamps render). On the
-          static editor canvas it's a centred, visible preview. */}
+      {/* Source pool — keeps React slot nodes mounted with handlers,
+          but invisible so that only sequential stamps render on hover. */}
       <div
         ref={poolRef}
-        style={isStatic ? {
-          position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexWrap: 'wrap', gap: '12px',
-          pointerEvents: 'none',
-        } : {
+        style={{
           position: 'absolute', left: 0, top: 0, opacity: 0, pointerEvents: 'none',
         }}
       >
         {children}
       </div>
 
-      {/* Live trail — each stamp is a real React mount; component instances
-          inside keep their state, though the stamp wrapper is
-          pointer-events:none (the trail is decorative). */}
-      {!isStatic && stamps.map(function (stamp) {
+      {/* Live trail stamps — each stamp is a real React mount displaying
+          exactly one item from the sequence. */}
+      {stamps.map(function (stamp) {
         const src = items[stamp.srcIdx];
-        const cleaned = isValidElement(src)
-          ? cloneElement(src, { 'data-id': undefined, 'data-canvas-node': undefined, 'data-name': undefined })
-          : src;
         return (
           <TrailStamp
             key={stamp.id}
             x={stamp.x} y={stamp.y} angle={stamp.angle}
-            src={cleaned}
+            src={src}
             fadeMs={fadeMs} fadeScale={fadeScale} rotate={rotate}
           />
         );

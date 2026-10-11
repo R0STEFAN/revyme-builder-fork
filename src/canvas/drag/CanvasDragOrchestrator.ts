@@ -332,6 +332,7 @@ export class CanvasDragOrchestrator {
     const activeFilePath = this.opts.getActiveFilePath();
     const nodes = this.opts.getNodes();
     const cmsSchemas = this.opts.jotaiStore.get(collectionSchemasAtom);
+    const addedNodeIds: string[] = [];
 
     for (const update of updates) {
       if (update.type === 'style' && update.styles && contentEl) {
@@ -1092,7 +1093,9 @@ export class CanvasDragOrchestrator {
         // An auto-sized absolute drop is hidden + re-centred after paint;
         // its strategy selects it on reveal so the overlay never draws at
         // the ghost placement (deferredDropSelection).
-        if (!deferredDropSelection.has(newId)) this.opts.setSelectedIds([newId]);
+        if (!deferredDropSelection.has(newId)) {
+          addedNodeIds.push(newId);
+        }
       } else if (update.type === 'duplicateCollectionToCanvas') {
         // Replica drag-out clone of a CMS collection list — COPY the literal
         // `.map()` subtree into `canvasNodes` (map + `item.*` bindings preserved,
@@ -1117,6 +1120,10 @@ export class CanvasDragOrchestrator {
           srcId: update.nodeId, cloneId, source: update.cmsSource,
         });
       }
+    }
+
+    if (addedNodeIds.length > 0) {
+      this.opts.setSelectedIds(addedNodeIds);
     }
 
     // Let the normal async mutation flush handle code persistence.

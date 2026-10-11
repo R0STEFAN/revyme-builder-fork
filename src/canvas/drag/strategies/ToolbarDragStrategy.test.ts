@@ -429,4 +429,55 @@ export default Hero;
     expect(updates[0].descriptor!.tag).toBe('SuFeSe');
     expect(updates[0].descriptor!.name).toBe('nav');
   });
+
+  describe('batch drop (multi-select media drag)', () => {
+    it('drops multiple items with cascading coordinates onto free canvas', () => {
+      const strategy = new ToolbarDragStrategy();
+      const item1 = makeItem({ id: 'img-1', defaultStyles: { width: '200px', height: '150px' } });
+      const item2 = makeItem({ id: 'img-2', defaultStyles: { width: '200px', height: '150px' } });
+      const item3 = makeItem({ id: 'img-3', defaultStyles: { width: '200px', height: '150px' } });
+      item1.batch = [item1, item2, item3];
+
+      strategy.setToolbarItem(item1);
+      strategy.onStart(makeContext());
+      strategy._setTestState({ isOverCanvas: true, dropParentId: null });
+      const updates = strategy.onEnd(makeContext());
+
+      expect(updates).toHaveLength(3);
+      expect(updates.every((u) => u.type === 'add')).toBe(true);
+
+      const ids = updates.map((u) => u.nodeId);
+      expect(new Set(ids).size).toBe(3);
+
+      const lefts = updates.map((u) => parseInt(u.descriptor!.styles.left, 10));
+      const tops = updates.map((u) => parseInt(u.descriptor!.styles.top, 10));
+
+      expect(lefts[1] - lefts[0]).toBe(24);
+      expect(lefts[2] - lefts[1]).toBe(24);
+      expect(tops[1] - tops[0]).toBe(24);
+      expect(tops[2] - tops[1]).toBe(24);
+    });
+
+    it('drops multiple items with sequential indices into layout container', () => {
+      const strategy = new ToolbarDragStrategy();
+      const item1 = makeItem({ id: 'img-1' });
+      const item2 = makeItem({ id: 'img-2' });
+      item1.batch = [item1, item2];
+
+      strategy.setToolbarItem(item1);
+      strategy.onStart(makeContext());
+      strategy._setTestState({
+        isOverCanvas: true,
+        dropParentId: 'parent-container',
+        dropIndex: 2,
+      });
+      const updates = strategy.onEnd(makeContext());
+
+      expect(updates).toHaveLength(2);
+      expect(updates[0].newIndex).toBe(2);
+      expect(updates[1].newIndex).toBe(3);
+      expect(updates[0].newParentId).toBe('parent-container');
+      expect(updates[1].newParentId).toBe('parent-container');
+    });
+  });
 });

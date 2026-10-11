@@ -150,6 +150,10 @@ describe('Self-host storage', () => {
 
     const summaries = listProjects(TEST_DATA_DIR);
     expect(summaries.find(s => s.id === 'thumb-test')?.previewImage).toMatch(/^\/api\/uploads\/thumbnail-thumb-test\.jpg\?t=\d+$/);
+
+    // Project thumbnail must not appear in project media manager
+    const mediaUploads = listUploads(undefined, TEST_DATA_DIR);
+    expect(mediaUploads.some(u => u.key.startsWith('thumbnail-'))).toBe(false);
   });
 
   it('isolates uploads by projectId and calculates project-scoped storage', () => {

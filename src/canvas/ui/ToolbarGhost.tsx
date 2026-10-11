@@ -104,6 +104,7 @@ export default function ToolbarGhost() {
            still drives the strategy underneath. */
         <div
           style={{
+            position: 'relative',
             width: item.ghostSize.width,
             height: item.ghostSize.height,
             borderRadius: 6,
@@ -113,7 +114,7 @@ export default function ToolbarGhost() {
         >
           {isMediaImage ? (
             <img
-              src={item.defaultAttrs?.src}
+              src={item.defaultAttrs?.src || (item.defaultStyles?.backgroundImage ? item.defaultStyles.backgroundImage.replace(/^url\(["']?|["']?\)$/g, '') : '')}
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               draggable={false}
@@ -124,6 +125,25 @@ export default function ToolbarGhost() {
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               muted
             />
+          )}
+          {item.batch && item.batch.length > 1 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                backgroundColor: 'var(--accent, #3b82f6)',
+                color: '#ffffff',
+                borderRadius: 9999,
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                lineHeight: 1,
+              }}
+            >
+              {item.batch.length}
+            </div>
           )}
         </div>
       ) : isIcon ? (

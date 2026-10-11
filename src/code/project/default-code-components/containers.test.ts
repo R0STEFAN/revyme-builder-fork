@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import {
   LENS_BOX_COMPONENT, MAGNET_BOX_COMPONENT,
   MARQUEE_COMPONENT, CAROUSEL_COMPONENT, RIBBON_MARQUEE_COMPONENT,
@@ -137,4 +137,34 @@ describe('Effect Code components', () => {
     // 3 Dots should be present
     expect(container.querySelectorAll('button[aria-label^="Go to slide"]').length).toBe(3);
   });
+
+  it('MotionTrail cycles items sequentially on cursor movement', () => {
+    const Comp = compileCodeComponent(MOTION_TRAIL_COMPONENT, 'MotionTrail') as React.ComponentType<any>;
+    expect(Comp).not.toBeNull();
+    const { container } = render(
+      React.createElement(Comp, { threshold: 50 }, [
+        React.createElement('div', { key: 'm1' }, 'Image 1'),
+        React.createElement('div', { key: 'm2' }, 'Image 2'),
+        React.createElement('div', { key: 'm3' }, 'Image 3'),
+        React.createElement('div', { key: 'm4' }, 'Image 4'),
+      ])
+    );
+    const box = container.firstElementChild as HTMLElement;
+    box.getBoundingClientRect = () => ({
+      left: 0, top: 0, right: 600, bottom: 400, width: 600, height: 400, x: 0, y: 0, toJSON: () => {},
+    });
+
+    // First move primes
+    act(() => {
+      box.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 10, clientY: 10 }));
+      // Move past threshold (dx = 60 >= 50) -> stamps Image 1
+      box.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 70, clientY: 10 }));
+      // Move past threshold (dx = 60 >= 50) -> stamps Image 2
+      box.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 130, clientY: 10 }));
+    });
+
+    expect(container.textContent).toContain('Image 1');
+    expect(container.textContent).toContain('Image 2');
+  });
 });
+

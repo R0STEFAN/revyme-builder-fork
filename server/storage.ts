@@ -597,6 +597,8 @@ export function listUploads(type?: 'image' | 'video', customRoot?: string, proje
   const videoExts = new Set(['.mp4', '.webm', '.mov', '.m4v', '.ogg']);
   const records: UploadRecord[] = [];
   for (const file of files) {
+    // Project preview screenshots for dashboard cards must not appear in project media manager
+    if (file.startsWith('thumbnail-')) continue;
     const filePath = path.join(uploadsDir, file);
     try {
       const stat = fs.statSync(filePath);

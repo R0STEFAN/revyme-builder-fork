@@ -57,7 +57,47 @@ const MEDIA_DRAG_THRESHOLD_PX = 5;
  *  cursor moves more than `MEDIA_DRAG_THRESHOLD_PX` from the
  *  pointerdown position. When released under the threshold, triggers
  *  `onTileClick`. */
-function useMediaDrag(url: string, kind: 'image' | 'video', onTileClick?: (e: PointerEvent) => void) {
+export function makeMediaToolbarItem(url: string, kind: 'image' | 'video', ghostW = 200, ghostH = 150): ToolbarItem {
+  return kind === 'image' ? {
+    id: `media-image:${url}`,
+    elementType: 'div',
+    name: 'Image',
+    defaultStyles: {
+      width: '200px',
+      height: '150px',
+      backgroundImage: `url("${url}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    ghostSize: { width: ghostW, height: ghostH },
+  } : {
+    id: `media-video:${url}`,
+    elementType: 'video',
+    name: 'Video',
+    defaultStyles: {
+      display: 'block',
+      width: '320px',
+      height: '240px',
+      maxWidth: 'none',
+      backgroundColor: '#1f2937',
+    },
+    defaultAttrs: { src: url, controls: '' },
+    ghostSize: { width: ghostW, height: ghostH },
+  };
+}
+
+/** Shared drag logic for media tiles. Mirrors LibraryPanel's
+ *  `useComponentDrag` — kicks off `startToolbarDrag` once the
+ *  cursor moves more than `MEDIA_DRAG_THRESHOLD_PX` from the
+ *  pointerdown position. When released under the threshold, triggers
+ *  `onTileClick`. */
+function useMediaDrag(
+  url: string,
+  kind: 'image' | 'video',
+  batchItems?: ToolbarItem[],
+  onTileClick?: (e: PointerEvent) => void
+) {
   return useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -68,32 +108,11 @@ function useMediaDrag(url: string, kind: 'image' | 'video', onTileClick?: (e: Po
     const rect = tile.getBoundingClientRect();
     const ghostW = Math.round(rect.width)  || 200;
     const ghostH = Math.round(rect.height) || 150;
-    const item: ToolbarItem = kind === 'image' ? {
-      id: `media-image:${url}`,
-      elementType: 'div',
-      name: 'Image',
-      defaultStyles: {
-        width: '200px',
-        height: '150px',
-        backgroundImage: `url("${url}")`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      },
-      ghostSize: { width: ghostW, height: ghostH },
-    } : {
-      id: `media-video:${url}`,
-      elementType: 'video',
-      defaultStyles: {
-        display: 'block',
-        width: '320px',
-        height: '240px',
-        maxWidth: 'none',
-        backgroundColor: '#1f2937',
-      },
-      defaultAttrs: { src: url, controls: '' },
-      ghostSize: { width: ghostW, height: ghostH },
-    };
+    const item: ToolbarItem = makeMediaToolbarItem(url, kind, ghostW, ghostH);
+    if (batchItems && batchItems.length > 1) {
+      const filtered = batchItems.filter((b) => b.id !== item.id);
+      item.batch = [item, ...filtered];
+    }
     let dragStarted = false;
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove);
@@ -107,7 +126,7 @@ function useMediaDrag(url: string, kind: 'image' | 'video', onTileClick?: (e: Po
       if (dx * dx + dy * dy < MEDIA_DRAG_THRESHOLD_PX * MEDIA_DRAG_THRESHOLD_PX) return;
       dragStarted = true;
       cleanup();
-      trace.action('media-panel:drag-start', { kind, url });
+      trace.action('media-panel:drag-start', { kind, url, batchCount: item.batch?.length ?? 1 });
       startToolbarDrag(item, startEvent);
     };
     const onUp = (upEvent: PointerEvent) => {
@@ -119,7 +138,7 @@ function useMediaDrag(url: string, kind: 'image' | 'video', onTileClick?: (e: Po
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
-  }, [url, kind, onTileClick]);
+  }, [url, kind, batchItems, onTileClick]);
 }
 
 /** Single tile in the gallery grid with selection checkbox, drag to canvas,
@@ -129,6 +148,7 @@ const MediaTile = React.memo(function MediaTile({
   kind,
   mediaKey,
   isSelected,
+  batchItems,
   hasAnySelected,
   canDelete,
   onShiftPointerDown,
@@ -141,6 +161,7 @@ const MediaTile = React.memo(function MediaTile({
   kind: 'image' | 'video';
   mediaKey: string | null;
   isSelected: boolean;
+  batchItems?: ToolbarItem[];
   hasAnySelected: boolean;
   canDelete: boolean;
   onShiftPointerDown: (key: string, e: React.PointerEvent) => void;
@@ -149,7 +170,7 @@ const MediaTile = React.memo(function MediaTile({
   onToggleSelect: (key: string) => void;
   onRequestDelete: (key: string) => void;
 }) {
-  const handleDrag = useMediaDrag(url, kind, (upEvent) => {
+  const handleDrag = useMediaDrag(url, kind, isSelected ? batchItems : undefined, (upEvent) => {
     if (!mediaKey) return;
     if (upEvent.ctrlKey || upEvent.metaKey) {
       onCtrlClick(mediaKey);
@@ -262,6 +283,16 @@ export default function MediaGalleryPanel() {
     [allUploadKeys, selectedKeys]
   );
 
+  const selectedBatchItems = useMemo(() => {
+    if (selectedKeys.size <= 1) return undefined;
+    const kind: 'image' | 'video' = tab === 'images' ? 'image' : 'video';
+    const selectedUploads = uploads.filter((u) => {
+      const k = deriveUploadKey(u);
+      return !!k && selectedKeys.has(k);
+    });
+    return selectedUploads.map((u) => makeMediaToolbarItem(u.url, kind));
+  }, [uploads, selectedKeys, tab]);
+
   useEffect(() => {
     if (selectAllCheckboxRef.current) {
       selectAllCheckboxRef.current.indeterminate = someSelected;
@@ -280,8 +311,13 @@ export default function MediaGalleryPanel() {
       ]);
       if (uploadsRes.ok) {
         const data = await uploadsRes.json();
-        setUploads(data.uploads || []);
-        trace.action('media:fetched', { type: tab, count: data.uploads?.length ?? 0 });
+        const rawUploads: UploadedFile[] = data.uploads || [];
+        const filtered = rawUploads.filter((u) => {
+          const key = deriveUploadKey(u) || '';
+          return !key.startsWith('thumbnail-') && !u.url.includes('/thumbnail-');
+        });
+        setUploads(filtered);
+        trace.action('media:fetched', { type: tab, count: filtered.length });
       }
       if (storageRes.ok) {
         const data = await storageRes.json();
@@ -355,19 +391,39 @@ export default function MediaGalleryPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, [allUploadKeys, selectedKeys, confirmKeys]);
 
-  // Handle file upload
+  // Handle file upload (supports single or multiple files)
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
     setUploading(true);
     setUploadError(null);
-    trace.action('media:upload-start', { name: file.name, size: file.size });
+    trace.action('media:upload-start', { count: files.length, names: files.map(f => f.name) });
     try {
-      const url = await backend.uploadAsset(projectId, file);
-      setUploads(prev => [{ url, size: file.size }, ...prev]);
-      trace.action('media:upload-success', { url });
-      // Re-fetch storage so usage updates
-      fetchUploads();
+      const results = await Promise.allSettled(
+        files.map(async (file) => {
+          const url = await backend.uploadAsset(projectId, file);
+          return { url, size: file.size, key: file.name };
+        })
+      );
+      const successful: UploadedFile[] = [];
+      const failures: string[] = [];
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          successful.push(res.value);
+        } else {
+          failures.push(`${files[idx].name} (${res.reason instanceof Error ? res.reason.message : 'failed'})`);
+        }
+      });
+      if (successful.length > 0) {
+        setUploads(prev => [...successful, ...prev]);
+        trace.action('media:upload-success', { count: successful.length });
+        fetchUploads();
+      }
+      if (failures.length > 0) {
+        trace.error('media:upload-partial-failures', { failures });
+        setUploadError(`Failed to upload: ${failures.join(', ')}`);
+      }
     } catch (err) {
       trace.error('media:upload-failed', err);
       setUploadError(err instanceof Error ? err.message : 'Upload failed');
@@ -592,6 +648,7 @@ export default function MediaGalleryPanel() {
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           accept={tab === 'images' ? 'image/*' : 'video/*'}
           onChange={handleUpload}
           className="hidden"
@@ -664,6 +721,7 @@ export default function MediaGalleryPanel() {
                 kind={tab === 'images' ? 'image' : 'video'}
                 mediaKey={deriveUploadKey(item)}
                 isSelected={(() => { const k = deriveUploadKey(item); return !!k && selectedKeys.has(k); })()}
+                batchItems={selectedBatchItems}
                 hasAnySelected={selectedKeys.size > 0}
                 canDelete={true}
                 onShiftPointerDown={beginShiftGesture}

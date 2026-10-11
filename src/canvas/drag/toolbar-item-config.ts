@@ -33,6 +33,8 @@ export interface ToolbarItem {
    *  so the inserted JSX tag (`elementType` is the slug / component
    *  name) resolves at runtime via the canvas's URL-import path. */
   cdnUrl?: string;
+  /** When multiple items are dragged together (e.g. multi-select media drag) */
+  batch?: ToolbarItem[];
 }
 
 // ─── Child factories ────────────────────────────────────────────────────────

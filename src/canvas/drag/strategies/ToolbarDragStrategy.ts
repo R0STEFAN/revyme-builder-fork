@@ -421,271 +421,172 @@ export class ToolbarDragStrategy implements DragStrategy {
       });
     }
 
-    const nodeId = generateNodeId(this.item.elementType === 'div' ? 'frame' : this.item.elementType);
+    const itemsToDrop = (this.item.batch && this.item.batch.length > 0)
+      ? this.item.batch
+      : [this.item];
 
-    const styles = { ...this.item.defaultStyles };
+    const updates: PendingUpdate[] = [];
+    const addedNodeIds: string[] = [];
 
-    if (!this.dropParentId) {
-      // Dropping on canvas with no parent — absolute position centered on cursor.
-      // Resolve width/height to px for centering offset (handles px, %, auto).
-      const w = parsePxValue(styles.width) ?? this.item.ghostSize.width;
-      const h = parsePxValue(styles.height) ?? this.item.ghostSize.height;
-      const canvasPos = screenToCanvas(
-        this.lastMouseScreen.x, this.lastMouseScreen.y,
-        context.transform, context.containerRect,
-      );
-      styles.position = 'absolute';
-      styles.left = `${Math.round(canvasPos.x - w / 2)}px`;
-      styles.top = `${Math.round(canvasPos.y - h / 2)}px`;
-      this.pendingRecenter = (parsePxValue(styles.width) == null || parsePxValue(styles.height) == null)
-        ? { nodeId, vpPrefix: '', left: Math.round(canvasPos.x - w / 2), top: Math.round(canvasPos.y - h / 2), mouseScreen: { ...this.lastMouseScreen }, scale: context.transform.scale || 1, contentEl: context.contentEl }
-        : null;
-      // Percentage / viewport sizes have nothing to resolve against on the
-      // bare canvas (a free node's `width: 100%` spans the whole workspace)
-      // — materialise the ghost-footprint px instead. Section blueprints
-      // carry `width: '100%'` / `height: '100vh'` for their in-page life.
-      if (/%$/.test(styles.width ?? '')) styles.width = `${w}px`;
-      if (/(%|vh)$/.test(styles.height ?? '')) styles.height = `${h}px`;
-    } else if (this.dropIndex === undefined) {
-      // Non-layout frame parent (no flex / grid / block flow). `onMove`
-      // signals this with `dropParentId` set + `dropIndex === undefined`,
-      // and shows a `parentHighlightOps` outline rather than a drop line.
-      // Insert as `position: absolute` and center under the cursor in
-      // parent-local coords. Without this branch the descriptor's default
-      // `position: 'relative'` lands the node at the parent's top-left,
-      // ignoring where the user actually dropped.
-      // `currentVpId` is NULL for a CANVAS-NODE parent (no replica routing) —
-      // vpId '' resolves the '' bridge prefix canvas nodes are cached under,
-      // so the same math places the drop inside a floating frame too (the
-      // old `&& this.currentVpId` guard skipped this branch entirely and
-      // canvas-node drops landed at the parent's top-left).
-      const w = parsePxValue(styles.width) ?? this.item.ghostSize.width;
-      const h = parsePxValue(styles.height) ?? this.item.ghostSize.height;
-      const parentRect = findNodeRect(this.dropParentId, this.currentVpId ?? '');
-      if (parentRect) {
-        const scale = context.transform.scale || 1;
-        // Subtract parent's screen origin and divide by canvas scale so
-        // the px we write are in CSS units the parent's rect computed at.
-        const localX = (this.lastMouseScreen.x - parentRect.left) / scale;
-        const localY = (this.lastMouseScreen.y - parentRect.top) / scale;
-        styles.position = 'absolute';
-        styles.left = `${Math.round(localX - w / 2)}px`;
-        styles.top = `${Math.round(localY - h / 2)}px`;
-        // Only primary / canvas-node parents: a replica drop routes through
-        // @media overrides, which the plain correction write must not touch.
-        const primaryish = this.currentVpId == null || isPrimaryViewport(this.currentVpId);
-        this.pendingRecenter = primaryish && (parsePxValue(styles.width) == null || parsePxValue(styles.height) == null)
-          ? { nodeId, vpPrefix: getViewportPrefix(this.currentVpId ?? ''), left: Math.round(localX - w / 2), top: Math.round(localY - h / 2), mouseScreen: { ...this.lastMouseScreen }, scale, contentEl: context.contentEl }
-          : null;
-        // Clear `flex: '0 0 auto'` (carried by some toolbar defaults for
-        // layout-friendly insertion) — irrelevant for absolute children
-        // and would only confuse the SizeTool's display.
-        delete (styles as Record<string, string>).flex;
-      } else {
-        // Bridge cache miss — fall back to the same parent-relative
-        // position the descriptor came with.
-        styles.position = 'relative';
-      }
-    } else if (this.dropIndex !== undefined) {
-      // LAYOUT DROP — the new node joins a flex/grid parent as a flow child.
-      // Force flex-shrink: 0 so it never inherits the CSS default (shrink: 1),
-      // which collapses it to ~0 computed height in a height-constrained flex
-      // column (design-tool parity: flow children are Fixed/Hug). A grow > 0 item
-      // (Fill) keeps its grow + basis; everything else lands at `0 0 auto`.
-      const f = parseFlex(styles.flex || '0 0 auto');
-      styles.flex = f.grow > 0 ? `${f.grow} 0 ${f.basis}` : '0 0 auto';
-    }
-
+    const isReplicaDrop = this.currentVpId !== null && !isPrimaryViewport(this.currentVpId);
     const dropParentNode = this.dropParentId ? context.nodes.get(this.dropParentId) : null;
     const isDroppingIntoText = dropParentNode ? isTextContainerTag(dropParentNode.type) : false;
-    if (isDroppingIntoText) {
-      delete (styles as Record<string, string>).position;
-      delete (styles as Record<string, string>).left;
-      delete (styles as Record<string, string>).top;
-      delete (styles as Record<string, string>).right;
-      delete (styles as Record<string, string>).bottom;
-      delete (styles as Record<string, string>).flex;
-    }
 
-    // Generate children if the item has a children factory (e.g. row/column with default frames)
-    const children = this.item.children?.();
+    // Canvas drop coords (pre-computed once)
+    const canvasPos = !this.dropParentId
+      ? screenToCanvas(
+          this.lastMouseScreen.x, this.lastMouseScreen.y,
+          context.transform, context.containerRect,
+        )
+      : null;
 
-    // ORACLE CONFORMANCE — the built-in Insert catalogue goes through the SAME
-    // normaliser as plugin-supplied trees (`toolbar-drag-bridge`). It was only
-    // ever wired to the plugin path, so the builder's own items shipped shapes
-    // its own oracle rejects: `makeFlexChildren` writes `flex: '1'` (grow 1 with
-    // shrink 1 → FLEX_CHILD_SHRINKS, the "collapses to 0 in a constrained
-    // column" bug) and no `order` at all (FLEX_CHILD_MISSING_ORDER → the child
-    // snaps to the front of the order:0 group on first drag-to-reorder). A live
-    // page carried 29 of these (user report 2026-07-26).
-    //
-    // Normalising the WHOLE descriptor (not each child alone) is what assigns
-    // sequential `order` — the rule is a property of the parent/child relation,
-    // so the children must be seen together. It runs AFTER the drop-context
-    // placement above, and only ever tightens it: offsets are stripped just for
-    // relative/static roots, so an absolute drop keeps its left/top.
-    const normalized = normalizeLayoutDescriptor({
-      tag: this.item.elementType, id: nodeId, styles, children,
-      attrs: this.item.defaultAttrs, textContent: this.item.textContent,
-      // Name rides along so the svg shape decomposition can label its
-      // per-shape children ("Ahrefs 1/2/3" instead of "Shape 1/2/3").
-      name: this.item.name ?? getInsertItem(this.item.id)?.name,
-    });
+    // Parent rect (pre-computed once for absolute non-layout parent)
+    const parentRect = (this.dropParentId && this.dropIndex === undefined)
+      ? findNodeRect(this.dropParentId, this.currentVpId ?? '')
+      : null;
 
-    // CMS-bound list: the toolbar item id encodes the collection slug
-    // (`cms:<slug>`). Surface it on the descriptor so Canvas's add-handler
-    // can fire a bindToCmsCollection on the first child after the add
-    // lands. The slug stays in the strategy's input — no other code-path
-    // cares about it.
-    const cmsCollectionSlug = this.item.id.startsWith('cms:')
-      ? this.item.id.slice('cms:'.length)
-      : undefined;
+    for (let itemIdx = 0; itemIdx < itemsToDrop.length; itemIdx++) {
+      const curItem = itemsToDrop[itemIdx];
+      const nodeId = generateNodeId(curItem.elementType === 'div' ? 'frame' : curItem.elementType);
+      addedNodeIds.push(nodeId);
 
-    // Replica drop logic — mirrors the create-on-replica pattern in
-    // FrameCreator/TextCreator/etc. and the canvas-drag entry-into-replica
-    // path. When the drop lands inside a non-primary viewport (page replica)
-    // or a non-default variant (component master) the new node must:
-    //   1. Carry inline `display: 'none'` so the primary stays empty (no
-    //      @container rule covers the primary, so without this the node
-    //      would render on every viewport).
-    //   2. Get explicit `display: 'none'` overrides for every OTHER replica/
-    //      variant via `hideInAllOthers` so smaller breakpoints don't
-    //      inherit the entered's `display: 'unset'` via @media cascade.
-    //   3. Get a `display: 'unset'` override for the entered viewport's
-    //      @container / variant — overrides the inline hide on the one
-    //      viewport the user actually dropped into.
-    // Without this trio, the new node either appears on every viewport
-    // (primary leaks) or nowhere (over-hidden everywhere).
-    //
-    // Component instances (uppercase tag like `<YouTubeEmbed>`) take the
-    // same inline hide. They used to skip it on the theory that the bounded
-    // per-viewport @media hides "cover the primary range" — they never did
-    // (the generator drops a primary-width band), so an instance dropped on
-    // tablet stayed visible on desktop. `expandComponent` keeps the tag's
-    // `display:none` off the inner root (the wrapper owns hiding), and the
-    // entered band restores the master ROOT's display below — see
-    // instance-replica-visibility.ts.
-    const isReplicaDrop = this.currentVpId !== null && !isPrimaryViewport(this.currentVpId);
-    const isComponentInstance = /^[A-Z]/.test(this.item.elementType);
-    if (isReplicaDrop) {
-      styles.display = 'none';
-    }
+      const styles = { ...curItem.defaultStyles };
+      const w = parsePxValue(styles.width) ?? curItem.ghostSize.width;
+      const h = parsePxValue(styles.height) ?? curItem.ghostSize.height;
+      const offset = itemIdx * 24;
 
-    const update: PendingUpdate = {
-      nodeId,
-      type: 'add',
-      descriptor: {
-        tag: this.item.elementType,
-        id: nodeId,
-        // Friendly name → `data-name="..."` on the JSX so the Layers
-        // panel reads "Pricing Card" / "Sidebar Layout" instead of the
-        // bare tag (`div`). Source priority:
-        //   1. Explicit `name` on the toolbar item (rare — only for cases
-        //      where the InsertItem panel label is too abbreviated, e.g.
-        //      cards ("Basic" → "Basic Card") and layouts ("2 Row" →
-        //      "2 Row Layout").
-        //   2. InsertItem.name from element-data.ts (the panel label) —
-        //      single source of truth for "what to call this element".
-        //      Captures Frame / Column / Row / Image / Button / Heading
-        //      / Paragraph / Quote / etc. automatically.
-        //   3. Undefined → generator skips `data-name`, layers falls back
-        //      to the tag name (legacy behavior).
-        name: this.item.name ?? getInsertItem(this.item.id)?.name,
-        styles: normalized.styles,
-        attrs: normalized.attrs,
-        textContent: normalized.textContent,
-        children: normalized.children,
-        cmsCollectionSlug,
-      },
-      newParentId: this.dropParentId ?? undefined,
-      newIndex: this.dropIndex,
-    };
-
-    trace.action('toolbar-drag:drop', {
-      nodeId,
-      parentId: this.dropParentId,
-      index: this.dropIndex,
-      tag: this.item.elementType,
-      vpId: this.currentVpId,
-      isReplicaDrop,
-    });
-
-    // Order matters here: hide/unhide CSS lands BEFORE the add. The add
-    // triggers a full renderer rebuild that paints the new element on
-    // every viewport's DOM. If the @media `display:none` rules aren't yet
-    // in the canvas <style>, the primary briefly shows the new node — the
-    // user sees a frame of layout shift before the CSS arrives and removes
-    // it. Inserting CSS first means the rule is already matching when
-    // the element first hits the DOM, so primary stays visually still.
-    const updates: PendingUpdate[] = [];
-
-    if (isReplicaDrop && this.currentVpId) {
-      const vpId = this.currentVpId;
-      const activeFilePath = getActiveFilePath();
-      const vpWidths = getViewportWidths();
-      const rctx = getReplicaContext(vpId, activeFilePath, vpWidths);
-      const isComponent = isComponentFilePath(activeFilePath);
-
-      // Hide on all OTHER replicas/variants. For component masters this also
-      // hides on `default` (the framer-motion baseline), which is the
-      // correct way to keep the new node out of the primary variant.
-      for (const hide of rctx.hideInAllOthers(nodeId)) {
-        updates.push(hide);
+      if (!this.dropParentId && canvasPos) {
+        styles.position = 'absolute';
+        styles.left = `${Math.round(canvasPos.x - w / 2) + offset}px`;
+        styles.top = `${Math.round(canvasPos.y - h / 2) + offset}px`;
+        if (itemIdx === 0) {
+          this.pendingRecenter = (parsePxValue(styles.width) == null || parsePxValue(styles.height) == null)
+            ? { nodeId, vpPrefix: '', left: Math.round(canvasPos.x - w / 2), top: Math.round(canvasPos.y - h / 2), mouseScreen: { ...this.lastMouseScreen }, scale: context.transform.scale || 1, contentEl: context.contentEl }
+            : null;
+        }
+        if (/%$/.test(styles.width ?? '')) styles.width = `${w}px`;
+        if (/(%|vh)$/.test(styles.height ?? '')) styles.height = `${h}px`;
+      } else if (this.dropIndex === undefined) {
+        if (parentRect) {
+          const scale = context.transform.scale || 1;
+          const localX = (this.lastMouseScreen.x - parentRect.left) / scale;
+          const localY = (this.lastMouseScreen.y - parentRect.top) / scale;
+          styles.position = 'absolute';
+          styles.left = `${Math.round(localX - w / 2) + offset}px`;
+          styles.top = `${Math.round(localY - h / 2) + offset}px`;
+          const primaryish = this.currentVpId == null || isPrimaryViewport(this.currentVpId);
+          if (itemIdx === 0) {
+            this.pendingRecenter = primaryish && (parsePxValue(styles.width) == null || parsePxValue(styles.height) == null)
+              ? { nodeId, vpPrefix: getViewportPrefix(this.currentVpId ?? ''), left: Math.round(localX - w / 2), top: Math.round(localY - h / 2), mouseScreen: { ...this.lastMouseScreen }, scale, contentEl: context.contentEl }
+              : null;
+          }
+          delete (styles as Record<string, string>).flex;
+        } else {
+          styles.position = 'relative';
+        }
+      } else if (this.dropIndex !== undefined) {
+        const f = parseFlex(styles.flex || '0 0 auto');
+        styles.flex = f.grow > 0 ? `${f.grow} 0 ${f.basis}` : '0 0 auto';
       }
 
-      // Unhide on the entered replica/variant. Mirrors
-      // `queueReplicaCreationUnhide` from creator-utils — same shape, but
-      // emitted as PendingUpdates so they ride the same onCommit path as the
-      // `add` mutation (no race between flushNow and queueMutation).
-      //
-      // Component instances restore the master ROOT's display instead of
-      // `unset`: `unset !important` forces the canvas wrapper <div> to
-      // `display: inline` (0×0), and on the live site the band rule lands on
-      // the root itself. The master is looked up by tag name in the
-      // component registry (a CDN item has no file → `block`).
-      const unhideDisplay = isComponentInstance
-        ? instanceReplicaUnhideDisplay({
-            type: this.item.elementType,
-            styles,
-            isComponentInstance: true,
-            componentFile: this.item.cdnUrl ?? null,
-          })
-        : 'unset';
-      if (isComponent) {
-        updates.push({
-          nodeId,
-          type: 'updateVariantStyle',
-          variantName: vpId,
-          styles: { display: unhideDisplay },
-        });
-      } else {
-        updates.push({
-          nodeId,
-          type: 'updateContainerStyle',
-          maxWidth: vpWidths[vpId] ?? 0,
-          styles: { display: unhideDisplay },
-        });
+      if (isDroppingIntoText) {
+        delete (styles as Record<string, string>).position;
+        delete (styles as Record<string, string>).left;
+        delete (styles as Record<string, string>).top;
+        delete (styles as Record<string, string>).right;
+        delete (styles as Record<string, string>).bottom;
+        delete (styles as Record<string, string>).flex;
       }
 
-      trace.action('toolbar-drag:replica-writes', {
-        nodeId, vpId, isComponent, hideCount: updates.length - 1,
+      const children = curItem.children?.();
+      const normalized = normalizeLayoutDescriptor({
+        tag: curItem.elementType, id: nodeId, styles, children,
+        attrs: curItem.defaultAttrs, textContent: curItem.textContent,
+        name: curItem.name ?? getInsertItem(curItem.id)?.name,
       });
-    }
 
-    // `add` last — its rebuild is what makes the new element visible.
-    // The hide/unhide rules above are already in the iframe's <style> block
-    // by the time this re-render runs.
-    updates.push(update);
+      const cmsCollectionSlug = curItem.id.startsWith('cms:')
+        ? curItem.id.slice('cms:'.length)
+        : undefined;
+
+      const isComponentInstance = /^[A-Z]/.test(curItem.elementType);
+      if (isReplicaDrop) {
+        styles.display = 'none';
+      }
+
+      const itemDropIndex = this.dropIndex !== undefined ? this.dropIndex + itemIdx : undefined;
+
+      const update: PendingUpdate = {
+        nodeId,
+        type: 'add',
+        descriptor: {
+          tag: curItem.elementType,
+          id: nodeId,
+          name: curItem.name ?? getInsertItem(curItem.id)?.name,
+          styles: normalized.styles,
+          attrs: normalized.attrs,
+          textContent: normalized.textContent,
+          children: normalized.children,
+          cmsCollectionSlug,
+        },
+        newParentId: this.dropParentId ?? undefined,
+        newIndex: itemDropIndex,
+      };
+
+      trace.action('toolbar-drag:drop', {
+        nodeId,
+        parentId: this.dropParentId,
+        index: itemDropIndex,
+        tag: curItem.elementType,
+        vpId: this.currentVpId,
+        isReplicaDrop,
+      });
+
+      if (isReplicaDrop && this.currentVpId) {
+        const vpId = this.currentVpId;
+        const activeFilePath = getActiveFilePath();
+        const vpWidths = getViewportWidths();
+        const rctx = getReplicaContext(vpId, activeFilePath, vpWidths);
+        const isComponent = isComponentFilePath(activeFilePath);
+
+        for (const hide of rctx.hideInAllOthers(nodeId)) {
+          updates.push(hide);
+        }
+
+        const unhideDisplay = isComponentInstance
+          ? instanceReplicaUnhideDisplay({
+              type: curItem.elementType,
+              styles,
+              isComponentInstance: true,
+              componentFile: curItem.cdnUrl ?? null,
+            })
+          : 'unset';
+        if (isComponent) {
+          updates.push({
+            nodeId,
+            type: 'updateVariantStyle',
+            variantName: vpId,
+            styles: { display: unhideDisplay },
+          });
+        } else {
+          updates.push({
+            nodeId,
+            type: 'updateContainerStyle',
+            maxWidth: vpWidths[vpId] ?? 0,
+            styles: { display: unhideDisplay },
+          });
+        }
+
+        trace.action('toolbar-drag:replica-writes', {
+          nodeId, vpId, isComponent, hideCount: updates.length - 1,
+        });
+      }
+
+      updates.push(update);
+    }
 
     // Renumber sibling `order` styles when the drop parent already has
     // explicit `order:N` on its children (set by a previous reorder).
-    // Without this, the new element ships to the JSX position the user
-    // asked for — but its CSS `order` is the default `0`, so it visually
-    // lands at the top of the layout instead of where the drop-line
-    // showed. `computeLayoutInsertOrderUpdates` returns [] when no
-    // sibling has an explicit order, so the cost in the common case is
-    // a single bridge cache lookup. Mirrors the same call
-    // CanvasDragStrategy makes after a layout-entry move.
     if (
       this.dropParentId &&
       this.dropIndex !== undefined &&
@@ -696,15 +597,10 @@ export class ToolbarDragStrategy implements DragStrategy {
         this.dropParentId,
         this.currentVpId,
         this.dropIndex,
-        [nodeId],
+        addedNodeIds,
         direction === 'column' ? 'column' : 'row',
         (id) => context.nodes.get(id)?.styles?.order,
       );
-      // Routed, never raw. A raw `type: 'style'` order write is only correct on
-      // the primary viewport — on a component master's variant tile
-      // `updateNodeStyles` sends it to `variants[X].order = N`, which
-      // framer-motion tweens as a float and overlays on the inline value, so
-      // the node parks at the wrong slot (user report 2026-07-27).
       updates.push(...commitOrderAssignments(orderUpdates, context.contentEl, this.currentVpId));
     }
 
