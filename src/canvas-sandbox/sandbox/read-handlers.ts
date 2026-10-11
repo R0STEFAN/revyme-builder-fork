@@ -184,6 +184,7 @@ export async function captureElement(
         width: norm.width,
         height: norm.height,
         style: norm.style as Partial<CSSStyleDeclaration>,
+        skipFonts: true,
       };
       if (opts.format === 'svg') return await htmlToImage.toSvg(el, base);
       if (opts.format === 'jpeg') return await htmlToImage.toJpeg(el, { ...base, quality: 0.95 });

@@ -1,7 +1,7 @@
 // thumbnail-capture.test.ts — Unit tests for thumbnail-capture helper
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { captureAndSaveProjectThumbnail } from './thumbnail-capture';
+import { captureAndSaveProjectThumbnail, resetThumbnailCaptureState } from './thumbnail-capture';
 import * as canvasBridgeModule from '@/canvas/canvas-bridge';
 import * as projectIdModule from './project-id';
 
@@ -16,6 +16,7 @@ vi.mock('./project-id', () => ({
 describe('captureAndSaveProjectThumbnail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetThumbnailCaptureState();
   });
 
   it('captures root element from bridge and posts to /api/projects/:id/thumbnail in self-host mode', async () => {
@@ -57,5 +58,33 @@ describe('captureAndSaveProjectThumbnail', () => {
 
     const result = await captureAndSaveProjectThumbnail('test-project-id');
     expect(result).toBeNull();
+  });
+
+  it('throttles rapid subsequent captures within cooldown interval', async () => {
+    const mockCaptureElement = vi.fn().mockResolvedValue('data:image/jpeg;base64,data-1');
+    vi.mocked(canvasBridgeModule.getCanvasBridge).mockReturnValue({
+      captureElement: mockCaptureElement,
+    } as any);
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, previewImage: '/api/uploads/thumb.jpg' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    // First call succeeds
+    const first = await captureAndSaveProjectThumbnail('test-project-id');
+    expect(first).toBe('/api/uploads/thumb.jpg');
+    expect(mockCaptureElement).toHaveBeenCalledTimes(1);
+
+    // Immediate second call is throttled
+    const second = await captureAndSaveProjectThumbnail('test-project-id');
+    expect(second).toBeNull();
+    expect(mockCaptureElement).toHaveBeenCalledTimes(1);
+
+    // Forced call bypasses throttle
+    const forced = await captureAndSaveProjectThumbnail('test-project-id', true);
+    expect(forced).toBe('/api/uploads/thumb.jpg');
+    expect(mockCaptureElement).toHaveBeenCalledTimes(2);
   });
 });

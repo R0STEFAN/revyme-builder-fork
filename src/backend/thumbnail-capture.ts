@@ -6,17 +6,45 @@ import { uploadPreviewThumbnail } from '@/backend/revyme-backend';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
 import { trace } from '@/shared/debug-trace';
 
+import { projectVersionAtom } from '@/code/project/project-fs';
+import { getDefaultStore } from 'jotai';
+
 let _capturing = false;
 let _lastCapturedVersion: number | null = null;
+let _lastCaptureTime = 0;
+const MIN_CAPTURE_INTERVAL_MS = 25000;
+
+export function resetThumbnailCaptureState(): void {
+  _capturing = false;
+  _lastCapturedVersion = null;
+  _lastCaptureTime = 0;
+}
 
 /**
  * Capture a screenshot/thumbnail of the current page from the canvas
  * and save it to backend storage & localStorage.
  */
-export async function captureAndSaveProjectThumbnail(projectId?: string): Promise<string | null> {
+export async function captureAndSaveProjectThumbnail(projectId?: string, force = false): Promise<string | null> {
   if (_capturing) return null;
   const id = projectId || getProjectId();
   if (!id) return null;
+
+  const now = Date.now();
+  let currentVersion: number | null = null;
+  try {
+    currentVersion = getDefaultStore().get(projectVersionAtom);
+  } catch {
+    // outside Jotai context / testing
+  }
+
+  if (!force) {
+    if (now - _lastCaptureTime < MIN_CAPTURE_INTERVAL_MS) {
+      return null;
+    }
+    if (currentVersion !== null && _lastCapturedVersion !== null && currentVersion === _lastCapturedVersion) {
+      return null;
+    }
+  }
 
   const bridge = getCanvasBridge() as {
     captureElement?: (
@@ -40,6 +68,9 @@ export async function captureAndSaveProjectThumbnail(projectId?: string): Promis
     if (!dataUrl || !dataUrl.startsWith('data:image/')) {
       return null;
     }
+
+    _lastCapturedVersion = currentVersion;
+    _lastCaptureTime = Date.now();
 
     trace.action('thumbnail-capture:captured', { id, size: dataUrl.length });
 

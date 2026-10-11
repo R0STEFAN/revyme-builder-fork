@@ -379,15 +379,18 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
               for (const [k, v] of Object.entries(tplProps)) if (!k.includes('@')) tplPropsBase[k] = v;
               const layoutNodes = parseProjectFile(layoutFilePath, projectFS, layoutCodeForParse, tplPropsBase);
 
-              // Find which layout node contains {children}
-              const childrenIdx = layoutCode.indexOf('{children}');
-              const childrenParentId = childrenIdx >= 0
-                ? findChildrenParentId(layoutCode, childrenIdx, layoutNodes)
-                : null;
+              // If the layout file has no canvas nodes (e.g. root RootLayout shell with <html><body><Providers>{children}…`),
+              // there are no template elements to merge into the canvas tree — page content renders standalone.
+              if (layoutNodes.size > 0) {
+                // Find which layout node contains {children}
+                const childrenIdx = layoutCode.indexOf('{children}');
+                const childrenParentId = childrenIdx >= 0
+                  ? findChildrenParentId(layoutCode, childrenIdx, layoutNodes)
+                  : null;
 
-              if (!childrenParentId) {
-                trace.error('nodesAtom:layout-no-children', { layoutPath });
-              } else {
+                if (!childrenParentId) {
+                  trace.error('nodesAtom:layout-no-children', { layoutPath });
+                } else {
                 // Collect original children lists before mutating
                 const origChildren = new Map<string, string[]>();
                 for (const [id, node] of layoutNodes) {
@@ -559,6 +562,7 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
             }
           }
         }
+      }
       }
       // Runs ONLY on a memo-miss (fresh parse + merge just replaced the map) —
       // give unchanged nodes their previous-generation identity back so

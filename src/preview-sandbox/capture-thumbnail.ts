@@ -88,6 +88,7 @@ export async function captureThumbnail(): Promise<void> {
       width: body.scrollWidth,
       height: body.scrollHeight || window.innerHeight,
       backgroundColor: opaqueBackground(),
+      skipFonts: true,
     });
     parent.postMessage({ type: 'preview:thumbnail', dataUrl }, '*');
   } catch (err) {
