@@ -40,6 +40,13 @@ describe('detectLayoutFlags', () => {
   it('no layout props at all → no layout', () => {
     expect(detectLayoutFlags({ width: '100px', color: '#fff' }).hasLayout).toBe(false);
   });
+
+  it.each<Record<string, string>>([
+    { display: 'block', flexDirection: 'column', alignItems: 'center', gap: '8px' },
+    { display: 'block', gridTemplateColumns: '1fr 1fr', gridAutoFlow: 'row' },
+  ])('explicit block disables inherited layout props: %o', (styles) => {
+    expect(detectLayoutFlags(styles)).toEqual({ hasFlex: false, hasGrid: false, hasLayout: false });
+  });
 });
 
 // A design component writes per-variant layout props as inline ternaries, and

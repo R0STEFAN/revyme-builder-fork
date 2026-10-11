@@ -799,6 +799,10 @@ export function detectLayoutFlags(
   styles: Record<string, string>,
 ): { hasFlex: boolean; hasGrid: boolean; hasLayout: boolean } {
   const display = styles.display || '';
+  // Remove Layout writes block to mask inherited flex/grid on a variant.
+  // Clearing an override can leave the base layout props in the effective
+  // map; they do not establish flex/grid when display explicitly disables it.
+  if (display === 'block') return { hasFlex: false, hasGrid: false, hasLayout: false };
   const hasFlexDisplay = display === 'flex' || display === 'inline-flex';
   const hasGridDisplay = display === 'grid' || display === 'inline-grid';
   // A prop set to its CSS INITIAL is not evidence of a layout. A design
@@ -1018,7 +1022,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
         contentEl,
       });
 
-      trace.action('layout:remove', { nodeId, childCount: childData.length, parentDims });
+      trace.action('layout:remove', { nodeId, childCount: childData.length, parentDims, vpId, isComponentFile, removedDisplay });
     } else {
       // ── Frame container: inject flex column + reflow children to flow.
       // Shared with SizeTool's `auto` width/height path so both entry
@@ -1041,7 +1045,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
     // user reported. Toggle is a single user click; instant feedback wins
     // over the scheduling smoothness idle was buying.
     flushNow();
-  }, [hasLayout, nodeId, onUpdateMultiple, styles, selectedIds, interactingVpId]);
+  }, [hasLayout, nodeId, onUpdateMultiple, styles, selectedIds, interactingVpId, isReplica, isComponentFile]);
 
   // Type switch is Flex ↔ Grid only.
   const handleTypeChange = useCallback((type: string) => {
