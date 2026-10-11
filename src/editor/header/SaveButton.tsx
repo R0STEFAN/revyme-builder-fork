@@ -176,7 +176,7 @@ export default function SaveButton({ className }: { className?: string } = {}) {
       data-tutorial="canvas-save-button"
       className={
         className ??
-        'flex items-center justify-center h-[32px] px-2.5 cut-corners cut-border text-xs font-semibold gap-1.5 cursor-pointer select-none transition-all duration-150 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed'
+        'flex items-center justify-center h-[32px] w-[76px] shrink-0 px-2.5 cut-corners cut-border text-xs font-semibold gap-1.5 cursor-pointer select-none transition-all duration-150 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed'
       }
       style={buttonStyle}
     >
