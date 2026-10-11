@@ -16,6 +16,7 @@
 import { parse } from '@babel/parser';
 import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
+import { projectFS } from '@/code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
 import { isSvgTag, isTextTag } from '@/shared/constants';
 import { formattedBranchesOfDangerAttr } from '@/shared/rich-message';
@@ -189,7 +190,7 @@ function isEditorMediaStyleBlock(el: t.JSXElement): boolean {
 
 export function checkFile(
   code: string,
-  opts: { kind: FileKind; path?: string; existingDataIds?: Set<string> },
+  opts: { kind: FileKind; path?: string; existingDataIds?: Set<string>; isTemplated?: boolean },
 ): OracleViolation[] {
   // A template (LayoutClient.tsx — Next.js layout semantics) is page dialect
   // plus one extra invariant: the {children} slot. Normalize to 'page' for
@@ -1557,7 +1558,9 @@ export function checkFile(
       // "padding shows live but not on canvas" bug). Keep the root bare; move
       // padding/background onto an inner wrapper with its own data-id. Excludes the
       // template LayoutClient itself (isTemplate), which legitimately owns the root.
-      if (kind === 'page' && !isTemplate && opts.path && /\([^)]+\)/.test(opts.path) && nodes.has('root')) {
+      const routeGroup = opts.path ? opts.path.match(/\(([^)]+)\)/)?.[1] : null;
+      const isActuallyTemplated = opts.isTemplated ?? (routeGroup ? Boolean(projectFS?.exists?.(`app/(${routeGroup})/LayoutClient.tsx`)) : false);
+      if (kind === 'page' && !isTemplate && isActuallyTemplated && nodes.has('root')) {
         const rootStyles = nodes.get('root')!.styles ?? {};
         // overflow/minHeight are flagged alongside padding/background: `overflowX: 'hidden'`
         // on a templated page root is dropped on the canvas but LIVE it computes

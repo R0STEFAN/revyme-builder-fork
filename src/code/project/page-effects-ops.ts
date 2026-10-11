@@ -64,11 +64,19 @@ export function setPageEffectForPage(pageFile: string, effect: PageEffect): bool
   }
   ensurePageEffectsScaffold(lc);
   // Inject <PageTransitions> into the LayoutClient (existing file → modifyProjectFile).
-  modifyProjectFile(lc, (code) => injectPageTransitionsInCode(code));
+  const injected = modifyProjectFile(lc, (code) => injectPageTransitionsInCode(code));
+  if (!injected) {
+    trace.error('page-effects-ops:set', { pageFile, reason: 'inject-failed' });
+    return false;
+  }
   const sourceRoute = routeForPage(pageFile);
-  modifyProjectFile(pageEffectsDataPath(lc), (code) =>
+  const updated = modifyProjectFile(pageEffectsDataPath(lc), (code) =>
     serializePageEffects(upsertEffectInMap(parsePageEffects(code), sourceRoute, effect)),
   );
+  if (!updated) {
+    trace.error('page-effects-ops:set', { pageFile, reason: 'map-write-failed' });
+    return false;
+  }
   trace.action('page-effects-ops:set', { pageFile, sourceRoute, target: effect.target, preset: effect.preset });
   return true;
 }

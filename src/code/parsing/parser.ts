@@ -255,6 +255,11 @@ export interface CanvasNode {
   // Set by expandComponent on the expanded internal nodes; read by resolveVariantStyles.
   responsivePropStyles?: Record<number, Record<string, string>> | null;
   /**
+   * Per-viewport style overrides (e.g. from template props var@width),
+   * viewport width -> { cssProp: value }. Merged by resolveVariantStyles on replica tiles.
+   */
+  responsiveStyles?: Record<number, Record<string, string>> | null;
+  /**
    * Per-viewport CMS-binding overrides LOWERED onto an expanded master node by
    * expandComponent (from the instance's `responsivePropFieldBindings` field-refs
    * + literal `data-responsive` overrides on a bound prop). Keyed by binding axis;

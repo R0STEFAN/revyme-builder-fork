@@ -8,21 +8,93 @@
 
 import { trace } from '@/shared/debug-trace';
 
-export type RouteMap = Record<string, Record<string, string>>;
+export type RouteMap = Record<string, Record<string, any>>;
 
 // The map is stored as a strict-JSON object literal (valid JS) so values with
 // commas/quotes (colors, gradients) round-trip safely via JSON.parse/stringify.
 export const MAP_RE = /const __templateProps = (\{[\s\S]*?\});\n?/;
 
+export interface TemplatePropsSpan {
+  start: number;
+  end: number;
+  jsonStart: number;
+  jsonEnd: number;
+  jsonString: string;
+}
+
+/** Find the full extent of `const __templateProps = {...};` accounting for quotes and nested braces. */
+export function findTemplatePropsSpan(code: string): TemplatePropsSpan | null {
+  const match = code.match(/(?:^|\n)([ \t]*const __templateProps\s*=\s*)/);
+  if (!match || match.index === undefined) return null;
+  const start = match.index + (match[0].startsWith('\n') ? 1 : 0);
+  const jsonStart = start + match[1].length;
+  if (code[jsonStart] !== '{') return null;
+
+  let depth = 0;
+  let inString: string | null = null;
+  let escape = false;
+  let jsonEnd = -1;
+
+  for (let i = jsonStart; i < code.length; i++) {
+    const ch = code[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (inString) {
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inString = ch;
+      continue;
+    }
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        jsonEnd = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (jsonEnd === -1) return null;
+
+  let end = jsonEnd;
+  while (end < code.length && (code[end] === ' ' || code[end] === '\t')) end++;
+  if (end < code.length && code[end] === ';') end++;
+  if (end < code.length && code[end] === '\r') end++;
+  if (end < code.length && code[end] === '\n') end++;
+
+  return {
+    start,
+    end,
+    jsonStart,
+    jsonEnd,
+    jsonString: code.slice(jsonStart, jsonEnd),
+  };
+}
+
 export function parseTemplateRouteMap(code: string): RouteMap {
-  const m = code.match(MAP_RE);
-  if (!m) return {};
-  try { return JSON.parse(m[1]) as RouteMap; }
+  const span = findTemplatePropsSpan(code);
+  if (!span) {
+    const m = code.match(MAP_RE);
+    if (!m) return {};
+    try { return JSON.parse(m[1]) as RouteMap; }
+    catch { return {}; }
+  }
+  try { return JSON.parse(span.jsonString) as RouteMap; }
   catch (e) { trace.error('template-route:parse-failed', { error: String(e) }); return {}; }
 }
 
 /** The per-page values for one route (e.g. '/' or '/about'). */
-export function getTemplateRouteValues(code: string, route: string): Record<string, string> {
+export function getTemplateRouteValues(code: string, route: string): Record<string, any> {
   return parseTemplateRouteMap(code)[route] ?? {};
 }
 

@@ -21,12 +21,21 @@
 // means "no chrome", matching the reference's behaviour.
 
 import { projectFS } from './project-fs';
+import { getDefaultStore } from 'jotai';
 import {
   createRouteGroup as createRouteGroupRaw,
   getRouteGroup,
   getPageServerPath,
+  getPageClientPath,
+  isPageServerFile,
+  isPageClientFile,
   movePageFile,
+  retargetCommentsForFilePath,
+  activeFilePathAtom,
+  componentBreadcrumbAtom,
 } from './active-file-store';
+import { syncLocaleRoutes } from './locale-route-ops';
+import { getI18nConfig } from './locale-ops';
 import { trace } from '@/shared/debug-trace';
 
 export interface Template {
@@ -129,13 +138,25 @@ export function assignTemplate(pageFilePath: string, templateName: string | null
     trace.fn('template-ops:assign-noop', { pageFilePath, templateName });
     return pageFilePath;
   }
-  if (projectFS.exists(newPath)) {
-    trace.error('template-ops:assign-conflict', { from: pageFilePath, to: newPath });
+  const oldClient = isPageServerFile(pageFilePath) ? getPageClientPath(pageFilePath) : pageFilePath;
+  const newClient = isPageServerFile(newPath) ? getPageClientPath(newPath) : newPath;
+  const oldServer = isPageClientFile(oldClient) ? getPageServerPath(oldClient) : pageFilePath;
+  const newServer = isPageClientFile(newClient) ? getPageServerPath(newClient) : newPath;
+
+  const oldClientExists = projectFS.exists(oldClient);
+  const oldServerExists = oldServer !== oldClient && projectFS.exists(oldServer);
+
+  if (oldClientExists && newClient !== oldClient && projectFS.exists(newClient)) {
+    trace.error('template-ops:assign-conflict-client', { from: oldClient, to: newClient });
+    return pageFilePath;
+  }
+  if (oldServerExists && newServer !== oldServer && projectFS.exists(newServer)) {
+    trace.error('template-ops:assign-conflict-server', { from: oldServer, to: newServer });
     return pageFilePath;
   }
   trace.action('template-ops:assign', { from: pageFilePath, to: newPath, templateName });
-  movePageFile(pageFilePath, newPath);
-  return newPath;
+  const ok = movePageFile(pageFilePath, newPath);
+  return ok ? newPath : pageFilePath;
 }
 
 /**
@@ -213,10 +234,100 @@ export function renameTemplate(oldName: string, newName: string): boolean {
   const oldDir = `app/(${oldName})/`;
   const newDir = `app/(${clean})/`;
   const files = projectFS.listFiles(oldDir);
+  if (files.length === 0) return false;
+
+  // Preflight destination: reject if destination folder already exists or any file clashes
+  if (projectFS.listFiles(newDir).length > 0) {
+    trace.error('template-ops:rename-destination-exists', { oldName, newName: clean, destDir: newDir });
+    return false;
+  }
+  for (const file of files) {
+    const dest = newDir + file.slice(oldDir.length);
+    if (projectFS.exists(dest)) {
+      trace.error('template-ops:rename-conflict-file', { oldName, newName: clean, dest });
+      return false;
+    }
+  }
+
+  // Move files and retarget comments
   for (const file of files) {
     const dest = newDir + file.slice(oldDir.length);
     projectFS.moveFile(file, dest);
+    retargetCommentsForFilePath(file, dest);
   }
+
+  // Retarget A/B test manifests (_revyme/variants/*/test.json)
+  const variantManifests = projectFS.listFiles('_revyme/variants/').filter((f) => f.endsWith('/test.json'));
+  for (const mf of variantManifests) {
+    const raw = projectFS.readFile(mf);
+    if (!raw) continue;
+    try {
+      const manifest = JSON.parse(raw);
+      let changed = false;
+      if (typeof manifest.pagePath === 'string' && manifest.pagePath.startsWith(oldDir)) {
+        manifest.pagePath = newDir + manifest.pagePath.slice(oldDir.length);
+        changed = true;
+      }
+      if (Array.isArray(manifest.variants)) {
+        for (const v of manifest.variants) {
+          if (v && v.template === oldName) {
+            v.template = clean;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        projectFS.writeFile(mf, JSON.stringify(manifest));
+      }
+    } catch {}
+  }
+
+  // Retarget activeFilePathAtom and componentBreadcrumbAtom in Jotai store
+  const store = getDefaultStore();
+  const active = store.get(activeFilePathAtom);
+  if (active && active.startsWith(oldDir)) {
+    const newActive = newDir + active.slice(oldDir.length);
+    store.set(activeFilePathAtom, newActive);
+  }
+  const curBreadcrumbs = store.get(componentBreadcrumbAtom);
+  if (curBreadcrumbs && curBreadcrumbs.length > 0) {
+    const nextBreadcrumbs = curBreadcrumbs.map((p) => (p.startsWith(oldDir) ? newDir + p.slice(oldDir.length) : p));
+    store.set(componentBreadcrumbAtom, nextBreadcrumbs);
+  }
+
+  // Retarget _meta/template-folders.json
+  const oldClient = `app/(${oldName})/LayoutClient.tsx`;
+  const newClient = `app/(${clean})/LayoutClient.tsx`;
+  const folderData = projectFS.readFile('_meta/template-folders.json');
+  if (folderData) {
+    try {
+      const parsed = JSON.parse(folderData);
+      let changed = false;
+      if (Array.isArray(parsed.rootOrder)) {
+        parsed.rootOrder = parsed.rootOrder.map((id: string) => {
+          if (id === oldClient) { changed = true; return newClient; }
+          return id;
+        });
+      }
+      if (Array.isArray(parsed.folders)) {
+        for (const f of parsed.folders) {
+          if (Array.isArray(f.items)) {
+            f.items = f.items.map((id: string) => {
+              if (id === oldClient) { changed = true; return newClient; }
+              return id;
+            });
+          }
+        }
+      }
+      if (changed) {
+        projectFS.writeFile('_meta/template-folders.json', JSON.stringify(parsed));
+      }
+    } catch {}
+  }
+
+  // Re-sync locale routes so generated locale wrappers update their imports and paths
+  syncLocaleRoutes(getI18nConfig());
+
   trace.action('template-ops:rename', { oldName, newName: clean, fileCount: files.length });
   return true;
 }

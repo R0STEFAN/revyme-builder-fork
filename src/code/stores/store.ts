@@ -13,6 +13,8 @@ import { computeLayoutBrackets, mergeTemplateChildren, cssOrderValue } from '@/s
 import { parseProjectFile, resolveInstancePropOverrides } from '../parsing/project-parser';
 import { getTemplateRouteValues, substituteTemplateVarAttrsForCanvas } from '../generation/template-route-parse';
 import { substituteScrollVariantFromVarForCanvas } from '../generation/scroll-variant-gen';
+import { findContentSlot } from '../generation/slot-children';
+import { splitViewportKey } from '../generation/template-route-gen';
 import { parseAsync } from '../parsing/async-parser';
 import { activeCodeAtom, activeFilePathAtom, isComponentFilePath, isComponentLikeFilePath, isLayoutFile, getLayoutForPage, getLayoutClientPath, filePathToSlug } from '../project/active-file-store';
 import { projectFS, projectVersionAtom } from '../project/project-fs';
@@ -280,9 +282,11 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
         if (editingLayout) {
           // ── Layout editing: inject {children} placeholder ──
           const layoutCode = code;
-          const childrenIdx = layoutCode.indexOf('{children}');
-          if (childrenIdx >= 0) {
-            const slotParentId = findChildrenParentId(layoutCode, childrenIdx, _cachedNodes);
+          const slot = findContentSlot(layoutCode);
+          if (slot) {
+            const slotParentId = slot.parentDataId && _cachedNodes.has(slot.parentDataId)
+              ? slot.parentDataId
+              : findChildrenParentId(layoutCode, slot.start, _cachedNodes);
 
             if (slotParentId && _cachedNodes.has(slotParentId)) {
               const parentNode = _cachedNodes.get(slotParentId)!;
@@ -295,7 +299,7 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
               let insertIdx = 0;
               for (const kidId of origKids) {
                 const tagIdx = jsxDataIdIndex(layoutCode, kidId);
-                if (tagIdx !== -1 && tagIdx < childrenIdx) insertIdx++;
+                if (tagIdx !== -1 && tagIdx < slot.start) insertIdx++;
               }
 
               // Create placeholder node
@@ -384,9 +388,11 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
               // there are no template elements to merge into the canvas tree — page content renders standalone.
               if (layoutNodes.size > 0) {
                 // Find which layout node contains {children}
-                const childrenIdx = layoutCode.indexOf('{children}');
-                const childrenParentId = childrenIdx >= 0
-                  ? findChildrenParentId(layoutCode, childrenIdx, layoutNodes)
+                const slot = findContentSlot(layoutCode);
+                const childrenParentId = slot
+                  ? (slot.parentDataId && layoutNodes.has(slot.parentDataId)
+                      ? slot.parentDataId
+                      : findChildrenParentId(layoutCode, slot.start, layoutNodes))
                   : null;
 
                 if (!childrenParentId) {
@@ -452,7 +458,7 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                     let insertIdx = 0;
                     for (const kidId of (origChildren.get(origId) || [])) {
                       const tagIdx = jsxDataIdIndex(layoutCode, kidId);
-                      if (tagIdx !== -1 && tagIdx < childrenIdx) insertIdx++;
+                      if (tagIdx !== -1 && tagIdx < (slot?.start ?? 0)) insertIdx++;
                     }
                     // In PAINT order (template `order` values + the page root's own),
                     // not source order — see mergeTemplateChildren.
@@ -539,20 +545,56 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                 // set overrides, so untouched templated pages are byte-identical.
                 // (`tplProps` was computed up front, before the parse.)
                 if (Object.keys(tplProps).length > 0) {
-                  const overrides = resolveInstancePropOverrides(tplProps, layoutCode);
-                  for (const ov of overrides.values()) {
-                    const target = _cachedNodes.get('layout::' + ov.nodeId);
-                    if (!target) continue;
-                    if (ov.kind === 'text') {
-                      target.textContent = ov.value;
-                    } else if (ov.kind === 'attr') {
-                      target.attrs = { ...(target.attrs ?? {}), [ov.attrName]: ov.value };
+                  const tplPropsBase: Record<string, any> = {};
+                  const tplPropsResponsive = new Map<number, Record<string, any>>();
+                  for (const [k, v] of Object.entries(tplProps)) {
+                    const { base, width } = splitViewportKey(k);
+                    if (width == null) {
+                      tplPropsBase[base] = v;
                     } else {
-                      target.styles = { ...target.styles, [ov.cssProp]: ov.value };
+                      const cur = tplPropsResponsive.get(width) ?? {};
+                      cur[base] = v;
+                      tplPropsResponsive.set(width, cur);
                     }
-                    _cachedNodes.set('layout::' + ov.nodeId, target);
                   }
-                  trace.action('nodesAtom:template-props-applied', { count: overrides.size, keys: Object.keys(tplProps) });
+
+                  if (Object.keys(tplPropsBase).length > 0) {
+                    const overrides = resolveInstancePropOverrides(tplPropsBase, layoutCode);
+                    for (const ov of overrides.values()) {
+                      const target = _cachedNodes.get('layout::' + ov.nodeId);
+                      if (!target) continue;
+                      if (ov.kind === 'text') {
+                        target.textContent = ov.value;
+                      } else if (ov.kind === 'attr') {
+                        target.attrs = { ...(target.attrs ?? {}), [ov.attrName]: ov.value };
+                      } else {
+                        target.styles = { ...target.styles, [ov.cssProp]: ov.value };
+                      }
+                      _cachedNodes.set('layout::' + ov.nodeId, target);
+                    }
+                  }
+
+                  for (const [width, widthProps] of tplPropsResponsive.entries()) {
+                    const overrides = resolveInstancePropOverrides(widthProps, layoutCode);
+                    for (const ov of overrides.values()) {
+                      const target = _cachedNodes.get('layout::' + ov.nodeId);
+                      if (!target) continue;
+                      if (ov.kind === 'text') {
+                        target.textOverrides = target.textOverrides ?? {};
+                        target.textOverrides[String(width)] = ov.value;
+                      } else if (ov.kind === 'attr') {
+                        target.attrs = { ...(target.attrs ?? {}), [ov.attrName]: ov.value };
+                      } else {
+                        target.responsiveStyles = target.responsiveStyles ?? {};
+                        target.responsiveStyles[width] = {
+                          ...(target.responsiveStyles[width] ?? {}),
+                          [ov.cssProp]: ov.value,
+                        };
+                      }
+                      _cachedNodes.set('layout::' + ov.nodeId, target);
+                    }
+                  }
+                  trace.action('nodesAtom:template-props-applied', { keys: Object.keys(tplProps) });
                 }
 
                 trace.action('nodesAtom:layout-merged', {

@@ -559,6 +559,10 @@ function resolveVariantStylesUncached(
     const propStyles = responsiveVariantForWidth(node.responsivePropStyles, vpWidth, node.responsiveVariantBp);
     if (propStyles) folded = mergeStyleLayers(folded, propStyles);
   }
+  if (vpWidth && node.responsiveStyles) {
+    const respStyles = responsiveVariantForWidth(node.responsiveStyles, vpWidth, node.responsiveVariantBp);
+    if (respStyles) folded = mergeStyleLayers(folded, respStyles);
+  }
   // AnimatePresence + conditional render visibility (the pattern from
   // setVariantVisibilityInCode). When the active variant is in the node's
   // `hiddenOnVariants` set, apply `display: 'none'` on the canvas so the

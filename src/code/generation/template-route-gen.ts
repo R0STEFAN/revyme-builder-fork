@@ -25,8 +25,17 @@
 
 import { trace } from '@/shared/debug-trace';
 import { ensureMediaGate, ensureMediaQueryHook, sweepOrphanMediaGates } from './scoped-expr';
+import { parse } from '@babel/parser';
+import * as t from '@babel/types';
 
-import { MAP_RE, parseTemplateRouteMap, getTemplateRouteValues, substituteTemplateVarAttrsForCanvas, type RouteMap } from './template-route-parse';
+import {
+  MAP_RE,
+  findTemplatePropsSpan,
+  parseTemplateRouteMap,
+  getTemplateRouteValues,
+  substituteTemplateVarAttrsForCanvas,
+  type RouteMap,
+} from './template-route-parse';
 export { parseTemplateRouteMap, getTemplateRouteValues, substituteTemplateVarAttrsForCanvas };
 
 // Per-viewport template variables are stored in the SAME route map with a
@@ -54,39 +63,50 @@ export function viewportVarKey(varName: string, vpWidth: number | null): string 
 // per-viewport `__mq`-gated form (`v = (__mq1 ? __tp['v@375'] : … : undefined) ?? __tp.v ?? v;`)
 // — any single line that assigns an identifier and references `__tp` — so toggling a
 // variable's responsiveness regenerates the whole block in place without leaving a stale line.
-const RESOLVE_BLOCK_RE = /[ \t]*const __tp = (?:__templateProps\[usePathname\(\)\] \?\? \{\}|__matchTemplateRoute\(usePathname\(\)\));(?:[ \t]*\r?\n[ \t]*[A-Za-z_$][\w$]* = [^\n]*__tp[^\n]*;)*[ \t]*\r?\n?/;
+const RESOLVE_BLOCK_RE = /(?:[ \t]*const __mq\d+ = useMediaQuery\('[^']*'\);[ \t]*\r?\n)*[ \t]*const __tp = (?:__templateProps\[usePathname\(\)\] \?\? \{\}|__matchTemplateRoute\(usePathname\(\)\));(?:[ \t]*\r?\n[ \t]*[A-Za-z_$][\w$]* = [^\n]*__tp[^\n]*;)*[ \t]*\r?\n?/;
 
-// Runtime route matcher. `usePathname()` returns the RESOLVED path (`/blog/my-post`),
-// which never string-equals a DYNAMIC map key (`/blog/[slug]`) — so a plain
-// `__templateProps[usePathname()]` lookup leaves dynamic detail pages on their param
-// defaults (their per-page template values never apply). This tries the exact path
-// first (static pages + literal preview paths), then the first dynamic key whose
-// pattern matches (each `[segment]` → one non-slash path segment). Emitted verbatim
-// (stable text) at module scope right after the map. NOTE: `[...catchAll]` collapses
-// to a single-segment match — fine for the common one-level dynamic route.
+// Runtime route matcher supporting static routes, catch-all ([...slug]), optional catch-all,
+// dynamic segments ([slug]), trailing slash normalization, and locale prefixes (e.g. /fr/about -> /about).
 const MATCHER_SRC =
 `const __matchTemplateRoute = (__p) => {
-  if (__templateProps[__p]) return __templateProps[__p];
-  for (const __k in __templateProps) {
-    if (__k.indexOf('[') === -1) continue;
-    if (new RegExp('^' + __k.replace(/\\[[^\\]]+\\]/g, '[^/]+') + '$').test(__p)) return __templateProps[__k];
+  if (!__p) return {};
+  const __norm = (__path) => {
+    const p = __path.replace(/\\/+$/, '');
+    return p ? p : '/';
+  };
+  const __test = (__target) => {
+    if (__templateProps[__target]) return __templateProps[__target];
+    for (const __k in __templateProps) {
+      if (__k.indexOf('[') === -1) {
+        if (__norm(__k) === __norm(__target)) return __templateProps[__k];
+        continue;
+      }
+      const __pat = '^' + __k
+        .replace(/\\[\\.\\.\\.[^\\]]+\\]/g, '.+')
+        .replace(/\\[[^\\]]+\\]/g, '[^/]+') + '/?$';
+      if (new RegExp(__pat).test(__target)) return __templateProps[__k];
+    }
+    return null;
+  };
+  const __res = __test(__p);
+  if (__res) return __res;
+  const __locMatch = __p.match(/^\\/([a-z]{2,3}(?:-[A-Za-z0-9]+)?)(?:\\/(.*))?$/);
+  if (__locMatch) {
+    const __stripped = '/' + (__locMatch[2] || '');
+    const __locRes = __test(__stripped);
+    if (__locRes) return __locRes;
   }
   return {};
 };
 `;
-// Parens-TOLERANT + whitespace-flexible. The emitted `(__p) =>` (MATCHER_SRC)
-// gets reformatted to `__p =>` by ANY babel round-trip of the LayoutClient
-// (@babel/generator drops the single-param parens). A parens-REQUIRED regex
-// then fails to recognise the existing matcher, so `ensureMatcher` re-injects
-// it — piling up `const __matchTemplateRoute` decls → babel "already declared"
-// crash. Matching BOTH forms keeps the idempotency + self-heal correct.
+
 const MATCHER_RE = /const __matchTemplateRoute = \(?__p\)?\s*=>\s*\{[\s\S]*?\n\};\n?/;
 
 function ensureUsePathnameImport(code: string): string {
   if (/import\s*\{[^}]*\busePathname\b[^}]*\}\s*from\s*['"]next\/navigation['"]/.test(code)) return code;
+  const line = `import { usePathname } from 'next/navigation';\n`;
   // Add after the next/link import if present, else after 'use client', else top.
   const nextLink = code.match(/import\s+\w+\s+from\s+['"]next\/link['"];?\n/);
-  const line = `import { usePathname } from 'next/navigation';\n`;
   if (nextLink && nextLink.index !== undefined) {
     const at = nextLink.index + nextLink[0].length;
     return code.slice(0, at) + line + code.slice(at);
@@ -101,6 +121,10 @@ function ensureUsePathnameImport(code: string): string {
 
 function ensureMapConst(code: string, map: RouteMap): string {
   const decl = `const __templateProps = ${JSON.stringify(map)};\n`;
+  const span = findTemplatePropsSpan(code);
+  if (span) {
+    return code.slice(0, span.start) + decl + code.slice(span.end);
+  }
   if (MAP_RE.test(code)) return code.replace(MAP_RE, decl);
   // Insert just before `export default function` (module scope).
   const exp = code.match(/\n(export default function )/);
@@ -111,22 +135,15 @@ function ensureMapConst(code: string, map: RouteMap): string {
   return code + '\n' + decl;
 }
 
-/** Find the index just AFTER the LayoutClient function body's opening `{`.
- *  String-aware paren-balance to the params' close `)` (param defaults can hold
- *  strings with parens), then the next `{` is the body. -1 if not found. */
-/** Ensure EXACTLY ONE module-scope `__matchTemplateRoute` helper, inserted right
- *  after the `__templateProps` map const.
- *  - 1 present  → leave it (no churn).
- *  - 0 present  → insert one.
- *  - 2+ present → strip ALL, insert one (SELF-HEAL a LayoutClient already
- *    corrupted by the old parens-required check, which duplicated the matcher
- *    on every template-var write after a babel reformat → "already declared").
- *  Counting via the parens-tolerant MATCHER_RE is what makes both the
- *  idempotency (don't add a 2nd) and the heal (collapse N→1) work. */
 function ensureMatcher(code: string): string {
   const count = (code.match(new RegExp(MATCHER_RE.source, 'g')) || []).length;
   if (count === 1) return code;
   const stripped = count >= 2 ? code.replace(new RegExp(MATCHER_RE.source, 'g'), '') : code;
+  const span = findTemplatePropsSpan(stripped);
+  if (span) {
+    const at = span.end;
+    return stripped.slice(0, at) + MATCHER_SRC + stripped.slice(at);
+  }
   const m = stripped.match(MAP_RE);
   if (m && m.index !== undefined) {
     const at = m.index + m[0].length;
@@ -159,11 +176,6 @@ function findBodyOpenIndex(code: string): number {
  *  before-return reassignment would run too late (they'd read the param
  *  default). usePathname() must also be the first hook anyway. */
 function ensureResolveBlock(code: string, varNames: string[], map: RouteMap): string {
-  // Per-variable override widths, collected across ALL routes (one `__mq`-gated
-  // reassignment line is shared by every route — `__tp` already scopes to the
-  // active route, so an absent `@<width>` key for a given route falls through to
-  // the base value). Sorted SMALLEST-first so the ternary checks the most
-  // specific breakpoint first (mobile before tablet) — the responsive-attrs rule.
   const widthsByVar = new Map<string, number[]>();
   for (const route of Object.keys(map)) {
     for (const key of Object.keys(map[route])) {
@@ -175,11 +187,22 @@ function ensureResolveBlock(code: string, varNames: string[], map: RouteMap): st
     }
   }
 
+  const allWidths = [...new Set([...widthsByVar.values()].flat())].sort((a, b) => a - b);
+  const anyResponsive = allWidths.length > 0;
+
   let out = code;
-  const anyResponsive = [...widthsByVar.values()].some((a) => a.length > 0);
-  // The gated reassignments reference `__mqN` (and the `useMediaQuery` hook).
-  // Ensure both exist BEFORE we build the lines so we know the gate var names.
   if (anyResponsive) out = ensureMediaQueryHook(out);
+
+  // Strip any old gates from the function body so they don't get placed after consumers or duplicate
+  out = out.replace(/\n[ \t]*const __mq\d+ = useMediaQuery\([^\n]*\);/g, '');
+
+  const gateVarByWidth = new Map<number, string>();
+  const gateLines: string[] = [];
+  allWidths.forEach((w, idx) => {
+    const gateVar = `__mq${idx}`;
+    gateVarByWidth.set(w, gateVar);
+    gateLines.push(`  const ${gateVar} = useMediaQuery('(max-width: ${w}px)');`);
+  });
 
   const reassign: string[] = [];
   for (const v of varNames) {
@@ -188,66 +211,84 @@ function ensureResolveBlock(code: string, varNames: string[], map: RouteMap): st
       reassign.push(`  ${v} = __tp.${v} ?? ${v};`);
       continue;
     }
-    const parts: string[] = [];
-    for (const w of widths) {
-      const g = ensureMediaGate(out, `(max-width: ${w}px)`);
-      out = g.code;
-      parts.push(`${g.gateVar} ? __tp['${v}@${w}']`);
+    const parts = widths.map(w => `(${gateVarByWidth.get(w)} ? __tp['${v}@${w}'] : undefined)`);
+    if (parts.length === 1) {
+      reassign.push(`  ${v} = ${parts[0]} ?? __tp.${v} ?? ${v};`);
+    } else {
+      reassign.push(`  ${v} = (${parts.join(' ?? ')}) ?? __tp.${v} ?? ${v};`);
     }
-    // `(__mq1 ? __tp['v@375'] : __mq0 ? __tp['v@768'] : undefined) ?? __tp.v ?? v`
-    reassign.push(`  ${v} = (${parts.join(' : ')} : undefined) ?? __tp.${v} ?? ${v};`);
   }
 
-  const lines = '\n' + [`  const __tp = __matchTemplateRoute(usePathname());`, ...reassign].join('\n') + '\n';
+  const lines = '\n' + [
+    ...gateLines,
+    `  const __tp = __matchTemplateRoute(usePathname());`,
+    ...reassign,
+  ].join('\n') + '\n';
 
   if (RESOLVE_BLOCK_RE.test(out)) {
     out = out.replace(RESOLVE_BLOCK_RE, varNames.length ? lines.replace(/^\n/, '') : '');
   } else if (varNames.length) {
-    // Fresh insert. Place the block AFTER the last `__mq` gate so the gated
-    // reassignments see the declarations (gates are injected at the body top by
-    // ensureMediaGate); otherwise at the body open.
-    let insertAt = findBodyOpenIndex(out);
-    const gates = [...out.matchAll(/\n[ \t]*const __mq\d+ = useMediaQuery\([^)]*\);/g)];
-    if (gates.length > 0) {
-      const last = gates[gates.length - 1];
-      insertAt = (last.index ?? 0) + last[0].length;
+    const insertAt = findBodyOpenIndex(out);
+    if (insertAt !== -1) {
+      out = out.slice(0, insertAt) + lines + out.slice(insertAt);
     }
-    if (insertAt !== -1) out = out.slice(0, insertAt) + lines + out.slice(insertAt);
   }
-  // Drop any `__mq` gate this regeneration left unreferenced (e.g. a per-viewport
-  // override was reset back to base, removing its only consumer).
+
   return sweepOrphanMediaGates(out);
 }
 
-/**
- * Set one template variable's value for `route` in the LayoutClient's route map
- * (empty value clears it; an empty route entry is removed), and ensure the
- * native resolution wiring (usePathname import + map const + reassignment block
- * covering all `varNames`) is present. `varNames` is the full list of BASE
- * template variables so the reassignment block stays complete.
- *
- * `varName` may be a BASE key (`headerVariant`, primary/desktop value) OR a
- * per-viewport `@<width>` key (`headerVariant@768`, replica override). The map
- * stores either verbatim; `ensureResolveBlock` derives the `__mq`-gated
- * resolution from the `@<width>` keys present across the map. Use
- * `viewportVarKey(name, vpWidth)` to build the key from the active viewport.
- */
 // Numeric transition fields — framer-motion needs these as NUMBERS, not strings.
 const TRANSITION_NUM_KEYS = new Set(['duration', 'delay', 'stiffness', 'damping', 'mass', 'bounce']);
 
-/**
- * A transition variable's value arrives as a JSON OBJECT string (`{"type":"spring","stiffness":"300"}`). Stored
- * VERBATIM as a string it reaches the component as a string — framer-motion silently ignores a string transition
- * (every variant then animates with the DEFAULT). Detect an object-JSON value, parse it, and coerce the numeric
- * physics fields to real numbers, so it round-trips through the map as a real OBJECT: the runtime reassignment
- * (`v = __tp.v ?? v`) and the canvas attr-substitution (`={JSON.stringify(value)}` → `={{…}}`) both then pass an
- * OBJECT (with numeric fields) to the component. Non-object values (colors, text, numbers) stay strings.
- */
-function coerceRouteValue(value: string): any {
-  const t = (value ?? '').trim();
-  if (t[0] !== '{') return value;
+function getParamDefaultKinds(code: string): Map<string, 'boolean' | 'number' | 'string' | 'object'> {
+  const kinds = new Map<string, 'boolean' | 'number' | 'string' | 'object'>();
   try {
-    const obj = JSON.parse(t);
+    const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    for (const stmt of ast.program.body) {
+      let fn: t.FunctionDeclaration | null = null;
+      if (t.isExportDefaultDeclaration(stmt)) {
+        if (t.isFunctionDeclaration(stmt.declaration)) fn = stmt.declaration;
+      }
+      if (fn && fn.params.length > 0) {
+        const first = fn.params[0];
+        if (t.isObjectPattern(first)) {
+          for (const prop of first.properties) {
+            if (t.isObjectProperty(prop) && t.isAssignmentPattern(prop.value) && t.isIdentifier(prop.value.left)) {
+              const name = prop.value.left.name;
+              const right = prop.value.right;
+              if (t.isBooleanLiteral(right)) kinds.set(name, 'boolean');
+              else if (t.isNumericLiteral(right)) kinds.set(name, 'number');
+              else if (t.isStringLiteral(right)) kinds.set(name, 'string');
+              else if (t.isObjectExpression(right)) kinds.set(name, 'object');
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+  return kinds;
+}
+
+function coerceRouteValue(value: any, expectedKind?: 'boolean' | 'number' | 'string' | 'object'): any {
+  if (typeof value === 'boolean' || typeof value === 'number') return value;
+  if (value == null) return value;
+  const str = String(value).trim();
+
+  if (expectedKind === 'boolean') {
+    if (str === 'false') return false;
+    if (str === 'true') return true;
+  }
+  if (expectedKind === 'number') {
+    if (str !== '' && !Number.isNaN(Number(str))) {
+      if (/^-?\d+(\.\d+)?$/.test(str) && (!str.startsWith('0') || str === '0' || str.startsWith('0.'))) {
+        return Number(str);
+      }
+    }
+  }
+
+  if (str[0] !== '{') return value;
+  try {
+    const obj = JSON.parse(str);
     if (!obj || typeof obj !== 'object') return value;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
@@ -260,13 +301,17 @@ function coerceRouteValue(value: string): any {
 }
 
 export function setTemplateRouteValueInCode(
-  code: string, route: string, varName: string, value: string, varNames: string[],
+  code: string, route: string, varName: string, value: any, varNames: string[],
 ): string {
   const map = parseTemplateRouteMap(code);
+  const paramKinds = getParamDefaultKinds(code);
+  const { base } = splitViewportKey(varName);
+  const kind = paramKinds.get(base);
+
   if (value === '' || value == null) {
     if (map[route]) { delete map[route][varName]; if (Object.keys(map[route]).length === 0) delete map[route]; }
   } else {
-    map[route] = { ...(map[route] ?? {}), [varName]: coerceRouteValue(value) };
+    map[route] = { ...(map[route] ?? {}), [varName]: coerceRouteValue(value, kind) };
   }
   let out = ensureUsePathnameImport(code);
   out = ensureMapConst(out, map);
@@ -282,7 +327,7 @@ export function setTemplateRouteValueInCode(
  *  fall-through so the Template tool's input shows what the page will render. */
 export function getTemplateRouteValueForViewport(
   code: string, route: string, varName: string, vpWidth: number | null,
-): string {
+): any {
   const entry = parseTemplateRouteMap(code)[route] ?? {};
   if (vpWidth != null) {
     const override = entry[`${varName}@${vpWidth}`];
@@ -331,4 +376,18 @@ export function removeTemplateVarFromCode(code: string, varName: string): string
   // The deleted var's reassignment line went with `deleteComponentVariableInCode`;
   // sweep any `__mq` gate it was the last consumer of.
   return sweepOrphanMediaGates(ensureMapConst(code, map));
+}
+
+/**
+ * Re-key a route in `__templateProps` (e.g. when a page slug / URL changes).
+ * Preserves all variables and responsive overrides.
+ */
+export function renameTemplateRouteInCode(code: string, oldRoute: string, newRoute: string): string {
+  const map = parseTemplateRouteMap(code);
+  if (!map[oldRoute]) return code;
+  const oldVals = map[oldRoute];
+  delete map[oldRoute];
+  map[newRoute] = { ...oldVals, ...(map[newRoute] ?? {}) };
+  trace.action('template-route:rename-route', { oldRoute, newRoute });
+  return ensureMapConst(code, map);
 }

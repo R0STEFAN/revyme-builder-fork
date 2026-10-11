@@ -18,6 +18,9 @@ import { healMissingInstanceDataIds } from '@/code/parsing/heal-data-ids';
 import { syncLocaleRoutes } from './locale-route-ops';
 import { getI18nConfig } from './locale-ops';
 import { normalizePageRootShell } from '../generation/page-root-shell';
+import { renameTemplateRouteInCode } from '../generation/template-route-gen';
+import { pageEffectsDataPath } from '../generation/page-transitions-gen';
+import { parsePageEffects, serializePageEffects } from './page-effects-config';
 
 // ─── Active File ────────────────────────────────────────────────────────────
 
@@ -974,6 +977,26 @@ export function deletePageFile(filePath: string): void {
   trace.action('active-file:delete-page', { clientPath, serverPath });
 }
 
+function slugToRoute(slug: string): string {
+  if (!slug || slug === 'home') return '/';
+  return '/' + slug.replace(/^\//, '');
+}
+
+function retargetVariantsForPage(oldPage: string, newPage: string): void {
+  const manifests = projectFS.listFiles('_revyme/variants/').filter((f) => f.endsWith('/test.json'));
+  for (const mf of manifests) {
+    const raw = projectFS.readFile(mf);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.pagePath === oldPage) {
+        parsed.pagePath = newPage;
+        projectFS.writeFile(mf, JSON.stringify(parsed));
+      }
+    } catch {}
+  }
+}
+
 /**
  * Move a page to a new path. Moves BOTH halves of the page pair
  * atomically and rewrites every comment's `filePath` field so threads
@@ -982,22 +1005,68 @@ export function deletePageFile(filePath: string): void {
  * `oldPath` / `newPath` can be either the server wrapper or the client
  * body — we derive the corresponding partner for each. Used for
  * drag-drop nesting and route group assignment.
+ * Returns true if move succeeded, false on conflict or missing source.
  */
-export function movePageFile(oldPath: string, newPath: string): void {
-  if (oldPath === newPath) return;
+export function movePageFile(oldPath: string, newPath: string): boolean {
+  if (oldPath === newPath) return true;
   const oldClient = isPageServerFile(oldPath) ? getPageClientPath(oldPath) : oldPath;
   const newClient = isPageServerFile(newPath) ? getPageClientPath(newPath) : newPath;
   const oldServer = isPageClientFile(oldClient) ? getPageServerPath(oldClient) : oldPath;
   const newServer = isPageClientFile(newClient) ? getPageServerPath(newClient) : newPath;
 
-  if (projectFS.exists(oldClient)) {
+  const oldClientExists = projectFS.exists(oldClient);
+  const oldServerExists = oldServer !== oldClient && projectFS.exists(oldServer);
+  if (!oldClientExists && !oldServerExists) {
+    trace.error('active-file:move-source-missing', { oldPath, newPath });
+    return false;
+  }
+
+  // Preflight destination conflicts for both client and server halves
+  if (oldClientExists && newClient !== oldClient && projectFS.exists(newClient)) {
+    trace.error('active-file:move-conflict-client', { oldClient, newClient });
+    return false;
+  }
+  if (oldServerExists && newServer !== oldServer && projectFS.exists(newServer)) {
+    trace.error('active-file:move-conflict-server', { oldServer, newServer });
+    return false;
+  }
+
+  if (oldClientExists) {
     projectFS.moveFile(oldClient, newClient);
     retargetCommentsForFilePath(oldClient, newClient);
+    retargetVariantsForPage(oldClient, newClient);
   }
-  if (oldServer !== oldClient && projectFS.exists(oldServer)) {
+  if (oldServerExists) {
     projectFS.moveFile(oldServer, newServer);
     retargetCommentsForFilePath(oldServer, newServer);
   }
+
+  // URL route change: migrate template overrides and page effects
+  const oldRoute = slugToRoute(filePathToSlug(oldClient));
+  const newRoute = slugToRoute(filePathToSlug(newClient));
+  if (oldRoute !== newRoute) {
+    const layoutPath = getLayoutForPage(newClient) ?? getLayoutForPage(oldClient);
+    if (layoutPath) {
+      const layoutClient = getLayoutClientPath(layoutPath);
+      if (projectFS.exists(layoutClient)) {
+        modifyProjectFile(layoutClient, (code) => renameTemplateRouteInCode(code, oldRoute, newRoute));
+      }
+      const effectsPath = pageEffectsDataPath(layoutClient);
+      if (projectFS.exists(effectsPath)) {
+        modifyProjectFile(effectsPath, (code) => {
+          const map = parsePageEffects(code);
+          if (map.pages && map.pages[oldRoute]) {
+            const effects = map.pages[oldRoute];
+            delete map.pages[oldRoute];
+            map.pages[newRoute] = effects;
+            return serializePageEffects(map);
+          }
+          return code;
+        });
+      }
+    }
+  }
+
   // TEMPLATE-BOUNDARY ROOT NORMALIZATION. A templated page's `data-id="root"` collides
   // with the template's root in the canvas node map — its shell styles are DROPPED on the
   // canvas but still render live (the page-root `overflowX: 'hidden'` became a live nested
@@ -1024,6 +1093,7 @@ export function movePageFile(oldPath: string, newPath: string): void {
     fromClient: oldClient, toClient: newClient, fromServer: oldServer, toServer: newServer,
   });
   syncLocaleRoutes(getI18nConfig());
+  return true;
 }
 
 /** Is this path inside a route group that is a real TEMPLATE (has a LayoutClient)?
@@ -1053,7 +1123,7 @@ function pruneCommentsForFilePath(filePath: string): void {
 
 /** Rewrite `filePath` on every comment matching `oldPath` so threads
  *  follow the page through a rename / move. */
-function retargetCommentsForFilePath(oldPath: string, newPath: string): void {
+export function retargetCommentsForFilePath(oldPath: string, newPath: string): void {
   const json = projectFS.readFile(COMMENTS_FILE_PATH);
   if (!json) return;
   const before = parseComments(json);

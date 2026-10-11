@@ -132,7 +132,12 @@ export function TemplatesSection({
     if (!renameTarget) return;
     flushNow();
     sealPendingHistory();
-    renameTemplate(renameTarget, newName);
+    const success = renameTemplate(renameTarget, newName);
+    if (!success) {
+      toast.error(`Cannot rename template "${renameTarget}" to "${newName}"`);
+      setRenameTarget(null);
+      return;
+    }
     setVersion(v => v + 1);
     setRenameTarget(null);
     // The rename moves every file in the group — the pre-op active path is

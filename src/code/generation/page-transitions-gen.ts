@@ -18,6 +18,7 @@
 import { trace } from '@/shared/debug-trace';
 import { projectFS } from '../project/project-fs';
 import { serializePageEffects } from '../project/page-effects-config';
+import { findContentSlot } from './slot-children';
 
 /** The deployed pure helpers. Plain JS (no TS types / editor imports) so it's
  *  self-contained user source AND directly eval-able by the parity test. Mirrors
@@ -250,17 +251,15 @@ export function ensurePageEffectsScaffold(layoutClientPath: string): void {
   // NOTE: the LayoutClient `<PageTransitions>` injection is done by the OPS layer
   // via modifyProjectFile (the LayoutClient is an existing file with pending
   // queue state; raw writeFile would lose it).
-  trace.action('page-transitions-gen:ensure-scaffold', { layoutClientPath });
 }
 
 /** Wrap the LayoutClient's `{children}` in `<PageTransitions>` + add the import.
  *  Idempotent. Pure (exported for testing). */
 export function injectPageTransitionsInCode(code: string): string {
   if (code.includes('<PageTransitions>')) return code;
-  // Wrap the FIRST top-level `{children}` occurrence.
-  const idx = code.indexOf('{children}');
-  if (idx === -1) return code;
-  let next = code.slice(0, idx) + '<PageTransitions>{children}</PageTransitions>' + code.slice(idx + '{children}'.length);
+  const slot = findContentSlot(code);
+  if (!slot) return code;
+  let next = code.slice(0, slot.start) + '<PageTransitions>{children}</PageTransitions>' + code.slice(slot.end);
   // Add the import after the last import (or after 'use client').
   const imp = `import { PageTransitions } from './page-transitions';`;
   if (!next.includes(imp)) {
