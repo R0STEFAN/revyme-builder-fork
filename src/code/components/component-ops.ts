@@ -3697,3 +3697,5 @@ function addImportIfNeeded(code: string, componentName: string, componentFilePat
   // No imports found — add at top
   return importStatement + code;
 }
+
+export { duplicateComponent, generateDuplicateDisplayName } from './component-duplicate';

@@ -22,8 +22,8 @@ vi.mock('./sections/TemplatesSection', () => ({ TemplatesSection: () => null }))
 vi.mock('./sections/CodeOverridesSection', () => ({ CodeOverridesSection: () => null }));
 vi.mock('@/editor/left-toolbar/panels/plugins', () => ({ default: () => null }));
 vi.mock('@/design-system/ConfirmDialog', () => ({
-  default: ({ isOpen, onClose, onConfirm }: { isOpen: boolean; onClose: () => void; onConfirm: () => void }) =>
-    isOpen ? <div><button onClick={onClose}>Cancel delete</button><button onClick={onConfirm}>Confirm delete</button></div> : null,
+  default: ({ isOpen, onClose, onConfirm, message }: { isOpen: boolean; onClose: () => void; onConfirm: () => void; message?: string }) =>
+    isOpen ? <div><p data-testid="confirm-message">{message}</p><button onClick={onClose}>Cancel delete</button><button onClick={onConfirm}>Confirm delete</button></div> : null,
 }));
 
 const page = 'app/page.client.tsx';
@@ -77,6 +77,8 @@ describe('LibraryPanel component deletion', () => {
   it('keeps the editor open when the user cancels confirmation', () => {
     render(<LibraryPanel mode="library" />);
     fireEvent.click(screen.getByText('Request Card delete'));
+    expect(screen.getByTestId('confirm-message').textContent).toContain('You can undo this deletion with Edit > Undo.');
+    expect(screen.getByTestId('confirm-message').textContent).not.toContain('This cannot be undone');
     expect(store.get(componentEditorFileAtom)).toBe(master);
     fireEvent.click(screen.getByText('Cancel delete'));
     expect(store.get(componentEditorFileAtom)).toBe(master);

@@ -19,6 +19,8 @@ import {
 } from '@/design-system/FolderTree';
 import { scanLinkedComponentUrls } from '@/cloud/components/linked-components-scanner';
 import { setComponentName } from '@/code/components/component-ops';
+import { duplicateComponent } from '@/code/components/component-duplicate';
+import { toast } from 'sonner';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { modifyProjectFile } from '@/code/project/modify-file';
@@ -88,6 +90,7 @@ interface ProjectChildrenProps {
   editorFile: string | null;
   onSwitchToComponent: (f: string) => void;
   onSwitchToCodeComponent: (f: string) => void;
+  onDuplicateComponent?: (filePath: string, type: 'design' | 'code') => void;
   onDeleteComponent: (f: string) => void;
   setRenamingPath: (p: string | null) => void;
   setRenamingFolderId: (id: string | null) => void;
@@ -106,11 +109,33 @@ function ProjectChildren(props: ProjectChildrenProps) {
     projectFolderOpen, renamingPath, renamingFolderId, pendingNewFolderId,
     selectedComponentFiles,
     activeFile, editorFile,
-    onSwitchToComponent, onSwitchToCodeComponent, onDeleteComponent,
+    onSwitchToComponent, onSwitchToCodeComponent, onDuplicateComponent, onDeleteComponent,
     setRenamingPath, setRenamingFolderId,
     handleRenameCommit, handleFolderRenameCommit, handleFolderDelete,
     multiSelect,
   } = props;
+
+  const handleDuplicate = (filePath: string, type: 'design' | 'code') => {
+    if (onDuplicateComponent) {
+      onDuplicateComponent(filePath, type);
+    } else {
+      try {
+        const res = duplicateComponent(filePath);
+        if (!res.success || !res.newFilePath) {
+          toast.error(res.error || 'Could not duplicate component');
+          return;
+        }
+        setVersion((v) => v + 1);
+        if (type === 'design') {
+          onSwitchToComponent(res.newFilePath);
+        } else {
+          onSwitchToCodeComponent(res.newFilePath);
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not duplicate component');
+      }
+    }
+  };
 
   const allFiles = useMemo(
     () => new Set<string>([...componentFiles, ...codeComponentFiles]),
@@ -148,7 +173,7 @@ function ProjectChildren(props: ProjectChildrenProps) {
     const menuItems: DropdownMenuEntry[] = inBulk ? bulkMenuItems() : [
       { id: 'edit', label: 'Edit', onClick: () => onSwitchToComponent(filePath) },
       { id: 'rename', label: 'Rename', onClick: () => setRenamingPath(filePath) },
-      { id: 'duplicate', label: 'Duplicate', onClick: () => { /* TODO */ } },
+      { id: 'duplicate', label: 'Duplicate', onClick: () => handleDuplicate(filePath, 'design') },
       ...(CLOUD_ENABLED ? [
       { type: 'separator' } as const,
       { id: 'copy-url', label: 'Copy URL', onClick: () => { void shareAndCopy(internalName, filePath, 'url', 'design'); } },
@@ -191,7 +216,7 @@ function ProjectChildren(props: ProjectChildrenProps) {
     const menuItems: DropdownMenuEntry[] = inBulk ? bulkMenuItems() : [
       { id: 'edit', label: 'Edit', onClick: () => onSwitchToCodeComponent(filePath) },
       { id: 'rename', label: 'Rename', onClick: () => setRenamingPath(filePath) },
-      { id: 'duplicate', label: 'Duplicate', onClick: () => { /* TODO */ } },
+      { id: 'duplicate', label: 'Duplicate', onClick: () => handleDuplicate(filePath, 'code') },
       ...(CLOUD_ENABLED ? [
       { type: 'separator' } as const,
       { id: 'copy-url-cdn', label: 'Copy URL', onClick: () => { void shareAndCopy(internalName, filePath, 'url'); } },
@@ -319,6 +344,7 @@ function ProjectChildren(props: ProjectChildrenProps) {
 export function ComponentsSection({
   componentFiles, codeComponentFiles, activeFile,
   onSwitchToComponent, onSwitchToCodeComponent,
+  onDuplicateComponent,
   onCreateDesignComponent, onCreateCodeComponent,
   onDeleteComponent,
   onBulkDeleteComponent,
@@ -328,6 +354,7 @@ export function ComponentsSection({
   activeFile: string;
   onSwitchToComponent: (f: string) => void;
   onSwitchToCodeComponent: (f: string) => void;
+  onDuplicateComponent?: (filePath: string, type: 'design' | 'code') => void;
   onCreateDesignComponent: (name: string) => void;
   onCreateCodeComponent: (name: string) => void;
   /** Per-row delete — opens the single-item confirm. Used by the
@@ -494,6 +521,7 @@ export function ComponentsSection({
             editorFile={editorFile}
             onSwitchToComponent={onSwitchToComponent}
             onSwitchToCodeComponent={onSwitchToCodeComponent}
+            onDuplicateComponent={onDuplicateComponent}
             onDeleteComponent={onDeleteComponent}
             setRenamingPath={setRenamingPath}
             setRenamingFolderId={setRenamingFolderId}

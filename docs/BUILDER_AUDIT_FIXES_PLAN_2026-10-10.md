@@ -217,8 +217,8 @@ expect(JSON.parse(transitionValue)).toEqual({ duration: 0.3 });
 
 **Interfaces:** Both design/code Duplicate actions create a new distinct Library master, preserve source/metadata/variants/slots and dependencies, choose a unique file/internal name, and reveal/select the new copy using existing Library/editor navigation. Design node IDs are remapped consistently inside JSX and associated variant/slot/style references. No overwrite of existing files.
 
-- [ ] RED helper/UI tests: code/design menu click creates new master; duplicate twice produces unique names; design IDs and internal references remap; metadata/variants/slots remain valid; dependencies still import; one undo removes copy and redo restores; backend sees copy after debounce/reload.
-- [ ] Search for existing clone/name/ID APIs; assemble duplicate transform using AST/shared helpers. Flush queue before reading source; validate generated design TSX before writing new file; use existing project create transaction/history/autosave and clear caches/version. Replace both TODO handlers with this operation, catch refusal and show existing error UI.
+- [x] RED helper/UI tests: code/design menu click creates new master; duplicate twice produces unique names; design IDs and internal references remap; metadata/variants/slots remain valid; dependencies still import; one undo removes copy and redo restores; backend sees copy after debounce/reload.
+- [x] Search for existing clone/name/ID APIs; assemble duplicate transform using AST/shared helpers. Flush queue before reading source; validate generated design TSX before writing new file; use existing project create transaction/history/autosave and clear caches/version. Replace both TODO handlers with this operation, catch refusal and show existing error UI.
 
 ```ts
 expect(projectFS.exists(copyPath)).toBe(true);
@@ -227,7 +227,7 @@ expect(copyIds.filter(id => originalIds.includes(id)).length).toBe(0);
 expect(getHistoryState().canUndo).toBe(true);
 ```
 
-- [ ] Related Library/component/history suites + TypeScript; review. Coordinator then runs full suite/builds and whole-branch review and records final checkpoint SHAs.
+- [x] Related Library/component/history suites + TypeScript; review. Coordinator then runs full suite/builds and whole-branch review and records final checkpoint SHAs.
 
 ## Completion log
 
@@ -240,4 +240,5 @@ expect(getHistoryState().canUndo).toBe(true);
 - Task 6: complete — AUD-08/09 plus assigned static/fill oracle fixes. ImageSequence handles source revisions, cached/stale callbacks, URL inputs, selection precedence and shared fit/resize drawing; static mode paints the first available image. ModelViewer applies latest asynchronous props, tracks one loop, disposes active/late resources and ends loading on setup failure. ParticleField has one static paint and explicit canvas fill. Initial 215 related tests passed; final 18 lifecycle tests and TypeScript passed, independently 18 passed; review approved after one fix round.
 - Task 7: complete — AUD-10. ComponentPropsPanel preserves finite numbers (0 and negatives), renders objectList, imageList, font, and an honest disabled note for slots; propagates uploadSource and onBatchComplete totalFrames; serializes transition objects as valid JSON; ComponentEditorOverlay flattens nested group defaults and preserves set values (false, 0, empty string). Twenty-seven related tests and TypeScript passed; git diff check clean.
 - Task 8: complete — AUD-14/16. Optional heavy 3D packages (three, @splinetool/runtime) pinned in isolated worktree dependencies; async optional-modules-registry deduplicates in-flight loads, evicts failed attempts for retry, and detects imports via regex. OptionalDependencyReadinessWrapper and preview __import/__requireFn provide unified readiness and retry UI. SplineScene satisfies CANVAS_FILL_FEEDBACK oracle rule with explicit fill styling, removes no-op cameraX/Y controls/props, and adds unmount cleanup with load failure retry. All 163 related tests passed (including 100% of 157 oracle checks) and TypeScript passed.
-- Task 9: pending. Final task: working Library duplication for design and code components (AUD-15).
+- Task 9: complete — AUD-15. Implemented component-duplicate engine with auto-incrementing unique display names, source-level AST remapping of data-id (zero collisions), slot declarations/references, motion variant consts/references, and effect identifiers. Code components preserve all docblock controls and metadata while updating label and function identifiers. Deletion confirmation dialog copy in LibraryPanel updated to provide accurate Undo guidance. All 190 related tests passed; TypeScript passed.
+

@@ -8,7 +8,7 @@ import { useAtom, useAtomValue, useSetAtom, getDefaultStore } from 'jotai';
 import { activeFilePathAtom, getFileDisplayName, switchActiveFile, componentBreadcrumbAtom, slugToFilePath, getRouteGroup } from '@/code/project/active-file-store';
 import { hasComponentControls } from '@/code/components/controls-parser';
 import ConfirmDialog from '@/design-system/ConfirmDialog';
-import { generateInternalName, deleteComponent } from '@/code/components/component-ops';
+import { generateInternalName, deleteComponent, duplicateComponent } from '@/code/components/component-ops';
 import { generateIconSetName, buildIconSetFile, isIconSetCode } from '@/code/icons/icon-set-template';
 import { enterComponentFile, getPrimaryVariantId } from '@/canvas/component-navigation';
 import PluginsSection from '@/editor/left-toolbar/panels/plugins';
@@ -279,6 +279,26 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
     trace.action('library:create-code-component', { filePath, displayName, internalName });
     switchToCodeComponent(filePath);
   }, [switchToCodeComponent, bumpVersion]);
+
+  const handleDuplicateComponent = useCallback((filePath: string, type: 'design' | 'code') => {
+    try {
+      const res = duplicateComponent(filePath, { activeFileBefore: activeFile });
+      if (!res.success || !res.newFilePath) {
+        toast.error(res.error || 'Could not duplicate component');
+        return;
+      }
+      bumpVersion(v => v + 1);
+      trace.action('library:duplicate-component', { filePath, newFilePath: res.newFilePath, newDisplayName: res.newDisplayName, type });
+      if (type === 'design') {
+        switchToComponent(res.newFilePath);
+      } else {
+        switchToCodeComponent(res.newFilePath);
+      }
+    } catch (err) {
+      trace.error('library:duplicate-error', { filePath, err });
+      toast.error(err instanceof Error ? err.message : 'Could not duplicate component');
+    }
+  }, [activeFile, bumpVersion, switchToComponent, switchToCodeComponent]);
 
   // Delete component — confirm dialog state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -584,6 +604,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
           activeFile={activeFile}
           onSwitchToComponent={switchToComponent}
           onSwitchToCodeComponent={switchToCodeComponent}
+          onDuplicateComponent={handleDuplicateComponent}
           onCreateDesignComponent={createDesignComponent}
           onCreateCodeComponent={createNewCodeComponent}
           onDeleteComponent={handleDeleteComponent}
@@ -756,7 +777,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDeleteComponent}
         title="Delete Component"
-        message={`Are you sure you want to delete "${deleteConfirmName}"? All instances of this component will be removed from your project. This cannot be undone.`}
+        message={`Are you sure you want to delete "${deleteConfirmName}"? All instances of this component will be removed from your project. You can undo this deletion with Edit > Undo.`}
         confirmLabel="Delete"
         danger
       />
