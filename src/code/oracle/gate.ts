@@ -123,8 +123,9 @@ export function gateTurnFiles(
     // "pre-existing" even when the ELEMENT never existed (an id that only
     // ever appeared in a stale band rule exempted the model's brand-new node
     // from every new-node rule, 2026-08-11).
-    if (prevCode) for (const m of prevCode.matchAll(/(?<!\[)data-id="([^"]+)"/g)) existingDataIds.add(m[1]);
-    let vs = [...checkFile(f.code, { kind, path: f.path, existingDataIds })];
+    const group = f.path.match(/\(([^)]+)\)/)?.[1];
+    const isTemplated = !!group && projectFS.exists(`app/(${group})/LayoutClient.tsx`);
+    let vs = [...checkFile(f.code, { kind, path: f.path, existingDataIds, isTemplated })];
     // ── GRANDFATHERING ────────────────────────────────────────────────────
     // The oracle grows rules; legacy files carry violations they were built
     // with. Judging an EDIT by the whole file would brick AI editing on any

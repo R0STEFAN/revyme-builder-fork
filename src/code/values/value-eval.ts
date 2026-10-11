@@ -21,10 +21,10 @@ import type { PageVariableType } from '@/code/features/page-variables';
 // migrating those sites is byte-for-byte parity, not a behavior change).
 const OFF_STATES = new Set(['false', '', '0', 'undefined', 'null', 'no', 'No']);
 
-/** Canonical truthiness for a toggle value stored as a string. `null`/`undefined` → OFF. */
-export function isTruthy(raw: string | null | undefined): boolean {
-  if (raw == null) return false;
-  return !OFF_STATES.has(raw);
+/** Canonical truthiness for a toggle value stored as a string or literal. `null`/`undefined`/`false`/`0` → OFF. */
+export function isTruthy(raw: any): boolean {
+  if (raw == null || raw === false || raw === 0) return false;
+  return !OFF_STATES.has(String(raw));
 }
 
 // ── String un-escaping (numeric/scalar path only) ─────────────────────────────

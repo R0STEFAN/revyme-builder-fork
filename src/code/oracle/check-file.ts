@@ -1559,7 +1559,18 @@ export function checkFile(
       // padding/background onto an inner wrapper with its own data-id. Excludes the
       // template LayoutClient itself (isTemplate), which legitimately owns the root.
       const routeGroup = opts.path ? opts.path.match(/\(([^)]+)\)/)?.[1] : null;
-      const isActuallyTemplated = opts.isTemplated ?? (routeGroup ? Boolean(projectFS?.exists?.(`app/(${routeGroup})/LayoutClient.tsx`)) : false);
+      let isActuallyTemplated: boolean;
+      if (opts.isTemplated !== undefined) {
+        isActuallyTemplated = opts.isTemplated;
+      } else if (routeGroup) {
+        if (opts.path && projectFS.exists(opts.path) && !projectFS.exists(`app/(${routeGroup})/LayoutClient.tsx`)) {
+          isActuallyTemplated = false;
+        } else {
+          isActuallyTemplated = true;
+        }
+      } else {
+        isActuallyTemplated = false;
+      }
       if (kind === 'page' && !isTemplate && isActuallyTemplated && nodes.has('root')) {
         const rootStyles = nodes.get('root')!.styles ?? {};
         // overflow/minHeight are flagged alongside padding/background: `overflowX: 'hidden'`
