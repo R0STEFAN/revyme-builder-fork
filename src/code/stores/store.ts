@@ -346,7 +346,8 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
             // inline markup, rendered fine — the tell-tale of this bug).
             const layoutFilePath = projectFS.readFile(clientPath) != null ? clientPath : layoutPath;
             const layoutCode = projectFS.readFile(layoutFilePath);
-            if (layoutCode) {
+            // Server RootLayout shells (<html><body><Providers>) are not templates; only LayoutClient or canvas-authored layouts merge
+            if (layoutCode && (!layoutCode.includes('RootLayout') || layoutCode.includes('LayoutClient'))) {
               // Per-page template-variable values for THIS page's route. Computed
               // up front because they feed BOTH the parse (baking template vars
               // passed into COMPONENT-INSTANCE props — `<Frame color={myVar}/>` —
