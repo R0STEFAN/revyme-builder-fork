@@ -10,10 +10,11 @@
 // under overflow so the whole component scrolls. jsdom has no layout engine,
 // so these tests pin the CSS contract itself.
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { act, createElement } from 'react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
+import { act, render, cleanup } from '@testing-library/react';
 import ComponentLivePreview from './ComponentLivePreview';
 import { projectFS } from '@/code/project/project-fs';
 import { clearCodeComponentCache } from '@/canvas/code-component-runtime';
@@ -78,5 +79,61 @@ describe('ComponentLivePreview — overflow reachability', () => {
     expect(master!.hasAttribute('data-preview-master-root')).toBe(true);
     await act(async () => { root.unmount(); });
     host.remove();
+  });
+});
+
+describe('ComponentLivePreview — dependency graph', () => {
+  beforeEach(() => {
+    projectFS.writeFile('components/Root.tsx', `
+      import Left from '@/components/Left';
+      import Right from '@/components/Right';
+      export default function Root() { return <div data-id="root"><Left /><Right /></div>; }
+    `);
+    projectFS.writeFile('components/Left.tsx', `
+      import Shared from '@/components/Shared';
+      export default function Left() { return <div data-id="left"><Shared /></div>; }
+    `);
+    projectFS.writeFile('components/Right.tsx', `
+      import Shared from '@/components/Shared';
+      export default function Right() { return <div data-id="right"><Shared /></div>; }
+    `);
+    projectFS.writeFile('components/Shared.tsx', `
+      export default function Shared() { return <span data-id="shared">Shared content</span>; }
+    `);
+  });
+
+  afterEach(() => { cleanup(); clearCodeComponentCache(); });
+
+  it('renders a completed shared dependency under every importing branch', () => {
+    const view = render(<ComponentLivePreview componentFilePath="components/Root.tsx" />);
+    expect(view.getAllByText('Shared content')).toHaveLength(2);
+  });
+
+  it('recompiles every shared dependency instance after its source changes', () => {
+    const view = render(<ComponentLivePreview componentFilePath="components/Root.tsx" />);
+    expect(view.getAllByText('Shared content')).toHaveLength(2);
+
+    act(() => {
+      projectFS.writeFile('components/Shared.tsx', `
+        export default function Shared() { return <span data-id="shared">Updated shared content</span>; }
+      `);
+    });
+
+    expect(view.getAllByText('Updated shared content')).toHaveLength(2);
+  });
+
+  it('shows the active dependency path when a real cycle is detected', () => {
+    projectFS.writeFile('components/Root.tsx', `
+      import Child from '@/components/Child';
+      export default function Root() { return <div data-id="root"><Child /></div>; }
+    `);
+    projectFS.writeFile('components/Child.tsx', `
+      import Root from '@/components/Root';
+      export default function Child() { return <div data-id="child"><Root /></div>; }
+    `);
+
+    const view = render(<ComponentLivePreview componentFilePath="components/Root.tsx" />);
+    expect(view.getByText(/Circular component dependency/)).toBeTruthy();
+    expect(view.getByText(/components\/Root\.tsx.*components\/Child\.tsx.*components\/Root\.tsx/)).toBeTruthy();
   });
 });

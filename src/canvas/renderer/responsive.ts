@@ -40,11 +40,11 @@ export let _allViewportWidthsAsc: number[] = [];
 /** Parse @media rules from CSS, capturing BOTH max-width and min-width */
 export function parseResponsiveBreakpoints(css: string): ResponsiveBreakpoint[] {
   const breakpoints: ResponsiveBreakpoint[] = [];
-  const regex = /@(?:media|container)\s*\(max-width:\s*(\d+)px\)(?:\s*and\s*\(min-width:\s*([\d.]+)px\))?\s*\{/g;
+  const regex = /@(?:media|container)\s*\(max-width:\s*(\d+(?:\.\d+)?)px\)(?:\s*and\s*\(min-width:\s*(\d+(?:\.\d+)?)px\))?\s*\{/g;
   let match;
 
   while ((match = regex.exec(css)) !== null) {
-    const maxWidth = parseInt(match[1]);
+    const maxWidth = parseFloat(match[1]);
     const minWidth = match[2] ? parseFloat(match[2]) : 0;
     const blockStart = match.index + match[0].length;
 
@@ -120,18 +120,16 @@ export function getResponsiveOverridesForNode(nodeId: string, vpWidth: number | 
   if (_isComponentMaster) return {};
   const overrides: Record<string, string> = {};
 
-  // Apply matching breakpoints — most specific (smallest range) wins.
-  // Sort by maxWidth ascending so smaller breakpoints override larger ones.
-  const sorted = [..._responsiveBreakpoints].sort((a, b) => a.maxWidth - b.maxWidth);
-
-  for (const bp of sorted) {
+  // These builder selectors have equal specificity, so matching declarations
+  // follow the same source-order cascade as the site's CSS.
+  for (const bp of _responsiveBreakpoints) {
     // Check BOTH max-width AND min-width conditions
     if (vpWidth <= bp.maxWidth && vpWidth >= bp.minWidth) {
       const nodeOverrides = bp.nodes.get(nodeId);
       if (nodeOverrides) {
         for (const [prop, val] of nodeOverrides) {
           const camelProp = prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-          overrides[camelProp] = val; // smaller breakpoints override larger ones
+          overrides[camelProp] = val;
         }
       }
     }

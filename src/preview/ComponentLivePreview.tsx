@@ -12,53 +12,74 @@ interface Props {
   componentFilePath: string;
 }
 
-const COMPONENT_IMPORT_RE = /import\s+(\w+)\s+from\s+['"](@\/components\/[^'"]+|components\/[^'"]+)['"]/g;
+interface CompilationResult {
+  component: React.ComponentType<any> | null;
+  error: string | null;
+}
 
-/**
- * Compile a component file plus any @/components imports it references.
- * Walks the import graph breadth-first; cycles short-circuit via the visited set.
- */
-function compileWithDependencies(
-  rootPath: string,
-  visited: Set<string> = new Set(),
-): React.ComponentType<any> | null {
-  if (visited.has(rootPath)) {
-    trace.action('component-live-preview:cycle', { path: rootPath });
-    return null;
-  }
-  visited.add(rootPath);
+/** Compile each reachable file once for this root preview compilation. */
+function compileWithDependencies(rootPath: string): CompilationResult {
+  const completed = new Map<string, React.ComponentType<any>>();
+  const visiting = new Set<string>();
+  const path: string[] = [];
 
-  const code = projectFS.readFile(rootPath);
-  if (!code) {
-    trace.error('component-live-preview:file-missing', { path: rootPath });
-    return null;
-  }
-
-  // Pre-compile every nested @/components/* import so __require can resolve them
-  const extraModules: Record<string, any> = {};
-  COMPONENT_IMPORT_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = COMPONENT_IMPORT_RE.exec(code)) !== null) {
-    const importSpec = match[2]; // "@/components/Foo" or "components/Foo"
-    const relativePath = importSpec.replace(/^@\//, '');
-    const childPath = relativePath.endsWith('.tsx') ? relativePath : `${relativePath}.tsx`;
-    if (!projectFS.exists(childPath)) continue;
-
-    const ChildComponent = compileWithDependencies(childPath, visited);
-    if (ChildComponent) {
-      // Register under both the import spec the runtime sees AND the short form
-      const shortSpec = importSpec.replace(/^@\//, '');
-      extraModules[importSpec] = { default: ChildComponent };
-      extraModules[shortSpec] = { default: ChildComponent };
+  const compile = (filePath: string): React.ComponentType<any> => {
+    const cached = completed.get(filePath);
+    if (cached) return cached;
+    if (visiting.has(filePath)) {
+      const cycleStart = path.indexOf(filePath);
+      const cycle = [...path.slice(cycleStart), filePath];
+      trace.action('component-live-preview:cycle', { path: cycle });
+      throw new Error(`Circular component dependency: ${cycle.join(' → ')}`);
     }
-  }
 
-  const componentName = rootPath.replace(/^components\//, '').replace(/\.tsx$/, '');
-  return compileCodeComponent(code, componentName, {
-    previewMode: true,
-    extraModules,
-    skipCache: true,
-  });
+    const code = projectFS.readFile(filePath);
+    if (!code) {
+      trace.error('component-live-preview:file-missing', { path: filePath });
+      throw new Error(`Component file not found: ${filePath}`);
+    }
+
+    visiting.add(filePath);
+    path.push(filePath);
+    try {
+      // Gather the complete local import list before recursing. A fresh regex
+      // per file avoids carrying global lastIndex state across nested walks.
+      const imports = [...code.matchAll(/import\s+(\w+)\s+from\s+['"](@\/components\/[^'"]+|components\/[^'"]+)['"]/g)]
+        .map((match) => match[2]);
+      const extraModules: Record<string, any> = {};
+      for (const importSpec of imports) {
+        const relativePath = importSpec.replace(/^@\//, '');
+        const childPath = relativePath.endsWith('.tsx') ? relativePath : `${relativePath}.tsx`;
+        if (!projectFS.exists(childPath)) continue;
+
+        const ChildComponent = compile(childPath);
+        const shortSpec = importSpec.replace(/^@\//, '');
+        extraModules[importSpec] = { default: ChildComponent };
+        extraModules[shortSpec] = { default: ChildComponent };
+      }
+
+      const componentName = filePath.replace(/^components\//, '').replace(/\.tsx$/, '');
+      const component = compileCodeComponent(code, componentName, {
+        previewMode: true,
+        extraModules,
+        skipCache: true,
+      });
+      if (!component) throw new Error(`Unable to compile component: ${filePath}`);
+      completed.set(filePath, component);
+      return component;
+    } finally {
+      path.pop();
+      visiting.delete(filePath);
+    }
+  };
+
+  try {
+    return { component: compile(rootPath), error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    trace.error('component-live-preview:compile-threw', { error });
+    return { component: null, error };
+  }
 }
 
 export default function ComponentLivePreview({ componentFilePath }: Props) {
@@ -70,14 +91,8 @@ export default function ComponentLivePreview({ componentFilePath }: Props) {
     return () => { unsub(); };
   }, []);
 
-  const Compiled = useMemo(() => {
-    try {
-      return compileWithDependencies(componentFilePath);
-    } catch (err) {
-      trace.error('component-live-preview:compile-threw', { error: String(err) });
-      return null;
-    }
-  }, [componentFilePath, version]);
+  const compilation = useMemo(() => compileWithDependencies(componentFilePath), [componentFilePath, version]);
+  const Compiled = compilation.component;
 
   trace.fn('ComponentLivePreview.render', { componentFilePath, hasCompiled: !!Compiled, version });
 
@@ -163,7 +178,7 @@ export default function ComponentLivePreview({ componentFilePath }: Props) {
         </ErrorBoundary>
       ) : (
         <div style={{ color: '#888', fontFamily: 'monospace', fontSize: 12, margin: 'auto' }}>
-          Failed to compile {componentFilePath}
+          Failed to compile {componentFilePath}: {compilation.error ?? 'unknown compilation error'}
         </div>
       )}
     </div>
