@@ -249,34 +249,13 @@ const MODULE_MAP: Record<string, any> = {
   'next-intl': nextIntlStub,
 };
 
-// Lazily load three.js when first requested.
-// Use Function('return import(...)') to prevent Vite from statically analyzing
-// the import — three and spline are optional runtime dependencies, not bundled.
-let _threeLoaded = false;
-async function ensureThree() {
-  if (_threeLoaded) return;
-  _threeLoaded = true;
-  try {
-    const dynamicImport = new Function('specifier', 'return import(specifier)');
-    const THREE = await dynamicImport('three');
-    MODULE_MAP['three'] = { default: THREE, ...THREE };
-    const gltfModule = await dynamicImport('three/examples/jsm/loaders/GLTFLoader.js');
-    MODULE_MAP['three/examples/jsm/loaders/GLTFLoader.js'] = { GLTFLoader: gltfModule.GLTFLoader };
-    trace.action('code-component-runtime:three-loaded');
-  } catch { /* three not installed */ }
-}
-
-let _splineLoaded = false;
-async function ensureSpline() {
-  if (_splineLoaded) return;
-  _splineLoaded = true;
-  try {
-    const dynamicImport = new Function('specifier', 'return import(specifier)');
-    const spline = await dynamicImport('@splinetool/runtime');
-    MODULE_MAP['@splinetool/runtime'] = { default: spline, ...spline };
-    trace.action('code-component-runtime:spline-loaded');
-  } catch { /* spline not installed */ }
-}
+import {
+  loadOptionalModule,
+  preloadOptionalModules,
+  isOptionalModuleLoaded,
+  getLoadedOptionalModule,
+  detectRequiredOptionalModules,
+} from './optional-modules-registry';
 
 // Cache compiled components by content hash
 const codeComponentCache = new Map<string, React.ComponentType<any>>();
@@ -347,13 +326,12 @@ export function compileCodeComponent(
   }
 
   try {
-    // Pre-populate MODULE_MAP for optional heavy dependencies (fire-and-forget)
-    if (code.includes("from 'three'") || code.includes('from "three"')) {
-      ensureThree();
-    }
-    if (code.includes("from '@splinetool/runtime'") || code.includes('from "@splinetool/runtime"')) {
-      ensureSpline();
-    }
+    const neededOptional = detectRequiredOptionalModules(code);
+    neededOptional.forEach((spec) => {
+      if (isOptionalModuleLoaded(spec)) {
+        MODULE_MAP[spec] = getLoadedOptionalModule(spec);
+      }
+    });
 
     // Check if the source already wraps with withResponsiveProps
     const hasNativeResponsive = code.includes('withResponsiveProps');
@@ -443,8 +421,11 @@ export function compileCodeComponent(
     cleanCode = cleanCode.replace(/export\s+default\s+function\s+(\w+)/, 'var __CODE_COMPONENT__ = function $1');
     cleanCode = cleanCode.replace(/export\s+default\s+/, 'var __CODE_COMPONENT__ = ');
 
+    // 4b. Rewrite dynamic import('...') calls to use our injected __import resolver
+    cleanCode = cleanCode.replace(/\bimport\s*\(([^)]+)\)/g, '__import($1)');
+
     // 5. Wrap in IIFE so Babel treats it as a script (not module) and return works
-    const wrapped = `(function(__require, React) {\n${cleanCode}\nreturn __CODE_COMPONENT__;\n})`;
+    const wrapped = `(function(__require, __import, React) {\n${cleanCode}\nreturn __CODE_COMPONENT__;\n})`;
 
     const result = transform(wrapped, {
       presets: ['react', 'typescript'],
@@ -484,27 +465,132 @@ export function compileCodeComponent(
       return {};
     };
 
+    const __import = (spec: string) => {
+      return loadOptionalModule(spec);
+    };
+
     // 7. Execute — the IIFE returns the component function
     const factory = eval(result.code);
-    let Component = factory(__require, React);
 
-    // A component is a function OR a React "exotic" type — an OBJECT carrying a
-    // `$$typeof` tag: `React.forwardRef(...)` (icon-set / vector-set instances use
-    // this so page effects can bind a ref + animate a motion root), `React.memo`,
-    // `lazy`, etc. The bare `typeof === 'function'` check wrongly rejected those
-    // (forwardRef is an object) → the component compiled to null → blank render.
-    const isRenderableComponent = typeof Component === 'function'
-      || (typeof Component === 'object' && Component !== null && (Component as any).$$typeof != null);
-    if (!isRenderableComponent) {
-      trace.error('code-component-runtime:not-a-component', { componentName, type: typeof Component });
-      return null;
+    const instantiateComponent = () => {
+      neededOptional.forEach((spec) => {
+        MODULE_MAP[spec] = getLoadedOptionalModule(spec);
+      });
+      let Inner = factory(__require, __import, React);
+      const isRenderable = typeof Inner === 'function'
+        || (typeof Inner === 'object' && Inner !== null && (Inner as any).$$typeof != null);
+      if (!isRenderable) {
+        trace.error('code-component-runtime:not-a-component', { componentName, type: typeof Inner });
+        return null;
+      }
+      if (!hasNativeResponsive) {
+        Inner = withResponsiveProps(Inner);
+        trace.action('code-component-runtime:legacy-wrap', { componentName });
+      }
+      return Inner;
+    };
+
+    let Component: React.ComponentType<any> | null = null;
+
+    if (neededOptional.length > 0 && !neededOptional.every(isOptionalModuleLoaded)) {
+      Component = function OptionalDependencyReadinessWrapper(props: any) {
+        const [isReady, setIsReady] = React.useState(() => neededOptional.every(isOptionalModuleLoaded));
+        const [loadError, setLoadError] = React.useState<string | null>(null);
+        const [retryNonce, setRetryNonce] = React.useState(0);
+        const compRef = React.useRef<any>(null);
+
+        React.useEffect(() => {
+          if (neededOptional.every(isOptionalModuleLoaded)) {
+            compRef.current = instantiateComponent();
+            setIsReady(true);
+            return;
+          }
+          let cancelled = false;
+          setIsReady(false);
+          setLoadError(null);
+
+          preloadOptionalModules(neededOptional)
+            .then(() => {
+              if (cancelled) return;
+              compRef.current = instantiateComponent();
+              setIsReady(true);
+            })
+            .catch((err) => {
+              if (!cancelled) {
+                setLoadError(err?.message || 'Failed to load optional module');
+              }
+            });
+
+          return () => {
+            cancelled = true;
+          };
+        }, [retryNonce]);
+
+        if (loadError) {
+          return React.createElement(
+            'div',
+            {
+              'data-id': props['data-id'],
+              'data-name': props['data-name'],
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+                color: '#f87171',
+                fontSize: 12,
+                gap: 8,
+                ...props.style,
+              },
+            },
+            React.createElement('span', null, `Error loading 3D library: ${loadError}`),
+            React.createElement(
+              'button',
+              {
+                onClick: () => setRetryNonce((n) => n + 1),
+                style: {
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                },
+              },
+              'Retry'
+            )
+          );
+        }
+
+        if (!isReady || !compRef.current) {
+          return React.createElement(
+            'div',
+            {
+              'data-id': props['data-id'],
+              'data-name': props['data-name'],
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+                color: '#888',
+                fontSize: 12,
+                ...props.style,
+              },
+            },
+            'Loading 3D engine...'
+          );
+        }
+
+        return React.createElement(compRef.current, props);
+      };
+    } else {
+      Component = instantiateComponent();
     }
 
-    // 8. Fallback: wrap legacy Code components that don't have native withResponsiveProps
-    if (!hasNativeResponsive) {
-      Component = withResponsiveProps(Component);
-      trace.action('code-component-runtime:legacy-wrap', { componentName });
-    }
+    if (!Component) return null;
 
     if (opts?.previewMode) {
       const PreviewComponent = Component;

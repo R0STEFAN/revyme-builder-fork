@@ -50,6 +50,13 @@ import { buildRouteTable, resolveRoute, type Route } from './router';
 import { templatePreviewPages } from '@/preview/template-preview';
 import { LinkShim, ImageShim, useRouter as useRouterShim, usePathname, useSearchParams, useParams as useParamsShim, setCurrentParams } from './next-shims';
 import Lenis from 'lenis';
+import {
+  loadOptionalModule,
+  preloadOptionalModules,
+  getLoadedOptionalModule,
+  detectRequiredOptionalModules,
+  isOptionalModuleLoaded,
+} from '@/canvas/optional-modules-registry';
 
 // ─── Project files (mirror of parent ProjectFS) ────────────────────────────
 
@@ -327,6 +334,26 @@ async function preloadCdnImports(): Promise<void> {
   }));
 }
 
+async function preloadProjectOptionalModules(): Promise<void> {
+  const needed = new Set<string>();
+  for (const content of projectFiles.values()) {
+    for (const spec of detectRequiredOptionalModules(content)) {
+      needed.add(spec);
+    }
+  }
+
+  const toLoad = [...needed].filter(s => !isOptionalModuleLoaded(s));
+  if (toLoad.length === 0) return;
+
+  await Promise.all(toLoad.map(async (spec) => {
+    try {
+      await loadOptionalModule(spec);
+    } catch (err) {
+      console.error('[preview] Optional module preload failed', spec, err);
+    }
+  }));
+}
+
 function compileFile(filePath: string): any {
   if (compiledModuleCache.has(filePath)) return compiledModuleCache.get(filePath);
   const source = projectFiles.get(filePath);
@@ -336,7 +363,8 @@ function compileFile(filePath: string): any {
   // and `'use server'` are no-ops in the client-only preview.
   const stripped = source
     .replace(/^\s*['"]use client['"];?\s*$/m, '')
-    .replace(/^\s*['"]use server['"];?\s*$/m, '');
+    .replace(/^\s*['"]use server['"];?\s*$/m, '')
+    .replace(/\bimport\s*\(([^)]+)\)/g, '__import($1)');
 
   let transformed: { code?: string };
   try {
@@ -375,6 +403,10 @@ function compileFile(filePath: string): any {
       return { default: () => null };
     }
 
+    // 1c. Optional heavy module (three, spline, etc.)
+    const optionalMod = getLoadedOptionalModule(importPath);
+    if (optionalMod) return optionalMod;
+
     // 2. Resolve relative / `@/` paths against ProjectFS.
     const resolved = resolveImportPath(importPath, filePath);
     if (resolved) {
@@ -397,8 +429,9 @@ function compileFile(filePath: string): any {
 
   try {
      
-    const fn = new Function('module', 'exports', 'require', transformed.code!);
-    fn(moduleObj, moduleObj.exports, requireFn);
+    const __import = (spec: string) => loadOptionalModule(spec);
+    const fn = new Function('module', 'exports', 'require', '__import', transformed.code!);
+    fn(moduleObj, moduleObj.exports, requireFn, __import);
   } catch (err) {
     throw new Error(`preview: runtime error in ${filePath}: ${(err as Error).message}`);
   }
@@ -742,11 +775,11 @@ function rerender(): void {
     if (p.endsWith('.css')) injectCss(p, src);
   }
 
-  // Pre-load any CDN URL imports BEFORE first paint. Without this the
-  // synchronous `requireFn` would return `undefined` for URL imports on
-  // the first render → React errors with "Element type is invalid".
-  // Renders an empty page while loading, then re-renders with content.
-  preloadCdnImports().then(() => {
+  // Pre-load CDN URL imports and optional modules BEFORE first paint.
+  Promise.all([
+    preloadCdnImports(),
+    preloadProjectOptionalModules(),
+  ]).then(() => {
     root.render(<PreviewApp />);
   }).catch((err) => {
     // Even if preload fails, render so the user sees an error rather
