@@ -1,10 +1,9 @@
 // ParticleField — Code component template (mouse-reactive Canvas 2D particle network).
 //
 // Performance: `useStaticCanvas()` flips the code component into a paint-once
-// branch on the editor canvas — the simulation/paint body runs ~30
-// times to settle particles, then stops (no rAF, no mouse listeners
-// effectively driving updates). Live preview and the published site
-// keep the full animated version.
+// branch on the editor canvas — it paints one representative frame with
+// fewer particles and no pointer listeners or animation loop. Live preview
+// and the published site keep the full animated version.
 
 export const PARTICLE_FIELD_COMPONENT = `'use client';
 
@@ -42,6 +41,7 @@ function ParticleField({
     let w = canvas.clientWidth;
     let h = canvas.clientHeight;
     const dpr = isStatic ? 1 : (window.devicePixelRatio || 1);
+    let paintReady = false;
 
     function resize() {
       if (!canvas) return;
@@ -50,12 +50,13 @@ function ParticleField({
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (isStatic && paintReady) simulateAndPaint();
     }
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    const particles = Array.from({ length: particleCount }, () => ({
+    const particles = Array.from({ length: isStatic ? Math.min(particleCount, 80) : particleCount }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
       z: Math.random(),
@@ -70,8 +71,10 @@ function ParticleField({
       mouse.y = e.clientY - r.top;
     }
     function onLeave() { mouse.x = -9999; mouse.y = -9999; }
-    canvas.addEventListener('pointermove', onMove);
-    canvas.addEventListener('pointerleave', onLeave);
+    if (!isStatic) {
+      canvas.addEventListener('pointermove', onMove);
+      canvas.addEventListener('pointerleave', onLeave);
+    }
 
     let raf = 0;
     const linkSq = linkDistance * linkDistance;
@@ -140,11 +143,10 @@ function ParticleField({
     }
 
     if (isStatic) {
-      for (let i = 0; i < 30; i++) simulateAndPaint();
+      simulateAndPaint();
+      paintReady = true;
       return () => {
         ro.disconnect();
-        canvas.removeEventListener('pointermove', onMove);
-        canvas.removeEventListener('pointerleave', onLeave);
       };
     }
 
@@ -161,7 +163,7 @@ function ParticleField({
   return (
     <div data-id={props['data-id']} data-name={props['data-name']}
          style={{  position: 'relative', overflow: 'hidden', backgroundColor: bgColor, ...props.style }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <canvas ref={canvasRef} style={{ position: 'absolute', top: '0px', left: '0px', width: '100%', height: '100%', display: 'block' }} />
     </div>
   );
 }
