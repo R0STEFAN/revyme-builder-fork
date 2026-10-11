@@ -157,6 +157,8 @@ export default function Page() {
 
   test('moving OUT of a template restores the standalone shell with overflowX clip', () => {
     createRouteGroup('body', true);
+    projectFS.deleteFile('app/about/page.client.tsx');
+    projectFS.deleteFile('app/about/page.tsx');
     seedPage('app/(body)/about/page.client.tsx');
     movePageFile('app/(body)/about/page.client.tsx', 'app/about/page.client.tsx');
     const code = projectFS.readFile('app/about/page.client.tsx')!;

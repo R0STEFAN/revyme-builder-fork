@@ -111,6 +111,24 @@ function C() {
     const once = ensureRootPerfIsolation(LIGHT_WITH_OUR_SNIPPET);
     expect(ensureRootPerfIsolation(once)).toBe(once);
   });
+
+  it('excludes components with data-overlay and strips snippet to prevent trapping fixed overlays', () => {
+    const heavyWithOverlay = HEAVY + '\n<div data-id="ov" data-overlay=\'{"type":"relative"}\' />';
+    expect(ensureRootPerfIsolation(heavyWithOverlay)).not.toContain('contain:');
+
+    const heavyWithSnippetAndOverlay = `
+const pillVariants = {
+  default: { left: '8px' },
+  'variant-1': { left: '171px' },
+};
+function C() {
+  return <motion.div data-id="root" style={{ contain: 'layout paint', willChange: 'transform', position: 'absolute', width: '512px' }}><div data-id="ov" data-overlay='{"type":"relative"}' /></motion.div>;
+}
+`;
+    const cleaned = ensureRootPerfIsolation(heavyWithSnippetAndOverlay);
+    expect(cleaned).not.toContain('contain:');
+    expect(cleaned).not.toContain('willChange');
+  });
 });
 
 describe('isHeavyAnimatedProp', () => {

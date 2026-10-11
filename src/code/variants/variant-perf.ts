@@ -78,7 +78,10 @@ const ISOLATION_SNIPPET = "contain: 'layout paint', willChange: 'transform', ";
  *      other form is never touched (conservative: we only ever delete our
  *      own contiguous snippet). */
 export function ensureRootPerfIsolation(code: string): string {
-  const heavy = variantsAnimateHeavyProps(code);
+  // Overlays (data-overlay) rely on position: fixed to escape component overflow and
+  // align to the viewport. Applying `contain: paint` or `willChange: transform` creates
+  // a containing block for fixed descendants, trapping and clipping the overlay.
+  const heavy = variantsAnimateHeavyProps(code) && !code.includes('data-overlay');
   const rootTag = code.match(/<motion\.\w+[^>]*data-id="[^"]+"[^>]*style=\{\{/s);
   if (!rootTag || rootTag.index === undefined) return code;
   const styleOpen = rootTag.index + rootTag[0].length;
