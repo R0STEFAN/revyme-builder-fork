@@ -29,7 +29,7 @@ interface Options {
   getDisplayName: (path: string) => string;
   /** Runs the per-path delete. Called once per path on confirm. Caller
    *  owns the actual mutation (registry calls, file deletes, etc.). */
-  onDelete: (path: string) => void | Promise<void>;
+  onDelete: (path: string) => void | boolean | Promise<void | boolean>;
 }
 
 export interface LibraryMultiSelect {
@@ -135,13 +135,21 @@ export function useLibraryMultiSelect({
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               if (!pending) return;
               const paths = pending.paths;
               setPending(null);
-              setSelected(new Set());
-              for (const p of paths) void onDelete(p);
-              trace.action('library-multi-select:confirm-delete', { itemLabel, count: paths.length });
+              const refused: string[] = [];
+              for (const p of paths) {
+                try {
+                  if (await onDelete(p) === false) refused.push(p);
+                } catch (err) {
+                  refused.push(p);
+                  trace.error('library-multi-select:delete-refused', { itemLabel, path: p, error: String(err) });
+                }
+              }
+              setSelected(new Set(refused));
+              trace.action('library-multi-select:confirm-delete', { itemLabel, count: paths.length - refused.length, refused: refused.length });
             }}
             className="flex-1 h-8 text-xs font-medium text-white bg-[var(--accent-danger,#dc2626)] hover:opacity-90 cut-corners cursor-pointer"
           >

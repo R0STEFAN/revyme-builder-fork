@@ -122,6 +122,7 @@ import { CodeComponentControlField } from './ComponentPropsTool/CodeComponentCon
 import { LinkVariableInstanceRow } from './ComponentPropsTool/LinkVariableInstanceRow';
 import { FormattedTextInstanceRow } from './ComponentPropsTool/FormattedTextInstanceRow';
 import { CursorVariableInstanceRow } from './ComponentPropsTool/CursorVariableInstanceRow';
+import { resolveSelectedInstanceTag } from './ComponentPropsTool/instance-tag';
 
 export {
   detectPropCSSMapping,
@@ -204,6 +205,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
   const viewportsConfig = useAtomValue(viewportsConfigAtom);
   const node = selectedId ? nodes.get(selectedId) ?? null : null;
   const componentFile = node?.componentFile ?? null;
+  const instanceTagName = useMemo(() => resolveSelectedInstanceTag(code, activeFile, node), [code, activeFile, node]);
   // Master file source — used to read a variable's @propMeta Option choices when rendering an Option
   // editor for the instance. Re-reads on every mutation flush so freshly-edited choices show up.
   const masterCode = useMemo(() => (componentFile ? projectFS.readFile(componentFile) ?? '' : ''), [componentFile, projectVersion]);
@@ -458,9 +460,9 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     return { overridden: true, reset: () => resetLocalePropBand(selectedId, componentName, propName, lp) };
   };
   const currentValues = useMemo(() => {
-    if (!selectedId || !code || !componentName) return new Map<string, string>();
-    return parseInstanceProps(code, selectedId, componentName);
-  }, [selectedId, code, componentName]);
+    if (!selectedId || !code || !instanceTagName) return new Map<string, string>();
+    return parseInstanceProps(code, selectedId, instanceTagName);
+  }, [selectedId, code, instanceTagName]);
 
   // Detect which CSS property each prop maps to (for rendering the right control atom).
   // The componentFile path is passed so the detector can follow forwarded
@@ -708,11 +710,11 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     modifyProjectFile(activeFile, (currentCode) =>
       (scope && 'query' in scope)
         ? setResponsiveInstancePropVarInCode(currentCode, selectedId, componentInfo.name, scope.query, propName, varName)
-        : setInstanceProp(currentCode, selectedId, componentInfo.name, propName, varName, true));
+        : setInstanceProp(currentCode, selectedId, instanceTagName ?? '', propName, varName, true));
     const newCode = projectFS.readFile(activeFile);
     if (newCode) { setCode(newCode); setVersion(v => v + 1); }
     trace.action('component-props:bind-code-control-variable', { propName, varName, isReplica });
-  }, [selectedId, componentInfo, activeFile, isReplica]);
+  }, [selectedId, componentInfo, activeFile, isReplica, instanceTagName]);
 
   const controlsMeta = componentInfo?.controlsMeta ?? null;
 
@@ -755,7 +757,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       const sv = getScrollVariant(code, selectedId);
       if (sv && typeof sv.canvasVariant === 'string') return sv.canvasVariant;
     }
-    const props = parseInstanceProps(code, selectedId, componentInfo.name);
+    const props = parseInstanceProps(code, selectedId, instanceTagName ?? '');
     const raw = props.get('initialVariant') ?? 'default';
     // When in a component file on a non-default variant, the JSX may carry a
     // ternary like `initialVariant === 'variant-1' ? 'variant-2' : 'default'`.
@@ -775,7 +777,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       if (branch && !branch.isVar) return branch.value;
     }
     return raw;
-  }, [selectedId, code, componentInfo, isReplica, responsiveOverrides, isComponentVariant, activeComponentVariant, nodes, vpWidth, parentVarsByName]);
+  }, [selectedId, code, componentInfo, isReplica, responsiveOverrides, isComponentVariant, activeComponentVariant, nodes, vpWidth, parentVarsByName, instanceTagName]);
 
   // Navigate to component master page — or open code editor for code components.
   // Centralized via enterComponentFile so this matches the double-click on
@@ -1112,7 +1114,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
           // component default. Otherwise setting a prop to its component default on
           // a replica (e.g. direction→'row') deletes the override and the viewport
           // snaps back to the base (e.g. 'column') — the "reverses my entry" bug.
-          const baseVal = parseInstanceProps(currentCode, selectedId, componentInfo.name).get(propName) ?? defaultValue;
+          const baseVal = parseInstanceProps(currentCode, selectedId, instanceTagName ?? '').get(propName) ?? defaultValue;
           return setResponsiveOverride(currentCode, selectedId, componentInfo.name, vpWidth, propName, value, baseVal);
         });
       } else if (isComponentVariant && activeComponentVariant) {
@@ -1125,10 +1127,10 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
         // from the current base (or the control default) so the base look is
         // preserved on first override.
         modifyProjectFile(activeFile, (currentCode) => {
-          const baseSeed = parseInstanceProps(currentCode, selectedId, componentInfo.name).get(propName)
+          const baseSeed = parseInstanceProps(currentCode, selectedId, instanceTagName ?? '').get(propName)
             ?? (defaultValue ?? '');
           return setConditionalInstanceProp(
-            currentCode, selectedId, componentInfo.name,
+            currentCode, selectedId, instanceTagName ?? '',
             propName, activeComponentVariant, writeValue, baseSeed,
           );
         });
@@ -1136,15 +1138,15 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
         // Formatted text inside a master: the per-variant ternary writer quotes values with
         // bare `'…'` / `"…"`, which markup breaks — the value is written to the base prop.
         modifyProjectFile(activeFile, (currentCode) => (value === (defaultValue ?? '') || value === '')
-          ? removeInstanceProp(currentCode, selectedId, componentInfo.name, propName)
-          : setInstanceProp(currentCode, selectedId, componentInfo.name, propName, writeValue, true));
+          ? removeInstanceProp(currentCode, selectedId, instanceTagName ?? '', propName)
+          : setInstanceProp(currentCode, selectedId, instanceTagName ?? '', propName, writeValue, true));
       } else if (isComponentFilePath(activeFile)) {
         // COMPONENT FILE, DEFAULT variant: write the DEFAULT branch through
         // the conditional writer so existing per-variant branches SURVIVE —
         // plain setInstanceProp would replace the whole ternary and wipe them.
         modifyProjectFile(activeFile, (currentCode) => {
           return setConditionalInstanceProp(
-            currentCode, selectedId, componentInfo.name,
+            currentCode, selectedId, instanceTagName ?? '',
             propName, 'default', writeValue,
           );
         });
@@ -1160,9 +1162,9 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
             return setInstancePropBaseInCode(currentCode, selectedId, componentInfo.name, propName, newBaseExpr);
           }
           if (value === (defaultValue ?? '') || value === '') {
-            return removeInstanceProp(currentCode, selectedId, componentInfo.name, propName);
+            return removeInstanceProp(currentCode, selectedId, instanceTagName ?? '', propName);
           } else {
-            return setInstanceProp(currentCode, selectedId, componentInfo.name, propName, writeValue, writeUseExpr);
+            return setInstanceProp(currentCode, selectedId, instanceTagName ?? '', propName, writeValue, writeUseExpr);
           }
         });
       }
@@ -1183,7 +1185,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     });
     if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
     commitTimerRef.current = setTimeout(flushCommits, 140);
-  }, [selectedId, activeFile, componentInfo, controlsMeta, isReplica, vpWidth, propLinkAttrMap, setCode, setVersion, previewProp, flushCommits]);
+  }, [selectedId, activeFile, componentInfo, controlsMeta, isReplica, vpWidth, propLinkAttrMap, setCode, setVersion, previewProp, flushCommits, instanceTagName]);
 
   // Write a prop value as a RAW JSX EXPRESSION (`prop={expr}`), not a string
   // literal. Used by the link control's Slug binding to set the per-row CMS
@@ -1194,10 +1196,10 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     expediteStableAtomSync();
     if (!selectedId || !componentInfo) return;
     trace.action('component-props:set-link-expr', { nodeId: selectedId, propName, expr });
-    modifyProjectFile(activeFile, (code) => setInstanceProp(code, selectedId, componentInfo.name, propName, expr, true));
+    modifyProjectFile(activeFile, (code) => setInstanceProp(code, selectedId, instanceTagName ?? '', propName, expr, true));
     const newCode = projectFS.readFile(activeFile);
     if (newCode) { setCode(newCode); setVersion(v => v + 1); }
-  }, [selectedId, activeFile, componentInfo, setCode, setVersion]);
+  }, [selectedId, activeFile, componentInfo, setCode, setVersion, instanceTagName]);
 
   // A SCROLL VARIANT caches the per-viewport resting variant in its OWN spec
   // (`responsive[scope].from`), which migratePerViewportResting derives FROM
@@ -1352,7 +1354,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       // "can't close FAQ item 1 on mobile" bug). Same rule as the generic
       // prop path above.
       modifyProjectFile(activeFile, (currentCode) => {
-        const rawBase = parseInstanceProps(currentCode, selectedId, componentInfo.name).get('initialVariant');
+        const rawBase = parseInstanceProps(currentCode, selectedId, instanceTagName ?? '').get('initialVariant');
         const baseVal = rawBase && variantConfig.some((vc) => vc.name === rawBase) ? rawBase : 'default';
         const next = setResponsiveOverride(currentCode, selectedId, componentInfo.name, vpWidth, 'initialVariant', variantName, baseVal);
         // A SCROLL VARIANT keeps its OWN copy of the per-viewport resting variant
@@ -1373,7 +1375,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       // variant independently.
       modifyProjectFile(activeFile, (currentCode) => {
         return setConditionalInstanceProp(
-          currentCode, selectedId, componentInfo.name,
+          currentCode, selectedId, instanceTagName ?? '',
           'initialVariant', activeComponentVariant, variantName,
         );
       });
@@ -1383,7 +1385,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       // overrides, KEEP them — only the default branch changes.
       modifyProjectFile(activeFile, (currentCode) => {
         return setConditionalInstanceProp(
-          currentCode, selectedId, componentInfo.name,
+          currentCode, selectedId, instanceTagName ?? '',
           'initialVariant', 'default', variantName,
         );
       });
@@ -1392,7 +1394,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
       // component-variant ternary form because the parent isn't a variant
       // host; for page contexts the per-viewport mechanism is data-responsive.
       modifyProjectFile(activeFile, (currentCode) => {
-        return setInstanceProp(currentCode, selectedId, componentInfo.name, 'initialVariant', variantName, false);
+        return setInstanceProp(currentCode, selectedId, instanceTagName ?? '', 'initialVariant', variantName, false);
       });
     }
 
@@ -1538,7 +1540,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                 const raw = (parentVarsByName.get(cvVariantBoundRef) ?? '').replace(/^["'](.*)["']$/s, '$1');
                 const literal = variantConfig.some((v) => v.name === raw)
                   ? raw : (variantConfig.find((v) => v.isPrimary)?.name ?? variantConfig[0]?.name ?? 'default');
-                return setConditionalInstanceProp(c, selectedId, componentInfo.name, 'initialVariant', activeComponentVariant, literal);
+                return setConditionalInstanceProp(c, selectedId, instanceTagName ?? '', 'initialVariant', activeComponentVariant, literal);
               });
               const nc = projectFS.readFile(activeFile);
               if (nc) { setCode(nc); setVersion((v) => v + 1); }
@@ -1634,7 +1636,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                 ? setResponsiveInstancePropVarInCode(c, selectedId, componentInfo.name, activeQuery, 'initialVariant', varName)
                 : (isComponentVariant && activeComponentVariant)
                   ? setConditionalInstancePropVarInCode(c, selectedId, componentInfo.name, 'initialVariant', activeComponentVariant, varName, currentVariant)
-                  : setInstanceProp(c, selectedId, componentInfo.name, 'initialVariant', varName, true));
+                  : setInstanceProp(c, selectedId, instanceTagName ?? '', 'initialVariant', varName, true));
             const nc = projectFS.readFile(activeFile);
             if (nc) { setCode(nc); setVersion((v) => v + 1); }
           };
@@ -1816,7 +1818,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
         setPropOptimistic(propName, defVal);
         expediteStableAtomSync();
         modifyProjectFile(activeFile, (c) =>
-          setConditionalInstanceProp(c, selectedId, componentInfo.name, propName, activeComponentVariant, defVal));
+          setConditionalInstanceProp(c, selectedId, instanceTagName ?? '', propName, activeComponentVariant, defVal));
         trace.action('component-props:reset-variant-override', { propName, variant: activeComponentVariant });
       },
     };
@@ -2587,7 +2589,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                         label: v.label,
                         show: true,
                         hoverColor: 'accent-secondary' as const,
-                        onClick: () => { expediteStableAtomSync(); modifyProjectFile(activeFile, (c) => setInstanceProp(c, selectedId, componentInfo.name, prop.name, v.name, true)); },
+                        onClick: () => { expediteStableAtomSync(); modifyProjectFile(activeFile, (c) => setInstanceProp(c, selectedId, instanceTagName ?? '', prop.name, v.name, true)); },
                       })),
                     });
                   }
@@ -2978,7 +2980,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                       masterFile={componentFile}
                       propName={prop.name}
                       instanceNodeId={selectedId!}
-                      instanceComponentName={componentInfo.name}
+                      instanceComponentName={instanceTagName ?? ''}
                       activeFile={activeFile}
                       onChanged={() => {
                         const refreshed = projectFS.readFile(activeFile);

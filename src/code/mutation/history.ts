@@ -58,6 +58,11 @@ export interface UiLocation {
   componentEditorProps?: Record<string, unknown>;
 }
 
+export interface HistoryFileOpBefore {
+  selection: string[];
+  uiLocation: UiLocation;
+}
+
 interface HistoryEntry {
   diffs: FileDiff[];
   /** Selected node ids BEFORE the operation (captured at its start). Undo
@@ -143,6 +148,19 @@ function liveUiLocation(): UiLocation {
 /** Current live selection, or [] when not wired (tests). */
 function liveSelection(): string[] {
   return _getSelection ? _getSelection() : [];
+}
+
+function copyUiLocation(loc: UiLocation): UiLocation {
+  return {
+    ...loc,
+    ...(loc.breadcrumb ? { breadcrumb: [...loc.breadcrumb] } : {}),
+    ...(loc.componentEditorProps ? { componentEditorProps: { ...loc.componentEditorProps } } : {}),
+  };
+}
+
+/** Capture editor chrome before a file op navigates or closes its overlay. */
+export function captureHistoryFileOpBefore(): HistoryFileOpBefore {
+  return { selection: [...liveSelection()], uiLocation: copyUiLocation(liveUiLocation()) };
 }
 
 /** Keep only ids that still exist in the just-restored node map. Stale
@@ -411,14 +429,19 @@ export function sealPendingHistory(): void {
  * the PRE-op state (the page they were on). The redo-side target is the live
  * active file at push time, which exists in the post-op state.
  */
-export function pushHistoryFileOp(activeFileBefore: string): void {
+export function pushHistoryFileOp(activeFileBefore: string, before?: HistoryFileOpBefore): void {
   const sizeBefore = undoStack.length;
   pushHistoryImmediate('');
   // Only stamp when a new entry actually landed (no-diff push is a no-op —
   // stamping the PRIOR entry would corrupt an unrelated edit's undo target).
   if (undoStack.length > sizeBefore) {
-    undoStack[undoStack.length - 1].activeFileBefore = activeFileBefore;
-    trace.action('history:push-file-op', { activeFileBefore, activeFile: undoStack[undoStack.length - 1].activeFile });
+    const entry = undoStack[undoStack.length - 1];
+    entry.activeFileBefore = activeFileBefore;
+    if (before) {
+      entry.selBefore = [...before.selection];
+      entry.uiLocation = copyUiLocation(before.uiLocation);
+    }
+    trace.action('history:push-file-op', { activeFileBefore, activeFile: entry.activeFile });
   }
 }
 

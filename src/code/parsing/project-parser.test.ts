@@ -83,6 +83,34 @@ function makeFS() {
 }
 
 describe('project-parser: instance → root style merge', () => {
+  it('marks an aliased default import as the component instance wrapper', () => {
+    const fs = new InMemoryProjectFS(new Map([
+      ['app/page.tsx', 'import Tile from "@/components/Card"; export default function Page(){return <Tile data-id="literal" title="B"/>;}'],
+      ['components/Card.tsx', 'export default function Card({title = "Default"}){return <div data-id="root">{title}</div>;}'],
+    ]));
+    const node = parseProjectFile('app/page.tsx', fs).get('literal');
+    expect(node?.type).toBe('Tile');
+    expect(node?.componentFile).toBe('components/Card.tsx');
+    expect(node?.isComponentInstance).toBe(true);
+  });
+  it('does not expand a named helper from the default component file as that default component', () => {
+    const fs = new InMemoryProjectFS(new Map([
+      ['app/page.tsx', 'import { Helper } from "@/components/Card"; export default function Page(){return <Helper data-id="helper"/>;}'],
+      ['components/Card.tsx', 'export function Helper(){return <span data-id="helper-root">Help</span>;} export default function Card(){return <div data-id="card-root">Card</div>;}'],
+    ]));
+    const node = parseProjectFile('app/page.tsx', fs).get('helper');
+    expect(node?.type).toBe('Helper');
+    expect(node?.isComponentInstance).not.toBe(true);
+    expect(node?.componentFile).toBeNull();
+    expect(parseProjectFile('app/page.tsx', fs).has('helper:card-root')).toBe(false);
+  });
+  it('accepts a named default alias from the component file', () => {
+    const fs = new InMemoryProjectFS(new Map([
+      ['app/page.tsx', 'import { default as Tile } from "@/components/Card"; export default function Page(){return <Tile data-id="tile"/>;}'],
+      ['components/Card.tsx', 'export default function Card(){return <div data-id="card-root">Card</div>;}'],
+    ]));
+    expect(parseProjectFile('app/page.tsx', fs).get('tile')?.isComponentInstance).toBe(true);
+  });
   it('keeps wrapper-only positioning (position/left/top) on the instance wrapper, not the inner root', () => {
     const nodes = parseProjectFile('app/page.tsx', makeFS());
 

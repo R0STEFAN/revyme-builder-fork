@@ -42,6 +42,11 @@ import { trace } from '@/shared/debug-trace';
 import { setPropTypeInCode } from './prop-meta';
 import { getCollectionData, getCollectionSchema } from '../project/cms-ops';
 import { hasComponentControls } from './controls-parser';
+import { resolveImportPath } from './import-resolver';
+import { modifyProjectFile } from '../project/modify-file';
+import { pushHistoryImmediate, sealPendingHistory, restoreSnapshot } from '../mutation/history';
+import { triggerAutosave } from '@/backend/autosave';
+import { isCanvasBusy } from '../stores/agent-run-lock-store';
 
 /** Strip a CSS `url('…')`/`url(…)` wrapper → bare URL. Local copy on purpose —
  *  the editor runtime stubs `cms-ops`, so importing a helper from it crashes
@@ -2500,53 +2505,138 @@ export function detachInstance(
  * Delete a component file and remove all its instances + imports from the project.
  * Returns the list of files that were modified.
  */
-export function deleteComponent(componentFilePath: string): string[] {
-  const internalName = componentFilePath.replace('components/', '').replace('.tsx', '');
-  trace.action('component-ops:delete', { componentFilePath, internalName });
+export function deleteComponent(componentFilePath: string, opts?: { deferHistory?: boolean }): string[] {
+  trace.action('component-ops:delete', { componentFilePath });
+  if (isCanvasBusy()) {
+    trace.action('component-ops:delete-refused-canvas-busy', { componentFilePath });
+    throw new Error('Cannot delete a component while an agent run holds this branch');
+  }
+  if (!projectFS.exists(componentFilePath)) throw new Error(`Component does not exist: ${componentFilePath}`);
+  // The page queue owns the freshest source. Commit it before the read-only plan.
+  flushNow();
+  sealPendingHistory();
+  const masterCode = projectFS.readFile(componentFilePath);
+  if (masterCode == null) throw new Error(`Component does not exist: ${componentFilePath}`);
+  const plan = new Map<string, { before: string; after: string }>();
+  const stem = componentFilePath.replace(/\.(tsx?|jsx?)$/, '');
+  const importStem = stem.endsWith('/index') ? stem.slice(0, -'/index'.length) : stem;
+  const basename = importStem.slice(importStem.lastIndexOf('/') + 1);
+  const matchesMaster = (source: string, file: string): boolean => {
+    const resolved = resolveImportPath(source, file);
+    if (!resolved) return false;
+    const base = resolved.replace(/\.(tsx?|jsx?)$/, '');
+    const explicitExtension = /\.(tsx?|jsx?)$/.test(source);
+    const variants = ['.tsx', '.ts', '.jsx', '.js'];
+    const candidates = explicitExtension
+      ? [resolved, ...variants.map(ext => base + ext).filter(path => path !== resolved)]
+      : [...variants.map(ext => base + ext), ...variants.map(ext => base + '/index' + ext)];
+    const actual = candidates.find(path => projectFS.exists(path));
+    return actual === componentFilePath;
+  };
 
-  const modifiedFiles: string[] = [];
-
-  // Find all project files that import this component and clean them
-  const allFiles = projectFS.listFiles();
-  for (const file of allFiles) {
-    if (file === componentFilePath) continue;
-    if (!file.endsWith('.tsx') && !file.endsWith('.ts')) continue;
-
-    const code = projectFS.readFile(file);
-    if (!code) continue;
-
-    // Check if this file imports the component
-    const importPattern = new RegExp(`import\\s+${internalName}\\s+from\\s+['"].*?${internalName}['"];?\\n?`);
-    if (!importPattern.test(code)) continue;
-
-    // Remove all JSX instances: self-closing <Name ... /> and open/close <Name ...>...</Name>
-    let cleaned = code;
-
-    // Self-closing: <InternalName ... />
-    const selfClosingRe = new RegExp(`<${internalName}\\b[^>]*?\\/>\\s*`, 'g');
-    cleaned = cleaned.replace(selfClosingRe, '');
-
-    // Open/close: <InternalName ...>...</InternalName> (handles nested content)
-    // Use a simple balanced-tag approach for non-nested same-tag cases
-    const openCloseRe = new RegExp(`<${internalName}\\b[^>]*>[\\s\\S]*?<\\/${internalName}>\\s*`, 'g');
-    cleaned = cleaned.replace(openCloseRe, '');
-
-    // Run syncImports to remove the now-unused import line
-    cleaned = syncImports(cleaned);
-
-    if (cleaned !== code) {
-      projectFS.writeFile(file, cleaned);
-      modifiedFiles.push(file);
-      trace.action('component-ops:delete-cleaned-file', { file, internalName });
+  try {
+    for (const file of projectFS.listFiles()) {
+      if (file === componentFilePath || !/\.[jt]sx?$/.test(file)) continue;
+      const code = projectFS.readFile(file);
+      if (code == null) continue;
+      const ast = parseJSX(code);
+      if (!ast) {
+        // A malformed dependent cannot be safely inspected. Refuse the whole
+        // transaction; unrelated unfinished files do not prevent deletion.
+        if (code.includes(basename) || code.includes(stem)) throw new Error(`Cannot parse dependent ${file}`);
+        continue;
+      }
+      const edits: Array<{ start: number; end: number; replacement: string }> = [];
+      const imports: Array<{ name: string; start: number; end: number }> = [];
+      traverse(ast, {
+        ImportDeclaration(path) {
+          if (!matchesMaster(path.node.source.value, file)) return;
+          const statement = path.node;
+          if (statement.specifiers.length !== 1 || !t.isImportDefaultSpecifier(statement.specifiers[0])) {
+            throw new Error(`Unsupported import of ${componentFilePath} in ${file}`);
+          }
+          if (statement.start == null || statement.end == null) throw new Error(`Missing import range in ${file}`);
+          imports.push({ name: statement.specifiers[0].local.name, start: statement.start, end: statement.end });
+        },
+        ExportNamedDeclaration(path) {
+          if (path.node.source && matchesMaster(path.node.source.value, file)) throw new Error(`Unsupported re-export in ${file}`);
+        },
+        ExportAllDeclaration(path) {
+          if (matchesMaster(path.node.source.value, file)) throw new Error(`Unsupported re-export in ${file}`);
+        },
+        StringLiteral(path) {
+          if (!matchesMaster(path.node.value, file)) return;
+          if (path.parentPath.isImportDeclaration() || path.parentPath.isExportNamedDeclaration() || path.parentPath.isExportAllDeclaration()) return;
+          throw new Error(`Unsupported source reference to ${componentFilePath} in ${file}`);
+        },
+      });
+      if (imports.length === 0) continue;
+      if (imports.length > 1) throw new Error(`Ambiguous imports in ${file}`);
+      const imported = imports[0];
+      const importBinding = (ast.program.body.find(n => t.isImportDeclaration(n) && n.start === imported.start) as t.ImportDeclaration);
+      traverse(ast, {
+        JSXElement(path) {
+          const name = path.node.openingElement.name;
+          if (t.isJSXMemberExpression(name) && t.isJSXIdentifier(name.object) && name.object.name === imported.name) {
+            throw new Error(`Unsupported namespace reference in ${file}`);
+          }
+          if (!t.isJSXIdentifier(name) || name.name !== imported.name) return;
+          const binding = path.scope.getBinding(imported.name);
+          if (!binding || binding.path.node !== importBinding.specifiers[0]) return;
+          const element = path.node;
+          if (element.start == null || element.end == null) throw new Error(`Missing JSX range in ${file}`);
+          // JSX children can disappear. Expression roots need a valid value.
+          const replacement = path.parentPath.isJSXElement() || path.parentPath.isJSXFragment() ? '' : 'null';
+          edits.push({ start: element.start, end: element.end, replacement });
+        },
+        Identifier(path) {
+          if (path.node.name !== imported.name || !path.isReferencedIdentifier()) return;
+          const binding = path.scope.getBinding(imported.name);
+          if (binding?.path.node === importBinding.specifiers[0]) {
+            throw new Error(`Unsupported non-JSX reference to ${imported.name} in ${file}`);
+          }
+        },
+      });
+      edits.push({ start: imported.start, end: imported.end, replacement: '' });
+      // A removed ancestor subsumes nested instances. Apply surviving ranges
+      // backwards so original offsets and neighboring formatting remain valid.
+      const nonOverlapping = edits.sort((a, b) => a.start - b.start || b.end - a.end)
+        .filter((edit, i, all) => !all.slice(0, i).some(parent => parent.start <= edit.start && parent.end >= edit.end));
+      let after = code;
+      for (const edit of nonOverlapping.sort((a, b) => b.start - a.start)) {
+        after = after.slice(0, edit.start) + edit.replacement + after.slice(edit.end);
+      }
+      if (!parseJSX(after)) throw new Error(`Deletion would invalidate ${file}`);
+      plan.set(file, { before: code, after });
     }
+  } catch (err) {
+    trace.error('component-ops:delete-plan-refused', { componentFilePath, error: String(err) });
+    throw err;
   }
 
-  // Delete the component file itself
-  projectFS.deleteFile(componentFilePath);
+  const beforeCommit = projectFS.getSnapshot();
+  const committed: string[] = [];
+  try {
+    for (const [file, change] of plan) {
+      const result = modifyProjectFile(file, code => {
+        if (code !== change.before) throw new Error(`Changed during deletion: ${file}`);
+        return change.after;
+      });
+      if (result == null || projectFS.readFile(file) !== result) throw new Error(`Could not update ${file}`);
+      committed.push(file);
+      trace.action('component-ops:delete-cleaned-file', { file });
+    }
+    projectFS.deleteFile(componentFilePath);
+  } catch (err) {
+    restoreSnapshot(beforeCommit, { history: 'none', autosave: false, reason: 'component-delete-rollback' });
+    trace.error('component-ops:delete-commit-failed', { componentFilePath, error: String(err) });
+    throw err;
+  }
   clearComponentCache();
-
-  trace.action('component-ops:delete-complete', { componentFilePath, modifiedFiles: modifiedFiles.length });
-  return modifiedFiles;
+  if (!opts?.deferHistory) pushHistoryImmediate('');
+  triggerAutosave({ force: true });
+  trace.action('component-ops:delete-complete', { componentFilePath, modifiedFiles: committed.length });
+  return [...plan.keys()];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

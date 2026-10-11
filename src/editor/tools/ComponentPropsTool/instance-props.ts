@@ -1,7 +1,8 @@
 // ComponentPropsTool/instance-props.ts — JSX instance-tag prop read/write helpers
 // lifted verbatim from ComponentPropsTool.tsx (Phase 7 god-file split, item 7.5).
 
-import { findTagClose } from '@/code/generation/generator-utils';
+import { parseJSX, traverse, findAttribute, getAttributeValue } from '@/code/parsing/ast-utils';
+import * as t from '@babel/types';
 import { parseScopedScalarExpr } from '@/code/generation/generator-motion';
 import {
   parseConditionalPropExpression,
@@ -12,72 +13,34 @@ import {
 
 // ─── JSX Instance Helpers ────────────────────────────────────────────────────
 
-/**
- * Find the Nth instance of <ComponentName in the code.
- * nodeId like "auto_2" → occurrence index 2 (0-based counter from parser).
- * Returns { tagStart, tagEnd } or null.
- */
+/** Locate a JSX opening tag by parsed data-id and exact source range. */
 function findInstanceTag(code: string, nodeId: string, componentName: string): { tagStart: number; tagEnd: number } | null {
-  // The parser assigns auto_0, auto_1, etc. in order.
-  // We need to find which occurrence this instance is.
-  // First try: if the instance has a data-id in the code, use that
-  // Find instance tag by data-id — must be on the actual component/element JSX tag,
-  // NOT inside CSS selectors like `[data-id="..."]` or template strings.
-  // Verify by checking that the character immediately before `data-id` is whitespace
-  // (JSX attribute) not `[` (CSS selector) or `"` (string).
-  const idPattern = `data-id="${nodeId}"`;
-  let idSearchFrom = 0;
-  while (idSearchFrom < code.length) {
-    const idIdx = code.indexOf(idPattern, idSearchFrom);
-    if (idIdx === -1) break;
-    // Check char before data-id — must be whitespace (JSX attr separator)
-    const charBefore = idIdx > 0 ? code[idIdx - 1] : '';
-    if (charBefore === ' ' || charBefore === '\n' || charBefore === '\t') {
-      // findTagClose (brace/quote-aware) instead of indexOf('>'): an instance can carry an inline arrow
-      // handler like `event1={() => setOpen(true)}` whose `=>` contains a `>` — a naive indexOf would cut the
-      // tag there, dropping every attr after it (e.g. a `color1={color1}` binding placed after event1 showed
-      // as an unbound literal in the panel even though the hoist was wired in the code).
-      // A prop VALUE before `data-id` can hold markup of its own (a formatted-text prop
-      // `content={"<strong>Hi</strong>"}`), so a `<` only opens OUR tag when that tag closes after the id.
-      let tagStart = idIdx;
-      while (tagStart > 0) {
-        tagStart--;
-        if (code[tagStart] !== '<') continue;
-        const tagEnd = findTagClose(code, tagStart);
-        if (tagEnd > idIdx) return { tagStart, tagEnd: tagEnd + 1 };
+  const ast = parseJSX(code);
+  if (!ast) return null;
+  const exact: Array<{ span: { tagStart: number; tagEnd: number }; name: string }> = [];
+  const legacy: Array<{ tagStart: number; tagEnd: number }> = [];
+  traverse(ast, {
+    JSXOpeningElement(path) {
+      const opening = path.node;
+      if (opening.start == null || opening.end == null) return;
+      const span = { tagStart: opening.start, tagEnd: opening.end };
+      const idAttr = findAttribute(opening, 'data-id');
+      const name = t.isJSXIdentifier(opening.name) ? opening.name.name : '';
+      if (idAttr && getAttributeValue(idAttr) === nodeId) {
+        exact.push({ span, name });
       }
-    }
-    idSearchFrom = idIdx + idPattern.length;
+      if (!idAttr && name === componentName) legacy.push(span);
+    },
+  });
+  // Duplicate data-ids are ambiguous across the entire JSX tree, including
+  // elements of other tag names. A unique id on a foreign tag is not a match.
+  if (exact.length > 1) return null;
+  if (exact.length === 1) {
+    return exact[0].name === componentName ? exact[0].span : null;
   }
-
-  // Find by component tag name + occurrence index
-  // auto_0 is the first auto-id, but we need the occurrence among THIS component's instances
-  const tagPattern = `<${componentName}`;
-  let searchFrom = 0;
-  const occurrences: number[] = [];
-
-  while (searchFrom < code.length) {
-    const idx = code.indexOf(tagPattern, searchFrom);
-    if (idx === -1) break;
-    // Make sure it's a tag boundary (next char is space, /, or >)
-    const nextChar = code[idx + tagPattern.length];
-    if (nextChar === ' ' || nextChar === '/' || nextChar === '>') {
-      occurrences.push(idx);
-    }
-    searchFrom = idx + tagPattern.length;
-  }
-
-  if (occurrences.length === 0) return null;
-
-  // Determine which occurrence: extract numeric suffix from nodeId (auto_N)
-  // But auto_N counts ALL auto nodes, not just this component.
-  // Simpler: if there's only one instance, use it. Otherwise use first for now.
-  // TODO: handle multiple instances of same component properly
-  const tagStart = occurrences[0];
-  const tagEnd = findTagClose(code, tagStart); // brace/quote-aware (see the data-id path above)
-  if (tagEnd === -1) return null;
-
-  return { tagStart, tagEnd: tagEnd + 1 };
+  // Parser-generated auto ids have no source attribute. A sole matching tag
+  // is the only safe fallback when an explicit identity is absent.
+  return /^auto_\d+$/.test(nodeId) && legacy.length === 1 ? legacy[0] : null;
 }
 
 /** Parse props from a component instance in JSX: <Name propA="val" propB="val" /> */

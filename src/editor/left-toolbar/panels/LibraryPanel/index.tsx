@@ -3,6 +3,7 @@
 // Merges the old PresetsPanel functionality directly into the Library panel.
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAtom, useAtomValue, useSetAtom, getDefaultStore } from 'jotai';
 import { activeFilePathAtom, getFileDisplayName, switchActiveFile, componentBreadcrumbAtom, slugToFilePath, getRouteGroup } from '@/code/project/active-file-store';
 import { hasComponentControls } from '@/code/components/controls-parser';
@@ -14,12 +15,13 @@ import PluginsSection from '@/editor/left-toolbar/panels/plugins';
 import { interactingViewportIdAtom } from '@/code/stores/viewport-store';
 import { deleteIconSet } from '@/code/icons/icon-set-ops';
 import { isIconSetFilePath } from '@/code/project/active-file-store';
-import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
+import { componentEditorFileAtom, componentEditorPropsAtom } from '@/code/stores/component-editor-store';
 import { suppressSelectionOverlayAtom } from '@/code/stores/editor-store';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { selectedIdsAtom, updatingFromCanvasAtom, nodesAtom } from '@/code/stores/store';
 import { presetTokensAtom, presetUsageAtom } from '@/code/stores/preset-store';
 import { flushNow, syncQueueCode, queueMutation } from '@/code/mutation/mutation-queue';
+import { captureHistoryFileOpBefore, pushHistoryFileOp } from '@/code/mutation/history';
 import type { PresetToken } from '@/shared/types';
 import ToolPopup from '@/editor/ui/ToolPopup';
 import { refreshCanvasTokens } from '@/canvas/node-ops';
@@ -283,9 +285,8 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
   const deleteConfirmName = deleteConfirm ? getFileDisplayName(deleteConfirm) : '';
 
   const handleDeleteComponent = useCallback((filePath: string) => {
-    setComponentEditorFile(null);
     setDeleteConfirm(filePath);
-  }, [setComponentEditorFile]);
+  }, []);
 
   // Icon-set delete reuses the same confirm dialog (the dialog's behavior
   // — confirm + close + sync — is generic over file path). We dispatch
@@ -302,7 +303,23 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
   // exactly the user-reported "Are you sure you want to delete
   // 'Frame'?" appearing after the bulk Delete N click).
   const performDeleteLibraryFile = useCallback((filePath: string) => {
-    // If currently editing this file, switch away first. The home page may
+    const historyBefore = captureHistoryFileOpBefore();
+    // Commit the deletion first. A rejected AST plan leaves the file in place,
+    // so navigation and editor state must still point at it.
+    try {
+      if (isIconSetFilePath(filePath)) {
+        deleteIconSet(filePath);
+        trace.action('library:delete-icon-set', { filePath });
+      } else {
+        deleteComponent(filePath, { deferHistory: true });
+        trace.action('library:delete-component', { filePath });
+      }
+    } catch (err) {
+      trace.error('library:delete-refused', { filePath, error: String(err) });
+      toast.error(err instanceof Error ? err.message : 'Could not delete this component');
+      return false;
+    }
+    // If currently editing this file, switch away. The home page may
     // live at `app/page.tsx` or inside a Template route group like
     // `app/(default)/page.tsx` — `slugToFilePath('home')` resolves to
     // whichever actually exists.
@@ -312,25 +329,20 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
       setSelectedIds([]);
       setBreadcrumb([]);
     }
-    // Close component editor if open for this file
-    setComponentEditorFile(null);
-    // Dispatch to the right delete op based on file location. Icon-set
-    // deletes go through deleteIconSet (which cleans instances + imports
-    // across pages, same shape as deleteComponent).
-    if (isIconSetFilePath(filePath)) {
-      deleteIconSet(filePath);
-      trace.action('library:delete-icon-set', { filePath });
-    } else {
-      deleteComponent(filePath);
-      trace.action('library:delete-component', { filePath });
+    // Only close the overlay when its own file was deleted. An unrelated
+    // component can stay open while another library item is removed.
+    if (jotaiStore.get(componentEditorFileAtom) === filePath) {
+      jotaiStore.set(componentEditorPropsAtom, {});
+      setComponentEditorFile(null);
     }
     bumpVersion(v => v + 1);
-  }, [activeFile, setActiveFile, setSelectedIds, setBreadcrumb, setComponentEditorFile, bumpVersion]);
+    if (!isIconSetFilePath(filePath)) pushHistoryFileOp(activeFile, historyBefore);
+    return true;
+  }, [activeFile, setActiveFile, setSelectedIds, setBreadcrumb, setComponentEditorFile, bumpVersion, jotaiStore]);
 
   const confirmDeleteComponent = useCallback(() => {
     if (!deleteConfirm) return;
-    performDeleteLibraryFile(deleteConfirm);
-    setDeleteConfirm(null);
+    if (performDeleteLibraryFile(deleteConfirm)) setDeleteConfirm(null);
   }, [deleteConfirm, performDeleteLibraryFile]);
 
   // Group tokens by category. When search is active, narrow each

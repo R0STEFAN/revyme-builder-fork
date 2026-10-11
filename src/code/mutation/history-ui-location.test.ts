@@ -7,7 +7,7 @@
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  initHistory, pushHistory, pushHistoryImmediate, pushHistoryNavigation, undo, redo, finishPendingRestore,
+  initHistory, pushHistory, pushHistoryImmediate, pushHistoryNavigation, pushHistoryFileOp, undo, redo, finishPendingRestore,
   type UiLocation,
 } from './history';
 import { projectFS } from '../project/project-fs';
@@ -44,6 +44,32 @@ describe('history restores where the user was', () => {
     ui = { localizationLocale: null };            // …then closed it, back to canvas
     undoNow();
     expect(ui).toEqual({ localizationLocale: 'fr' });
+  });
+
+  test('a file delete restores pre-delete editor chrome and selection on undo, then post-delete state on redo', () => {
+    const master = 'components/Card.tsx';
+    projectFS.writeFile(master, 'master');
+    let active = master;
+    let selection = ['card'];
+    ui = { breadcrumb: [FILE], componentEditorFile: master, componentEditorProps: { title: 'Preview' } };
+    initHistory('', () => {}, () => active, undefined, {
+      get: () => [...selection], set: ids => { selection = ids; }, getNodeIds: () => new Set(['card']),
+      navigateToFile: path => { if (!projectFS.exists(path)) return false; active = path; return true; },
+    }, { get: () => ({ ...ui }), set: loc => { ui = { ...loc }; } });
+    const before = { selection: [...selection], uiLocation: { ...ui } };
+    projectFS.deleteFile(master);
+    active = FILE;
+    selection = [];
+    ui = { breadcrumb: [], componentEditorFile: null, componentEditorProps: {} };
+    pushHistoryFileOp(master, before);
+    expect(undoNow()).toBe(true);
+    expect(active).toBe(master);
+    expect(ui).toEqual(before.uiLocation);
+    expect(selection).toEqual(['card']);
+    expect(redoNow()).toBe(true);
+    expect(active).toBe(FILE);
+    expect(ui).toEqual({ breadcrumb: [], componentEditorFile: null, componentEditorProps: {} });
+    expect(selection).toEqual([]);
   });
 
   test('and redo puts it back there as well', () => {

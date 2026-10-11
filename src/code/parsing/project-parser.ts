@@ -15,6 +15,24 @@ import { parseVariantConfig } from '../variants/variant-config';
 import type { ProjectFS } from '../project/project-fs';
 import { trace } from '@/shared/debug-trace';
 import { WRAPPER_ONLY_STYLE_PROPS } from '@/shared/constants';
+import { parseJSX, traverse } from './ast-utils';
+
+function defaultImportNames(code: string): Set<string> {
+  const names = new Set<string>();
+  const ast = parseJSX(code);
+  if (!ast) return names;
+  traverse(ast, {
+    ImportDeclaration(path) {
+      for (const specifier of path.node.specifiers) {
+        if (specifier.type === 'ImportDefaultSpecifier'
+          || (specifier.type === 'ImportSpecifier' && specifier.imported.type === 'Identifier' && specifier.imported.name === 'default')) {
+          names.add(specifier.local.name);
+        }
+      }
+    },
+  });
+  return names;
+}
 
 // ─── Component-file parse cache ──────────────────────────────────────────────
 // `expandComponent` re-parses every referenced component file's JSX on EVERY
@@ -121,6 +139,7 @@ export function parseProjectFile(
 
   // Build component registry (cached)
   const registry = buildComponentRegistry(fs);
+  const defaultImportsByFile = new Map<string, Set<string>>();
 
   // Expand component instances recursively (supports nested components).
   // Each pass expands one level. Repeat until no more component tags are found.
@@ -212,7 +231,18 @@ export function parseProjectFile(
             continue;
           }
 
-          const componentInfo = registry.get(node.type);
+          // JSX may alias a default import (`Card` rendered as `<Tile>`).
+          // The resolved source file, rather than the registry's export name,
+          // identifies the selected instance in that case.
+          let defaultImports = defaultImportsByFile.get(nodeFile);
+          if (!defaultImports) {
+            defaultImports = defaultImportNames(nodeCode);
+            defaultImportsByFile.set(nodeFile, defaultImports);
+          }
+          const namedInfo = registry.get(node.type);
+          const componentInfo = namedInfo?.filePath === resolvedPath
+            ? namedInfo
+            : defaultImports.has(node.type) ? [...registry.values()].find(info => info.filePath === resolvedPath) : undefined;
           if (componentInfo) {
             expandComponent(node, componentInfo, fs, nodes, nodeFile);
             expanded.add(nodeId);

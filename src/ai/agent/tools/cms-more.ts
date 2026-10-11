@@ -19,7 +19,10 @@ import { modifyProjectFile } from '@/code/project/modify-file';
 import { listCollections, getCollectionSchema, getCollectionData, reorderCollectionItems, reorderCollectionFields, duplicateCollection } from '@/code/project/cms-ops';
 import { createCmsIndexPageFile, createCmsDetailPageFile } from '@/code/project/cms-page-ops';
 import { getEnclosingMapIteratorForNode, getEnclosingMapSourceForNode } from '@/code/generation/map-gen';
-import { setInstanceProp } from '@/editor/tools/ComponentPropsTool/instance-props';
+import { setInstanceProp, getInstancePropExpr } from '@/editor/tools/ComponentPropsTool/instance-props';
+import { resolveSelectedInstanceTag } from '@/editor/tools/ComponentPropsTool/instance-tag';
+import { parseProjectFile } from '@/code/parsing/project-parser';
+import { buildComponentRegistry } from '@/code/components/component-registry';
 import { SEARCH_FIELD_PLACEHOLDER } from '@/code/generation/cms-search-field-gen';
 import { parsePageVariables } from '@/code/features/page-variables';
 import { isComponentFilePath } from '@/code/project/file-path-kind';
@@ -48,6 +51,14 @@ function collectionOfMap(code: string, nodeId: string): { slug: string; itemVar:
   const known = new Set(listCollections());
   for (const ident of src.sourceExpr.match(/[A-Za-z_$][\w$]*/g) ?? []) if (known.has(ident)) return { slug: ident, itemVar: src.iterVar };
   return null;
+}
+
+function boundComponentTag(code: string, filePath: string, nodeId: string, requestedName: string): string | null {
+  const node = parseProjectFile(filePath, projectFS, code).get(nodeId) ?? null;
+  const tag = resolveSelectedInstanceTag(code, filePath, node);
+  if (!tag) return null;
+  const info = [...buildComponentRegistry(projectFS).values()].find(value => value.filePath === node?.componentFile);
+  return requestedName === tag || requestedName === info?.name ? tag : null;
 }
 
 /** The LIST CONTAINER for a node: the container itself, or the container of
@@ -356,18 +367,37 @@ export const bindCmsPropTool: AgentTool = {
   category: 'semantic',
   async execute(args, ctx) {
     const nodeId = String(args.node_id);
+    const active = resolveToolFile(ctx);
     const code = getToolCode(ctx);
     const inMap = collectionOfMap(code, nodeId);
     if (!inMap) return fail(`"${nodeId}" is not inside a bound collection list — bind_cms_list first.`);
     const fid = String(args.field_id);
     if (!fieldIds(inMap.slug).includes(fid)) return fail(`"${fid}" is not a field of ${inMap.slug}. Fields: ${fieldIds(inMap.slug).join(', ')}.`);
     if (isBranchedRun(ctx)) return fail('bind_cms_prop writes the active branch only — run unbranched.');
-    const active = resolveToolFile(ctx);
+    const requestedName = String(args.component_name);
+    if (!boundComponentTag(code, active, nodeId, requestedName)) {
+      return fail(`"${nodeId}" is not a unique instance of ${requestedName} in ${active}.`);
+    }
     ctx.ensureCheckpoint();
     flushTool(ctx);
-    const wrote = modifyProjectFile(active, (c) => setInstanceProp(c, nodeId, String(args.component_name), String(args.prop), `${inMap.itemVar}.${fid}`, true));
+    let applied = false;
+    let appliedMap = inMap;
+    const wrote = modifyProjectFile(active, (c) => {
+      // Re-prove identity after the queue flush and the safe writer's own
+      // pre-write flush. A duplicate or changed import must never turn into a
+      // silent no-op reported as success.
+      const tag = boundComponentTag(c, active, nodeId, requestedName);
+      const currentMap = collectionOfMap(c, nodeId);
+      if (!tag || !currentMap || !fieldIds(currentMap.slug).includes(fid)) return c;
+      appliedMap = currentMap;
+      const expression = `${currentMap.itemVar}.${fid}`;
+      const next = setInstanceProp(c, nodeId, tag, String(args.prop), expression, true);
+      applied = next !== c || getInstancePropExpr(c, nodeId, tag, String(args.prop)) === expression;
+      return next;
+    });
     if (wrote === null) return fail(`Could not write ${active}.`);
-    return ok({ node_id: nodeId, prop: args.prop, bound_to: `${inMap.itemVar}.${fid}`, collection: inMap.slug });
+    if (!applied) return fail(`Could not bind ${String(args.prop)} on the unique ${requestedName} instance "${nodeId}".`);
+    return ok({ node_id: nodeId, prop: args.prop, bound_to: `${appliedMap.itemVar}.${fid}`, collection: appliedMap.slug });
   },
 };
 
