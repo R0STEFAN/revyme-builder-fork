@@ -13,6 +13,7 @@ import { buildComponentRegistry, parseComponentInfoFromSource, STRUCTURAL_PROPS,
 import { inferPropertyFromValue, resolveVariableCssProp, type ChildResolution } from '@/code/components/prop-css-mapping';
 import { getPropOptions, getPropOptionsLocked, getPropNumberMeta, getPropDescription, getPropLabel, parsePropMeta, type PropNumberMeta } from '@/code/components/prop-meta';
 import NumberVariableEditor from '../controls/NumberVariableEditor';
+import ImagePickerInput from '../controls/ImagePickerInput';
 import RichInlineEditor from './RichInlineEditor';
 import { VariableTypeIcon, resolveVariableIconKey } from '../controls/VariableTypeIcon';
 import { VariableTypePicker } from '../controls/VariableTypePicker';
@@ -907,6 +908,10 @@ export default function VariableModal({
       );
     }
 
+    if (effectiveProperty === 'src') {
+      return <ImagePickerInput value={value} onChange={onChange} rawUrl={true} />;
+    }
+
     // Typed "+" variables with a PRIMITIVE editor (data types). 'style' types fall through to the
     // control-registry path below (effectiveProperty already points at the control's CSS property).
     if (activeTypeDef && activeTypeDef.editor !== 'style') {
@@ -949,6 +954,8 @@ export default function VariableModal({
               onCommit={onChange}
             />
           );
+        case 'image':
+          return <ImagePickerInput value={value} onChange={onChange} rawUrl={effectiveProperty === 'src' || !value.startsWith('url(')} />;
         case 'option': {
           if (!selectedVar) return null;
           const optionVals = getPropOptions(componentCode, selectedVar);
@@ -959,7 +966,7 @@ export default function VariableModal({
           }
           return <OptionDefaultEditor varName={selectedVar} value={value} onChange={onChange} options={optionVals} />;
         }
-        default: // 'text' — plainText / date / link / image / file / cursor / transition
+        default: // 'text' — plainText / date / link / file / cursor / transition
           return <ToolInput value={value} onChange={onChange} text />;
       }
     }
@@ -1237,7 +1244,7 @@ export default function VariableModal({
           {/* Create mode — form */}
           {!removeWarning && mode === 'create' && (
             <>
-              <div className="flex-1 p-6 overflow-y-auto space-y-2">
+              <div className="flex-1 min-w-0 p-6 overflow-y-auto overflow-x-hidden space-y-2">
                 {/* Name */}
                 <FieldRow label="Name">
                   <input
@@ -1316,7 +1323,7 @@ export default function VariableModal({
           {/* View mode — variable details */}
           {!removeWarning && mode === 'view' && selectedVarInfo && (
             <>
-              <div className="flex-1 p-6 overflow-y-auto space-y-2">
+              <div className="flex-1 min-w-0 p-6 overflow-y-auto overflow-x-hidden space-y-2">
                 {/* Name — editable; renames the variable (prop + all refs) on blur / Enter. */}
                 <FieldRow label="Name">
                   <input
