@@ -7,7 +7,7 @@
 import { ensureRootPerfIsolation } from '@/code/variants/variant-perf';
 import { parseVariantConfig } from '@/code/variants/variant-config';
 
-import { toKebab, SHORTHAND_LONGHANDS } from '@/shared/css-utils';
+import { toKebab, SHORTHAND_LONGHANDS, parseShorthand } from '@/shared/css-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
 import { scopeVariantConstsReadingProps } from './variant-const-scope';
 import { CSS_LAYOUT_DEFAULTS } from '@/shared/constants';
@@ -18,6 +18,16 @@ import * as t from '@babel/types';
 import _traverse from '@babel/traverse';
 
 const traverseAst = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
+
+/**
+ * Shared regex pattern string matching a property value in a variants object literal:
+ * - Quoted strings: '...', "...", `...`
+ * - Numbers: integers, decimals, negatives
+ * - Identifiers: JS variables / props ([A-Za-z_$][\w$]*)
+ * - Function calls: rgba(...), var(...), calc(...)
+ * - Keywords / Booleans: true, false, null, undefined, auto
+ */
+export const VARIANT_PROP_VALUE_PATTERN = `(?:'[^']*'|"[^"]*"|\`[^\`]*\`|-?\\d+(?:\\.\\d+)?|[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*(?:\\([^)]*\\))?)`;
 
 /** Which present width-keys belong to the RESIZED viewport — DRIFT-PROOF.
  *  Exact match first. Otherwise ORDINAL: in this dialect each non-primary
@@ -2035,6 +2045,64 @@ function seedWouldBeClobberedByShorthand(key: string, entryContent: string): boo
   return new RegExp(`(?:^|[,{\\s])['"]?${shorthand}['"]?\\s*:`).test(entryContent);
 }
 
+/**
+ * Constituent longhands and axis expander for CSS shorthands in component variants.
+ * Used to normalize shorthand vs longhand layering between variants and default.
+ */
+const SHORTHAND_CONSTITUENTS_MAP: Record<string, { sides: readonly string[]; parse: (v: string) => Record<string, string> }> = {
+  padding: {
+    sides: SHORTHAND_LONGHANDS.padding,
+    parse: (v) => {
+      const [t, r, b, l] = parseShorthand(v);
+      return { paddingTop: t, paddingRight: r, paddingBottom: b, paddingLeft: l };
+    },
+  },
+  margin: {
+    sides: SHORTHAND_LONGHANDS.margin,
+    parse: (v) => {
+      const [t, r, b, l] = parseShorthand(v);
+      return { marginTop: t, marginRight: r, marginBottom: b, marginLeft: l };
+    },
+  },
+  borderRadius: {
+    sides: SHORTHAND_LONGHANDS.borderRadius,
+    parse: (v) => {
+      const [tl, tr, br, bl] = parseShorthand(v);
+      return { borderTopLeftRadius: tl, borderTopRightRadius: tr, borderBottomRightRadius: br, borderBottomLeftRadius: bl };
+    },
+  },
+  borderWidth: {
+    sides: SHORTHAND_LONGHANDS.borderWidth ?? ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'],
+    parse: (v) => {
+      const [t, r, b, l] = parseShorthand(v);
+      return { borderTopWidth: t, borderRightWidth: r, borderBottomWidth: b, borderLeftWidth: l };
+    },
+  },
+  border: {
+    sides: [
+      'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+      'borderWidth', 'borderStyle', 'borderColor',
+      'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    ],
+    parse: (v) => {
+      const sides: Record<string, string> = {};
+      if (v === 'none' || v === '0' || v === '0px') {
+        sides.borderTop = 'none';
+        sides.borderRight = 'none';
+        sides.borderBottom = 'none';
+        sides.borderLeft = 'none';
+        sides.borderWidth = '0px';
+      } else {
+        sides.borderTop = v;
+        sides.borderRight = v;
+        sides.borderBottom = v;
+        sides.borderLeft = v;
+      }
+      return sides;
+    },
+  },
+};
+
 /** Whether `name` is a destructured param of the file's component function
  *  (`function Card({ style, color = '#fff', ...rest })`). */
 function isComponentPropParam(code: string, name: string): boolean {
@@ -2930,6 +2998,31 @@ function updateVariantStyleInCodeInner(
   // +2 keeps the closing `};` in the slice — the create-entry path below
   // locates its insert position via `afterConst.indexOf('};')`.
   const afterConst = constBodyEnd !== -1 ? code.slice(constIdx, Math.min(constBodyEnd + 2, code.length)) : code.slice(constIdx);
+  // SHORTHAND vs LONGHAND NORMALIZATION (Task 5):
+  // When writing a shorthand to a non-default variant, inspect whether `default` defines
+  // constituent longhands. If default defines constituent longhands, explicitly cover
+  // those axes in this variant so Framer Motion's shallow object merge doesn't allow
+  // default's longhands to override the variant's shorthand.
+  if (variantName !== 'default') {
+    for (const [shortKey, config] of Object.entries(SHORTHAND_CONSTITUENTS_MAP)) {
+      if (styles[shortKey] !== undefined && styles[shortKey] !== '') {
+        const shortVal = styles[shortKey];
+        const defaultEntryMatch = afterConst.match(/(?:^|[,{\s])default\s*:\s*\{([^}]*)\}/);
+        if (defaultEntryMatch) {
+          const defaultBody = defaultEntryMatch[1];
+          const parsedSides = config.parse(shortVal);
+          for (const lh of config.sides) {
+            if (!(lh in styles) && new RegExp(`${keyPat(lh)}\\s*:`).test(defaultBody)) {
+              if (parsedSides[lh]) {
+                styles = { ...styles, [lh]: parsedSides[lh] };
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   const variantEntryRegex = new RegExp(`('?${variantName}'?\\s*:\\s*\\{)([^}]*)(\\})`);
   const entryMatch = afterConst.match(variantEntryRegex);
 
@@ -3049,16 +3142,25 @@ function updateVariantStyleInCodeInner(
     if (cIdx === -1) return null;
     const dm = code2.slice(cIdx).match(/default\s*:\s*\{([^}]*)\}/);
     if (!dm) return null;
-    const vm = dm[1].match(new RegExp(`${keyPat(key)}\\s*:\\s*(?:'([^']*)'|"([^"]*)"|(-?\\d+(?:\\.\\d+)?))`));
-    return vm ? (vm[1] ?? vm[2] ?? vm[3] ?? null) : null;
+    const vm = dm[1].match(new RegExp(`${keyPat(key)}\\s*:\\s*(?:'([^']*)'|"([^"]*)"|\`([^\`]*)\`|(${VARIANT_PROP_VALUE_PATTERN}))`));
+    return vm ? (vm[1] ?? vm[2] ?? vm[3] ?? vm[4] ?? null) : null;
   };
 
   // A seeded rest value must be VALID JS: motion props are usually bare
   // numbers, but `x`/`y` legitimately hold percent strings (`'-50%'`, a
-  // centering pin). Emitting `x: -50%` raw was a parse error the validator
+  // centering pin), variables (`brandX`), or calls. Emitting `x: -50%` raw was a parse error the validator
   // blocked — every align/pin write on such a shape bounced (live find
   // 2026-09-06, "Unexpected token (152:49)").
-  const seedLiteral = (v: string): string => (/^-?\d+(\.\d+)?$/.test(v) ? v : `'${v.replace(/'/g, "\\'")}'`);
+  const seedLiteral = (v: string): string => {
+    if (/^-?\d+(\.\d+)?$/.test(v)) return v;
+    if (/^(?:true|false|null|undefined)$/.test(v)) return v;
+    if (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\([^)]*\))?$/.test(v)) {
+      if (!/^(?:none|auto|inherit|initial|unset|center|fill-box|view-box|content-box|stroke-box)$/.test(v)) {
+        return v;
+      }
+    }
+    return `'${v.replace(/'/g, "\\'")}'`;
+  };
   const ensureTransformNeutralOnAllVariants = (result: string, props: string[]): string => {
     const motionProps = props.filter((k) => MOTION_TRANSFORM_PROPS.has(k));
     if (motionProps.length === 0) return result;
@@ -3132,6 +3234,21 @@ function updateVariantStyleInCodeInner(
       }
     }
 
+    // SHORTHAND vs LONGHAND NORMALIZATION (Task 5):
+    // If writing a shorthand, remove any constituent longhands currently in entryContent
+    // (unless explicitly provided in styles with a non-empty value) so the shorthand takes effect
+    // without internal conflicts.
+    for (const [shortKey, config] of Object.entries(SHORTHAND_CONSTITUENTS_MAP)) {
+      if (styles[shortKey] !== undefined && styles[shortKey] !== '') {
+        for (const lh of config.sides) {
+          if (!(lh in styles && styles[lh] !== '')) {
+            const deleteLhRegex = new RegExp(`\\s*${keyPat(lh)}\\s*:\\s*${VARIANT_PROP_VALUE_PATTERN}\\s*,?`);
+            entryContent = entryContent.replace(deleteLhRegex, '');
+          }
+        }
+      }
+    }
+
     // Properties that should be numeric (no quotes) in variant entries
     const NUMERIC_PROPS = new Set(['order', 'opacity', 'scale', 'scaleX', 'scaleY', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'skewX', 'skewY', 'x', 'y', 'z', 'transformPerspective', 'attrX', 'attrY']);
     for (const [key, value] of Object.entries(styles)) {
@@ -3170,20 +3287,18 @@ function updateVariantStyleInCodeInner(
       // empty shorthand wiped the color. Empty = remove the key, in EVERY
       // variant including default.
       if (value === '') {
-        // Match either `key: 'value'`, `key: "value"`, or `key: 123` —
+        // Match either `key: 'value'`, `key: "value"`, `key: 123`, or identifier/call —
         // include the optional trailing comma + whitespace so the
         // surrounding object literal stays well-formed after deletion.
-        const deleteRegex = new RegExp(`\\s*${keyPat(key)}\\s*:\\s*(?:'[^']*'|"[^"]*"|-?\\d+(?:\\.\\d+)?)\\s*,?`);
+        const deleteRegex = new RegExp(`\\s*${keyPat(key)}\\s*:\\s*${VARIANT_PROP_VALUE_PATTERN}\\s*,?`);
         entryContent = entryContent.replace(deleteRegex, '');
         continue;
       }
       const isNumeric = NUMERIC_PROPS.has(key) && /^-?\d+(\.\d+)?$/.test(value);
       const formattedValue = isNumeric ? value : `'${value}'`;
-      // Value alternation must include the leading `-` so an existing NEGATIVE
-      // numeric value (e.g. `rotate: -2`) is matched-and-REPLACED, not missed →
-      // appended. Without `-?` here, every drag frame on a negatively-rotated
-      // element added a fresh `rotate: -N` key (duplicate keys piling up).
-      const propRegex = new RegExp(`(${keyPat(key)}\\s*:\\s*)(?:'[^']*'|"[^"]*"|-?\\d+(?:\\.\\d+)?)`);
+      // Match any valid property value (quotes, numbers, identifiers, calls)
+      // so existing values are replaced, not duplicated.
+      const propRegex = new RegExp(`(${keyPat(key)}\\s*:\\s*)${VARIANT_PROP_VALUE_PATTERN}`);
       const propMatch = entryContent.match(propRegex);
       if (propMatch) {
         entryContent = entryContent.replace(propMatch[0], `${propMatch[1]}${formattedValue}`);
@@ -3231,7 +3346,6 @@ function updateVariantStyleInCodeInner(
     // Ensure default entry has base values for these properties
     if (variantName !== 'default') {
       result = ensureDefaultHasBaseValues(result, setProps);
-    result = ensureTransformNeutralOnAllVariants(result, setProps);
       result = ensureTransformNeutralOnAllVariants(result, setProps);
     }
     // Add layout prop when order changes — CSS order is not animatable,
@@ -3266,7 +3380,6 @@ function updateVariantStyleInCodeInner(
     let result = code;
     if (variantName !== 'default') {
       result = ensureDefaultHasBaseValues(result, setProps);
-    result = ensureTransformNeutralOnAllVariants(result, setProps);
       result = ensureTransformNeutralOnAllVariants(result, setProps);
     }
     if ('order' in styles) {
@@ -3822,16 +3935,43 @@ export function setConditionalStyleInCode(
   const removeProp = value === '' && Object.keys(map).length === 0;
   if (removeProp) trace.action('generator.setConditionalStyle:removeLayoutProp', { nodeId, prop, variantName });
   if (map.default === undefined) {
+    let baseVal: string | undefined;
+    const tagEnd = code.indexOf('>', idIdx);
+    if (tagEnd !== -1) {
+      const tagSlice = code.slice(idIdx, tagEnd);
+      // Check for tag attributes (e.g. width="100" / height="50" on svg/img)
+      const attrMatch = tagSlice.match(new RegExp(`\\b${escapeRegExp(prop)}=["']([^"']+)["']`)) ||
+                        tagSlice.match(new RegExp(`\\b${escapeRegExp(prop)}=\\{['"]?([^}'"]+)['"]?\\}`));
+      if (attrMatch) {
+        baseVal = attrMatch[1];
+      }
+      // Check if the element has a variants object with a default entry for this prop
+      if (!baseVal) {
+        const vm = tagSlice.match(/variants=\{(?:__applyInstanceSize\()?(\w+)/);
+        if (vm) {
+          const varName = vm[1];
+          const cIdx = code.indexOf(`const ${varName}`);
+          if (cIdx !== -1) {
+            const dm = code.slice(cIdx).match(/default\s*:\s*\{([^}]*)\}/);
+            if (dm) {
+              const pm = dm[1].match(new RegExp(`(?:^|[,{\\s])${escapeRegExp(prop)}\\s*:\\s*(?:'([^']*)'|"([^"]*)"|(-?\\d+(?:\\.\\d+)?))`));
+              if (pm) baseVal = pm[1] ?? pm[2] ?? pm[3];
+            }
+          }
+        }
+      }
+    }
+    if (baseVal !== undefined) {
+      hadExplicitDefault = true;
+    }
+
     if (variantName === 'default') {
-      map.default = value !== '' ? value : (CSS_LAYOUT_DEFAULTS[prop] ?? '');
+      map.default = value !== '' ? value : (baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '');
     } else {
       // Non-default variant write on an element with no prior inline value for this prop.
-      // If the variant value matches the CSS layout default (e.g. flexDirection: 'row'),
-      // using that same default as the else-branch fallback would produce a redundant ternary
-      // or collapse to an unconditional plain value that overwrites `default`.
-      // Use '' as the else fallback so `default` is not mutated by the variant's write.
-      const cssDef = CSS_LAYOUT_DEFAULTS[prop] ?? '';
-      map.default = value === cssDef ? '' : cssDef;
+      // Prioritize existing base value from tag/variants, otherwise fall back to CSS_LAYOUT_DEFAULTS.
+      const fallback = baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '';
+      map.default = value === fallback ? '' : fallback;
     }
   }
 

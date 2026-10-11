@@ -402,6 +402,12 @@ export const CSS_LAYOUT_DEFAULTS: Readonly<Record<string, string>> = {
   borderTopRightRadius: '0px',
   borderBottomLeftRadius: '0px',
   borderBottomRightRadius: '0px',
+  width: 'auto',
+  height: 'auto',
+  minWidth: 'auto',
+  minHeight: 'auto',
+  maxWidth: 'none',
+  maxHeight: 'none',
 };
 
 /** Invisible character used as placeholder text content when creating new

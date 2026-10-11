@@ -30,6 +30,7 @@ vi.mock('@/canvas/node-ops', async (importOriginal) => ({
 }));
 
 import { getOverrideMenuItems, type MenuContext } from './control-menu-items';
+import { updateNodeStyles, setStyleContext, setForceRenderAfterExternalEdit } from '@/canvas/node-ops';
 
 function makeCtx(over: Partial<MenuContext> = {}): MenuContext {
   return {
@@ -59,7 +60,10 @@ function clickReset(ctx: MenuContext): void {
   item!.onClick();
 }
 
-beforeEach(() => { forceRenderAfterExternalEdit.mockClear(); });
+beforeEach(() => {
+  forceRenderAfterExternalEdit.mockClear();
+  setForceRenderAfterExternalEdit(forceRenderAfterExternalEdit);
+});
 
 describe('Reset Override → canvas sync', () => {
   it('forces a render on the GENERIC path (updateStyle clear)', () => {
@@ -119,3 +123,40 @@ describe('Reset Override → canvas sync', () => {
     expect(forceRenderAfterExternalEdit).not.toHaveBeenCalled();
   });
 });
+
+describe('updateNodeStyles — variant override reset triggers forceRenderAfterExternalEdit', () => {
+  it('triggers forceRenderAfterExternalEdit when updating active variant with property deletion', () => {
+    setStyleContext('components/Card.tsx', 'variant-1', 1200);
+    const contentEl = document.createElement('div');
+    forceRenderAfterExternalEdit.mockClear();
+
+    updateNodeStyles({
+      id: 'card-1',
+      styles: { backgroundColor: '' },
+      contentEl,
+    });
+
+    expect(forceRenderAfterExternalEdit).toHaveBeenCalledWith(
+      'variant-reset-override',
+      expect.objectContaining({ id: 'card-1', styles: { backgroundColor: '' } }),
+    );
+  });
+
+  it('does NOT trigger variant-reset-override when styles are non-empty values', () => {
+    setStyleContext('components/Card.tsx', 'variant-1', 1200);
+    const contentEl = document.createElement('div');
+    forceRenderAfterExternalEdit.mockClear();
+
+    updateNodeStyles({
+      id: 'card-1',
+      styles: { backgroundColor: '#ff0000' },
+      contentEl,
+    });
+
+    expect(forceRenderAfterExternalEdit).not.toHaveBeenCalledWith(
+      'variant-reset-override',
+      expect.anything(),
+    );
+  });
+});
+

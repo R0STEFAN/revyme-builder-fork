@@ -1420,3 +1420,79 @@ export default withResponsiveProps(ReMoHe);`;
     expect(out.match(/onTap=/g)).toHaveLength(1);
   });
 });
+
+describe('render-phase state adjustment for interactive variants (Task 4)', () => {
+  const FILE = 'components/Button.tsx';
+  const BASE = `import React from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+
+const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'variant-1', label: 'Pressed', x: 100, y: 0 },
+];
+
+function Button({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return (
+    <LayoutGroup>
+      <motion.div data-id="root" style={{ position: 'absolute', ...style }}>
+        <motion.div data-id="btn" style={{ position: 'relative' }} />
+      </motion.div>
+    </LayoutGroup>
+  );
+}
+export default withResponsiveProps(Button);`;
+
+  test('generateConnectionCode emits render-phase adjustment pattern instead of useEffect', () => {
+    resetProjectFS(new Map([[FILE, BASE]]));
+    addConnection(FILE, 'default', 'variant-1', 'click');
+    const updated = projectFS.readFile(FILE)!;
+
+    expect(updated).toContain('const [variant, setVariant] = useState(initialVariant);');
+    expect(updated).toContain('const [prevInitial, setPrevInitial] = useState(initialVariant);');
+    expect(updated).toContain('if (initialVariant !== prevInitial) {');
+    expect(updated).toContain('setPrevInitial(initialVariant);');
+    expect(updated).toContain('setVariant(initialVariant);');
+    expect(updated).not.toContain('useEffect(() => { setVariant(initialVariant); }, [initialVariant]);');
+  });
+
+  test('removing the last connection completely tears down prevInitial and state adjustment', () => {
+    resetProjectFS(new Map([[FILE, BASE]]));
+    addConnection(FILE, 'default', 'variant-1', 'click');
+    removeConnection(FILE, 'default', 'variant-1');
+    const updated = projectFS.readFile(FILE)!;
+
+    expect(updated).not.toContain('prevInitial');
+    expect(updated).not.toContain('setPrevInitial');
+    expect(updated).not.toContain('setVariant');
+    expect(updated).not.toContain('useState');
+  });
+
+  test('migrates legacy useEffect sync to render-phase adjustment when new connections are added', () => {
+    const legacyCode = `import React, { useState, useEffect } from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+
+const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'variant-1', label: 'Hover', x: 100, y: 0 },
+  { name: 'variant-2', label: 'Pressed', x: 200, y: 0 },
+];
+const connections = [{ from: 'default', to: 'variant-1', trigger: 'mouseEnter' }];
+
+function LegacyBtn({ style, initialVariant = 'default' }: any) {
+  const [variant, setVariant] = useState(initialVariant);
+  useEffect(() => { setVariant(initialVariant); }, [initialVariant]);
+  return <motion.div data-id="root" animate={variant} />;
+}
+export default withResponsiveProps(LegacyBtn);`;
+
+    const out = generateConnectionCode(legacyCode, [
+      { from: 'default', to: 'variant-1', trigger: 'mouseEnter' },
+      { from: 'variant-1', to: 'variant-2', trigger: 'click' },
+    ]);
+    expect(out).toContain('const [prevInitial, setPrevInitial] = useState(initialVariant);');
+    expect(out).toContain('if (initialVariant !== prevInitial)');
+    expect(out).not.toContain('useEffect(() => { setVariant(initialVariant); }, [initialVariant]);');
+  });
+});

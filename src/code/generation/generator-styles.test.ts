@@ -1991,3 +1991,164 @@ describe('setConditionalOrderInCode — authored branches survive coinciding wit
     expect(orderOf(out)).toBe("'3'");
   });
 });
+
+describe('updateVariantStyleInCode — broadened value pattern (identifiers, variables, calls, booleans)', () => {
+  const COMP_WITH_IDENTIFIERS = `'use client';
+export const cardVariants = {
+  default: { color: brandColor, opacity: 1, backgroundColor: rgba(0, 0, 0, 0.5) },
+  'variant-1': { color: brandColor, rotate: 10 },
+};
+export default function Card({ initialVariant = 'default' }) {
+  return (
+    <motion.div data-id="card" variants={cardVariants} initial={initialVariant} animate={initialVariant} />
+  );
+}`;
+
+  test('overwriting an identifier value in a variant entry with a literal', () => {
+    const out = updateVariantStyleInCode(COMP_WITH_IDENTIFIERS, 'card', 'variant-1', { color: '#ffffff' });
+    const vc = out.slice(out.indexOf('cardVariants'));
+    const v1 = vc.slice(vc.indexOf("'variant-1'"), vc.indexOf('}', vc.indexOf("'variant-1'")));
+    expect(v1).toContain("color: '#ffffff'");
+    expect(v1).not.toContain('color: brandColor');
+    // Ensure no duplicate keys
+    expect((v1.match(/color\s*:/g) || []).length).toBe(1);
+  });
+
+  test("deleting ('') an identifier value in a variant entry (resetting override)", () => {
+    const out = updateVariantStyleInCode(COMP_WITH_IDENTIFIERS, 'card', 'variant-1', { color: '' });
+    const vc = out.slice(out.indexOf('cardVariants'));
+    const v1 = vc.slice(vc.indexOf("'variant-1'"), vc.indexOf('}', vc.indexOf("'variant-1'")));
+    expect(v1).not.toContain('color');
+    expect(v1).toContain('rotate: 10');
+  });
+
+  test('overwriting a function call value in default or non-default variant without duplicates', () => {
+    const out = updateVariantStyleInCode(COMP_WITH_IDENTIFIERS, 'card', 'default', { backgroundColor: '#123456' });
+    const vc = out.slice(out.indexOf('cardVariants'));
+    const def = vc.slice(vc.indexOf('default'), vc.indexOf('}', vc.indexOf('default')));
+    expect(def).toContain("backgroundColor: '#123456'");
+    expect(def).not.toContain('rgba(0, 0, 0, 0.5)');
+    expect((def.match(/backgroundColor\s*:/g) || []).length).toBe(1);
+  });
+
+  test('defaultEntryValue reads identifier defaults for neutral transform seeding', () => {
+    const COMP_WITH_VAR_TRANSFORM = `'use client';
+export const variantConfig = [{ name: 'default' }, { name: 'variant-1' }, { name: 'variant-2' }];
+export const boxVariants = {
+  default: { x: brandOffsetX, rotate: 0 },
+  'variant-1': { rotate: 45 },
+  'variant-2': { scale: 1.5 },
+};
+export default function Box({ initialVariant = 'default' }) {
+  return (
+    <motion.div data-id="box" variants={boxVariants} initial={initialVariant} animate={initialVariant} />
+  );
+}`;
+    // Writing a new transform on variant-1 seeds rest value of x (brandOffsetX) onto other variants if needed
+    const out = updateVariantStyleInCode(COMP_WITH_VAR_TRANSFORM, 'box', 'variant-1', { x: '50' });
+    const vc = out.slice(out.indexOf('boxVariants'));
+    // variant-2 should be seeded with brandOffsetX from default, NOT 'brandOffsetX' with quotes
+    const v2 = vc.slice(vc.indexOf("'variant-2'"), vc.indexOf('}', vc.indexOf("'variant-2'")));
+    expect(v2).toContain('x: brandOffsetX');
+    expect(v2).not.toContain("x: 'brandOffsetX'");
+  });
+});
+
+describe('setConditionalStyleInCode — dimension defaults for layout ternaries (Task 2)', () => {
+  test('setting width on a non-default variant falls back to "auto", never empty string', () => {
+    const COMP = `'use client';
+export default function Card({ initialVariant = 'default' }) {
+  return (
+    <div data-id="card-1" style={{ position: 'relative' }}>
+      Content
+    </div>
+  );
+}`;
+    const out = setConditionalStyleInCode(COMP, 'card-1', 'width', 'variant-1', '300px');
+    expect(out).toContain("width: initialVariant === 'variant-1' ? '300px' : 'auto'");
+    expect(out).not.toContain(": ''");
+  });
+
+  test('setting height on a non-default variant prioritizes tag attribute over auto', () => {
+    const COMP = `'use client';
+export default function Icon({ initialVariant = 'default' }) {
+  return (
+    <svg data-id="icon-1" height="24" style={{ display: 'inline-block' }}>
+      <path d="..." />
+    </svg>
+  );
+}`;
+    const out = setConditionalStyleInCode(COMP, 'icon-1', 'height', 'variant-1', '32px');
+    expect(out).toContain("height: initialVariant === 'variant-1' ? '32px' : '24'");
+  });
+
+  test('setting width on a non-default variant prioritizes variants default entry', () => {
+    const COMP = `'use client';
+const boxVariants = {
+  default: { width: '180px' },
+  'variant-1': {},
+};
+export default function Box({ initialVariant = 'default' }) {
+  return (
+    <motion.div data-id="box-1" variants={boxVariants} style={{ position: 'relative' }}>
+      Box
+    </motion.div>
+  );
+}`;
+    const out = setConditionalStyleInCode(COMP, 'box-1', 'width', 'variant-1', '250px');
+    expect(out).toContain("width: initialVariant === 'variant-1' ? '250px' : '180px'");
+  });
+});
+
+describe('updateVariantStyleInCode — shorthand vs longhand normalization (Task 5)', () => {
+  const COMP = `'use client';
+import React from 'react';
+import { motion } from 'framer-motion';
+
+const cardVariants = {
+  default: { paddingTop: '40px', paddingBottom: '30px' },
+  'variant-1': { paddingTop: '15px', paddingRight: '10px' },
+};
+
+export default function Card({ initialVariant = 'default' }) {
+  return (
+    <motion.div data-id="card-1" variants={cardVariants} initial={['default', initialVariant]} animate={['default', initialVariant]}>
+      Card
+    </motion.div>
+  );
+}`;
+
+  test('writing shorthand to a variant removes constituent longhands from that variant', () => {
+    // When writing padding: '50px' to variant-1, its existing paddingTop: '15px' and paddingRight: '10px' must be removed
+    const out = updateVariantStyleInCode(COMP, 'card-1', 'variant-1', { padding: '50px' });
+    const v1Match = out.match(/'variant-1':\s*\{([^}]*)\}/);
+    expect(v1Match).toBeTruthy();
+    const v1Content = v1Match![1];
+    expect(v1Content).toContain("padding: '50px'");
+    expect(v1Content).not.toContain("paddingRight: '10px'");
+    expect(v1Content).not.toContain("paddingTop: '15px'");
+  });
+
+  test('writing shorthand to a variant explicitly covers constituent longhands present in default', () => {
+    // default has paddingTop and paddingBottom; variant-1 writes padding: '50px'.
+    // To prevent Framer Motion from letting default's paddingTop/paddingBottom win in CSS,
+    // variant-1 must explicitly cover paddingTop and paddingBottom with '50px'.
+    const out = updateVariantStyleInCode(COMP, 'card-1', 'variant-1', { padding: '50px' });
+    const v1Match = out.match(/'variant-1':\s*\{([^}]*)\}/);
+    expect(v1Match).toBeTruthy();
+    const v1Content = v1Match![1];
+    expect(v1Content).toContain("padding: '50px'");
+    expect(v1Content).toContain("paddingTop: '50px'");
+    expect(v1Content).toContain("paddingBottom: '50px'");
+  });
+
+  test('constituent longhands explicitly specified alongside shorthand are preserved', () => {
+    const out = updateVariantStyleInCode(COMP, 'card-1', 'variant-1', { padding: '50px', paddingTop: '80px' });
+    const v1Match = out.match(/'variant-1':\s*\{([^}]*)\}/);
+    expect(v1Match).toBeTruthy();
+    const v1Content = v1Match![1];
+    expect(v1Content).toContain("padding: '50px'");
+    expect(v1Content).toContain("paddingTop: '80px'");
+  });
+});
+

@@ -380,6 +380,7 @@ export const SHORTHAND_LONGHANDS: Readonly<Record<string, readonly string[]>> = 
   margin: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'],
   gap: ['rowGap', 'columnGap'],
   inset: ['top', 'right', 'bottom', 'left'],
+  borderWidth: ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'],
 };
 
 /**

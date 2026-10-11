@@ -420,6 +420,10 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     const styles = typeof keyOrStyles === 'string' ? { [keyOrStyles]: value! } : keyOrStyles;
     trace.action('control:update-style', { nodeIds: selectedIds, styles });
 
+    const vpPrefix = (isComponentVariantViewport && activeComponentVariant && activeComponentVariant !== 'default')
+      ? getViewportPrefix(activeComponentVariant)
+      : undefined;
+
     // FIT SVG wrapper: route text-style properties to inner text node
     const innerId = fitInnerIdRef.current;
     if (innerId) {
@@ -430,20 +434,20 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         else svgStyles[k] = v;
       }
       if (Object.keys(textStyles).length > 0) {
-        updateNodeStyles({ id: innerId, styles: textStyles, contentEl });
+        updateNodeStyles({ id: innerId, styles: textStyles, contentEl, viewportPrefix: vpPrefix });
       }
       if (Object.keys(svgStyles).length > 0) {
         for (const id of selectedIds) {
-          updateNodeStyles({ id, styles: svgStyles, contentEl });
+          updateNodeStyles({ id, styles: svgStyles, contentEl, viewportPrefix: vpPrefix });
         }
       }
       return;
     }
 
     for (const id of selectedIds) {
-      updateNodeStyles({ id, styles, contentEl });
+      updateNodeStyles({ id, styles, contentEl, viewportPrefix: vpPrefix });
     }
-  }, [selectedIds]);
+  }, [selectedIds, isComponentVariantViewport, activeComponentVariant]);
 
   // DOM-only live patch — bypasses the mutation queue + code generator
   // entirely. Used by sliders during continuous input so the canvas

@@ -233,11 +233,13 @@ function rebuildConnections(code: string, connections: Connection[]): string {
     for (const handler of ['onTap', 'onTapStart', 'onHoverStart', 'onHoverEnd', 'onViewportEnter']) {
       updated = stripAllTagAttrsBalanced(updated, handler);
     }
-    // Remove useState + useEffect chain
+    // Remove useState + prevInitial state + sync adjustment + useEffect chain
     updated = updated.replace(/\s*const \[variant, setVariant\] = useState\([^)]*\);\n?/g, '');
+    updated = updated.replace(/\s*const \[prevInitial, setPrevInitial\] = useState\([^)]*\);\n?/g, '');
+    updated = updated.replace(/\s*if\s*\(\s*(?:initialVariant|variant)\s*!==\s*prevInitial\s*\)\s*\{[\s\S]*?\}\n?/g, '');
     updated = updated.replace(/\s*const \[isInView, setIsInView\] = useState\(false\);\n?/g, '');
     updated = updated.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant, isInView\]\);\n?/g, '');
-    // The SYNC effect the add-path pairs with the useState
+    // The legacy SYNC effect the add-path pairs with the useState
     // (`useEffect(() => { setVariant(initialVariant); }, [initialVariant]);`)
     // has deps `[initialVariant]`, so the inView-anchored regex above never
     // matched it — deleting the last connected variant stripped the useState
@@ -259,7 +261,7 @@ function rebuildConnections(code: string, connections: Connection[]): string {
     // `variant !== '…'` — visibility conditions use the negative form) back to
     // `initialVariant`. Leaving a `variant !==` behind after the useState above
     // is stripped would be a ReferenceError that kills the whole component.
-    updated = updated.replace(/\bvariant(\s*[!=]==\s*)/g, `initialVariant$1`);
+    updated = updated.replace(/\bvariant(\s*[!=]==\s*)(?!\s*prevInitial\b)/g, `initialVariant$1`);
     // Restore the Collection List config's variant arg to `initialVariant` (mirror
     // of the add-path 2d rewrite). `variant` would be a ReferenceError once the
     // useState above is stripped. Anchored on the `const … =` assignment so the
@@ -470,8 +472,9 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     }
   }
 
-  // 1b. Add useEffect import (needed for responsive variant sync + inView chains)
-  if (!result.includes('useEffect')) {
+  // 1b. Add useEffect import (needed for inView chains + afterDelay)
+  const needsUseEffect = connections.some(c => c.trigger === 'inView' || c.trigger === 'afterDelay');
+  if (needsUseEffect && !result.includes('useEffect')) {
     if (/import\s*\{([^}]*)\}\s*from\s*'react'/.test(result)) {
       result = result.replace(
         /import\s*\{([^}]*)\}\s*from\s*'react'/,
@@ -522,7 +525,8 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     const insertIdx = bodyBraceIdx;
     result = result.slice(0, insertIdx) +
       "\n  const [variant, setVariant] = useState(initialVariant);" +
-      "\n  useEffect(() => { setVariant(initialVariant); }, [initialVariant]);\n" +
+      "\n  const [prevInitial, setPrevInitial] = useState(initialVariant);" +
+      "\n  if (initialVariant !== prevInitial) {\n    setPrevInitial(initialVariant);\n    setVariant(initialVariant);\n  }\n" +
       result.slice(insertIdx);
 
     // NOTE: migration of pre-existing AnimatePresence wrapper conditions
@@ -533,6 +537,13 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     // the FIRST `</AnimatePresence>`, so conditions of wrappers NESTED inside
     // another wrapper were silently skipped — those elements stayed frozen on
     // the initial variant forever (hamburger line stuck on click-toggle).
+  } else if (result.includes('const [variant, setVariant]') && !result.includes('prevInitial')) {
+    if (result.includes('setVariant(initialVariant)') && result.includes('useEffect')) {
+      result = result.replace(
+        /\s*useEffect\(\(\)\s*=>\s*\{\s*setVariant\(initialVariant\);?\s*\},?\s*\[initialVariant\]\);?\n?/,
+        "\n  const [prevInitial, setPrevInitial] = useState(initialVariant);\n  if (initialVariant !== prevInitial) {\n    setPrevInitial(initialVariant);\n    setVariant(initialVariant);\n  }\n"
+      );
+    }
   }
 
   // 2b. (Re)build the inView chain effect from the current connection list.
@@ -552,9 +563,10 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     m.includes('__afterDelayChain') ? '' : m);
   const afterDelayConns = connections.filter(c => c.trigger === 'afterDelay');
   if (afterDelayConns.length > 0) {
-    const anchor = result.match(/const \[variant, setVariant\] = useState\(initialVariant\);/);
-    if (anchor) {
-      const at = result.indexOf(anchor[0]) + anchor[0].length;
+    const anchor = result.match(/if\s*\(\s*(?:initialVariant\s*!==\s*prevInitial|prevInitial\s*!==\s*initialVariant)\s*\)\s*\{[\s\S]*?\}\n?/)
+      || result.match(/const \[variant, setVariant\] = useState\(initialVariant\);/);
+    if (anchor && anchor.index !== undefined) {
+      const at = anchor.index + anchor[0].length;
       const entries = afterDelayConns.map(c =>
         `    '${c.from}': { to: '${c.to}', delay: ${(c.delay ?? 0) * 1000} }`).join(',\n');
       result = result.slice(0, at) + `
@@ -571,10 +583,11 @@ export function generateConnectionCode(code: string, connections: Connection[]):
 
   const inViewConns = connections.filter(c => c.trigger === 'inView');
   if (inViewConns.length > 0) {
-    // Find function body to insert after useState
-    const funcMatch2 = result.match(/const \[variant, setVariant\] = useState\(initialVariant\);/);
-    if (funcMatch2) {
-      const afterState = result.indexOf(funcMatch2[0]) + funcMatch2[0].length;
+    // Find function body to insert after state block
+    const funcMatch2 = result.match(/if\s*\(\s*(?:initialVariant\s*!==\s*prevInitial|prevInitial\s*!==\s*initialVariant)\s*\)\s*\{[\s\S]*?\}\n?/)
+      || result.match(/const \[variant, setVariant\] = useState\(initialVariant\);/);
+    if (funcMatch2 && funcMatch2.index !== undefined) {
+      const afterState = funcMatch2.index + funcMatch2[0].length;
       // Build the inView chain map: { 'default': { to: 'variant-1', delay: 1.3 }, ... }
       const chainEntries = inViewConns.map(c =>
         `    '${c.from}': { to: '${c.to}', delay: ${(c.delay ?? 0) * 1000} }`
@@ -603,7 +616,7 @@ export function generateConnectionCode(code: string, connections: Connection[]):
   // but the condition never re-evaluates, and the canvas freezes at the initial
   // state. Only the comparison-operator form is matched, so prop NAMES like
   // `initialVariant=` and the bare `: initialVariant` else-branch stay intact.
-  result = result.replace(/\binitialVariant(\s*[!=]==\s*)/g, `variant$1`);
+  result = result.replace(/\binitialVariant(\s*[!=]==\s*)(?!\s*prevInitial\b)/g, `variant$1`);
 
   // 2d. Re-point the responsive Collection List config's variant ARGUMENT to the
   // live `variant` state too. `const cfg = useResponsiveListConfig(base, vp, bps,

@@ -2215,8 +2215,9 @@ export function updateNodeStyles(options: {
 
   // Auto-detect routing from global context
   const isComponentFile = isComponentFilePath(_activeFilePath);
-  const isPrimary = isPrimaryViewport(_interactingVpId);
-  const variantName = (isComponentFile && !isPrimary) ? _interactingVpId : null;
+  const effectiveVpId = options.viewportPrefix ? vpIdFromPrefix(options.viewportPrefix) : _interactingVpId;
+  const isPrimary = isPrimaryViewport(effectiveVpId);
+  const variantName = (isComponentFile && !isPrimary) ? effectiveVpId : null;
   const isReplica = (!isComponentFile && !isPrimary);
   const vpWidth = _vpWidth;
   const vpPrefix = options.viewportPrefix ?? getViewportPrefix(_interactingVpId);
@@ -2799,6 +2800,9 @@ export function updateNodeStyles(options: {
       if (isComponentInstanceInCache(id) && (styles.width !== undefined || styles.height !== undefined)) {
         forceRenderAfterExternalEdit('instance-dim-band-write', { nodeId: id, keys: Object.keys(styles) });
       }
+      if (variantName && Object.values(styles).some((v) => v === '')) {
+        forceRenderAfterExternalEdit('variant-reset-override', { id, styles });
+      }
     }
     // Solo-clear on unhide. If a display write makes the element
     // visible on a vp OTHER than the solo vp, the element is no
@@ -2898,7 +2902,17 @@ export function updateNodeStyles(options: {
  *
  *  Idempotent + safe to over-call: `flushNow()` on an empty queue is a no-op and
  *  `forceRender` re-forwards the same input. */
+let _forceRenderAfterExternalEdit: ((reason: string, detail?: Record<string, unknown>) => void) | null = null;
+
+export function setForceRenderAfterExternalEdit(fn: ((reason: string, detail?: Record<string, unknown>) => void) | null): void {
+  _forceRenderAfterExternalEdit = fn;
+}
+
 export function forceRenderAfterExternalEdit(reason: string, detail?: Record<string, unknown>): void {
+  if (_forceRenderAfterExternalEdit) {
+    _forceRenderAfterExternalEdit(reason, detail);
+    return;
+  }
   trace.action('nodeOps.forceRenderAfterExternalEdit', { reason, ...detail });
   setForceRender();
   flushNow();
