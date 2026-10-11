@@ -13,6 +13,7 @@ import { useAtomValue } from 'jotai';
 import { ToolSection, ToolInput, ToolSelect, ControlLabel, ControlActionRow, ColorSwatch } from '../controls';
 import { useControl } from '../controls/ControlProvider';
 import { CmsBoundPill } from '../controls/CmsBoundPill';
+import { LegacyVariableBoundPill } from '../controls/VariableBoundPill';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getViewportPrefix } from '@/canvas/node-ops';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
@@ -57,7 +58,7 @@ const ALPHA_CHECKER_STYLE: React.CSSProperties = {
 
 export default function ImageTool() {
   const ctx = useControl();
-  const { node, nodeId, styles, vpId, updateStyle, cmsBinding } = ctx;
+  const { node, nodeId, styles, vpId, updateStyle, cmsBinding, getValueSource, removeVariable } = ctx;
 
   // Only show for img/Image/motion.img elements
   if (!node || (node.type !== 'img' && node.type !== 'Image' && node.type !== 'motion.img')) return null;
@@ -69,6 +70,8 @@ export default function ImageTool() {
     vpId={vpId}
     updateStyle={updateStyle}
     cmsBinding={cmsBinding}
+    getValueSource={getValueSource}
+    removeVariable={removeVariable}
   />;
 }
 
@@ -80,6 +83,8 @@ function ImageToolInner({
   vpId,
   updateStyle,
   cmsBinding,
+  getValueSource,
+  removeVariable,
 }: {
   nodeId: string;
   node: NonNullable<ReturnType<typeof useControl>['node']>;
@@ -87,6 +92,8 @@ function ImageToolInner({
   vpId: string;
   updateStyle: (key: string, value: string) => void;
   cmsBinding: ReturnType<typeof useControl>['cmsBinding'];
+  getValueSource: ReturnType<typeof useControl>['getValueSource'];
+  removeVariable: ReturnType<typeof useControl>['removeVariable'];
 }) {
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
@@ -95,8 +102,12 @@ function ImageToolInner({
   // ControlLabel's menu handles binding/unbinding for unbound rows
   // automatically — no extra chain icon needed.
   const isSrcCmsBound = !!cmsBinding?.getBindingForProperty('src');
+  const srcSource = getValueSource?.('src');
+  const isSrcVarBound = srcSource?.source === 'prop';
+  const srcVarRef = srcSource?.ref;
 
-  const src = node.attrs?.src ?? '';
+  const rawSrc = node.attrs?.src ?? '';
+  const src = rawSrc.startsWith('var:') ? '' : rawSrc;
   const alt = node.attrs?.alt ?? '';
 
   const [localAlt, setLocalAlt] = useState(alt);
@@ -138,7 +149,7 @@ function ImageToolInner({
     updateStyle('objectPosition', value);
   }, [nodeId, updateStyle]);
 
-  trace.fn('ImageTool:render', { nodeId, src: src.slice(0, 60), alt: localAlt, objectFit, objectPosition, isSrcCmsBound });
+  trace.fn('ImageTool:render', { nodeId, src: src.slice(0, 60), alt: localAlt, objectFit, objectPosition, isSrcCmsBound, isSrcVarBound, srcVarRef });
 
   // Source row — single ControlActionRow shape (just like Fill). The
   // swatch shows a thumbnail of the current image, or the alpha-checker
@@ -153,11 +164,19 @@ function ImageToolInner({
       <ToolSection title="Image" collapsible>
         {/* Source row — ControlLabel handles the binding menu (CMS, variable,
             override) automatically. When CMS-bound, the value column swaps
-            to the CmsBoundPill — same convention as Fill's bound state. */}
+            to the CmsBoundPill; when variable-bound, to LegacyVariableBoundPill. */}
         <div className="flex items-center justify-between w-full">
           <ControlLabel label="Source" property="src" />
           {isSrcCmsBound ? (
             <CmsBoundPill property="src" fallbackValue={src} />
+          ) : isSrcVarBound && srcVarRef ? (
+            <LegacyVariableBoundPill
+              property="src"
+              propertyLabel="Source"
+              variableRef={srcVarRef}
+              currentValue={src}
+              removeVariable={removeVariable}
+            />
           ) : (
             <ControlActionRow onClick={() => setImageModalOpen(true)}>
               <ColorSwatch size="md" style={sourceSwatchStyle} />

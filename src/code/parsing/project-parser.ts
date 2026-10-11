@@ -914,6 +914,7 @@ function expandComponent(
     // entry per usage with a `kind` discriminator.
     let overriddenStyles = node.styles;
     let overriddenTextContent: string | null = null;
+    let overriddenAttrs: Record<string, string> | null = null;
     if (propStyleOverrides.size > 0) {
       const styleOverrides: Record<string, string> = {};
       for (const [, override] of propStyleOverrides) {
@@ -922,6 +923,9 @@ function expandComponent(
           styleOverrides[override.cssProp] = override.value;
         } else if (override.kind === 'text') {
           overriddenTextContent = override.value;
+        } else if (override.kind === 'attr') {
+          if (!overriddenAttrs) overriddenAttrs = {};
+          overriddenAttrs[override.attrName] = override.value;
         }
       }
       if (Object.keys(styleOverrides).length > 0) {
@@ -1277,6 +1281,7 @@ function expandComponent(
     const instanceVariantText = bindInstanceVariantText(node, instanceProps);
     allNodes.set(prefixedId, {
       ...node,
+      attrs: overriddenAttrs ? { ...(node.attrs ?? {}), ...overriddenAttrs } : node.attrs,
       id: prefixedId,
       parentId: prefixedParentId,
       children: prefixedChildren,
@@ -1380,7 +1385,8 @@ function bindInstanceVariantText(
  */
 export type PropOverride =
   | { kind: 'style'; nodeId: string; cssProp: string; value: string }
-  | { kind: 'text'; nodeId: string; value: string };
+  | { kind: 'text'; nodeId: string; value: string }
+  | { kind: 'attr'; nodeId: string; attrName: string; value: string };
 
 // Exported so the TEMPLATE layout-merge (store.ts) can resolve a page's
 // @templateProps onto the merged layout nodes the SAME way a component instance
@@ -1536,6 +1542,23 @@ export function resolveInstancePropOverrides(
         result.set(`text:${propName}:${idMatch[1]}`, { kind: 'text', nodeId: idMatch[1], value: propValue });
       }
     }
+
+    // ── Attribute usage: `attrName={propName}` (e.g. `src={image}`, `alt={altText}`) ──
+    const attrRegex = new RegExp(`\\b([a-zA-Z0-9_-]+)=\\{\\s*${propName}\\s*\\}`, 'g');
+    let attrMatch;
+    while ((attrMatch = attrRegex.exec(componentCode)) !== null) {
+      const attrName = attrMatch[1];
+      if (attrName === 'style' || attrName === 'className' || attrName === 'key') continue;
+      const tagStart = componentCode.lastIndexOf('<', attrMatch.index);
+      const tagEnd = componentCode.indexOf('>', attrMatch.index + attrMatch[0].length);
+      if (tagStart < 0 || tagEnd < 0) continue;
+      const tagSlice = componentCode.slice(tagStart, tagEnd);
+      const idMatch = /data-id="([^"]*)"/.exec(tagSlice);
+      const nodeId = idMatch ? idMatch[1] : findEnclosingDataId(attrMatch.index);
+      if (nodeId) {
+        result.set(`attr:${propName}:${nodeId}:${attrName}`, { kind: 'attr', nodeId, attrName, value: propValue });
+      }
+    }
   }
 
   if (result.size > 0) {
@@ -1543,7 +1566,7 @@ export function resolveInstancePropOverrides(
       propCount: propNames.length,
       overrideCount: result.size,
       overrides: [...result.entries()].map(([k, v]) =>
-        v.kind === 'style' ? `${k} → ${v.cssProp}: ${v.value}` : `${k} → text: ${v.value}`,
+        v.kind === 'style' ? `${k} → ${v.cssProp}: ${v.value}` : v.kind === 'attr' ? `${k} → attr ${v.attrName}: ${v.value}` : `${k} → text: ${v.value}`,
       ),
     });
   }

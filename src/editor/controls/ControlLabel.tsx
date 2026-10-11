@@ -369,7 +369,7 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
     ? (node?.textContent ?? '').replace(/<[^>]*>/g, '')
     : property === 'transition'
       ? JSON.stringify(node?.motionProps?.transition ?? {})
-      : styles[property];
+      : (styles[property] ?? node?.attrs?.[property]);
   const valueSource = getValueSource(property);
   const hasVar = valueSource.source === 'prop';
   const varRef = valueSource.ref;

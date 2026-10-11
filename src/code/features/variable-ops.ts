@@ -86,10 +86,48 @@ export function createVariableInCode(
   let currentValue: string | null = null;
   const longhandSet = clearLonghands && clearLonghands.length > 0 ? new Set(clearLonghands) : null;
 
-  // Step 1: Find the node and replace the style value with an Identifier
+  // Step 1: Find the node and replace the style value or HTML attribute with an Identifier
   findFirstElementByDataId(ast, nodeId, (path) => {
     const opening = path.node.openingElement;
     const styleAttr = findAttribute(opening, 'style') as t.JSXAttribute | null;
+
+    // HTML ATTRIBUTE binding (e.g. `src={image}`, `alt={altText}`, `href={link}`)
+    const attr = findAttribute(opening, styleProperty) as t.JSXAttribute | null;
+    const isHtmlAttr = styleProperty === 'src' || styleProperty === 'alt' || (attr !== null && styleProperty !== 'style');
+
+    if (isHtmlAttr) {
+      if (attr) {
+        if (t.isStringLiteral(attr.value)) {
+          currentValue = defaultValue != null ? defaultValue : attr.value.value;
+          attr.value = t.jsxExpressionContainer(t.identifier(propName));
+        } else if (t.isJSXExpressionContainer(attr.value)) {
+          const ex = attr.value.expression;
+          if (t.isStringLiteral(ex)) {
+            currentValue = defaultValue != null ? defaultValue : ex.value;
+            attr.value.expression = t.identifier(propName);
+          } else if (t.isIdentifier(ex)) {
+            currentValue = defaultValue != null ? defaultValue : (ex.name === propName ? null : '');
+            attr.value.expression = t.identifier(propName);
+          }
+        }
+      } else if (defaultValue != null) {
+        currentValue = defaultValue;
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier(styleProperty), t.jsxExpressionContainer(t.identifier(propName)))
+        );
+      }
+
+      // Also clean up any accidental stray `styleProperty` in styleAttr object if present from prior buggy codegen
+      if (styleAttr && styleAttr.value?.type === 'JSXExpressionContainer' && t.isObjectExpression(styleAttr.value.expression)) {
+        styleAttr.value.expression.properties = styleAttr.value.expression.properties.filter((p) => {
+          if (!t.isObjectProperty(p)) return true;
+          const k = t.isIdentifier(p.key) ? p.key.name : t.isStringLiteral(p.key) ? p.key.value : null;
+          return k !== styleProperty;
+        });
+      }
+      return;
+    }
+
     if (!styleAttr || styleAttr.value?.type !== 'JSXExpressionContainer') return;
 
     const expr = styleAttr.value.expression;
@@ -616,17 +654,10 @@ export function addBarePropToFunctionInCode(
     return true;
   };
 
-  traverse(ast, {
-    // Module-scope only — never a nested empty-param arrow (see addPropToFunction).
-    FunctionDeclaration(path: any) {
-      if (touched || path.getFunctionParent()) return;
-      if (handle(path.node.params)) { touched = true; path.stop(); }
-    },
-    ArrowFunctionExpression(path: any) {
-      if (touched || path.getFunctionParent()) return;
-      if (handle(path.node.params)) { touched = true; path.stop(); }
-    },
-  });
+  const target = findComponentFunctionNode(ast);
+  if (target && handle(target.params)) {
+    touched = true;
+  }
 
   if (!touched) return code;
   try {
@@ -816,6 +847,9 @@ export function deleteComponentVariableInCode(code: string, propName: string, de
       // only rewrites `propName` identifiers, so unrelated handler/expr attrs are untouched.
       if (a.value?.type === 'JSXExpressionContainer' && t.isExpression(a.value.expression)) {
         a.value.expression = inlineExpr(a.value.expression);
+        if (t.isStringLiteral(a.value.expression)) {
+          a.value = a.value.expression;
+        }
       }
     },
     JSXSpreadAttribute(path: any) {
@@ -1893,20 +1927,37 @@ export function removeTextVariableInCode(
 export function isComponentPropUsed(code: string, propName: string): boolean {
   const ast = parseJSX(code);
   if (!ast) return true;
-  let result = true;   // conservative default
+  const target = findComponentFunctionNode(ast);
+  if (!target) return true;
+
+  let result = false;
   let found = false;
   traverse(ast, {
     Function(path: any) {
       if (found) return;
-      const binding = path.scope.getOwnBinding(propName); // the prop's own param binding in THIS function
-      if (binding) {
+      if (path.node === target.node) {
         found = true;
-        result = binding.referencePaths.length > 0;
+        const binding = path.scope.getOwnBinding(propName);
+        if (binding) {
+          result = binding.referencePaths.length > 0;
+        } else {
+          // Prop is not declared in params — check if any identifier in body references it
+          let referenced = false;
+          path.traverse({
+            Identifier(idPath: any) {
+              if (idPath.node.name === propName && !idPath.parentPath.isObjectProperty({ key: idPath.node })) {
+                referenced = true;
+                idPath.stop();
+              }
+            },
+          });
+          result = referenced;
+        }
         path.stop();
       }
     },
   });
-  return result;
+  return found ? result : false;
 }
 
 /**
@@ -2058,11 +2109,59 @@ export function removeVariableInCode(
   // Replace Identifier with StringLiteral
   findFirstElementByDataId(ast, nodeId, (path) => {
     const opening = path.node.openingElement;
+
+    // Check HTML attributes first (e.g. `src={imagesrc}`)
+    const targetAttr = findAttribute(opening, styleProperty) as t.JSXAttribute | null;
+    let attrHandled = false;
+    if (targetAttr) {
+      if (targetAttr.value?.type === 'JSXExpressionContainer') {
+        const expr = targetAttr.value.expression;
+        if (t.isIdentifier(expr) && expr.name === propName) {
+          const resolved = (defaultValue && defaultValue.trim())
+            ? defaultValue
+            : (readPropDefaultString(ast, propName) ?? '');
+          targetAttr.value = t.stringLiteral(resolved);
+          attrHandled = true;
+        } else if (
+          t.isConditionalExpression(expr)
+          && t.isIdentifier(expr.test) && expr.test.name === propName
+        ) {
+          const consequent = t.isStringLiteral(expr.consequent) ? expr.consequent.value : '';
+          const alternate = t.isStringLiteral(expr.alternate) ? expr.alternate.value : '';
+          const boolDef = readPropDefaultBool(ast, propName);
+          targetAttr.value = t.stringLiteral(boolDef === true ? consequent : alternate);
+          attrHandled = true;
+        } else if (t.isConditionalExpression(expr)) {
+          targetAttr.value.expression = removeIdentBranchFromTernary(expr, propName);
+          attrHandled = true;
+        }
+      } else if (
+        t.isStringLiteral(targetAttr.value)
+        && (targetAttr.value.value === `var:${propName}` || targetAttr.value.value === propName)
+      ) {
+        const resolved = (defaultValue && defaultValue.trim())
+          ? defaultValue
+          : (readPropDefaultString(ast, propName) ?? '');
+        targetAttr.value = t.stringLiteral(resolved);
+        attrHandled = true;
+      }
+    }
+
     const styleAttr = findAttribute(opening, 'style') as t.JSXAttribute | null;
     if (!styleAttr || styleAttr.value?.type !== 'JSXExpressionContainer') return;
 
     const expr = styleAttr.value.expression;
     if (!t.isObjectExpression(expr)) return;
+
+    // If an HTML attribute was handled, clean up any stray duplicate in style and exit
+    if (attrHandled) {
+      expr.properties = expr.properties.filter((p) => {
+        if (!t.isObjectProperty(p)) return true;
+        const k = t.isIdentifier(p.key) ? p.key.name : t.isStringLiteral(p.key) ? p.key.value : null;
+        return k !== styleProperty;
+      });
+      return;
+    }
 
     for (const prop of expr.properties) {
       if (!t.isObjectProperty(prop)) continue;
@@ -2153,11 +2252,10 @@ export function setComponentPropDefaultInCode(
       changed = true;
     }
   };
-  traverse(ast, {
-    // Module-scope only — don't touch nested arrows' params (see addPropToFunction).
-    FunctionDeclaration(path: any) { if (!path.getFunctionParent()) apply(path.node.params); },
-    ArrowFunctionExpression(path: any) { if (!path.getFunctionParent()) apply(path.node.params); },
-  });
+  const target = findComponentFunctionNode(ast);
+  if (target) {
+    apply(target.params);
+  }
   if (!changed) return code;
   try {
     const out = generate(ast, { retainLines: true }, code);
@@ -2171,44 +2269,32 @@ export function setComponentPropDefaultInCode(
 
 /** Read a destructured prop's string default from the component signature (`{ X = 'val' }`). */
 function readPropDefaultString(ast: t.File, propName: string): string | null {
-  let out: string | null = null;
-  const read = (params: t.Node[]) => {
-    const first = params[0];
-    if (!first) return;
-    const target = t.isAssignmentPattern(first) && t.isObjectPattern(first.left) ? first.left : first;
-    if (!t.isObjectPattern(target)) return;
-    for (const prop of target.properties) {
-      if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key) || prop.key.name !== propName) continue;
-      if (t.isAssignmentPattern(prop.value) && t.isStringLiteral(prop.value.right)) out = prop.value.right.value;
-    }
-  };
-  traverse(ast, {
-    // Module-scope only — read the COMPONENT's default, never a nested arrow's.
-    FunctionDeclaration(path: any) { if (!path.getFunctionParent()) read(path.node.params); },
-    ArrowFunctionExpression(path: any) { if (!path.getFunctionParent()) read(path.node.params); },
-  });
-  return out;
+  const target = findComponentFunctionNode(ast);
+  if (!target) return null;
+  const first = target.params[0];
+  if (!first) return null;
+  const obj = t.isAssignmentPattern(first) && t.isObjectPattern(first.left) ? first.left : first;
+  if (!t.isObjectPattern(obj)) return null;
+  for (const prop of obj.properties) {
+    if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key) || prop.key.name !== propName) continue;
+    if (t.isAssignmentPattern(prop.value) && t.isStringLiteral(prop.value.right)) return prop.value.right.value;
+  }
+  return null;
 }
 
 /** Read a prop's BooleanLiteral signature default (`hidden = true`). null when absent / not a boolean. */
 function readPropDefaultBool(ast: t.File, propName: string): boolean | null {
-  let out: boolean | null = null;
-  const read = (params: t.Node[]) => {
-    const first = params[0];
-    if (!first) return;
-    const target = t.isAssignmentPattern(first) && t.isObjectPattern(first.left) ? first.left : first;
-    if (!t.isObjectPattern(target)) return;
-    for (const prop of target.properties) {
-      if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key) || prop.key.name !== propName) continue;
-      if (t.isAssignmentPattern(prop.value) && t.isBooleanLiteral(prop.value.right)) out = prop.value.right.value;
-    }
-  };
-  traverse(ast, {
-    // Module-scope only — read the COMPONENT's default, never a nested arrow's.
-    FunctionDeclaration(path: any) { if (!path.getFunctionParent()) read(path.node.params); },
-    ArrowFunctionExpression(path: any) { if (!path.getFunctionParent()) read(path.node.params); },
-  });
-  return out;
+  const target = findComponentFunctionNode(ast);
+  if (!target) return null;
+  const first = target.params[0];
+  if (!first) return null;
+  const obj = t.isAssignmentPattern(first) && t.isObjectPattern(first.left) ? first.left : first;
+  if (!t.isObjectPattern(obj)) return null;
+  for (const prop of obj.properties) {
+    if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key) || prop.key.name !== propName) continue;
+    if (t.isAssignmentPattern(prop.value) && t.isBooleanLiteral(prop.value.right)) return prop.value.right.value;
+  }
+  return null;
 }
 
 /**
@@ -2257,53 +2343,119 @@ function literalForKind(kind: PropLiteralKind, value: string): t.Expression {
   return t.stringLiteral(value);
 }
 
+export interface ComponentTarget {
+  node: t.Node;
+  params: t.Node[];
+}
+
+export function findComponentFunctionNode(ast: t.File): ComponentTarget | null {
+  // 1. Look for ExportDefaultDeclaration
+  let defaultExportName: string | null = null;
+
+  for (const stmt of ast.program.body) {
+    if (t.isExportDefaultDeclaration(stmt)) {
+      const decl = stmt.declaration;
+      if (t.isFunctionDeclaration(decl)) {
+        return { node: decl, params: decl.params };
+      }
+      if (t.isFunctionExpression(decl) || t.isArrowFunctionExpression(decl)) {
+        return { node: decl, params: decl.params };
+      }
+      if (t.isIdentifier(decl)) {
+        defaultExportName = decl.name;
+      } else if (t.isCallExpression(decl)) {
+        // e.g. withResponsiveProps(Comp), React.forwardRef(fn), motion.create(fn)
+        let call: t.CallExpression = decl;
+        while (true) {
+          const firstArg = call.arguments[0];
+          if (t.isIdentifier(firstArg)) {
+            defaultExportName = firstArg.name;
+            break;
+          } else if (t.isFunctionExpression(firstArg) || t.isArrowFunctionExpression(firstArg)) {
+            return { node: firstArg, params: firstArg.params };
+          } else if (t.isCallExpression(firstArg)) {
+            call = firstArg;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. If default export name was found, find that specific function or variable
+  if (defaultExportName) {
+    for (const stmt of ast.program.body) {
+      if (t.isFunctionDeclaration(stmt) && stmt.id?.name === defaultExportName) {
+        return { node: stmt, params: stmt.params };
+      }
+      if (t.isVariableDeclaration(stmt)) {
+        for (const decl of stmt.declarations) {
+          if (t.isIdentifier(decl.id) && decl.id.name === defaultExportName && decl.init) {
+            let init: t.Expression = decl.init;
+            while (t.isCallExpression(init)) {
+              const arg = init.arguments[0];
+              if (t.isFunctionExpression(arg) || t.isArrowFunctionExpression(arg)) {
+                return { node: arg, params: arg.params };
+              }
+              if (t.isExpression(arg)) {
+                init = arg;
+              } else {
+                break;
+              }
+            }
+            if (t.isFunctionExpression(init) || t.isArrowFunctionExpression(init)) {
+              return { node: init, params: init.params };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: find module-scope function
+  // Look for top-level FunctionDeclaration (excluding use* hook helpers)
+  for (const stmt of ast.program.body) {
+    if (t.isFunctionDeclaration(stmt) && stmt.id?.name && !stmt.id.name.startsWith('use')) {
+      return { node: stmt, params: stmt.params };
+    }
+  }
+  for (const stmt of ast.program.body) {
+    if (t.isFunctionDeclaration(stmt)) {
+      return { node: stmt, params: stmt.params };
+    }
+    if (t.isVariableDeclaration(stmt)) {
+      for (const decl of stmt.declarations) {
+        if (decl.init) {
+          let init: t.Expression = decl.init;
+          while (t.isCallExpression(init)) {
+            const arg = init.arguments[0];
+            if (t.isFunctionExpression(arg) || t.isArrowFunctionExpression(arg)) {
+              return { node: arg, params: arg.params };
+            }
+            if (t.isExpression(arg)) {
+              init = arg;
+            } else {
+              break;
+            }
+          }
+          if (t.isFunctionExpression(init) || t.isArrowFunctionExpression(init)) {
+            return { node: init, params: init.params };
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function addPropToFunction(ast: t.File, propName: string, defaultValue: string, literalKind: PropLiteralKind = 'string'): boolean {
-  let added = false;
-
-  traverse(ast, {
-    FunctionDeclaration(path: any) {
-      // ONLY module-scope functions are component candidates. Skipping nested
-      // functions is critical: a helper like `useMediaQuery` contains
-      // `useState(() => …)` — that EMPTY-param initializer arrow would otherwise
-      // be the first "addable" target (addPropToParams turns `()` into
-      // `({ prop = … })`), corrupting the helper instead of the component and
-      // crashing the render with `Cannot destructure undefined`.
-      if (path.getFunctionParent()) return;
-      if (addPropToParams(path.node.params, propName, defaultValue, literalKind)) {
-        added = true;
-        path.stop();
-      }
-    },
-    ArrowFunctionExpression(path: any) {
-      if (path.getFunctionParent()) return; // skip nested arrows (see above)
-      if (addPropToParams(path.node.params, propName, defaultValue, literalKind)) {
-        added = true;
-        path.stop();
-      }
-    },
-    // An ICON SET's component is `React.forwardRef(function Name({ name, style,
-    // … }, ref) { … })` — a FunctionExpression, which neither visitor above
-    // reaches, so a variable created on a vector's fill silently no-opped.
-    // The file also opens with module-scope helpers (svgIdsIn, scopeUrlRefs,
-    // scopeSvgIds) whose first parameter is a plain identifier; those are
-    // skipped by addPropToParams's own ObjectPattern requirement, but only
-    // once the forwardRef body is reachable at all.
-    FunctionExpression(path: any) {
-      if (path.getFunctionParent()) return;
-      const call = path.parentPath?.node;
-      const isForwardRef = t.isCallExpression(call)
-        && ((t.isMemberExpression(call.callee)
-          && t.isIdentifier(call.callee.property, { name: 'forwardRef' }))
-          || t.isIdentifier(call.callee, { name: 'forwardRef' }));
-      if (!isForwardRef) return;
-      if (addPropToParams(path.node.params, propName, defaultValue, literalKind)) {
-        added = true;
-        path.stop();
-      }
-    },
-  });
-
-  return added;
+  const target = findComponentFunctionNode(ast);
+  if (target) {
+    return addPropToParams(target.params, propName, defaultValue, literalKind);
+  }
+  return false;
 }
 
 function addPropToParams(params: t.Node[], propName: string, defaultValue: string, literalKind: PropLiteralKind = 'string'): boolean {
@@ -2488,19 +2640,10 @@ export function hoistMapBindingsToProps(
 }
 
 function removePropFromFunction(ast: t.File, propName: string): void {
-  traverse(ast, {
-    // Module-scope only — same reason as addPropToFunction. Without the guard
-    // this would strip the prop out of a nested arrow's params that addProp had
-    // wrongly injected, leaving `({}) =>` (the empty-destructure crash).
-    FunctionDeclaration(path: any) {
-      if (path.getFunctionParent()) return;
-      removePropFromParams(path.node.params, propName);
-    },
-    ArrowFunctionExpression(path: any) {
-      if (path.getFunctionParent()) return;
-      removePropFromParams(path.node.params, propName);
-    },
-  });
+  const target = findComponentFunctionNode(ast);
+  if (target) {
+    removePropFromParams(target.params, propName);
+  }
 }
 
 function removePropFromParams(params: t.Node[], propName: string): void {

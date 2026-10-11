@@ -1288,6 +1288,37 @@ describe('project-parser: hoisted-variable forwarding', () => {
     expect(expandedShortRoot, 'expanded inner should exist').toBeTruthy();
     expect(expandedShortRoot!.styles.transform).toBe('rotate(45deg)');
   });
+
+  it('applies an HTML attribute prop (e.g. image src) onto the expanded inner element', () => {
+    const IMAGE_CHILD = `
+      export default function ImageChild({ style, image = 'https://default.png' }: any) {
+        return (
+          <div data-id="child-root" style={{ ...style }}>
+            <img data-id="img-node" src={image} alt="pic" />
+          </div>
+        );
+      }
+    `;
+    const PAGE = `
+      import ImageChild from '@/components/ImageChild';
+      export default function Page() {
+        return (
+          <div data-id="root">
+            <ImageChild data-id="card-instance" image="https://custom.png/test.jpg" />
+          </div>
+        );
+      }
+    `;
+    const fs = new InMemoryProjectFS(new Map([
+      ['components/ImageChild.tsx', IMAGE_CHILD],
+      ['app/page.tsx', PAGE],
+    ]));
+    const nodes = parseProjectFile('app/page.tsx', fs);
+
+    const expandedImg = nodes.get('card-instance:img-node');
+    expect(expandedImg, 'expanded img node should exist').toBeTruthy();
+    expect(expandedImg!.attrs?.src).toBe('https://custom.png/test.jpg');
+  });
 });
 
 describe('project-parser: overlay-border variable on a component instance', () => {

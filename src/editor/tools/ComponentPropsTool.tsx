@@ -29,6 +29,7 @@ import { resolveVariableEditor } from '../controls/variable-editor-registry';
 import { UnifiedControlProvider } from '../controls/unified';
 import { YES_NO_OPTIONS } from '../controls/css-property-options';
 import ColorInput from '../controls/ColorInput';
+import ImagePickerInput from '../controls/ImagePickerInput';
 import UploadControl from '../controls/UploadControl';
 import { FontFamilyControl } from './TextStyleTool/atoms/FontFamilyControl';
 import SlotControl from './SlotControl';
@@ -2811,6 +2812,18 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                         onChangeLive={(v) => previewProp(prop.name, v)}
                         meta={getPropNumberMeta(masterCode, prop.name)}
                       /></LocalePropPillOr>
+                    </div>
+                  </HoistMenuItemProvider>
+                );
+              }
+              if (prop.varType === 'image') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <div className="flex items-center justify-between w-full">
+                      <ControlLabel label={prop.label || prop.name} property={cssProp ?? ''} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel={humanizeStylePropName(cssProp) ?? undefined} />
+                      <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
+                        <ImagePickerInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} rawUrl={!propValue.startsWith('url(')} />
+                      </LocalePropPillOr>
                     </div>
                   </HoistMenuItemProvider>
                 );

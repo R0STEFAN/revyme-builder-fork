@@ -178,18 +178,18 @@ export function deriveLayerPreview(
   const radius = deriveRadius(styles, size);
 
   // 1. A real image element — the case this feature exists for.
-  if (node.type === 'img' && attrs.src) return { kind: 'image', src: attrs.src, radius };
+  if (node.type === 'img' && attrs.src && !attrs.src.startsWith('var:')) return { kind: 'image', src: attrs.src, radius };
 
   // 2. Video: the poster is the only frame available without decoding.
-  if (node.type === 'video' && attrs.poster) return { kind: 'image', src: attrs.poster, radius };
+  if (node.type === 'video' && attrs.poster && !attrs.poster.startsWith('var:')) return { kind: 'image', src: attrs.poster, radius };
 
   // 3. backgroundImage covers BOTH a url() fill and a gradient. A url() is
   //    shown as an image so it gets object-fit and lazy loading; a gradient is
   //    passed through as CSS, which renders it exactly with zero cost.
   const bgImage = styles.backgroundImage;
-  if (bgImage && !isEmptyPaint(bgImage)) {
+  if (bgImage && !isEmptyPaint(bgImage) && !bgImage.startsWith('var:')) {
     const m = URL_RE.exec(bgImage);
-    if (m?.[2]) return { kind: 'image', src: m[2], radius };
+    if (m?.[2] && !m[2].startsWith('var:')) return { kind: 'image', src: m[2], radius };
     if (/gradient\(/i.test(bgImage)) return { kind: 'paint', css: bgImage, radius };
   }
 

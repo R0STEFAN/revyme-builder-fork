@@ -545,6 +545,8 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                     if (!target) continue;
                     if (ov.kind === 'text') {
                       target.textContent = ov.value;
+                    } else if (ov.kind === 'attr') {
+                      target.attrs = { ...(target.attrs ?? {}), [ov.attrName]: ov.value };
                     } else {
                       target.styles = { ...target.styles, [ov.cssProp]: ov.value };
                     }

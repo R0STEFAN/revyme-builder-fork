@@ -656,7 +656,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       }
       return { source: 'inline' as ValueSource, ref: null };
     }
-    const val = styles[property] ?? '';
+    const val = styles[property] ?? node?.attrs?.[property] ?? '';
     // Per-variant detach: on a NON-PRIMARY variant that has its OWN override
     // for this property, the base variable is shadowed here — so for THIS
     // variant it's a literal, not a variable binding. Ignore the variable
@@ -711,8 +711,11 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     // node.styleVariables is the post-resolve marker for variable bindings —
     // styles[property] now holds the *resolved* default for master files, so
     // the legacy `var:` prefix detection alone misses the binding.
+    // Also check node.attrPropRefs (for HTML attributes like `src` or `alt`).
+    const attrVarRef = node?.attrPropRefs?.[property]
+      ?? (typeof node?.attrs?.[property] === 'string' && node.attrs[property].startsWith('var:') ? node.attrs[property].slice(4) : undefined);
     const variableRef = responsiveVarRef ?? condVarRef
-      ?? ((overriddenInVariant || overriddenInViewport) ? undefined : node?.styleVariables?.[property]);
+      ?? ((overriddenInVariant || overriddenInViewport) ? undefined : (node?.styleVariables?.[property] ?? attrVarRef));
     return detectValueSource(val, variableRef);
   }, [styles, node, isComponentVariantViewport, activeComponentVariant, isReplica, vpWidth, drawnWidth, hasOverride]);
 

@@ -108,6 +108,10 @@ function computeLocalCssPropForVar(varName: string, code: string): string {
     }
   }
 
+  // 5. Direct JSX HTML attribute binding (e.g. `src={varName}`, `alt={varName}`, `href={varName}`)
+  const attrMatch = new RegExp(`\\b(src|alt|href|placeholder)\\s*=\\s*\\{\\s*${varName}\\s*\\}`).exec(code);
+  if (attrMatch) return attrMatch[1];
+
   return '';
 }
 

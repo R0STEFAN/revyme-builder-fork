@@ -19,6 +19,7 @@ import {
   deleteComponentVariableInCode,
   renameComponentVariableInCode,
   hoistMapBindingsToProps,
+  isComponentPropUsed,
 } from './variable-ops';
 import { parseJSX } from '../parsing/ast-utils';
 import { removePageVariableInCode } from './page-variables';
@@ -653,6 +654,43 @@ describe('createVariableInCode', () => {
     expect(result).toMatch(/padding:\s*['"]5px['"]/);
     expect(result).toMatch(/cardBorder\s*=\s*["']2px dashed blue["']/);
   });
+
+  test('binds HTML attribute src when creating variable on img tag', () => {
+    const code = `export default function Card() {
+  return (
+    <img data-id="img-1" src="https://example.com/photo.jpg" alt="test" />
+  );
+}`;
+    const result = createVariableInCode(code, 'img-1', 'src', 'image');
+    expect(result).toContain('src={image}');
+    expect(result).toMatch(/image\s*=\s*["']https:\/\/example\.com\/photo\.jpg["']/);
+    expect(result).not.toContain('style={{');
+  });
+
+  test('targets exported component function when a module-scope forwardRef helper is declared above it', () => {
+    const code = `const MotionLink = motion.create(React.forwardRef(function MotionLinkBase({ href, ...props }: any, ref: any) {
+  return href ? <Link ref={ref} href={href} {...props} /> : <div ref={ref} {...props} />;
+}));
+
+function ProjectCard({ style, title = "Title" }) {
+  return (
+    <div data-id="root" style={{ ...style }}>
+      <img data-id="img-1" src="/images/tattoo.webp" alt="Preview" />
+      <MotionLink data-id="link-1" href="/item" />
+    </div>
+  );
+}
+
+export default withResponsiveProps(ProjectCard);`;
+
+    const result = createVariableInCode(code, 'img-1', 'src', 'image', '/images/tattoo.webp');
+    // MotionLinkBase must NOT have received the prop
+    expect(result).not.toMatch(/MotionLinkBase\(\{[^}]*image/);
+    // ProjectCard MUST have received the prop
+    expect(result).toMatch(/function ProjectCard\(\{[^}]*image\s*=\s*["']\/images\/tattoo\.webp["']/);
+    // img-1 src attribute bound to {image}
+    expect(result).toContain('src={image}');
+  });
 });
 
 // ─── removeVariableInCode ───────────────────────────────────────────────────
@@ -710,6 +748,33 @@ describe('removeVariableInCode', () => {
     expect(result).toContain('#ff0000');
     // Prop removed from params (full delete).
     expect(result).not.toMatch(/bgColor\s*=\s*['"]#/);
+  });
+
+  test('restores HTML attribute src and drops prop when deleteProp=true', () => {
+    const code = `export default function Card({ image = 'https://example.com/photo.jpg' }) {
+  return (
+    <img data-id="img-1" src={image} alt="test" />
+  );
+}`;
+    const result = removeVariableInCode(code, 'img-1', 'src', 'image', 'https://example.com/photo.jpg', true);
+    expect(result).toContain('src="https://example.com/photo.jpg"');
+    expect(result).not.toMatch(/image\s*=/);
+  });
+
+  test('restores HTML attribute src and drops prop when attribute has var: sentinel string literal', () => {
+    const code = `function ProjectCard({ style, image = "/images/tattoo.webp" }) {
+  return (
+    <div data-id="root" style={{ ...style }}>
+      <img data-id="img-1" src="var:image" alt="Preview" />
+    </div>
+  );
+}
+export default withResponsiveProps(ProjectCard);`;
+
+    const result = removeVariableInCode(code, 'img-1', 'src', 'image', '/images/tattoo.webp', true);
+    expect(result).toContain('src="/images/tattoo.webp"');
+    expect(result).not.toContain('var:image');
+    expect(result).not.toMatch(/image\s*=/);
   });
 
   test('preserves other props when deleting one (deleteProp=true)', () => {
@@ -1388,3 +1453,37 @@ export default function Page() {
     expect(bindTextNodeAsPageVarInCode(interleaved, 't', 'content')).toBe(interleaved);
   });
 });
+
+describe('isComponentPropUsed', () => {
+  test('detects prop used in component JSX', () => {
+    const code = `function Card({ style, title = "Hi" }) {
+  return <div data-id="r">{title}</div>;
+}
+export default withResponsiveProps(Card);`;
+    expect(isComponentPropUsed(code, 'title')).toBe(true);
+  });
+
+  test('returns false when prop is not referenced in component JSX', () => {
+    const code = `function Card({ style, title = "Hi" }) {
+  return <div data-id="r">Hello</div>;
+}
+export default withResponsiveProps(Card);`;
+    expect(isComponentPropUsed(code, 'title')).toBe(false);
+  });
+
+  test('does not confuse module-scope forwardRef helper with the component', () => {
+    const code = `const MotionLink = motion.create(React.forwardRef(function MotionLinkBase({ href, ...props }: any, ref: any) {
+  return <a href={href} {...props} />;
+}));
+
+function Card({ style, title = "Hi" }) {
+  return <div data-id="r">{title}</div>;
+}
+export default withResponsiveProps(Card);`;
+    // title is used in Card
+    expect(isComponentPropUsed(code, 'title')).toBe(true);
+    // href is in MotionLinkBase, but Card does not use href
+    expect(isComponentPropUsed(code, 'href')).toBe(false);
+  });
+});
+

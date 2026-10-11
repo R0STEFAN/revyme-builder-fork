@@ -3367,6 +3367,26 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           }
         }
       }
+      // Attribute variable bindings on native elements (e.g. `<img src={image} />`
+      // captured as attrs.src = 'var:image'): record in attrPropRefs so ControlLabel
+      // can show the bound pill, and substitute the prop default so the master canvas
+      // paints the image/attribute.
+      if (node.attrs) {
+        for (const [attrName, val] of Object.entries(node.attrs)) {
+          if (typeof val === 'string' && val.startsWith('var:')) {
+            const refName = val.slice(4);
+            if (!node.attrPropRefs) node.attrPropRefs = {};
+            node.attrPropRefs[attrName] = refName;
+            // Only substitute default on the canvas for content/media attributes (e.g. src/alt),
+            // NOT for navigation/tracking attrs (href/target/rel/data-revyme-track) which
+            // expect 'var:<name>' to remain in node.attrs.
+            if ((attrName === 'src' || attrName === 'alt') && refName in propDefaults) {
+              node.attrs[attrName] = propDefaults[refName];
+            }
+          }
+        }
+      }
+
       // Forwarded-prop refs on nested instance attrs. For each ref like
       // `<RoHuVu poon={poon2} />` (recorded as attrPropRefs.poon = 'poon2'),
       // substitute attrs.poon = propDefaults['poon2'] so the master canvas

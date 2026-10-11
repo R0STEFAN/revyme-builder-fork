@@ -53,9 +53,9 @@ export function updateHtmlAttrsInCode(
     if (value === '') {
       // Require a whitespace prefix so we don't strip `data-id="..."`
       // when removing `id`. `data-id` has `-` before `id`, not whitespace,
-      // so this regex won't accidentally match it. Match BOTH quote styles
-      // (a JSON attr like data-overlay-trigger is single-quoted).
-      tagStr = tagStr.replace(new RegExp(`\\s+${key}=(?:"[^"]*"|'[^']*')`, 'g'), '');
+      // so this regex won't accidentally match it. Match quote styles and JSX expressions
+      // (a JSON attr like data-overlay-trigger is single-quoted; a variable attr is {var}).
+      tagStr = tagStr.replace(new RegExp(`\\s+${key}=(?:"[^"]*"|'[^']*'|\\{[^}]*\\})`, 'g'), '');
     } else {
       // Same whitespace-prefix guard. The previous regex `(${key}=)"…"`
       // matched substring positions inside other attribute names — most
@@ -64,17 +64,14 @@ export function updateHtmlAttrsInCode(
       // parser/selection. The whitespace anchor pins the match to the
       // start of an attribute name.
       //
-      // CRITICAL: match BOTH single- AND double-quoted existing values. An
-      // attr whose value is JSON (e.g. `data-overlay-trigger='{"targetId":…}'`)
-      // is emitted SINGLE-quoted; the old double-quote-only regex missed it and
-      // fell through to the append branch, producing a SECOND attr written as
-      // `key="{"targetId":…}"` — double quotes wrapping double-quote JSON, which
-      // is invalid JSX and crashed the page on paste (the overlay-trigger remap).
-      // The written value is single-quoted when it contains `"` (JSON), else
-      // double-quoted (normal attrs).
-      const q = value.includes('"') ? "'" : '"';
-      const lit = `${q}${value}${q}`;
-      const attrRegex = new RegExp(`(\\s)(${key}=)(?:"[^"]*"|'[^']*')`);
+      // CRITICAL: match BOTH single- AND double-quoted existing values, as
+      // well as JSX expression containers `{...}`.
+      // If the incoming value has the `var:<name>` sentinel (a component prop reference),
+      // emit `{name}` (JSX expression) instead of quoting as `"var:name"`.
+      const lit = value.startsWith('var:')
+        ? `{${value.slice(4)}}`
+        : (value.includes('"') ? `'${value}'` : `"${value}"`);
+      const attrRegex = new RegExp(`(\\s)(${key}=)(?:"[^"]*"|'[^']*'|\\{[^}]*\\})`);
       if (attrRegex.test(tagStr)) {
         tagStr = tagStr.replace(attrRegex, `$1$2${lit}`);
       } else {

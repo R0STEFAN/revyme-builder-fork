@@ -14,7 +14,7 @@ export type VariableTypeId =
   | 'componentCursor';
 
 type LiteralKind = 'string' | 'number' | 'boolean';
-type DefaultEditor = 'text' | 'textarea' | 'number' | 'toggle' | 'option' | 'style' | 'componentCursor' | 'none';
+type DefaultEditor = 'text' | 'textarea' | 'number' | 'toggle' | 'option' | 'style' | 'componentCursor' | 'none' | 'image';
 
 export interface VariableTypeDef {
   id: VariableTypeId;
@@ -40,7 +40,7 @@ export const VARIABLE_TYPES: VariableTypeDef[] = [
   { id: 'formattedText', label: 'Formatted Text', iconKey: 'text',       literalKind: 'string',  defaultValue: '',                              editor: 'textarea' },
   { id: 'date',          label: 'Date',           iconKey: 'date',       literalKind: 'string',  defaultValue: '',                              editor: 'text' },
   { id: 'link',          label: 'Link',           iconKey: 'link',       literalKind: 'string',  defaultValue: '',                              editor: 'text', noDefault: true },
-  { id: 'image',         label: 'Image',          iconKey: 'image',      literalKind: 'string',  defaultValue: '',                              editor: 'style', controlProperty: 'backgroundImage' },
+  { id: 'image',         label: 'Image',          iconKey: 'image',      literalKind: 'string',  defaultValue: '',                              editor: 'image', controlProperty: 'backgroundImage' },
   { id: 'color',         label: 'Color',          iconKey: 'color',      literalKind: 'string',  defaultValue: '#000000',                       editor: 'style', controlProperty: 'backgroundColor' },
   { id: 'toggle',        label: 'Toggle',         iconKey: 'boolean',    literalKind: 'boolean', defaultValue: 'false',                         editor: 'toggle' },
   { id: 'number',        label: 'Number',         iconKey: 'number',     literalKind: 'number',  defaultValue: '0',                             editor: 'number' },
