@@ -118,12 +118,59 @@ const stubUseTheme = () => {
     resolvedTheme: theme,
     systemTheme: theme,
     themes: ['light', 'dark'],
-    setTheme: () => {},
+    setTheme: (_nextTheme: string | ((previousTheme: string) => string)) => {},
   };
 };
 const nextThemesStub = {
   useTheme: stubUseTheme,
   ThemeProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+};
+
+type PreviewThemeValue = ReturnType<typeof stubUseTheme>;
+const PreviewThemeContext = React.createContext<PreviewThemeValue | null>(null);
+
+function PreviewThemeProvider({ children, defaultTheme }: { children: React.ReactNode; defaultTheme?: string }) {
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(
+    () => defaultTheme === 'light' || defaultTheme === 'dark' ? defaultTheme : readCanvasTheme(),
+  );
+  const updateTheme = (nextTheme: string | ((previousTheme: string) => string)) => {
+    setTheme((previousTheme) => {
+      const requested = typeof nextTheme === 'function' ? nextTheme(previousTheme) : nextTheme;
+      const resolved = requested === 'dark' ? 'dark' : 'light';
+      trace.action('code-component-runtime:preview-theme-change', { theme: resolved });
+      return resolved;
+    });
+  };
+  const value: PreviewThemeValue = {
+    theme,
+    resolvedTheme: theme,
+    systemTheme: theme,
+    themes: ['light', 'dark'],
+    setTheme: updateTheme,
+  };
+  return React.createElement(PreviewThemeContext.Provider, { value }, children);
+}
+
+function PreviewThemeBoundary({ children }: { children: React.ReactNode }) {
+  const parent = React.useContext(PreviewThemeContext);
+  return parent ? children : React.createElement(PreviewThemeProvider, null, children);
+}
+
+function previewUseTheme() {
+  const context = React.useContext(PreviewThemeContext);
+  // Every compiled preview root gets a boundary. A direct provider-less call
+  // still has a stable hook shape and can read the current editor theme.
+  if (context) return context;
+  const theme = readCanvasTheme();
+  return {
+    theme, resolvedTheme: theme, systemTheme: theme,
+    themes: ['light', 'dark'], setTheme: (_nextTheme: string | ((previousTheme: string) => string)) => {},
+  };
+}
+
+const previewNextThemes = {
+  useTheme: previewUseTheme,
+  ThemeProvider: PreviewThemeProvider,
 };
 
 // next-intl stub — code components like LocaleSwitcher / pages may
@@ -251,33 +298,31 @@ const fastContentHash = simpleHash;
  * component is already responsive-aware (reads __canvasViewportWidth from CodeComponentHost).
  * For legacy Code components without the wrapper, we apply it as a fallback.
  */
-/** Brace-BALANCED removal of JSX mouse/pointer/click handler props
- *  (onMouseEnter={…}, onClick={…}, …) from code component source — they fire on the
- *  code component's own DOM and fight canvas interaction. The earlier `[^}]*` regex
- *  stopped at the FIRST `}` inside the handler (a block body `() => { … }` or
- *  an object literal `setX({…})` or a template `\`${x}\``), leaving a stray `}`
- *  that broke the JSX → "Compilation returned null". This scans the matching
- *  close brace so the whole prop is removed regardless of inner braces. */
-const JSX_MOUSE_HANDLER_RE = /\bon(?:Mouse(?:Move|Enter|Leave|Down|Up|Over|Out)|Pointer(?:Move|Enter|Leave|Down|Up|Over|Out)|Click|DoubleClick|ContextMenu|Wheel)\s*=\s*\{/g;
-function stripJsxMouseHandlers(src: string): string {
-  let out = '';
-  let last = 0;
-  JSX_MOUSE_HANDLER_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = JSX_MOUSE_HANDLER_RE.exec(src)) !== null) {
-    const start = m.index;
-    let i = start + m[0].length - 1; // index of the opening '{'
-    let depth = 0;
-    for (; i < src.length; i++) {
-      const ch = src[i];
-      if (ch === '{') depth++;
-      else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }
-    }
-    out += src.slice(last, start);
-    last = i;
-    JSX_MOUSE_HANDLER_RE.lastIndex = i;
-  }
-  return out + src.slice(last);
+// Canvas-only restrictions run in Babel's existing TSX pass, where braces in
+// quoted strings, comments, and templates have already been parsed correctly.
+const CANVAS_JSX_HANDLER_RE = /^on(?:Mouse(?:Move|Enter|Leave|Down|Up|Over|Out)|Pointer(?:Move|Enter|Leave|Down|Up|Over|Out)|Click|DoubleClick|ContextMenu|Wheel)$/;
+const CANVAS_LISTENER_RE = /^(?:mouse\w+|pointer\w+|click|dblclick|contextmenu|wheel)$/;
+function canvasInteractionPlugin({ types: t }: any) {
+  return {
+    visitor: {
+      JSXAttribute(path: any) {
+        if (t.isJSXIdentifier(path.node.name) && CANVAS_JSX_HANDLER_RE.test(path.node.name.name)) {
+          path.remove();
+        }
+      },
+      CallExpression(path: any) {
+        const { callee, arguments: args } = path.node;
+        if (!t.isMemberExpression(callee) || !t.isIdentifier(callee.object)) return;
+        if (callee.object.name !== 'window' && callee.object.name !== 'document') return;
+        const method = t.isIdentifier(callee.property) && !callee.computed
+          ? callee.property.name
+          : t.isStringLiteral(callee.property) && callee.computed ? callee.property.value : null;
+        if (method !== 'addEventListener' && method !== 'removeEventListener') return;
+        if (!t.isStringLiteral(args[0]) || !CANVAS_LISTENER_RE.test(args[0].value)) return;
+        path.replaceWith(t.unaryExpression('void', t.numericLiteral(0)));
+      },
+    },
+  };
 }
 
 export function compileCodeComponent(
@@ -322,29 +367,6 @@ export function compileCodeComponent(
 
     // 2. Strip 'use client' directive
     cleanCode = cleanCode.replace(/^['"]use client['"];?\s*\n?/gm, '');
-
-    // 2b. Canvas safety: strip dangerous global side effects.
-    // NOTE: CSS keyframe/animation stripping was removed — too many edge cases with
-    // template expressions, JS vs CSS context, nested braces. Future approach: code components
-    // provide their own static version via useIsCanvasRenderer() hook.
-    // Strip window/document.addEventListener calls for mouse/pointer events.
-    // Replace with `void 0` (a valid expression) instead of a comment, so the
-    // result still parses inside arrow-function bodies — `return () => void 0`
-    // is fine, but `return () => /* stripped */` is a syntax error. The
-    // comment is kept inline so the strip is still discoverable in dev tools.
-    cleanCode = cleanCode.replace(
-      /(?:window|document)\.addEventListener\(\s*['"](?:mouse\w+|pointer\w+|click|dblclick|contextmenu|wheel)['"][^)]*\)/g,
-      '(/* canvas: mouse listener stripped */ void 0)'
-    );
-    cleanCode = cleanCode.replace(
-      /(?:window|document)\.removeEventListener\(\s*['"](?:mouse\w+|pointer\w+|click|dblclick|contextmenu|wheel)['"][^)]*\)/g,
-      '(/* canvas: mouse listener stripped */ void 0)'
-    );
-
-    // 2c. Strip React JSX mouse/pointer event handler props (onMouseMove, onMouseEnter, etc.)
-    // These fire on the code component's own DOM and interfere with canvas interaction.
-    // Brace-balanced (handles block bodies / object literals inside the handler).
-    cleanCode = stripJsxMouseHandlers(cleanCode);
 
     // 2d. Auto-inject missing framer-motion import. Master files
     // (icon-set / component) can drift into a state where
@@ -427,6 +449,7 @@ export function compileCodeComponent(
     const result = transform(wrapped, {
       presets: ['react', 'typescript'],
       filename: `${componentName}.tsx`,
+      plugins: opts?.previewMode ? [] : [canvasInteractionPlugin],
     });
 
     if (!result.code) throw new Error('Babel transform returned empty code');
@@ -450,6 +473,7 @@ export function compileCodeComponent(
       if (previewOverrides[mod]) return previewOverrides[mod];
       // Caller-provided modules (e.g. nested component imports for live preview)
       if (extraModules[mod]) return extraModules[mod];
+      if (opts?.previewMode && mod === 'next-themes') return previewNextThemes;
       const resolved = MODULE_MAP[mod];
       if (resolved) return resolved;
       const shortMod = mod.replace(/^@\//, '');
@@ -480,6 +504,13 @@ export function compileCodeComponent(
     if (!hasNativeResponsive) {
       Component = withResponsiveProps(Component);
       trace.action('code-component-runtime:legacy-wrap', { componentName });
+    }
+
+    if (opts?.previewMode) {
+      const PreviewComponent = Component;
+      Component = function InteractiveCodeComponent(props: any) {
+        return React.createElement(PreviewThemeBoundary, null, React.createElement(PreviewComponent, props));
+      };
     }
 
     trace.action('code-component-runtime:compiled', { componentName, codeLength: code.length, nativeResponsive: hasNativeResponsive });
