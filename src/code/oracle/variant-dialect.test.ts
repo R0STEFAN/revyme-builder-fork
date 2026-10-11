@@ -279,3 +279,50 @@ describe('border radius grandfathering (PROJECTION_STYLE_PROPS, 2026-08-16)', ()
     expect(vs.filter((x) => x.code === 'LAYOUT_PROP_IN_VARIANT_OBJECT')).toEqual([]);
   });
 });
+
+describe('raw transform conflict safeguards (Task 6)', () => {
+  it('bounces an element with variants that defines raw CSS transform with rotate', () => {
+    const code = component(`{
+  default: { backgroundColor: '#0f172a' },
+  'expanded': { backgroundColor: '#1e293b' },
+}`).replace("padding: '24px',", "padding: '24px', transform: 'rotate(45deg)',");
+    const vs = checkFile(code, { kind: 'component' });
+    expect(codes(vs)).toContain('VARIANT_ELEMENT_RAW_TRANSFORM');
+    expect(codes(vs)).toContain('LAYOUT_CONFLICTING_TRANSFORM');
+  });
+
+  it('bounces an element with variants that defines raw CSS transform with scale', () => {
+    const code = petalComponent('{ x: 0, scale: 1, rotate: 0, opacity: 0 }', ", transform: 'scale(1.2)'");
+    const vs = checkFile(code, { kind: 'component' });
+    expect(codes(vs)).toContain('VARIANT_ELEMENT_RAW_TRANSFORM');
+  });
+
+  it('bounces an element with variants that defines raw CSS transform with skew', () => {
+    const code = petalComponent('{ x: 0, scale: 1, rotate: 0, opacity: 0 }', ", transform: 'skewX(10deg)'");
+    const vs = checkFile(code, { kind: 'component' });
+    expect(codes(vs)).toContain('VARIANT_ELEMENT_RAW_TRANSFORM');
+  });
+
+  it('bounces an element with layout={true} defining raw CSS transform with rotate even without variants', () => {
+    const code = component(`{
+  default: { backgroundColor: '#0f172a' },
+  'expanded': { backgroundColor: '#1e293b' },
+}`).replace(
+      "<motion.p data-id=\"label\" data-name=\"Label\" layout style={{ position: 'relative', flex: '0 0 auto', color: '#ffffff' }}>",
+      "<motion.p data-id=\"label\" data-name=\"Label\" layout style={{ position: 'relative', flex: '0 0 auto', color: '#ffffff', transform: 'rotate(15deg)' }}>",
+    );
+    const vs = checkFile(code, { kind: 'component' });
+    expect(codes(vs)).toContain('LAYOUT_CONFLICTING_TRANSFORM');
+    expect(codes(vs)).not.toContain('VARIANT_ELEMENT_RAW_TRANSFORM');
+  });
+
+  it('allows centering pins (translate(-50%, -50%)) on elements with variants and layout', () => {
+    const code = component(`{
+  default: { backgroundColor: '#0f172a' },
+  'expanded': { backgroundColor: '#1e293b' },
+}`).replace("padding: '24px',", "padding: '24px', transform: 'translate(-50%, -50%)',");
+    const vs = checkFile(code, { kind: 'component' });
+    expect(codes(vs)).not.toContain('VARIANT_ELEMENT_RAW_TRANSFORM');
+    expect(codes(vs)).not.toContain('LAYOUT_CONFLICTING_TRANSFORM');
+  });
+});

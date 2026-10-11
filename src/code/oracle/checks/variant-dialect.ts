@@ -61,6 +61,19 @@ function mentionsVariant(e: t.Node): boolean {
   return false;
 }
 
+const NON_PIN_TRANSFORM_RE = /\b(rotate[XYZ]?|scale[XYZ]?|skew[XY]?|matrix(3d)?)\s*\(/i;
+
+function extractTransformStrings(val: t.Node): string[] {
+  if (t.isStringLiteral(val)) return [val.value];
+  if (t.isConditionalExpression(val)) {
+    return [...extractTransformStrings(val.consequent), ...extractTransformStrings(val.alternate)];
+  }
+  if (t.isTemplateLiteral(val)) {
+    return val.quasis.map((q) => q.value.raw);
+  }
+  return [];
+}
+
 function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): void {
   const variantCfg = parseVariantConfig(code);
   const variantNames = variantCfg.map((vc) => vc.name);
@@ -236,6 +249,35 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
         }
         inlineKeysFor.set(variantsName, keys);
       }
+
+      if (styleObj) {
+        const transformProp = styleObj.properties.find((p): p is t.ObjectProperty =>
+          t.isObjectProperty(p) && ((t.isIdentifier(p.key) && p.key.name === 'transform') || (t.isStringLiteral(p.key) && p.key.value === 'transform')));
+        if (transformProp) {
+          const rawTransforms = extractTransformStrings(transformProp.value);
+          const conflictingVal = rawTransforms.find((s) => NON_PIN_TRANSFORM_RE.test(s));
+          if (conflictingVal) {
+            const tLine = transformProp.loc?.start.line ?? line;
+            if (variantsName) {
+              v.push({
+                code: 'VARIANT_ELEMENT_RAW_TRANSFORM', tier: 2, line: tLine, elementId: dataId,
+                message: `<${dataId ?? 'element'}> has variants={${variantsName}} but defines a raw CSS transform string "${conflictingVal}" (line ${tLine}) containing non-pin transforms (rotate/scale/skew). Framer Motion manages transform channels independently — raw CSS transform strings conflict with variant transitions and get replaced on mount. Author rotation, scale and skew as independent motion props (rotate: ..., scale: ...) instead of a CSS transform string (only translate-only pin centering e.g. 'translate(-50%, -50%)' is allowed in CSS).`,
+              });
+            }
+            const layoutAttr = attrs.find((a) => a.name.name === 'layout');
+            const hasLayout = !!layoutAttr && (layoutAttr.value === null
+              || (t.isJSXExpressionContainer(layoutAttr.value) && (!t.isBooleanLiteral(layoutAttr.value.expression) || layoutAttr.value.expression.value !== false))
+              || (t.isStringLiteral(layoutAttr.value) && layoutAttr.value.value !== 'false'));
+            if (hasLayout) {
+              v.push({
+                code: 'LAYOUT_CONFLICTING_TRANSFORM', tier: 2, line: tLine, elementId: dataId,
+                message: `<${dataId ?? 'element'}> uses layout={true} (line ${tLine}) but defines inline CSS transform: "${conflictingVal}". Framer Motion performs FLIP layout animations via the CSS transform property; raw transform strings (rotate/scale/skew) clobber FLIP projections, causing elements to snap or revert after animating. Use motion props (rotate: ..., scale: ...) instead.`,
+              });
+            }
+          }
+        }
+      }
+
       const isRoot = !!styleObj && spreadsStyle(styleObj);
       if (isRoot) {
         sawStyleSpread = true;

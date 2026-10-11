@@ -18,7 +18,7 @@ import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers, toKebab } from '
 import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag, isCustomDataAttr } from '@/shared/constants';
 import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
-import { hasMotionTransformProp, motionPropsToCSSTransform, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
+import { hasMotionTransformProp, motionPropsToCSSTransform, foldMotionTransforms, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { simpleHash } from '@/shared/hash-utils';
 import { getOrCreateCanvasStyleEl, getActiveFilePath, getPreviewRouteParams } from './node-ops';
 
@@ -579,29 +579,7 @@ function resolveVariantStylesUncached(
   return folded;
 }
 
-/**
- * Fold framer-motion INDEPENDENT transform props (rotate / scale / x / y /
- * skew) into a single CSS `transform` for the STATIC canvas. The source code
- * stores these as motion props (so live motion composes them with the layout
- * FLIP); the canvas has no motion, so it renders them as CSS here. Any motion
- * props are removed and combined (after any pre-existing CSS `transform`, e.g.
- * a pin's `translate(-50%,-50%)`) so the tile matches the animated result.
- * No-op when the map carries no motion transform props.
- */
-function foldMotionTransforms(styles: Record<string, string>): Record<string, string> {
-  if (!hasMotionTransformProp(styles)) return styles;
-  const motionCss = motionPropsToCSSTransform(styles);
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(styles)) {
-    if (MOTION_TRANSFORM_PROPS.has(k)) continue; // drop the motion props themselves
-    out[k] = v;
-  }
-  if (motionCss) {
-    const existing = out.transform && out.transform !== 'none' ? out.transform : '';
-    out.transform = existing ? `${existing} ${motionCss}` : motionCss;
-  }
-  return out;
-}
+
 
 /**
  * Resolve a node's per-variant text. Returns the text for the active variant

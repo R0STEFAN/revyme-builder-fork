@@ -18,6 +18,8 @@
 //   - Renderer.resolveVariantStyles  (motion props → CSS transform, for canvas)
 //   - make-component / variant writers (CSS transform → motion props, on author)
 
+import { removeAxisTranslate } from './position-utils';
+
 /** Motion transform props motion applies via its own transform system (and
  *  which therefore must NOT be emitted as a raw `transform` string). */
 export const MOTION_TRANSFORM_PROPS = new Set<string>([
@@ -68,8 +70,15 @@ function withUnit(prop: string, raw: unknown): string {
  * composition order (translate → scale → rotate → skew) so the static canvas
  * matches the animated result exactly. Returns '' when no motion transform
  * props are present. Non-transform keys are ignored.
+ *
+ * If a `baseTransform` string is provided (or if `styles.transform` is present),
+ * any duplicate `x`/`y` motion values supersede the axis translation from the
+ * CSS string rather than stacking additively.
  */
-export function motionPropsToCSSTransform(styles: Record<string, unknown>): string {
+export function motionPropsToCSSTransform(
+  styles: Record<string, unknown>,
+  baseTransform?: string,
+): string {
   // A motion prop bound to a motion MOTION VALUE is stored as the parser's
   // `var:<identifier>` sentinel (e.g. `scale: 'var:cardFxCScale'`) — a DYNAMIC
   // binding, not a static CSS value. Baking it as `scale(var:cardFxCScale)`
@@ -101,7 +110,20 @@ export function motionPropsToCSSTransform(styles: Record<string, unknown>): stri
   if (ok(styles.rotateZ)) parts.push(`rotateZ(${withUnit('rotateZ', styles.rotateZ)})`);
   if (ok(styles.skewX)) parts.push(`skewX(${withUnit('skewX', styles.skewX)})`);
   if (ok(styles.skewY)) parts.push(`skewY(${withUnit('skewY', styles.skewY)})`);
-  return parts.join(' ');
+
+  const motionCss = parts.join(' ');
+  const rawBase = baseTransform !== undefined
+    ? baseTransform
+    : (typeof styles.transform === 'string' ? styles.transform : '');
+  let base = rawBase && rawBase !== 'none' ? rawBase.trim() : '';
+
+  if (!base) return motionCss;
+  if (parts.length === 0) return '';
+
+  if (ok(tx)) base = removeAxisTranslate(base, 'x');
+  if (ok(ty)) base = removeAxisTranslate(base, 'y');
+
+  return [base, motionCss].filter(Boolean).join(' ').trim();
 }
 
 /** Strip a trailing unit so a motion prop holds a bare value (motion re-adds
@@ -161,6 +183,34 @@ export function cssTransformToMotionProps(transform: string): Record<string, str
 }
 
 /**
+ * Fold framer-motion INDEPENDENT transform props (rotate / scale / x / y /
+ * skew) into a single CSS `transform` for the STATIC canvas. The source code
+ * stores these as motion props (so live motion composes them with the layout
+ * FLIP); the canvas has no motion, so it renders them as CSS here. Any motion
+ * props are removed and combined (after any pre-existing CSS `transform`, e.g.
+ * a pin's `translate(-50%,-50%)`) so the tile matches the animated result.
+ * Duplicate axis translates (x/y) in the CSS string are superseded by the motion
+ * values rather than stacking additively.
+ * No-op when the map carries no motion transform props.
+ */
+export function foldMotionTransforms<T extends Record<string, unknown>>(styles: T): T {
+  if (!hasMotionTransformProp(styles)) return styles;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(styles)) {
+    if (MOTION_TRANSFORM_PROPS.has(k)) continue; // drop the motion props themselves
+    out[k] = v;
+  }
+  const existing = typeof out.transform === 'string' && out.transform !== 'none' ? out.transform : '';
+  const folded = motionPropsToCSSTransform(styles, existing);
+  if (folded) {
+    out.transform = folded;
+  } else {
+    delete out.transform;
+  }
+  return out as T;
+}
+
+/**
  * The CSS `transform` the STATIC canvas will PAINT for a tile's merged style
  * map (inline base ⊕ `default` entry ⊕ active variant entry) with the rotation
  * overridden — the rotate PREVIEW must produce exactly this, or the gesture
@@ -176,8 +226,7 @@ export function composeTransformWithRotate(merged: Record<string, unknown>, rota
   const css = typeof merged.transform === 'string' && merged.transform.trim() && merged.transform !== 'none'
     ? merged.transform.replace(/\s*rotate\([^)]*\)/gi, '').trim()
     : '';
-  const motion = motionPropsToCSSTransform({ ...merged, rotate });
-  return css ? `${css} ${motion}`.trim() : motion;
+  return motionPropsToCSSTransform({ ...merged, rotate }, css);
 }
 
 
@@ -223,7 +272,8 @@ export function foldEffectiveTransform(input: {
     const val = branches[input.variantKey] ?? branches['default'];
     if (val != null) cond[prop] = val;
   }
-  const motionCss = motionPropsToCSSTransform({ ...effective, ...variantStyles, ...cond });
   const cssT = String(effective.transform ?? '').trim();
-  return [cssT === 'none' ? '' : cssT, motionCss].filter(Boolean).join(' ').trim();
+  const merged = { ...effective, ...variantStyles, ...cond };
+  const folded = motionPropsToCSSTransform(merged, cssT === 'none' ? '' : cssT);
+  return folded || (cssT === 'none' ? '' : cssT);
 }

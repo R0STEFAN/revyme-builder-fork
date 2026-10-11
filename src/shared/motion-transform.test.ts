@@ -4,6 +4,9 @@ import {
   hasMotionTransformProp,
   motionPropsToCSSTransform,
   cssTransformToMotionProps,
+  foldMotionTransforms,
+  composeTransformWithRotate,
+  foldEffectiveTransform,
 } from './motion-transform';
 
 describe('hasMotionTransformProp', () => {
@@ -131,5 +134,72 @@ describe('composeTransformWithRotate — the rotate PREVIEW paints what the Rend
     const { composeTransformWithRotate } = await import('./motion-transform');
     expect(composeTransformWithRotate({}, 12)).toBe('rotate(12deg)');
     expect(composeTransformWithRotate({ transform: 'none' }, 12)).toBe('rotate(12deg)');
+  });
+});
+
+describe('foldMotionTransforms — folds motion props into CSS transform and supersedes axis translates', () => {
+  it('folds motion transform props and drops them from output object', () => {
+    const res = foldMotionTransforms({ rotate: '30', backgroundColor: 'red' });
+    expect(res).toEqual({ transform: 'rotate(30deg)', backgroundColor: 'red' });
+  });
+
+  it('supersedes x translation in CSS string when x motion prop is present', () => {
+    const res = foldMotionTransforms({ transform: 'translate(-50%, -50%)', x: '20px' });
+    expect(res.transform).toBe('translateY(-50%) translateX(20px)');
+  });
+
+  it('supersedes both x and y translations in CSS string when both x and y motion props are present', () => {
+    const res = foldMotionTransforms({ transform: 'translate(-50%, -50%)', x: '20px', y: '30px' });
+    expect(res.transform).toBe('translateX(20px) translateY(30px)');
+  });
+
+  it('preserves other CSS transforms (like perspective) when motion props fold', () => {
+    const res = foldMotionTransforms({ transform: 'perspective(500px) translate(-50%, -50%)', x: '20px' });
+    expect(res.transform).toBe('translateY(-50%) perspective(500px) translateX(20px)');
+  });
+
+  it('returns styles unchanged if no motion transform props exist', () => {
+    const styles = { transform: 'translate(-50%, -50%)', color: 'blue' };
+    expect(foldMotionTransforms(styles)).toBe(styles);
+  });
+});
+
+describe('motionPropsToCSSTransform with baseTransform', () => {
+  it('supersedes x axis in baseTransform when motion x is passed', () => {
+    expect(motionPropsToCSSTransform({ x: '10px' }, 'translate(-50%, -50%)'))
+      .toBe('translateY(-50%) translateX(10px)');
+  });
+
+  it('supersedes y axis in baseTransform when motion y is passed', () => {
+    expect(motionPropsToCSSTransform({ y: '15px' }, 'translate(-50%, -50%)'))
+      .toBe('translateX(-50%) translateY(15px)');
+  });
+
+  it('supersedes both axes in baseTransform when both x and y are passed', () => {
+    expect(motionPropsToCSSTransform({ x: '10px', y: '15px' }, 'translate(-50%, -50%)'))
+      .toBe('translateX(10px) translateY(15px)');
+  });
+
+  it('keeps baseTransform unchanged when only visual motion props (rotate/scale) are passed', () => {
+    expect(motionPropsToCSSTransform({ rotate: '45' }, 'translate(-50%, -50%)'))
+      .toBe('translate(-50%, -50%) rotate(45deg)');
+  });
+});
+
+describe('composeTransformWithRotate and foldEffectiveTransform with duplicate translates', () => {
+  it('composeTransformWithRotate supersedes x translate in transform string when merged contains x', () => {
+    expect(composeTransformWithRotate({ transform: 'translate(-50%, -50%)', x: '10px' }, 45))
+      .toBe('translateY(-50%) translateX(10px) rotate(45deg)');
+  });
+
+  it('foldEffectiveTransform supersedes translate in effective.transform when motion variants contain x', () => {
+    const res = foldEffectiveTransform({
+      styles: { transform: 'translate(-50%, -50%)' },
+      motionVariants: {
+        default: { x: '25px' },
+      },
+      variantKey: 'default',
+    });
+    expect(res).toBe('translateY(-50%) translateX(25px)');
   });
 });
