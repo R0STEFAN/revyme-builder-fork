@@ -117,7 +117,7 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
   "activeSlideIndex": { "type": "number", "label": "Active Slide (Canvas)", "min": 0, "max": 50, "step": 1, "default": 0 }
 } */
 
-import { useRef, useEffect, useState, useCallback, Children } from 'react';
+import { useEffect, useState, useCallback, Children } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import AutoScroll from 'embla-carousel-auto-scroll';
@@ -245,15 +245,17 @@ function EmblaCarousel({
     setScrollSnaps(emblaApi.scrollSnapList());
     onSelect();
     onScroll();
-    emblaApi.on('select', onSelect);
-    emblaApi.on('reInit', () => {
+    const onReInit = () => {
       setScrollSnaps(emblaApi.scrollSnapList());
       onSelect();
       onScroll();
-    });
+    };
+    emblaApi.on('select', onSelect);
+    emblaApi.on('reInit', onReInit);
     emblaApi.on('scroll', onScroll);
     return () => {
       emblaApi.off('select', onSelect);
+      emblaApi.off('reInit', onReInit);
       emblaApi.off('scroll', onScroll);
     };
   }, [emblaApi, onSelect, onScroll]);
