@@ -38,6 +38,11 @@ describe('getInsertItem', () => {
     expect(blob).not.toBeNull();
     expect(blob!.iconKey).toBe('effectBlobCursor');
 
+    const embla = getInsertItem('cs-emblaCarousel');
+    expect(embla).not.toBeNull();
+    expect(embla!.name).toBe('Embla Carousel');
+    expect(embla!.iconKey).toBe('effectCarousel');
+
     const typing = getInsertItem('cs-typingText');
     expect(typing).not.toBeNull();
     expect(typing!.iconKey).toBe('creativeTypingText');

@@ -614,6 +614,7 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-magnetBox':       { tag: 'MagnetBox',       width: 400, height: 300 },
   // Effects — multi-slot containers; connected canvas nodes become children.
   'cs-carousel':        { tag: 'Carousel',         width: 600, height: 400 },
+  'cs-emblaCarousel':   { tag: 'EmblaCarousel',    width: 800, height: 450 },
   'cs-marquee':         { tag: 'Marquee',          width: 800, height: 160 },
   'cs-ribbonMarquee':   { tag: 'RibbonMarquee',    width: 700, height: 320 },
   'cs-threeDMarquee':   { tag: 'Marquee3D',        width: 720, height: 520 },

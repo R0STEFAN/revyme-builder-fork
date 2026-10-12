@@ -116,6 +116,7 @@ const SHAPE_ITEMS: InsertItem[] = [
 //     slot model, just driven by cursor instead of time.
 const EFFECTS_ITEMS: InsertItem[] = [
   { id: 'cs-carousel', name: 'Carousel', iconKey: 'effectCarousel', gradientColors: ['#3B82F6', '#2563EB'], description: 'Slideshow of connected nodes with navigation arrows, dots, and autoplay.' },
+  { id: 'cs-emblaCarousel', name: 'Embla Carousel', iconKey: 'effectCarousel', gradientColors: ['#6366F1', '#4F46E5'], description: 'Advanced slider powered by Embla with multi-slide, marquee, and external trigger support.' },
   { id: 'cs-marquee', name: 'Marquee', iconKey: 'effectMarquee', gradientColors: ['#8B5CF6', '#7C3AED'], description: 'Continuous scrolling ticker loop of connected canvas nodes.' },
   { id: 'cs-ribbonMarquee', name: 'Path Marquee', iconKey: 'effectPathMarquee', gradientColors: ['#A855F7', '#7C3AED'], description: 'Connected nodes flowing and auto-rotating along a curved path.' },
   { id: 'cs-threeDMarquee', name: '3D Marquee', iconKey: 'effectThreeDMarquee', gradientColors: ['#06B6D4', '#0891B2'], description: 'Connected nodes in a tilted 3D grid with alternating scroll.' },

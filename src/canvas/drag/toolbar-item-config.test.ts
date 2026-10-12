@@ -256,6 +256,12 @@ describe('getToolbarItemConfig', () => {
     const item = getToolbarItemConfig('cs-carousel');
     expect(item).not.toBeNull();
     expect(item!.elementType).toBe('Carousel');
+    const embla = getToolbarItemConfig('cs-emblaCarousel');
+    expect(embla).not.toBeNull();
+    expect(embla!.elementType).toBe('EmblaCarousel');
+    expect(embla!.defaultStyles.width).toBe('800px');
+    expect(embla!.defaultStyles.height).toBe('450px');
+    expect(embla!.ghostSize).toEqual({ width: 800, height: 450 });
     expect(getToolbarItemConfig('cs-marquee')!.elementType).toBe('Marquee');
   });
 });
