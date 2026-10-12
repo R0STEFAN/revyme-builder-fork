@@ -436,13 +436,39 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(pTarget.style.transform).toContain('scale(1.2)');
   });
 
-  it('auto-migrates existing EmblaCarousel lacking slideEffects or parallax target in syncBuiltInCodeComponents', () => {
+  it('auto-migrates existing EmblaCarousel lacking slideEffects, parallax target, or resolvedBgSize in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('data-embla-parallax-target');
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\n// data-embla-parallax-target\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('resolvedBgSize');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
+  });
+
+  it('applies backgroundSize and backgroundPosition to slide child with backgroundImage', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          objectFit: 'contain',
+          objectPosition: 'top',
+        },
+        React.createElement('div', {
+          key: '1',
+          style: {
+            backgroundImage: 'url("test.jpg")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          },
+        }),
+      ),
+    );
+
+    const slideChild = container.querySelector('[data-embla-parallax-target="true"] > div') as HTMLElement;
+    expect(slideChild).toBeTruthy();
+    expect(slideChild.style.backgroundSize).toBe('contain');
+    expect(slideChild.style.backgroundPosition).toContain('top');
   });
 });
 

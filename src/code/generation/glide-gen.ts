@@ -458,3 +458,139 @@ export function setGlideInCode(code: string, nodeId: string, spec: GlideSpec | n
   if (hasGlide(code, nodeId)) return applyGlide(removeGlide(code, nodeId), nodeId, spec);
   return applyGlide(code, nodeId, spec);
 }
+
+const GLIDE_SYNC_KEYS = ['width', 'order', 'flex', 'alignSelf'] as const;
+
+/**
+ * Sync sizing and flex placement from child node to its enclosing
+ * `<motion.div data-glide-item ...>` wrapper, if one exists.
+ * When a child's width, order, flex, or alignSelf changes, the wrapper
+ * (which acts as the flex/grid item in the parent container) must match.
+ */
+export function syncEnclosingGlideItem(
+  code: string,
+  nodeId: string,
+  styleChanges: Record<string, string>
+): string {
+  const hasRelevant = GLIDE_SYNC_KEYS.some((k) => k in styleChanges);
+  if (!hasRelevant) return code;
+
+  const idPattern = new RegExp(`data-id=["']${nodeId}["']`);
+  const match = idPattern.exec(code);
+  if (!match) return code;
+
+  const tagStart = code.lastIndexOf('<', match.index);
+  if (tagStart === -1) return code;
+
+  // Walk backwards from tagStart skipping whitespace
+  let p = tagStart - 1;
+  while (p >= 0 && (code[p] === ' ' || code[p] === '\n' || code[p] === '\t' || code[p] === '\r')) p--;
+  if (p < 0 || code[p] !== '>') return code;
+
+  // Find start of previous tag `<`
+  const prevTagStart = code.lastIndexOf('<', p);
+  if (prevTagStart === -1) return code;
+  const prevTag = code.slice(prevTagStart, p + 1);
+  if (!prevTag.includes('data-glide-item')) return code;
+
+  // We have the wrapper tag `<motion.div data-glide-item ... style={{ ... }}>`
+  const styleIdx = prevTag.indexOf('style={{');
+  if (styleIdx === -1) return code;
+  const bodyStart = styleIdx + 'style={{'.length;
+  const bodyEnd = prevTag.indexOf('}}', bodyStart);
+  if (bodyEnd === -1) return code;
+
+  let styleBody = prevTag.slice(bodyStart, bodyEnd);
+  for (const key of GLIDE_SYNC_KEYS) {
+    if (!(key in styleChanges)) continue;
+    const val = styleChanges[key];
+    const keyRegex = new RegExp(`\\b${key}\\s*:\\s*('[^']*'|"[^"]*"|[^,}]+)`);
+    if (val === '') {
+      // Remove key
+      styleBody = styleBody.replace(keyRegex, '');
+    } else {
+      const formatted = isJsxLiteral(val) ? val : `'${val}'`;
+      if (keyRegex.test(styleBody)) {
+        styleBody = styleBody.replace(keyRegex, `${key}: ${formatted}`);
+      } else {
+        styleBody = styleBody.trim();
+        if (styleBody && !styleBody.endsWith(',')) styleBody += ', ';
+        styleBody += `${key}: ${formatted}`;
+      }
+    }
+  }
+
+  // Clean up any stray commas/double spaces in styleBody
+  const cleanedBody = styleBody
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(', ');
+
+  const newPrevTag = prevTag.slice(0, bodyStart) + (cleanedBody ? ` ${cleanedBody} ` : '') + prevTag.slice(bodyEnd);
+  return code.slice(0, prevTagStart) + newPrevTag + code.slice(p + 1);
+}
+
+/**
+ * Scan all `<motion.div data-glide-item ...>` wrappers in `code` and heal
+ * any wrapper whose copied `order`, `flex`, `width`, or `alignSelf` does not
+ * match its immediate child element's inline style.
+ */
+export function healGlideItemWrappers(code: string): string {
+  let out = code;
+  let guard = 0;
+  while (guard++ < 200) {
+    let changed = false;
+    const matches: Array<{ start: number; end: number; tag: string }> = [];
+    const scanner = /<motion\.div\s+[^>]*data-glide-item[^>]*>/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = scanner.exec(out))) {
+      matches.push({ start: sm.index, end: sm.index + sm[0].length, tag: sm[0] });
+    }
+
+    for (let k = matches.length - 1; k >= 0; k--) {
+      const match = matches[k];
+      const afterWrapper = out.slice(match.end);
+      // Find the first child element start `<`
+      let childStartRel = 0;
+      while (childStartRel < afterWrapper.length && /\s/.test(afterWrapper[childStartRel])) childStartRel++;
+      if (afterWrapper[childStartRel] !== '<' || afterWrapper[childStartRel + 1] === '/') continue;
+
+      const childGtRel = findTagGt(afterWrapper, childStartRel, afterWrapper.length);
+      if (childGtRel === -1) continue;
+      const childOpen = afterWrapper.slice(childStartRel, childGtRel + 1);
+
+      const childSb = styleBodyOf(childOpen);
+      const childOrder = extractStyleVal(childSb, 'order') ?? "'0'";
+      const childFlex = extractStyleVal(childSb, 'flex') ?? "'0 0 auto'";
+      const childWidth = extractStyleVal(childSb, 'width');
+      const childAlignSelf = extractStyleVal(childSb, 'alignSelf');
+
+      const parts = [`order: ${childOrder}`, `flex: ${childFlex}`];
+      if (childWidth) parts.push(`width: ${childWidth}`);
+      if (childAlignSelf) parts.push(`alignSelf: ${childAlignSelf}`);
+      const targetStyleBody = parts.join(', ');
+
+      const wrapperSb = styleBodyOf(match.tag);
+      const normalize = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean).sort().join(', ');
+      if (normalize(wrapperSb) !== normalize(targetStyleBody)) {
+        const styleIdx = match.tag.indexOf('style={{');
+        let newTag: string;
+        if (styleIdx !== -1) {
+          const bodyStart = styleIdx + 'style={{'.length;
+          const bodyEnd = match.tag.indexOf('}}', bodyStart);
+          newTag = match.tag.slice(0, bodyStart) + ' ' + targetStyleBody + ' ' + match.tag.slice(bodyEnd);
+        } else {
+          const closeGt = match.tag.lastIndexOf('>');
+          newTag = match.tag.slice(0, closeGt) + ` style={{ ${targetStyleBody} }}>`;
+        }
+        out = out.slice(0, match.start) + newTag + out.slice(match.end);
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) break;
+  }
+  return out;
+}
+

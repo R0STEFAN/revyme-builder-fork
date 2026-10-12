@@ -14,7 +14,7 @@ import { removeAxisTranslate } from '@/shared/position-utils';
 import { trace } from '@/shared/debug-trace';
 import { flattenPastedRichHtml } from '@/shared/rich-message';
 import { findVariantRootId } from '@/shared/variant-root';
-import { sweepEmptyGlideWrappers } from './glide-gen';
+import { sweepEmptyGlideWrappers, syncEnclosingGlideItem } from './glide-gen';
 import { generate, findTagClose, findJSXDataIdIndex, quoteStyleValue, serializeJSXAttr, findMatchingCloseTagIndex, findStyleObjectEnd } from './generator-utils';
 import { moveNodeIntoParentFast } from './move-fast';
 import { clearContainerStylesForNode, removeHoverStyleInCode, removeBorderOverlayStyle, removePseudoStyleInCode, removeSelectCaretRuleInCode, removeScopedChildRulesInCode, findBandedOrderWidths, stripBandedOrderForNode } from './generator-styles';
@@ -138,13 +138,13 @@ export function updateNodeInCode(
   const fast = updateNodeInCodeFast(code, nodeId, styleChanges);
   if (fast !== null) {
     trace.action('generator:fast-path-success', { nodeId });
-    return syncTemplate(fast);
+    return syncEnclosingGlideItem(syncTemplate(fast), nodeId, styleChanges);
   }
   trace.action('generator:fast-path-fallback-to-ast', { nodeId });
   const astResult = updateNodeInCodeAST(code, nodeId, styleChanges);
   const changed = astResult !== code;
   trace.action('generator:ast-path-result', { nodeId, changed, codeLen: astResult.length });
-  return syncTemplate(astResult);
+  return syncEnclosingGlideItem(syncTemplate(astResult), nodeId, styleChanges);
 }
 
 /** Index of a TOP-LEVEL `key:` property in a style-object body, or -1.

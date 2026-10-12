@@ -44,7 +44,11 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
       { "label": "Top", "value": "top" },
       { "label": "Bottom", "value": "bottom" },
       { "label": "Left", "value": "left" },
-      { "label": "Right", "value": "right" }
+      { "label": "Right", "value": "right" },
+      { "label": "Top Left", "value": "top left" },
+      { "label": "Top Right", "value": "top right" },
+      { "label": "Bottom Left", "value": "bottom left" },
+      { "label": "Bottom Right", "value": "bottom right" }
     ]},
     "slideRadius": { "type": "number", "label": "Slide Radius", "min": 0, "max": 80, "step": 2, "default": 0 },
     "align": { "type": "select", "label": "Alignment", "default": "start", "options": [
@@ -451,6 +455,15 @@ function EmblaCarousel({
     return () => ro.disconnect();
   }, [emblaApi]);
 
+  const bgSizeMap = {
+    cover: 'cover',
+    contain: 'contain',
+    fill: '100% 100%',
+    none: 'auto',
+  };
+  const resolvedBgSize = bgSizeMap[objectFit] || objectFit || 'cover';
+  const resolvedBgPos = objectPosition || 'center';
+
   // Neutralize lingering canvas positioning (absolute, left, top) on slot children
   // and pin elements to fill the slide inner card so aspect ratio never collapses.
   useEffect(() => {
@@ -473,6 +486,13 @@ function EmblaCarousel({
           c.style.setProperty('box-sizing', 'border-box', 'important');
         }
       });
+      const bgEls = inner.querySelectorAll('[data-canvas-node], [data-name="Image"], [data-embla-parallax-target] > *');
+      bgEls.forEach((el) => {
+        if (el instanceof HTMLElement) {
+          el.style.setProperty('background-size', resolvedBgSize, 'important');
+          el.style.setProperty('background-position', resolvedBgPos, 'important');
+        }
+      });
       const imgs = inner.querySelectorAll('img');
       imgs.forEach((img) => {
         img.style.setProperty('position', 'absolute', 'important');
@@ -485,11 +505,11 @@ function EmblaCarousel({
         img.style.setProperty('max-width', '100%', 'important');
         img.style.setProperty('max-height', '100%', 'important');
         img.style.setProperty('object-fit', objectFit || 'cover', 'important');
-        img.style.setProperty('object-position', objectPosition || 'center', 'important');
+        img.style.setProperty('object-position', resolvedBgPos, 'important');
         img.style.setProperty('display', 'block', 'important');
       });
     });
-  }, [children, objectFit, objectPosition, aspectRatio, count]);
+  }, [children, objectFit, objectPosition, resolvedBgSize, resolvedBgPos, aspectRatio, count]);
 
   const renderSlideChild = (child) => {
     if (!isValidElement(child)) return child;
@@ -509,7 +529,9 @@ function EmblaCarousel({
         maxHeight: '100%',
         boxSizing: 'border-box',
         objectFit: objectFit || 'cover',
-        objectPosition: objectPosition || 'center',
+        objectPosition: resolvedBgPos,
+        backgroundSize: resolvedBgSize,
+        backgroundPosition: resolvedBgPos,
       },
     });
   };
@@ -1235,6 +1257,12 @@ function EmblaCarousel({
         'max-height: 100% !important; ' +
         'box-sizing: border-box !important; ' +
         '} ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] [data-canvas-node], ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] [data-name="Image"], ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-parallax-target] > * { ' +
+        'background-size: ' + resolvedBgSize + ' !important; ' +
+        'background-position: ' + resolvedBgPos + ' !important; ' +
+        '} ' +
         '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] img, ' +
         '[data-embla-root="' + carouselId + '"] [data-embla-parallax-target] img { ' +
         'position: absolute !important; ' +
@@ -1247,7 +1275,7 @@ function EmblaCarousel({
         'max-width: 100% !important; ' +
         'max-height: 100% !important; ' +
         'object-fit: ' + (objectFit || 'cover') + ' !important; ' +
-        'object-position: ' + (objectPosition || 'center') + ' !important; ' +
+        'object-position: ' + resolvedBgPos + ' !important; ' +
         'display: block !important; ' +
         '}'
       }</style>

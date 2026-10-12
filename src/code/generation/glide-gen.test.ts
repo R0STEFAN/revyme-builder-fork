@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { parse } from '@babel/parser';
-import { setGlideInCode, getGlide, hasGlide } from './glide-gen';
+import { setGlideInCode, getGlide, hasGlide, syncEnclosingGlideItem, healGlideItemWrappers } from './glide-gen';
+import { updateNodeInCode } from './generator-crud';
 
 const parses = (code: string) => {
   parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
@@ -299,3 +300,45 @@ export default function C() {
     expect(out.match(/data-glide-item/g)?.length).toBe(2);
   });
 });
+
+describe('syncEnclosingGlideItem and healGlideItemWrappers', () => {
+  const GLIDED_PAGE = `export default function Page() {
+  return <div data-id="root" style={{ width: '100%', display: 'flex' }}>
+    <LayoutGroup>
+      <motion.div data-glide-item layout transition={{ type: 'spring' }} style={{ order: '0', flex: '0 0 auto', width: '800px' }}>
+        <div data-id="carousel-1" style={{ width: '800px', height: '400px' }} />
+      </motion.div>
+    </LayoutGroup>
+  </div>;
+}`;
+
+  test('syncEnclosingGlideItem updates wrapper width when child width changes', () => {
+    const updated = syncEnclosingGlideItem(GLIDED_PAGE, 'carousel-1', { width: '100%' });
+    expect(updated).toMatch(/data-glide-item[^>]*width: '100%'/);
+    expect(updated).toContain("order: '0'");
+    expect(updated).toContain("flex: '0 0 auto'");
+  });
+
+  test('updateNodeInCode automatically syncs the enclosing motion.div data-glide-item width', () => {
+    const updated = updateNodeInCode(GLIDED_PAGE, 'carousel-1', { width: '100%' });
+    expect(updated).toMatch(/data-glide-item[^>]*width: '100%'/);
+    expect(updated).toMatch(/data-id="carousel-1"[^>]*width: '100%'/);
+  });
+
+  test('healGlideItemWrappers fixes desynced wrapper width, order, and alignSelf to match child', () => {
+    const desynced = `export default function Page() {
+  return <div data-id="root" style={{ width: '100%', display: 'flex' }}>
+    <LayoutGroup>
+      <motion.div data-glide-item layout style={{ order: '0', flex: '0 0 auto', width: '800px' }}>
+        <div data-id="carousel-1" style={{ width: '100%', order: '2', flex: '0 0 auto', alignSelf: 'stretch' }} />
+      </motion.div>
+    </LayoutGroup>
+  </div>;
+}`;
+    const healed = healGlideItemWrappers(desynced);
+    expect(healed).toMatch(/data-glide-item[^>]*width: '100%'/);
+    expect(healed).toMatch(/data-glide-item[^>]*order: '2'/);
+    expect(healed).toMatch(/data-glide-item[^>]*alignSelf: 'stretch'/);
+  });
+});
+

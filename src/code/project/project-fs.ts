@@ -20,6 +20,7 @@ import { ensureLayoutFile } from '@/code/generation/metadata-gen';
 import { DIRECTUS_SYNC_PLUGIN_SOURCE } from './default-plugins/DirectusSync';
 import { healSectionOffsets } from '@/code/generation/generator-motion-scroll';
 import { healEventOverlayToggle } from '@/code/generation/event-overlay-heal';
+import { healGlideItemWrappers } from '@/code/generation/glide-gen';
 import { formatOverrideSource } from '@/code/generation/format-override-source';
 import { OVERRIDES_DIR } from '@/code/generation/code-override-gen';
 import { ensureSmoothScrollInLayout, SMOOTH_SCROLL_DATA_PATH, SMOOTH_SCROLL_CONTROLLER_PATH } from '@/code/generation/smooth-scroll-layout';
@@ -2538,8 +2539,8 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
     // `readFile` returns null/undefined for missing files. Skip both — only
     // consider files the user actually has in their project.
     if (existing == null) continue;
-    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth, broken wheelGestures, vertical axis fix, slideEffects, or parallax target
-    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin') || !existing.includes("minHeight: isVertical && isFitHeight ? '450px'") || !existing.includes('"slideEffects"') || !existing.includes('data-embla-parallax-target'))) {
+    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth, broken wheelGestures, vertical axis fix, slideEffects, parallax target, or resolvedBgSize
+    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin') || !existing.includes("minHeight: isVertical && isFitHeight ? '450px'") || !existing.includes('"slideEffects"') || !existing.includes('data-embla-parallax-target') || !existing.includes('resolvedBgSize'))) {
       fs.writeFile(path, template);
       continue;
     }
@@ -2547,6 +2548,19 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
   }
   if (skippedModified > 0) {
     trace.action('project-fs:sync-built-in-components', { skippedModified, total: BUILT_IN_COMPONENTS.length });
+  }
+
+  // Heal desynced data-glide-item wrappers across all app pages
+  for (const file of fs.listFiles()) {
+    if ((file.startsWith('app/') || file.startsWith('pages/')) && (file.endsWith('.tsx') || file.endsWith('.jsx'))) {
+      const code = fs.readFile(file);
+      if (code && code.includes('data-glide-item')) {
+        const healed = healGlideItemWrappers(code);
+        if (healed !== code) {
+          fs.writeFile(file, healed);
+        }
+      }
+    }
   }
 }
 
