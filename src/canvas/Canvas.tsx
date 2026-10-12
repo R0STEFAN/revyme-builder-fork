@@ -87,6 +87,7 @@ import AddFormFieldUI from './ui/AddFormFieldUI';
 import ArrowConnectors from './ui/ArrowConnectors';
 import ConnectionHandle from './ui/ConnectionHandle';
 import SlotConnectionHandle from './ui/SlotConnectionHandle';
+import CarouselTriggerHandle from './ui/CarouselTriggerHandle';
 import SlotConnectors from './ui/SlotConnectors';
 import { useIsViewer } from '@/code/stores/viewer-mode-store';
 import ConnectionTypeModal from '@/editor/ui/ConnectionTypeModal';
@@ -1487,6 +1488,9 @@ export default function Canvas() {
       {/* Slot connection handle — drag a canvas node into a code-component
           slot (LensBox etc.). Editor-only, like the variant handle. */}
       {!isViewer && <SlotConnectionHandle />}
+
+      {/* Carousel trigger handle — connect external Prev/Next triggers */}
+      {!isViewer && <CarouselTriggerHandle />}
 
       {/* Persistent connector arrows for established slot connections. */}
       {!isViewer && <SlotConnectors />}
