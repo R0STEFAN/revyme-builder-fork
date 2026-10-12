@@ -480,3 +480,154 @@ export const SYSTEM_DATA_ATTRS: ReadonlySet<string> = new Set([
 export function isCustomDataAttr(attr: string): boolean {
   return attr.startsWith('data-') && !SYSTEM_DATA_ATTRS.has(attr);
 }
+
+/** HTML attributes that are managed by dedicated inspector tools in the properties panel. */
+export const DEDICATED_HTML_ATTRS: ReadonlySet<string> = new Set([
+  'id',
+  'src',
+  'srcSet',
+  'srcset',
+  'sizes',
+  'alt',
+  'poster',
+  'href',
+  'target',
+  'rel',
+  'aria-label',
+  'name',
+  'value',
+  'placeholder',
+  'type',
+  'checked',
+  'required',
+  'disabled',
+  'readOnly',
+  'autoComplete',
+  'autoFocus',
+  'maxLength',
+  'minLength',
+  'pattern',
+  'min',
+  'max',
+  'step',
+  'rows',
+  'cols',
+  'wrap',
+  'selected',
+  'multiple',
+  'inputMode',
+  'htmlFor',
+  'method',
+  'action',
+  'noValidate',
+]);
+
+/** Internal JSX / React / animation properties that must not be used as custom attributes. */
+export const RESERVED_ATTR_KEYS: ReadonlySet<string> = new Set([
+  'style',
+  'className',
+  'class',
+  'key',
+  'ref',
+  'children',
+  'dangerouslySetInnerHTML',
+  'variants',
+  'initial',
+  'animate',
+  'transition',
+  'whileHover',
+  'whileTap',
+  'whileInView',
+  'viewport',
+  'layout',
+  'layoutId',
+]);
+
+/** True when an attribute is an editable custom attribute in the Attributes tool. */
+export function isCustomAttr(attr: string): boolean {
+  if (!attr) return false;
+  if (SYSTEM_DATA_ATTRS.has(attr)) return false;
+  if (RESERVED_ATTR_KEYS.has(attr)) return false;
+  if (isCustomDataAttr(attr)) return true;
+  if (DEDICATED_HTML_ATTRS.has(attr)) return false;
+  return true;
+}
+
+/** Known builder-defined default attributes per element tag. */
+export const BUILDER_DEFAULT_ATTRS: Record<string, Record<string, string>> = {
+  img: {
+    decoding: 'async',
+    loading: 'lazy',
+  },
+  iframe: {
+    loading: 'lazy',
+  },
+};
+
+/** True when an attribute is an unchanged default attribute set by the builder. */
+export function isBuilderDefaultAttr(
+  tagName: string | undefined,
+  attrKey: string,
+  attrValue: string | undefined,
+): boolean {
+  if (!tagName || attrValue === undefined) return false;
+  let tag = tagName.toLowerCase();
+  if (tag.startsWith('motion.')) {
+    tag = tag.slice(7);
+  }
+  if (tag === 'image') tag = 'img';
+  const defaults = BUILDER_DEFAULT_ATTRS[tag];
+  if (!defaults) return false;
+  return defaults[attrKey] === attrValue;
+}
+
+export interface AttrSuggestion {
+  name: string;
+  defaultValue?: string;
+  hint?: string;
+}
+
+/** Curated list of common HTML, ARIA, and data-* attributes for autocomplete. */
+export const COMMON_ATTRIBUTE_SUGGESTIONS: readonly AttrSuggestion[] = [
+  // Media & Performance
+  { name: 'loading', defaultValue: 'lazy', hint: 'lazy | eager' },
+  { name: 'decoding', defaultValue: 'async', hint: 'async | sync | auto' },
+  { name: 'fetchpriority', defaultValue: 'high', hint: 'high | low | auto' },
+
+  // General HTML
+  { name: 'title', defaultValue: '', hint: 'tooltip text' },
+  { name: 'role', defaultValue: 'button', hint: 'ARIA role' },
+  { name: 'tabindex', defaultValue: '0', hint: '0 | -1' },
+  { name: 'download', defaultValue: '', hint: 'filename' },
+  { name: 'enterkeyhint', defaultValue: 'enter', hint: 'enter | done | go | search' },
+  { name: 'inputmode', defaultValue: 'text', hint: 'text | numeric | decimal' },
+  { name: 'spellcheck', defaultValue: 'false', hint: 'true | false' },
+  { name: 'draggable', defaultValue: 'true', hint: 'true | false' },
+  { name: 'contenteditable', defaultValue: 'false', hint: 'true | false' },
+
+  // ARIA Attributes
+  { name: 'aria-hidden', defaultValue: 'true', hint: 'true | false' },
+  { name: 'aria-describedby', defaultValue: '', hint: 'element id' },
+  { name: 'aria-expanded', defaultValue: 'false', hint: 'true | false' },
+  { name: 'aria-controls', defaultValue: '', hint: 'element id' },
+  { name: 'aria-haspopup', defaultValue: 'true', hint: 'true | menu | dialog' },
+  { name: 'aria-live', defaultValue: 'polite', hint: 'polite | assertive | off' },
+  { name: 'aria-current', defaultValue: 'page', hint: 'page | step | true' },
+  { name: 'aria-disabled', defaultValue: 'true', hint: 'true | false' },
+  { name: 'aria-selected', defaultValue: 'true', hint: 'true | false' },
+  { name: 'aria-checked', defaultValue: 'true', hint: 'true | false' },
+
+  // Custom data-* Attributes
+  { name: 'data-testid', defaultValue: '', hint: 'test selector' },
+  { name: 'data-theme', defaultValue: 'dark', hint: 'light | dark' },
+  { name: 'data-analytics', defaultValue: '', hint: 'event name' },
+  { name: 'data-tracking', defaultValue: '', hint: 'tracking id' },
+  { name: 'data-state', defaultValue: 'active', hint: 'state name' },
+  { name: 'data-target', defaultValue: '', hint: 'target id' },
+  { name: 'data-tooltip', defaultValue: '', hint: 'tooltip content' },
+  { name: 'data-modal', defaultValue: '', hint: 'modal id' },
+  { name: 'data-variant', defaultValue: '', hint: 'variant name' },
+  { name: 'data-action', defaultValue: '', hint: 'action name' },
+];
+
+

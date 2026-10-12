@@ -15,7 +15,7 @@ import { renderWidth } from '@/shared/types';
 import { resolveOverlayConfig } from '@/code/parsing/overlay-parser';
 import { trace, pauseDOMObserver, resumeDOMObserver } from '@/shared/debug-trace';
 import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers, toKebab } from '@/shared/css-utils';
-import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag, isCustomDataAttr } from '@/shared/constants';
+import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag, isCustomDataAttr, isCustomAttr } from '@/shared/constants';
 import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
 import { hasMotionTransformProp, motionPropsToCSSTransform, foldMotionTransforms, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
@@ -2803,9 +2803,10 @@ export function patchElement(
     // (overlays are moved from viewport tree to a portal sibling)
   }
 
-  // Clean up removed custom data-* attributes so canvas DOM stays 100% in sync with code
+  // Clean up removed custom attributes so canvas DOM stays 100% in sync with code
   for (const attr of Array.from(el.attributes)) {
-    if (isCustomDataAttr(attr.name) && !node.attrs?.[attr.name]) {
+    if ((isCustomDataAttr(attr.name) || isCustomAttr(attr.name)) && !node.attrs?.[attr.name]) {
+      if (attr.name === 'loading' && el.tagName.toLowerCase() === 'img') continue;
       el.removeAttribute(attr.name);
     }
   }
