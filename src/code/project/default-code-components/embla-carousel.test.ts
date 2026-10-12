@@ -59,6 +59,7 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(meta?.controls.layout?.type).toBe('group');
     expect(meta?.controls.scroll?.type).toBe('group');
     expect(meta?.controls.motion?.type).toBe('group');
+    expect(meta?.controls.slideEffects?.type).toBe('group');
     expect(meta?.controls.arrows?.type).toBe('group');
     expect(meta?.controls.dots?.type).toBe('group');
     expect(meta?.controls.activeSlideIndex?.type).toBe('number');
@@ -87,6 +88,14 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(motionControls?.autoplayDelay?.type).toBe('number');
     expect(motionControls?.pauseOnHover?.type).toBe('toggle');
     expect(motionControls?.effect?.type).toBe('select');
+
+    const effectsControls = meta?.controls.slideEffects?.controls;
+    expect(effectsControls?.enableSlideEffects?.type).toBe('toggle');
+    expect(effectsControls?.inactiveScale?.type).toBe('number');
+    expect(effectsControls?.inactiveOpacity?.type).toBe('number');
+    expect(effectsControls?.parallaxFactor?.type).toBe('number');
+    expect(effectsControls?.rotateAngle?.type).toBe('number');
+    expect(effectsControls?.effectsFalloff?.type).toBe('select');
 
     const arrowsControls = meta?.controls.arrows?.controls;
     expect(arrowsControls?.arrowsShow?.type).toBe('toggle');
@@ -396,11 +405,35 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(inner.style.height).toBe('100%');
   });
 
-  it('auto-migrates existing EmblaCarousel lacking WheelGesturesPlugin or vertical axis fix in syncBuiltInCodeComponents', () => {
+  it('renders with slideEffects enabled and applies transition styles', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          enableSlideEffects: true,
+          inactiveScale: 0.85,
+          inactiveOpacity: 0.6,
+          rotateAngle: 15,
+          parallaxFactor: 20,
+        },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+      ),
+    );
+
+    const slide = container.querySelector('[data-embla-slide="0"]') as HTMLElement;
+    expect(slide).toBeTruthy();
+    const inner = container.querySelector('[data-embla-slide-inner="true"]') as HTMLElement;
+    expect(inner).toBeTruthy();
+    expect(inner.style.transition).toContain('transform');
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking slideEffects in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    // Write a version that lacks vertical fix
-    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain("minHeight: isVertical && isFitHeight ? '450px'");
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"slideEffects"');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);

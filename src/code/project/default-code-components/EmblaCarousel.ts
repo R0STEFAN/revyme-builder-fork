@@ -104,6 +104,18 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
     ]}
   }},
 
+  "slideEffects": { "type": "group", "label": "Slide Effects (Tweens)", "controls": {
+    "enableSlideEffects": { "type": "toggle", "label": "Enable Effects", "default": false },
+    "inactiveScale": { "type": "number", "label": "Secondary Scale", "min": 0.5, "max": 1, "step": 0.05, "default": 0.85 },
+    "inactiveOpacity": { "type": "number", "label": "Secondary Opacity", "min": 0.1, "max": 1, "step": 0.05, "default": 0.6 },
+    "parallaxFactor": { "type": "number", "label": "Parallax Depth (%)", "min": 0, "max": 50, "step": 5, "default": 0 },
+    "rotateAngle": { "type": "number", "label": "3D Rotate / Coverflow (°)", "min": 0, "max": 45, "step": 5, "default": 0 },
+    "effectsFalloff": { "type": "select", "label": "Falloff Mode", "default": "clamped", "options": [
+      { "label": "Single Neighbor (Clamped)", "value": "clamped" },
+      { "label": "Continuous (Coverflow / Distance)", "value": "continuous" }
+    ]}
+  }},
+
   "arrows": { "type": "group", "label": "Built-in Arrows", "controls": {
     "arrowsShow": { "type": "toggle", "label": "Show Arrows", "default": true },
     "arrowsPosition": { "type": "select", "label": "Position", "default": "inside-sides", "options": [
@@ -180,6 +192,13 @@ function EmblaCarousel({
   marqueeSpeed = 2,
   marqueeDirection = 'forward',
   effect = 'slide',
+
+  enableSlideEffects = false,
+  inactiveScale = 0.85,
+  inactiveOpacity = 0.6,
+  parallaxFactor = 0,
+  rotateAngle = 0,
+  effectsFalloff = 'clamped',
 
   arrowsShow = true,
   arrowsPosition = 'inside-sides',
@@ -271,32 +290,140 @@ function EmblaCarousel({
     setProgress(Math.max(0, Math.min(1, emblaApi.scrollProgress())));
   }, [emblaApi]);
 
+  const isEffectsEnabled = enableSlideEffects === true || enableSlideEffects === 'true';
+  const minScale = Number(inactiveScale ?? 0.85);
+  const minOpacity = Number(inactiveOpacity ?? 0.6);
+  const numRotate = Number(rotateAngle || 0);
+  const numParallax = Number(parallaxFactor || 0);
+
+  const tweenSlideEffects = useCallback((api) => {
+    if (!api) return;
+    let slideNodes;
+    try {
+      slideNodes = api.slideNodes();
+    } catch (e) {
+      return;
+    }
+    if (!slideNodes || slideNodes.length === 0) return;
+
+    if (!isEffectsEnabled) {
+      slideNodes.forEach((node) => {
+        const inner = node.querySelector('[data-embla-slide-inner]');
+        if (inner) {
+          inner.style.transform = '';
+          inner.style.opacity = '';
+        }
+        const img = node.querySelector('img');
+        if (img) img.style.transform = '';
+      });
+      return;
+    }
+
+    let engine, scrollProgress, scrollSnaps;
+    try {
+      engine = api.internalEngine();
+      scrollProgress = api.scrollProgress();
+      scrollSnaps = api.scrollSnapList();
+    } catch (e) {
+      return;
+    }
+    const snapCount = scrollSnaps?.length || 0;
+    if (snapCount === 0 || !engine) return;
+
+    const snapDistance = snapCount > 1 ? (1 / (engine.options?.loop ? snapCount : (snapCount - 1))) : 1;
+
+    scrollSnaps.forEach((scrollSnap, snapIndex) => {
+      let diffToTarget = scrollSnap - scrollProgress;
+
+      if (engine.options?.loop && engine.slideLooper?.loopPoints) {
+        engine.slideLooper.loopPoints.forEach((loopItem) => {
+          const target = loopItem.target();
+          if (snapIndex === loopItem.index && target !== 0) {
+            const sign = Math.sign(target);
+            if (sign === -1) {
+              diffToTarget = scrollSnap - (1 + scrollProgress);
+            }
+            if (sign === 1) {
+              diffToTarget = scrollSnap + (1 - scrollProgress);
+            }
+          }
+        });
+      }
+
+      const normalizedDiff = snapDistance > 0 ? (diffToTarget / snapDistance) : 0;
+      const absDiff = Math.abs(normalizedDiff);
+
+      const factor = effectsFalloff === 'continuous'
+        ? Math.max(0, 1 - (absDiff * 0.5))
+        : Math.max(0, 1 - absDiff);
+
+      const scale = minScale + (1 - minScale) * factor;
+      const clampedScale = Math.min(Math.max(scale, minScale), 1);
+
+      const opacity = minOpacity + (1 - minOpacity) * factor;
+      const clampedOpacity = Math.min(Math.max(opacity, minOpacity), 1);
+
+      const slideNode = slideNodes[snapIndex];
+      if (!slideNode) return;
+      const inner = slideNode.querySelector('[data-embla-slide-inner]');
+      if (inner) {
+        let transformStr = 'scale(' + clampedScale + ')';
+        if (numRotate > 0) {
+          const angle = -1 * Math.sign(normalizedDiff) * Math.min(numRotate, absDiff * numRotate);
+          transformStr += isVertical ? (' rotateX(' + angle + 'deg)') : (' rotateY(' + angle + 'deg)');
+        }
+        inner.style.transform = transformStr;
+        inner.style.opacity = String(clampedOpacity);
+      }
+
+      if (numParallax > 0) {
+        const img = slideNode.querySelector('img');
+        if (img) {
+          const pTranslate = normalizedDiff * (-1 * numParallax);
+          img.style.transform = isVertical
+            ? ('translate3d(0, ' + pTranslate + '%, 0)')
+            : ('translate3d(' + pTranslate + '%, 0, 0)');
+        }
+      }
+    });
+  }, [isEffectsEnabled, minScale, minOpacity, numRotate, numParallax, effectsFalloff, isVertical]);
+
   useEffect(() => {
     if (!emblaApi) return;
     setScrollSnaps(emblaApi.scrollSnapList());
     onSelect();
     onScroll();
+    tweenSlideEffects(emblaApi);
     const onReInit = () => {
       setScrollSnaps(emblaApi.scrollSnapList());
       onSelect();
       onScroll();
+      tweenSlideEffects(emblaApi);
+    };
+    const onScrollEvent = () => {
+      onScroll();
+      tweenSlideEffects(emblaApi);
     };
     emblaApi.on('select', onSelect);
     emblaApi.on('reInit', onReInit);
-    emblaApi.on('scroll', onScroll);
+    emblaApi.on('scroll', onScrollEvent);
+    emblaApi.on('slideFocus', () => tweenSlideEffects(emblaApi));
     return () => {
       emblaApi.off('select', onSelect);
       emblaApi.off('reInit', onReInit);
-      emblaApi.off('scroll', onScroll);
+      emblaApi.off('scroll', onScrollEvent);
     };
-  }, [emblaApi, onSelect, onScroll]);
+  }, [emblaApi, onSelect, onScroll, tweenSlideEffects]);
 
   // Active slide index sync (in canvas mode)
   useEffect(() => {
-    if (isStatic && emblaApi && typeof activeSlideIndex === 'number') {
-      emblaApi.scrollTo(activeSlideIndex);
+    if (emblaApi && typeof activeSlideIndex === 'number') {
+      if (isStatic) {
+        emblaApi.scrollTo(activeSlideIndex);
+      }
+      tweenSlideEffects(emblaApi);
     }
-  }, [isStatic, emblaApi, activeSlideIndex]);
+  }, [isStatic, emblaApi, activeSlideIndex, tweenSlideEffects]);
 
   // Root ref & external trigger listener and button state sync
   const rootRef = useRef(null);
@@ -502,6 +629,7 @@ function EmblaCarousel({
     justifyContent: 'center',
     position: 'relative',
     boxSizing: 'border-box',
+    perspective: isEffectsEnabled && numRotate > 0 ? '1000px' : undefined,
     ...(isVertical
       ? { marginBottom: numGap + 'px' }
       : { marginRight: numGap + 'px' }),
@@ -521,6 +649,9 @@ function EmblaCarousel({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: isEffectsEnabled ? 'transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.2s cubic-bezier(0.25, 1, 0.5, 1)' : undefined,
+    willChange: isEffectsEnabled ? 'transform, opacity' : undefined,
+    transformOrigin: 'center center',
     ...(isFill || isAutoRatio
       ? {
           width: '100%',
