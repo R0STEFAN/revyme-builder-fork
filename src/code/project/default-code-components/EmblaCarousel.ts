@@ -23,6 +23,29 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
     ]},
     "customSlideWidth": { "type": "text", "label": "Slide Width", "default": "80%" },
     "gap": { "type": "number", "label": "Slide Gap", "min": 0, "max": 120, "step": 2, "default": 16 },
+    "aspectRatio": { "type": "select", "label": "Aspect Ratio", "default": "fill", "options": [
+      { "label": "Fill (Match Carousel)", "value": "fill" },
+      { "label": "16:9 (Widescreen)", "value": "16/9" },
+      { "label": "4:3 (Standard)", "value": "4/3" },
+      { "label": "1:1 (Square)", "value": "1/1" },
+      { "label": "3:4 (Portrait)", "value": "3/4" },
+      { "label": "9:16 (Vertical / Stories)", "value": "9/16" },
+      { "label": "Auto (Content)", "value": "auto" }
+    ]},
+    "objectFit": { "type": "select", "label": "Image Fit", "default": "cover", "options": [
+      { "label": "Cover (Crop & Fill)", "value": "cover" },
+      { "label": "Contain (Fit Inside)", "value": "contain" },
+      { "label": "Fill (Stretch)", "value": "fill" },
+      { "label": "Original (None)", "value": "none" }
+    ]},
+    "objectPosition": { "type": "select", "label": "Image Position", "default": "center", "options": [
+      { "label": "Center", "value": "center" },
+      { "label": "Top", "value": "top" },
+      { "label": "Bottom", "value": "bottom" },
+      { "label": "Left", "value": "left" },
+      { "label": "Right", "value": "right" }
+    ]},
+    "slideRadius": { "type": "number", "label": "Slide Radius", "min": 0, "max": 80, "step": 2, "default": 0 },
     "align": { "type": "select", "label": "Alignment", "default": "start", "options": [
       { "label": "Start", "value": "start" },
       { "label": "Center", "value": "center" },
@@ -117,7 +140,7 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
   "activeSlideIndex": { "type": "number", "label": "Active Slide (Canvas)", "min": 0, "max": 50, "step": 1, "default": 0 }
 } */
 
-import { useEffect, useState, useCallback, Children } from 'react';
+import { useEffect, useState, useCallback, Children, useRef, isValidElement, cloneElement } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import AutoScroll from 'embla-carousel-auto-scroll';
@@ -130,6 +153,10 @@ function EmblaCarousel({
   visibleSlides = '1',
   customSlideWidth = '80%',
   gap = 16,
+  aspectRatio = 'fill',
+  objectFit = 'cover',
+  objectPosition = 'center',
+  slideRadius = 0,
   align = 'start',
   axis = 'horizontal',
   direction = 'ltr',
@@ -267,8 +294,68 @@ function EmblaCarousel({
     }
   }, [isStatic, emblaApi, activeSlideIndex]);
 
-  // External trigger listener and button state sync
+  // Root ref & external trigger listener and button state sync
+  const rootRef = useRef(null);
   const carouselId = props['data-id'] || props.id || 'embla';
+
+  // Neutralize lingering canvas positioning (absolute, left, top) on slot children
+  // and enforce image fit/adaptation inside slides.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const inners = root.querySelectorAll('[data-embla-slide-inner]');
+    inners.forEach((inner) => {
+      Array.from(inner.children).forEach((c) => {
+        if (c instanceof HTMLElement) {
+          c.style.setProperty('position', 'relative', 'important');
+          c.style.setProperty('left', 'auto', 'important');
+          c.style.setProperty('top', 'auto', 'important');
+          c.style.setProperty('right', 'auto', 'important');
+          c.style.setProperty('bottom', 'auto', 'important');
+          c.style.setProperty('margin', '0', 'important');
+          c.style.setProperty('width', '100%', 'important');
+          c.style.setProperty('height', '100%', 'important');
+          c.style.setProperty('max-width', '100%', 'important');
+          c.style.setProperty('max-height', '100%', 'important');
+          c.style.setProperty('box-sizing', 'border-box', 'important');
+        }
+      });
+      const imgs = inner.querySelectorAll('img');
+      imgs.forEach((img) => {
+        img.style.setProperty('width', '100%', 'important');
+        img.style.setProperty('height', '100%', 'important');
+        img.style.setProperty('max-width', '100%', 'important');
+        img.style.setProperty('max-height', '100%', 'important');
+        img.style.setProperty('object-fit', objectFit || 'cover', 'important');
+        img.style.setProperty('object-position', objectPosition || 'center', 'important');
+        img.style.setProperty('display', 'block', 'important');
+      });
+    });
+  }, [children, objectFit, objectPosition, aspectRatio, count]);
+
+  const renderSlideChild = (child) => {
+    if (!isValidElement(child)) return child;
+    const childStyle = (child.props && child.props.style) || {};
+    return cloneElement(child, {
+      style: {
+        ...childStyle,
+        position: 'relative',
+        left: 'auto',
+        top: 'auto',
+        right: 'auto',
+        bottom: 'auto',
+        margin: 0,
+        width: '100%',
+        height: '100%',
+        maxWidth: '100%',
+        maxHeight: '100%',
+        boxSizing: 'border-box',
+        objectFit: objectFit || 'cover',
+        objectPosition: objectPosition || 'center',
+      },
+    });
+  };
+
   useEffect(() => {
     if (!emblaApi) return;
 
@@ -368,14 +455,46 @@ function EmblaCarousel({
     }
   }
 
-  const slideStyle = {
+  const isFill = !aspectRatio || aspectRatio === 'fill';
+  const isAutoRatio = aspectRatio === 'auto';
+  const radiusPx = Number(slideRadius || 0);
+
+  const slideOuterStyle = {
     flex: flexBasis,
     minWidth: 0,
     minHeight: 0,
+    height: isVertical ? 'auto' : '100%',
+    width: isVertical ? '100%' : undefined,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
+    boxSizing: 'border-box',
     ...(isVertical
       ? { marginBottom: numGap + 'px' }
       : { marginRight: numGap + 'px' }),
+  };
+
+  const slideInnerStyle = {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: radiusPx > 0 ? radiusPx + 'px' : undefined,
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isFill || isAutoRatio
+      ? {
+          width: '100%',
+          height: '100%',
+        }
+      : {
+          aspectRatio: aspectRatio,
+          width: isVertical ? 'auto' : '100%',
+          height: isVertical ? '100%' : 'auto',
+          maxWidth: '100%',
+          maxHeight: '100%',
+        }),
   };
 
   const arrowBtnStyle = (disabled) => ({
@@ -600,6 +719,8 @@ function EmblaCarousel({
 
   return (
     <div
+      ref={rootRef}
+      data-embla-root={carouselId}
       data-id={props['data-id']}
       data-name={props['data-name']}
       style={{
@@ -610,6 +731,30 @@ function EmblaCarousel({
         ...props.style,
       }}
     >
+      <style>{
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] > * { ' +
+        'position: relative !important; ' +
+        'left: auto !important; ' +
+        'top: auto !important; ' +
+        'right: auto !important; ' +
+        'bottom: auto !important; ' +
+        'margin: 0 !important; ' +
+        'width: 100% !important; ' +
+        'height: 100% !important; ' +
+        'max-width: 100% !important; ' +
+        'max-height: 100% !important; ' +
+        'box-sizing: border-box !important; ' +
+        '} ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] img { ' +
+        'width: 100% !important; ' +
+        'height: 100% !important; ' +
+        'max-width: 100% !important; ' +
+        'max-height: 100% !important; ' +
+        'object-fit: ' + (objectFit || 'cover') + ' !important; ' +
+        'object-position: ' + (objectPosition || 'center') + ' !important; ' +
+        'display: block !important; ' +
+        '}'
+      }</style>
       <div
         ref={emblaRef}
         style={{
@@ -628,8 +773,10 @@ function EmblaCarousel({
         >
           {slides.map(function (slide, idx) {
             return (
-              <div key={idx} style={slideStyle}>
-                {slide}
+              <div key={idx} data-embla-slide={idx} style={slideOuterStyle}>
+                <div data-embla-slide-inner="true" style={slideInnerStyle}>
+                  {renderSlideChild(slide)}
+                </div>
               </div>
             );
           })}

@@ -7,7 +7,7 @@ import { render } from '@testing-library/react';
 import { EMBLA_CAROUSEL_COMPONENT } from './EmblaCarousel';
 import { parseComponentControlsMeta, parseCodeComponentDefaultSize } from '@/code/components/controls-parser';
 import { compileCodeComponent } from '@/canvas/code-component-runtime';
-import { BUILT_IN_COMPONENTS, InMemoryProjectFS, installBuiltInCodeComponent, createDefaultProject } from '../project-fs';
+import { BUILT_IN_COMPONENTS, InMemoryProjectFS, installBuiltInCodeComponent, createDefaultProject, syncBuiltInCodeComponents } from '../project-fs';
 import * as defaultComponents from './index';
 
 beforeAll(() => {
@@ -67,6 +67,10 @@ describe('EmblaCarousel Component Metadata', () => {
     const layoutControls = meta?.controls.layout?.controls;
     expect(layoutControls?.visibleSlides?.type).toBe('select');
     expect(layoutControls?.gap?.type).toBe('number');
+    expect(layoutControls?.aspectRatio?.type).toBe('select');
+    expect(layoutControls?.objectFit?.type).toBe('select');
+    expect(layoutControls?.objectPosition?.type).toBe('select');
+    expect(layoutControls?.slideRadius?.type).toBe('number');
     expect(layoutControls?.align?.type).toBe('select');
     expect(layoutControls?.axis?.type).toBe('select');
     expect(layoutControls?.direction?.type).toBe('select');
@@ -238,4 +242,50 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(installed).toBe(true);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
   });
+
+  it('neutralizes slot child absolute positioning and applies aspect ratio', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          visibleSlides: '3',
+          aspectRatio: '3/4',
+          slideRadius: 16,
+          objectFit: 'cover',
+        },
+        React.createElement('img', {
+          key: '1',
+          src: 'test.jpg',
+          style: { position: 'absolute', left: 450, top: 100, width: 300, height: 200 },
+        }),
+      ),
+    );
+
+    const slideInner = container.querySelector('[data-embla-slide-inner="true"]') as HTMLElement;
+    expect(slideInner).toBeTruthy();
+    expect(slideInner.style.aspectRatio).toBe('3/4');
+    expect(slideInner.style.borderRadius).toBe('16px');
+
+    const img = container.querySelector('img') as HTMLElement;
+    expect(img).toBeTruthy();
+    // React cloneElement overrides
+    expect(img.style.position).toBe('relative');
+    expect(img.style.left).toBe('auto');
+    expect(img.style.top).toBe('auto');
+    expect(img.style.width).toBe('100%');
+    expect(img.style.height).toBe('100%');
+    expect(img.style.objectFit).toBe('cover');
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking aspectRatio in syncBuiltInCodeComponents', () => {
+    const fs = new InMemoryProjectFS(createDefaultProject());
+    // Write an older version of EmblaCarousel without aspectRatio
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"aspectRatio"');
+
+    syncBuiltInCodeComponents(fs);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
+  });
 });
+
