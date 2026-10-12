@@ -370,11 +370,37 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
   });
 
-  it('auto-migrates existing EmblaCarousel lacking WheelGesturesPlugin in syncBuiltInCodeComponents', () => {
+  it('renders vertical axis with non-zero dimensions and proper flex column', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          axis: 'vertical',
+          visibleSlides: '3',
+          gap: 12,
+        },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+      ),
+    );
+
+    const slide = container.querySelector('[data-embla-slide="0"]') as HTMLElement;
+    expect(slide).toBeTruthy();
+    expect(slide.style.width).toBe('100%');
+    expect(slide.style.height).toBe('100%');
+
+    const inner = container.querySelector('[data-embla-slide-inner="true"]') as HTMLElement;
+    expect(inner).toBeTruthy();
+    expect(inner.style.height).toBe('100%');
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking WheelGesturesPlugin or vertical axis fix in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    // Write a version that has visibleWidth but lacks WheelGesturesPlugin
-    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\nimport { wheelGestures } from 'embla-carousel-wheel-gestures';\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('WheelGesturesPlugin');
+    // Write a version that lacks vertical fix
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain("minHeight: isVertical && isFitHeight ? '450px'");
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);

@@ -495,8 +495,8 @@ function EmblaCarousel({
     flex: flexBasis,
     minWidth: 0,
     minHeight: 0,
-    height: isVertical ? 'auto' : '100%',
-    width: isVertical ? '100%' : undefined,
+    height: '100%',
+    width: '100%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -524,9 +524,9 @@ function EmblaCarousel({
     ...(isFill || isAutoRatio
       ? {
           width: '100%',
-          height: isFitHeight ? 'auto' : '100%',
-          aspectRatio: isFitHeight ? '16/9' : undefined,
-          minHeight: isFitHeight ? '180px' : undefined,
+          height: isFitHeight && !isVertical ? 'auto' : '100%',
+          aspectRatio: isFitHeight && !isVertical ? '16/9' : undefined,
+          minHeight: isFitHeight && !isVertical ? '180px' : undefined,
         }
       : {
           aspectRatio: aspectRatio,
@@ -713,13 +713,15 @@ function EmblaCarousel({
     const items = scrollSnaps.length > 0 ? scrollSnaps : slides;
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: dotsGap + 'px' }}>
+      <div style={{ display: 'flex', flexDirection: isVertical ? 'column' : 'row', alignItems: 'center', gap: dotsGap + 'px' }}>
         {items.map(function (_, i) {
           const isActive = i === selectedIndex;
-          const dotWidth = isPills
-            ? (isActive ? dotsSize * 3 : dotsSize * 1.5) + 'px'
+          const dotWidth = isVertical
+            ? dotsSize + 'px'
+            : (isPills ? (isActive ? dotsSize * 3 : dotsSize * 1.5) + 'px' : dotsSize + 'px');
+          const dotHeight = isVertical
+            ? (isPills ? (isActive ? dotsSize * 3 : dotsSize * 1.5) + 'px' : dotsSize + 'px')
             : dotsSize + 'px';
-          const dotHeight = dotsSize + 'px';
           const borderRadius = isPills ? Math.round(dotsSize / 2) + 'px' : '50%';
 
           return (
@@ -751,10 +753,12 @@ function EmblaCarousel({
       <div
         style={{
           position: 'absolute',
-          top: '16px',
+          top: isVertical ? '50%' : '16px',
           right: '16px',
+          transform: isVertical ? 'translateY(-50%)' : undefined,
           zIndex: 20,
           display: 'flex',
+          flexDirection: isVertical ? 'column' : 'row',
           alignItems: 'center',
           gap: dotsGap + 'px',
         }}
@@ -1070,6 +1074,7 @@ function EmblaCarousel({
         position: 'relative',
         width: '100%',
         height: '100%',
+        minHeight: isVertical && isFitHeight ? '450px' : undefined,
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
@@ -1110,20 +1115,22 @@ function EmblaCarousel({
         style={{
           overflow: 'hidden',
           width: '100%',
-          flex: isFitHeight ? '0 0 auto' : '1 1 auto',
-          minHeight: 0,
+          height: isVertical ? '100%' : undefined,
+          flex: isFitHeight ? (isVertical ? '1 1 auto' : '0 0 auto') : '1 1 auto',
+          minHeight: isVertical && isFitHeight ? '450px' : 0,
           position: 'relative',
           boxSizing: 'border-box',
           paddingLeft: padSides ? padSides + 'px' : undefined,
           paddingRight: padSides ? padSides + 'px' : undefined,
           paddingTop: padTopBottomSides ? padTopBottomSides + 'px' : undefined,
+          paddingBottom: padTopBottomSides ? padTopBottomSides + 'px' : undefined,
         }}
       >
         <div
           style={{
             display: 'flex',
             flexDirection: isVertical ? 'column' : 'row',
-            height: isVertical ? 'auto' : '100%',
+            height: '100%',
             touchAction: isVertical ? 'pan-x' : 'pan-y',
           }}
         >

@@ -2538,8 +2538,8 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
     // `readFile` returns null/undefined for missing files. Skip both — only
     // consider files the user actually has in their project.
     if (existing == null) continue;
-    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth or with broken wheelGestures import
-    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin'))) {
+    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth, broken wheelGestures, or vertical axis fix
+    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin') || !existing.includes("minHeight: isVertical && isFitHeight ? '450px'"))) {
       fs.writeFile(path, template);
       continue;
     }
