@@ -88,6 +88,7 @@ import ArrowConnectors from './ui/ArrowConnectors';
 import ConnectionHandle from './ui/ConnectionHandle';
 import SlotConnectionHandle from './ui/SlotConnectionHandle';
 import CarouselTriggerHandle from './ui/CarouselTriggerHandle';
+import CarouselTriggerConnectors from './ui/CarouselTriggerConnectors';
 import SlotConnectors from './ui/SlotConnectors';
 import { useIsViewer } from '@/code/stores/viewer-mode-store';
 import ConnectionTypeModal from '@/editor/ui/ConnectionTypeModal';
@@ -1491,6 +1492,9 @@ export default function Canvas() {
 
       {/* Carousel trigger handle — connect external Prev/Next triggers */}
       {!isViewer && <CarouselTriggerHandle />}
+
+      {/* Carousel trigger connectors — persistent lines for wired external triggers */}
+      {!isViewer && <CarouselTriggerConnectors />}
 
       {/* Persistent connector arrows for established slot connections. */}
       {!isViewer && <SlotConnectors />}
