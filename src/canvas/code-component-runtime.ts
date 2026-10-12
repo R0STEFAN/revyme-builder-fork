@@ -8,6 +8,13 @@ import * as motionRuntime from 'framer-motion';
 import * as revymeRuntime from '@revyme/runtime';
 import * as ReactJSXRuntime from 'react/jsx-runtime';
 import * as motionOne from '@motionone/dom';
+import useEmblaCarousel from 'embla-carousel-react';
+import Autoplay from 'embla-carousel-autoplay';
+import AutoScroll from 'embla-carousel-auto-scroll';
+import Fade from 'embla-carousel-fade';
+import AutoHeight from 'embla-carousel-auto-height';
+import WheelGesturesPlugin from 'embla-carousel-wheel-gestures';
+const wheelGestures = WheelGesturesPlugin;
 import { trace } from '@/shared/debug-trace';
 import { upgradeVectorSetInstanceBranch } from '@/code/icons/icon-set-template';
 
@@ -247,6 +254,12 @@ const MODULE_MAP: Record<string, any> = {
   'motion': motionOne,
   'next-themes': nextThemesStub,
   'next-intl': nextIntlStub,
+  'embla-carousel-react': { default: useEmblaCarousel, useEmblaCarousel },
+  'embla-carousel-autoplay': { default: Autoplay, Autoplay },
+  'embla-carousel-auto-scroll': { default: AutoScroll, AutoScroll },
+  'embla-carousel-fade': { default: Fade, Fade },
+  'embla-carousel-auto-height': { default: AutoHeight, AutoHeight },
+  'embla-carousel-wheel-gestures': { default: wheelGestures, wheelGestures, WheelGesturesPlugin: wheelGestures },
 };
 
 import {
@@ -306,7 +319,7 @@ function canvasInteractionPlugin({ types: t }: any) {
 
 export function compileCodeComponent(
   code: string,
-  componentName: string,
+  componentName: string = 'Component',
   opts?: { previewMode?: boolean; extraModules?: Record<string, any>; skipCache?: boolean },
 ): React.ComponentType<any> | null {
   // Upgrade legacy VECTOR SET files so an instance SCALES its vector with the box

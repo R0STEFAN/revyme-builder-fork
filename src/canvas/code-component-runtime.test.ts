@@ -318,5 +318,59 @@ export default withResponsiveProps(DynamicDataWrapper);
       expect(html).toContain('data-custom-tag="premium"');
       expect(html).toContain('<button>Click</button>');
     });
+
+    it('resolves embla-carousel modules from MODULE_MAP', () => {
+      const code = `
+'use client';
+import useEmblaCarousel from 'embla-carousel-react';
+import Autoplay from 'embla-carousel-autoplay';
+import AutoScroll from 'embla-carousel-auto-scroll';
+import Fade from 'embla-carousel-fade';
+import AutoHeight from 'embla-carousel-auto-height';
+import { wheelGestures } from 'embla-carousel-wheel-gestures';
+
+export default function Test() {
+  if (typeof useEmblaCarousel !== 'function') throw new Error("Cannot find module 'embla-carousel-react'");
+  if (typeof Autoplay !== 'function') throw new Error("Cannot find module 'embla-carousel-autoplay'");
+  if (typeof AutoScroll !== 'function') throw new Error("Cannot find module 'embla-carousel-auto-scroll'");
+  if (typeof Fade !== 'function') throw new Error("Cannot find module 'embla-carousel-fade'");
+  if (typeof AutoHeight !== 'function') throw new Error("Cannot find module 'embla-carousel-auto-height'");
+  if (typeof wheelGestures !== 'function') throw new Error("Cannot find module 'embla-carousel-wheel-gestures'");
+  return <div>Embla Loaded</div>;
+}
+`;
+      const Comp = compileCodeComponent(code, 'Test');
+      expect(Comp).toBeDefined();
+      expect(Comp).not.toBeNull();
+      const html = renderToStaticMarkup(createElement(Comp as any));
+      expect(html).toContain('Embla Loaded');
+    });
+
+    it('resolves embla-carousel modules via named imports', () => {
+      const code = `
+'use client';
+import { useEmblaCarousel } from 'embla-carousel-react';
+import { Autoplay } from 'embla-carousel-autoplay';
+import { AutoScroll } from 'embla-carousel-auto-scroll';
+import { Fade } from 'embla-carousel-fade';
+import { AutoHeight } from 'embla-carousel-auto-height';
+import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
+
+export default function TestNamed() {
+  if (typeof useEmblaCarousel !== 'function') throw new Error("Cannot find named 'useEmblaCarousel'");
+  if (typeof Autoplay !== 'function') throw new Error("Cannot find named 'Autoplay'");
+  if (typeof AutoScroll !== 'function') throw new Error("Cannot find named 'AutoScroll'");
+  if (typeof Fade !== 'function') throw new Error("Cannot find named 'Fade'");
+  if (typeof AutoHeight !== 'function') throw new Error("Cannot find named 'AutoHeight'");
+  if (typeof WheelGesturesPlugin !== 'function') throw new Error("Cannot find named 'WheelGesturesPlugin'");
+  return <div>Named Imports Loaded</div>;
+}
+`;
+      const Comp = compileCodeComponent(code, 'TestNamed');
+      expect(Comp).not.toBeNull();
+      const html = renderToStaticMarkup(createElement(Comp as any));
+      expect(html).toContain('Named Imports Loaded');
+    });
   });
 });
+
