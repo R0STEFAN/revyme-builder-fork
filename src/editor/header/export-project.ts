@@ -36,7 +36,7 @@ export function canExport(): boolean {
 /** The formats this build can export. Standalone has no server to prerender
  *  or convert, so only the Next.js source — built locally — is on offer. */
 export function canExportFormat(format: ExportFormat): boolean {
-  return CLOUD_ENABLED || format === 'source';
+  return CLOUD_ENABLED || format === 'source' || format === 'source-ssg';
 }
 
 /** The @revyme/runtime range to pin in an exported package.json. */
@@ -76,13 +76,18 @@ export function extractUploadFilenames(files: Iterable<string>): string[] {
 
 /** Standalone: MAIN's files (what publishes — never a branch), as a
  *  runnable Next.js project, zipped here and downloaded. */
-async function exportSourceInBrowser(): Promise<boolean> {
+async function exportSourceInBrowser(format: ExportFormat = 'source'): Promise<boolean> {
   // Pending canvas edits reach ProjectFS on flush — export what's on screen.
   flushNow();
   const main = projectFS.readBranchFiles(MAIN_BRANCH_ID, { shared: true }) ?? new Map<string, string>();
   const name = getDefaultStore().get(projectNameAtom) || null;
-  trace.action('export-project:local-start', { files: main.size });
-  const built = await buildSourceExport(Object.fromEntries(main), { name, runtimeRange: runtimeRange() });
+  const ssg = format === 'source-ssg';
+  trace.action('export-project:local-start', { files: main.size, format, ssg });
+  const built = await buildSourceExport(Object.fromEntries(main), {
+    name,
+    runtimeRange: runtimeRange(),
+    ssg,
+  });
 
   // Gather referenced upload assets and fetch binary data to bundle into public/api/uploads and public/uploads
   const uploadFiles = extractUploadFilenames(main.values());
@@ -142,7 +147,7 @@ export async function exportProject(format: ExportFormat = 'source'): Promise<bo
       return false;
     }
     try {
-      return await exportSourceInBrowser();
+      return await exportSourceInBrowser(format);
     } catch (err) {
       trace.error('export-project:local-error', err);
       toast.error('Export failed — check console');

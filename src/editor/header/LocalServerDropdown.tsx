@@ -129,6 +129,28 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
   const [buildLog, setBuildLog] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [buildMode, setBuildMode] = useState<'dynamic' | 'ssg'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('revyme-local-server-build-mode');
+        if (saved === 'ssg' || saved === 'dynamic') return saved;
+      } catch {
+        // ignore
+      }
+    }
+    return 'dynamic';
+  });
+
+  const handleBuildModeChange = (mode: 'dynamic' | 'ssg') => {
+    setBuildMode(mode);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('revyme-local-server-build-mode', mode);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const projectId = getProjectId();
   const currentBranch = useAtomValue(activeBranchIdAtom) || MAIN_BRANCH_ID;
@@ -215,12 +237,15 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       }
 
       // 3. Trigger build
-      const result = await buildLocalServer(projectId, prepareSiteFiles(files), activeBranch);
+      const isSsg = buildMode === 'ssg';
+      trace.action('local-server-dropdown:build-trigger', { projectId, branch: activeBranch, buildMode });
+      const preparedFiles = prepareSiteFiles(files, { ssg: isSsg });
+      const result = await buildLocalServer(projectId, preparedFiles, activeBranch);
       setBuildLog(result.log || null);
 
       if (result.success) {
-        trace.action('local-server-dropdown:build-success', { projectId, branch: activeBranch });
-        toast.success(`Build succeeded (${activeBranch})! Ready to start server.`);
+        trace.action('local-server-dropdown:build-success', { projectId, branch: activeBranch, buildMode });
+        toast.success(`Build succeeded (${activeBranch}, ${isSsg ? 'Hybrid SSG' : 'Dynamic'})! Ready to start server.`);
         await refreshStatus();
       } else {
         trace.error('local-server-dropdown:build-failed', { projectId, branch: activeBranch, log: result.log });
@@ -237,7 +262,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
       setBuilding(false);
       void refreshStatus();
     }
-  }, [building, currentBranch, projectId, refreshStatus]);
+  }, [building, buildMode, currentBranch, projectId, refreshStatus]);
 
   // Handle Start
   const handleStart = useCallback(async () => {
@@ -350,6 +375,42 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
             >
               {currentBranch}
             </span>
+          </div>
+
+          {/* Build mode row: Dynamic vs Hybrid SSG */}
+          <div className="flex flex-col gap-1.5 text-xs">
+            <div className="flex items-center justify-between text-[var(--text-secondary)] select-none">
+              <span>Build mode</span>
+              <span className="text-[10px] text-[var(--text-tertiary)]">
+                {buildMode === 'ssg' ? 'Pre-render CMS (SSG)' : 'Server render (Dynamic)'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1 p-0.5 bg-[var(--bg-surface,rgba(0,0,0,0.2))] border border-[var(--border-light)] rounded cut-corners">
+              <button
+                type="button"
+                disabled={isBuilding || isRunning}
+                onClick={() => handleBuildModeChange('dynamic')}
+                className={`px-2 py-1 text-[11px] font-medium rounded transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                  buildMode === 'dynamic'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                } disabled:opacity-50`}
+              >
+                Dynamic
+              </button>
+              <button
+                type="button"
+                disabled={isBuilding || isRunning}
+                onClick={() => handleBuildModeChange('ssg')}
+                className={`px-2 py-1 text-[11px] font-medium rounded transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                  buildMode === 'ssg'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                } disabled:opacity-50`}
+              >
+                Hybrid SSG
+              </button>
+            </div>
           </div>
 
           {/* URL link when running */}

@@ -53,6 +53,16 @@ describe('buildLocaleRouteSource', () => {
     expect(src).toContain("export { default } from '@/app/[slug]/page';");
     expect(src).not.toContain('alternates');
   });
+  it('dynamic routes re-export generateStaticParams when includeStaticParams is true', () => {
+    const src = buildLocaleRouteSource('app/[slug]/page.client.tsx', 'fr', CFG, { includeStaticParams: true });
+    expect(src).toContain("export { default, generateStaticParams } from '@/app/[slug]/page';");
+    expect(src).not.toContain('alternates');
+  });
+  it('non-dynamic routes keep export { default } even if includeStaticParams is true', () => {
+    const src = buildLocaleRouteSource('app/(Body)/about/page.client.tsx', 'fr', CFG, { includeStaticParams: true });
+    expect(src).toContain("export { default } from '@/app/(Body)/about/page';");
+    expect(src).not.toContain('generateStaticParams');
+  });
 });
 
 describe('syncLocaleRoutes', () => {

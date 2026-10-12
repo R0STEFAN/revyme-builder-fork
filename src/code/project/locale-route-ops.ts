@@ -53,6 +53,7 @@ export function buildLocaleRouteSource(
   pageClientPath: string,
   locale: string,
   config: I18nConfig,
+  options?: { includeStaticParams?: boolean },
 ): string {
   const pageDir = pageClientPath.replace(/\/page\.client\.tsx$/, '');
   const url = pageUrlPath(pageClientPath);
@@ -78,11 +79,15 @@ ${languages}
   },
 };
 `;
+  const exportClause = isDynamic && options?.includeStaticParams
+    ? 'export { default, generateStaticParams }'
+    : 'export { default }';
+
   return `/** ${LOCALE_ROUTE_MARKER} ${locale} — GENERATED route for ${localeUrl}.
  *  Content lives in ${pageClientPath}; app/providers.tsx resolves the locale
  *  from the URL. The editor regenerates this file on locale/page changes.
  *  Do not edit. */
-export { default } from '@/${pageDir}/page';
+${exportClause} from '@/${pageDir}/page';
 ${metadata}`;
 }
 

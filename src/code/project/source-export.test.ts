@@ -241,4 +241,79 @@ export default function Page() {
     expect(transformed).toContain('sizes="145px"');
     expect(transformed).not.toContain('sizes="100vw"');
   });
+
+  describe('Hybrid SSG vs Dynamic export variants', () => {
+    const cmsDetailPage = `import PageClient from './page.client';
+import articles from '@/cms/articles.json';
+
+export async function generateMetadata({ params }) {
+  return { title: 'Article' };
+}
+
+export default function Page() {
+  return <PageClient />;
+}
+`;
+    const localeDetailPage = `/** @revyme-locale-route fr — GENERATED route for /fr/articles/[slug].
+ *  Content lives in app/articles/[slug]/page.client.tsx; app/providers.tsx resolves the locale
+ *  from the URL. The editor regenerates this file on locale/page changes.
+ *  Do not edit. */
+export { default } from '@/app/articles/[slug]/page';
+`;
+    const pageWithImage = `export default function Page() {
+  return (
+    <div>
+      <img
+        data-id="img1"
+        src="/api/uploads/photo.jpg"
+        alt=""
+        style={{ width: '100%' }}
+      />
+    </div>
+  );
+}`;
+    const projectFiles = {
+      'app/articles/[slug]/page.tsx': cmsDetailPage,
+      'app/articles/[slug]/page.client.tsx': pageWithImage,
+      'app/fr/articles/[slug]/page.tsx': localeDetailPage,
+      'cms/articles.json': '[{"_slug":"hello","title":"Hello"}]',
+    };
+
+    it('dynamic export (ssg: false or omitted) does not include generateStaticParams in CMS detail or locale wrapper', async () => {
+      const omitted = await buildSourceExport(projectFiles, { name: 'Dynamic Site', runtimeRange: '^1', now: NOW });
+      expect(omitted.files['app/articles/[slug]/page.tsx']).not.toContain('generateStaticParams');
+      expect(omitted.files['app/fr/articles/[slug]/page.tsx']).toContain("export { default } from '@/app/articles/[slug]/page';");
+      expect(omitted.files['app/fr/articles/[slug]/page.tsx']).not.toContain('generateStaticParams');
+
+      const explicitFalse = await buildSourceExport(projectFiles, { name: 'Dynamic Site', runtimeRange: '^1', now: NOW, ssg: false });
+      expect(explicitFalse.files['app/articles/[slug]/page.tsx']).not.toContain('generateStaticParams');
+      expect(explicitFalse.files['app/fr/articles/[slug]/page.tsx']).toContain("export { default } from '@/app/articles/[slug]/page';");
+      expect(explicitFalse.files['app/fr/articles/[slug]/page.tsx']).not.toContain('generateStaticParams');
+
+      // Both retain image-utils, optimize-images, responsive srcSet, and sharp
+      expect(omitted.files['lib/image-utils.ts']).toContain('getUploadSrcSet');
+      expect(omitted.files['scripts/optimize-images.mjs']).toContain('sharp');
+      expect(omitted.files['app/articles/[slug]/page.client.tsx']).toContain('srcSet="/api/uploads/photo-320w.webp 320w');
+      expect(JSON.parse(omitted.files['package.json']).devDependencies.sharp).toBe('^0.35.5');
+    });
+
+    it('hybrid SSG export (ssg: true) includes generateStaticParams in CMS detail and re-exports in dynamic locale wrapper', async () => {
+      const ssg = await buildSourceExport(projectFiles, { name: 'SSG Site', runtimeRange: '^1', now: NOW, ssg: true });
+
+      // CMS detail page has generateStaticParams injected
+      expect(ssg.files['app/articles/[slug]/page.tsx']).toContain('export async function generateStaticParams()');
+      expect(ssg.files['app/articles/[slug]/page.tsx']).toContain('const items = Array.isArray(articles) ? articles : [];');
+
+      // Dynamic locale route re-exports generateStaticParams
+      expect(ssg.files['app/fr/articles/[slug]/page.tsx']).toContain(
+        "export { default, generateStaticParams } from '@/app/articles/[slug]/page';",
+      );
+
+      // Retains image-utils, optimize-images, responsive srcSet, and sharp
+      expect(ssg.files['lib/image-utils.ts']).toContain('getUploadSrcSet');
+      expect(ssg.files['scripts/optimize-images.mjs']).toContain('sharp');
+      expect(ssg.files['app/articles/[slug]/page.client.tsx']).toContain('srcSet="/api/uploads/photo-320w.webp 320w');
+      expect(JSON.parse(ssg.files['package.json']).devDependencies.sharp).toBe('^0.35.5');
+    });
+  });
 });

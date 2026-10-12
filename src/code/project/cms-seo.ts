@@ -140,6 +140,7 @@ export interface BuildDetailWrapperInput {
    *  empty. Flat keys matching CMS_SEO_SLOTS, plus `canonical`/robots. */
   defaults?: Record<string, unknown>;
   bindings?: CmsSeoBindings;
+  includeStaticParams?: boolean;
 }
 
 /**
@@ -156,7 +157,7 @@ export interface BuildDetailWrapperInput {
  * static defaults rather than throw and 500 the route.
  */
 export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): string {
-  const { collection, defaults = {}, bindings = {} } = input;
+  const { collection, defaults = {}, bindings = {}, includeStaticParams } = input;
   const varName = importVarName(collection);
 
   const defaultsLiteral = inlineObject([
@@ -175,6 +176,15 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
 
   const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
     ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
+    : '';
+
+  const staticParams = includeStaticParams
+    ? `\nexport async function generateStaticParams() {
+  const items = Array.isArray(${varName}) ? ${varName} : [];
+  return items
+    .filter((i) => i && i._slug)
+    .map((i) => ({ slug: String(i._slug) }));
+}\n`
     : '';
 
   return `import PageClient from './page.client';
@@ -219,7 +229,7 @@ export async function generateMetadata({ params }) {
     alternates: { canonical: seoDefaults.canonical || undefined },${robots}
   };
 }
-
+${staticParams}
 export default function Page() {
   return <PageClient />;
 }
@@ -229,4 +239,34 @@ export default function Page() {
 /** The collection a detail page's wrapper imports, when it has per-item SEO. */
 export function wrapperCollection(serverCode: string): string | null {
   return /from\s+['"]@\/cms\/([A-Za-z0-9_-]+)\.json['"]/.exec(serverCode)?.[1] ?? null;
+}
+
+/** True when this server wrapper already exports generateStaticParams. */
+export function hasGenerateStaticParams(serverCode: string): boolean {
+  return /export\s+(?:async\s+)?function\s+generateStaticParams\b|export\s*\{[^}]*\bgenerateStaticParams\b/.test(serverCode);
+}
+
+/**
+ * Ensure generateStaticParams is present in a CMS detail page server wrapper.
+ * If missing, detects the imported collection var name and injects it.
+ */
+export function ensureCmsDetailStaticParams(serverCode: string): string {
+  if (hasGenerateStaticParams(serverCode)) return serverCode;
+
+  const importMatch = /import\s+([A-Za-z0-9_$]+)\s+from\s+['"]@\/cms\/[A-Za-z0-9_-]+\.json['"]/.exec(serverCode);
+  const collection = wrapperCollection(serverCode);
+  const varName = importMatch?.[1] ?? (collection ? importVarName(collection) : 'items');
+
+  const snippet = `export async function generateStaticParams() {
+  const items = Array.isArray(${varName}) ? ${varName} : [];
+  return items
+    .filter((i) => i && i._slug)
+    .map((i) => ({ slug: String(i._slug) }));
+}
+`;
+
+  if (/export\s+default\b/.test(serverCode)) {
+    return serverCode.replace(/export\s+default\b/, `${snippet}\nexport default`);
+  }
+  return serverCode.endsWith('\n') ? `${serverCode}\n${snippet}` : `${serverCode}\n\n${snippet}`;
 }

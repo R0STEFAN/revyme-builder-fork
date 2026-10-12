@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn, exec, execSync, type ChildProcess } from 'node:child_process';
 import sharp from 'sharp';
 import { getDataDirs, getProject } from './storage';
-import { prepareSiteFiles, OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/code/project/source-export';
+import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/shared/image-export-constants';
 
 export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
 
@@ -352,10 +352,8 @@ export class LocalServerManager {
       }
     }
 
-    const siteFiles = prepareSiteFiles(files);
-
     // Write all project files, skipping internal metadata paths starting with '_'
-    for (const [relativePath, content] of Object.entries(siteFiles)) {
+    for (const [relativePath, content] of Object.entries(files)) {
       if (isIgnoredFile(relativePath)) {
         continue;
       }

@@ -33,6 +33,7 @@ vi.mock('@/code/mutation/mutation-queue', () => ({
 describe('LocalServerDropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 
     // Default mock responses
@@ -214,6 +215,77 @@ export function PageTransitions() { e.stopImmediatePropagation(); }`;
       }),
       'feature-hero'
     );
+  });
+
+  it('supports switching build modes and persists selection to localStorage', async () => {
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(localServerClient.fetchLocalServerStatus).toHaveBeenCalled();
+    });
+
+    const dynamicBtn = screen.getByRole('button', { name: /^dynamic$/i });
+    const ssgBtn = screen.getByRole('button', { name: /^hybrid ssg$/i });
+
+    expect(dynamicBtn).toBeTruthy();
+    expect(ssgBtn).toBeTruthy();
+
+    // Default mode is dynamic
+    expect(localStorage.getItem('revyme-local-server-build-mode')).toBeNull();
+
+    // Switch to Hybrid SSG
+    act(() => {
+      fireEvent.click(ssgBtn);
+    });
+    expect(localStorage.getItem('revyme-local-server-build-mode')).toBe('ssg');
+
+    // Switch back to Dynamic
+    act(() => {
+      fireEvent.click(dynamicBtn);
+    });
+    expect(localStorage.getItem('revyme-local-server-build-mode')).toBe('dynamic');
+  });
+
+  it('injects generateStaticParams into CMS detail pages when building in Hybrid SSG mode', async () => {
+    const cmsDetailFile = `import { posts } from '@/cms/posts.data';
+export default function BlogPost({ params }) { return <div>Post</div>; }`;
+    vi.spyOn(projectFsModule.projectFS, 'readBranchFiles').mockReturnValue(new Map([
+      ['app/(site)/blog/[slug]/page.tsx', cmsDetailFile],
+    ]));
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    // Click Hybrid SSG mode
+    const ssgBtn = screen.getByRole('button', { name: /^hybrid ssg$/i });
+    fireEvent.click(ssgBtn);
+
+    // Click Build
+    const buildBtn = screen.getByRole('button', { name: /^build$/i });
+    await act(async () => {
+      fireEvent.click(buildBtn);
+    });
+
+    const sent = vi.mocked(localServerClient.buildLocalServer).mock.calls[0][1]!;
+    expect(sent['app/(site)/blog/[slug]/page.tsx']).toContain('generateStaticParams');
+  });
+
+  it('keeps CMS detail pages dynamic without generateStaticParams when building in Dynamic mode', async () => {
+    const cmsDetailFile = `import { posts } from '@/cms/posts.data';
+export default function BlogPost({ params }) { return <div>Post</div>; }`;
+    vi.spyOn(projectFsModule.projectFS, 'readBranchFiles').mockReturnValue(new Map([
+      ['app/(site)/blog/[slug]/page.tsx', cmsDetailFile],
+    ]));
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    // Default is Dynamic mode, click Build directly
+    const buildBtn = screen.getByRole('button', { name: /^build$/i });
+    await act(async () => {
+      fireEvent.click(buildBtn);
+    });
+
+    const sent = vi.mocked(localServerClient.buildLocalServer).mock.calls[0][1]!;
+    expect(sent['app/(site)/blog/[slug]/page.tsx']).not.toContain('generateStaticParams');
   });
 
   it('shows error toast when build fails', async () => {

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { extractUploadFilenames } from './export-project';
+import { extractUploadFilenames, canExportFormat } from './export-project';
+
+describe('canExportFormat', () => {
+  it('allows source and source-ssg formats in standalone mode', () => {
+    expect(canExportFormat('source')).toBe(true);
+    expect(canExportFormat('source-ssg')).toBe(true);
+  });
+});
 
 describe('extractUploadFilenames', () => {
   it('extracts unique upload filenames from code strings', () => {

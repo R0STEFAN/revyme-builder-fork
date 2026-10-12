@@ -8,6 +8,8 @@ import {
   bindableFields,
   defaultBindings,
   wrapperCollection,
+  hasGenerateStaticParams,
+  ensureCmsDetailStaticParams,
 } from './cms-seo';
 import { parseMetadataFromCode } from '../generation/metadata-gen';
 import type { CollectionSchema } from '@/shared/types';
@@ -51,6 +53,18 @@ async function runGenerateMetadata(src: string, items: unknown[] | null, slug: s
   // vinext passes params as a THENABLE, matching Next 15 — the emitted code
   // must await it, so hand it a promise rather than a plain object.
   return fn({ params: Promise.resolve({ slug }) });
+}
+
+async function runGenerateStaticParams(src: string, items: unknown[] | null) {
+  const importVar = /^import (\w+) from ['"]@\/cms\//m.exec(src)?.[1];
+  if (!importVar) throw new Error('wrapper has no collection import');
+  const body = src
+    .slice(src.indexOf('export async function generateStaticParams'), src.indexOf('export default'))
+    .replace('export async function generateStaticParams', 'async function generateStaticParams')
+    .replace(new RegExp(`\\b${importVar}\\b`, 'g'), '__cmsData');
+  const factory = new Function('__cmsData', `${body}\nreturn generateStaticParams;`);
+  const fn = factory(items) as () => Promise<Array<{ slug: string }>>;
+  return fn();
 }
 
 describe('buildCmsDetailServerWrapper', () => {
@@ -186,3 +200,64 @@ export default function Page() {
     expect((next.match(/export\s+(async\s+function\s+generateMetadata|const\s+metadata)/g) ?? []).length).toBe(1);
   });
 });
+
+describe('generateStaticParams for hybrid SSG', () => {
+  it('omits generateStaticParams when includeStaticParams is false or undefined', () => {
+    const withoutOpt = buildCmsDetailServerWrapper({ collection: 'articles' });
+    expect(hasGenerateStaticParams(withoutOpt)).toBe(false);
+    expect(withoutOpt).not.toContain('generateStaticParams');
+
+    const explicitFalse = buildCmsDetailServerWrapper({ collection: 'articles', includeStaticParams: false });
+    expect(hasGenerateStaticParams(explicitFalse)).toBe(false);
+  });
+
+  it('generates generateStaticParams when includeStaticParams is true', async () => {
+    const withOpt = buildCmsDetailServerWrapper({ collection: 'articles', includeStaticParams: true });
+    expect(() => parse(withOpt, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+    expect(hasGenerateStaticParams(withOpt)).toBe(true);
+    expect(withOpt).toContain('export async function generateStaticParams');
+
+    const params = await runGenerateStaticParams(withOpt, [
+      ...ITEMS,
+      { name: 'No slug' },
+      null,
+    ]);
+    expect(params).toEqual([{ slug: 'first' }, { slug: 'second' }]);
+  });
+
+  it('safely handles non-array data in generateStaticParams', async () => {
+    const withOpt = buildCmsDetailServerWrapper({ collection: 'articles', includeStaticParams: true });
+    const params = await runGenerateStaticParams(withOpt, null);
+    expect(params).toEqual([]);
+  });
+
+  it('ensureCmsDetailStaticParams injects generateStaticParams idempotently', () => {
+    const initial = buildCmsDetailServerWrapper({ collection: 'articles' });
+    expect(hasGenerateStaticParams(initial)).toBe(false);
+
+    const injected = ensureCmsDetailStaticParams(initial);
+    expect(hasGenerateStaticParams(injected)).toBe(true);
+    expect(injected).toContain('const items = Array.isArray(articles) ? articles : [];');
+    expect(() => parse(injected, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+
+    // Calling it again does not duplicate
+    const twice = ensureCmsDetailStaticParams(injected);
+    expect(twice).toBe(injected);
+    const count = (twice.match(/export async function generateStaticParams/g) ?? []).length;
+    expect(count).toBe(1);
+  });
+
+  it('ensureCmsDetailStaticParams detects collection variable from import', () => {
+    const customCode = `import PageClient from './page.client';
+import customPosts from '@/cms/posts.json';
+
+export default function Page() {
+  return <PageClient />;
+}
+`;
+    const injected = ensureCmsDetailStaticParams(customCode);
+    expect(injected).toContain('const items = Array.isArray(customPosts) ? customPosts : [];');
+    expect(hasGenerateStaticParams(injected)).toBe(true);
+  });
+});
+

@@ -15,6 +15,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { CLOUD_ENABLED } from '@/shared/cloud-flag';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { WebsiteMeta } from '@/backend/types';
+import { canExportFormat } from './export-project';
 
 // ─── Brand icons ────────────────────────────────────────────────────────────
 //
@@ -125,7 +126,7 @@ function HtmlLogo({ size = 16 }: { size?: number }) {
 
 // ─── Format catalogue ───────────────────────────────────────────────────────
 
-export type ExportFormat = 'source' | 'vite' | 'static' | 'tailwind';
+export type ExportFormat = 'source' | 'source-ssg' | 'vite' | 'static' | 'tailwind';
 
 interface FormatDef {
   id: ExportFormat;
@@ -142,8 +143,15 @@ interface FormatDef {
 const FORMATS: FormatDef[] = [
   {
     id: 'source',
-    label: 'Source code',
-    sublabel: 'Full Next.js project',
+    label: 'Next.js (Dynamic)',
+    sublabel: 'Standard server-rendered routes',
+    minPlan: 'free',
+    icon: <NextLogo size={18} />,
+  },
+  {
+    id: 'source-ssg',
+    label: 'Next.js (Hybrid SSG)',
+    sublabel: 'Pre-rendered pages + dynamic forms',
     minPlan: 'free',
     icon: <NextLogo size={18} />,
   },
@@ -236,8 +244,8 @@ export function ExportDropdown({
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open, onClose]);
 
-  // Standalone offers only what the browser can build: the Next.js source.
-  const formats = FORMATS.filter((f) => CLOUD_ENABLED || f.id === 'source');
+  // Standalone offers only what the browser can build: the Next.js sources (Dynamic and Hybrid SSG).
+  const formats = FORMATS.filter((f) => canExportFormat(f.id));
   const selected = formats.find(f => f.id === format) ?? formats[0]!;
   const canUseSelected = meetsPlan(meta, selected.minPlan);
 
