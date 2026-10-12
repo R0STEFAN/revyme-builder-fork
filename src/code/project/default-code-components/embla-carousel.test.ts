@@ -1,12 +1,13 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { EMBLA_CAROUSEL_COMPONENT } from './EmblaCarousel';
 import { parseComponentControlsMeta, parseCodeComponentDefaultSize } from '@/code/components/controls-parser';
-import { compileCodeComponent } from '@/canvas/code-component-runtime';
+import { compileCodeComponent, clearCodeComponentCache } from '@/canvas/code-component-runtime';
+import useEmblaCarousel from 'embla-carousel-react';
 import { BUILT_IN_COMPONENTS, InMemoryProjectFS, installBuiltInCodeComponent, createDefaultProject, syncBuiltInCodeComponents } from '../project-fs';
 import * as defaultComponents from './index';
 
@@ -193,17 +194,155 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(getByText('02')).toBeTruthy();
   });
 
-  it('renders progressBar dot format', () => {
+  it('renders progressBar dot format with proper percentage, role, and vertical layout', () => {
     const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
-    const { container } = render(
+    const { container, rerender } = render(
       React.createElement(
         Comp,
         { dotsShow: true, dotsFormat: 'progressBar' },
         React.createElement('div', { key: '1' }, 'S1'),
         React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+        React.createElement('div', { key: '4' }, 'S4'),
       ),
     );
-    expect(container.querySelector('[style*="width: 120px"]')).toBeTruthy();
+    const progressTrack = container.querySelector('[role="progressbar"]') as HTMLElement;
+    expect(progressTrack).toBeTruthy();
+    expect(progressTrack?.getAttribute('aria-valuenow')).toBe('1');
+    expect(progressTrack?.getAttribute('aria-valuemax')).toBe('4');
+    
+    const fillEl = progressTrack?.firstElementChild as HTMLElement;
+    expect(fillEl).toBeTruthy();
+    expect(fillEl.style.width).toBe('25%');
+
+    // Vertical layout -> height 120px and height fill 25%
+    rerender(
+      React.createElement(
+        Comp,
+        { dotsShow: true, dotsFormat: 'progressBar', axis: 'y' },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+        React.createElement('div', { key: '4' }, 'S4'),
+      ),
+    );
+    const verticalTrack = container.querySelector('[role="progressbar"]') as HTMLElement;
+    expect(verticalTrack.style.height).toBe('120px');
+    const verticalFill = verticalTrack?.firstElementChild as HTMLElement;
+    expect(verticalFill.style.height).toBe('25%');
+    expect(verticalFill.style.width).toBe('100%');
+  });
+
+  it('allows clicking the progressBar to navigate between slides', () => {
+    clearCodeComponentCache();
+    let capturedApi: any = null;
+    const wrappedHook = (...args: any[]) => {
+      const res = useEmblaCarousel(...args);
+      if (res[1]) {
+        capturedApi = res[1];
+        if (!capturedApi.scrollTo?.mock) {
+          vi.spyOn(capturedApi, 'scrollTo');
+          capturedApi.scrollSnapList = () => [0, 1, 2, 3];
+        }
+      }
+      return res;
+    };
+
+    try {
+      const Comp = compileCodeComponent(
+        EMBLA_CAROUSEL_COMPONENT,
+        'EmblaCarousel',
+        { previewMode: true, extraModules: { 'embla-carousel-react': { default: wrappedHook, useEmblaCarousel: wrappedHook } } },
+      ) as React.ComponentType<any>;
+      const { container } = render(
+        React.createElement(
+          Comp,
+          { dotsShow: true, dotsFormat: 'progressBar' },
+          React.createElement('div', { key: '1' }, 'S1'),
+          React.createElement('div', { key: '2' }, 'S2'),
+          React.createElement('div', { key: '3' }, 'S3'),
+          React.createElement('div', { key: '4' }, 'S4'),
+        ),
+      );
+      const progressTrack = container.querySelector('[role="progressbar"]') as HTMLElement;
+      expect(progressTrack).toBeTruthy();
+
+      // Mock getBoundingClientRect on track
+      progressTrack.getBoundingClientRect = () => ({
+        left: 100,
+        top: 200,
+        width: 120,
+        height: 8,
+        right: 220,
+        bottom: 208,
+        x: 100,
+        y: 200,
+        toJSON: () => {},
+      });
+
+      // Click at 75% across the width (clientX = 190, which is left 100 + 90 -> 90/120 = 0.75 -> index 3)
+      fireEvent.click(progressTrack, { clientX: 190, clientY: 204 });
+
+      expect(capturedApi?.scrollTo).toHaveBeenCalledWith(3);
+    } finally {
+      clearCodeComponentCache();
+    }
+  });
+
+  it('allows clicking vertical progressBar to navigate slides top-to-bottom', () => {
+    clearCodeComponentCache();
+    let capturedApi: any = null;
+    const wrappedHook = (...args: any[]) => {
+      const res = useEmblaCarousel(...args);
+      if (res[1]) {
+        capturedApi = res[1];
+        if (!capturedApi.scrollTo?.mock) {
+          vi.spyOn(capturedApi, 'scrollTo');
+          capturedApi.scrollSnapList = () => [0, 1, 2, 3];
+        }
+      }
+      return res;
+    };
+
+    try {
+      const Comp = compileCodeComponent(
+        EMBLA_CAROUSEL_COMPONENT,
+        'EmblaCarousel',
+        { previewMode: true, extraModules: { 'embla-carousel-react': { default: wrappedHook, useEmblaCarousel: wrappedHook } } },
+      ) as React.ComponentType<any>;
+      const { container } = render(
+        React.createElement(
+          Comp,
+          { dotsShow: true, dotsFormat: 'progressBar', axis: 'vertical' },
+          React.createElement('div', { key: '1' }, 'S1'),
+          React.createElement('div', { key: '2' }, 'S2'),
+          React.createElement('div', { key: '3' }, 'S3'),
+          React.createElement('div', { key: '4' }, 'S4'),
+        ),
+      );
+      const progressTrack = container.querySelector('[role="progressbar"]') as HTMLElement;
+      expect(progressTrack).toBeTruthy();
+
+      // Mock getBoundingClientRect on vertical track
+      progressTrack.getBoundingClientRect = () => ({
+        left: 200,
+        top: 100,
+        width: 8,
+        height: 120,
+        right: 208,
+        bottom: 220,
+        x: 200,
+        y: 100,
+        toJSON: () => {},
+      });
+
+      // Click at 50% along the height (clientY = 160 -> (160 - 100) / 120 = 0.5 -> index 2)
+      fireEvent.click(progressTrack, { clientX: 204, clientY: 160 });
+
+      expect(capturedApi?.scrollTo).toHaveBeenCalledWith(2);
+    } finally {
+      clearCodeComponentCache();
+    }
   });
 
   it('wires external triggers matching data-carousel-target and updates disabled states', () => {
@@ -440,6 +579,15 @@ describe('EmblaCarousel Component Metadata', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
     fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\n// data-embla-parallax-target\nexport default function EmblaCarousel() { return null; }`);
     expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('resolvedBgSize');
+
+    syncBuiltInCodeComponents(fs);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking handleProgressClick in syncBuiltInCodeComponents', () => {
+    const fs = new InMemoryProjectFS(createDefaultProject());
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\n// data-embla-parallax-target\n// resolvedBgSize\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('handleProgressClick');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);

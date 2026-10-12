@@ -229,7 +229,7 @@ function EmblaCarousel({
   const slides = Children.toArray(children);
   const count = slides.length;
 
-  const isVertical = axis === 'vertical';
+  const isVertical = axis === 'vertical' || axis === 'y';
   const isLoop = loop !== false && loop !== 'false';
   const isPauseOnHover = pauseOnHover !== false && pauseOnHover !== 'false';
   const isAutoHeight = autoHeight === true || autoHeight === 'true';
@@ -840,18 +840,36 @@ function EmblaCarousel({
     }
 
     if (dotsFormat === 'progressBar') {
-      const fillPercent = progress > 0
-        ? progress * 100
-        : (snapCount > 1 ? (selectedIndex / (snapCount - 1)) * 100 : 0);
+      const fillPercent = snapCount > 0
+        ? Math.max(0, Math.min(100, ((selectedIndex + 1) / snapCount) * 100))
+        : 100;
+
+      const handleProgressClick = (e) => {
+        if (!emblaApi || snapCount <= 1) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const ratio = isVertical
+          ? (e.clientY - rect.top) / rect.height
+          : (e.clientX - rect.left) / rect.width;
+        const targetIdx = Math.min(snapCount - 1, Math.max(0, Math.floor(ratio * snapCount)));
+        emblaApi.scrollTo(targetIdx);
+      };
+
       return (
         <div
+          role="progressbar"
+          aria-valuenow={selectedIndex + 1}
+          aria-valuemin={1}
+          aria-valuemax={snapCount}
+          onClick={handleProgressClick}
           style={{
             position: 'relative',
-            width: '120px',
-            height: dotsSize + 'px',
+            width: isVertical ? dotsSize + 'px' : '120px',
+            height: isVertical ? '120px' : dotsSize + 'px',
             background: dotsColor,
             borderRadius: Math.round(dotsSize / 2) + 'px',
             overflow: 'hidden',
+            cursor: snapCount > 1 ? 'pointer' : 'default',
+            userSelect: 'none',
           }}
         >
           <div
@@ -859,11 +877,13 @@ function EmblaCarousel({
               position: 'absolute',
               top: 0,
               left: 0,
-              bottom: 0,
-              width: fillPercent + '%',
+              width: isVertical ? '100%' : fillPercent + '%',
+              height: isVertical ? fillPercent + '%' : '100%',
               background: dotsActiveColor,
               borderRadius: Math.round(dotsSize / 2) + 'px',
-              transition: 'width 0.15s ease-out',
+              transition: isVertical
+                ? 'height 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
+                : 'width 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
             }}
           />
         </div>
