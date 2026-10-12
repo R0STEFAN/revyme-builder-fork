@@ -101,4 +101,15 @@ describe('carousel-trigger-ops', () => {
     expect(unwired).not.toContain('data-carousel-target');
     expect(unwired).not.toContain('data-carousel-action');
   });
+
+  it('replaces previous node wired to the same action to prevent duplicate triggers', () => {
+    let code = setCarouselTriggerInCode(baseCode, 'btn-1', 'slider-1', 'prev');
+    expect(getCarouselTriggers(code, 'slider-1').prevIds).toEqual(['btn-1']);
+
+    // Now wire btn-2 to prev for the same slider
+    code = setCarouselTriggerInCode(code, 'btn-2', 'slider-1', 'prev');
+    const conns = getCarouselTriggers(code, 'slider-1');
+    expect(conns.prevIds).toEqual(['btn-2']);
+    expect(code).not.toContain('data-id="btn-1" data-carousel-target="slider-1"');
+  });
 });

@@ -177,8 +177,8 @@ describe('CarouselTriggerConnectors', () => {
       expect(badges.length).toBe(2);
 
       const texts = Array.from(badges).map((b) => b.textContent?.trim());
-      expect(texts).toContain('◀ Prev');
-      expect(texts).toContain('▶ Next');
+      expect(texts.some((t) => t?.includes('◀ Prev'))).toBe(true);
+      expect(texts.some((t) => t?.includes('▶ Next'))).toBe(true);
     });
 
     it('does not render if there are no trigger connections', () => {

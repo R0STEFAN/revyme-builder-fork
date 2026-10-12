@@ -42,6 +42,30 @@ export function setCarouselTriggerInCode(
   const ast = parseJSX(code);
   if (!ast) return code;
 
+  // Clear this specific action from any other element targeting this carousel
+  // to prevent duplicate/infinite triggers for Prev or Next.
+  traverse(ast, {
+    JSXElement(path) {
+      const opening = path.node.openingElement;
+      const targetAttr = findAttribute(opening, 'data-carousel-target');
+      const actionAttr = findAttribute(opening, 'data-carousel-action');
+      const idAttr = findAttribute(opening, 'data-id');
+      const nodeId = idAttr ? getAttributeValue(idAttr) : null;
+      if (nodeId && nodeId !== targetNodeId) {
+        const targetVal = targetAttr ? getAttributeValue(targetAttr) : null;
+        const actionVal = actionAttr ? getAttributeValue(actionAttr) : null;
+        if (targetVal === carouselId && actionVal === action) {
+          opening.attributes = opening.attributes.filter(attr => {
+            if (attr.type === 'JSXAttribute' && attr.name.type === 'JSXIdentifier') {
+              return attr.name.name !== 'data-carousel-target' && attr.name.name !== 'data-carousel-action';
+            }
+            return true;
+          });
+        }
+      }
+    },
+  });
+
   let found = false;
   findFirstElementByDataId(ast, targetNodeId, (_path, el) => {
     found = true;

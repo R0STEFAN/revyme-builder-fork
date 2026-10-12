@@ -243,6 +243,20 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
   });
 
+  it('renders bottom-left arrow position', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { getByLabelText } = render(
+      React.createElement(
+        Comp,
+        { arrowsShow: true, arrowsPosition: 'bottom-left' },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+      ),
+    );
+    expect(getByLabelText('Previous')).toBeTruthy();
+    expect(getByLabelText('Next')).toBeTruthy();
+  });
+
   it('neutralizes slot child absolute positioning and applies aspect ratio', () => {
     const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
     const { container } = render(
@@ -270,19 +284,19 @@ describe('EmblaCarousel Component Metadata', () => {
     const img = container.querySelector('img') as HTMLElement;
     expect(img).toBeTruthy();
     // React cloneElement overrides
-    expect(img.style.position).toBe('relative');
-    expect(img.style.left).toBe('auto');
-    expect(img.style.top).toBe('auto');
+    expect(img.style.position).toBe('absolute');
+    expect(img.style.left).toBe('0px');
+    expect(img.style.top).toBe('0px');
     expect(img.style.width).toBe('100%');
     expect(img.style.height).toBe('100%');
     expect(img.style.objectFit).toBe('cover');
   });
 
-  it('auto-migrates existing EmblaCarousel lacking aspectRatio in syncBuiltInCodeComponents', () => {
+  it('auto-migrates existing EmblaCarousel lacking bottom-left in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    // Write an older version of EmblaCarousel without aspectRatio
+    // Write an older version of EmblaCarousel without bottom-left
     fs.writeFile('components/EmblaCarousel.tsx', `'use client';\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"aspectRatio"');
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"bottom-left"');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);

@@ -24,7 +24,8 @@ import {
   generateSteppedPath,
 } from '@/canvas/ui/arrow-path';
 import { ARROW_COLOR_GREYED } from '@/canvas/ui/arrow-color';
-import { getCarouselTriggers } from '@/code/generation/carousel-trigger-ops';
+import { getCarouselTriggers, removeCarouselTriggerInCode } from '@/code/generation/carousel-trigger-ops';
+import { modifyProjectFile } from '@/code/project/modify-file';
 import { trace } from '@/shared/debug-trace';
 import type { CanvasNode } from '@/code/parsing/parser';
 
@@ -267,35 +268,61 @@ export default function CarouselTriggerConnectors() {
               }
             />
 
-            {/* Direction and action indicator badge */}
+            {/* Direction and action indicator badge with disconnect button */}
             <g
               data-carousel-trigger-badge=""
               data-action={p.action}
+              data-target-id={p.targetId}
               transform={`translate(${p.badgePos.x}, ${p.badgePos.y})`}
+              style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!activeFilePath) return;
+                trace.action('carousel-trigger-connectors:disconnect', {
+                  carouselId: p.carouselId,
+                  targetId: p.targetId,
+                  action: p.action,
+                });
+                modifyProjectFile(activeFilePath, (c) => removeCarouselTriggerInCode(c, p.targetId));
+              }}
             >
+              <title>Click to disconnect trigger</title>
               <rect
-                x={-28}
-                y={-10}
-                width={56}
-                height={20}
-                rx={10}
-                ry={10}
+                x={-34}
+                y={-11}
+                width={68}
+                height={22}
+                rx={11}
+                ry={11}
                 fill={isHighlighted ? ACTIVE_COLOR : 'rgba(30, 30, 40, 0.85)'}
-                stroke={isHighlighted ? '#ffffff' : 'rgba(255, 255, 255, 0.15)'}
+                stroke={isHighlighted ? '#ffffff' : 'rgba(255, 255, 255, 0.25)'}
                 strokeWidth={1}
               />
               <text
-                x={0}
+                x={-6}
                 y={0}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill={isHighlighted ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                fill={isHighlighted ? '#ffffff' : 'rgba(255, 255, 255, 0.8)'}
                 fontSize={10}
                 fontWeight={600}
                 fontFamily="sans-serif"
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
                 {p.action === 'prev' ? '◀ Prev' : '▶ Next'}
+              </text>
+              <text
+                x={21}
+                y={0}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={isHighlighted ? '#ffffff' : 'rgba(255, 255, 255, 0.6)'}
+                fontSize={10}
+                fontWeight={700}
+                fontFamily="sans-serif"
+                style={{ userSelect: 'none', pointerEvents: 'none' }}
+              >
+                ✕
               </text>
             </g>
           </g>

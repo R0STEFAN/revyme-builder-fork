@@ -108,8 +108,9 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
     "arrowsPosition": { "type": "select", "label": "Position", "default": "inside-sides", "options": [
       { "label": "Inside Sides", "value": "inside-sides" },
       { "label": "Outside Sides", "value": "outside-sides" },
-      { "label": "Bottom Right", "value": "bottom-right" },
-      { "label": "Bottom Center", "value": "bottom-center" }
+      { "label": "Bottom Left", "value": "bottom-left" },
+      { "label": "Bottom Center", "value": "bottom-center" },
+      { "label": "Bottom Right", "value": "bottom-right" }
     ]},
     "arrowsOffset": { "type": "number", "label": "Offset (px)", "min": -60, "max": 60, "step": 2, "default": 16 },
     "arrowsSize": { "type": "number", "label": "Button Size", "min": 24, "max": 80, "step": 2, "default": 40 },
@@ -298,8 +299,22 @@ function EmblaCarousel({
   const rootRef = useRef(null);
   const carouselId = props['data-id'] || props.id || 'embla';
 
+  // Live container resize observer: automatically recalibrates Embla's slide metrics,
+  // track transforms, and snaps whenever the slider is resized on the canvas or window reflows.
+  useEffect(() => {
+    if (!emblaApi || !rootRef.current) return;
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      try {
+        emblaApi.reInit();
+      } catch (e) {}
+    });
+    ro.observe(rootRef.current);
+    return () => ro.disconnect();
+  }, [emblaApi]);
+
   // Neutralize lingering canvas positioning (absolute, left, top) on slot children
-  // and enforce image fit/adaptation inside slides.
+  // and pin elements to fill the slide inner card so aspect ratio never collapses.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -307,11 +322,11 @@ function EmblaCarousel({
     inners.forEach((inner) => {
       Array.from(inner.children).forEach((c) => {
         if (c instanceof HTMLElement) {
-          c.style.setProperty('position', 'relative', 'important');
-          c.style.setProperty('left', 'auto', 'important');
-          c.style.setProperty('top', 'auto', 'important');
-          c.style.setProperty('right', 'auto', 'important');
-          c.style.setProperty('bottom', 'auto', 'important');
+          c.style.setProperty('position', 'absolute', 'important');
+          c.style.setProperty('top', '0', 'important');
+          c.style.setProperty('left', '0', 'important');
+          c.style.setProperty('right', '0', 'important');
+          c.style.setProperty('bottom', '0', 'important');
           c.style.setProperty('margin', '0', 'important');
           c.style.setProperty('width', '100%', 'important');
           c.style.setProperty('height', '100%', 'important');
@@ -322,6 +337,11 @@ function EmblaCarousel({
       });
       const imgs = inner.querySelectorAll('img');
       imgs.forEach((img) => {
+        img.style.setProperty('position', 'absolute', 'important');
+        img.style.setProperty('top', '0', 'important');
+        img.style.setProperty('left', '0', 'important');
+        img.style.setProperty('right', '0', 'important');
+        img.style.setProperty('bottom', '0', 'important');
         img.style.setProperty('width', '100%', 'important');
         img.style.setProperty('height', '100%', 'important');
         img.style.setProperty('max-width', '100%', 'important');
@@ -339,11 +359,11 @@ function EmblaCarousel({
     return cloneElement(child, {
       style: {
         ...childStyle,
-        position: 'relative',
-        left: 'auto',
-        top: 'auto',
-        right: 'auto',
-        bottom: 'auto',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         margin: 0,
         width: '100%',
         height: '100%',
@@ -497,6 +517,31 @@ function EmblaCarousel({
         }),
   };
 
+  const numArrowsOffset = Number(arrowsOffset || 0);
+  const numArrowsSize = Number(arrowsSize || 40);
+  const numDotsSize = Number(dotsSize || 8);
+
+  const arrowsAtBottom = showArrows && count > 1 && (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-center' || arrowsPosition === 'bottom-right');
+  const dotsAtBottom = showDots && count > 1 && (dotsPosition === 'bottom-center' || dotsPosition === 'bottom-left');
+
+  const bothAtBottomCenter = arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-center' && showArrows && showDots && count > 1;
+  const bothAtBottomLeft = arrowsPosition === 'bottom-left' && dotsPosition === 'bottom-left' && showArrows && showDots && count > 1;
+
+  let padBottom = 0;
+  if (bothAtBottomCenter || bothAtBottomLeft) {
+    padBottom = numArrowsOffset + numArrowsSize + 12 + numDotsSize + 14;
+  } else if (arrowsAtBottom && dotsAtBottom) {
+    padBottom = Math.max(numArrowsOffset + numArrowsSize + 12, numDotsSize + 28);
+  } else if (arrowsAtBottom) {
+    padBottom = numArrowsOffset + numArrowsSize + 12;
+  } else if (dotsAtBottom) {
+    padBottom = numDotsSize + 28;
+  }
+
+  const arrowsInsideSides = showArrows && count > 1 && arrowsPosition === 'inside-sides';
+  const padSides = arrowsInsideSides && !isVertical ? (numArrowsSize + numArrowsOffset + 8) : 0;
+  const padTopBottomSides = arrowsInsideSides && isVertical ? (numArrowsSize + numArrowsOffset + 8) : 0;
+
   const arrowBtnStyle = (disabled) => ({
     width: arrowsSize + 'px',
     height: arrowsSize + 'px',
@@ -514,21 +559,23 @@ function EmblaCarousel({
     userSelect: 'none',
     transition: 'opacity 0.2s ease',
     padding: 0,
-    zIndex: 10,
+    zIndex: 20,
   });
 
   const prevDisabled = !isLoop && !canPrev;
   const nextDisabled = !isLoop && !canNext;
 
   const renderArrows = () => {
-    if (arrowsPosition === 'bottom-right' || arrowsPosition === 'bottom-center') {
+    if (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-right' || arrowsPosition === 'bottom-center') {
       const containerStyle = {
         position: 'absolute',
-        zIndex: 10,
+        zIndex: 20,
         display: 'flex',
         gap: '8px',
         bottom: arrowsOffset + 'px',
-        ...(arrowsPosition === 'bottom-right'
+        ...(arrowsPosition === 'bottom-left'
+          ? { left: arrowsOffset + 'px' }
+          : arrowsPosition === 'bottom-right'
           ? { right: arrowsOffset + 'px' }
           : { left: '50%', transform: 'translateX(-50%)' }),
       };
@@ -613,16 +660,20 @@ function EmblaCarousel({
   const renderPagination = () => {
     const isBottomCenter = dotsPosition === 'bottom-center';
     const isBottomLeft = dotsPosition === 'bottom-left';
+    const dotsBottomOffset = (bothAtBottomCenter || bothAtBottomLeft)
+      ? (numArrowsOffset + numArrowsSize + 10) + 'px'
+      : '16px';
+
     const containerStyle = {
       position: 'absolute',
-      zIndex: 10,
+      zIndex: 20,
       display: 'flex',
       alignItems: 'center',
       gap: dotsGap + 'px',
       ...(isBottomCenter
-        ? { bottom: '16px', left: '50%', transform: 'translateX(-50%)' }
+        ? { bottom: dotsBottomOffset, left: '50%', transform: 'translateX(-50%)' }
         : isBottomLeft
-        ? { bottom: '16px', left: '16px' }
+        ? { bottom: dotsBottomOffset, left: '16px' }
         : { top: '16px', right: '16px' }),
     };
 
@@ -733,11 +784,11 @@ function EmblaCarousel({
     >
       <style>{
         '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] > * { ' +
-        'position: relative !important; ' +
-        'left: auto !important; ' +
-        'top: auto !important; ' +
-        'right: auto !important; ' +
-        'bottom: auto !important; ' +
+        'position: absolute !important; ' +
+        'top: 0 !important; ' +
+        'left: 0 !important; ' +
+        'right: 0 !important; ' +
+        'bottom: 0 !important; ' +
         'margin: 0 !important; ' +
         'width: 100% !important; ' +
         'height: 100% !important; ' +
@@ -746,6 +797,11 @@ function EmblaCarousel({
         'box-sizing: border-box !important; ' +
         '} ' +
         '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] img { ' +
+        'position: absolute !important; ' +
+        'top: 0 !important; ' +
+        'left: 0 !important; ' +
+        'right: 0 !important; ' +
+        'bottom: 0 !important; ' +
         'width: 100% !important; ' +
         'height: 100% !important; ' +
         'max-width: 100% !important; ' +
@@ -761,6 +817,11 @@ function EmblaCarousel({
           overflow: 'hidden',
           width: '100%',
           height: '100%',
+          boxSizing: 'border-box',
+          paddingLeft: padSides ? padSides + 'px' : undefined,
+          paddingRight: padSides ? padSides + 'px' : undefined,
+          paddingBottom: padBottom ? padBottom + 'px' : undefined,
+          paddingTop: padTopBottomSides ? padTopBottomSides + 'px' : undefined,
         }}
       >
         <div

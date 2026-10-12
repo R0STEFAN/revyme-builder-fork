@@ -2538,8 +2538,8 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
     // `readFile` returns null/undefined for missing files. Skip both — only
     // consider files the user actually has in their project.
     if (existing == null) continue;
-    // Auto-migrate EmblaCarousel if user has the initial version without aspectRatio / slide neutralization
-    if (path === 'components/EmblaCarousel.tsx' && !existing.includes('"aspectRatio"')) {
+    // Auto-migrate EmblaCarousel if user has an older version without bottom-left / control spacing / live resize
+    if (path === 'components/EmblaCarousel.tsx' && !existing.includes('"bottom-left"')) {
       fs.writeFile(path, template);
       continue;
     }

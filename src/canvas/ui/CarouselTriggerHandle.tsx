@@ -5,10 +5,10 @@
 // Dragging from a handle draws a connection line, snaps to any canvas element on hover,
 // and on drop modifies the project source file to bind the trigger via `setCarouselTriggerInCode`.
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
 import { createPortal } from 'react-dom';
-import { selectedNodeAtom, nodesAtom, canvasInteractingAtom } from '@/code/stores/store';
+import { selectedNodeAtom, nodesAtom, canvasInteractingAtom, codeAtom } from '@/code/stores/store';
 import { suppressSelectionOverlayAtom } from '@/code/stores/editor-store';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { interactingViewportIdAtom } from '@/code/stores/viewport-store';
@@ -16,7 +16,7 @@ import { getNodeHitsAtPoint, patchNodeStyles, getContentRoot } from '@/canvas/no
 import { getScreenCornersById } from '@/canvas/resize/geometry-utils';
 import { usePolledValue } from '@/canvas/hooks/usePolledValue';
 import { modifyProjectFile } from '@/code/project/modify-file';
-import { setCarouselTriggerInCode } from '@/code/generation/carousel-trigger-ops';
+import { setCarouselTriggerInCode, getCarouselTriggers, removeCarouselTriggerInCode } from '@/code/generation/carousel-trigger-ops';
 import { setForceRender } from '@/code/mutation/mutation-queue';
 import { trace } from '@/shared/debug-trace';
 import type { CanvasNode } from '@/code/parsing/parser';
@@ -74,6 +74,15 @@ export default function CarouselTriggerHandle() {
   const suppressOverlay = useAtomValue(suppressSelectionOverlayAtom);
   const activeFilePath = useAtomValue(activeFilePathAtom);
   const vpId = useAtomValue(interactingViewportIdAtom);
+  const code = useAtomValue(codeAtom);
+
+  const triggers = useMemo(() => {
+    if (!code || !selectedId) return { prevIds: [], nextIds: [] };
+    return getCarouselTriggers(code, selectedId);
+  }, [code, selectedId]);
+
+  const prevConnectedId = triggers.prevIds[0];
+  const nextConnectedId = triggers.nextIds[0];
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragAction, setDragAction] = useState<'prev' | 'next' | null>(null);
@@ -124,6 +133,10 @@ export default function CarouselTriggerHandle() {
       setDragAction(action);
       setCursorPos({ x: e.clientX, y: e.clientY });
 
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const existingId = action === 'prev' ? prevConnectedId : nextConnectedId;
+
       const contentEl = getContentRoot();
       let prevTarget: { id: string; prefix: string } | null = null;
 
@@ -169,6 +182,7 @@ export default function CarouselTriggerHandle() {
       const up = (me: PointerEvent) => {
         const target = getDropTarget(me.clientX, me.clientY);
         clearOutline();
+        const dist = Math.hypot(me.clientX - startX, me.clientY - startY);
 
         if (target && activeFilePath) {
           trace.action('carousel-trigger-handle:connect', {
@@ -178,6 +192,20 @@ export default function CarouselTriggerHandle() {
           });
           modifyProjectFile(activeFilePath, (code) =>
             setCarouselTriggerInCode(code, target.id, selectedId, action),
+          );
+          setForceRender();
+        } else if (dist < 6 && existingId && activeFilePath) {
+          // Click on connected handle without dragging -> disconnect!
+          trace.action('carousel-trigger-handle:disconnect-click', { carouselId: selectedId, targetId: existingId, action });
+          modifyProjectFile(activeFilePath, (code) =>
+            removeCarouselTriggerInCode(code, existingId),
+          );
+          setForceRender();
+        } else if (dist >= 6 && !target && existingId && activeFilePath) {
+          // Drag away into empty canvas -> disconnect!
+          trace.action('carousel-trigger-handle:disconnect-drag-empty', { carouselId: selectedId, targetId: existingId, action });
+          modifyProjectFile(activeFilePath, (code) =>
+            removeCarouselTriggerInCode(code, existingId),
           );
           setForceRender();
         } else {
@@ -200,7 +228,7 @@ export default function CarouselTriggerHandle() {
         window.removeEventListener('pointerup', up);
       };
     },
-    [selectedId, activeFilePath, nodes],
+    [selectedId, activeFilePath, nodes, prevConnectedId, nextConnectedId],
   );
 
   if (!shouldShow || !handlePositions) return null;
@@ -213,7 +241,7 @@ export default function CarouselTriggerHandle() {
       <div
         onPointerDown={handlePointerDown('prev')}
         data-canvas-wheel=""
-        title="Drag to connect Prev button"
+        title={prevConnectedId ? "Connected to Prev button. Click or drag to empty space to disconnect." : "Drag to connect Prev button"}
         data-action="prev"
         style={{
           position: 'fixed',
@@ -222,7 +250,7 @@ export default function CarouselTriggerHandle() {
           width: HANDLE_SIZE,
           height: HANDLE_SIZE,
           borderRadius: '50%',
-          backgroundColor: ACCENT_COLOR,
+          backgroundColor: prevConnectedId ? '#10b981' : ACCENT_COLOR,
           color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
@@ -233,6 +261,7 @@ export default function CarouselTriggerHandle() {
           boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
           fontSize: 10,
           userSelect: 'none',
+          border: prevConnectedId ? '2px solid #ffffff' : 'none',
         }}
       >
         ◀
@@ -242,7 +271,7 @@ export default function CarouselTriggerHandle() {
       <div
         onPointerDown={handlePointerDown('next')}
         data-canvas-wheel=""
-        title="Drag to connect Next button"
+        title={nextConnectedId ? "Connected to Next button. Click or drag to empty space to disconnect." : "Drag to connect Next button"}
         data-action="next"
         style={{
           position: 'fixed',
@@ -251,7 +280,7 @@ export default function CarouselTriggerHandle() {
           width: HANDLE_SIZE,
           height: HANDLE_SIZE,
           borderRadius: '50%',
-          backgroundColor: ACCENT_COLOR,
+          backgroundColor: nextConnectedId ? '#10b981' : ACCENT_COLOR,
           color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
@@ -262,10 +291,12 @@ export default function CarouselTriggerHandle() {
           boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
           fontSize: 10,
           userSelect: 'none',
+          border: nextConnectedId ? '2px solid #ffffff' : 'none',
         }}
       >
         ▶
       </div>
+
 
       {/* Dragging connection line */}
       {isDragging && cursorPos && activeStartPos && (
