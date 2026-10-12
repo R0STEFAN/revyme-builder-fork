@@ -495,6 +495,12 @@ function EmblaCarousel({
       : { marginRight: numGap + 'px' }),
   };
 
+  const isFitHeight = !props.style?.height ||
+    props.style.height === 'fit-content' ||
+    props.style.height === 'auto' ||
+    props.style.height === 'min-content' ||
+    props.style.height === 'max-content';
+
   const slideInnerStyle = {
     position: 'relative',
     overflow: 'hidden',
@@ -506,7 +512,9 @@ function EmblaCarousel({
     ...(isFill || isAutoRatio
       ? {
           width: '100%',
-          height: '100%',
+          height: isFitHeight ? 'auto' : '100%',
+          aspectRatio: isFitHeight ? '16/9' : undefined,
+          minHeight: isFitHeight ? '180px' : undefined,
         }
       : {
           aspectRatio: aspectRatio,
@@ -521,22 +529,11 @@ function EmblaCarousel({
   const numArrowsSize = Number(arrowsSize || 40);
   const numDotsSize = Number(dotsSize || 8);
 
-  const arrowsAtBottom = showArrows && count > 1 && (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-center' || arrowsPosition === 'bottom-right');
-  const dotsAtBottom = showDots && count > 1 && (dotsPosition === 'bottom-center' || dotsPosition === 'bottom-left');
-
-  const bothAtBottomCenter = arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-center' && showArrows && showDots && count > 1;
-  const bothAtBottomLeft = arrowsPosition === 'bottom-left' && dotsPosition === 'bottom-left' && showArrows && showDots && count > 1;
-
-  let padBottom = 0;
-  if (bothAtBottomCenter || bothAtBottomLeft) {
-    padBottom = numArrowsOffset + numArrowsSize + 12 + numDotsSize + 14;
-  } else if (arrowsAtBottom && dotsAtBottom) {
-    padBottom = Math.max(numArrowsOffset + numArrowsSize + 12, numDotsSize + 28);
-  } else if (arrowsAtBottom) {
-    padBottom = numArrowsOffset + numArrowsSize + 12;
-  } else if (dotsAtBottom) {
-    padBottom = numDotsSize + 28;
-  }
+  const hasBottomArrows = showArrows && count > 1 && !isVertical &&
+    (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-center' || arrowsPosition === 'bottom-right');
+  const hasBottomDots = showDots && count > 1 && !isVertical &&
+    (dotsPosition === 'bottom-center' || dotsPosition === 'bottom-left');
+  const hasBottomBar = hasBottomArrows || hasBottomDots;
 
   const arrowsInsideSides = showArrows && count > 1 && arrowsPosition === 'inside-sides';
   const padSides = arrowsInsideSides && !isVertical ? (numArrowsSize + numArrowsOffset + 8) : 0;
@@ -565,48 +562,37 @@ function EmblaCarousel({
   const prevDisabled = !isLoop && !canPrev;
   const nextDisabled = !isLoop && !canNext;
 
-  const renderArrows = () => {
-    if (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-right' || arrowsPosition === 'bottom-center') {
-      const containerStyle = {
-        position: 'absolute',
-        zIndex: 20,
-        display: 'flex',
-        gap: '8px',
-        bottom: arrowsOffset + 'px',
-        ...(arrowsPosition === 'bottom-left'
-          ? { left: arrowsOffset + 'px' }
-          : arrowsPosition === 'bottom-right'
-          ? { right: arrowsOffset + 'px' }
-          : { left: '50%', transform: 'translateX(-50%)' }),
-      };
-      return (
-        <div style={containerStyle}>
-          <button
-            onClick={() => emblaApi?.scrollPrev()}
-            disabled={prevDisabled}
-            style={arrowBtnStyle(prevDisabled)}
-            aria-label="Previous"
-          >
-            {isVertical ? '\\u2303' : '\\u2039'}
-          </button>
-          <button
-            onClick={() => emblaApi?.scrollNext()}
-            disabled={nextDisabled}
-            style={arrowBtnStyle(nextDisabled)}
-            aria-label="Next"
-          >
-            {isVertical ? '\\u2304' : '\\u203A'}
-          </button>
-        </div>
-      );
-    }
+  const renderArrowButtons = () => (
+    <>
+      <button
+        onClick={() => emblaApi?.scrollPrev()}
+        disabled={prevDisabled}
+        style={arrowBtnStyle(prevDisabled)}
+        aria-label="Previous"
+      >
+        {isVertical ? '\\u2303' : '\\u2039'}
+      </button>
+      <button
+        onClick={() => emblaApi?.scrollNext()}
+        disabled={nextDisabled}
+        style={arrowBtnStyle(nextDisabled)}
+        aria-label="Next"
+      >
+        {isVertical ? '\\u2304' : '\\u203A'}
+      </button>
+    </>
+  );
 
+  const renderFloatingArrows = () => {
+    if (!showArrows || count <= 1) return null;
+    if (arrowsPosition !== 'inside-sides' && arrowsPosition !== 'outside-sides' && !isVertical) return null;
     const isInside = arrowsPosition === 'inside-sides';
     const offsetVal = Number(arrowsOffset || 0);
     const sizeVal = Number(arrowsSize || 40);
 
     const prevPosStyle = {
       position: 'absolute',
+      zIndex: 20,
       ...(isVertical
         ? {
             left: '50%',
@@ -622,6 +608,7 @@ function EmblaCarousel({
 
     const nextPosStyle = {
       position: 'absolute',
+      zIndex: 20,
       ...(isVertical
         ? {
             left: '50%',
@@ -657,45 +644,24 @@ function EmblaCarousel({
     );
   };
 
-  const renderPagination = () => {
-    const isBottomCenter = dotsPosition === 'bottom-center';
-    const isBottomLeft = dotsPosition === 'bottom-left';
-    const dotsBottomOffset = (bothAtBottomCenter || bothAtBottomLeft)
-      ? (numArrowsOffset + numArrowsSize + 10) + 'px'
-      : '16px';
-
-    const containerStyle = {
-      position: 'absolute',
-      zIndex: 20,
-      display: 'flex',
-      alignItems: 'center',
-      gap: dotsGap + 'px',
-      ...(isBottomCenter
-        ? { bottom: dotsBottomOffset, left: '50%', transform: 'translateX(-50%)' }
-        : isBottomLeft
-        ? { bottom: dotsBottomOffset, left: '16px' }
-        : { top: '16px', right: '16px' }),
-    };
-
+  const renderDotsContent = () => {
     const snapCount = scrollSnaps.length || count;
 
     if (dotsFormat === 'fraction') {
       return (
-        <div style={containerStyle}>
-          <div
-            style={{
-              fontSize: Math.max(12, dotsSize * 1.5) + 'px',
-              fontWeight: 600,
-              color: dotsActiveColor,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-          >
-            <span>{String(selectedIndex + 1).padStart(2, '0')}</span>
-            <span style={{ color: dotsColor, margin: '0 4px' }}>/</span>
-            <span style={{ color: dotsColor }}>{String(snapCount).padStart(2, '0')}</span>
-          </div>
+        <div
+          style={{
+            fontSize: Math.max(12, dotsSize * 1.5) + 'px',
+            fontWeight: 600,
+            color: dotsActiveColor,
+            fontVariantNumeric: 'tabular-nums',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+        >
+          <span>{String(selectedIndex + 1).padStart(2, '0')}</span>
+          <span style={{ color: dotsColor, margin: '0 4px' }}>/</span>
+          <span style={{ color: dotsColor }}>{String(snapCount).padStart(2, '0')}</span>
         </div>
       );
     }
@@ -705,30 +671,28 @@ function EmblaCarousel({
         ? progress * 100
         : (snapCount > 1 ? (selectedIndex / (snapCount - 1)) * 100 : 0);
       return (
-        <div style={containerStyle}>
+        <div
+          style={{
+            position: 'relative',
+            width: '120px',
+            height: dotsSize + 'px',
+            background: dotsColor,
+            borderRadius: Math.round(dotsSize / 2) + 'px',
+            overflow: 'hidden',
+          }}
+        >
           <div
             style={{
-              position: 'relative',
-              width: '120px',
-              height: dotsSize + 'px',
-              background: dotsColor,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: fillPercent + '%',
+              background: dotsActiveColor,
               borderRadius: Math.round(dotsSize / 2) + 'px',
-              overflow: 'hidden',
+              transition: 'width 0.15s ease-out',
             }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                bottom: 0,
-                width: fillPercent + '%',
-                background: dotsActiveColor,
-                borderRadius: Math.round(dotsSize / 2) + 'px',
-                transition: 'width 0.15s ease-out',
-              }}
-            />
-          </div>
+          />
         </div>
       );
     }
@@ -737,7 +701,7 @@ function EmblaCarousel({
     const items = scrollSnaps.length > 0 ? scrollSnaps : slides;
 
     return (
-      <div style={containerStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: dotsGap + 'px' }}>
         {items.map(function (_, i) {
           const isActive = i === selectedIndex;
           const dotWidth = isPills
@@ -768,6 +732,198 @@ function EmblaCarousel({
     );
   };
 
+  const renderFloatingDots = () => {
+    if (!showDots || count <= 1) return null;
+    if (dotsPosition !== 'top-right' && !isVertical) return null;
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: '16px',
+          right: '16px',
+          zIndex: 20,
+          display: 'flex',
+          alignItems: 'center',
+          gap: dotsGap + 'px',
+        }}
+      >
+        {renderDotsContent()}
+      </div>
+    );
+  };
+
+  const renderBottomBar = () => {
+    const bottomBarPaddingTop = Math.max(8, Number(arrowsOffset || 0));
+
+    // Case 1: Both arrows and dots at the bottom
+    if (hasBottomArrows && hasBottomDots) {
+      if (arrowsPosition === 'bottom-left' && dotsPosition === 'bottom-center') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+              minHeight: numArrowsSize + 'px',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '8px', zIndex: 2 }}>{renderArrowButtons()}</div>
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                zIndex: 1,
+              }}
+            >
+              {renderDotsContent()}
+            </div>
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-right' && dotsPosition === 'bottom-center') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+              minHeight: numArrowsSize + 'px',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                zIndex: 1,
+              }}
+            >
+              {renderDotsContent()}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', zIndex: 2 }}>
+              {renderArrowButtons()}
+            </div>
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-left' && dotsPosition === 'bottom-left') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+            {renderDotsContent()}
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-center') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+            }}
+          >
+            {renderDotsContent()}
+            <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+          </div>
+        );
+      }
+      return (
+        <div
+          data-embla-controls="bottom"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            boxSizing: 'border-box',
+            paddingTop: bottomBarPaddingTop + 'px',
+            paddingBottom: '4px',
+          }}
+        >
+          {renderDotsContent()}
+          <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+        </div>
+      );
+    }
+
+    // Case 2: Only arrows at the bottom
+    if (hasBottomArrows) {
+      const justify = arrowsPosition === 'bottom-center' ? 'center' : arrowsPosition === 'bottom-right' ? 'flex-end' : 'flex-start';
+      return (
+        <div
+          data-embla-controls="bottom"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: justify,
+            width: '100%',
+            boxSizing: 'border-box',
+            paddingTop: bottomBarPaddingTop + 'px',
+            paddingBottom: '4px',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+        </div>
+      );
+    }
+
+    // Case 3: Only dots at the bottom
+    if (hasBottomDots) {
+      const justify = dotsPosition === 'bottom-left' ? 'flex-start' : 'center';
+      return (
+        <div
+          data-embla-controls="bottom"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: justify,
+            width: '100%',
+            boxSizing: 'border-box',
+            paddingTop: bottomBarPaddingTop + 'px',
+            paddingBottom: '4px',
+          }}
+        >
+          {renderDotsContent()}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div
       ref={rootRef}
@@ -778,6 +934,8 @@ function EmblaCarousel({
         position: 'relative',
         width: '100%',
         height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
         boxSizing: 'border-box',
         ...props.style,
       }}
@@ -816,11 +974,12 @@ function EmblaCarousel({
         style={{
           overflow: 'hidden',
           width: '100%',
-          height: '100%',
+          flex: isFitHeight ? '0 0 auto' : '1 1 auto',
+          minHeight: 0,
+          position: 'relative',
           boxSizing: 'border-box',
           paddingLeft: padSides ? padSides + 'px' : undefined,
           paddingRight: padSides ? padSides + 'px' : undefined,
-          paddingBottom: padBottom ? padBottom + 'px' : undefined,
           paddingTop: padTopBottomSides ? padTopBottomSides + 'px' : undefined,
         }}
       >
@@ -842,10 +1001,12 @@ function EmblaCarousel({
             );
           })}
         </div>
+
+        {renderFloatingArrows()}
+        {renderFloatingDots()}
       </div>
 
-      {showArrows && count > 1 && renderArrows()}
-      {showDots && count > 1 && renderPagination()}
+      {hasBottomBar && renderBottomBar()}
     </div>
   );
 }

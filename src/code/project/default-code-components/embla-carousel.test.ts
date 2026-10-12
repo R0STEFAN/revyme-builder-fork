@@ -292,11 +292,40 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(img.style.objectFit).toBe('cover');
   });
 
-  it('auto-migrates existing EmblaCarousel lacking bottom-left in syncBuiltInCodeComponents', () => {
+  it('renders dedicated in-flow bottom controls bar with fit-content height', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          style: { height: 'fit-content' },
+          arrowsShow: true,
+          arrowsPosition: 'bottom-left',
+          dotsShow: true,
+          dotsPosition: 'bottom-center',
+        },
+        React.createElement('div', { key: '1' }, 'Slide 1'),
+        React.createElement('div', { key: '2' }, 'Slide 2'),
+      ),
+    );
+
+    const bottomControls = container.querySelector('[data-embla-controls="bottom"]');
+    expect(bottomControls).toBeTruthy();
+
+    const buttons = bottomControls?.querySelectorAll('button');
+    expect(buttons && buttons.length >= 2).toBe(true);
+
+    const prevBtn = container.querySelector('button[aria-label="Previous"]');
+    const nextBtn = container.querySelector('button[aria-label="Next"]');
+    expect(bottomControls?.contains(prevBtn)).toBe(true);
+    expect(bottomControls?.contains(nextBtn)).toBe(true);
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking bottom controls in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    // Write an older version of EmblaCarousel without bottom-left
+    // Write an older version of EmblaCarousel without data-embla-controls="bottom"
     fs.writeFile('components/EmblaCarousel.tsx', `'use client';\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"bottom-left"');
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('data-embla-controls="bottom"');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
