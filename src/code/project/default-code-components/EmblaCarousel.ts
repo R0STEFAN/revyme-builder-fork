@@ -149,7 +149,7 @@ import Autoplay from 'embla-carousel-autoplay';
 import AutoScroll from 'embla-carousel-auto-scroll';
 import Fade from 'embla-carousel-fade';
 import AutoHeight from 'embla-carousel-auto-height';
-import { wheelGestures } from 'embla-carousel-wheel-gestures';
+import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
 import { withResponsiveProps, useStaticCanvas } from '@revyme/runtime';
 
 function EmblaCarousel({
@@ -248,7 +248,7 @@ function EmblaCarousel({
     plugins.push(AutoHeight());
   }
   if (isWheelGestures) {
-    plugins.push(wheelGestures());
+    plugins.push(WheelGesturesPlugin());
   }
 
   const [emblaRef, emblaApi] = useEmblaCarousel(emblaOptions, plugins);

@@ -369,5 +369,15 @@ describe('EmblaCarousel Component Metadata', () => {
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
   });
+
+  it('auto-migrates existing EmblaCarousel lacking WheelGesturesPlugin in syncBuiltInCodeComponents', () => {
+    const fs = new InMemoryProjectFS(createDefaultProject());
+    // Write a version that has visibleWidth but lacks WheelGesturesPlugin
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\nimport { wheelGestures } from 'embla-carousel-wheel-gestures';\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('WheelGesturesPlugin');
+
+    syncBuiltInCodeComponents(fs);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
+  });
 });
 
