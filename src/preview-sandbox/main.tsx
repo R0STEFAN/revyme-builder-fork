@@ -45,6 +45,13 @@ import * as NextIntl from 'next-intl';
 // this import resolves to the same code that runs in the canvas editor and
 // in production.
 import * as RevymeRuntime from '@revyme/runtime';
+import EmblaCarousel from 'embla-carousel';
+import useEmblaCarousel from 'embla-carousel-react';
+import Autoplay from 'embla-carousel-autoplay';
+import AutoScroll from 'embla-carousel-auto-scroll';
+import Fade from 'embla-carousel-fade';
+import AutoHeight from 'embla-carousel-auto-height';
+import WheelGesturesPlugin from 'embla-carousel-wheel-gestures';
 
 import { buildRouteTable, resolveRoute, type Route } from './router';
 import { templatePreviewPages } from '@/preview/template-preview';
@@ -243,6 +250,13 @@ const MODULE_MAP: Record<string, any> = {
     withCursor: RevymeRuntime.withCursor,
     CursorPortal: RevymeRuntime.CursorPortal,
   }),
+  'embla-carousel': esm({ default: EmblaCarousel, EmblaCarousel }),
+  'embla-carousel-react': esm({ default: useEmblaCarousel, useEmblaCarousel }),
+  'embla-carousel-autoplay': esm({ default: Autoplay, Autoplay }),
+  'embla-carousel-auto-scroll': esm({ default: AutoScroll, AutoScroll }),
+  'embla-carousel-fade': esm({ default: Fade, Fade }),
+  'embla-carousel-auto-height': esm({ default: AutoHeight, AutoHeight }),
+  'embla-carousel-wheel-gestures': esm({ default: WheelGesturesPlugin, WheelGesturesPlugin, wheelGestures: WheelGesturesPlugin }),
 };
 
 // ─── Compile a single file from ProjectFS ──────────────────────────────────

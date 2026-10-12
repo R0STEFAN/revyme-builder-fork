@@ -93,3 +93,20 @@ describe('buildAutoImports covers the runtime', () => {
     expect(buildAutoImports(body).join('\n')).not.toContain('@revyme/runtime');
   });
 });
+
+describe('preview MODULE_MAP covers embla-carousel', () => {
+  const src = readFileSync(resolve(__dirname, 'main.tsx'), 'utf8');
+  const emblaModules = [
+    'embla-carousel',
+    'embla-carousel-react',
+    'embla-carousel-autoplay',
+    'embla-carousel-auto-scroll',
+    'embla-carousel-fade',
+    'embla-carousel-auto-height',
+    'embla-carousel-wheel-gestures',
+  ];
+
+  it.each(emblaModules)('exposes %s in MODULE_MAP', (mod) => {
+    expect(src).toContain(`'${mod}':`);
+  });
+});
