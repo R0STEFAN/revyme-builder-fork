@@ -21,6 +21,7 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
       { "label": "Custom (Peeking)", "value": "custom" },
       { "label": "Auto (Content)", "value": "auto" }
     ]},
+    "visibleWidth": { "type": "number", "label": "Visible Content Width (%)", "min": 40, "max": 100, "step": 1, "default": 100 },
     "customSlideWidth": { "type": "text", "label": "Slide Width", "default": "80%" },
     "gap": { "type": "number", "label": "Slide Gap", "min": 0, "max": 120, "step": 2, "default": 16 },
     "aspectRatio": { "type": "select", "label": "Aspect Ratio", "default": "fill", "options": [
@@ -130,6 +131,7 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
     "dotsPosition": { "type": "select", "label": "Position", "default": "bottom-center", "options": [
       { "label": "Bottom Center", "value": "bottom-center" },
       { "label": "Bottom Left", "value": "bottom-left" },
+      { "label": "Bottom Right", "value": "bottom-right" },
       { "label": "Top Right", "value": "top-right" }
     ]},
     "dotsSize": { "type": "number", "label": "Size / Height", "min": 4, "max": 24, "step": 1, "default": 8 },
@@ -152,6 +154,7 @@ import { withResponsiveProps, useStaticCanvas } from '@revyme/runtime';
 
 function EmblaCarousel({
   visibleSlides = '1',
+  visibleWidth = 100,
   customSlideWidth = '80%',
   gap = 16,
   aspectRatio = 'fill',
@@ -460,18 +463,27 @@ function EmblaCarousel({
 
   let flexBasis = '0 0 100%';
   const numGap = Number(gap || 0);
-  if (visibleSlides === '1') {
-    flexBasis = '0 0 100%';
-  } else if (visibleSlides === 'custom') {
+  const vWidth = Math.max(30, Math.min(100, Number(visibleWidth || 100)));
+  const scaleMultiplier = (100 / vWidth).toFixed(4);
+
+  if (visibleSlides === 'custom') {
     flexBasis = '0 0 ' + (customSlideWidth || '80%');
   } else if (visibleSlides === 'auto') {
     flexBasis = '0 0 auto';
   } else {
     const n = Number(visibleSlides) || 1;
-    if (numGap > 0) {
-      flexBasis = '0 0 calc((100% - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
+    if (vWidth < 100) {
+      if (numGap > 0) {
+        flexBasis = '0 0 calc((100% * ' + scaleMultiplier + ' - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
+      } else {
+        flexBasis = '0 0 calc((100% * ' + scaleMultiplier + ') / ' + n + ')';
+      }
     } else {
-      flexBasis = '0 0 calc(100% / ' + n + ')';
+      if (numGap > 0) {
+        flexBasis = '0 0 calc((100% - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
+      } else {
+        flexBasis = '0 0 calc(100% / ' + n + ')';
+      }
     }
   }
 
@@ -532,7 +544,7 @@ function EmblaCarousel({
   const hasBottomArrows = showArrows && count > 1 && !isVertical &&
     (arrowsPosition === 'bottom-left' || arrowsPosition === 'bottom-center' || arrowsPosition === 'bottom-right');
   const hasBottomDots = showDots && count > 1 && !isVertical &&
-    (dotsPosition === 'bottom-center' || dotsPosition === 'bottom-left');
+    (dotsPosition === 'bottom-center' || dotsPosition === 'bottom-left' || dotsPosition === 'bottom-right');
   const hasBottomBar = hasBottomArrows || hasBottomDots;
 
   const arrowsInsideSides = showArrows && count > 1 && arrowsPosition === 'inside-sides';
@@ -840,6 +852,126 @@ function EmblaCarousel({
           </div>
         );
       }
+      if (arrowsPosition === 'bottom-right' && dotsPosition === 'bottom-right') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '16px',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+            }}
+          >
+            {renderDotsContent()}
+            <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-left' && dotsPosition === 'bottom-right') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+            {renderDotsContent()}
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-right' && dotsPosition === 'bottom-left') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+            }}
+          >
+            {renderDotsContent()}
+            <div style={{ display: 'flex', gap: '8px' }}>{renderArrowButtons()}</div>
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-right') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+              minHeight: numArrowsSize + 'px',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '8px',
+                zIndex: 2,
+              }}
+            >
+              {renderArrowButtons()}
+            </div>
+            <div style={{ marginLeft: 'auto', zIndex: 1 }}>{renderDotsContent()}</div>
+          </div>
+        );
+      }
+      if (arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-left') {
+        return (
+          <div
+            data-embla-controls="bottom"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
+              paddingTop: bottomBarPaddingTop + 'px',
+              paddingBottom: '4px',
+              minHeight: numArrowsSize + 'px',
+            }}
+          >
+            <div style={{ zIndex: 1 }}>{renderDotsContent()}</div>
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '8px',
+                zIndex: 2,
+              }}
+            >
+              {renderArrowButtons()}
+            </div>
+          </div>
+        );
+      }
       if (arrowsPosition === 'bottom-center' && dotsPosition === 'bottom-center') {
         return (
           <div
@@ -902,7 +1034,11 @@ function EmblaCarousel({
 
     // Case 3: Only dots at the bottom
     if (hasBottomDots) {
-      const justify = dotsPosition === 'bottom-left' ? 'flex-start' : 'center';
+      const justify = dotsPosition === 'bottom-left'
+        ? 'flex-start'
+        : dotsPosition === 'bottom-right'
+        ? 'flex-end'
+        : 'center';
       return (
         <div
           data-embla-controls="bottom"

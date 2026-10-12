@@ -321,11 +321,50 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(bottomControls?.contains(nextBtn)).toBe(true);
   });
 
-  it('auto-migrates existing EmblaCarousel lacking bottom controls in syncBuiltInCodeComponents', () => {
+  it('scales slide width based on visibleWidth percentage', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          visibleSlides: '3',
+          visibleWidth: 85,
+          gap: 16,
+        },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+      ),
+    );
+
+    const slide = container.querySelector('[data-embla-slide="0"]') as HTMLElement;
+    expect(slide).toBeTruthy();
+    expect(slide.style.flex).toContain('117.65%');
+  });
+
+  it('supports bottom-right dotsPosition and renders in bottom controls', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          dotsShow: true,
+          dotsPosition: 'bottom-right',
+        },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+      ),
+    );
+
+    const bottomControls = container.querySelector('[data-embla-controls="bottom"]');
+    expect(bottomControls).toBeTruthy();
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking visibleWidth in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    // Write an older version of EmblaCarousel without data-embla-controls="bottom"
+    // Write an older version of EmblaCarousel without visibleWidth
     fs.writeFile('components/EmblaCarousel.tsx', `'use client';\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('data-embla-controls="bottom"');
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"visibleWidth"');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
