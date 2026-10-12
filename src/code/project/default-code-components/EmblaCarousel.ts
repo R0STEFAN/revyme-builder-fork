@@ -109,7 +109,7 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
     "inactiveScale": { "type": "number", "label": "Secondary Scale", "min": 0.5, "max": 1, "step": 0.05, "default": 0.85 },
     "inactiveOpacity": { "type": "number", "label": "Secondary Opacity", "min": 0.1, "max": 1, "step": 0.05, "default": 0.6 },
     "parallaxFactor": { "type": "number", "label": "Parallax Depth (%)", "min": 0, "max": 50, "step": 5, "default": 0 },
-    "rotateAngle": { "type": "number", "label": "3D Rotate / Coverflow (°)", "min": 0, "max": 45, "step": 5, "default": 0 },
+    "rotateAngle": { "type": "number", "label": "3D Rotate / Coverflow (°)", "min": -60, "max": 60, "step": 5, "default": 0 },
     "effectsFalloff": { "type": "select", "label": "Falloff Mode", "default": "clamped", "options": [
       { "label": "Single Neighbor (Clamped)", "value": "clamped" },
       { "label": "Continuous (Coverflow / Distance)", "value": "continuous" }
@@ -313,6 +313,10 @@ function EmblaCarousel({
           inner.style.transform = '';
           inner.style.opacity = '';
         }
+        const pTarget = node.querySelector('[data-embla-parallax-target]');
+        if (pTarget) {
+          pTarget.style.transform = '';
+        }
         const img = node.querySelector('img');
         if (img) img.style.transform = '';
       });
@@ -368,21 +372,25 @@ function EmblaCarousel({
       const inner = slideNode.querySelector('[data-embla-slide-inner]');
       if (inner) {
         let transformStr = 'scale(' + clampedScale + ')';
-        if (numRotate > 0) {
-          const angle = -1 * Math.sign(normalizedDiff) * Math.min(numRotate, absDiff * numRotate);
+        if (numRotate !== 0) {
+          const falloffFactor = effectsFalloff === 'continuous' ? Math.min(1, absDiff * 0.5) : Math.min(1, absDiff);
+          const angle = -1 * Math.sign(normalizedDiff) * (falloffFactor * numRotate);
           transformStr += isVertical ? (' rotateX(' + angle + 'deg)') : (' rotateY(' + angle + 'deg)');
         }
         inner.style.transform = transformStr;
         inner.style.opacity = String(clampedOpacity);
       }
 
-      if (numParallax > 0) {
-        const img = slideNode.querySelector('img');
-        if (img) {
-          const pTranslate = normalizedDiff * (-1 * numParallax);
-          img.style.transform = isVertical
-            ? ('translate3d(0, ' + pTranslate + '%, 0)')
-            : ('translate3d(' + pTranslate + '%, 0, 0)');
+      const pTarget = slideNode.querySelector('[data-embla-parallax-target]');
+      if (pTarget) {
+        if (numParallax > 0) {
+          const pTranslate = normalizedDiff * (-1 * (numParallax * 0.5));
+          const pScale = 1 + (numParallax / 100);
+          pTarget.style.transform = isVertical
+            ? ('translate3d(0, ' + pTranslate + '%, 0) scale(' + pScale + ')')
+            : ('translate3d(' + pTranslate + '%, 0, 0) scale(' + pScale + ')');
+        } else {
+          pTarget.style.transform = '';
         }
       }
     });
@@ -629,7 +637,7 @@ function EmblaCarousel({
     justifyContent: 'center',
     position: 'relative',
     boxSizing: 'border-box',
-    perspective: isEffectsEnabled && numRotate > 0 ? '1000px' : undefined,
+    perspective: isEffectsEnabled && numRotate !== 0 ? '1000px' : undefined,
     ...(isVertical
       ? { marginBottom: numGap + 'px' }
       : { marginRight: numGap + 'px' }),
@@ -1213,7 +1221,8 @@ function EmblaCarousel({
       }}
     >
       <style>{
-        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] > * { ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] > *, ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-parallax-target] > * { ' +
         'position: absolute !important; ' +
         'top: 0 !important; ' +
         'left: 0 !important; ' +
@@ -1226,7 +1235,8 @@ function EmblaCarousel({
         'max-height: 100% !important; ' +
         'box-sizing: border-box !important; ' +
         '} ' +
-        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] img { ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] img, ' +
+        '[data-embla-root="' + carouselId + '"] [data-embla-parallax-target] img { ' +
         'position: absolute !important; ' +
         'top: 0 !important; ' +
         'left: 0 !important; ' +
@@ -1269,7 +1279,27 @@ function EmblaCarousel({
             return (
               <div key={idx} data-embla-slide={idx} style={slideOuterStyle}>
                 <div data-embla-slide-inner="true" style={slideInnerStyle}>
-                  {renderSlideChild(slide)}
+                  <div
+                    data-embla-parallax-target="true"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: '100%',
+                      height: '100%',
+                      transformOrigin: 'center center',
+                      transform: isEffectsEnabled && numParallax > 0
+                        ? (isVertical
+                            ? ('translate3d(0, 0%, 0) scale(' + (1 + numParallax / 100) + ')')
+                            : ('translate3d(0%, 0, 0) scale(' + (1 + numParallax / 100) + ')'))
+                        : undefined,
+                      willChange: isEffectsEnabled && numParallax > 0 ? 'transform' : undefined,
+                    }}
+                  >
+                    {renderSlideChild(slide)}
+                  </div>
                 </div>
               </div>
             );

@@ -95,6 +95,8 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(effectsControls?.inactiveOpacity?.type).toBe('number');
     expect(effectsControls?.parallaxFactor?.type).toBe('number');
     expect(effectsControls?.rotateAngle?.type).toBe('number');
+    expect(effectsControls?.rotateAngle?.min).toBe(-60);
+    expect(effectsControls?.rotateAngle?.max).toBe(60);
     expect(effectsControls?.effectsFalloff?.type).toBe('select');
 
     const arrowsControls = meta?.controls.arrows?.controls;
@@ -428,12 +430,16 @@ describe('EmblaCarousel Component Metadata', () => {
     const inner = container.querySelector('[data-embla-slide-inner="true"]') as HTMLElement;
     expect(inner).toBeTruthy();
     expect(inner.style.transition).toContain('transform');
+
+    const pTarget = container.querySelector('[data-embla-parallax-target="true"]') as HTMLElement;
+    expect(pTarget).toBeTruthy();
+    expect(pTarget.style.transform).toContain('scale(1.2)');
   });
 
-  it('auto-migrates existing EmblaCarousel lacking slideEffects in syncBuiltInCodeComponents', () => {
+  it('auto-migrates existing EmblaCarousel lacking slideEffects or parallax target in syncBuiltInCodeComponents', () => {
     const fs = new InMemoryProjectFS(createDefaultProject());
-    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\nexport default function EmblaCarousel() { return null; }`);
-    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('"slideEffects"');
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('data-embla-parallax-target');
 
     syncBuiltInCodeComponents(fs);
     expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
