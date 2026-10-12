@@ -83,6 +83,7 @@ import {
   MAGNET_BOX_COMPONENT,
   MARQUEE_COMPONENT,
   CAROUSEL_COMPONENT,
+  EMBLA_CAROUSEL_COMPONENT,
   RIBBON_MARQUEE_COMPONENT,
   MARQUEE_3D_COMPONENT,
   MOTION_TRAIL_COMPONENT,
@@ -2383,7 +2384,7 @@ export function createDefaultProject(): Map<string, string> {
 // the Library panel only lists components the user actually pulled in (via
 // Insert drag, AI generation, or manual creation).
 
-const BUILT_IN_COMPONENTS: [string, string][] = [
+export const BUILT_IN_COMPONENTS: [string, string][] = [
   // Content / Typography
   ['components/MarkdownArticle.tsx', MARKDOWN_ARTICLE_COMPONENT],
   // Effects / animations
@@ -2449,6 +2450,7 @@ const BUILT_IN_COMPONENTS: [string, string][] = [
   // Effect code components — multi-slot containers that animate connected nodes.
   ['components/Marquee.tsx', MARQUEE_COMPONENT],
   ['components/Carousel.tsx', CAROUSEL_COMPONENT],
+  ['components/EmblaCarousel.tsx', EMBLA_CAROUSEL_COMPONENT],
   ['components/RibbonMarquee.tsx', RIBBON_MARQUEE_COMPONENT],
   ['components/Marquee3D.tsx', MARQUEE_3D_COMPONENT],
   ['components/MotionTrail.tsx', MOTION_TRAIL_COMPONENT],
