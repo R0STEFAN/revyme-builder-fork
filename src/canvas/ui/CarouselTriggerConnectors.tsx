@@ -9,6 +9,7 @@ import { useAtomValue } from 'jotai';
 import {
   codeAtom,
   selectedNodeAtom,
+  selectedIdsAtom,
   nodesAtom,
   canvasInteractingAtom,
 } from '@/code/stores/store';
@@ -131,6 +132,7 @@ export default function CarouselTriggerConnectors() {
   const code = useAtomValue(codeAtom);
   const nodes = useAtomValue(nodesAtom);
   const selectedId = useAtomValue(selectedNodeAtom);
+  const selectedIds = useAtomValue(selectedIdsAtom);
   const vpId = useAtomValue(interactingViewportIdAtom);
   const isInteracting = useAtomValue(canvasInteractingAtom);
   const suppressOverlay = useAtomValue(suppressSelectionOverlayAtom);
@@ -241,7 +243,8 @@ export default function CarouselTriggerConnectors() {
 
       {paths.map((p, i) => {
         const isHighlighted =
-          !!selectedId && (selectedId === p.carouselId || selectedId === p.targetId);
+          (!!selectedId && (selectedId === p.carouselId || selectedId === p.targetId)) ||
+          (Array.isArray(selectedIds) && (selectedIds.includes(p.carouselId) || selectedIds.includes(p.targetId)));
         const stroke = isHighlighted ? ACTIVE_COLOR : ARROW_COLOR_GREYED;
 
         return (

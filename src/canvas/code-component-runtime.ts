@@ -8,6 +8,7 @@ import * as motionRuntime from 'framer-motion';
 import * as revymeRuntime from '@revyme/runtime';
 import * as ReactJSXRuntime from 'react/jsx-runtime';
 import * as motionOne from '@motionone/dom';
+import EmblaCarousel from 'embla-carousel';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import AutoScroll from 'embla-carousel-auto-scroll';
@@ -254,6 +255,7 @@ const MODULE_MAP: Record<string, any> = {
   'motion': motionOne,
   'next-themes': nextThemesStub,
   'next-intl': nextIntlStub,
+  'embla-carousel': { default: EmblaCarousel, EmblaCarousel },
   'embla-carousel-react': { default: useEmblaCarousel, useEmblaCarousel },
   'embla-carousel-autoplay': { default: Autoplay, Autoplay },
   'embla-carousel-auto-scroll': { default: AutoScroll, AutoScroll },
