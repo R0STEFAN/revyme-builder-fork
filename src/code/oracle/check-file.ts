@@ -88,6 +88,10 @@ const IMPORT_ALLOWLIST = [
   // The generated Page-Effects controller: the editor writes `import { PageTransitions } from
   // './page-transitions'` into a route-group LayoutClient (a sibling module it also generates).
   /^\.\/page-transitions$/,
+  // Embla carousel packages (built-in EmblaCarousel code component)
+  /^embla-carousel/,
+  // Responsive image utilities
+  /^@\/lib\/image-utils$/,
 ];
 
 /** Comment blocks that are FEATURE ANNOTATIONS, not prose — always allowed.

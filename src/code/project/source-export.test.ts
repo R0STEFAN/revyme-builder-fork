@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath, prepareSiteFiles } from './source-export';
+import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath, prepareSiteFiles, getUploadSrcSet, injectResponsiveImageSrcSets } from './source-export';
 import { createOverlayInCode } from '../generation/overlay-gen';
 import { PAGE_TRANSITIONS_SOURCE } from '../generation/page-transitions-gen';
 
@@ -55,15 +55,29 @@ export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
       'cms/posts.json': '[]',
     }, { name: 'Halden Studio', runtimeRange: '^0.0.28', now: NOW, fetchImpl: async () => { throw new Error('no network'); } });
     expect(Object.keys(out.files).sort()).toEqual([
-      '.gitignore', 'README.md', 'app/page.client.tsx', 'app/page.tsx', 'cms/posts.json', 'next.config.mjs', 'package.json', 'tsconfig.json',
+      '.gitignore', 'README.md', 'app/page.client.tsx', 'app/page.tsx', 'cms/posts.json', 'lib/image-utils.ts', 'next.config.mjs', 'package.json', 'scripts/optimize-images.mjs', 'tsconfig.json',
     ]);
     expect(out.filename).toBe('halden-studio.zip');
     const pkg = JSON.parse(out.files['package.json']);
-    expect(pkg).toMatchObject({ name: 'halden-studio', private: true, scripts: { dev: 'next dev', build: 'next build' } });
+    expect(pkg).toMatchObject({
+      name: 'halden-studio',
+      private: true,
+      scripts: {
+        dev: 'next dev',
+        build: 'next build',
+        'optimize-images': 'node scripts/optimize-images.mjs',
+        prebuild: 'npm run optimize-images',
+      },
+      devDependencies: {
+        sharp: '^0.35.5',
+      },
+    });
     expect(pkg.dependencies['@revyme/runtime']).toBe('^0.0.28');
     expect(pkg.dependencies.next).toBe('^16');
     expect(pkg.dependencies).not.toHaveProperty('gsap');
     expect(JSON.parse(out.files['tsconfig.json']).compilerOptions.paths).toEqual({ '@/*': ['./*'] });
+    expect(out.files['scripts/optimize-images.mjs']).toContain('sharp');
+    expect(out.files['lib/image-utils.ts']).toContain('getUploadSrcSet');
     // Next 16: no removed `next lint` script, no unsupported `eslint` config key.
     expect(pkg.scripts).not.toHaveProperty('lint');
     expect(out.files['next.config.mjs']).not.toContain('eslint');
@@ -144,5 +158,87 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     expect(exportSlug('')).toBe('revyme-site');
     expect(isBuilderMetadataPath('_meta/x.json')).toBe(true);
     expect(isBuilderMetadataPath('app/_private/page.tsx')).toBe(false);
+  });
+
+  it('generates correct srcSet with getUploadSrcSet', () => {
+    expect(getUploadSrcSet(undefined)).toBeUndefined();
+    expect(getUploadSrcSet(null)).toBeUndefined();
+    expect(getUploadSrcSet('')).toBeUndefined();
+    expect(getUploadSrcSet('https://example.com/pic.jpg')).toBeUndefined();
+    expect(getUploadSrcSet('/other/path.png')).toBeUndefined();
+    expect(getUploadSrcSet('/uploads/hero.png')).toBe(
+      '/uploads/hero-320w.webp 320w, /uploads/hero-640w.webp 640w, /uploads/hero-768w.webp 768w, /uploads/hero-1024w.webp 1024w, /uploads/hero-1280w.webp 1280w, /uploads/hero-1920w.webp 1920w'
+    );
+    expect(getUploadSrcSet('/api/uploads/photo.jpg?query=1#hash')).toBe(
+      '/api/uploads/photo-320w.webp 320w, /api/uploads/photo-640w.webp 640w, /api/uploads/photo-768w.webp 768w, /api/uploads/photo-1024w.webp 1024w, /api/uploads/photo-1280w.webp 1280w, /api/uploads/photo-1920w.webp 1920w'
+    );
+  });
+
+  it('injects responsive srcSet and sizes into <img ...> elements during export', () => {
+    const rawCode = `
+export default function Page() {
+  return (
+    <div>
+      <img
+        data-id="img1"
+        data-name="Image"
+        src="/api/uploads/1791474873750-d8fd12f5.webp"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        style={{ width: '100%' }}
+      />
+      <img
+        data-id="cms-img"
+        src={item.photo}
+        alt="User"
+      />
+      <img
+        data-id="external"
+        src="https://images.unsplash.com/photo-123"
+        alt="External"
+      />
+    </div>
+  );
+}`;
+    const transformed = injectResponsiveImageSrcSets(rawCode);
+    expect(transformed).toContain('srcSet="/api/uploads/1791474873750-d8fd12f5-320w.webp 320w, /api/uploads/1791474873750-d8fd12f5-640w.webp 640w');
+    expect(transformed).toContain('sizes="100vw"');
+    expect(transformed).toContain('srcSet={getUploadSrcSet(item.photo)}');
+    expect(transformed).toMatch(/import \{ getUploadSrcSet \} from ['"]@\/lib\/image-utils['"];/);
+    // External images without upload prefix don't get responsive srcSet
+    expect(transformed).not.toContain('srcSet="https://images.unsplash.com');
+  });
+
+  it('infers optimal sizes="145px" for thumbnail images during export', () => {
+    const rawCode = `
+export default function Page() {
+  return (
+    <img
+      data-id="thumb"
+      src="/api/uploads/thumb.webp"
+      style={{ width: '145px', height: '121px' }}
+    />
+  );
+}`;
+    const transformed = injectResponsiveImageSrcSets(rawCode);
+    expect(transformed).toContain('sizes="145px"');
+  });
+
+  it('upgrades default sizes="100vw" to sizes="145px" when style width is 145px', () => {
+    const rawCode = `
+export default function Page() {
+  return (
+    <img
+      data-id="thumb"
+      sizes="100vw"
+      src="/api/uploads/thumb.webp"
+      style={{ width: '145px', height: '121px' }}
+    />
+  );
+}`;
+    const transformed = injectResponsiveImageSrcSets(rawCode);
+    expect(transformed).toContain('sizes="145px"');
+    expect(transformed).not.toContain('sizes="100vw"');
   });
 });

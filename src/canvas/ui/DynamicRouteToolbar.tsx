@@ -262,7 +262,7 @@ function RouteParamCombobox({ param, value, onChange, onCommit }: RouteParamComb
                 <div>
                   <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
                     <ClockIcon />
-                    <span>Історія</span>
+                    <span>History</span>
                   </div>
                   {filteredHistory.map((h, idx) => {
                     const isSelected = h === value;
@@ -294,7 +294,7 @@ function RouteParamCombobox({ param, value, onChange, onCommit }: RouteParamComb
                             removeHistory({ param, value: h });
                           }}
                           className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-rose-400 hover:bg-rose-500/20 rounded transition-all"
-                          title="Видалити з історії"
+                          title="Remove from history"
                         >
                           <CloseIcon />
                         </button>
@@ -309,7 +309,7 @@ function RouteParamCombobox({ param, value, onChange, onCommit }: RouteParamComb
                 <div>
                   <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mt-1 border-t border-[var(--border-light)]/40 pt-1.5">
                     <DatabaseIcon />
-                    <span>Колекція ({filteredCms[0]?.source})</span>
+                    <span>Collection ({filteredCms[0]?.source})</span>
                   </div>
                   {filteredCms.map((item, idx) => {
                     const itemIdx = filteredHistory.length + idx;
@@ -356,10 +356,10 @@ function RouteParamCombobox({ param, value, onChange, onCommit }: RouteParamComb
                 >
                   {query.trim() ? (
                     <span>
-                      Застосувати <span className="font-mono font-bold text-[var(--accent-text)]">«{query.trim()}»</span>
+                      Apply <span className="font-mono font-bold text-[var(--accent-text)]">«{query.trim()}»</span>
                     </span>
                   ) : (
-                    <span className="text-[var(--text-tertiary)]">Введіть значення...</span>
+                    <span className="text-[var(--text-tertiary)]">Enter value...</span>
                   )}
                 </div>
               )}

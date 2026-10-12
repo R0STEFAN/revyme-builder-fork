@@ -17,12 +17,13 @@ import {
   wrapInFrame, wrapInLayout, unfoldChildren,
   copyElementStylesCommand, pasteElementStylesCommand,
 } from '../commands';
-import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext } from '../node-ops';
+import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext, forceCanvasRender, findNodeComputedStyle } from '../node-ops';
 import { isTextTag } from '@/shared/constants';
 import { getCanvasBridge } from '../canvas-bridge';
 import { transformManager } from '../transform';
 import { makeComponent, detachInstance, type ViewportDimensions } from '@/code/components/component-ops';
 import { makeIconSetFromNodes } from '@/code/icons/icon-set-ops';
+import ConvertToImageModal from './ConvertToImageModal';
 import { suppressSelectionOverlayAtom } from '@/code/stores/editor-store';
 import { groupSvgs, ungroupSvgs } from '@/code/svg/group-svgs';
 import { buildGroupSvgsOpts } from '@/canvas/svg-group-helper';
@@ -170,6 +171,7 @@ export default function ContextMenu() {
   // entry doesn't bleed across modals if the user changes their mind.
   const [makeIconSetModal, setMakeIconSetModal] = useState<{ nodeIds: string[] } | null>(null);
   const [makeIconSetName, setMakeIconSetName] = useState('');
+  const [convertToImageModal, setConvertToImageModal] = useState<{ nodeId: string; childCount: number } | null>(null);
 
   // Adjust position to stay on screen
   useEffect(() => {
@@ -457,7 +459,27 @@ export default function ContextMenu() {
     />
   );
 
-  if (!menu.show) return <>{makeCompModalEl}{makeIconSetModalEl}</>;
+  const handleCloseConvertToImageModal = () => { setConvertToImageModal(null); };
+  const handleConvertToImageConfirm = (mode: 'replace' | 'nested-background') => {
+    if (!convertToImageModal) return;
+    const targetId = convertToImageModal.nodeId;
+    setConvertToImageModal(null);
+    setForceRender();
+    queueMutation({ type: 'convertDivToImage', nodeId: targetId, mode });
+    flushNow();
+    forceCanvasRender();
+    toast.success(mode === 'nested-background' ? 'Image nested inside container' : 'Converted to image');
+  };
+  const convertToImageModalEl = (
+    <ConvertToImageModal
+      isOpen={!!convertToImageModal}
+      onClose={handleCloseConvertToImageModal}
+      onConfirm={handleConvertToImageConfirm}
+      childCount={convertToImageModal?.childCount ?? 1}
+    />
+  );
+
+  if (!menu.show) return <>{makeCompModalEl}{makeIconSetModalEl}{convertToImageModalEl}</>;
   const hasChildren = node ? node.children.length > 0 : false;
   // A component INSTANCE (`<MyComp/>`) carries `componentFile`. Its construction/structure items
   // (Make Component, Make into Map, Unfold Children) are meaningless — it's already a component
@@ -496,12 +518,24 @@ export default function ContextMenu() {
   // SINGLE selection only: Make Component wraps ONE node — offering it on a
   // multi-selection made no sense (the reference hides it too; user report 2026-08-06).
   const showComponentOrMap = !isInstance && !isSvg && !isNonPrimaryArtboard && selectedIds.length <= 1; // (Make into Map retired)
+  const bgImg = node?.styles?.backgroundImage || node?.styles?.background || '';
+  const hasBgImgStyle = bgImg !== '' && bgImg !== 'none' && (bgImg.includes('url(') || bgImg.startsWith('urlvar:') || bgImg.startsWith('var:'));
+  const hasBgImgBinding = !!node?.styleBindings?.some(b => b.styleProp === 'backgroundImage' || b.styleProp === 'background' || b.styleProp === 'backgroundColor');
+  const hasBgImgVar = !!node?.styleVariables?.backgroundImage || !!node?.styleVariables?.background;
+  const hasVariantBg = !!node?.variantBindings?.style && Object.values(node.variantBindings.style).some(v => !!(v as any)?.backgroundImage || !!(v as any)?.background);
+  const computedBg = (!hasBgImgStyle && !hasBgImgBinding && !hasBgImgVar && !hasVariantBg && nodeId)
+    ? (findNodeComputedStyle(nodeId, interactingVp || 'desktop', 'backgroundImage') || '')
+    : '';
+  const hasComputedBg = computedBg !== '' && computedBg !== 'none' && computedBg.includes('url(');
+
+  const canConvertToImage = !isInstance && !isSvg && node?.type !== 'img' && node?.type !== 'Image' &&
+    (hasBgImgStyle || hasBgImgBinding || hasBgImgVar || hasVariantBg || hasComputedBg);
   // Detach Instance is the only instance-gated top item, and it's now design-only
   // (`isDesignInstance`). Using the broader `isInstance` here left the leading
   // separator orphaned at the top for CODE-component instances (Detach hidden,
   // nothing else in the section).
   const hasTopSection = isDesignInstance || showComponentOrMap || showMakeVectorSet
-    || canGroupSvgs || canUngroupSvg;
+    || canGroupSvgs || canUngroupSvg || canConvertToImage;
 
   const contentEl = getContentRoot();
   // Count replicas via bridge rectCache
@@ -520,6 +554,21 @@ export default function ContextMenu() {
   })();
 
   // ─── Handlers ─────────────────────────────────────────────────────
+
+  const handleConvertToImage = () => {
+    if (!nodeId) return;
+    if (hasChildren) {
+      setConvertToImageModal({ nodeId, childCount: node?.children.length ?? 0 });
+      close();
+      return;
+    }
+    close();
+    setForceRender();
+    queueMutation({ type: 'convertDivToImage', nodeId, mode: 'replace' });
+    flushNow();
+    forceCanvasRender();
+    toast.success('Converted to image');
+  };
 
   const handleCopy = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
@@ -922,6 +971,9 @@ export default function ContextMenu() {
         {showComponentOrMap && (
           <MenuItem label="Make Component" shortcut="Ctrl+Alt+K" onClick={handleMakeComponent} disabled={!nodeId} />
         )}
+        {canConvertToImage && (
+          <MenuItem label="Convert to Image" onClick={handleConvertToImage} disabled={!nodeId} />
+        )}
         {/* Make Vector Set — any SVG node or all-SVG group (icons and/or
             sketches; sketches bundle into vector sets). */}
         {showMakeVectorSet && (
@@ -1008,5 +1060,5 @@ export default function ContextMenu() {
     </>,
     document.body,
   );
-  return <>{contextMenuEl}{makeCompModalEl}{makeIconSetModalEl}</>;
+  return <>{contextMenuEl}{makeCompModalEl}{makeIconSetModalEl}{convertToImageModalEl}</>;
 }

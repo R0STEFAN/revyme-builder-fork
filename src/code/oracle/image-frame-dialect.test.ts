@@ -18,12 +18,18 @@ ${body}
 
 const im = (body: string) => checkFile(PAGE(body), { kind: 'page' }).filter((x) => x.code === 'IMAGE_USE_BACKGROUND_FRAME').length;
 
-describe('images = backgroundImage frames (not <img>)', () => {
-  it('a static-src <img> bounces', () => {
-    expect(im(`<img data-id="pic" data-name="Image" src="https://x.com/y.jpg" alt="" style={{ width: '100%', height: '200px', objectFit: 'cover' }} />`)).toBe(1);
+describe('images = backgroundImage frames or sized <img> elements', () => {
+  it('a static-src <img> with data-id and valid sizing passes', () => {
+    expect(im(`<img data-id="pic" data-name="Image" src="https://x.com/y.jpg" alt="" style={{ width: '100%', height: '200px', objectFit: 'cover' }} />`)).toBe(0);
   });
-  it('<motion.img> with static src bounces', () => {
-    expect(im(`<motion.img data-id="pic" data-name="Image" src="https://x.com/y.jpg" style={{ width: '100%', height: '200px' }} />`)).toBe(1);
+  it('<motion.img> with data-id and valid sizing passes', () => {
+    expect(im(`<motion.img data-id="pic" data-name="Image" src="https://x.com/y.jpg" style={{ width: '100%', height: '200px' }} />`)).toBe(0);
+  });
+  it('a static-src <img> without data-id bounces', () => {
+    expect(im(`<img src="https://x.com/y.jpg" alt="" style={{ width: '100%', height: '200px', objectFit: 'cover' }} />`)).toBe(1);
+  });
+  it('a static-src <img> with data-id but without sizing styles bounces', () => {
+    expect(im(`<img data-id="pic" data-name="Image" src="https://x.com/y.jpg" alt="" />`)).toBe(1);
   });
   it('an expression src (CMS / dynamic) is EXEMPT', () => {
     expect(im(`<img data-id="pic" data-name="Image" src={item.image} alt="" style={{ width: '100%', height: '200px' }} />`)).toBe(0);

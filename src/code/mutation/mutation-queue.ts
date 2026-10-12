@@ -139,6 +139,7 @@ import {
   MOTION_LINK_DECL_ANY_RE,
   MOTION_LINK_DECL_LEGACY_LINE_RE,
 } from '../generation/generator-attrs';
+import { convertDivToImageInCode } from '../generation/convert-to-image-gen';
 import {
   updateHoverStyleInCode,
   removeHoverStyleInCode,
@@ -268,6 +269,8 @@ export type Mutation =
   | { type: 'removeNode'; nodeId: string }
   /** Set the data-name attribute on an element (display name in layers panel). */
   | { type: 'renameNode'; nodeId: string; name: string }
+  /** Convert a div with backgroundImage to an img element (or insert nested background img). */
+  | { type: 'convertDivToImage'; nodeId: string; mode?: 'replace' | 'nested-background' }
   // ─── Text mutations ─────────────────────────────────────────────────────
   /** Update the text content of an element. Supports plain text and HTML. */
   | { type: 'updateText'; nodeId: string; text: string }
@@ -779,6 +782,7 @@ const IMPORT_AFFECTING_TYPES = new Set([
   // must add `LayoutGroup`/`motion` from framer-motion (and prune them on remove).
   'updateGlide', 'removeGlide',
   'addNode', 'addCanvasNode', 'removeNode', 'changeTag', 'replaceComponentInstance',
+  'convertDivToImage',
   // convertToMotionLink injects `const MotionLink = motion.create(Link)` which
   // references `Link` — syncImports must add `import Link from 'next/link'`
   // (buildAutoImports detects `\bMotionLink\b`). Also re-flows the const onto
@@ -905,6 +909,7 @@ const SYNC_SYNTAX_GATED_TYPES = new Set<Mutation['type']>([
   'updateVariantStyle', 'setVariantVisibility', 'updateMotionProp',
   'updateScrollVariant', 'updateGlide',
   'updateLocaleInstanceProp', 'updateInstancePropBase', 'hoistInstanceProp',
+  'convertDivToImage',
 ]);
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -3491,6 +3496,8 @@ function applyMutationCore(code: string, mutation: Mutation): string {
 
       case 'changeTag':
         return changeTagInCode(code, mutation.nodeId, mutation.newTag);
+      case 'convertDivToImage':
+        return convertDivToImageInCode(code, mutation.nodeId, mutation.mode);
       case 'replaceComponentInstance': {
         // Swap the instance for a different component (keeps data-id + style),
         // then re-assert width/height so the new instance keeps the old one's

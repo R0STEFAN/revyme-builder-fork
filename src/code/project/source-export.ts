@@ -23,9 +23,244 @@
 // command was removed in 16), and the tsconfig values Next would otherwise
 // rewrite on first run (`jsx: react-jsx`, `.next/dev/types`).
 
+import * as t from '@babel/types';
+import { parseJSX } from '../parsing/ast-utils';
+import { generate } from '../generation/generator-utils';
 import { healMissingOverlayEffectsInCode } from '../generation/overlay-gen';
 import { PAGE_TRANSITIONS_SOURCE } from '../generation/page-transitions-gen';
 import { transformSiteFilesForNextFonts } from '../generation/next-font-gen';
+import { getUploadSrcSet, inferImageSizes } from '@/shared/image-utils';
+
+export { getUploadSrcSet, inferImageSizes };
+
+/** Ensure import { getUploadSrcSet } from '@/lib/image-utils' is present in the AST */
+export function ensureGetUploadSrcSetImport(ast: t.File): void {
+  let hasImport = false;
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.source.value !== '@/lib/image-utils') continue;
+    for (const spec of node.specifiers) {
+      if (
+        spec.type === 'ImportSpecifier' &&
+        spec.imported.type === 'Identifier' &&
+        spec.imported.name === 'getUploadSrcSet'
+      ) {
+        hasImport = true;
+      }
+    }
+  }
+  if (!hasImport) {
+    const importDecl = t.importDeclaration(
+      [t.importSpecifier(t.identifier('getUploadSrcSet'), t.identifier('getUploadSrcSet'))],
+      t.stringLiteral('@/lib/image-utils'),
+    );
+    let lastImportIdx = -1;
+    for (let i = 0; i < ast.program.body.length; i++) {
+      if (ast.program.body[i].type === 'ImportDeclaration') lastImportIdx = i;
+    }
+    if (lastImportIdx >= 0) ast.program.body.splice(lastImportIdx + 1, 0, importDecl);
+    else ast.program.body.unshift(importDecl);
+  }
+}
+
+/**
+ * Scan JSX code and automatically inject responsive srcSet and sizes into any
+ * <img ...> and <motion.img ...> tags that reference uploads or dynamic CMS expressions.
+ */
+export function injectResponsiveImageSrcSets(code: string): string {
+  if (!code.includes('<img') && !code.includes('<motion.img')) return code;
+
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let touched = false;
+
+  const checkAndInject = (opening: t.JSXOpeningElement) => {
+    // Check if tag is img or motion.img
+    const isImg =
+      (t.isJSXIdentifier(opening.name) && opening.name.name === 'img') ||
+      (t.isJSXMemberExpression(opening.name) &&
+        t.isJSXIdentifier(opening.name.object) &&
+        opening.name.object.name === 'motion' &&
+        t.isJSXIdentifier(opening.name.property) &&
+        opening.name.property.name === 'img');
+
+    if (!isImg) return;
+
+    // Check if element already has srcSet / srcset
+    const hasSrcSet = opening.attributes.some(
+      (attr) =>
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        attr.name.name.toLowerCase() === 'srcset',
+    );
+    if (hasSrcSet) return;
+
+    // Find src attribute
+    const srcAttrIdx = opening.attributes.findIndex(
+      (attr) =>
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        attr.name.name === 'src',
+    );
+    if (srcAttrIdx === -1) return;
+
+    const srcAttr = opening.attributes[srcAttrIdx] as t.JSXAttribute;
+    if (!srcAttr.value) return;
+
+    // Infer dimension for optimal sizes attribute
+    let inferredWidth: string | number | null = null;
+    let inferredMaxWidth: string | number | null = null;
+
+    const styleAttr = opening.attributes.find(
+      (attr) =>
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        attr.name.name === 'style',
+    ) as t.JSXAttribute | undefined;
+
+    if (
+      styleAttr?.value &&
+      t.isJSXExpressionContainer(styleAttr.value) &&
+      t.isObjectExpression(styleAttr.value.expression)
+    ) {
+      for (const prop of styleAttr.value.expression.properties) {
+        if (t.isObjectProperty(prop)) {
+          const keyName = t.isIdentifier(prop.key)
+            ? prop.key.name
+            : t.isStringLiteral(prop.key)
+              ? prop.key.value
+              : null;
+          if (
+            keyName === 'width' &&
+            (t.isStringLiteral(prop.value) || t.isNumericLiteral(prop.value))
+          ) {
+            inferredWidth = prop.value.value;
+          } else if (
+            keyName === 'maxWidth' &&
+            (t.isStringLiteral(prop.value) || t.isNumericLiteral(prop.value))
+          ) {
+            inferredMaxWidth = prop.value.value;
+          }
+        }
+      }
+    }
+
+    if (inferredWidth === null) {
+      const widthAttr = opening.attributes.find(
+        (attr) =>
+          t.isJSXAttribute(attr) &&
+          t.isJSXIdentifier(attr.name) &&
+          attr.name.name === 'width',
+      ) as t.JSXAttribute | undefined;
+      if (widthAttr?.value) {
+        if (t.isStringLiteral(widthAttr.value)) inferredWidth = widthAttr.value.value;
+        else if (t.isJSXExpressionContainer(widthAttr.value)) {
+          if (
+            t.isNumericLiteral(widthAttr.value.expression) ||
+            t.isStringLiteral(widthAttr.value.expression)
+          ) {
+            inferredWidth = widthAttr.value.expression.value;
+          }
+        }
+      }
+    }
+
+    const calculatedSizes = inferImageSizes({
+      width: inferredWidth,
+      maxWidth: inferredMaxWidth,
+    });
+
+    const sizesAttrIdx = opening.attributes.findIndex(
+      (attr) =>
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        attr.name.name.toLowerCase() === 'sizes',
+    );
+
+    const applySizes = () => {
+      if (sizesAttrIdx === -1) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('sizes'), t.stringLiteral(calculatedSizes)),
+        );
+      } else {
+        const existing = opening.attributes[sizesAttrIdx] as t.JSXAttribute;
+        if (
+          t.isStringLiteral(existing.value) &&
+          existing.value.value === '100vw' &&
+          calculatedSizes !== '100vw'
+        ) {
+          existing.value = t.stringLiteral(calculatedSizes);
+        }
+      }
+    };
+
+    if (t.isStringLiteral(srcAttr.value)) {
+      const srcVal = srcAttr.value.value.trim();
+      const staticSrcSet = getUploadSrcSet(srcVal);
+      if (staticSrcSet) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('srcSet'), t.stringLiteral(staticSrcSet)),
+        );
+        applySizes();
+        touched = true;
+      }
+    } else if (t.isJSXExpressionContainer(srcAttr.value)) {
+      const expr = srcAttr.value.expression;
+      if (t.isStringLiteral(expr)) {
+        const srcVal = expr.value.trim();
+        const staticSrcSet = getUploadSrcSet(srcVal);
+        if (staticSrcSet) {
+          opening.attributes.push(
+            t.jsxAttribute(t.jsxIdentifier('srcSet'), t.stringLiteral(staticSrcSet)),
+          );
+          applySizes();
+          touched = true;
+        }
+      } else if (t.isExpression(expr) && !t.isJSXEmptyExpression(expr)) {
+        // Dynamic expression e.g. item.photo or image
+        ensureGetUploadSrcSetImport(ast);
+        opening.attributes.push(
+          t.jsxAttribute(
+            t.jsxIdentifier('srcSet'),
+            t.jsxExpressionContainer(
+              t.callExpression(t.identifier('getUploadSrcSet'), [t.cloneNode(expr)]),
+            ),
+          ),
+        );
+        applySizes();
+        touched = true;
+      }
+    }
+  };
+
+  // Walk all elements in AST
+  const walkNode = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'JSXElement') {
+      checkAndInject(node.openingElement);
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'tokens') continue;
+      const child = node[key];
+      if (Array.isArray(child)) {
+        for (const c of child) walkNode(c);
+      } else if (child && typeof child === 'object') {
+        walkNode(child);
+      }
+    }
+  };
+
+  walkNode(ast.program);
+
+  if (!touched) return code;
+
+  try {
+    return generate(ast, { retainLines: false, concise: false }, code).code;
+  } catch {
+    return code;
+  }
+}
 
 /** Prepare a copy of persisted site files so older generated controllers work in builds. */
 export function prepareSiteFiles(input: Record<string, string>): Record<string, string> {
@@ -40,10 +275,22 @@ export function prepareSiteFiles(input: Record<string, string>): Record<string, 
     if (files[path] && (files[path].includes('generateMetadata') || files[path].includes('export const metadata'))) {
       files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
     }
+    // Inject responsive image srcSet and sizes into all page and component JSX files
+    if (files[path] && /\.(tsx|jsx)$/.test(path) && (files[path].includes('<img') || files[path].includes('<motion.img'))) {
+      files[path] = injectResponsiveImageSrcSets(files[path]);
+    }
   }
 
   // Transform Google Fonts @import into next/font/google loaders
   files = transformSiteFilesForNextFonts(files);
+
+  // Provide lib/image-utils.ts and scripts/optimize-images.mjs for runtime / build resolution
+  if (!files['lib/image-utils.ts']) {
+    files['lib/image-utils.ts'] = IMAGE_UTILS_TS;
+  }
+  if (!files['scripts/optimize-images.mjs']) {
+    files['scripts/optimize-images.mjs'] = OPTIMIZE_IMAGES_SCRIPT;
+  }
 
   return files;
 }
@@ -157,6 +404,8 @@ export async function buildSourceExport(input: Record<string, string>, opts: Sou
   if (!localized['tsconfig.json']) files['tsconfig.json'] = TSCONFIG;
   files['README.md'] = buildReadme(opts.name || 'Revyme project');
   if (!localized['.gitignore']) files['.gitignore'] = GITIGNORE;
+  if (!localized['scripts/optimize-images.mjs']) files['scripts/optimize-images.mjs'] = OPTIMIZE_IMAGES_SCRIPT;
+  if (!localized['lib/image-utils.ts']) files['lib/image-utils.ts'] = IMAGE_UTILS_TS;
   return { files, filename: `${slug}.zip`, downloaded, failed };
 }
 
@@ -172,6 +421,8 @@ export function buildPackageJson(name: string, runtimeRange: string, now: Date):
       dev: 'next dev',
       build: 'next build',
       start: 'next start',
+      'optimize-images': 'node scripts/optimize-images.mjs',
+      prebuild: 'npm run optimize-images',
     },
     // The same runtime surface the deploy scaffold uses, so `npm install &&
     // npm run dev` just works off-platform. Never GSAP: its licence forbids
@@ -193,6 +444,7 @@ export function buildPackageJson(name: string, runtimeRange: string, now: Date):
       '@types/react': '^19',
       '@types/react-dom': '^19',
       '@types/node': '^20',
+      sharp: '^0.35.5',
     },
     revyme: {
       exportedAt: now.toISOString(),
@@ -282,3 +534,145 @@ This is a standard Next.js project. Deploy anywhere that supports Next.js
 Made with Revyme.
 `;
 }
+
+export const IMAGE_UTILS_TS = `export const RESPONSIVE_IMAGE_WIDTHS = [320, 640, 768, 1024, 1280, 1920] as const;
+
+export function inferImageSizes(options?: { width?: string | number | null; maxWidth?: string | number | null } | null): string {
+  if (!options) return '100vw';
+
+  const parsePx = (val: string | number | null | undefined): number | null => {
+    if (typeof val === 'number') return val > 0 ? val : null;
+    if (typeof val === 'string') {
+      const match = val.trim().match(/^(\\d+(?:\\.\\d+)?)\\s*px$/i);
+      if (match) {
+        const n = parseFloat(match[1]);
+        return n > 0 ? Math.round(n) : null;
+      }
+      if (/^\\d+(?:\\.\\d+)?$/.test(val.trim())) {
+        const n = parseFloat(val.trim());
+        return n > 0 ? Math.round(n) : null;
+      }
+    }
+    return null;
+  };
+
+  const widthPx = parsePx(options.width);
+  const maxWidthPx = parsePx(options.maxWidth);
+
+  if (widthPx !== null) {
+    if (widthPx <= 320) return \`\${widthPx}px\`;
+    return \`(max-width: \${widthPx}px) 100vw, \${widthPx}px\`;
+  }
+
+  if (maxWidthPx !== null) {
+    if (maxWidthPx <= 320) return \`\${maxWidthPx}px\`;
+    return \`(max-width: \${maxWidthPx}px) 100vw, \${maxWidthPx}px\`;
+  }
+
+  if (typeof options.width === 'string') {
+    const trimmed = options.width.trim();
+    const percentMatch = trimmed.match(/^(\\d+(?:\\.\\d+)?)\\s*%$/);
+    if (percentMatch) {
+      const pct = parseFloat(percentMatch[1]);
+      if (pct > 0 && pct < 100) {
+        const vwVal = Math.round(pct);
+        return \`(max-width: 768px) 100vw, \${vwVal}vw\`;
+      }
+    }
+    const vwMatch = trimmed.match(/^(\\d+(?:\\.\\d+)?)\\s*vw$/i);
+    if (vwMatch) {
+      const vw = parseFloat(vwMatch[1]);
+      if (vw > 0 && vw < 100) {
+        const vwVal = Math.round(vw);
+        return \`(max-width: 768px) 100vw, \${vwVal}vw\`;
+      }
+    }
+  }
+
+  return '100vw';
+}
+
+export function getUploadSrcSet(src: string | undefined | null): string | undefined {
+  if (!src || typeof src !== 'string') return undefined;
+  if (!src.startsWith('/uploads/') && !src.startsWith('/api/uploads/')) return undefined;
+  const clean = src.split('?')[0].split('#')[0];
+  const lastDot = clean.lastIndexOf('.');
+  if (lastDot === -1) return undefined;
+  const basePath = clean.slice(0, lastDot);
+  const widths = [320, 640, 768, 1024, 1280, 1920];
+  return widths.map(w => \`\${basePath}-\${w}w.webp \${w}w\`).join(', ');
+}
+`;
+
+export const OPTIMIZE_IMAGES_SCRIPT = `import fs from 'node:fs';
+import path from 'node:path';
+import sharp from 'sharp';
+
+const WIDTHS = [320, 640, 768, 1024, 1280, 1920];
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const RESPONSIVE_VARIANT_RE = /-\\d+w\\.webp$/;
+
+async function optimizeDirectory(dir) {
+  if (!fs.existsSync(dir)) return;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await optimizeDirectory(fullPath);
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!IMAGE_EXTS.has(ext)) continue;
+      if (RESPONSIVE_VARIANT_RE.test(entry.name)) continue;
+
+      const baseName = entry.name.slice(0, -ext.length);
+      let fileStat;
+      try {
+        fileStat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+
+      for (const w of WIDTHS) {
+        const outName = \`\${baseName}-\${w}w.webp\`;
+        const outPath = path.join(dir, outName);
+
+        try {
+          if (fs.existsSync(outPath)) {
+            const outStat = fs.statSync(outPath);
+            if (outStat.mtimeMs >= fileStat.mtimeMs) {
+              continue;
+            }
+          }
+
+          await sharp(fullPath)
+            .rotate()
+            .resize(w, null, { withoutEnlargement: true })
+            .webp({ quality: 82 })
+            .toFile(outPath);
+        } catch (err) {
+          console.warn(\`[optimize-images] Skipping \${entry.name} (\${w}w):\`, err?.message || err);
+        }
+      }
+    }
+  }
+}
+
+async function main() {
+  const dirs = [
+    path.resolve(process.cwd(), 'public/uploads'),
+    path.resolve(process.cwd(), 'public/api/uploads'),
+  ];
+
+  for (const dir of dirs) {
+    if (fs.existsSync(dir)) {
+      await optimizeDirectory(dir);
+    }
+  }
+}
+
+main().catch((err) => {
+  console.error('[optimize-images] Fatal error:', err);
+  process.exit(1);
+});
+`;

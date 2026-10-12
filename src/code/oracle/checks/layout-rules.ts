@@ -663,6 +663,30 @@ function checkImageBackgroundFrame(ast: t.File, v: OracleViolation[]): void {
       if (!srcAttr || !t.isStringLiteral(srcAttr.value)) return; // dynamic/CMS src → exempt
       const src = srcAttr.value.value;
       const id = stringAttr(attrs, 'data-id');
+
+      // EXEMPT: <img ...> elements that have data-id and valid sizing styles (width, height, or objectFit)
+      if (id) {
+        const hasWidthAttr = attrs.some((a) => a.name.name === 'width');
+        const hasHeightAttr = attrs.some((a) => a.name.name === 'height');
+        if (hasWidthAttr || hasHeightAttr) return;
+
+        const styleAttr = attrs.find((a) => a.name.name === 'style');
+        if (
+          styleAttr?.value?.type === 'JSXExpressionContainer' &&
+          t.isObjectExpression(styleAttr.value.expression)
+        ) {
+          const styleObj = styleAttr.value.expression;
+          const hasValidSizing = styleObj.properties.some((pr) => {
+            if (!t.isObjectProperty(pr)) return false;
+            const k = t.isIdentifier(pr.key) ? pr.key.name : t.isStringLiteral(pr.key) ? pr.key.value : '';
+            if (k !== 'width' && k !== 'height' && k !== 'objectFit') return false;
+            if (t.isStringLiteral(pr.value)) return pr.value.value.trim().length > 0;
+            return true;
+          });
+          if (hasValidSizing) return;
+        }
+      }
+
       const line = opening.loc?.start.line;
       v.push({
         code: 'IMAGE_USE_BACKGROUND_FRAME', tier: 2, line, elementId: id,

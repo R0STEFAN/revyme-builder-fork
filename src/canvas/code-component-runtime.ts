@@ -244,6 +244,8 @@ const MODULE_MAP: Record<string, any> = {
   'lib/cursor-runtime': revymeRuntime,
   '@/lib/useIsCanvasRenderer': { default: useIsCanvasRenderer, useIsCanvasRenderer },
   'lib/useIsCanvasRenderer': { default: useIsCanvasRenderer, useIsCanvasRenderer },
+  '@/lib/image-utils': { getUploadSrcSet: () => undefined, inferImageSizes: () => '100vw', default: { getUploadSrcSet: () => undefined, inferImageSizes: () => '100vw' } },
+  'lib/image-utils': { getUploadSrcSet: () => undefined, inferImageSizes: () => '100vw', default: { getUploadSrcSet: () => undefined, inferImageSizes: () => '100vw' } },
   // Both spellings a published code component may use, plus the `dist/` paths
   // some of them import directly.
   // published modules are compiled with the automatic JSX runtime, so they all

@@ -169,10 +169,10 @@ describe('LocalServerDropdown', () => {
     expect(readSpy).toHaveBeenCalledWith(projectFsModule.MAIN_BRANCH_ID, { shared: true });
     expect(localServerClient.buildLocalServer).toHaveBeenCalledWith(
       'test-project-123',
-      {
+      expect.objectContaining({
         'app/page.tsx': 'export default function Page() { return <div>Hello</div> }',
         'app/layout.tsx': 'export default function Layout({ children }) { return <html>{children}</html> }',
-      },
+      }),
       projectFsModule.MAIN_BRANCH_ID
     );
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Build succeeded'));
@@ -209,9 +209,9 @@ export function PageTransitions() { e.stopImmediatePropagation(); }`;
     expect(readSpy).toHaveBeenCalledWith('feature-hero', { shared: true });
     expect(localServerClient.buildLocalServer).toHaveBeenCalledWith(
       'test-project-123',
-      {
+      expect.objectContaining({
         'app/page.tsx': 'export default function HeroPage() { return <div>Hero</div> }',
-      },
+      }),
       'feature-hero'
     );
   });

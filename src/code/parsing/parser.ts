@@ -29,7 +29,7 @@ const INLINE_TAGS = new Set(['span', 'strong', 'em', 'br', 'a', 'u', 's', 'mark'
 // data-glide, …) so a declarative Loop's marker survives copy/paste — the
 // paste engine re-emits attrs from the parsed node, and anything missing
 // here silently vanishes from the pasted copy.
-const PARSED_HTML_ATTRS = ['id', 'src', 'alt', 'href', 'target', 'rel', 'type', 'placeholder', 'aria-label', 'role', 'aria-hidden', 'tabindex', 'data-overlay', 'data-overlay-trigger', 'data-smooth-scroll', 'data-keep-params', 'data-sketch', 'data-revyme-track', 'data-slot-pos', 'data-pinned', 'data-replica-solo', 'data-alt-duplicate', 'data-scroll-fx', 'data-glide', 'data-loop', 'data-stagger', 'poster', 'controls', 'autoplay', 'loop', 'muted', 'preload',
+const PARSED_HTML_ATTRS = ['id', 'src', 'srcSet', 'srcset', 'sizes', 'loading', 'decoding', 'alt', 'href', 'target', 'rel', 'type', 'placeholder', 'aria-label', 'role', 'aria-hidden', 'tabindex', 'data-overlay', 'data-overlay-trigger', 'data-smooth-scroll', 'data-keep-params', 'data-sketch', 'data-revyme-track', 'data-slot-pos', 'data-pinned', 'data-replica-solo', 'data-alt-duplicate', 'data-scroll-fx', 'data-glide', 'data-loop', 'data-stagger', 'poster', 'controls', 'autoplay', 'loop', 'muted', 'preload',
   // Form controls (input/textarea/select/option/button) + the <form> itself.
   // React JSX names (camelCase) so the generated .tsx is React-correct.
   // Also captured on CANVAS nodes: a form/search input dragged or pasted onto

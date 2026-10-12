@@ -172,6 +172,45 @@ describe('LocalServerManager', () => {
       }
     });
 
+    it('optimizes images in public/uploads producing responsive WebP variants and ignores invalid images gracefully', async () => {
+      const prevEnv = process.env.REVYME_DATA_DIR;
+      process.env.REVYME_DATA_DIR = TEST_STORAGE_DIR;
+      const uploadsDir = path.join(TEST_STORAGE_DIR, 'uploads');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+
+      const sharp = (await import('sharp')).default;
+      const validBuf = await sharp({
+        create: {
+          width: 800,
+          height: 600,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
+      }).png().toBuffer();
+
+      fs.writeFileSync(path.join(uploadsDir, 'banner.png'), validBuf);
+      fs.writeFileSync(path.join(uploadsDir, 'corrupt.jpg'), 'not-an-image');
+
+      try {
+        const files: Record<string, string> = {
+          'app/page.tsx': 'export default () => <div>Hello</div>;',
+        };
+        const targetDir = manager.exportProject('test-opt-sync', files);
+        await manager.syncUploads(targetDir);
+
+        const pubUploads = path.join(targetDir, 'public', 'uploads');
+        expect(fs.existsSync(path.join(pubUploads, 'banner.png'))).toBe(true);
+        expect(fs.existsSync(path.join(pubUploads, 'corrupt.jpg'))).toBe(true);
+
+        // Check generated responsive webp variants
+        expect(fs.existsSync(path.join(pubUploads, 'banner-320w.webp'))).toBe(true);
+        expect(fs.existsSync(path.join(pubUploads, 'banner-640w.webp'))).toBe(true);
+        expect(fs.existsSync(path.join(pubUploads, 'banner-768w.webp'))).toBe(true);
+      } finally {
+        process.env.REVYME_DATA_DIR = prevEnv;
+      }
+    });
+
     it('removes stale files when pages or components are moved or deleted', () => {
       const initialFiles: Record<string, string> = {
         'app/about-me/page.tsx': 'export default () => <div>About</div>;',

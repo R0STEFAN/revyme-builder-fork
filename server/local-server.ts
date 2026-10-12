@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, exec, execSync, type ChildProcess } from 'node:child_process';
+import sharp from 'sharp';
 import { getDataDirs, getProject } from './storage';
+import { prepareSiteFiles, OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/code/project/source-export';
 
 export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
 
@@ -262,7 +264,9 @@ const DEFAULT_PACKAGE_JSON = `{
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "optimize-images": "node scripts/optimize-images.mjs",
+    "prebuild": "npm run optimize-images"
   }
 }
 `;
@@ -348,8 +352,10 @@ export class LocalServerManager {
       }
     }
 
+    const siteFiles = prepareSiteFiles(files);
+
     // Write all project files, skipping internal metadata paths starting with '_'
-    for (const [relativePath, content] of Object.entries(files)) {
+    for (const [relativePath, content] of Object.entries(siteFiles)) {
       if (isIgnoredFile(relativePath)) {
         continue;
       }
@@ -376,7 +382,30 @@ export class LocalServerManager {
     const packageJsonPath = path.join(targetDir, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
       fs.writeFileSync(packageJsonPath, DEFAULT_PACKAGE_JSON, 'utf-8');
+    } else if (!files['package.json']) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        if (pkg.name === 'revyme-live-site' && pkg.scripts && pkg.scripts.build) {
+          if (!pkg.scripts['optimize-images'] || !pkg.scripts['prebuild']) {
+            pkg.scripts['optimize-images'] = 'node scripts/optimize-images.mjs';
+            pkg.scripts['prebuild'] = 'npm run optimize-images';
+            fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+          }
+        }
+      } catch {
+        fs.writeFileSync(packageJsonPath, DEFAULT_PACKAGE_JSON, 'utf-8');
+      }
     }
+
+    const optimizeScriptPath = path.join(targetDir, 'scripts', 'optimize-images.mjs');
+    const scriptDir = path.dirname(optimizeScriptPath);
+    if (!fs.existsSync(scriptDir)) fs.mkdirSync(scriptDir, { recursive: true });
+    fs.writeFileSync(optimizeScriptPath, OPTIMIZE_IMAGES_SCRIPT, 'utf-8');
+
+    const imageUtilsPath = path.join(targetDir, 'lib', 'image-utils.ts');
+    const libDir = path.dirname(imageUtilsPath);
+    if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(imageUtilsPath, IMAGE_UTILS_TS, 'utf-8');
 
     // Ensure uploads are synced/linked into public/api/uploads and public/uploads
     this.syncUploads(targetDir);
@@ -411,7 +440,7 @@ export class LocalServerManager {
     }
   }
 
-  syncUploads(targetDir: string): void {
+  async syncUploads(targetDir: string): Promise<void> {
     const uploadsDir = getDataDirs().uploadsDir;
     if (!uploadsDir || !fs.existsSync(uploadsDir)) return;
 
@@ -455,6 +484,66 @@ export class LocalServerManager {
         // ignore errors
       }
     }
+
+    // Run image optimization on public/uploads and public/api/uploads using sharp
+    try {
+      await this.optimizeImages(path.join(publicDir, 'uploads'));
+      await this.optimizeImages(path.join(publicApiDir, 'uploads'));
+    } catch {
+      // ignore
+    }
+  }
+
+  async optimizeImages(uploadsTarget: string): Promise<void> {
+    if (!fs.existsSync(uploadsTarget)) return;
+
+    const widths = [320, 640, 768, 1024, 1280, 1920];
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+    const responsiveVariantRe = /-\d+w\.webp$/;
+
+    try {
+      const entries = fs.readdirSync(uploadsTarget, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!imageExts.has(ext)) continue;
+        if (responsiveVariantRe.test(entry.name)) continue;
+
+        const baseName = entry.name.slice(0, -ext.length);
+        const filePath = path.join(uploadsTarget, entry.name);
+
+        let fileStat: fs.Stats;
+        try {
+          fileStat = fs.statSync(filePath);
+        } catch {
+          continue;
+        }
+
+        for (const w of widths) {
+          const outName = `${baseName}-${w}w.webp`;
+          const outPath = path.join(uploadsTarget, outName);
+
+          try {
+            if (fs.existsSync(outPath)) {
+              const outStat = fs.statSync(outPath);
+              if (outStat.mtimeMs >= fileStat.mtimeMs) {
+                continue;
+              }
+            }
+
+            await sharp(filePath, { failOnError: false })
+              .rotate()
+              .resize(w, null, { withoutEnlargement: true })
+              .webp({ quality: 82 })
+              .toFile(outPath);
+          } catch {
+            // Gracefully ignore individual image resize failures (e.g. invalid image files)
+          }
+        }
+      }
+    } catch {
+      // Gracefully ignore directory read errors
+    }
   }
 
   private copyDirFiles(srcDir: string, destDir: string): void {
@@ -484,6 +573,8 @@ export class LocalServerManager {
   ): Promise<{ success: boolean; log: string }> {
     const safeId = sanitizeId(projectId);
     const record = this.getOrCreateRecord(safeId);
+    record.status = 'building';
+    record.lastError = null;
 
     if (files) {
       this.exportProject(safeId, files);
@@ -507,8 +598,8 @@ export class LocalServerManager {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    record.status = 'building';
-    record.lastError = null;
+    // Ensure uploads are synced and optimized before building
+    await this.syncUploads(targetDir);
 
     // Clean stale .next build cache directory before compiling so Next.js does a 100% fresh build
     const nextBuildDir = path.join(targetDir, '.next');
@@ -603,7 +694,7 @@ export class LocalServerManager {
     }
 
     // Ensure uploads are synced before starting
-    this.syncUploads(targetDir);
+    await this.syncUploads(targetDir);
 
     const nextBin = resolveNextBin();
 

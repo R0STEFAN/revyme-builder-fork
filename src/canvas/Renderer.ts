@@ -187,6 +187,14 @@ const VALID_TAGS = new Set([
   'svg', 'rect', 'circle', 'ellipse', 'polygon', 'path', 'line', 'polyline', 'g', 'foreignObject',
 ]);
 
+const NEXTJS_TAG_MAP: Record<string, string> = { 'Link': 'a', 'MotionLink': 'a', 'Image': 'img' };
+
+export function resolveCanvasTagName(type: string): string {
+  let rawType = type.startsWith('motion.') ? type.slice(7) : type;
+  rawType = NEXTJS_TAG_MAP[rawType] || rawType;
+  return VALID_TAGS.has(rawType) ? rawType : 'div';
+}
+
 // ─── Previous-patch key tracking ──────────────────────────────────────────
 // patchElement writes inline styles from `styleEntries` on every render.
 // To clear keys that were set in a PREVIOUS render but are now absent from
@@ -1296,6 +1304,14 @@ export function renderNodes(
       if (rootEl && rootEl.parentElement !== container) {
         rootEl.remove();
         rootEl = null;
+      }
+
+      if (rootEl) {
+        const expectedTag = resolveCanvasTagName(rootNode.type);
+        if (rootEl.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
+          rootEl.remove();
+          rootEl = null;
+        }
       }
 
       if (rootEl) {
@@ -2757,7 +2773,7 @@ export function patchElement(
   const isFitEditing = isFitSvg && el.querySelector('[data-editing]') !== null;
   if (node.attrs) {
     for (const [key, value] of Object.entries(node.attrs)) {
-      if (key === 'href') continue;
+      if (key === 'href' || key.toLowerCase() === 'srcset' || key.toLowerCase() === 'sizes') continue;
       if (isFitEditing && key === 'viewBox') continue;
       // `var:<name>` is a VARIABLE binding (e.g. a Search Field's `value={var}`),
       // not a literal — the canvas can't resolve the page variable, so skip it
@@ -2772,6 +2788,8 @@ export function patchElement(
       if (key === 'src' && isPreviewAppliedSrc(el, safeValue)) continue;
       if (el.getAttribute(key) !== safeValue) el.setAttribute(key, safeValue);
     }
+    if (el.hasAttribute('srcset')) el.removeAttribute('srcset');
+    if (el.hasAttribute('sizes')) el.removeAttribute('sizes');
     // Mark overlay nodes for CSS-based visibility control (hidden by the base
     // `[data-overlay-node] { display:none }` rule until overlay mode shows the
     // ACTIVE one). This applies to canvas-node overlays too (trigger dragged
@@ -3042,14 +3060,18 @@ export function patchElement(
           // viewport prefix vs ghost ids minus prefix + their `__N` suffix — catches
           // deep adds, removals, and reorders at any depth.
           const stripIdPrefix = (id: string) => (idPrefix && id.startsWith(idPrefix) ? id.slice(idPrefix.length) : id);
-          const treeSig = (root: HTMLElement, ghostSuffix: string | null): string =>
-            Array.from(root.querySelectorAll('[data-node-id]'))
+          const treeSig = (root: HTMLElement, ghostSuffix: string | null): string => {
+            let rootId = stripIdPrefix(root.getAttribute('data-node-id') || '');
+            if (ghostSuffix && rootId.endsWith(ghostSuffix)) rootId = rootId.slice(0, -ghostSuffix.length);
+            const rootPart = `${root.tagName.toLowerCase()}:${rootId}`;
+            const descParts = Array.from(root.querySelectorAll('[data-node-id]'))
               .map((n) => {
                 let id = stripIdPrefix(n.getAttribute('data-node-id') || '');
                 if (ghostSuffix && id.endsWith(ghostSuffix)) id = id.slice(0, -ghostSuffix.length);
-                return id;
-              })
-              .join('|');
+                return `${n.tagName.toLowerCase()}:${id}`;
+              });
+            return [rootPart, ...descParts].join('|');
+          };
           const templateSig = treeSig(templateEl, null);
           let structureMismatch = false;
           existingGhosts.forEach(ghost => {
@@ -3349,10 +3371,7 @@ function patchChildElements(
     // one of the right tag. Mirror buildNodeElement's tag-resolution
     // logic so the comparison stays in sync.
     if (childEl) {
-      let rawType = childNode.type.startsWith('motion.') ? childNode.type.slice(7) : childNode.type;
-      if (rawType === 'Link' || rawType === 'MotionLink') rawType = 'a';
-      else if (rawType === 'Image') rawType = 'img';
-      const expectedTag = VALID_TAGS.has(rawType) ? rawType : 'div';
+      const expectedTag = resolveCanvasTagName(childNode.type);
       if (childEl.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
         trace.action('renderer:tag-mismatch-replace', {
           nodeId: childNode.id,
@@ -3455,6 +3474,14 @@ function patchHoistedCanvasNodes(
     const allMatches = Array.from(container.querySelectorAll(`[data-node-id="${node.id}"]`)) as HTMLElement[];
 
     if (el) {
+      const expectedTag = resolveCanvasTagName(node.type);
+      if (el.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
+        el.remove();
+        el = null;
+      }
+    }
+
+    if (el) {
       trace.action('renderer:patchHoistedCanvasNodes:reuse', {
         nodeId: node.id,
         totalMatches: allMatches.length,
@@ -3505,6 +3532,13 @@ function patchSlotCanvasNodes(
 ): void {
   for (const node of slotNodes) {
     let el = container.querySelector(`[data-node-id="${node.id}"][data-slot-canvas]`) as HTMLElement | null;
+    if (el) {
+      const expectedTag = resolveCanvasTagName(node.type);
+      if (el.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
+        el.remove();
+        el = null;
+      }
+    }
     if (el) {
       patchElement(el, node, allNodes, onNodeMouseDown, '', undefined, undefined, localeOverrides);
     } else {
@@ -3581,6 +3615,18 @@ function patchCanvasNodes(
   for (const node of canvasRoots) {
     let el = existingCanvasEls.get(node.id);
     if (el) {
+      const expectedTag = resolveCanvasTagName(node.type);
+      if (el.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
+        trace.action('renderer:canvas-node-tag-mismatch-replace', {
+          nodeId: node.id,
+          oldTag: el.tagName.toLowerCase(),
+          newTag: expectedTag,
+        });
+        el.remove();
+        el = undefined;
+      }
+    }
+    if (el) {
       patchElement(el, node, allNodes, onNodeMouseDown, '', undefined, undefined, localeOverrides);
     } else {
       // Drag-locked node with NO element at the container root: the active
@@ -3617,12 +3663,7 @@ function buildNodeElement(
   localeOverrides?: Map<string, NodeOverride>,
   vpWidth?: number,
 ): HTMLElement {
-  // Strip motion. prefix for canvas rendering (motion.h1 → h1, motion.span → span)
-  // Map Next.js built-in components to their HTML equivalents
-  const NEXTJS_TAG_MAP: Record<string, string> = { 'Link': 'a', 'MotionLink': 'a', 'Image': 'img' };
-  let rawType = node.type.startsWith('motion.') ? node.type.slice(7) : node.type;
-  rawType = NEXTJS_TAG_MAP[rawType] || rawType;
-  const tag = VALID_TAGS.has(rawType) ? rawType : 'div';
+  const tag = resolveCanvasTagName(node.type);
   const isSvg = isSvgTag(tag);
   const el = isSvg
     ? document.createElementNS(SVG_NS, tag) as unknown as HTMLElement
@@ -3632,7 +3673,7 @@ function buildNodeElement(
 
   if (node.attrs) {
     for (const [key, value] of Object.entries(node.attrs)) {
-      if (key === 'href') continue;  // Skip href on canvas
+      if (key === 'href' || key.toLowerCase() === 'srcset' || key.toLowerCase() === 'sizes') continue;  // Skip href, srcset, sizes on canvas
       // Variable binding (`var:<name>`) — not a literal DOM value (see patchElement).
       if (typeof value === 'string' && value.startsWith('var:')) continue;
       el.setAttribute(key, node.responsiveAttrs ? resolveResponsiveAttr(node, key, value, vpWidth, variantName) : value);
