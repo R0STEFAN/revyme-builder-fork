@@ -476,6 +476,14 @@ function deriveAndCacheNodes(code: string, filePath: string, version: number): v
                         ? primaryPageRootId
                         : 'layout::' + node.parentId);
 
+                  if (node.collectionList?.templateIds) {
+                    const prefixedTemplateIds: Record<string, string> = {};
+                    for (const [key, val] of Object.entries(node.collectionList.templateIds)) {
+                      prefixedTemplateIds[key] = val.startsWith('layout::') ? val : `layout::${val}`;
+                    }
+                    node.collectionList = { ...node.collectionList, templateIds: prefixedTemplateIds };
+                  }
+
                   // Keep original styles (flex column, width, etc.) — Renderer
                   // applies viewport positioning on top. Setting the root under
                   // `primaryPageRootId` OVERWRITES the old page-root node, so its

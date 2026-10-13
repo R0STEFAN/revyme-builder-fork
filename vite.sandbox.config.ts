@@ -65,6 +65,7 @@ function runtimeBridgeImportmapPlugin(): Plugin {
 
 export default defineConfig({
   root: path.resolve(__dirname, 'src/canvas-sandbox'),
+  publicDir: path.resolve(__dirname, 'public'),
   // Own cache — see vite.preview.config.ts for rationale (multiple Vite
   // servers in one workspace stomp on `node_modules/.vite/deps/` if they
   // share it).

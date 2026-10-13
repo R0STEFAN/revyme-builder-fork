@@ -161,6 +161,9 @@ export function changeTagInCode(
   //  · never double a prefix a caller already supplied (LinkTool's revert
   //    passes `motion.div` outright).
   const isMotionTag = oldTag.startsWith('motion.');
+  if ((isMotionTag || oldTag === 'MotionLink') && newTag === 'Link') {
+    return convertToMotionLinkInCode(code, nodeId);
+  }
   const effectiveNewTag = isMotionTag && !newTag.includes('.') && /^[a-z]/.test(newTag)
     ? `motion.${newTag}`
     : newTag;
@@ -173,9 +176,13 @@ export function changeTagInCode(
   if (tagEnd === -1) return code;
 
   // Replace opening tag name
-  let result = code.slice(0, tagStart + 1) + effectiveNewTag + code.slice(tagStart + 1 + oldTag.length);
+  let openTag = effectiveNewTag + code.slice(tagStart + 1 + oldTag.length, tagEnd);
+  if ((isMotionTag || oldTag === 'MotionLink') && !effectiveNewTag.startsWith('motion.') && effectiveNewTag !== 'MotionLink') {
+    openTag = openTag.replace(/\s+layout=\{[^}]*\}/g, '').replace(/\s+layout(?=\s|\/|$)/g, '');
+  }
+  let result = code.slice(0, tagStart + 1) + openTag + code.slice(tagEnd);
 
-  const adjustedTagEnd = tagEnd + (effectiveNewTag.length - oldTag.length);
+  const adjustedTagEnd = tagStart + 1 + openTag.length;
 
   // Self-closing — no closing tag to fix
   if (result.slice(adjustedTagEnd - 1, adjustedTagEnd + 1) === '/>') return result;

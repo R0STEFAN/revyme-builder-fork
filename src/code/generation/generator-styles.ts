@@ -3580,8 +3580,6 @@ function writeInstanceConditionalStyles(
 function ensureLayoutProp(code: string, nodeId: string): string {
   const idIdx = findJSXDataIdIndex(code, nodeId);
   if (idIdx === -1) return code;
-  const tagEnd = code.indexOf('>', idIdx);
-  if (tagEnd === -1) return code;
   // Walk BACKWARD from `data-id` to find the start of the JSX tag
   // (the `<` character). The previous version sliced from `idIdx`
   // (= position of `data-id`), which missed any `layout={true}` /
@@ -3590,7 +3588,13 @@ function ensureLayoutProp(code: string, nodeId: string): string {
   // with duplicates like `<motion.div layout={true} data-id="x" layout={true} ...>`.
   let tagStart = idIdx;
   while (tagStart > 0 && code[tagStart] !== '<') tagStart--;
+  const tagEnd = findTagClose(code, tagStart);
+  if (tagEnd === -1) return code;
   const fullTagSlice = code.slice(tagStart, tagEnd);
+  const tagMatch = fullTagSlice.match(/^<(\w[\w.-]*)/);
+  if (!tagMatch) return code;
+  const tagName = tagMatch[1];
+  if (!tagName.startsWith('motion.') && tagName !== 'MotionLink') return code;
 
   const idPattern = `data-id="${nodeId}"`;
   const insertAfter = idIdx + idPattern.length;

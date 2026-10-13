@@ -33,13 +33,46 @@ function scrollPreviewToTop(): void {
 
 // ─── next/link ─────────────────────────────────────────────────────────────
 
-export function LinkShim(props: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+const FRAMER_MOTION_PROPS = new Set([
+  'layout',
+  'layoutId',
+  'layoutScroll',
+  'variants',
+  'initial',
+  'animate',
+  'exit',
+  'transition',
+  'whileHover',
+  'whileTap',
+  'whileFocus',
+  'whileDrag',
+  'whileInView',
+  'onTap',
+  'onTapStart',
+  'onTapCancel',
+  'onHoverStart',
+  'onHoverEnd',
+  'onPan',
+  'onPanStart',
+  'onPanEnd',
+]);
+
+export interface LinkShimProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
   prefetch?: boolean;
   scroll?: boolean;
   replace?: boolean;
-}): React.ReactElement {
+  [key: string]: any;
+}
+
+export const LinkShim = React.forwardRef<HTMLAnchorElement, LinkShimProps>(function LinkShim(props, ref) {
   const { href, children, prefetch: _p, scroll, replace, onClick, ...rest } = props;
+  const cleanRest: Record<string, any> = {};
+  for (const [k, v] of Object.entries(rest)) {
+    if (!FRAMER_MOTION_PROPS.has(k)) {
+      cleanRest[k] = v;
+    }
+  }
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     onClick?.(e);
     if (e.defaultPrevented) return;
@@ -54,8 +87,12 @@ export function LinkShim(props: React.AnchorHTMLAttributes<HTMLAnchorElement> & 
     // Next.js scrolls to top on a forward Link navigation unless scroll={false}.
     if (scroll !== false) scrollPreviewToTop();
   };
-  return React.createElement('a', { href, onClick: handleClick, ...rest }, children);
-}
+  return React.createElement(
+    'a',
+    { ref, href, onClick: handleClick, ...cleanRest },
+    ...(Array.isArray(children) ? children : [children]),
+  );
+});
 
 // ─── next/image ────────────────────────────────────────────────────────────
 //
@@ -157,7 +194,9 @@ export function setCurrentParams(p: Record<string, string | string[]>): void {
   const nextKeys = Object.keys(p);
   if (prevKeys.length === nextKeys.length && prevKeys.every(k => currentParams[k] === p[k])) return;
   currentParams = p;
-  paramsListeners.forEach(fn => fn());
+  queueMicrotask(() => {
+    paramsListeners.forEach(fn => fn());
+  });
 }
 
 export function useParams<T = Record<string, string | string[]>>(): T {

@@ -23,6 +23,7 @@ import { healEventOverlayToggle } from '@/code/generation/event-overlay-heal';
 import { healGlideItemWrappers } from '@/code/generation/glide-gen';
 import { formatOverrideSource } from '@/code/generation/format-override-source';
 import { OVERRIDES_DIR } from '@/code/generation/code-override-gen';
+import { findTagClose } from '@/code/generation/generator-utils';
 import { ensureSmoothScrollInLayout, SMOOTH_SCROLL_DATA_PATH, SMOOTH_SCROLL_CONTROLLER_PATH } from '@/code/generation/smooth-scroll-layout';
 import {
   MARKDOWN_ARTICLE_COMPONENT,
@@ -621,6 +622,23 @@ export class InMemoryProjectFS implements ProjectFS {
       const rest = globalsAfter.slice(importsHead.length);
       this.activeFiles().set('app/globals.css', `${importsHead}${UNIVERSAL_SEED_RESET}\n\n${rest}`);
       trace.action('project-fs:restored-seed-reset', {});
+    }
+    const globalsForScroll = this.activeFiles().get('app/globals.css');
+    if (globalsForScroll && globalsForScroll.includes(UNIVERSAL_SEED_RESET) && !/\bhtml\s*\{[^}]*\bposition\s*:/.test(globalsForScroll)) {
+      this.activeFiles().set(
+        'app/globals.css',
+        globalsForScroll.replace(UNIVERSAL_SEED_RESET, `${UNIVERSAL_SEED_RESET}\nhtml {\n  position: relative;\n}`),
+      );
+      trace.action('project-fs:migrated-html-position-relative', {});
+    }
+    for (const [path, src] of this.activeFiles()) {
+      if (!path.endsWith('.tsx') || !(path.startsWith('app/') || path.startsWith('components/'))) continue;
+      if (!src.includes('layout={true}')) continue;
+      const healed = stripNonMotionLayoutProp(src);
+      if (healed === src) continue;
+      if (!parseJSX(healed)) { trace.error('project-fs:non-motion-layout-heal-unparseable', path); continue; }
+      this.activeFiles().set(path, healed);
+      trace.action('project-fs:healed-non-motion-layout-prop', { path });
     }
     // EMPTY PAGE BODY heal: a page whose `page.client.tsx` is empty has no
     // canvas at all — the page reads as "gone" in the editor even though its
@@ -2036,7 +2054,11 @@ const DEFAULT_TOKENS_CSS = `/* Modern reset — without this, \`width: 100%\` + 
    huge gaps live, compact in the editor). The reset ships natively in the
    project so publish needs no post-build normalization. */
 ${UNIVERSAL_SEED_RESET}
+html {
+  position: relative;
+}
 body {
+  position: relative;
   /* Global default font — content that doesn't set its own font-family (e.g.
      text inside component instances / layout templates) inherits this instead
      of the browser's serif default. Matches the canvas + preview sandboxes so
@@ -2329,6 +2351,28 @@ export function stripVariantRootInsets(code: string): string {
     }
   }
   return out;
+}
+
+/** Remove stray `layout={true}` from plain `<div>` or `<Link>` opening tags. */
+function stripNonMotionLayoutProp(code: string): string {
+  const openTagRe = /<(?:div|Link)(?=[\s/>])/g;
+  let out = '';
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = openTagRe.exec(code)) !== null) {
+    const tagStart = m.index;
+    if (tagStart < cursor) continue;
+    const tagEnd = findTagClose(code, tagStart);
+    if (tagEnd === -1) break;
+    const tagSlice = code.slice(tagStart, tagEnd);
+    if (/\s+layout=\{true\}/.test(tagSlice)) {
+      out += code.slice(cursor, tagStart) + tagSlice.replace(/\s+layout=\{true\}/g, '');
+      cursor = tagEnd;
+    }
+    openTagRe.lastIndex = tagEnd + 1;
+  }
+  if (cursor === 0) return code;
+  return out + code.slice(cursor);
 }
 
 export function createDefaultProject(): Map<string, string> {

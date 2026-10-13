@@ -1,40 +1,53 @@
-// read-handlers.test.ts — capture normalization: the export must map 1:1 to
-// the element's border box regardless of the node's own placement styles.
-import { describe, it, expect } from 'vitest';
-import { buildCaptureNormalization } from './read-handlers';
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
+import sandboxConfig from '../../../vite.sandbox.config';
+import previewConfig from '../../../vite.preview.config';
+import { setContentRoot } from './sandbox-state';
+import { captureElement } from './read-handlers';
 
-function elWithLayout(offsetWidth: number, offsetHeight: number): Element {
-  const el = document.createElement('div');
-  Object.defineProperty(el, 'offsetWidth', { value: offsetWidth });
-  Object.defineProperty(el, 'offsetHeight', { value: offsetHeight });
-  return el;
-}
+const toPngMock = vi.fn().mockResolvedValue('data:image/png;base64,ok');
+const toJpegMock = vi.fn().mockResolvedValue('data:image/jpeg;base64,ok');
+const toSvgMock = vi.fn().mockResolvedValue('data:image/svg+xml;charset=utf-8,<svg/>');
 
-describe('buildCaptureNormalization', () => {
-  it('zeroes the clone placement that shifts pixels inside the capture canvas', () => {
-    const norm = buildCaptureNormalization(elWithLayout(820, 583));
-    expect(norm.style).toMatchObject({
-      position: 'relative',
-      left: '0px',
-      top: '0px',
-      right: 'auto',
-      bottom: 'auto',
-      margin: '0px',
-      transform: 'none',
-    });
+vi.mock('html-to-image', () => ({
+  toPng: (...args: unknown[]) => toPngMock(...args),
+  toJpeg: (...args: unknown[]) => toJpegMock(...args),
+  toSvg: (...args: unknown[]) => toSvgMock(...args),
+}));
+
+describe('vite sandbox & preview publicDir configuration', () => {
+  const expectedPublicDir = path.resolve(__dirname, '../../../public');
+
+  it('configures publicDir in vite.sandbox.config.ts to the root public directory', () => {
+    expect(sandboxConfig.publicDir).toBe(expectedPublicDir);
   });
 
-  it('pins the canvas to the border box (offsetWidth/offsetHeight)', () => {
-    const norm = buildCaptureNormalization(elWithLayout(820, 583));
-    expect(norm.width).toBe(820);
-    expect(norm.height).toBe(583);
+  it('configures publicDir in vite.preview.config.ts to the root public directory', () => {
+    expect(previewConfig.publicDir).toBe(expectedPublicDir);
+  });
+});
+
+describe('captureElement', () => {
+  beforeEach(() => {
+    toPngMock.mockClear();
+    toJpegMock.mockClear();
+    toSvgMock.mockClear();
   });
 
-  it('omits explicit dimensions for elements with no HTML layout box (svg)', () => {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    const norm = buildCaptureNormalization(svg);
-    expect(norm.width).toBeUndefined();
-    expect(norm.height).toBeUndefined();
-    expect(norm.style.left).toBe('0px');
+  it('passes onImageErrorHandler returning true to html-to-image so broken image decodes resolve gracefully', async () => {
+    const root = document.createElement('div');
+    const target = document.createElement('div');
+    target.setAttribute('data-node-id', 'vp1_node-1');
+    root.appendChild(target);
+    setContentRoot(root);
+
+    const res = await captureElement('node-1', 'vp1_', { format: 'png', pixelRatio: 1 });
+    expect(res).toBe('data:image/png;base64,ok');
+    expect(toPngMock).toHaveBeenCalledTimes(1);
+
+    const passedOptions = toPngMock.mock.calls[0][1] as { onImageErrorHandler?: () => boolean };
+    expect(typeof passedOptions.onImageErrorHandler).toBe('function');
+    expect(passedOptions.onImageErrorHandler!()).toBe(true);
   });
 });

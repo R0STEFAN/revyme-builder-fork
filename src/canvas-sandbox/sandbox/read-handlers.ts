@@ -180,6 +180,7 @@ export async function captureElement(
         pixelRatio: opts.pixelRatio,
         cacheBust: false,
         imagePlaceholder: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+        onImageErrorHandler: () => true,
         backgroundColor: opts.backgroundColor,
         width: norm.width,
         height: norm.height,

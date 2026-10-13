@@ -33,7 +33,7 @@
          ~16px, ul padding-left 40px) and the user sees a different layout
          than they designed against. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body, #root { width: 100%; min-height: 100vh; }
+      html, body, #root { position: relative; width: 100%; min-height: 100vh; }
       /* Transparent body so the parent overlay's dark backdrop shows through
          while user code is still booting. The user's globals.css will set
          its own background once the runtime mounts the React tree. */

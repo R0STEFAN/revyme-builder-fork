@@ -36,6 +36,7 @@ function runtimeBridgeImportmapPlugin(): Plugin {
 
 export default defineConfig({
   root: path.resolve(__dirname, 'src/preview-sandbox'),
+  publicDir: path.resolve(__dirname, 'public'),
   // Per-config cache. Without this, all three Vite servers (parent on 3333,
   // canvas sandbox on 5174, preview on 5175) write to the same
   // `node_modules/.vite/deps/` and stomp each other's optimize-dep hashes —

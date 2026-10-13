@@ -17,6 +17,7 @@
 // (`@/components/Foo`, `./helpers`) compile from ProjectFS the same way.
 
 import * as React from 'react';
+import { jsx as reactJsx, jsxs as reactJsxs } from 'react/jsx-runtime';
 import { createRoot } from 'react-dom/client';
 import { captureThumbnail } from './capture-thumbnail';
 import { ThemeProvider as NextThemeProvider, useTheme } from 'next-themes';
@@ -147,16 +148,30 @@ function unwrapDocumentTags(type: any, props: any): { handled: true; children: a
 // children — match that here so the preview degrades gracefully instead.
 const PREVIEW_VOID_TAGS = new Set(['input', 'br', 'hr', 'img', 'area', 'base', 'col', 'embed', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 
-function previewJsx(type: any, props: any, key?: any) {
+function createPreviewElement(jsxFn: typeof reactJsx, type: any, props: any, key?: any) {
   const unwrap = unwrapDocumentTags(type, props);
   if (unwrap.handled) {
-    return React.createElement(React.Fragment, key !== undefined ? { key } : null, unwrap.children);
+    return jsxFn(React.Fragment, { children: unwrap.children }, key);
   }
-  if (props && props.children != null && typeof type === 'string' && PREVIEW_VOID_TAGS.has(type)) {
-    const { children, ...rest } = props;
-    return React.createElement(type, key !== undefined ? { ...rest, key } : rest);
+  let nextProps = props;
+  if (nextProps && typeof type === 'string') {
+    const stripChildren = nextProps.children != null && PREVIEW_VOID_TAGS.has(type);
+    const stripLayout = typeof nextProps.layout === 'boolean';
+    if (stripChildren || stripLayout) {
+      nextProps = { ...nextProps };
+      if (stripChildren) delete nextProps.children;
+      if (stripLayout) delete nextProps.layout;
+    }
   }
-  return React.createElement(type, key !== undefined ? { ...props, key } : props);
+  return jsxFn(type, nextProps ?? {}, key);
+}
+
+function previewJsx(type: any, props: any, key?: any) {
+  return createPreviewElement(reactJsx, type, props, key);
+}
+
+function previewJsxs(type: any, props: any, key?: any) {
+  return createPreviewElement(reactJsxs, type, props, key);
 }
 
 // Babel's `_interopRequireDefault(require('mod'))` wraps a non-ESM result
@@ -171,7 +186,7 @@ function esm<T extends Record<string, any>>(exports: T): T & { __esModule: true 
 
 const MODULE_MAP: Record<string, any> = {
   react: React,
-  'react/jsx-runtime': esm({ jsx: previewJsx, jsxs: previewJsx, Fragment: React.Fragment }),
+  'react/jsx-runtime': esm({ jsx: previewJsx, jsxs: previewJsxs, Fragment: React.Fragment }),
   'react/jsx-dev-runtime': esm({ jsxDEV: previewJsx, Fragment: React.Fragment }),
   'react-dom': esm({ createPortal: (children: any) => children }),
   'next-themes': esm({ ThemeProvider: NextThemeProvider, useTheme: useThemeForPage }),
