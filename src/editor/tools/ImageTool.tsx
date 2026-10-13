@@ -17,6 +17,8 @@ import { LegacyVariableBoundPill } from '../controls/VariableBoundPill';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getViewportPrefix } from '@/canvas/node-ops';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
+import { ExpressionBoundPill } from '../controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '../ui/ExpressionEditorPopup';
 import ImageSearchModal from '../ui/ImageSearchModal';
 import { trace } from '@/shared/debug-trace';
 
@@ -96,15 +98,20 @@ function ImageToolInner({
   removeVariable: ReturnType<typeof useControl>['removeVariable'];
 }) {
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [expressionOpen, setExpressionOpen] = useState(false);
 
-  // CMS binding state — when src is bound to a CMS image field, the source
-  // row swaps to a CmsBoundPill (matches Fill's bound-state UI). The
-  // ControlLabel's menu handles binding/unbinding for unbound rows
-  // automatically — no extra chain icon needed.
-  const isSrcCmsBound = !!cmsBinding?.getBindingForProperty('src');
+  // Source binding states — dynamic expression, CMS field, or component/page variable
+  const isSrcExpressionBound = !!node?.srcExpression;
+  const isSrcCmsBound = !isSrcExpressionBound && !!cmsBinding?.getBindingForProperty('src');
   const srcSource = getValueSource?.('src');
-  const isSrcVarBound = srcSource?.source === 'prop';
+  const isSrcVarBound = !isSrcExpressionBound && !isSrcCmsBound && srcSource?.source === 'prop';
   const srcVarRef = srcSource?.ref;
+
+  // Alt text binding states
+  const isAltCmsBound = !!cmsBinding?.getBindingForProperty('alt');
+  const altSource = getValueSource?.('alt');
+  const isAltVarBound = !isAltCmsBound && altSource?.source === 'prop';
+  const altVarRef = altSource?.ref;
 
   const rawSrc = node.attrs?.src ?? '';
   const src = rawSrc.startsWith('var:') ? '' : rawSrc;
@@ -149,7 +156,7 @@ function ImageToolInner({
     updateStyle('objectPosition', value);
   }, [nodeId, updateStyle]);
 
-  trace.fn('ImageTool:render', { nodeId, src: src.slice(0, 60), alt: localAlt, objectFit, objectPosition, isSrcCmsBound, isSrcVarBound, srcVarRef });
+  trace.fn('ImageTool:render', { nodeId, src: src.slice(0, 60), alt: localAlt, objectFit, objectPosition, isSrcExpressionBound, isSrcCmsBound, isSrcVarBound, srcVarRef });
 
   // Source row — single ControlActionRow shape (just like Fill). The
   // swatch shows a thumbnail of the current image, or the alpha-checker
@@ -163,43 +170,98 @@ function ImageToolInner({
     <>
       <ToolSection title="Image" collapsible>
         {/* Source row — ControlLabel handles the binding menu (CMS, variable,
-            override) automatically. When CMS-bound, the value column swaps
-            to the CmsBoundPill; when variable-bound, to LegacyVariableBoundPill. */}
+            override) automatically. When expression-bound, renders ExpressionBoundPill.
+            When CMS-bound, renders CmsBoundPill; when variable-bound, LegacyVariableBoundPill.
+            The [fx] button allows opening ExpressionEditorPopup for formula authoring. */}
         <div className="flex items-center justify-between w-full">
           <ControlLabel label="Source" property="src" />
-          {isSrcCmsBound ? (
-            <CmsBoundPill property="src" fallbackValue={src} />
-          ) : isSrcVarBound && srcVarRef ? (
-            <LegacyVariableBoundPill
-              property="src"
-              propertyLabel="Source"
-              variableRef={srcVarRef}
-              currentValue={src}
-              removeVariable={removeVariable}
-            />
-          ) : (
-            <ControlActionRow onClick={() => setImageModalOpen(true)}>
-              <ColorSwatch size="md" style={sourceSwatchStyle} />
-              <span className="text-xs text-[var(--text-primary)] truncate">
-                {sourceLabel}
-              </span>
-            </ControlActionRow>
-          )}
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isSrcExpressionBound ? (
+              <ExpressionBoundPill
+                expression={node.srcExpression!}
+                onEdit={() => setExpressionOpen(true)}
+                onClear={() => {
+                  trace.action('image-tool:unbind-src-expression', { nodeId });
+                  queueMutation({ type: 'unbindSrcExpression', nodeId });
+                  getCanvasBridge().setAttribute(nodeId, getViewportPrefix(vpId), 'src', null);
+                }}
+              />
+            ) : isSrcCmsBound ? (
+              <>
+                <CmsBoundPill property="src" fallbackValue={src} />
+                <button
+                  type="button"
+                  onClick={() => setExpressionOpen(true)}
+                  title="Dynamic Expression (Formula)"
+                  className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                >
+                  fx
+                </button>
+              </>
+            ) : isSrcVarBound && srcVarRef ? (
+              <>
+                <LegacyVariableBoundPill
+                  property="src"
+                  propertyLabel="Source"
+                  variableRef={srcVarRef}
+                  currentValue={src}
+                  removeVariable={removeVariable}
+                />
+                <button
+                  type="button"
+                  onClick={() => setExpressionOpen(true)}
+                  title="Dynamic Expression (Formula)"
+                  className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                >
+                  fx
+                </button>
+              </>
+            ) : (
+              <>
+                <ControlActionRow onClick={() => setImageModalOpen(true)}>
+                  <ColorSwatch size="md" style={sourceSwatchStyle} />
+                  <span className="text-xs text-[var(--text-primary)] truncate">
+                    {sourceLabel}
+                  </span>
+                </ControlActionRow>
+                <button
+                  type="button"
+                  onClick={() => setExpressionOpen(true)}
+                  title="Dynamic Expression (Formula)"
+                  className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                >
+                  fx
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Alt text — full ControlLabel (not plain) so users can bind alt
+        {/* Alt text — full ControlLabel so users can bind alt
             text to a CMS field via the menu, same way Source binds. */}
         <div className="flex items-center justify-between w-full">
           <ControlLabel label="Alt Text" property="alt" />
           <div className="flex items-center gap-2 w-full">
-            <ToolInput
-              value={localAlt}
-              onChange={(val) => {
-                setLocalAlt(val);
-                commitAlt(val);
-              }}
-              text
-            />
+            {isAltCmsBound ? (
+              <CmsBoundPill property="alt" fallbackValue={alt} />
+            ) : isAltVarBound && altVarRef ? (
+              <LegacyVariableBoundPill
+                property="alt"
+                propertyLabel="Alt Text"
+                variableRef={altVarRef}
+                currentValue={alt}
+                removeVariable={removeVariable}
+              />
+            ) : (
+              <ToolInput
+                value={localAlt}
+                onChange={(val) => {
+                  setLocalAlt(val);
+                  commitAlt(val);
+                }}
+                text
+              />
+            )}
           </div>
         </div>
 
@@ -229,6 +291,27 @@ function ImageToolInner({
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
         onSelect={handleImageSelect}
+      />
+
+      {/* Expression Editor modal for dynamic image source formulas */}
+      <ExpressionEditorPopup
+        isOpen={expressionOpen}
+        onClose={() => setExpressionOpen(false)}
+        onApply={(expr) => {
+          trace.action('image-tool:bind-src-expression', { nodeId, expression: expr });
+          if (isSrcCmsBound) {
+            cmsBinding?.unbindField('src', '');
+          }
+          queueMutation({ type: 'bindSrcExpression', nodeId, expression: expr });
+        }}
+        initialExpression={
+          node?.srcExpression ||
+          (isSrcCmsBound ? `${cmsBinding?.itemVar || 'item'}.${cmsBinding?.getBindingForProperty('src')}` : '')
+        }
+        targetProperty="src"
+        collectionSlug={cmsBinding?.slug}
+        itemVar={cmsBinding?.itemVar}
+        fields={cmsBinding?.fields}
       />
     </>
   );

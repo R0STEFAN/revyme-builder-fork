@@ -14,7 +14,7 @@ interface ExpressionEditorPopupProps {
   onClose: () => void;
   onApply: (expression: string) => void;
   initialExpression?: string;
-  targetProperty?: 'text' | 'href';
+  targetProperty?: 'text' | 'href' | 'src';
   collectionSlug?: string;
   itemVar?: string;
   fields?: FieldDefinition[];
@@ -91,9 +91,9 @@ export default function ExpressionEditorPopup({
     // 3. Mock item inside collection loop
     if (collectionSlug) {
       const items = collectionData.get(collectionSlug) || [];
-      ctx[itemVar] = items[0] || { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve' };
+      ctx[itemVar] = items[0] || { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
     } else {
-      ctx[itemVar] = { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve' };
+      ctx[itemVar] = { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
     }
 
     return ctx;
@@ -128,7 +128,13 @@ export default function ExpressionEditorPopup({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={targetProperty === 'href' ? 'Link Expression (Formula)' : 'Text Expression (Formula)'}
+      title={
+        targetProperty === 'src'
+          ? 'Image Expression (Formula)'
+          : targetProperty === 'href'
+          ? 'Link Expression (Formula)'
+          : 'Text Expression (Formula)'
+      }
       width={480}
     >
       <div className="flex flex-col gap-3 py-1">
@@ -136,7 +142,11 @@ export default function ExpressionEditorPopup({
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed m-0">
           Combine variables, route params, and text in quotes (e.g.{' '}
           <code className="px-1 py-0.5 rounded bg-[var(--grid-line)] text-purple-300 font-mono text-[11px]">
-            {targetProperty === 'href' ? '"/gallery/men/" + item.slug' : 'params.category + " тату у Запоріжжі"'}
+            {targetProperty === 'src'
+              ? '`https://directus.example.com/assets/${item.image}`'
+              : targetProperty === 'href'
+              ? '"/gallery/men/" + item.slug'
+              : 'params.category + " тату у Запоріжжі"'}
           </code>
           )
         </p>
@@ -248,7 +258,9 @@ export default function ExpressionEditorPopup({
             value={expression}
             onChange={(e) => setExpression(e.target.value)}
             placeholder={
-              targetProperty === 'href'
+              targetProperty === 'src'
+                ? '`https://directus.example.com/assets/${item.image}`'
+                : targetProperty === 'href'
                 ? '"/gallery/men/" + item.slug'
                 : 'params.category + " тату на " + params.place + " у Запоріжжі"'
             }

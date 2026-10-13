@@ -160,7 +160,7 @@ export function applyNodeCmsBindings(
       if (field !== undefined) { const v = bindingData[field]; if (v !== undefined) resolved = String(v ?? ''); }
     }
     if (resolved === undefined) continue;
-    if (attrName === 'src') { if (resolved) el.setAttribute('src', canvasImageSrc(resolved)); }
+    if (attrName === 'src') { if (resolved) el.setAttribute('src', canvasImageSrc(resolved)); else el.removeAttribute('src'); }
     else if (attrName === 'textContent') { applyBoundText(el, resolved); textApplied = true; }
     else if (resolved) el.setAttribute(attrName, resolved);
   }
@@ -170,6 +170,16 @@ export function applyNodeCmsBindings(
       const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.hrefExpression}); } catch(e) { return ''; }`);
       const val = fn(bindingData, bindingData, bindingData);
       if (val) el.setAttribute('href', String(val));
+    } catch {
+      // ignore
+    }
+  }
+  if (node.srcExpression) {
+    try {
+      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.srcExpression}); } catch(e) { return ''; }`);
+      const val = fn(bindingData, bindingData, bindingData);
+      if (val) el.setAttribute('src', canvasImageSrc(String(val)));
+      else el.removeAttribute('src');
     } catch {
       // ignore
     }

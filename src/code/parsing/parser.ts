@@ -162,6 +162,8 @@ export interface CanvasNode {
   textExpression?: string;
   /** Dynamic JS expression driving href (e.g. `"/gallery/" + item.slug`). */
   hrefExpression?: string;
+  /** Dynamic JS expression driving image src (e.g. `https://.../${item.image}`). */
+  srcExpression?: string;
   textContent: string;
   hasMixedContent: boolean; // true if textContent contains inline HTML (spans, br, strong, etc.)
   /**
@@ -2303,6 +2305,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         // go in `attrBindings` array so src + alt can coexist.
         const attrBindings: Array<{ field: string; property: 'src' | 'href' | 'alt' }> = [];
         let hrefExpression: string | undefined;
+        let srcExpression: string | undefined;
         if (activeCtx) {
           const bindableAttrs: Array<{ attr: string; prop: 'src' | 'href' | 'alt' }> = [
             { attr: 'src', prop: 'src' },
@@ -2338,6 +2341,21 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
               if (!isSimpleCmsField && expr.start != null && expr.end != null) {
                 hrefExpression = code.slice(expr.start, expr.end);
                 trace.action('parser:href-expression', { nodeId: id, hrefExpression });
+              }
+            }
+          }
+        }
+        // Detect general dynamic src expressions (e.g. `"/assets/" + item.image` or template literals)
+        for (const a of (opening.attributes as any[])) {
+          if (a.type === 'JSXAttribute' && a.name?.name === 'src') {
+            if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+              const expr = a.value.expression as any;
+              const isSimpleCmsField = activeCtx && expr.type === 'MemberExpression'
+                && expr.object?.type === 'Identifier' && expr.object.name === activeCtx.itemVar
+                && expr.property?.type === 'Identifier';
+              if (!isSimpleCmsField && expr.start != null && expr.end != null) {
+                srcExpression = code.slice(expr.start, expr.end);
+                trace.action('parser:src-expression', { nodeId: id, srcExpression });
               }
             }
           }
@@ -2524,6 +2542,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (textVariable) node.textVariable = textVariable;
         if (textExpression) node.textExpression = textExpression;
         if (hrefExpression) node.hrefExpression = hrefExpression;
+        if (srcExpression) node.srcExpression = srcExpression;
         if (translationKey) node.translationKey = translationKey;
         if (richTranslation) node.richTranslation = true;
         if (formattedTextVariable) node.formattedTextVariable = true;

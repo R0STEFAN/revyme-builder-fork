@@ -786,6 +786,8 @@ export function fieldTypesForProperty(property: string, nodeTag?: string): Set<F
   }
   // Link href also accepts link / url / slug fields, not just plain text.
   if (property === 'href') return new Set(['link', 'url', 'text', 'slug']);
+  // Image src accepts image / file / url / link / text / slug fields.
+  if (property === 'src') return new Set(['image', 'file', 'url', 'link', 'text', 'slug']);
   // Text content & alt → any display-text field.
   if (property === 'text' || property === 'textContent' || property === 'alt') {
     return new Set(['text', 'textarea', 'richtext', 'slug']);

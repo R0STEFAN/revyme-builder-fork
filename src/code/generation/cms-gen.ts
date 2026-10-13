@@ -4,7 +4,7 @@
 
 import { trace } from '@/shared/debug-trace';
 import { escapeJsxText } from '@/code/parsing/rich-text-runs';
-import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport } from './generator-utils';
+import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport, stripTagAttrBalanced, readTagAttrRaw } from './generator-utils';
 import type { FilterGroup, SortConfig } from '@/shared/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -706,27 +706,39 @@ function unbindAttributeFieldInCode(code: string, nodeId: string, attrName: stri
   }
 
   const tagSlice = code.slice(elStart, openTagEnd + 1);
-
-  // Match expression attribute: attrName={something}
-  const exprAttrRegex = new RegExp(`${attrName}=\\{[^}]*\\}`);
-  // Entity-escape: an `alt`/`href` field value containing a quote (or `<`)
-  // would otherwise terminate the attribute and corrupt the tag. JSX decodes
-  // these back, so the rendered value is unchanged.
-  const escapedAttr = staticValue
-    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const staticAttr = `${attrName}="${escapedAttr}"`;
-
-  if (exprAttrRegex.test(tagSlice)) {
-    const newTagSlice = tagSlice.replace(exprAttrRegex, staticAttr);
-    const result = code.slice(0, elStart) + newTagSlice + code.slice(elStart + tagSlice.length);
-    trace.action('cms-gen:unbindAttributeField:done', { nodeId, attrName });
-    return result;
+  const rawAttr = readTagAttrRaw(tagSlice, attrName);
+  if (!rawAttr || !/=\s*\{/.test(rawAttr)) {
+    trace.error('cms-gen:unbindAttributeField', { message: 'No expression binding found', ...{ nodeId, attrName } });
+    return code;
   }
 
-  // No expression binding found — return unchanged
-  trace.error('cms-gen:unbindAttributeField', { message: 'No expression binding found', ...{ nodeId, attrName } });
-  return code;
+  const strippedTag = stripTagAttrBalanced(tagSlice, attrName);
+  if (strippedTag === tagSlice) {
+    trace.error('cms-gen:unbindAttributeField', { message: 'No expression binding found', ...{ nodeId, attrName } });
+    return code;
+  }
+
+  let newTagSlice: string;
+  if (!staticValue) {
+    newTagSlice = strippedTag;
+  } else {
+    const escapedAttr = staticValue
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const staticAttr = `${attrName}="${escapedAttr}"`;
+
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${staticAttr} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${staticAttr}>`;
+    }
+  }
+
+  const result = code.slice(0, elStart) + newTagSlice + code.slice(elStart + tagSlice.length);
+  trace.action('cms-gen:unbindAttributeField:done', { nodeId, attrName });
+  return result;
 }
 
 /**

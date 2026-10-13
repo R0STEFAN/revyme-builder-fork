@@ -101,6 +101,22 @@ export function bindStyleToPageVariableInCode(
   let mutated = false;
   findFirstElementByDataId(ast, nodeId, (path) => {
     const opening = path.node.openingElement;
+
+    // HTML attributes (e.g. src, alt, href) live directly on the JSX opening tag, not in style={{}}
+    const isHtmlAttr = styleProperty === 'src' || styleProperty === 'alt' || styleProperty === 'href';
+    if (isHtmlAttr) {
+      const existingAttr = findAttribute(opening, styleProperty) as t.JSXAttribute | null;
+      if (existingAttr) {
+        existingAttr.value = t.jsxExpressionContainer(buildValue());
+      } else {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier(styleProperty), t.jsxExpressionContainer(buildValue())),
+        );
+      }
+      mutated = true;
+      return;
+    }
+
     const styleAttr = findAttribute(opening, 'style') as t.JSXAttribute | null;
 
     // No style attribute yet — add `style={{ <prop>: <bindingExpr> }}`
@@ -183,6 +199,37 @@ export function unbindStyleFromPageVariableInCode(
   let mutated = false;
   findFirstElementByDataId(ast, nodeId, (path) => {
     const opening = path.node.openingElement;
+
+    // Check HTML attribute first (e.g. `src={myVar}`)
+    const isHtmlAttr = styleProperty === 'src' || styleProperty === 'alt' || styleProperty === 'href';
+    const attr = findAttribute(opening, styleProperty) as t.JSXAttribute | null;
+    if (attr && attr.type === 'JSXAttribute') {
+      const isExpr = attr.value?.type === 'JSXExpressionContainer';
+      const isStringLit = attr.value?.type === 'StringLiteral';
+      if (isExpr) {
+        const expr = (attr.value as t.JSXExpressionContainer).expression;
+        const isIdent = t.isIdentifier(expr);
+        const isTernary = t.isConditionalExpression(expr) && t.isIdentifier(expr.test);
+        if (isIdent || isTernary) {
+          if (literalValue === '') {
+            opening.attributes = opening.attributes.filter((a: any) => a !== attr);
+          } else {
+            attr.value = t.stringLiteral(literalValue);
+          }
+          mutated = true;
+          return;
+        }
+      } else if (isStringLit && ((attr.value as t.StringLiteral).value.startsWith('var:') || literalValue === '')) {
+        if (literalValue === '') {
+          opening.attributes = opening.attributes.filter((a: any) => a !== attr);
+        } else {
+          attr.value = t.stringLiteral(literalValue);
+        }
+        mutated = true;
+        return;
+      }
+    }
+
     const styleAttr = findAttribute(opening, 'style') as t.JSXAttribute | null;
     if (!styleAttr || styleAttr.value?.type !== 'JSXExpressionContainer') return;
     const expr = styleAttr.value.expression;

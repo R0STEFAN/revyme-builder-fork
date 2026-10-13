@@ -424,12 +424,34 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       ? getViewportPrefix(activeComponentVariant)
       : undefined;
 
+    // Route HTML attribute keys (src, alt, href) directly to updateHtmlAttrs and canvas bridge
+    const htmlAttrs: Record<string, string> = {};
+    const cssStyles: Record<string, string> = {};
+    for (const [k, v] of Object.entries(styles)) {
+      if (k === 'src' || k === 'alt' || k === 'href') {
+        htmlAttrs[k] = v;
+      } else {
+        cssStyles[k] = v;
+      }
+    }
+
+    if (Object.keys(htmlAttrs).length > 0) {
+      for (const id of selectedIds) {
+        queueMutation({ type: 'updateHtmlAttrs', nodeId: id, attrs: htmlAttrs });
+        for (const [k, v] of Object.entries(htmlAttrs)) {
+          getCanvasBridge().setAttribute(id, vpPrefix ?? '', k, v || null);
+        }
+      }
+    }
+
+    if (Object.keys(cssStyles).length === 0) return;
+
     // FIT SVG wrapper: route text-style properties to inner text node
     const innerId = fitInnerIdRef.current;
     if (innerId) {
       const textStyles: Record<string, string> = {};
       const svgStyles: Record<string, string> = {};
-      for (const [k, v] of Object.entries(styles)) {
+      for (const [k, v] of Object.entries(cssStyles)) {
         if (TEXT_STYLE_KEYS.has(k)) textStyles[k] = v;
         else svgStyles[k] = v;
       }
@@ -445,7 +467,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     }
 
     for (const id of selectedIds) {
-      updateNodeStyles({ id, styles, contentEl, viewportPrefix: vpPrefix });
+      updateNodeStyles({ id, styles: cssStyles, contentEl, viewportPrefix: vpPrefix });
     }
   }, [selectedIds, isComponentVariantViewport, activeComponentVariant]);
 
@@ -1049,6 +1071,9 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       if (inferredType) {
         trace.action('control:unbind-page-variable', { nodeId: selectedId, property, propName, defaultValue });
         queueMutation({ type: 'unbindStylePageVariable', nodeId: selectedId, styleProperty: property, literalValue: defaultValue });
+        if (property === 'src' || property === 'alt' || property === 'href') {
+          getCanvasBridge().setAttribute(selectedId, '', property, defaultValue || null);
+        }
         return;
       }
     }
@@ -1140,6 +1165,9 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     // normal single-node unbind below, prop kept) when not a component master or other nodes still use it.
     if (removeComponentPropProjectWide(selectedId, property, propName, defaultValue)) return;
     queueMutation({ type: 'removeVariable', nodeId: selectedId, styleProperty: property, propName, defaultValue, deleteProp });
+    if (property === 'src' || property === 'alt' || property === 'href') {
+      getCanvasBridge().setAttribute(selectedId, '', property, defaultValue || null);
+    }
   }, [selectedId, isComponentFile, isComponentVariantViewport, activeComponentVariant, styles, pageVariables, node, isReplica, vpWidth, drawnWidth, updateStyle]);
 
   // CMS-collection-template context. Two sources surface this:
@@ -1354,6 +1382,9 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         }
         trace.action('control:unbind-field', { nodeId: selectedId, property });
         queueMutation({ type: 'unbindField', nodeId: selectedId, property, staticValue });
+        if (property === 'src' || property === 'alt' || property === 'href') {
+          getCanvasBridge().setAttribute(selectedId, '', property, staticValue || null);
+        }
         flushNow();
       },
       // True only on a non-default variant that carries its OWN per-variant CMS branch

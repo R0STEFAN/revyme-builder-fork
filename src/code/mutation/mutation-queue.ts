@@ -179,8 +179,8 @@ import {
   updateCollectionListConfigInCode, updateCollectionQueryConfig,
 } from '../generation/cms-gen';
 import {
-  bindTextExpressionInCode, bindHrefExpressionInCode,
-  unbindTextExpressionInCode, unbindHrefExpressionInCode,
+  bindTextExpressionInCode, bindHrefExpressionInCode, bindSrcExpressionInCode,
+  unbindTextExpressionInCode, unbindHrefExpressionInCode, unbindSrcExpressionInCode,
 } from '../generation/expression-gen';
 import { setPaginationInCode, removePaginationInCode, ensureLoadMoreComponentFile, ensureSpinnerComponentFile, readPaginationMarker, pruneOrphanedPaginationHooks, paginationUiParentId } from '../generation/cms-pagination-gen';
 import { addSearchFieldInCode, setSearchInputVariableInCode } from '../generation/cms-search-field-gen';
@@ -540,10 +540,14 @@ export type Mutation =
   | { type: 'bindTextExpression'; nodeId: string; expression: string }
   /** Bind an element's href attribute to a dynamic JS expression. */
   | { type: 'bindHrefExpression'; nodeId: string; expression: string }
+  /** Bind an element's src attribute to a dynamic JS expression. */
+  | { type: 'bindSrcExpression'; nodeId: string; expression: string }
   /** Unbind an element's dynamic text expression and set static text. */
   | { type: 'unbindTextExpression'; nodeId: string; fallbackText?: string }
   /** Unbind an element's dynamic href expression and set static href. */
   | { type: 'unbindHrefExpression'; nodeId: string; fallbackHref?: string }
+  /** Unbind an element's dynamic src expression and set static src. */
+  | { type: 'unbindSrcExpression'; nodeId: string; fallbackSrc?: string }
   /** Per-VARIANT CMS text binding on a raw element inside a .map() in a component master:
    *  rebind that variant to `fieldId` (kind:'field'), unbind→literal default (kind:'literal'),
    *  or clear the variant override (kind:'clear'). Other variants keep the base binding. */
@@ -3730,10 +3734,14 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         return bindTextExpressionInCode(code, mutation.nodeId, mutation.expression);
       case 'bindHrefExpression':
         return bindHrefExpressionInCode(code, mutation.nodeId, mutation.expression);
+      case 'bindSrcExpression':
+        return bindSrcExpressionInCode(code, mutation.nodeId, mutation.expression);
       case 'unbindTextExpression':
         return unbindTextExpressionInCode(code, mutation.nodeId, mutation.fallbackText);
       case 'unbindHrefExpression':
         return unbindHrefExpressionInCode(code, mutation.nodeId, mutation.fallbackHref);
+      case 'unbindSrcExpression':
+        return unbindSrcExpressionInCode(code, mutation.nodeId, mutation.fallbackSrc);
       case 'setVariantCmsText':
         return setVariantTextBindingInCode(code, mutation.nodeId, mutation.variantName, mutation.override, mutation.itemVar);
       case 'setVariantCmsStyle':

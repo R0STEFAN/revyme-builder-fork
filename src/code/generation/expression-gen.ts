@@ -49,8 +49,8 @@ export function bindTextExpressionInCode(code: string, nodeId: string, expressio
   return result;
 }
 
-function stripHrefFromTag(tag: string): string {
-  const m = tag.match(/\s+href=/);
+export function stripAttrFromTag(tag: string, attrName: string): string {
+  const m = tag.match(new RegExp(`\\s+${attrName}=`));
   if (!m || m.index === undefined) return tag;
   const start = m.index;
   const valStart = start + m[0].length;
@@ -74,6 +74,10 @@ function stripHrefFromTag(tag: string): string {
     if (end === -1) end = tag.length;
   }
   return tag.slice(0, start) + tag.slice(end);
+}
+
+function stripHrefFromTag(tag: string): string {
+  return stripAttrFromTag(tag, 'href');
 }
 
 /**
@@ -154,5 +158,75 @@ export function unbindHrefExpressionInCode(code: string, nodeId: string, fallbac
 
   const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
   trace.action('expression-gen:unbindHrefExpression:done', { nodeId });
+  return result;
+}
+
+/**
+ * Bind an image src expression: replaces or adds `src={expression}` on the element.
+ */
+export function bindSrcExpressionInCode(code: string, nodeId: string, expression: string): string {
+  const elStart = findJSXElementByDataId(code, nodeId);
+  if (elStart === -1) {
+    trace.error('expression-gen:bindSrcExpression', { message: 'Element not found', nodeId });
+    return code;
+  }
+
+  const openTagEnd = findTagClose(code, elStart + 1);
+  if (openTagEnd === -1) {
+    trace.error('expression-gen:bindSrcExpression', { message: 'Cannot find tag close', nodeId });
+    return code;
+  }
+
+  const tagSlice = code.slice(elStart, openTagEnd + 1);
+  const cleanExpr = expression.trim();
+  const binding = `src={${cleanExpr}}`;
+
+  const strippedTag = stripAttrFromTag(tagSlice, 'src');
+  let newTagSlice: string;
+  const insertIdx = strippedTag.length - 1;
+  const closingChar = strippedTag[insertIdx];
+  if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+    newTagSlice = strippedTag.slice(0, insertIdx - 1) + ` ${binding} />`;
+  } else {
+    newTagSlice = strippedTag.slice(0, insertIdx) + ` ${binding}>`;
+  }
+
+  let result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+  result = ensureParamsHookIfUsed(result, nodeId, cleanExpr);
+
+  trace.action('expression-gen:bindSrcExpression:done', { nodeId, expression: cleanExpr });
+  return result;
+}
+
+/**
+ * Unbind an image src expression: replaces `src={expression}` with a static `src="..."`.
+ */
+export function unbindSrcExpressionInCode(code: string, nodeId: string, fallbackSrc = ''): string {
+  const elStart = findJSXElementByDataId(code, nodeId);
+  if (elStart === -1) return code;
+
+  const openTagEnd = findTagClose(code, elStart + 1);
+  if (openTagEnd === -1) return code;
+
+  const tagSlice = code.slice(elStart, openTagEnd + 1);
+  const strippedTag = stripAttrFromTag(tagSlice, 'src');
+  if (strippedTag === tagSlice) return code;
+
+  let newTagSlice: string;
+  if (!fallbackSrc) {
+    newTagSlice = strippedTag;
+  } else {
+    const binding = `src="${fallbackSrc}"`;
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+    }
+  }
+
+  const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+  trace.action('expression-gen:unbindSrcExpression:done', { nodeId });
   return result;
 }

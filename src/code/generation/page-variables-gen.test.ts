@@ -329,6 +329,26 @@ function Page() {
     const out = unbindStyleFromPageVariableInCode(code, 'box', 'opacity', '0.7');
     expect(out).toContain('opacity: 0.5');
   });
+
+  test('binds and unbinds HTML attributes (src, alt) directly on the tag', () => {
+    const code = `
+function Page() {
+  return <img data-id="img-1" src="/fallback.jpg" alt="Photo" />;
+}`;
+    const boundSrc = bindStyleToPageVariableInCode(code, 'img-1', 'src', 'imgVar');
+    expect(boundSrc).toContain('src={imgVar}');
+    expect(boundSrc).not.toContain('style=');
+
+    const boundAlt = bindStyleToPageVariableInCode(boundSrc, 'img-1', 'alt', 'altVar');
+    expect(boundAlt).toContain('alt={altVar}');
+
+    const unboundSrc = unbindStyleFromPageVariableInCode(boundAlt, 'img-1', 'src', '/restored.jpg');
+    expect(unboundSrc).toContain('src="/restored.jpg"');
+    expect(unboundSrc).not.toContain('src={imgVar}');
+
+    const removedAlt = unbindStyleFromPageVariableInCode(unboundSrc, 'img-1', 'alt', '');
+    expect(removedAlt).not.toContain('alt=');
+  });
 });
 
 // ─── syncPageVariableHooks ────────────────────────────────────────────────

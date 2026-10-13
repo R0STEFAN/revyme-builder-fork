@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   bindTextExpressionInCode,
   bindHrefExpressionInCode,
+  bindSrcExpressionInCode,
   unbindTextExpressionInCode,
   unbindHrefExpressionInCode,
+  unbindSrcExpressionInCode,
 } from './expression-gen';
 
 describe('expression-gen', () => {
@@ -98,6 +100,64 @@ export default function Page() {
       const unbind = unbindHrefExpressionInCode(withExpr, 'link', '#');
       expect(unbind).toContain('href="#"');
       expect(unbind).not.toContain('`}');
+    });
+  });
+
+  describe('bindSrcExpressionInCode', () => {
+    const codeWithImg = `'use client';
+export default function Page() {
+  return (
+    <div data-id="root">
+      <img data-id="avatar" src="/default.png" alt="Avatar" />
+    </div>
+  );
+}`;
+
+    it('binds image src with template literal expression', () => {
+      const result = bindSrcExpressionInCode(
+        codeWithImg,
+        'avatar',
+        '`https://directus.example.com/assets/${item.image_id}`',
+      );
+      expect(result).toContain('src={`https://directus.example.com/assets/${item.image_id}`}');
+      expect(result).not.toContain('src="/default.png"');
+    });
+
+    it('replaces an existing expression on src without leaving syntax fragments', () => {
+      const initial = bindSrcExpressionInCode(
+        codeWithImg,
+        'avatar',
+        '`https://directus.example.com/assets/${item.image_id}`',
+      );
+      const replaced = bindSrcExpressionInCode(
+        initial,
+        'avatar',
+        'item.photo',
+      );
+      expect(replaced).toContain('src={item.photo}');
+      expect(replaced).not.toContain('https://directus.example.com');
+    });
+  });
+
+  describe('unbindSrcExpressionInCode', () => {
+    const codeWithImg = `'use client';
+export default function Page() {
+  return (
+    <div data-id="root">
+      <img data-id="avatar" src="/default.png" alt="Avatar" />
+    </div>
+  );
+}`;
+
+    it('unbounds dynamic template literal src to static fallback', () => {
+      const withExpr = bindSrcExpressionInCode(
+        codeWithImg,
+        'avatar',
+        '`https://directus.example.com/assets/${item.image_id}`',
+      );
+      const unbound = unbindSrcExpressionInCode(withExpr, 'avatar', '/placeholder.jpg');
+      expect(unbound).toContain('src="/placeholder.jpg"');
+      expect(unbound).not.toContain('item.image_id');
     });
   });
 });
