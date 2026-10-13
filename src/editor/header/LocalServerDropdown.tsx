@@ -105,6 +105,15 @@ function Check({ size = 12, className }: IconProps) {
   );
 }
 
+function Copy({ size = 12, className }: IconProps) {
+  return (
+    <svg {...svgProps(size, className)}>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
 export function stripAnsi(str: string): string {
   return str
     .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
@@ -129,6 +138,35 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
   const [buildLog, setBuildLog] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [errorMessage]);
+
+  const handleCopyError = useCallback(async () => {
+    if (!errorMessage) return;
+    const cleanText = stripAnsi(errorMessage);
+    try {
+      if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(cleanText);
+      } else if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea');
+        textarea.value = cleanText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      toast.success('Error copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy error to clipboard');
+    }
+  }, [errorMessage]);
   const [buildMode, setBuildMode] = useState<'dynamic' | 'ssg'>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -351,7 +389,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -10 }}
           transition={{ type: 'spring', stiffness: 400, damping: 22, mass: 0.8 }}
-          className="absolute top-full right-0 mt-6 min-w-[280px] bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg py-2.5 px-3 z-[10001] shadow-[var(--shadow-lg)] flex flex-col gap-2.5"
+          className="absolute top-full right-0 mt-6 min-w-[280px] max-w-[380px] sm:max-w-[420px] max-h-[85vh] overflow-y-auto bg-[var(--dropdown-bg)] border border-[var(--border-light)] cut-corners cut-lg py-2.5 px-3 z-[10001] shadow-[var(--shadow-lg)] flex flex-col gap-2.5"
         >
           {/* Header row: Title + status badge */}
           <div className="flex items-center justify-between pb-2 border-b border-[var(--border-light)] text-xs">
@@ -514,21 +552,42 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
           {/* Error view */}
           {errorMessage ? (
             <div className="mt-1 p-2 rounded bg-red-500/10 border border-red-500/30 text-xs flex flex-col gap-1.5">
-              <div className="flex items-start justify-between gap-1 text-red-400">
-                <span className="font-medium break-all leading-tight">
-                  {errorMessage}
+              <div className="flex items-center justify-between gap-1 text-red-400">
+                <span className="font-semibold text-[11px] uppercase tracking-wider text-red-400/90 flex items-center gap-1">
+                  <span>Build / Runtime Error</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMessage(null);
-                    setShowLog(false);
-                  }}
-                  className="text-red-400 hover:text-red-300 p-0.5 rounded cursor-pointer shrink-0"
-                  title="Dismiss error"
-                >
-                  <X size={12} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyError}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 transition-colors cursor-pointer"
+                    title="Copy error"
+                    aria-label="Copy error"
+                  >
+                    {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                    <span>{copied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage(null);
+                      setShowLog(false);
+                    }}
+                    className="text-red-400 hover:text-red-200 p-0.5 rounded hover:bg-red-500/20 cursor-pointer"
+                    title="Dismiss error"
+                    aria-label="Dismiss error"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable, height-constrained error box */}
+              <div
+                data-testid="error-message-box"
+                className="max-h-36 overflow-y-auto overflow-x-hidden p-1.5 bg-black/50 rounded border border-red-500/20 text-[11px] font-mono text-red-300 whitespace-pre-wrap break-words select-text"
+              >
+                {stripAnsi(errorMessage)}
               </div>
 
               {/* Quick action: Force Free Port & Restart when port collision occurs */}
@@ -548,7 +607,7 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
                 </div>
               )}
 
-              {buildLog && (
+              {buildLog && stripAnsi(buildLog).trim() !== stripAnsi(errorMessage).trim() && (
                 <div>
                   <button
                     type="button"

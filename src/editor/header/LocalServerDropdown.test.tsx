@@ -305,6 +305,47 @@ export default function BlogPost({ params }) { return <div>Post</div>; }`;
     expect(screen.getByText(/Syntax error at line 4/i)).toBeTruthy();
   });
 
+  it('renders error message in a scrollable container with max-height and copies error to clipboard', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const longError = '\x1B[31mError:\x1B[0m Turbopack build failed with 18 errors:\nLine 1\nLine 2\nLine 3';
+    vi.mocked(localServerClient.buildLocalServer).mockResolvedValue({
+      success: false,
+      log: longError,
+    });
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    const buildBtn = screen.getByRole('button', { name: /^build$/i });
+    await act(async () => {
+      fireEvent.click(buildBtn);
+    });
+
+    // Check that error container has scroll and height limit classes
+    const errorBox = screen.getByTestId('error-message-box');
+    expect(errorBox).toBeTruthy();
+    expect(errorBox.className).toContain('max-h-36');
+    expect(errorBox.className).toContain('overflow-y-auto');
+    expect(errorBox.textContent).toContain('Error: Turbopack build failed with 18 errors:');
+
+    // Click the Copy button
+    const copyBtn = screen.getByRole('button', { name: /copy error/i });
+    expect(copyBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(writeTextMock).toHaveBeenCalledWith('Error: Turbopack build failed with 18 errors:\nLine 1\nLine 2\nLine 3');
+    expect(toast.success).toHaveBeenCalledWith('Error copied to clipboard');
+    expect(screen.getByText('Copied')).toBeTruthy();
+  });
+
   it('handles start button click with custom port', async () => {
     const onStatusChange = vi.fn();
     render(<LocalServerDropdown open={true} onClose={() => {}} onStatusChange={onStatusChange} />);
