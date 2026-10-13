@@ -89,6 +89,9 @@ export async function captureThumbnail(): Promise<void> {
       height: body.scrollHeight || window.innerHeight,
       backgroundColor: opaqueBackground(),
       skipFonts: true,
+      cacheBust: false,
+      imagePlaceholder: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+      onImageErrorHandler: () => true,
     });
     parent.postMessage({ type: 'preview:thumbnail', dataUrl }, '*');
   } catch (err) {

@@ -656,35 +656,33 @@ function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKe
         />
       </div>
 
-      {isApiCollection ? (
+      {isApiCollection && (
         <QueryParametersControl
           queryConfig={queryConfig}
           onChange={handleQueryConfigChange}
           collectionSlug={source}
         />
-      ) : (
-        <>
-          {/* Filters — popup with Match All/Any + addable type-aware condition rows. */}
-          <FilterControl
-            schema={schema}
-            filterGroup={filters.length > 0 ? { combinator, filters } : null}
-            onChange={handleFilterGroupChange}
-            overridden={filterOverridden}
-            onResetOverride={filterOverridden ? resetFilterOverride : undefined}
-            allowDynamic={axis === 'base' && !variantArg}
-            onAddSearchField={handleAddSearchField}
-          />
-
-          {/* Sort — popup with N type-aware sort rules (precedence = order). */}
-          <SortControl
-            schema={schema}
-            sort={sort}
-            onChange={handleSortChange}
-            overridden={sortOverridden}
-            onResetOverride={sortOverridden ? resetSortOverride : undefined}
-          />
-        </>
       )}
+
+      {/* Filters — popup with Match All/Any + addable type-aware condition rows. */}
+      <FilterControl
+        schema={schema}
+        filterGroup={filters.length > 0 ? { combinator, filters } : null}
+        onChange={handleFilterGroupChange}
+        overridden={filterOverridden}
+        onResetOverride={filterOverridden ? resetFilterOverride : undefined}
+        allowDynamic={axis === 'base' && !variantArg}
+        onAddSearchField={handleAddSearchField}
+      />
+
+      {/* Sort — popup with N type-aware sort rules (precedence = order). */}
+      <SortControl
+        schema={schema}
+        sort={sort}
+        onChange={handleSortChange}
+        overridden={sortOverridden}
+        onResetOverride={sortOverridden ? resetSortOverride : undefined}
+      />
 
       {/* Pagination — Load More / Infinite Scroll. PRIMARY-ONLY (add/remove on the
           primary; read-only on a replica/variant, where it only appears if set on primary). */}

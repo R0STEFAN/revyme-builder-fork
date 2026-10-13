@@ -16,9 +16,11 @@ import {
   cmsPageMetaAtom,
   activePreviewSlugAtom,
   previewSlugByFileAtom,
+  previewRouteParamsByFileAtom,
   slugPageReferrerByFileAtom,
   getItemSlug,
 } from '@/code/stores/cms-page-store';
+import { setPreviewRouteParams, forceCanvasRender } from '@/canvas/node-ops';
 import { collectionDataAtom } from '@/code/stores/cms-store';
 import { selectedIdsAtom } from '@/code/stores/store';
 import { activeFilePathAtom, getSlugPageParentFile, getFileDisplayName, syncUrlToPage } from '@/code/project/active-file-store';
@@ -54,6 +56,7 @@ export default function SlugPageBreadcrumb() {
   const collectionData = useAtomValue(collectionDataAtom);
   const [filePath, setActiveFile] = useAtom(activeFilePathAtom);
   const setPreviewSlugMap = useSetAtom(previewSlugByFileAtom);
+  const setPreviewParamsMap = useSetAtom(previewRouteParamsByFileAtom);
   const setSelectedIds = useSetAtom(selectedIdsAtom);
   const selectedIds = useAtomValue(selectedIdsAtom);
   const referrerMap = useAtomValue(slugPageReferrerByFileAtom);
@@ -98,6 +101,14 @@ export default function SlugPageBreadcrumb() {
       next.set(filePath, slug);
       return next;
     });
+    setPreviewParamsMap((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(filePath) || {};
+      next.set(filePath, { ...cur, slug, ':slug': slug });
+      return next;
+    });
+    setPreviewRouteParams({ slug, ':slug': slug });
+    forceCanvasRender();
     setOpen(false);
     setQuery('');
     trace.action('slug-breadcrumb:pick-item', { slug, collection: meta.collection });

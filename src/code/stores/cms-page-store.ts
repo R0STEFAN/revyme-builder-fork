@@ -328,9 +328,22 @@ export const activePreviewRouteParamsAtom = atom<Record<string, string>>((get) =
                 foundSlug = val.trim();
                 break;
               } else if (typeof val === 'object' && val !== null) {
-                foundSlug = String(val.slug ?? val._slug ?? val.name ?? val.id ?? '').trim();
+                foundSlug = String(val.slug ?? val._slug ?? val.id ?? val._id ?? val.name ?? '').trim();
                 if (foundSlug) break;
               }
+            }
+          }
+        }
+      }
+
+      // If still not found and param is 'slug', fall back to the first item's slug/id of any collection
+      if (!foundSlug && name === 'slug') {
+        for (const [, items] of allData) {
+          if (Array.isArray(items) && items.length > 0) {
+            const s = getItemSlug(items[0]);
+            if (s) {
+              foundSlug = s;
+              break;
             }
           }
         }

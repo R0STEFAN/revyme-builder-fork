@@ -222,8 +222,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
   const initialPath = useMemo(
     () => getPreviewPageUrl(activeFilePath, activePreviewSlug, activeRouteParams),
     // Re-evaluate on open transitions, parameter changes, or manual reload clicks
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, reloadKey, activeRouteParams]
+    [open, reloadKey, activeRouteParams, activeFilePath, activePreviewSlug]
   );
 
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440);
@@ -578,8 +577,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
     const targetUrl = getPreviewPageUrl(activeFilePath, activePreviewSlug, activeRouteParams);
     iframe.contentWindow.postMessage({ type: 'preview:navigate', url: targetUrl }, POST_MESSAGE_TARGET);
     trace.action('preview-overlay:initial-nav', { url: targetUrl, activeFilePath, dynamic: activeFilePath.includes('[') });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, iframeReady, reloadKey, readyTick, activeRouteParams]);
+  }, [open, iframeReady, reloadKey, readyTick, activeRouteParams, activeFilePath, activePreviewSlug]);
 
   // ESC closes the overlay. (Browser-level shortcut — clicks inside the
   // iframe don't bubble out, so the parent owns this.)

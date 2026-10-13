@@ -121,7 +121,8 @@ export function resolveRoute(routes: Route[], url: string): Route | null {
     if (m) {
       const params: Record<string, string> = {};
       r.paramNames.forEach((name, i) => {
-        const val = m[i + 1] ?? '';
+        let val = m[i + 1] ?? '';
+        try { val = decodeURIComponent(val); } catch { /* ignore malformed URI */ }
         const clean = name.replace(/^:/, '');
         params[clean] = val;
         params[':' + clean] = val;
