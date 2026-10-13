@@ -44,14 +44,17 @@ describe('page-transitions-gen: injectPageTransitionsInCode', () => {
 });
 
 describe('page-transitions-gen: generated source files', () => {
-  it('the controller component is valid TSX', () => {
+  it('the controller component is valid TSX and renders scoped in-DOM stage with height tracking', () => {
     parsesTsx(PAGE_TRANSITIONS_SOURCE);
     expect(PAGE_TRANSITIONS_SOURCE).toContain("import { PAGE_EFFECTS } from './page-effects'");
-    expect(PAGE_TRANSITIONS_SOURCE).toContain('startViewTransition');
+    expect(PAGE_TRANSITIONS_SOURCE).toContain('data-revyme-pt-stage');
+    expect(PAGE_TRANSITIONS_SOURCE).toContain('revyme-pt-enter');
+    expect(PAGE_TRANSITIONS_SOURCE).toContain('revyme-pt-exit');
     expect(PAGE_TRANSITIONS_SOURCE).toContain('addEventListener(\'click\', onClick, true)'); // capture phase
   });
-  it('the runtime helpers module is valid TS', () => {
+  it('the runtime helpers module is valid TS with @rt-v3 marker', () => {
     parsesTs(PAGE_EFFECTS_RUNTIME_SOURCE);
+    expect(PAGE_EFFECTS_RUNTIME_SOURCE).toContain('@rt-v3');
   });
   it('path helpers sit next to the LayoutClient', () => {
     expect(pageEffectsDataPath('app/(Body)/LayoutClient.tsx')).toBe('app/(Body)/page-effects.ts');

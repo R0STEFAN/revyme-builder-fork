@@ -126,31 +126,27 @@ export function resolveTiming(t: TransitionConfig): { easing: string; duration: 
 export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): string {
   const lines: string[] = [];
   lines.push('@media (prefers-reduced-motion: reduce) {');
-  lines.push('  ::view-transition-old(root), ::view-transition-new(root), ::view-transition-group(root) { animation-duration: 0s !important; animation-delay: 0s !important; }');
+  lines.push('  .revyme-pt-exit, .revyme-pt-enter { animation-duration: 0s !important; animation-delay: 0s !important; }');
   lines.push('}');
-  // Blend/isolation MUST be per-effect. A pure opacity crossfade (neither side
-  // transforms or masks) needs the browser-default `plus-lighter` + isolated
-  // pair so the two half-faded snapshots SUM to full coverage. With `normal` the
-  // gap between the two fades reveals the backdrop — and the page bg lives on a
-  // child <div>, not <html>, so <html> (white by default) bleeds through = an
-  // ugly white flash mid-transition on the LIVE site (the preview only hid it
-  // because the editor chrome behind the iframe is dark). A slide/push/wipe —
-  // opaque pages OVERLAPPING as they move — keeps `normal`; `plus-lighter` would
-  // ADD the overlapping opaque pixels into a bright seam.
+  lines.push('[data-revyme-pt-stage] { position: relative; width: 100%; }');
+  lines.push('[data-revyme-pt-stage].revyme-pt-animating { overflow: clip; }');
+  lines.push('.revyme-pt-exit { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }');
+  lines.push('.revyme-pt-enter { width: 100%; }');
+
   const anyTransform =
     (!!exit && (sideToTransform(exit) !== 'none' || !!exit.mask)) ||
     (!!enter && (sideToTransform(enter) !== 'none' || !!enter.mask));
   if (anyTransform) {
-    lines.push('::view-transition-image-pair(root) { isolation: auto; }');
-    lines.push('::view-transition-old(root), ::view-transition-new(root) { mix-blend-mode: normal; }');
+    lines.push('[data-revyme-pt-stage] { isolation: auto; }');
+    lines.push('.revyme-pt-exit, .revyme-pt-enter { mix-blend-mode: normal; }');
   } else {
-    lines.push('::view-transition-image-pair(root) { isolation: isolate; }');
-    lines.push('::view-transition-old(root), ::view-transition-new(root) { mix-blend-mode: plus-lighter; }');
+    lines.push('[data-revyme-pt-stage] { isolation: isolate; }');
+    lines.push('.revyme-pt-exit, .revyme-pt-enter { mix-blend-mode: plus-lighter; }');
   }
 
   if (exit) {
     const t = resolveTiming(exit.transition);
-    lines.push(`::view-transition-old(root) { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-exit { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; }`);
     const mf = exit.mask ? maskToClip(exit.mask, 'full') : null;
     const mt = exit.mask ? maskToClip(exit.mask, 'clipped') : null;
     lines.push('@keyframes revyme-vt-exit {');
@@ -158,12 +154,12 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
     lines.push(`  to { opacity: ${exit.opacity}; transform: ${sideToTransform(exit)};${mt ? ` clip-path: ${mt};` : ''} }`);
     lines.push('}');
   } else {
-    lines.push('::view-transition-old(root) { animation: none; }');
+    lines.push('.revyme-pt-exit { animation: none; }');
   }
 
   if (enter) {
     const t = resolveTiming(enter.transition);
-    lines.push(`::view-transition-new(root) { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-enter { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; }`);
     const mf = enter.mask ? maskToClip(enter.mask, 'clipped') : null;
     const mt = enter.mask ? maskToClip(enter.mask, 'full') : null;
     lines.push('@keyframes revyme-vt-enter {');
@@ -171,7 +167,7 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
     lines.push(`  to { opacity: 1; transform: none;${mt ? ` clip-path: ${mt};` : ''} }`);
     lines.push('}');
   } else {
-    lines.push('::view-transition-new(root) { animation: none; }');
+    lines.push('.revyme-pt-enter { animation: none; }');
   }
 
   return lines.join('\n');

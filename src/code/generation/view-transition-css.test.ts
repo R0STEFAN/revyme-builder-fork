@@ -74,30 +74,24 @@ describe('view-transition-css: easing', () => {
 });
 
 describe('view-transition-css: buildViewTransitionCSS', () => {
-  it('both sides → old + new pseudo + keyframes', () => {
+  it('both sides → exit + enter scoped selectors + keyframes', () => {
     const css = buildViewTransitionCSS(createDefaultSide(), { ...createDefaultSide(), opacity: 0 });
-    expect(css).toContain('::view-transition-old(root)');
-    expect(css).toContain('::view-transition-new(root)');
+    expect(css).toContain('.revyme-pt-exit');
+    expect(css).toContain('.revyme-pt-enter');
+    expect(css).toContain('[data-revyme-pt-stage]');
     expect(css).toContain('@keyframes revyme-vt-exit');
     expect(css).toContain('@keyframes revyme-vt-enter');
     expect(css).toContain('prefers-reduced-motion: reduce');
-    // Pure opacity crossfade (no transform/mask) → browser-default plus-lighter +
-    // isolated pair, so the two fades sum to full coverage — no <html> backdrop
-    // bleed (the white-flash bug on the live site).
-    expect(css).toContain('isolation: isolate');
     expect(css).toContain('mix-blend-mode: plus-lighter');
-    expect(css).not.toContain('mix-blend-mode: normal');
   });
   it('transform effect (slide) → normal blend (opaque overlap, no bright seam)', () => {
     const css = buildViewTransitionCSS(undefined, { ...createDefaultSide(), offsetX: 100 });
-    // A moving opaque page must NOT plus-lighter — it would brighten the overlap.
-    expect(css).toContain('isolation: auto');
     expect(css).toContain('mix-blend-mode: normal');
     expect(css).not.toContain('plus-lighter');
   });
-  it('missing exit → old animation:none', () => {
+  it('missing exit → exit animation:none', () => {
     const css = buildViewTransitionCSS(undefined, { ...createDefaultSide(), offsetX: 100 });
-    expect(css).toContain('::view-transition-old(root) { animation: none; }');
+    expect(css).toContain('.revyme-pt-exit { animation: none; }');
     expect(css).toContain('transform: translate(100%, 0%)');
   });
   it('enter mask reveals clipped→full', () => {
