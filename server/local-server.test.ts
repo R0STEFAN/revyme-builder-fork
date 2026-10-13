@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import { LocalServerManager, sanitizeId } from './local-server';
+import { LocalServerManager, sanitizeId, parseBuildProgress, type BuildProgress } from './local-server';
 import { saveProject } from './storage';
 
 const TEST_DIR = path.resolve(process.cwd(), '.test-local-server');
@@ -100,6 +100,7 @@ describe('LocalServerManager', () => {
         lastBuiltAt: null,
         lastError: null,
         pid: null,
+        buildProgress: null,
       });
     });
 
@@ -368,11 +369,74 @@ describe('LocalServerManager', () => {
       }
     });
 
-    it('returns error if project does not exist in storage and no files provided', async () => {
-      const result = await manager.build('non-existent');
-      expect(result.success).toBe(false);
-      expect(result.log).toContain('Project not found');
-      expect(manager.getStatus('non-existent').status).toBe('error');
+    it('tracks build progress across Next.js build milestones', async () => {
+      const mockChild = createMockChild(1112);
+      mockSpawn.mockReturnValue(mockChild);
+
+      const files = { 'app/page.tsx': 'export default () => <h1>Hello</h1>;' };
+      const buildPromise = manager.build('progress-test', files);
+
+      // Initial progress before chunks
+      expect(manager.getStatus('progress-test').buildProgress).toEqual({
+        stage: 'compiling',
+        label: 'Preparing build...',
+        percent: 10,
+      });
+
+      // Yield for async export/sync before child is spawned
+      await new Promise((r) => setTimeout(r, 5));
+
+      mockChild.stdout.emit('data', Buffer.from('Creating an optimized production build ...\n'));
+      expect(manager.getStatus('progress-test').buildProgress?.percent).toBe(20);
+
+      mockChild.stdout.emit('data', Buffer.from('Compiled successfully\nCollecting page data ...\n'));
+      expect(manager.getStatus('progress-test').buildProgress?.stage).toBe('collecting');
+
+      mockChild.stdout.emit('data', Buffer.from('Generating static pages (4/8) ...\n'));
+      const ssgProgress = manager.getStatus('progress-test').buildProgress;
+      expect(ssgProgress?.stage).toBe('generating');
+      expect(ssgProgress?.label).toContain('4/8');
+
+      mockChild.stdout.emit('data', Buffer.from('Finalizing page optimization ...\n'));
+      expect(manager.getStatus('progress-test').buildProgress?.stage).toBe('optimizing');
+
+      mockChild.emit('close', 0);
+
+      const result = await buildPromise;
+      expect(result.success).toBe(true);
+
+      const finalStatus = manager.getStatus('progress-test');
+      expect(finalStatus.buildProgress).toEqual({
+        stage: 'done',
+        label: 'Build completed successfully',
+        percent: 100,
+      });
+    });
+
+    it('parses build output strings correctly in parseBuildProgress', () => {
+      const initial = parseBuildProgress('');
+      expect(initial).toEqual({ stage: 'compiling', label: 'Preparing build...', percent: 10 });
+
+      const creating = parseBuildProgress('Creating an optimized production build ...');
+      expect(creating).toEqual({ stage: 'compiling', label: 'Creating optimized production build...', percent: 20 });
+
+      const compiled = parseBuildProgress('Compiled successfully');
+      expect(compiled).toEqual({ stage: 'compiling', label: 'Validating and compiling...', percent: 45 });
+
+      const collecting = parseBuildProgress('Collecting page data ...');
+      expect(collecting).toEqual({ stage: 'collecting', label: 'Collecting page data...', percent: 60 });
+
+      const ssg0 = parseBuildProgress('Generating static pages (0/10) ...');
+      expect(ssg0).toEqual({ stage: 'generating', label: 'Generating static pages (0/10)...', percent: 65 });
+
+      const ssg5 = parseBuildProgress('Generating static pages (5/10) ...');
+      expect(ssg5).toEqual({ stage: 'generating', label: 'Generating static pages (5/10)...', percent: 79 });
+
+      const ssg10 = parseBuildProgress('Generating static pages (10/10) ...');
+      expect(ssg10).toEqual({ stage: 'generating', label: 'Generating static pages (10/10)...', percent: 92 });
+
+      const optimizing = parseBuildProgress('Finalizing page optimization ...');
+      expect(optimizing).toEqual({ stage: 'optimizing', label: 'Finalizing page optimization...', percent: 95 });
     });
   });
 

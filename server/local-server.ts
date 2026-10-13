@@ -7,6 +7,12 @@ import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/shared/image-expo
 
 export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
 
+export interface BuildProgress {
+  stage: 'compiling' | 'collecting' | 'generating' | 'optimizing' | 'done';
+  label: string;
+  percent: number;
+}
+
 export interface LocalServerStatus {
   status: LocalServerState;
   port: number | null;
@@ -15,6 +21,7 @@ export interface LocalServerStatus {
   lastBuiltAt: number | null;
   lastError: string | null;
   pid: number | null;
+  buildProgress?: BuildProgress | null;
 }
 
 export interface LocalServerOptions {
@@ -35,6 +42,7 @@ interface ProjectServerRecord {
   pid: number | null;
   proc: ChildProcess | null;
   isStopping?: boolean;
+  buildProgress?: BuildProgress | null;
 }
 
 export function sanitizeId(id: string): string {
@@ -71,6 +79,62 @@ function cleanProcessEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv 
 
 export function stripAnsi(str: string): string {
   return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+}
+
+export function parseBuildProgress(
+  output: string,
+  current?: BuildProgress | null
+): BuildProgress {
+  if (!output || !output.trim()) {
+    return current || { stage: 'compiling', label: 'Preparing build...', percent: 10 };
+  }
+
+  // Parse milestones from most advanced to earliest
+  if (/Finalizing page optimization/i.test(output)) {
+    return {
+      stage: 'optimizing',
+      label: 'Finalizing page optimization...',
+      percent: Math.max(current?.percent ?? 0, 95),
+    };
+  }
+
+  const staticPagesMatch = output.match(/Generating static pages\s*\((\d+)\/(\d+)\)/i);
+  if (staticPagesMatch) {
+    const done = parseInt(staticPagesMatch[1], 10);
+    const total = parseInt(staticPagesMatch[2], 10);
+    const pct = total > 0 ? Math.min(92, Math.round(65 + (done / total) * 27)) : 75;
+    return {
+      stage: 'generating',
+      label: `Generating static pages (${done}/${total})...`,
+      percent: Math.max(current?.percent ?? 0, pct),
+    };
+  }
+
+  if (/Collecting page data/i.test(output)) {
+    return {
+      stage: 'collecting',
+      label: 'Collecting page data...',
+      percent: Math.max(current?.percent ?? 0, 60),
+    };
+  }
+
+  if (/Compiled successfully|Linting and checking validity of types|Checking validity of types/i.test(output)) {
+    return {
+      stage: 'compiling',
+      label: 'Validating and compiling...',
+      percent: Math.max(current?.percent ?? 0, 45),
+    };
+  }
+
+  if (/Creating an optimized production build/i.test(output)) {
+    return {
+      stage: 'compiling',
+      label: 'Creating optimized production build...',
+      percent: Math.max(current?.percent ?? 0, 20),
+    };
+  }
+
+  return current || { stage: 'compiling', label: 'Preparing build...', percent: 10 };
 }
 
 export async function killProcessTree(
@@ -634,6 +698,7 @@ export class LocalServerManager {
     const record = this.getOrCreateRecord(safeId);
     record.status = 'building';
     record.lastError = null;
+    record.buildProgress = { stage: 'compiling', label: 'Preparing build...', percent: 10 };
 
     if (files) {
       this.exportProject(safeId, files);
@@ -643,6 +708,7 @@ export class LocalServerManager {
         const errLog = `Project not found: ${projectId}`;
         record.status = 'error';
         record.lastError = errLog;
+        record.buildProgress = null;
         return { success: false, log: errLog };
       }
       let exportFiles = stored.data?.files || {};
@@ -685,6 +751,7 @@ export class LocalServerManager {
 
       child.stdout?.on('data', (data) => {
         output += data.toString();
+        record.buildProgress = parseBuildProgress(output, record.buildProgress);
       });
 
       child.stderr?.on('data', (data) => {
@@ -696,6 +763,7 @@ export class LocalServerManager {
         const cleaned = stripAnsi(output);
         record.status = 'error';
         record.lastError = cleaned;
+        record.buildProgress = null;
         resolve({ success: false, log: cleaned });
       });
 
@@ -706,10 +774,12 @@ export class LocalServerManager {
           record.lastBuiltAt = Date.now();
           record.status = record.proc ? 'running' : 'idle';
           record.lastError = null;
+          record.buildProgress = { stage: 'done', label: 'Build completed successfully', percent: 100 };
           resolve({ success: true, log: cleaned });
         } else {
           record.status = 'error';
           record.lastError = cleaned || `Build failed with exit code ${code}`;
+          record.buildProgress = null;
           resolve({ success: false, log: record.lastError });
         }
       });
@@ -881,6 +951,7 @@ export class LocalServerManager {
       record.url = null;
       record.status = 'idle';
       record.lastError = null;
+      record.buildProgress = null;
       try {
         await killProcessTree(child, pid, this.execFn);
       } finally {
@@ -889,6 +960,7 @@ export class LocalServerManager {
     } else if (record) {
       record.status = 'idle';
       record.lastError = null;
+      record.buildProgress = null;
       record.proc = null;
       record.pid = null;
       record.port = null;
@@ -935,6 +1007,7 @@ export class LocalServerManager {
       lastBuiltAt,
       lastError: record?.lastError ?? null,
       pid: record?.pid ?? null,
+      buildProgress: record?.buildProgress ?? null,
     };
   }
 
@@ -952,6 +1025,7 @@ export class LocalServerManager {
       record.url = null;
       record.status = 'idle';
       record.lastError = null;
+      record.buildProgress = null;
     }
     this.servers.clear();
   }

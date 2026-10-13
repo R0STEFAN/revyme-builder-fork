@@ -484,4 +484,30 @@ export default function BlogPost({ params }) { return <div>Post</div>; }`;
     expect(screen.getByText(/Compiled successfully in 1797ms/)).toBeTruthy();
     expect(screen.queryByText(/\[38;2;/)).toBeNull();
   });
+
+  it('renders build progress bar and percentage when status is building with buildProgress', async () => {
+    vi.mocked(localServerClient.fetchLocalServerStatus).mockResolvedValue({
+      status: 'building',
+      port: null,
+      url: null,
+      isBuilt: false,
+      lastBuiltAt: null,
+      lastError: null,
+      pid: null,
+      buildProgress: {
+        stage: 'generating',
+        label: 'Generating static pages (6/14)...',
+        percent: 76,
+      },
+    });
+
+    render(<LocalServerDropdown open={true} onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Generating static pages (6/14)...')).toBeTruthy();
+    });
+
+    expect(screen.getByText('76%')).toBeTruthy();
+    expect(screen.getByText('Building (76%)')).toBeTruthy();
+  });
 });

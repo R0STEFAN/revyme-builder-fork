@@ -2,6 +2,12 @@ import { trace } from '@/shared/debug-trace';
 
 export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
 
+export interface BuildProgress {
+  stage: 'compiling' | 'collecting' | 'generating' | 'optimizing' | 'done';
+  label: string;
+  percent: number;
+}
+
 export interface LocalServerStatus {
   status: LocalServerState;
   port: number | null;
@@ -10,6 +16,7 @@ export interface LocalServerStatus {
   lastBuiltAt: number | null;
   lastError: string | null;
   pid: number | null;
+  buildProgress?: BuildProgress | null;
 }
 
 export interface BuildResult {

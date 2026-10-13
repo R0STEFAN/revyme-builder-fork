@@ -192,25 +192,26 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
     }
   }, [projectId, building, starting, onStatusChange]);
 
-  // Initial load and periodic polling while open
+  const isRunning = status?.status === 'running';
+  const isBuilding = building || status?.status === 'building';
+  const isError = !isBuilding && (status?.status === 'error' || !!errorMessage);
+  const canStop = (isRunning || isError) && !stopping && !isBuilding;
+
+  // Initial load and periodic polling while open (polls faster during active build)
   useEffect(() => {
     if (!open) return;
     trace.action('local-server-dropdown:opened', { projectId });
     void refreshStatus();
 
+    const pollInterval = isBuilding ? 700 : 2500;
     const interval = setInterval(() => {
       void refreshStatus();
-    }, 2500);
+    }, pollInterval);
 
     return () => {
       clearInterval(interval);
     };
-  }, [open, projectId, refreshStatus]);
-
-  const isRunning = status?.status === 'running';
-  const isBuilding = building || status?.status === 'building';
-  const isError = !isBuilding && (status?.status === 'error' || !!errorMessage);
-  const canStop = (isRunning || isError) && !stopping && !isBuilding;
+  }, [open, projectId, refreshStatus, isBuilding]);
 
   // Handle Build
   const handleBuild = useCallback(async () => {
@@ -327,7 +328,9 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
 
   if (isBuilding) {
     dotClass = 'bg-amber-500 animate-pulse';
-    badgeLabel = 'Building...';
+    badgeLabel = status?.buildProgress?.percent !== undefined
+      ? `Building (${status.buildProgress.percent}%)`
+      : 'Building...';
   } else if (isRunning) {
     dotClass = 'bg-emerald-500';
     badgeLabel = `Running: ${status?.port || port}`;
@@ -485,6 +488,28 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
               <span>{stopping ? 'Stopping...' : 'Stop'}</span>
             </button>
           </div>
+
+          {/* Build progress bar */}
+          {isBuilding && (
+            <div className="flex flex-col gap-1.5 p-2 rounded bg-[var(--bg-surface,rgba(0,0,0,0.2))] border border-[var(--border-light)] text-xs">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-[var(--text-secondary)] truncate max-w-[210px] font-medium">
+                  {status?.buildProgress?.label || 'Building application...'}
+                </span>
+                <span className="font-mono text-[var(--accent)] font-semibold shrink-0">
+                  {status?.buildProgress?.percent ?? 15}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-[var(--border-light,rgba(255,255,255,0.1))] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent,#0066ff)] rounded-full transition-all duration-300 ease-out"
+                  style={{
+                    width: `${Math.max(5, Math.min(100, status?.buildProgress?.percent ?? 15))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Error view */}
           {errorMessage ? (

@@ -37,3 +37,4 @@ oss-release-plan/
 .DS_Store
 .superpowers/
 scratch/
+.test-local-server/
