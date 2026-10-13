@@ -118,4 +118,9 @@ describe('CollectionListTool with API collection', () => {
     expect(mockFlushNow).toHaveBeenCalled();
     expect(mockForceCanvasRender).toHaveBeenCalled();
   });
+
+  it('renders Pagination control in API mode', () => {
+    render(<CollectionListTool />);
+    expect(screen.getByText('Pagination')).toBeTruthy();
+  });
 });

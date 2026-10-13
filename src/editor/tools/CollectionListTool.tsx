@@ -683,11 +683,15 @@ function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKe
             overridden={sortOverridden}
             onResetOverride={sortOverridden ? resetSortOverride : undefined}
           />
+        </>
+      )}
 
-          {/* Pagination — Load More / Infinite Scroll. PRIMARY-ONLY (add/remove on the
-              primary; read-only on a replica/variant, where it only appears if set on primary). */}
-          <PaginationControl pagination={pagination} onSet={handleSetPagination} onRemove={handleRemovePagination} editable={isPrimaryContext} />
+      {/* Pagination — Load More / Infinite Scroll. PRIMARY-ONLY (add/remove on the
+          primary; read-only on a replica/variant, where it only appears if set on primary). */}
+      <PaginationControl pagination={pagination} onSet={handleSetPagination} onRemove={handleRemovePagination} editable={isPrimaryContext} />
 
+      {!isApiCollection && (
+        <>
           {/* Limit to — added via the section + (hidden by default). */}
           {showLimit && (
             <div className="flex items-center justify-between w-full">
