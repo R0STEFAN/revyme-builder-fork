@@ -222,4 +222,27 @@ describe('applyDetailPageBindings — dormant (canvas) bindings', () => {
     expect(out.get('other')!.textContent).toBe('baked from another collection');
     expect(out.get('other')).toBe(nodes.get('other')); // untouched by reference
   });
+
+  it('substitutes nested dot-notation fields into textContent and attributes', () => {
+    const nodes = new Map<string, CanvasNode>([
+      ['file-id', makeNode({
+        id: 'file-id', type: 'p',
+        binding: { field: 'img_file.id', property: 'text' },
+      } as any)],
+      ['file-img', makeNode({
+        id: 'file-img', type: 'img',
+        binding: { field: 'img_file.filename_disk', property: 'src' },
+      } as any)],
+    ]);
+    const item = {
+      id: 1,
+      img_file: {
+        id: '436f6e77-e4d1-451d-9a71-0b2a9e4c2588',
+        filename_disk: '436f6e77.webp',
+      },
+    };
+    const out = applyDetailPageBindings(nodes, item);
+    expect(out.get('file-id')!.textContent).toBe('436f6e77-e4d1-451d-9a71-0b2a9e4c2588');
+    expect(out.get('file-img')!.attrs.src).toBe('436f6e77.webp');
+  });
 });

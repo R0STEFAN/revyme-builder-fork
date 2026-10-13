@@ -74,12 +74,18 @@ export function extractItemMemberPath(expr: any, itemVar: string): string | null
   const parts: string[] = [];
   let curr = expr;
   while (curr && curr.type === 'MemberExpression') {
-    if (curr.property?.type !== 'Identifier') return null;
-    parts.unshift(curr.property.name);
+    if (curr.property?.type === 'Identifier') {
+      parts.unshift(curr.property.name);
+    } else if (curr.property?.type === 'StringLiteral') {
+      const segs = String(curr.property.value).split('.');
+      parts.unshift(...segs);
+    } else {
+      return null;
+    }
     curr = curr.object;
   }
   if (curr && curr.type === 'Identifier' && curr.name === itemVar) {
-    return parts.join('.');
+    return parts.filter(Boolean).join('.');
   }
   return null;
 }

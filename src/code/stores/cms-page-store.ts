@@ -62,6 +62,16 @@ export const previewSlugByFileAtom = atom<Map<string, string>>(new Map());
 export const slugPageReferrerByFileAtom = atom<Map<string, string>>(new Map());
 
 /**
+ * Universal item identifier / slug resolver.
+ * Handles local CMS items (_slug, _id) and external API items (slug, id, _slug, _id).
+ */
+export function getItemSlug(item: Record<string, any> | undefined | null): string {
+  if (!item) return '';
+  const val = item._slug ?? item.slug ?? item.id ?? item._id;
+  return val != null ? String(val) : '';
+}
+
+/**
  * Convenience — the slug currently previewed for the ACTIVE file. Falls
  * back to the first item's slug in the relevant collection so a freshly-
  * opened detail page renders something instead of an empty template.
@@ -76,7 +86,9 @@ export const activePreviewSlugAtom = atom<string | null>((get) => {
   // `find(...) ?? collection[0]` fallback in the generated page so the
   // canvas matches what a user would see if they visited the bare URL.
   const items = get(collectionDataAtom).get(meta.collection) ?? [];
-  return items[0]?._slug ?? null;
+  const first = items[0];
+  if (!first) return null;
+  return getItemSlug(first) || null;
 });
 
 /**
@@ -86,10 +98,11 @@ export const activePreviewSlugAtom = atom<string | null>((get) => {
 export const activePreviewItemAtom = atom<Record<string, any> | null>((get) => {
   const meta = get(cmsPageMetaAtom);
   if (meta?.kind !== 'detail') return null;
-  const slug = get(activePreviewSlugAtom);
-  if (!slug) return null;
   const items = get(collectionDataAtom).get(meta.collection) ?? [];
-  return items.find(i => i._slug === slug) ?? items[0] ?? null;
+  if (items.length === 0) return null;
+  const slug = get(activePreviewSlugAtom);
+  if (!slug) return items[0];
+  return items.find(i => getItemSlug(i) === slug) ?? items[0];
 });
 
 /**

@@ -44,7 +44,7 @@ vi.mock('./cms-ops', () => ({
   })),
 }));
 
-import { createCmsIndexPageFile, createCmsDetailPageFile, parseCmsPageMeta, findCmsPageFile } from './cms-page-ops';
+import { createCmsIndexPageFile, createCmsDetailPageFile, parseCmsPageMeta, findCmsPageFile, cmsItemDisplayLabel } from './cms-page-ops';
 import { rootMountedCollection } from './cms-root-mount';
 
 beforeEach(() => { fsStore.clear(); vi.clearAllMocks(); });
@@ -249,5 +249,34 @@ describe('createCmsDetailPageFile at the root', () => {
     fsStore.set('app/[slug]/some-leftover.txt', 'x');
     expect(rootMountedCollection()).toBeNull();
     expect(createCmsDetailPageFile('team', { atRoot: true })).toBe('app/[slug]/page.client.tsx');
+  });
+});
+
+describe('cmsItemDisplayLabel', () => {
+  test('prioritizes title, name, label and falls back to slug, id', () => {
+    expect(cmsItemDisplayLabel({ title: 'My Article', status: 'draft', _slug: 'art-1' })).toBe('My Article');
+    expect(cmsItemDisplayLabel({ name: 'Dragon Tattoo', id: 55 })).toBe('Dragon Tattoo');
+    expect(cmsItemDisplayLabel({ label: 'Featured Category', id: 1 })).toBe('Featured Category');
+    expect(cmsItemDisplayLabel({ id: 'uuid-123', slug: 'my-slug' })).toBe('my-slug');
+    expect(cmsItemDisplayLabel({ id: 99 })).toBe('99');
+    expect(cmsItemDisplayLabel(null, 'default')).toBe('default');
+  });
+});
+
+describe('nested dot-notation field rendering', () => {
+  test('generates dot notation item.img_file.id instead of bracket string access', async () => {
+    const { getCollectionSchema } = await import('./cms-ops');
+    vi.mocked(getCollectionSchema).mockReturnValueOnce({
+      name: 'Tattoos',
+      slug: 'tattoos',
+      fields: [
+        { id: 'img_file.id', name: 'File ID', type: 'text' },
+        { id: 'cover-image', name: 'Cover Image', type: 'image' },
+      ],
+    });
+    createCmsDetailPageFile('tattoos');
+    const code = fsStore.get('app/tattoos/[slug]/page.client.tsx')!;
+    expect(code).toContain('{item.img_file.id}');
+    expect(code).toContain('src={item["cover-image"]}');
   });
 });

@@ -60,7 +60,7 @@ export default function LinkSlugControl({
   const bound = navMode !== 'none';
   const allData = useAtomValue(collectionDataAtom);
   const slugs = useMemo(
-    () => (allData.get(collection) ?? []).map(i => i._slug).filter(Boolean) as string[],
+    () => (allData.get(collection) ?? []).map(i => i._slug ?? i.slug ?? (i.id != null ? String(i.id) : '')).filter(Boolean) as string[],
     [allData, collection],
   );
 

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parseJSXToNodes } from './parser';
+import { parseJSXToNodes, extractItemMemberPath } from './parser';
 import { projectFS } from '@/code/project/project-fs';
 
 describe('parseJSXToNodes', () => {
@@ -1738,6 +1738,48 @@ export default function Page() {
 
       const text = nodes.get('text')!;
       expect(text.attrs['data-tooltip']).toBe('Helpful info');
+    });
+  });
+
+  describe('nested CMS member paths (dot and bracket notation)', () => {
+    test('extractItemMemberPath parses dot notation, string literal bracket, and nested members', () => {
+      // Mock babel AST MemberExpressions
+      const dotExpr = {
+        type: 'MemberExpression',
+        object: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'item' },
+          property: { type: 'Identifier', name: 'img_file' },
+        },
+        property: { type: 'Identifier', name: 'id' },
+      };
+      expect(extractItemMemberPath(dotExpr, 'item')).toBe('img_file.id');
+
+      const stringBracketExpr = {
+        type: 'MemberExpression',
+        object: { type: 'Identifier', name: 'item' },
+        property: { type: 'StringLiteral', value: 'img_file.id' },
+      };
+      expect(extractItemMemberPath(stringBracketExpr, 'item')).toBe('img_file.id');
+    });
+
+    test('parseJSXToNodes binds nested field on CMS detail page with both dot and bracket syntax', () => {
+      const code = `/** @cmsPage { "collection": "works", "kind": "detail" } */
+export default function Page() {
+  return (
+    <div data-id="root">
+      <p data-id="p1">{item.img_file.id}</p>
+      <p data-id="p2">{item["img_file.filename_disk"]}</p>
+      <img data-id="img1" src={item.img_file.url} alt="" />
+      <img data-id="img2" src={item["img_file.url"]} alt="" />
+    </div>
+  );
+}`;
+      const nodes = parseJSXToNodes(code);
+      expect(nodes.get('p1')?.binding).toEqual({ field: 'img_file.id', property: 'text' });
+      expect(nodes.get('p2')?.binding).toEqual({ field: 'img_file.filename_disk', property: 'text' });
+      expect(nodes.get('img1')?.binding).toEqual({ field: 'img_file.url', property: 'src' });
+      expect(nodes.get('img2')?.binding).toEqual({ field: 'img_file.url', property: 'src' });
     });
   });
 });

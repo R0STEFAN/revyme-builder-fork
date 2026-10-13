@@ -76,9 +76,10 @@ type RenderScope = 'detail' | 'card';
  * (e.g. `cover-image`) where `item.cover-image` is a syntax error.
  */
 function itemAccess(itemVar: string, fieldId: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(fieldId)
-    ? `${itemVar}.${fieldId}`
-    : `${itemVar}[${JSON.stringify(fieldId)}]`;
+  if (fieldId.split('.').every((part) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(part))) {
+    return `${itemVar}.${fieldId}`;
+  }
+  return `${itemVar}[${JSON.stringify(fieldId)}]`;
 }
 
 /**
@@ -526,7 +527,7 @@ export function createCmsDetailPageFile(
   const pageExportSignature = apiConfig
     ? `export default function Page({ item: serverItem }: { item?: any } = {}) {
   const params = useParams();
-  const item = serverItem ?? (${varName}.find((i) => (i.slug || i._slug) === params?.slug) ?? ${varName}[0]);`
+  const item = serverItem ?? (${varName}.find((i) => (i.slug || i._slug || String(i.id)) === params?.slug) ?? ${varName}[0]);`
     : `export default function Page() {
   const params = useParams();
   const item = ${varName}.find((i) => i._slug === params?.slug) ?? ${varName}[0];`;
@@ -633,10 +634,18 @@ export function cmsItemDisplayLabel(
   fallbackSlug?: string | null,
 ): string {
   if (!item) return fallbackSlug ?? '';
+  const priorityKeys = ['title', 'name', 'label', 'headline', 'header', 'slug'];
+  for (const pk of priorityKeys) {
+    if (typeof item[pk] === 'string' && item[pk].trim()) {
+      return item[pk];
+    }
+  }
   const textKey = Object.keys(item).find(
-    (k) => !k.startsWith('_') && typeof item[k] === 'string' && (item[k] as string).trim(),
+    (k) => !k.startsWith('_') && k !== 'id' && typeof item[k] === 'string' && (item[k] as string).trim(),
   );
-  return (textKey ? item[textKey] : item._slug) || item._slug || (fallbackSlug ?? '');
+  if (textKey && item[textKey]) return item[textKey];
+  const slug = item._slug ?? item.slug ?? item.id ?? item._id;
+  return slug != null ? String(slug) : (fallbackSlug ?? '');
 }
 
 /** "blog-posts" / "blog_posts" → "Blog Posts" — collection slug to a title. */

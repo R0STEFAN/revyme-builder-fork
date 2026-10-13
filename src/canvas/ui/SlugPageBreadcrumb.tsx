@@ -17,6 +17,7 @@ import {
   activePreviewSlugAtom,
   previewSlugByFileAtom,
   slugPageReferrerByFileAtom,
+  getItemSlug,
 } from '@/code/stores/cms-page-store';
 import { collectionDataAtom } from '@/code/stores/cms-store';
 import { selectedIdsAtom } from '@/code/stores/store';
@@ -84,7 +85,7 @@ export default function SlugPageBreadcrumb() {
   // Gate AFTER all hooks (hooks must run unconditionally).
   if (!isDetail || items.length === 0) return null;
 
-  const currentIdx = Math.max(0, items.findIndex((i) => i._slug === activeSlug));
+  const currentIdx = Math.max(0, items.findIndex((i) => getItemSlug(i) === activeSlug));
   const current = items[currentIdx];
   const currentLabel = itemLabel(current, activeSlug);
 
@@ -107,7 +108,7 @@ export default function SlugPageBreadcrumb() {
   // CanvasMouseController). `leftPanel: 'cms'` keeps the overlay mounted (App
   // auto-closes it when the left panel isn't 'cms').
   const openCmsCollection = () => {
-    openCmsEditor({ collection: meta.collection, itemId: items[0]?._id ?? null });
+    openCmsEditor({ collection: meta.collection, itemId: items[0]?._id ?? (items[0]?.id != null ? String(items[0].id) : null) });
     trace.action('slug-breadcrumb:open-cms', { collection: meta.collection });
   };
 
@@ -239,7 +240,7 @@ export default function SlugPageBreadcrumb() {
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); setQuery(''); }
-                  if (e.key === 'Enter' && filtered[0]) pick(filtered[0]._slug);
+                  if (e.key === 'Enter' && filtered[0]) pick(getItemSlug(filtered[0]));
                 }}
                 className="w-full h-8 px-3 text-xs bg-[var(--grid-line)] text-[var(--text-primary)] border border-[var(--border-light)] cut-corners cut-border [--cut-border-color:var(--border-light)] hover:[--cut-border-color:var(--control-border)] focus:[--cut-border-color:var(--border-focus)] hover:border-[var(--control-border)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
               />
@@ -250,12 +251,13 @@ export default function SlugPageBreadcrumb() {
               {filtered.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-[var(--text-tertiary)]">No items</div>
               ) : (
-                filtered.map((it) => {
-                  const isCurrent = it._slug === current?._slug;
+                filtered.map((it, idx) => {
+                  const itSlug = getItemSlug(it);
+                  const isCurrent = itSlug === getItemSlug(current);
                   return (
                     <button
-                      key={it._slug}
-                      onClick={() => pick(it._slug)}
+                      key={itSlug || String(idx)}
+                      onClick={() => pick(itSlug)}
                       className="group flex items-center gap-2 mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer text-xs text-[var(--text-primary)] hover:bg-[var(--accent)] hover:text-[var(--accent-fg)] transition-colors"
                     >
                       <span className="w-3.5 flex-shrink-0 flex items-center justify-center">
