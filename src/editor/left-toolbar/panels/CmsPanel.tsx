@@ -10,7 +10,12 @@ import {
   collectionDataAtom,
   activeCmsCollectionAtom,
   editingCmsItemAtom,
+  cmsModeAtom,
+  apiCollectionsConfigAtom,
 } from '@/code/stores/cms-store';
+import { setCmsMode, removeApiCollection } from '@/code/project/cms-api-config';
+import { ApiResourceModal, inferSchemaFromItems, getEnvVariables } from './cms/ApiResourceModal';
+import { toast } from 'sonner';
 import {
   listCollections,
   deleteCollection,
@@ -22,6 +27,8 @@ import {
   addCollectionItem,
   updateCollectionItem,
   removeCollectionItem,
+  saveCollectionData,
+  saveCollectionSchema,
   type CmsUsage,
 } from '@/code/project/cms-ops';
 import { projectVersionAtom } from '@/code/project/project-fs';
@@ -273,6 +280,143 @@ function CollectionListView({
 
       {/* Cascade-delete confirm modal — shown only when a delete is pending. */}
       <DeleteCollectionModal pending={pendingDelete} onConfirm={confirmDeleteCollection} onCancel={cancelDeleteCollection} />
+    </div>
+  );
+}
+
+// ─── View 1B: API Collection List (External API Mode) ──────────────────────────
+
+function ApiCollectionListView({
+  onAddResource,
+  onEditResource,
+  searchQuery,
+}: {
+  onAddResource: () => void;
+  onEditResource: (slug: string) => void;
+  searchQuery: string;
+}) {
+  const apiCollections = useAtomValue(apiCollectionsConfigAtom);
+  const data = useAtomValue(collectionDataAtom);
+  const refresh = useCmsRefresh();
+
+  const allSlugs = useMemo(() => Array.from(apiCollections.keys()), [apiCollections]);
+  const q = searchQuery.trim().toLowerCase();
+  const slugs = useMemo(() => {
+    if (!q) return allSlugs;
+    return allSlugs.filter(slug => {
+      const col = apiCollections.get(slug);
+      const name = (col?.name ?? slug).toLowerCase();
+      return name.includes(q) || slug.toLowerCase().includes(q);
+    });
+  }, [allSlugs, apiCollections, q]);
+
+  const handleDeleteCollection = useCallback((slug: string) => {
+    removeApiCollection(slug);
+    deleteCollection(slug);
+    refresh();
+    toast.success(`Removed API collection "${slug}"`);
+    trace.action('cms-panel:delete-api-collection', { slug });
+  }, [refresh]);
+
+  const handleRefreshData = useCallback(async (slug: string) => {
+    const col = apiCollections.get(slug);
+    if (!col) return;
+    toast.info(`Refreshing ${col.name}...`);
+    try {
+      const envVars = getEnvVariables();
+      const resolvedHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(col.headers)) {
+        let val = v;
+        const envMatch = val.match(/env:([A-Za-z0-9_]+)/);
+        if (envMatch) {
+          val = val.replace(`env:${envMatch[1]}`, envVars[envMatch[1]] || '');
+        }
+        resolvedHeaders[k] = val;
+      }
+      const res = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: col.url,
+          method: col.method,
+          headers: resolvedHeaders,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      let items: any[] = [];
+      if (col.itemsKey && Array.isArray(json[col.itemsKey])) {
+        items = json[col.itemsKey];
+      } else if (Array.isArray(json)) {
+        items = json;
+      } else if (Array.isArray(json.data)) {
+        items = json.data;
+      } else if (Array.isArray(json.results)) {
+        items = json.results;
+      }
+      saveCollectionData(slug, items);
+      const schema = inferSchemaFromItems(slug, col.name, items);
+      saveCollectionSchema(slug, schema);
+      refresh();
+      toast.success(`Refreshed ${col.name} (${items.length} items)`);
+    } catch (err: any) {
+      toast.error(`Failed to refresh ${col.name}: ${err.message}`);
+    }
+  }, [apiCollections, refresh]);
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="mx-3 my-2 p-2 rounded cut-corners bg-[var(--card-bg,rgba(255,255,255,0.03))] border border-[var(--border-light)] text-[10px] text-[var(--text-secondary)] leading-relaxed flex items-start gap-1.5">
+        <span className="text-[var(--accent)] text-xs">ℹ</span>
+        <span>Content is managed in external CMS (Directus / Baserow / Strapi / REST). Local editing of records is disabled.</span>
+      </div>
+
+      {slugs.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 px-4 pt-4 text-center">
+          <CmsIcon className="w-5 h-5 text-[var(--text-disabled)]" />
+          <p className="text-xs font-medium text-[var(--text-secondary)]">No API resources connected</p>
+          <p className="text-[10px] text-[var(--text-disabled)] max-w-[200px] leading-relaxed">
+            Connect Directus, Baserow, Strapi, or any REST API endpoint to pull live data into your design.
+          </p>
+          <button
+            onClick={onAddResource}
+            className="flex items-center gap-1.5 cut-corners bg-[var(--accent)] px-3 py-1.5 text-[11px] font-medium text-[var(--accent-fg,#0d1017)] transition-[filter] hover:brightness-110 cursor-pointer"
+          >
+            + Add API Resource
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
+          {slugs.map(slug => {
+            const col = apiCollections.get(slug);
+            const items = data.get(slug) ?? [];
+            const menuItems: DropdownMenuEntry[] = [
+              { id: 'edit-api', label: 'Edit API Config', onClick: () => onEditResource(slug) },
+              { id: 'refresh-data', label: 'Refresh Data & Schema', onClick: () => handleRefreshData(slug) },
+              { type: 'separator' },
+              { id: 'delete-api', label: 'Delete Collection', onClick: () => handleDeleteCollection(slug) },
+            ];
+            return (
+              <SidebarRow
+                key={slug}
+                icon={<CmsIcon width={14} height={14} />}
+                label={col?.name || slug}
+                iconColor="var(--text-secondary)"
+                onClick={() => onEditResource(slug)}
+                menuItems={menuItems}
+                right={
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1 py-0.5 rounded bg-[var(--chip-bg,rgba(255,255,255,0.06))] text-[9px] uppercase font-mono text-[var(--accent)]">
+                      {col?.provider || 'rest'}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-disabled)]">{items.length}</span>
+                  </div>
+                }
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -751,6 +895,9 @@ export default function CmsPanel() {
   // views own their own breadcrumb headers above, so the search row stays
   // collection-list-only.
   const [searchQuery, setSearchQuery] = useState('');
+  const cmsMode = useAtomValue(cmsModeAtom);
+  const [apiModalOpen, setApiModalOpen] = useState(false);
+  const [editingApiSlug, setEditingApiSlug] = useState<string | undefined>(undefined);
   const refresh = useCmsRefresh();
 
   // Refresh on mount
@@ -758,7 +905,7 @@ export default function CmsPanel() {
     refresh();
   }, [refresh]);
 
-  trace.fn('CmsPanel.render', { activeCollection, editingItem });
+  trace.fn('CmsPanel.render', { activeCollection, editingItem, cmsMode });
 
   const handleClickCollection = useCallback((slug: string) => {
     setCmsEditorCollection(slug);
@@ -810,34 +957,78 @@ export default function CmsPanel() {
       </div>
       <div data-tool-divider className="h-px bg-[var(--border-light)] mx-3 mt-1.5 mb-0" />
 
+      {/* CMS Mode Switcher (Local JSON vs External API) */}
+      <div className="px-3 pt-2 pb-1 shrink-0 flex items-center justify-between text-xs">
+        <span className="text-[10px] font-bold uppercase text-[var(--text-disabled)] tracking-wider">CMS Mode</span>
+        <div className="flex bg-[var(--control-bg,rgba(255,255,255,0.06))] p-0.5 rounded cut-corners border border-[var(--border-light)] text-[11px]">
+          <button
+            type="button"
+            onClick={() => { setCmsMode('local'); refresh(); }}
+            className={`px-2 py-0.5 rounded transition-colors font-medium ${cmsMode === 'local' ? 'bg-[var(--accent)] text-[var(--accent-fg,#000)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer'}`}
+          >
+            Local (JSON)
+          </button>
+          <button
+            type="button"
+            onClick={() => { setCmsMode('api'); refresh(); }}
+            className={`px-2 py-0.5 rounded transition-colors font-medium ${cmsMode === 'api' ? 'bg-[var(--accent)] text-[var(--accent-fg,#000)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer'}`}
+          >
+            External API
+          </button>
+        </div>
+      </div>
+
       <SectionLabel
         size="md"
         right={
           <div className="flex items-center gap-1.5">
-            {isDirectusInstalled && (
-              <button
-                type="button"
-                onClick={handleOpenDirectusSync}
-                title="Sync from Directus CMS"
-                className="px-1.5 py-0.5 text-[10px] font-semibold cut-corners bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] hover:bg-[var(--accent)] hover:text-[var(--accent-fg,#000)] text-[var(--text-secondary)] transition-colors cursor-pointer flex items-center gap-1 border-none"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#6644ff] inline-block" />
-                Directus
-              </button>
+            {cmsMode === 'local' ? (
+              <>
+                {isDirectusInstalled && (
+                  <button
+                    type="button"
+                    onClick={handleOpenDirectusSync}
+                    title="Sync from Directus CMS"
+                    className="px-1.5 py-0.5 text-[10px] font-semibold cut-corners bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] hover:bg-[var(--accent)] hover:text-[var(--accent-fg,#000)] text-[var(--text-secondary)] transition-colors cursor-pointer flex items-center gap-1 border-none"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6644ff] inline-block" />
+                    Directus
+                  </button>
+                )}
+                <AddButton onClick={handleCreateCollectionInline} title="New collection" />
+              </>
+            ) : (
+              <AddButton onClick={() => { setEditingApiSlug(undefined); setApiModalOpen(true); }} title="Add API Resource" />
             )}
-            <AddButton onClick={handleCreateCollectionInline} title="New collection" />
           </div>
         }
       >
         CMS
       </SectionLabel>
 
-      <CollectionListView
-        onClickCollection={handleClickCollection}
-        onNewCollection={handleCreateCollectionInline}
-        searchQuery={searchQuery}
-        renamingSlug={renamingSlug}
-        setRenamingSlug={setRenamingSlug}
+      {cmsMode === 'api' ? (
+        <ApiCollectionListView
+          onAddResource={() => { setEditingApiSlug(undefined); setApiModalOpen(true); }}
+          onEditResource={(slug) => { setEditingApiSlug(slug); setApiModalOpen(true); }}
+          searchQuery={searchQuery}
+        />
+      ) : (
+        <CollectionListView
+          onClickCollection={handleClickCollection}
+          onNewCollection={handleCreateCollectionInline}
+          searchQuery={searchQuery}
+          renamingSlug={renamingSlug}
+          setRenamingSlug={setRenamingSlug}
+        />
+      )}
+
+      <ApiResourceModal
+        isOpen={apiModalOpen}
+        onClose={() => setApiModalOpen(false)}
+        initialSlug={editingApiSlug}
+        onSaved={() => {
+          refresh();
+        }}
       />
     </div>
   );

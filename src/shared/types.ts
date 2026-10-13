@@ -299,6 +299,17 @@ export interface PaginationConfig {
   stateVar: string;
 }
 
+export interface CollectionQueryParam {
+  key: string;
+  value: string;
+  isExpression?: boolean;
+}
+
+export interface CollectionQueryConfig {
+  isApiMode?: boolean;
+  params: CollectionQueryParam[];
+}
+
 // ─── Localization / i18n ────────────────────────────────────────────────────
 
 export interface I18nConfig {

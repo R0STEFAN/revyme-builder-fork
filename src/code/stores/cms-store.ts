@@ -5,7 +5,27 @@ import { atom } from 'jotai';
 import { projectFS, projectVersionAtom } from '../project/project-fs';
 import { activeLocaleAtom, isDefaultLocaleAtom } from './locale-store';
 import { localizeCollections } from './cms-locale';
+import { loadCmsProjectConfig, type ApiCollectionConfig, type CmsProjectConfig } from '../project/cms-api-config';
 import type { CollectionSchema, CollectionItem } from '@/shared/types';
+
+// CMS project configuration derived from _meta/cms-api-config.json
+export const cmsProjectConfigAtom = atom<CmsProjectConfig>((get) => {
+  get(projectVersionAtom);
+  return loadCmsProjectConfig();
+});
+
+export const cmsModeAtom = atom<'local' | 'api'>((get) => {
+  return get(cmsProjectConfigAtom).mode;
+});
+
+export const apiCollectionsConfigAtom = atom<Map<string, ApiCollectionConfig>>((get) => {
+  const cfg = get(cmsProjectConfigAtom);
+  const map = new Map<string, ApiCollectionConfig>();
+  for (const [slug, col] of Object.entries(cfg.apiCollections)) {
+    map.set(slug, col);
+  }
+  return map;
+});
 
 // All collection schemas, keyed by slug — derived from ProjectFS
 export const collectionSchemasAtom = atom<Map<string, CollectionSchema>>((get) => {

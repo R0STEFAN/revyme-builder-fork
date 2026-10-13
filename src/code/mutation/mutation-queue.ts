@@ -176,7 +176,7 @@ import { filePathToSlug } from '../project/active-file-store';
 import { connectSlotInCode, disconnectSlotInCode, reorderSlotInCode, getAllSlotConnections } from '../generation/slot-ops';
 import {
   createCollectionListInCode, bindFieldInCode, unbindFieldInCode,
-  updateCollectionListConfigInCode,
+  updateCollectionListConfigInCode, updateCollectionQueryConfig,
 } from '../generation/cms-gen';
 import {
   bindTextExpressionInCode, bindHrefExpressionInCode,
@@ -556,6 +556,7 @@ export type Mutation =
   | { type: 'setListResponsiveConfig'; parentId: string; slug: string; config: ResponsiveListConfig; limit?: number | null; offset?: number | null; paginationVar?: string | null; variantArg?: string; vpWidths?: number[] }
   | { type: 'setPagination'; parentId: string; mode: 'loadMore' | 'infinite'; perPage: number }
   | { type: 'removePagination'; parentId: string }
+  | { type: 'updateCollectionQueryConfig'; parentId: string; queryConfig: import('@/shared/types').CollectionQueryConfig | null }
   /** Dynamic "Search Field" filter input: create a text page variable + a bound
    *  search <input> just before the list. The matching filter (valueSource:
    *  'searchField', valueVar) is added separately via updateCollectionConfig. */
@@ -3763,6 +3764,9 @@ function applyMutationCore(code: string, mutation: Mutation): string {
 
       case 'removePagination':
         return pruneOrphanedPaginationHooks(removePaginationInCode(code, mutation.parentId));
+
+      case 'updateCollectionQueryConfig':
+        return updateCollectionQueryConfig(code, mutation.parentId, mutation.queryConfig);
 
       case 'addCollectionSearchField':
         return addSearchFieldInCode(code, mutation.parentId, mutation.varName, mutation.frameId, mutation.fieldLabel, mutation.placeholder, !!mutation.isComponentFile, mutation.queryParam);

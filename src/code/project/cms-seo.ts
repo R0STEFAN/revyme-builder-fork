@@ -38,6 +38,7 @@
 
 import { parseLocalObjectFromCode } from '../generation/metadata-gen';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
+import { getApiCollection } from './cms-api-config';
 
 /** The SEO slots that can take a per-item binding.
  *
@@ -134,6 +135,24 @@ function inlineObject(entries: Array<[string, unknown]>): string {
   return `{ ${kept.map(([k, v]) => `${k}: ${literal(v)}`).join(', ')} }`;
 }
 
+export function serializeHeadersForCode(headers: Record<string, string> | undefined): string {
+  if (!headers || Object.keys(headers).length === 0) return '{}';
+  const entries: string[] = [];
+  for (const [k, v] of Object.entries(headers)) {
+    if (!v) continue;
+    if (v.includes('process.env.')) {
+      const replaced = v.replace(/process\.env\.([A-Za-z0-9_]+)/g, '${process.env.$1}');
+      entries.push(`${JSON.stringify(k)}: \`${replaced}\``);
+    } else if (v.includes('$')) {
+      const replaced = v.replace(/\$([A-Za-z0-9_]+)/g, '${process.env.$1}');
+      entries.push(`${JSON.stringify(k)}: \`${replaced}\``);
+    } else {
+      entries.push(`${JSON.stringify(k)}: ${JSON.stringify(v)}`);
+    }
+  }
+  return `{\n    ${entries.join(',\n    ')}\n  }`;
+}
+
 export interface BuildDetailWrapperInput {
   collection: string;
   /** Static values, used when a slot has no binding or the item's field is
@@ -158,7 +177,7 @@ export interface BuildDetailWrapperInput {
  */
 export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): string {
   const { collection, defaults = {}, bindings = {}, includeStaticParams } = input;
-  const varName = importVarName(collection);
+  const apiConfig = getApiCollection(collection);
 
   const defaultsLiteral = inlineObject([
     ['title', defaults.title],
@@ -177,6 +196,121 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
   const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
     ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
     : '';
+
+  if (apiConfig) {
+    const headersCode = serializeHeadersForCode(apiConfig.headers);
+    const revalidate = apiConfig.cacheMaxAge ?? 14400;
+
+    let slugParam = 'filter[slug][_eq]';
+    if (apiConfig.provider === 'baserow') slugParam = 'filter__slug__equal';
+    else if (apiConfig.provider === 'strapi') slugParam = 'filters[slug][$eq]';
+
+    const defaultQuery = new URLSearchParams();
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null) defaultQuery.set(k, String(v));
+      }
+    }
+    const defaultQueryStr = defaultQuery.toString();
+    const endpointBase = apiConfig.url;
+    const separator = endpointBase.includes('?') ? '&' : '?';
+    const baseWithDefaults = defaultQueryStr
+      ? `${endpointBase}${separator}${defaultQueryStr}`
+      : endpointBase;
+    const finalSeparator = baseWithDefaults.includes('?') ? '&' : '?';
+
+    const itemExtract = apiConfig.itemsKey
+      ? `json[${JSON.stringify(apiConfig.itemsKey)}]?.[0]`
+      : `(Array.isArray(json) ? json[0] : (json.data?.[0] ?? json.results?.[0]))`;
+
+    const itemsExtract = apiConfig.itemsKey
+      ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
+      : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
+
+    return `import PageClient from './page.client';
+import { notFound } from 'next/navigation';
+
+const seoDefaults = ${defaultsLiteral};
+
+const seoBindings = ${bindingsLiteral};
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
+  const res = await fetch(endpoint, {
+    headers: ${headersCode},
+    next: { revalidate: ${revalidate} },
+  });
+  if (!res.ok) return seoDefaults;
+  const json = await res.json();
+  const item = ${itemExtract};
+  if (!item) return seoDefaults;
+
+  const bound = (slot: string) => {
+    const field = (seoBindings as Record<string, string>)[slot];
+    if (!field || !item) return undefined;
+    const value = item[field];
+    return typeof value === 'string' && value ? value : undefined;
+  };
+  const pick = (slot: string, fallbackSlot?: string) =>
+    bound(slot) ?? (seoDefaults as any)[slot] ?? (fallbackSlot ? bound(fallbackSlot) ?? (seoDefaults as any)[fallbackSlot] : undefined) ?? undefined;
+
+  const title = pick('title');
+  const description = pick('description');
+  const ogImage = pick('ogImage');
+  const twitterImage = pick('twitterImage') ?? ogImage;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: pick('ogTitle', 'title'),
+      description: pick('ogDescription', 'description'),
+      images: ogImage ? [ogImage] : [],
+    },
+    twitter: {
+      card: (seoDefaults as any).twitterCard || undefined,
+      title: pick('twitterTitle', 'title'),
+      description: pick('twitterDescription', 'description'),
+      image: twitterImage,
+    },
+    alternates: { canonical: (seoDefaults as any).canonical || undefined },${robots}
+  };
+}
+
+export async function generateStaticParams() {
+  const endpoint = \`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\`;
+  const res = await fetch(endpoint, {
+    headers: ${headersCode},
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  const items = ${itemsExtract};
+  return items
+    .filter((i: any) => i && (i.slug || i._slug))
+    .map((i: any) => ({ slug: String(i.slug || i._slug) }));
+}
+
+export const dynamicParams = true;
+
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
+  const res = await fetch(endpoint, {
+    headers: ${headersCode},
+    next: { revalidate: ${revalidate} },
+  });
+  if (!res.ok) notFound();
+  const json = await res.json();
+  const item = ${itemExtract};
+  if (!item) notFound();
+
+  return <PageClient item={item} />;
+}
+`;
+  }
+
+  const varName = importVarName(collection);
 
   const staticParams = includeStaticParams
     ? `\nexport async function generateStaticParams() {

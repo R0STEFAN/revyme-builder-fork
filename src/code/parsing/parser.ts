@@ -449,6 +449,8 @@ export interface CanvasNode {
     offset?: number | null;
     /** Pagination (Load More / Infinite Scroll) — Phase 3. */
     pagination?: import('@/shared/types').PaginationConfig | null;
+    /** Server-side query parameter configuration for external API collections. */
+    queryConfig?: import('@/shared/types').CollectionQueryConfig | null;
     /** Responsive config (per-viewport / per-variant) — when the list was UPGRADED
      *  to the `__applyListConfig(slug, cfg)` + `useResponsiveListConfig(...)` shape.
      *  `filterGroup`/`sort`/`limit`/`offset` above hold the BASE; these hold the
@@ -2779,6 +2781,13 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
                   parsedPagination = { mode: m, perPage: parseInt(n, 10) || 1, stateVar: 'vis' + sanitized.charAt(0).toUpperCase() + sanitized.slice(1) };
                 }
               }
+              let parsedQueryConfig: import('@/shared/types').CollectionQueryConfig | null = null;
+              const queryAttr = getAttr(parentOpening.attributes, 'data-query-config');
+              if (queryAttr) {
+                try {
+                  parsedQueryConfig = JSON.parse(queryAttr);
+                } catch { /* skip */ }
+              }
               parentNode.collectionList = {
                 source,
                 itemVar,
@@ -2789,6 +2798,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
                 limit: parsedLimit,
                 offset: parsedOffset || null,
                 pagination: parsedPagination,
+                queryConfig: parsedQueryConfig,
                 responsive: responsiveCfg ? responsiveCfg.viewport : null,
                 variantConfigs: responsiveCfg ? responsiveCfg.variants : null,
               };
@@ -4238,12 +4248,45 @@ function extractMotionProps(attrs: (JSXAttribute | any)[], ctx: ParseCtx): Canva
   return motionProps;
 }
 
+function astNodeToValue(node: any): any {
+  if (!node) return null;
+  if (node.type === 'StringLiteral' || node.type === 'NumericLiteral' || node.type === 'BooleanLiteral') return node.value;
+  if (node.type === 'NullLiteral') return null;
+  if (node.type === 'ArrayExpression') return node.elements.map(astNodeToValue);
+  if (node.type === 'ObjectExpression') {
+    const obj: Record<string, any> = {};
+    for (const prop of node.properties) {
+      if (prop.type === 'ObjectProperty') {
+        const key = prop.key.type === 'Identifier' ? prop.key.name :
+                    prop.key.type === 'StringLiteral' ? prop.key.value :
+                    prop.key.type === 'NumericLiteral' ? String(prop.key.value) : null;
+        if (key != null) {
+          obj[key] = astNodeToValue(prop.value);
+        }
+      }
+    }
+    return obj;
+  }
+  return null;
+}
+
 function getAttr(attrs: (JSXAttribute | any)[], name: string): string | null {
   for (const attr of attrs) {
     if (attr.type === 'JSXAttribute' && attr.name?.name === name) {
       if (attr.value?.type === 'StringLiteral') return attr.value.value;
-      if (attr.value?.type === 'JSXExpressionContainer' && attr.value.expression.type === 'StringLiteral') {
-        return attr.value.expression.value;
+      if (attr.value?.type === 'JSXExpressionContainer') {
+        if (attr.value.expression.type === 'StringLiteral') {
+          return attr.value.expression.value;
+        }
+        if (attr.value.expression.type === 'CallExpression'
+            && attr.value.expression.callee?.type === 'MemberExpression'
+            && attr.value.expression.callee.property?.type === 'Identifier'
+            && attr.value.expression.callee.property.name === 'stringify') {
+          try {
+            const val = astNodeToValue(attr.value.expression.arguments?.[0]);
+            if (val !== null && val !== undefined) return JSON.stringify(val);
+          } catch { /* skip */ }
+        }
       }
     }
   }

@@ -988,3 +988,34 @@ export function extractCollectionSlug(content: string, mapDotIdx: number): strin
   const span = extractCollectionSlugSpan(content, mapDotIdx);
   return span ? span.slug : null;
 }
+
+/**
+ * Injects, updates, or removes `data-query-config={JSON.stringify(queryConfig)}`
+ * on the collection list container element identified by `parentId`.
+ */
+export function updateCollectionQueryConfig(
+  code: string,
+  parentId: string,
+  queryConfig: import('@/shared/types').CollectionQueryConfig | null,
+): string {
+  const elStart = findJSXElementByDataId(code, parentId);
+  if (elStart === -1) return code;
+
+  const tagClose = findTagClose(code, elStart + 1);
+  if (tagClose === -1) return code;
+
+  const openingTag = code.slice(elStart, tagClose);
+  // Strip existing data-query-config
+  const cleanedOpening = openingTag
+    .replace(/\s*data-query-config=\{JSON\.stringify\([^)]+\)\}/g, '')
+    .replace(/\s*data-query-config=(?:"[^"]*"|'[^']*')/g, '');
+
+  let newOpening = cleanedOpening;
+  if (queryConfig && queryConfig.params && queryConfig.params.length > 0) {
+    const configJson = JSON.stringify(queryConfig);
+    newOpening += ` data-query-config={JSON.stringify(${configJson})}`;
+  }
+
+  trace.action('cms-gen:updateCollectionQueryConfig', { parentId, hasConfig: !!queryConfig });
+  return code.slice(0, elStart) + newOpening + code.slice(tagClose);
+}

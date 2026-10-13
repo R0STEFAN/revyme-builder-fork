@@ -21,6 +21,7 @@ vi.mock('@/backend/project-id', () => ({
 
 vi.mock('./export-project', () => ({
   exportProject: vi.fn(),
+  canExportFormat: vi.fn(() => true),
 }));
 
 describe('RightHeader in self-host mode (!CLOUD_ENABLED)', () => {

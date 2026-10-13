@@ -416,6 +416,30 @@ export interface SourceExport {
   failed: string[];
 }
 
+/** Generate .env.example documenting referenced environment variables without leaking secret values. */
+export function generateEnvExample(files: Record<string, string>): string | null {
+  const envKeys = new Set<string>();
+  const envLocal = files['.env.local'] || files['.env'];
+  if (envLocal) {
+    for (const line of envLocal.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx !== -1) {
+        envKeys.add(trimmed.slice(0, eqIdx).trim());
+      }
+    }
+  }
+  for (const content of Object.values(files)) {
+    const matches = content.matchAll(/process\.env\.([A-Za-z0-9_]+)/g);
+    for (const m of matches) {
+      if (m[1] && m[1] !== 'NODE_ENV') envKeys.add(m[1]);
+    }
+  }
+  if (envKeys.size === 0) return null;
+  return Array.from(envKeys).sort().map((k) => `${k}=your_${k.toLowerCase()}_here`).join('\n') + '\n';
+}
+
 export async function buildSourceExport(input: Record<string, string>, opts: SourceExportOptions): Promise<SourceExport> {
   const { files: localized, downloaded, failed } = await localizeUrlImports(
     prepareSiteFiles(input, { ssg: opts.ssg }),
@@ -423,7 +447,7 @@ export async function buildSourceExport(input: Record<string, string>, opts: Sou
   );
   const files: Record<string, string> = {};
   for (const [path, content] of Object.entries(localized)) {
-    if (!isBuilderMetadataPath(path)) files[path] = content;
+    if (!isBuilderMetadataPath(path) && path !== '.env.local' && path !== '.env') files[path] = content;
   }
   const slug = exportSlug(opts.name);
   if (!localized['package.json']) files['package.json'] = buildPackageJson(slug, opts.runtimeRange, opts.now ?? new Date());
@@ -433,6 +457,12 @@ export async function buildSourceExport(input: Record<string, string>, opts: Sou
   if (!localized['.gitignore']) files['.gitignore'] = GITIGNORE;
   if (!localized['scripts/optimize-images.mjs']) files['scripts/optimize-images.mjs'] = OPTIMIZE_IMAGES_SCRIPT;
   if (!localized['lib/image-utils.ts']) files['lib/image-utils.ts'] = IMAGE_UTILS_TS;
+
+  if (!localized['.env.example']) {
+    const envExample = generateEnvExample(input);
+    if (envExample) files['.env.example'] = envExample;
+  }
+
   return { files, filename: `${slug}.zip`, downloaded, failed };
 }
 

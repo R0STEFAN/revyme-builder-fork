@@ -28,8 +28,9 @@ import { getCollectionSchema } from './cms-ops';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { rootMountBlockedBy } from './cms-root-mount';
-import { buildCmsDetailServerWrapper, defaultBindings } from './cms-seo';
+import { buildCmsDetailServerWrapper, defaultBindings, serializeHeadersForCode } from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
+import { getApiCollection } from './cms-api-config';
 
 // ─── Field selection ────────────────────────────────────────────────────────
 
@@ -323,6 +324,36 @@ export function createCmsIndexPageFile(slug: string): string {
   // is created; the user can delete what they don't want instead of having
   // to manually bind every column.
   const cardFieldsJsx = renderAllFields(schema, 'item', 'card', headingField, bodyField);
+  const apiConfig = getApiCollection(slug);
+  let serverCode = SERVER_WRAPPER;
+  let clientSignature = `export default function Page() {`;
+  let clientMapExpr = `{${varName}.map((item, idx) => (`;
+
+  if (apiConfig) {
+    const headersCode = serializeHeadersForCode(apiConfig.headers);
+    const revalidate = apiConfig.cacheMaxAge ?? 14400;
+    const itemsExtract = apiConfig.itemsKey
+      ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
+      : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
+
+    serverCode = `import PageClient from './page.client';
+
+export const metadata = {};
+
+export default async function Page() {
+  const res = await fetch(\`${apiConfig.url}\`, {
+    headers: ${headersCode},
+    next: { revalidate: ${revalidate} },
+  });
+  const json = res.ok ? await res.json() : [];
+  const items = ${itemsExtract};
+  return <PageClient items={items} />;
+}
+`;
+    clientSignature = `export default function Page({ items: serverItems }: { items?: any[] } = {}) {
+  const items = serverItems ?? ${varName};`;
+    clientMapExpr = `{items.map((item, idx) => (`;
+  }
 
   const code = `'use client';
 
@@ -332,7 +363,7 @@ import React from 'react';
 import Link from 'next/link';
 import ${varName} from '@/cms/${slug}.json';
 
-export default function Page() {
+${clientSignature}
   return (
     <div data-id="root" data-name="${pageName}" style={{
       position: 'relative', width: '100%',
@@ -361,7 +392,7 @@ export default function Page() {
         order: '1', flex: '0 0 auto',
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px'
       }}>
-      {${varName}.map((item, idx) => (
+      ${clientMapExpr}
         <Link data-id="card" data-name="Card" key={idx} data-cms-nav="row" href={${cmsNavHrefExpr(slug, collectionVarName(slug), 'row')}} style={{
           position: 'relative',
           display: 'flex', flexDirection: 'column', gap: '12px',
@@ -379,7 +410,7 @@ ${cardFieldsJsx}
   );
 }`;
 
-  projectFS.writeFile(serverPath, SERVER_WRAPPER);
+  projectFS.writeFile(serverPath, serverCode);
   projectFS.writeFile(clientPath, code);
   trace.action('cms-page-ops:create-index', { serverPath, clientPath, slug, headingField, bodyField, fieldCount: schema?.fields.length });
   return clientPath;
@@ -481,6 +512,15 @@ export function createCmsDetailPageFile(
   // emitted comment literally contained "doesn't").
   const fieldsJsx = renderAllFields(schema, 'item', 'detail', headingField, bodyField);
 
+  const apiConfig = getApiCollection(slug);
+  const pageExportSignature = apiConfig
+    ? `export default function Page({ item: serverItem }: { item?: any } = {}) {
+  const params = useParams();
+  const item = serverItem ?? (${varName}.find((i) => (i.slug || i._slug) === params?.slug) ?? ${varName}[0]);`
+    : `export default function Page() {
+  const params = useParams();
+  const item = ${varName}.find((i) => i._slug === params?.slug) ?? ${varName}[0];`;
+
   const code = `'use client';
 
 ${CANVAS_CONFIG_BLOCK}
@@ -494,9 +534,7 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import ${varName} from '@/cms/${slug}.json';
 
-export default function Page() {
-  const params = useParams();
-  const item = ${varName}.find((i) => i._slug === params?.slug) ?? ${varName}[0];
+${pageExportSignature}
   return (
     <div data-id="root" key={String(params?.slug ?? '')} data-name="${pageName}" style={{
       position: 'relative', width: '100%',

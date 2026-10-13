@@ -8,7 +8,7 @@
 //   - The main render() effect with file-switch detection (forceRender)
 //   - The viewport-headers render effect (re-fires on iframeRenderTick)
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import {
   nodesAtom, codeAtom, canvasInteractingAtom,
@@ -44,8 +44,82 @@ import {
 import { getCanvasRenderer } from '../CanvasRenderer';
 import { trace } from '@/shared/debug-trace';
 import type { PostMessageBridge } from '@/canvas-sandbox/bridge-host';
-import type { ViewportConfig, SnapGuide, SpacingGuide } from '@/shared/types';
+import type { ViewportConfig, SnapGuide, SpacingGuide, CollectionQueryConfig } from '@/shared/types';
 import type { AddViewportMenuState } from '../ui/AddViewportMenu';
+import { getApiCollection, type ApiCollectionConfig } from '@/code/project/cms-api-config';
+import { getEnvVariables } from '@/editor/left-toolbar/panels/cms/ApiResourceModal';
+
+/** Safely evaluate expression like `params.category` or `params.category || "all"` against route params. */
+export function evaluateParamExpression(expr: string, params: Record<string, string>): string {
+  if (!expr || !expr.trim()) return '';
+  const trimmed = expr.trim();
+  try {
+    const fn = new Function('params', `with({ params }) { return (${trimmed}); }`);
+    const val = fn(params || {});
+    return val !== undefined && val !== null ? String(val) : '';
+  } catch {
+    // Fallback: simple lookup
+    const match = trimmed.match(/^params\.([a-zA-Z0-9_]+)$/);
+    if (match && params && params[match[1]] !== undefined) {
+      return String(params[match[1]]);
+    }
+    return '';
+  }
+}
+
+/** Evaluate all parameters in a CollectionQueryConfig against current route parameters. */
+export function evaluateQueryParamExpressions(
+  queryConfig: CollectionQueryConfig | undefined,
+  routeParams: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!queryConfig || !Array.isArray(queryConfig.params)) return result;
+  for (const p of queryConfig.params) {
+    if (!p.key) continue;
+    if (p.isExpression) {
+      result[p.key] = evaluateParamExpression(p.value, routeParams);
+    } else {
+      result[p.key] = p.value ?? '';
+    }
+  }
+  return result;
+}
+
+/** Construct complete URL with defaultParams and evaluated query parameters. */
+export function resolveApiEndpointWithParams(
+  apiConfig: ApiCollectionConfig,
+  resolvedParams: Record<string, string>,
+): string {
+  try {
+    const url = new URL(apiConfig.url);
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+      }
+    }
+    for (const [k, v] of Object.entries(resolvedParams)) {
+      if (v !== undefined && v !== null && v !== '') {
+        url.searchParams.set(k, String(v));
+      }
+    }
+    return url.toString();
+  } catch {
+    const query = new URLSearchParams();
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null) query.set(k, String(v));
+      }
+    }
+    for (const [k, v] of Object.entries(resolvedParams)) {
+      if (v !== undefined && v !== null && v !== '') {
+        query.set(k, String(v));
+      }
+    }
+    const qStr = query.toString();
+    if (!qStr) return apiConfig.url;
+    return apiConfig.url.includes('?') ? `${apiConfig.url}&${qStr}` : `${apiConfig.url}?${qStr}`;
+  }
+}
 
 export interface UseRendererSyncOptions {
   activeViewports: ViewportConfig[];
@@ -130,6 +204,72 @@ export function useRendererSync(
   useEffect(() => {
     setPreviewRouteParams(activeRouteParams);
   }, [activeRouteParams]);
+
+  const [dynamicApiData, setDynamicApiData] = useState<Record<string, any[]>>({});
+
+  // Background fetch for API CMS collections with dynamic query parameter expressions
+  useEffect(() => {
+    let cancelled = false;
+    for (const node of nodes.values()) {
+      if (!node.collectionList?.source || !node.collectionList.queryConfig) continue;
+      const source = node.collectionList.source;
+      const apiConfig = getApiCollection(source);
+      if (!apiConfig) continue;
+
+      const hasExpressions = node.collectionList.queryConfig.params.some(p => p.isExpression);
+      if (!hasExpressions) continue;
+
+      const resolvedParams = evaluateQueryParamExpressions(node.collectionList.queryConfig, activeRouteParams);
+      const fullUrl = resolveApiEndpointWithParams(apiConfig, resolvedParams);
+
+      (async () => {
+        try {
+          const envVars = getEnvVariables();
+          const resolvedHeaders: Record<string, string> = {};
+          for (const [k, v] of Object.entries(apiConfig.headers || {})) {
+            let replaced = v;
+            for (const [envKey, envVal] of Object.entries(envVars)) {
+              replaced = replaced.split(`process.env.${envKey}`).join(envVal).split(`$${envKey}`).join(envVal);
+            }
+            resolvedHeaders[k] = replaced;
+          }
+
+          const res = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: fullUrl,
+              method: apiConfig.method || 'GET',
+              headers: resolvedHeaders,
+            }),
+          });
+          if (!res.ok || cancelled) return;
+          const data = await res.json();
+          let items: any[] = [];
+          if (apiConfig.itemsKey && Array.isArray(data[apiConfig.itemsKey])) {
+            items = data[apiConfig.itemsKey];
+          } else if (Array.isArray(data)) {
+            items = data;
+          } else if (Array.isArray(data.data)) {
+            items = data.data;
+          } else if (Array.isArray(data.results)) {
+            items = data.results;
+          } else if (Array.isArray(data.items)) {
+            items = data.items;
+          }
+          if (!cancelled && items.length > 0) {
+            setDynamicApiData(prev => ({ ...prev, [source]: items }));
+          }
+        } catch {
+          // Ignore network errors in background preview
+        }
+      })();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nodes, activeRouteParams]);
 
 
   const setSelectedIds = useSetAtom(selectedIdsAtom);
@@ -305,7 +445,10 @@ export function useRendererSync(
       // placeholder for every collection list.
       cmsCollections: {
         schemas: Object.fromEntries(cmsSchemas),
-        data: Object.fromEntries(cmsData),
+        data: {
+          ...Object.fromEntries(cmsData),
+          ...dynamicApiData,
+        },
       },
       previewRouteParams: activeRouteParams,
     };
@@ -347,7 +490,7 @@ export function useRendererSync(
     // re-renders the canvas immediately (otherwise the panel would update
     // but ghost copies on canvas would stay stale until another mutation
     // triggered a render).
-  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeRouteParams, activeFilePath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeRouteParams, activeFilePath, dynamicApiData]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // ─── Viewport headers render effect ─────────────────────────────────────

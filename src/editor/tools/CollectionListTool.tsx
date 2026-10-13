@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useAtomValue } from 'jotai';
-import { collectionSchemasAtom } from '@/code/stores/cms-store';
+import { collectionSchemasAtom, apiCollectionsConfigAtom } from '@/code/stores/cms-store';
 import { useControl } from '../controls/ControlProvider';
 import { ToolSection, ToolSelect, ToolInput, ControlLabel, ControlActionRow } from '../controls';
 import { queueMutation, flushNow, syncQueueCode } from '@/code/mutation/mutation-queue';
@@ -16,12 +16,14 @@ import { paginationStateVar } from '@/code/generation/cms-pagination-gen';
 import { SEARCH_FIELD_PLACEHOLDER } from '@/code/generation/cms-search-field-gen';
 import { parsePageVariables } from '@/code/features/page-variables';
 import type { ResponsiveListConfig } from '@/code/generation/cms-responsive-gen';
-import type { FilterConfig, FilterGroup, SortConfig, CollectionSchema, PaginationConfig } from '@/shared/types';
+import type { FilterConfig, FilterGroup, SortConfig, CollectionSchema, PaginationConfig, CollectionQueryConfig, CollectionQueryParam } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import FilterControl from './CollectionList/FilterControl';
 import SortControl from './CollectionList/SortControl';
 import { COLLECTION_VALUE_CLS, fieldsForSortFilter } from './CollectionList/cms-filter-utils';
 import PaginationControl from './CollectionList/PaginationControl';
+import ExpressionBoundPill from '@/editor/controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '@/editor/ui/ExpressionEditorPopup';
 
 // Mirrors the Animation/Layout tool add-dropdown item styling.
 const ADD_ITEM = 'group flex items-center mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer bg-transparent hover:!bg-[var(--accent)] border-none whitespace-nowrap';
@@ -135,6 +137,7 @@ export default function CollectionListTool() {
       initialLimit={initLimit != null ? String(initLimit) : ''}
       initialOffset={initOffset != null && initOffset > 0 ? String(initOffset) : ''}
       pagination={pagination ?? null}
+      queryConfig={cl.queryConfig ?? null}
     />
   );
 }
@@ -166,9 +169,160 @@ interface InnerProps {
   initialLimit: string;
   initialOffset: string;
   pagination: PaginationConfig | null;
+  queryConfig: CollectionQueryConfig | null;
 }
 
-function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKey, variantArg, vpWidths, baseFilterGroup, baseSort, responsive, variantConfigs, initialFilters, initialCombinator, initialSort, initialLimit, initialOffset, pagination }: InnerProps) {
+// ─── Query Parameters Control (API Mode) ──────────────────────────────────────
+
+function QueryParametersControl({
+  queryConfig,
+  onChange,
+  collectionSlug,
+}: {
+  queryConfig: CollectionQueryConfig | null;
+  onChange: (cfg: CollectionQueryConfig | null) => void;
+  collectionSlug: string;
+}) {
+  const [params, setParams] = useState<CollectionQueryParam[]>(() => queryConfig?.params ?? []);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setParams(queryConfig?.params ?? []);
+  }, [queryConfig]);
+
+  const commitParams = (newParams: CollectionQueryParam[]) => {
+    setParams(newParams);
+    onChange({
+      isApiMode: true,
+      params: newParams,
+    });
+  };
+
+  const handleAddParam = () => {
+    const next = [...params, { key: '', value: '', isExpression: false }];
+    commitParams(next);
+  };
+
+  const handleRemoveParam = (index: number) => {
+    const next = params.filter((_, i) => i !== index);
+    commitParams(next);
+  };
+
+  const handleKeyChange = (index: number, key: string) => {
+    const next = [...params];
+    next[index] = { ...next[index], key };
+    commitParams(next);
+  };
+
+  const handleValueChange = (index: number, value: string) => {
+    const next = [...params];
+    next[index] = { ...next[index], value, isExpression: false };
+    commitParams(next);
+  };
+
+  const handleApplyExpression = (expr: string) => {
+    if (editingIndex === null) return;
+    const next = [...params];
+    next[editingIndex] = { ...next[editingIndex], value: expr, isExpression: true };
+    commitParams(next);
+    setEditingIndex(null);
+  };
+
+  const handleClearExpression = (index: number) => {
+    const next = [...params];
+    next[index] = { ...next[index], value: '', isExpression: false };
+    commitParams(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 mt-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase text-[var(--text-disabled)] tracking-wider">
+          Query Parameters (Backend)
+        </span>
+        <button
+          type="button"
+          onClick={handleAddParam}
+          className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer font-medium"
+        >
+          + Add Parameter
+        </button>
+      </div>
+
+      {params.length === 0 ? (
+        <p className="text-[10px] text-[var(--text-disabled)] italic py-1">
+          No query parameters set. All items from the endpoint will be rendered.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {params.map((p, i) => (
+            <div key={i} className="flex items-center gap-1.5 w-full">
+              {/* Key input */}
+              <input
+                type="text"
+                value={p.key}
+                onChange={(e) => handleKeyChange(i, e.target.value)}
+                placeholder="param key (e.g. limit)"
+                className="w-1/2 h-[var(--control-height)] px-1.5 text-xs bg-[var(--grid-line)] border border-[var(--control-border)] text-[var(--text-primary)] cut-corners"
+              />
+
+              {/* Value input or ExpressionBoundPill */}
+              <div className="w-1/2 flex items-center gap-1">
+                {p.isExpression ? (
+                  <div className="flex-1 min-w-0">
+                    <ExpressionBoundPill
+                      expression={p.value}
+                      onEdit={() => setEditingIndex(i)}
+                      onClear={() => handleClearExpression(i)}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={p.value}
+                      onChange={(e) => handleValueChange(i, e.target.value)}
+                      placeholder="value"
+                      className="w-full h-[var(--control-height)] px-1.5 text-xs bg-[var(--grid-line)] border border-[var(--control-border)] text-[var(--text-primary)] cut-corners"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingIndex(i)}
+                      title="Bind Route Parameter or Expression"
+                      className="shrink-0 px-1 py-1 text-[10px] font-bold rounded bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/40 cursor-pointer font-mono"
+                    >
+                      fx
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveParam(i)}
+                  className="text-[var(--text-disabled)] hover:text-red-400 p-0.5 cursor-pointer shrink-0"
+                  title="Remove parameter"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editingIndex !== null && (
+        <ExpressionEditorPopup
+          isOpen={true}
+          onClose={() => setEditingIndex(null)}
+          onApply={handleApplyExpression}
+          initialExpression={params[editingIndex]?.value || ''}
+          collectionSlug={collectionSlug}
+        />
+      )}
+    </div>
+  );
+}
+
+function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKey, variantArg, vpWidths, baseFilterGroup, baseSort, responsive, variantConfigs, initialFilters, initialCombinator, initialSort, initialLimit, initialOffset, pagination, queryConfig }: InnerProps) {
   // Seed local state from the parser's read-back so the panel reflects
   // what's actually in the JSX. Re-mount key in the wrapper resets these
   // when the user switches source — fresh slate per collection.
@@ -470,10 +624,20 @@ function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKe
     forceCanvasRender();
   }, [nodeId]);
 
+  const apiCollections = useAtomValue(apiCollectionsConfigAtom);
+  const isApiCollection = apiCollections.has(source);
+
+  const handleQueryConfigChange = useCallback((newConfig: CollectionQueryConfig | null) => {
+    trace.action('collection-list-tool:update-query-config', { nodeId, newConfig });
+    queueMutation({ type: 'updateCollectionQueryConfig', parentId: nodeId, queryConfig: newConfig });
+    flushNow();
+    forceCanvasRender();
+  }, [nodeId]);
+
   return (
     <ToolSection
       title="Collection List"
-      action={<ContentAddMenu showLimit={showLimit} showOffset={showOffset} onAdd={(w) => (w === 'limit' ? setShowLimit(true) : setShowOffset(true))} />}
+      action={!isApiCollection ? <ContentAddMenu showLimit={showLimit} showOffset={showOffset} onAdd={(w) => (w === 'limit' ? setShowLimit(true) : setShowOffset(true))} /> : undefined}
     >
       {/* Source — ToolSelect directly (matches the Filters/Sorting/Pagination
           value-column width; the old gap-2 wrapper made it a few px narrower). */}
@@ -486,55 +650,66 @@ function CollectionListToolInner({ nodeId, source, schema, schemas, axis, axisKe
           className={COLLECTION_VALUE_CLS}
           options={collectionSlugs.map(s => {
             const sch = schemas.get(s);
-            return { value: s, label: sch?.name ?? s };
+            const isApi = apiCollections.has(s);
+            return { value: s, label: (sch?.name ?? s) + (isApi ? ' (API)' : '') };
           })}
         />
       </div>
 
-      {/* Filters — popup with Match All/Any + addable type-aware condition rows. */}
-      <FilterControl
-        schema={schema}
-        filterGroup={filters.length > 0 ? { combinator, filters } : null}
-        onChange={handleFilterGroupChange}
-        overridden={filterOverridden}
-        onResetOverride={filterOverridden ? resetFilterOverride : undefined}
-        allowDynamic={axis === 'base' && !variantArg}
-        onAddSearchField={handleAddSearchField}
-      />
+      {isApiCollection ? (
+        <QueryParametersControl
+          queryConfig={queryConfig}
+          onChange={handleQueryConfigChange}
+          collectionSlug={source}
+        />
+      ) : (
+        <>
+          {/* Filters — popup with Match All/Any + addable type-aware condition rows. */}
+          <FilterControl
+            schema={schema}
+            filterGroup={filters.length > 0 ? { combinator, filters } : null}
+            onChange={handleFilterGroupChange}
+            overridden={filterOverridden}
+            onResetOverride={filterOverridden ? resetFilterOverride : undefined}
+            allowDynamic={axis === 'base' && !variantArg}
+            onAddSearchField={handleAddSearchField}
+          />
 
-      {/* Sort — popup with N type-aware sort rules (precedence = order). */}
-      <SortControl
-        schema={schema}
-        sort={sort}
-        onChange={handleSortChange}
-        overridden={sortOverridden}
-        onResetOverride={sortOverridden ? resetSortOverride : undefined}
-      />
+          {/* Sort — popup with N type-aware sort rules (precedence = order). */}
+          <SortControl
+            schema={schema}
+            sort={sort}
+            onChange={handleSortChange}
+            overridden={sortOverridden}
+            onResetOverride={sortOverridden ? resetSortOverride : undefined}
+          />
 
-      {/* Pagination — Load More / Infinite Scroll. PRIMARY-ONLY (add/remove on the
-          primary; read-only on a replica/variant, where it only appears if set on primary). */}
-      <PaginationControl pagination={pagination} onSet={handleSetPagination} onRemove={handleRemovePagination} editable={isPrimaryContext} />
+          {/* Pagination — Load More / Infinite Scroll. PRIMARY-ONLY (add/remove on the
+              primary; read-only on a replica/variant, where it only appears if set on primary). */}
+          <PaginationControl pagination={pagination} onSet={handleSetPagination} onRemove={handleRemovePagination} editable={isPrimaryContext} />
 
-      {/* Limit to — added via the section + (hidden by default). */}
-      {showLimit && (
-        <div className="flex items-center justify-between w-full">
-          <ControlLabel label="Limit to" property="collectionLimit" plain />
-          <div className={`flex items-center gap-2 ${COLLECTION_VALUE_CLS}`}>
-            <ToolInput value={limit} onChange={handleLimitChange} className="!w-16 shrink-0" />
-            <ControlActionRow center onClick={removeLimit}>Remove</ControlActionRow>
-          </div>
-        </div>
-      )}
+          {/* Limit to — added via the section + (hidden by default). */}
+          {showLimit && (
+            <div className="flex items-center justify-between w-full">
+              <ControlLabel label="Limit to" property="collectionLimit" plain />
+              <div className={`flex items-center gap-2 ${COLLECTION_VALUE_CLS}`}>
+                <ToolInput value={limit} onChange={handleLimitChange} className="!w-16 shrink-0" />
+                <ControlActionRow center onClick={removeLimit}>Remove</ControlActionRow>
+              </div>
+            </div>
+          )}
 
-      {/* Start Offset — added via the section + (hidden by default). */}
-      {showOffset && (
-        <div className="flex items-center justify-between w-full">
-          <ControlLabel label="Start Offset" property="collectionOffset" plain />
-          <div className={`flex items-center gap-2 ${COLLECTION_VALUE_CLS}`}>
-            <ToolInput value={offset} onChange={handleOffsetChange} className="!w-16 shrink-0" />
-            <ControlActionRow center onClick={removeOffset}>Remove</ControlActionRow>
-          </div>
-        </div>
+          {/* Start Offset — added via the section + (hidden by default). */}
+          {showOffset && (
+            <div className="flex items-center justify-between w-full">
+              <ControlLabel label="Start Offset" property="collectionOffset" plain />
+              <div className={`flex items-center gap-2 ${COLLECTION_VALUE_CLS}`}>
+                <ToolInput value={offset} onChange={handleOffsetChange} className="!w-16 shrink-0" />
+                <ControlActionRow center onClick={removeOffset}>Remove</ControlActionRow>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </ToolSection>
   );
