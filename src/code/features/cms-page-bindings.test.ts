@@ -85,6 +85,41 @@ describe('applyDetailPageBindings', () => {
     expect(cloned.attrs!.alt).toBe('Alice');
   });
 
+  it('substitutes nested dot-notation fields into attrBindings and binding', () => {
+    const nodes = new Map<string, CanvasNode>([
+      ['avatar', makeNode({
+        id: 'avatar', type: 'img',
+        attrBindings: [
+          { property: 'src', field: 'img_file.id' },
+          { property: 'alt', field: 'author.name' },
+        ],
+      } as any)],
+    ]);
+    const out = applyDetailPageBindings(nodes, {
+      img_file: { id: '436f6e77-uuid', filename_disk: 'pic.webp' },
+      author: { name: 'Rost' },
+    });
+    const cloned = out.get('avatar')!;
+    expect(cloned.attrs!.src).toBe('436f6e77-uuid');
+    expect(cloned.attrs!.alt).toBe('Rost');
+  });
+
+  it('substitutes nested object directly into src extracting url/id/filename', () => {
+    const nodes = new Map<string, CanvasNode>([
+      ['avatar', makeNode({
+        id: 'avatar', type: 'img',
+        attrBindings: [
+          { property: 'src', field: 'img_file' },
+        ],
+      } as any)],
+    ]);
+    const out = applyDetailPageBindings(nodes, {
+      img_file: { id: '436f6e77-uuid', filename_disk: 'pic.webp' },
+    });
+    const cloned = out.get('avatar')!;
+    expect(cloned.attrs!.src).toBe('436f6e77-uuid');
+  });
+
   it('passes nodes without bindings through by reference', () => {
     const plain = makeNode({ id: 'plain' });
     const bound = makeNode({

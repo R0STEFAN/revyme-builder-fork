@@ -57,6 +57,20 @@ function applyBoundText(el: Element, value: string): void {
   }
 }
 
+/** Resolve a field value from bindingData, supporting dot-notation paths like 'img_file.id' */
+export function getNestedBindingValue(data: Record<string, any> | undefined | null, path: string | undefined): unknown {
+  if (!data || !path) return undefined;
+  if (path in data) return data[path];
+  if (!path.includes('.')) return data[path];
+  const parts = path.split('.');
+  let current: any = data;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
 /**
  * Apply ALL CMS bindings (text / style / attr) for ONE element from a collection
  * row, honoring per-viewport rebinds + unbind→default (`node.responsiveBindings`)
@@ -109,7 +123,7 @@ export function applyNodeCmsBindings(
     if (ov && 'value' in ov) value = ov.value; // unbind→default literal
     else {
       const field = (ov && 'field' in ov) ? ov.field : node.styleBindings?.find(b => b.styleProp === cssProp)?.field;
-      value = field ? bindingData[field] : undefined;
+      value = field ? getNestedBindingValue(bindingData, field) : undefined;
     }
     if (value !== undefined && value !== null && value !== '') {
       try { (el.style as any)[cssProp] = formatBoundStyleValue(cssProp, value); } catch { /* skip invalid */ }
@@ -126,7 +140,10 @@ export function applyNodeCmsBindings(
     if (vpText && 'value' in vpText) resolved = vpText.value;
     else {
       const field = (vpText && 'field' in vpText) ? vpText.field : textBaseField;
-      if (field !== undefined) { const v = bindingData[field]; if (v !== undefined) resolved = String(v ?? ''); }
+      if (field !== undefined) {
+        const v = getNestedBindingValue(bindingData, field);
+        if (v !== undefined) resolved = String(v ?? '');
+      }
     }
     if (resolved !== undefined) { applyBoundText(el, resolved); textApplied = true; }
   } else if (node.textExpression) {
@@ -157,7 +174,16 @@ export function applyNodeCmsBindings(
       if (ov && 'field' in ov) field = ov.field;
       else field = node.attrBindings?.find(b => b.property === attrName)?.field
         ?? ((node.binding && node.binding.property === attrName) ? node.binding.field : undefined);
-      if (field !== undefined) { const v = bindingData[field]; if (v !== undefined) resolved = String(v ?? ''); }
+      if (field !== undefined) {
+        const v = getNestedBindingValue(bindingData, field);
+        if (v !== undefined) {
+          if (typeof v === 'object' && v !== null) {
+            resolved = (v as any).url || (v as any).src || (v as any).id || (v as any).filename_disk || '';
+          } else {
+            resolved = String(v ?? '');
+          }
+        }
+      }
     }
     if (resolved === undefined) continue;
     if (attrName === 'src') { if (resolved) el.setAttribute('src', canvasImageSrc(resolved)); else el.removeAttribute('src'); }

@@ -65,6 +65,25 @@ function findSplitTextWrapper(el: any): any | null {
   return null;
 }
 
+/**
+ * Extract dot-separated member expression path rooted at `itemVar` (e.g. `item.title` -> "title",
+ * `item.img_file.id` -> "img_file.id"). Returns null if not rooted at itemVar.
+ */
+export function extractItemMemberPath(expr: any, itemVar: string): string | null {
+  if (!expr || expr.type !== 'MemberExpression') return null;
+  const parts: string[] = [];
+  let curr = expr;
+  while (curr && curr.type === 'MemberExpression') {
+    if (curr.property?.type !== 'Identifier') return null;
+    parts.unshift(curr.property.name);
+    curr = curr.object;
+  }
+  if (curr && curr.type === 'Identifier' && curr.name === itemVar) {
+    return parts.join('.');
+  }
+  return null;
+}
+
 function isInlineRunChild(c: any): boolean {
   if (!c || c.type !== 'JSXElement') return true; // text / expressions don't break inline-ness
   const opening = c.openingElement;
@@ -2193,13 +2212,12 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             }
           }
           // Detect {item.fieldName} text binding inside collection template
-          if (activeCtx && child.type === 'JSXExpressionContainer'
-              && child.expression.type === 'MemberExpression'
-              && child.expression.object.type === 'Identifier'
-              && (child.expression.object as any).name === activeCtx.itemVar
-              && child.expression.property.type === 'Identifier') {
-            binding = { field: (child.expression.property as any).name, property: 'text' };
-            trace.action('parser:cms-text-binding', { nodeId: id, field: binding.field, itemVar: activeCtx.itemVar });
+          if (activeCtx && child.type === 'JSXExpressionContainer') {
+            const memberPath = extractItemMemberPath(child.expression, activeCtx.itemVar);
+            if (memberPath) {
+              binding = { field: memberPath, property: 'text' };
+              trace.action('parser:cms-text-binding', { nodeId: id, field: binding.field, itemVar: activeCtx.itemVar });
+            }
           }
           // Detect bare {propName} text — text content driven by a component
           // variable (e.g. `<p>{title}</p>` where Card has `title = 'Hello'`).
@@ -2315,17 +2333,16 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           for (const { attr: attrName, prop } of bindableAttrs) {
             for (const a of (opening.attributes as any[])) {
               if (a.type !== 'JSXAttribute' || a.name?.name !== attrName) continue;
-              if (a.value?.type === 'JSXExpressionContainer'
-                  && a.value.expression.type === 'MemberExpression'
-                  && a.value.expression.object.type === 'Identifier'
-                  && a.value.expression.object.name === activeCtx.itemVar
-                  && a.value.expression.property.type === 'Identifier') {
-                attrBindings.push({ field: a.value.expression.property.name, property: prop });
-                // Keep backward compat: first attr binding also goes in `binding` if no text binding
-                if (!binding) {
-                  binding = { field: a.value.expression.property.name, property: prop };
+              if (a.value?.type === 'JSXExpressionContainer') {
+                const memberPath = extractItemMemberPath(a.value.expression, activeCtx.itemVar);
+                if (memberPath) {
+                  attrBindings.push({ field: memberPath, property: prop });
+                  // Keep backward compat: first attr binding also goes in `binding` if no text binding
+                  if (!binding) {
+                    binding = { field: memberPath, property: prop };
+                  }
+                  trace.action('parser:cms-attr-binding', { nodeId: id, field: memberPath, property: prop, itemVar: activeCtx.itemVar });
                 }
-                trace.action('parser:cms-attr-binding', { nodeId: id, field: a.value.expression.property.name, property: prop, itemVar: activeCtx.itemVar });
               }
             }
           }
@@ -2335,9 +2352,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           if (a.type === 'JSXAttribute' && a.name?.name === 'href') {
             if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
               const expr = a.value.expression as any;
-              const isSimpleCmsField = activeCtx && expr.type === 'MemberExpression'
-                && expr.object?.type === 'Identifier' && expr.object.name === activeCtx.itemVar
-                && expr.property?.type === 'Identifier';
+              const isSimpleCmsField = activeCtx && Boolean(extractItemMemberPath(expr, activeCtx.itemVar));
               if (!isSimpleCmsField && expr.start != null && expr.end != null) {
                 hrefExpression = code.slice(expr.start, expr.end);
                 trace.action('parser:href-expression', { nodeId: id, hrefExpression });
@@ -2350,9 +2365,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           if (a.type === 'JSXAttribute' && a.name?.name === 'src') {
             if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
               const expr = a.value.expression as any;
-              const isSimpleCmsField = activeCtx && expr.type === 'MemberExpression'
-                && expr.object?.type === 'Identifier' && expr.object.name === activeCtx.itemVar
-                && expr.property?.type === 'Identifier';
+              const isSimpleCmsField = activeCtx && Boolean(extractItemMemberPath(expr, activeCtx.itemVar));
               if (!isSimpleCmsField && expr.start != null && expr.end != null) {
                 srcExpression = code.slice(expr.start, expr.end);
                 trace.action('parser:src-expression', { nodeId: id, srcExpression });
@@ -4378,12 +4391,10 @@ function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): A
       const key = prop.key.type === 'Identifier' ? prop.key.name :
                   prop.key.type === 'StringLiteral' ? prop.key.value : null;
       if (!key) continue;
-      // Direct: `backgroundColor: item.brand`
-      if (prop.value.type === 'MemberExpression'
-          && prop.value.object.type === 'Identifier'
-          && (prop.value.object as any).name === itemVar
-          && prop.value.property.type === 'Identifier') {
-        bindings.push({ styleProp: key, field: (prop.value.property as any).name });
+      // Direct: `backgroundColor: item.brand` or nested `item.author.color`
+      const directMemberPath = extractItemMemberPath(prop.value, itemVar);
+      if (directMemberPath) {
+        bindings.push({ styleProp: key, field: directMemberPath });
         continue;
       }
       // Template-literal wrapper: `backgroundImage: \`url(${item.photo})\``.
@@ -4395,11 +4406,9 @@ function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): A
       if (prop.value.type === 'TemplateLiteral'
           && prop.value.expressions.length === 1) {
         const inner = prop.value.expressions[0];
-        if (inner.type === 'MemberExpression'
-            && inner.object.type === 'Identifier'
-            && (inner.object as any).name === itemVar
-            && inner.property.type === 'Identifier') {
-          bindings.push({ styleProp: key, field: (inner.property as any).name });
+        const innerPath = extractItemMemberPath(inner, itemVar);
+        if (innerPath) {
+          bindings.push({ styleProp: key, field: innerPath });
         }
       }
     }
@@ -4425,10 +4434,11 @@ function extractVariantStyleBindings(
   const readVal = (n: any): { field: string } | { value: string } | null => {
     if (!n) return null;
     if (n.type === 'StringLiteral') return { value: n.value };
-    if (n.type === 'MemberExpression' && !n.computed && n.object?.type === 'Identifier' && n.object.name === itemVar && n.property?.type === 'Identifier') return { field: n.property.name };
+    const p = extractItemMemberPath(n, itemVar);
+    if (p) return { field: p };
     if (n.type === 'TemplateLiteral' && n.expressions.length === 1) {
-      const e = n.expressions[0];
-      if (e.type === 'MemberExpression' && !e.computed && e.object?.type === 'Identifier' && e.object.name === itemVar && e.property?.type === 'Identifier') return { field: e.property.name };
+      const ep = extractItemMemberPath(n.expressions[0], itemVar);
+      if (ep) return { field: ep };
     }
     return null;
   };
@@ -4481,12 +4491,10 @@ function extractPropBindings(attrs: (JSXAttribute | any)[], itemVar: string): Ar
     if (skipAttrs.has(propName) || propName.startsWith('data-')) continue;
     if (attr.value?.type !== 'JSXExpressionContainer') continue;
     const expr = attr.value.expression;
-    // Detect item.fieldName
-    if (expr.type === 'MemberExpression'
-        && expr.object.type === 'Identifier'
-        && (expr.object as any).name === itemVar
-        && expr.property.type === 'Identifier') {
-      bindings.push({ prop: propName, field: (expr.property as any).name });
+    // Detect item.fieldName or nested item.a.b
+    const propPath = extractItemMemberPath(expr, itemVar);
+    if (propPath) {
+      bindings.push({ prop: propName, field: propPath });
       continue;
     }
     // WHOLE-VALUE image binding: prop={`url(${item.field})`} — a Make Component /
@@ -4496,15 +4504,14 @@ function extractPropBindings(attrs: (JSXAttribute | any)[], itemVar: string): Ar
     // detection in extractStyles. Recorded with `urlWrap` so consumers that pass the
     // RAW field value to the prop (CodeComponentHost ghosts) re-apply the wrap.
     if (expr.type === 'TemplateLiteral'
-        && expr.expressions?.length === 1
-        && expr.expressions[0]?.type === 'MemberExpression'
-        && (expr.expressions[0] as any).object?.type === 'Identifier'
-        && (expr.expressions[0] as any).object.name === itemVar
-        && (expr.expressions[0] as any).property?.type === 'Identifier'
-        && String(expr.quasis?.[0]?.value?.raw ?? '').trimStart().toLowerCase().startsWith('url(')
-        && String(expr.quasis?.[1]?.value?.raw ?? '').trimEnd() === ')') {
-      bindings.push({ prop: propName, field: (expr.expressions[0] as any).property.name, urlWrap: true });
-      trace.action('parser:prop-binding-urlwrap', { prop: propName, field: (expr.expressions[0] as any).property.name });
+        && expr.expressions?.length === 1) {
+      const innerPath = extractItemMemberPath(expr.expressions[0], itemVar);
+      if (innerPath
+          && String(expr.quasis?.[0]?.value?.raw ?? '').trimStart().toLowerCase().startsWith('url(')
+          && String(expr.quasis?.[1]?.value?.raw ?? '').trimEnd() === ')') {
+        bindings.push({ prop: propName, field: innerPath, urlWrap: true });
+        trace.action('parser:prop-binding-urlwrap', { prop: propName, field: innerPath });
+      }
     }
   }
   return bindings;
@@ -4772,9 +4779,8 @@ function walkVariantCmsText(
   const read = (n: any): { field: string } | { value: string } | null => {
     if (!n) return null;
     if (n.type === 'StringLiteral') return { value: n.value };
-    if (n.type === 'MemberExpression' && !n.computed
-      && n.object?.type === 'Identifier' && n.object.name === itemVar
-      && n.property?.type === 'Identifier') { hasField = true; return { field: n.property.name }; }
+    const p = extractItemMemberPath(n, itemVar);
+    if (p) { hasField = true; return { field: p }; }
     return null; // identifier (prop var) / other → not a CMS conditional
   };
   let cursor: any = expr;

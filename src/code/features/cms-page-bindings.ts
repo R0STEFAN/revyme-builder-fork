@@ -17,6 +17,26 @@ import type { CanvasNode } from '../parsing/parser';
 import { formatBoundStyleValue } from './cms-style-format';
 import { trace } from '@/shared/debug-trace';
 
+function getNestedValue(obj: Record<string, unknown> | null, path: string): unknown {
+  if (!obj || !path) return undefined;
+  if (path in obj) return (obj as any)[path];
+  if (!path.includes('.')) return (obj as any)[path];
+  const parts = path.split('.');
+  let current: any = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function formatAttrValue(val: unknown): string {
+  if (typeof val === 'object' && val !== null) {
+    return (val as any).url || (val as any).src || (val as any).id || (val as any).filename_disk || '';
+  }
+  return String(val ?? '');
+}
+
 /**
  * Walk the node map and apply field substitutions for any node whose
  * parser-detected bindings reference fields present on `item`. Returns a
@@ -35,23 +55,25 @@ export function applyDetailPageBindings(
     let cloned: CanvasNode | null = null;
 
     // Text / single-attribute binding.
-    if (node.binding && item[node.binding.field] !== undefined) {
-      const resolved = String(item[node.binding.field] ?? '');
-      cloned = { ...node };
-      if (node.binding.property === 'text') {
-        cloned.textContent = resolved;
-      } else {
-        cloned.attrs = { ...cloned.attrs, [node.binding.property]: resolved };
+    if (node.binding) {
+      const rawVal = getNestedValue(item, node.binding.field);
+      if (rawVal !== undefined) {
+        cloned = { ...node };
+        if (node.binding.property === 'text') {
+          cloned.textContent = String(rawVal ?? '');
+        } else {
+          cloned.attrs = { ...cloned.attrs, [node.binding.property]: formatAttrValue(rawVal) };
+        }
       }
     }
 
     // Multi-attribute bindings (src + alt etc.).
     if (node.attrBindings) {
       for (const ab of node.attrBindings) {
-        if (item[ab.field] === undefined) continue;
-        const resolved = String(item[ab.field] ?? '');
+        const rawVal = getNestedValue(item, ab.field);
+        if (rawVal === undefined) continue;
         if (!cloned) cloned = { ...node };
-        cloned.attrs = { ...cloned.attrs, [ab.property]: resolved };
+        cloned.attrs = { ...cloned.attrs, [ab.property]: formatAttrValue(rawVal) };
       }
     }
 
@@ -62,8 +84,9 @@ export function applyDetailPageBindings(
     // detail-page substitution and per-item rendering stay byte-identical.
     if (node.styleBindings) {
       for (const sb of node.styleBindings) {
-        if (item[sb.field] === undefined) continue;
-        const resolved = formatBoundStyleValue(sb.styleProp, item[sb.field] ?? '');
+        const rawVal = getNestedValue(item, sb.field);
+        if (rawVal === undefined) continue;
+        const resolved = formatBoundStyleValue(sb.styleProp, (rawVal as any) ?? '');
         if (!cloned) cloned = { ...node };
         cloned.styles = { ...cloned.styles, [sb.styleProp]: resolved };
       }
@@ -80,15 +103,16 @@ export function applyDetailPageBindings(
     // dragged out of a NESTED collection list stays on its baked value.
     if (node.orphanBindings) {
       for (const ob of node.orphanBindings) {
-        if (item[ob.field] === undefined) continue;
+        const rawVal = getNestedValue(item, ob.field);
+        if (rawVal === undefined) continue;
         if (!cloned) cloned = { ...node };
         if (ob.prop === '__text') {
-          cloned.textContent = String(item[ob.field] ?? '');
+          cloned.textContent = String(rawVal ?? '');
         } else if (ob.prop.startsWith('__style.')) {
           const cssProp = ob.prop.slice('__style.'.length);
-          cloned.styles = { ...cloned.styles, [cssProp]: formatBoundStyleValue(cssProp, item[ob.field] ?? '') };
+          cloned.styles = { ...cloned.styles, [cssProp]: formatBoundStyleValue(cssProp, (rawVal as any) ?? '') };
         } else {
-          cloned.attrs = { ...cloned.attrs, [ob.prop]: String(item[ob.field] ?? '') };
+          cloned.attrs = { ...cloned.attrs, [ob.prop]: formatAttrValue(rawVal) };
         }
       }
     }

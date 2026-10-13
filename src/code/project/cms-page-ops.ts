@@ -332,6 +332,16 @@ export function createCmsIndexPageFile(slug: string): string {
   if (apiConfig) {
     const headersCode = serializeHeadersForCode(apiConfig.headers);
     const revalidate = apiConfig.cacheMaxAge ?? 14400;
+    const defaultQuery = new URLSearchParams();
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null && v !== '') defaultQuery.set(k, String(v));
+      }
+    }
+    const defaultQueryStr = defaultQuery.toString();
+    const fetchUrl = defaultQueryStr
+      ? `${apiConfig.url}${apiConfig.url.includes('?') ? '&' : '?'}${defaultQueryStr}`
+      : apiConfig.url;
     const itemsExtract = apiConfig.itemsKey
       ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
       : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
@@ -341,7 +351,7 @@ export function createCmsIndexPageFile(slug: string): string {
 export const metadata = {};
 
 export default async function Page() {
-  const res = await fetch(\`${apiConfig.url}\`, {
+  const res = await fetch(\`${fetchUrl}\`, {
     headers: ${headersCode},
     next: { revalidate: ${revalidate} },
   });

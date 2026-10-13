@@ -1290,6 +1290,33 @@ export default function Page() {
     expect(priceNode.binding!.field).toBe('price');
     expect(priceNode.binding!.property).toBe('text');
   });
+
+  test('detects nested {item.author.name} and src={item.img_file.filename_disk} bindings', () => {
+    const code = `
+import cardData from '@/cms/cardData.json';
+export default function Page() {
+  return (
+    <div data-id="root" style={{}}>
+      {cardData.map((item, idx) => (
+        <div data-id="card" key={idx} style={{}}>
+          <h3 data-id="card-author" style={{}}>{item.author.name}</h3>
+          <img data-id="card-img" src={item.img_file.filename_disk} alt={item.img_file.title} style={{}} />
+        </div>
+      ))}
+    </div>
+  );
+}`;
+    const nodes = parseJSXToNodes(code);
+    const authorNode = nodes.get('card-author')!;
+    expect(authorNode.binding).toBeDefined();
+    expect(authorNode.binding!.field).toBe('author.name');
+    expect(authorNode.binding!.property).toBe('text');
+
+    const imgNode = nodes.get('card-img')!;
+    expect(imgNode.attrBindings).toBeDefined();
+    expect(imgNode.attrBindings).toContainEqual({ property: 'src', field: 'img_file.filename_disk' });
+    expect(imgNode.attrBindings).toContainEqual({ property: 'alt', field: 'img_file.title' });
+  });
 });
 
 describe('Map system — isCollectionTemplate on children inside .map()', () => {

@@ -34,7 +34,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-import { ApiResourceModal, inferSchemaFromItems } from './ApiResourceModal';
+import { ApiResourceModal, inferSchemaFromItems, appendQueryParams } from './ApiResourceModal';
 
 describe('inferSchemaFromItems', () => {
   it('infers field types correctly from sample JSON array', () => {
@@ -73,6 +73,65 @@ describe('inferSchemaFromItems', () => {
     const descField = schema.fields.find(f => f.id === 'description');
     expect(descField?.type).toBe('textarea');
   });
+
+  it('infers nested object properties and recognizes image objects like Directus file', () => {
+    const sampleItems = [
+      {
+        id: 'item-1',
+        title: 'Tattoo Art',
+        img_file: {
+          id: '436f6e77-e4d1-451d-9a71-0b2a9e4c2588',
+          storage: 'local',
+          filename_disk: '436f6e77-e4d1-451d-9a71-0b2a9e4c2588.webp',
+          filename_download: 'IMG_0477.webp',
+          title: 'Img 0477',
+          type: 'image/webp',
+          width: 4284,
+          height: 5712,
+        },
+      },
+    ];
+
+    const schema = inferSchemaFromItems('tattoos', 'Tattoos', sampleItems);
+    expect(schema.slug).toBe('tattoos');
+
+    // Root fields
+    const parentImg = schema.fields.find(f => f.id === 'img_file');
+    expect(parentImg).toBeDefined();
+    expect(parentImg?.type).toBe('image');
+
+    // Nested fields
+    const nestedId = schema.fields.find(f => f.id === 'img_file.id');
+    expect(nestedId).toBeDefined();
+    expect(nestedId?.name).toBe('Img File → Id');
+    expect(nestedId?.type).toBe('text');
+
+    const nestedFilename = schema.fields.find(f => f.id === 'img_file.filename_disk');
+    expect(nestedFilename).toBeDefined();
+    expect(nestedFilename?.type).toBe('image');
+
+    const nestedWidth = schema.fields.find(f => f.id === 'img_file.width');
+    expect(nestedWidth).toBeDefined();
+    expect(nestedWidth?.type).toBe('number');
+  });
+});
+
+describe('appendQueryParams', () => {
+  it('appends query parameters cleanly to URL', () => {
+    const res = appendQueryParams('https://api.example.com/items', [
+      { key: 'fields', value: '*,img_file.*' },
+      { key: 'sort', value: '-id' },
+    ]);
+    expect(res).toBe('https://api.example.com/items?fields=*%2Cimg_file.*&sort=-id');
+  });
+
+  it('handles existing query parameters on URL', () => {
+    const res = appendQueryParams('https://api.example.com/items?limit=10', [
+      { key: 'fields', value: '*.*' },
+    ]);
+    expect(res).toContain('limit=10');
+    expect(res).toContain('fields=');
+  });
 });
 
 describe('ApiResourceModal', () => {
@@ -81,13 +140,19 @@ describe('ApiResourceModal', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders inputs and tests connection via /api/proxy', async () => {
+  it('renders inputs and tests connection via /api/proxy with query parameters', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         data: [
-          { id: 101, name: 'Dragon Tattoo', style: 'Irezumi' },
-          { id: 102, name: 'Koi Fish', style: 'Japanese' },
+          {
+            id: 101,
+            name: 'Dragon Tattoo',
+            img_file: {
+              id: 'uuid-1',
+              filename_disk: 'tattoo.webp',
+            },
+          },
         ],
       }),
     });
@@ -106,15 +171,25 @@ describe('ApiResourceModal', () => {
     fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/tattoos' } });
     fireEvent.blur(urlInput);
 
+    // Add Directus fields preset
+    const presetBtn = screen.getByRole('button', { name: /\+ directus fields \(\*\.\*\)/i });
+    fireEvent.click(presetBtn);
+
+    // Now modify the fields parameter to *,img_file.*
+    const valInput = screen.getByPlaceholderText('Value (e.g. *,img_file.*)');
+    fireEvent.change(valInput, { target: { value: '*,img_file.*' } });
+
     const testBtn = screen.getByRole('button', { name: /load data \/ test connection/i });
     fireEvent.click(testBtn);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/proxy', expect.any(Object));
+      expect(mockFetch).toHaveBeenCalledWith('/api/proxy', expect.objectContaining({
+        body: expect.stringContaining('fields=*%2Cimg_file.*'),
+      }));
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/loaded 2 items/i)).toBeTruthy();
+      expect(screen.getByText(/loaded 1 items/i)).toBeTruthy();
     });
 
     const saveBtn = screen.getByRole('button', { name: /save api collection/i });
@@ -129,5 +204,8 @@ describe('ApiResourceModal', () => {
     expect(config.mode).toBe('api');
     expect(config.apiCollections.tattoos).toBeDefined();
     expect(config.apiCollections.tattoos.url).toBe('https://api.example.com/items/tattoos');
+    expect(config.apiCollections.tattoos.defaultParams).toEqual({
+      fields: '*,img_file.*',
+    });
   });
 });

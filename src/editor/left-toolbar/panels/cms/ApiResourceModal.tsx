@@ -49,6 +49,68 @@ export function getEnvVariables(): Record<string, string> {
   return result;
 }
 
+export function formatFieldName(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export function inferFieldType(val: any, key: string): FieldDefinition['type'] {
+  if (typeof val === 'number') return 'number';
+  if (typeof val === 'boolean') return 'boolean';
+  if (typeof val === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}(T|\b)/.test(val)) return 'date';
+    if (/\.(png|jpe?g|webp|gif|svg|avif)($|\?)/i.test(val)) return 'image';
+    if (key.toLowerCase() === 'slug') return 'slug';
+    if (val.includes('\n') || val.length > 80) return 'textarea';
+    return 'text';
+  }
+  return 'text';
+}
+
+export function isLikelyImageField(key: string, val: any): boolean {
+  const lKey = key.toLowerCase();
+  if (
+    lKey.includes('img') ||
+    lKey.includes('image') ||
+    lKey.includes('photo') ||
+    lKey.includes('picture') ||
+    lKey.includes('avatar') ||
+    lKey.includes('logo') ||
+    lKey.includes('thumbnail') ||
+    lKey.includes('cover')
+  ) {
+    return true;
+  }
+  if (val && typeof val === 'object') {
+    if ('filename_disk' in val || 'filename_download' in val) return true;
+    if (typeof val.type === 'string' && val.type.startsWith('image/')) return true;
+    if (typeof val.mime_type === 'string' && val.mime_type.startsWith('image/')) return true;
+    if (typeof val.url === 'string' && /\.(png|jpe?g|webp|gif|svg|avif)($|\?)/i.test(val.url)) return true;
+  }
+  return false;
+}
+
+/** Append key/value query parameters to a URL */
+export function appendQueryParams(rawUrl: string, params: Array<{ key: string; value: string }>): string {
+  if (!params || params.length === 0) return rawUrl;
+  const valid = params.filter(p => p.key.trim().length > 0);
+  if (valid.length === 0) return rawUrl;
+
+  try {
+    const urlObj = new URL(rawUrl);
+    for (const p of valid) {
+      urlObj.searchParams.set(p.key.trim(), p.value);
+    }
+    return urlObj.toString();
+  } catch {
+    const sep = rawUrl.includes('?') ? '&' : '?';
+    const qs = valid.map(p => `${encodeURIComponent(p.key.trim())}=${encodeURIComponent(p.value)}`).join('&');
+    return `${rawUrl}${sep}${qs}`;
+  }
+}
+
 /** Infer CollectionSchema from an array of JSON objects */
 export function inferSchemaFromItems(slug: string, name: string, items: any[]): CollectionSchema {
   const fieldsMap = new Map<string, FieldDefinition>();
@@ -58,34 +120,42 @@ export function inferSchemaFromItems(slug: string, name: string, items: any[]): 
   for (const item of inspectItems) {
     if (!item || typeof item !== 'object') continue;
     for (const [key, val] of Object.entries(item)) {
-      if (fieldsMap.has(key)) continue;
-
-      let type: FieldDefinition['type'] = 'text';
-      if (typeof val === 'number') {
-        type = 'number';
-      } else if (typeof val === 'boolean') {
-        type = 'boolean';
-      } else if (typeof val === 'string') {
-        if (/^\d{4}-\d{2}-\d{2}(T|\b)/.test(val)) {
-          type = 'date';
-        } else if (/\.(png|jpe?g|webp|gif|svg|avif)($|\?)/i.test(val)) {
-          type = 'image';
-        } else if (key.toLowerCase() === 'slug') {
-          type = 'slug';
-        } else if (val.includes('\n') || val.length > 80) {
-          type = 'textarea';
+      if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+        // Nested object (e.g. Directus file object, Strapi relation, author object)
+        const isImg = isLikelyImageField(key, val);
+        if (!fieldsMap.has(key)) {
+          fieldsMap.set(key, {
+            id: key,
+            name: formatFieldName(key),
+            type: isImg ? 'image' : 'text',
+          });
+        } else if (isImg && fieldsMap.get(key)!.type !== 'image') {
+          fieldsMap.get(key)!.type = 'image';
         }
+
+        for (const [subKey, subVal] of Object.entries(val)) {
+          const nestedId = `${key}.${subKey}`;
+          if (!fieldsMap.has(nestedId)) {
+            let subType = inferFieldType(subVal, subKey);
+            if (subKey === 'filename_disk' || (typeof subVal === 'string' && /\.(png|jpe?g|webp|gif|svg|avif)($|\?)/i.test(subVal))) {
+              subType = 'image';
+            }
+            fieldsMap.set(nestedId, {
+              id: nestedId,
+              name: `${formatFieldName(key)} → ${formatFieldName(subKey)}`,
+              type: subType,
+            });
+          }
+        }
+        continue;
       }
 
-      const formattedName = key
-        .replace(/_/g, ' ')
-        .replace(/-/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
+      if (fieldsMap.has(key)) continue;
 
       fieldsMap.set(key, {
         id: key,
-        name: formattedName,
-        type,
+        name: formatFieldName(key),
+        type: inferFieldType(val, key),
       });
     }
   }
@@ -119,6 +189,7 @@ export function ApiResourceModal({
   const [headers, setHeaders] = useState<Array<{ key: string; value: string }>>([
     { key: 'Content-Type', value: 'application/json' },
   ]);
+  const [params, setParams] = useState<Array<{ key: string; value: string }>>([]);
   const [cacheMaxAge, setCacheMaxAge] = useState(14400);
   const [itemsKey, setItemsKey] = useState('');
 
@@ -146,6 +217,13 @@ export function ApiResourceModal({
         setHeaders(
           Object.entries(existing.headers).map(([k, v]) => ({ key: k, value: v }))
         );
+        if (existing.defaultParams) {
+          setParams(
+            Object.entries(existing.defaultParams).map(([k, v]) => ({ key: k, value: String(v) }))
+          );
+        } else {
+          setParams([]);
+        }
       }
     } else if (isOpen) {
       setName('');
@@ -156,6 +234,7 @@ export function ApiResourceModal({
       setCacheMaxAge(14400);
       setItemsKey('');
       setHeaders([{ key: 'Content-Type', value: 'application/json' }]);
+      setParams([]);
       setTestResult(null);
       setInferredSchema(null);
     }
@@ -171,16 +250,37 @@ export function ApiResourceModal({
   // Smart URL parser: if user pastes URL with query params
   const handleUrlChange = (rawUrl: string) => {
     setUrl(rawUrl);
-    // If name is empty, auto-guess slug from URL path
-    if (!name && rawUrl) {
+    if (rawUrl) {
       try {
         const parsed = new URL(rawUrl);
-        const segments = parsed.pathname.split('/').filter(Boolean);
-        const last = segments[segments.length - 1];
-        if (last) {
-          const autoName = last.charAt(0).toUpperCase() + last.slice(1);
-          setName(autoName);
-          setSlug(slugify(autoName));
+        // If name is empty, auto-guess slug from URL path
+        if (!name) {
+          const segments = parsed.pathname.split('/').filter(Boolean);
+          const last = segments[segments.length - 1];
+          if (last) {
+            const autoName = last.charAt(0).toUpperCase() + last.slice(1);
+            setName(autoName);
+            setSlug(slugify(autoName));
+          }
+        }
+        // If query parameters are present in pasted URL, extract them
+        if (parsed.searchParams.size > 0) {
+          const extracted: Array<{ key: string; value: string }> = [];
+          parsed.searchParams.forEach((val, key) => {
+            extracted.push({ key, value: val });
+          });
+          setParams(prev => {
+            const next = [...prev];
+            for (const item of extracted) {
+              const idx = next.findIndex(p => p.key === item.key);
+              if (idx !== -1) {
+                next[idx] = item;
+              } else {
+                next.push(item);
+              }
+            }
+            return next;
+          });
         }
       } catch {
         // Ignore invalid URL while typing
@@ -214,6 +314,35 @@ export function ApiResourceModal({
     toast.info(`Added Authorization header referencing env:${tokenEnvVar}`);
   };
 
+  const handleAddParam = () => {
+    setParams(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  const handleRemoveParam = (index: number) => {
+    setParams(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleParamChange = (index: number, field: 'key' | 'value', val: string) => {
+    setParams(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: val };
+      return copy;
+    });
+  };
+
+  const handleAddFieldsPreset = () => {
+    setParams(prev => {
+      const existingIdx = prev.findIndex(p => p.key === 'fields');
+      if (existingIdx !== -1) {
+        const copy = [...prev];
+        copy[existingIdx] = { key: 'fields', value: '*.*' };
+        return copy;
+      }
+      return [...prev, { key: 'fields', value: '*.*' }];
+    });
+    toast.info('Added Directus fields: *.* query parameter');
+  };
+
   // Test request via /api/proxy
   const handleTestConnection = async () => {
     if (!url) {
@@ -222,7 +351,8 @@ export function ApiResourceModal({
     }
     setTesting(true);
     setTestResult(null);
-    trace.action('api-resource:test-connection', { url, method });
+    const testUrl = appendQueryParams(url, params);
+    trace.action('api-resource:test-connection', { url: testUrl, method });
 
     try {
       const envVars = getEnvVariables();
@@ -243,7 +373,7 @@ export function ApiResourceModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url,
+          url: testUrl,
           method,
           headers: resolvedHeaders,
         }),
@@ -318,6 +448,13 @@ export function ApiResourceModal({
       }
     }
 
+    const paramsRecord: Record<string, string> = {};
+    for (const p of params) {
+      if (p.key.trim()) {
+        paramsRecord[p.key.trim()] = p.value.trim();
+      }
+    }
+
     const finalConfig: ApiCollectionConfig = {
       slug: finalSlug,
       name: name || finalSlug,
@@ -325,6 +462,7 @@ export function ApiResourceModal({
       url,
       method,
       headers: headersRecord,
+      defaultParams: Object.keys(paramsRecord).length > 0 ? paramsRecord : undefined,
       cacheMaxAge,
       itemsKey: itemsKey || undefined,
     };
@@ -423,6 +561,65 @@ export function ApiResourceModal({
                 placeholder="e.g. data or results"
                 text
               />
+            </div>
+          </div>
+
+          {/* Default Query Parameters Editor */}
+          <div className="flex flex-col gap-1.5 mt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Default Query Parameters</label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleAddFieldsPreset}
+                  className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer"
+                >
+                  + Directus fields (*.*)
+                </button>
+                <span className="text-[var(--text-disabled)]">•</span>
+                <button
+                  type="button"
+                  onClick={handleAddParam}
+                  className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer font-medium"
+                >
+                  + Add Param
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+              {params.length === 0 ? (
+                <div className="text-[11px] text-[var(--text-disabled)] italic py-0.5">
+                  No default query params (e.g. fields = *,img_file.*)
+                </div>
+              ) : (
+                params.map((p, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={p.key}
+                      onChange={e => handleParamChange(i, 'key', e.target.value)}
+                      placeholder="Param Name (e.g. fields)"
+                      className="w-2/5 bg-[var(--input-bg,rgba(255,255,255,0.05))] border border-[var(--border-light)] rounded px-1.5 py-1 text-[11px] text-[var(--text-primary)]"
+                    />
+                    <input
+                      type="text"
+                      value={p.value}
+                      onChange={e => handleParamChange(i, 'value', e.target.value)}
+                      placeholder="Value (e.g. *,img_file.*)"
+                      className="flex-1 bg-[var(--input-bg,rgba(255,255,255,0.05))] border border-[var(--border-light)] rounded px-1.5 py-1 text-[11px] text-[var(--text-primary)] font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveParam(i)}
+                      className="text-[var(--text-disabled)] hover:text-red-400 p-1 cursor-pointer"
+                      title="Remove Parameter"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
