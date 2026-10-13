@@ -45,24 +45,40 @@ describe('LocalServerManager', () => {
     });
     mockExecSync = vi.fn();
 
-    if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true });
-    }
+    const safeClean = () => {
+      try {
+        if (fs.existsSync(TEST_DIR)) {
+          fs.rmSync(TEST_DIR, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+        }
+      } catch {
+        // ignore Windows file lock delays
+      }
+    };
+
+    safeClean();
     fs.mkdirSync(TEST_BUILDS_DIR, { recursive: true });
+    const testPublicDir = path.join(TEST_DIR, 'public');
+    fs.mkdirSync(path.join(testPublicDir, 'fonts'), { recursive: true });
+    fs.writeFileSync(path.join(testPublicDir, 'fonts', 'test-font.woff2'), 'fake-font-content');
 
     manager = new LocalServerManager(TEST_BUILDS_DIR, {
       spawn: mockSpawn as any,
       exec: mockExec as any,
       execSync: mockExecSync as any,
       startupTimeoutMs: 1000,
+      publicDir: testPublicDir,
     });
   });
 
   afterEach(() => {
     manager.dispose();
     vi.restoreAllMocks();
-    if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    try {
+      if (fs.existsSync(TEST_DIR)) {
+        fs.rmSync(TEST_DIR, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      }
+    } catch {
+      // ignore
     }
   });
 
@@ -116,6 +132,7 @@ describe('LocalServerManager', () => {
       expect(fs.existsSync(path.join(targetDir, 'app/page.tsx'))).toBe(true);
       expect(fs.readFileSync(path.join(targetDir, 'app/page.tsx'), 'utf-8')).toContain('Home');
       expect(fs.existsSync(path.join(targetDir, 'public/favicon.ico'))).toBe(true);
+      expect(fs.existsSync(path.join(targetDir, 'public/fonts/test-font.woff2'))).toBe(true);
 
       // Check skipped files
       expect(fs.existsSync(path.join(targetDir, '_meta/project.json'))).toBe(false);

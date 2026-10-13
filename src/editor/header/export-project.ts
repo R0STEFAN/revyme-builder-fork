@@ -74,6 +74,22 @@ export function extractUploadFilenames(files: Iterable<string>): string[] {
   return Array.from(filenames);
 }
 
+export function extractPublicAssetPaths(files: Iterable<string>): string[] {
+  const assetPaths = new Set<string>();
+  const regex = /(?:['"`(\s])\/(fonts|images)\/([a-zA-Z0-9_.-]+)/g;
+  for (const text of files) {
+    if (!text || typeof text !== 'string') continue;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      if (m[1] && m[2]) {
+        const safeName = m[2].split('?')[0].split('#')[0];
+        assetPaths.add(`${m[1]}/${safeName}`);
+      }
+    }
+  }
+  return Array.from(assetPaths);
+}
+
 /** Standalone: MAIN's files (what publishes — never a branch), as a
  *  runnable Next.js project, zipped here and downloaded. */
 async function exportSourceInBrowser(format: ExportFormat = 'source'): Promise<boolean> {
@@ -101,6 +117,24 @@ async function exportSourceInBrowser(format: ExportFormat = 'source'): Promise<b
             const buf = new Uint8Array(await res.arrayBuffer());
             uploadEntries.push({ path: `public/api/uploads/${filename}`, data: buf });
             uploadEntries.push({ path: `public/uploads/${filename}`, data: buf });
+          }
+        } catch {
+          // ignore individual fetch errors
+        }
+      })
+    );
+  }
+
+  // Gather referenced static fonts and images and bundle into public/fonts and public/images
+  const publicAssetPaths = extractPublicAssetPaths(main.values());
+  if (publicAssetPaths.length > 0) {
+    await Promise.all(
+      publicAssetPaths.map(async (assetRelPath) => {
+        try {
+          const res = await fetch(`/${assetRelPath}`);
+          if (res.ok) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            uploadEntries.push({ path: `public/${assetRelPath}`, data: buf });
           }
         } catch {
           // ignore individual fetch errors

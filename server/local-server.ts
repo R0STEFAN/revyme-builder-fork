@@ -22,6 +22,7 @@ export interface LocalServerOptions {
   exec?: typeof exec;
   execSync?: typeof execSync;
   startupTimeoutMs?: number;
+  publicDir?: string | null;
 }
 
 interface ProjectServerRecord {
@@ -273,6 +274,7 @@ const DEFAULT_PACKAGE_JSON = `{
 
 export class LocalServerManager {
   private readonly buildsDir: string;
+  private readonly publicDir: string | null;
   private readonly servers = new Map<string, ProjectServerRecord>();
   private readonly spawnFn: typeof spawn;
   private readonly execFn: typeof exec;
@@ -281,6 +283,7 @@ export class LocalServerManager {
 
   constructor(buildsDir?: string, options?: LocalServerOptions) {
     this.buildsDir = buildsDir || path.join(getDataDirs().root, 'builds');
+    this.publicDir = options?.publicDir !== undefined ? options.publicDir : path.resolve(process.cwd(), 'public');
     this.spawnFn = options?.spawn || spawn;
     this.execFn = options?.exec || exec;
     this.execSyncFn = options?.execSync || execSync;
@@ -407,6 +410,7 @@ export class LocalServerManager {
 
     // Ensure uploads are synced/linked into public/api/uploads and public/uploads
     this.syncUploads(targetDir);
+    this.syncPublicAssets(targetDir);
 
     return targetDir;
   }
@@ -544,6 +548,63 @@ export class LocalServerManager {
     }
   }
 
+  syncPublicAssets(targetDir: string): void {
+    if (!this.publicDir || !fs.existsSync(this.publicDir)) return;
+
+    const targetPublicDir = path.join(targetDir, 'public');
+    if (!fs.existsSync(targetPublicDir)) {
+      fs.mkdirSync(targetPublicDir, { recursive: true });
+    }
+
+    try {
+      const entries = fs.readdirSync(this.publicDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name === 'api' || entry.name === 'uploads') continue;
+        const srcPath = path.join(this.publicDir, entry.name);
+        const destPath = path.join(targetPublicDir, entry.name);
+        if (entry.isDirectory()) {
+          this.copyDirRecursive(srcPath, destPath);
+        } else if (entry.isFile()) {
+          try {
+            if (!fs.existsSync(destPath) || fs.statSync(srcPath).mtimeMs > fs.statSync(destPath).mtimeMs) {
+              fs.copyFileSync(srcPath, destPath);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private copyDirRecursive(srcDir: string, destDir: string): void {
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    try {
+      const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = path.join(srcDir, entry.name);
+        const destPath = path.join(destDir, entry.name);
+        if (entry.isDirectory()) {
+          this.copyDirRecursive(srcPath, destPath);
+        } else if (entry.isFile()) {
+          try {
+            if (!fs.existsSync(destPath) || fs.statSync(srcPath).mtimeMs > fs.statSync(destPath).mtimeMs) {
+              fs.copyFileSync(srcPath, destPath);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   private copyDirFiles(srcDir: string, destDir: string): void {
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
@@ -598,6 +659,7 @@ export class LocalServerManager {
 
     // Ensure uploads are synced and optimized before building
     await this.syncUploads(targetDir);
+    this.syncPublicAssets(targetDir);
 
     // Clean stale .next build cache directory before compiling so Next.js does a 100% fresh build
     const nextBuildDir = path.join(targetDir, '.next');
