@@ -429,7 +429,7 @@ export function hasGenerateStaticParams(serverCode: string): boolean {
  * Ensure generateStaticParams is present in a CMS detail page server wrapper.
  * If missing, detects the imported collection var name and injects it.
  */
-export function ensureCmsDetailStaticParams(serverCode: string): string {
+export function ensureCmsDetailStaticParams(serverCode: string, paramName = 'slug'): string {
   if (hasGenerateStaticParams(serverCode)) return serverCode;
 
   const importMatch = /import\s+([A-Za-z0-9_$]+)\s+from\s+['"]@\/cms\/[A-Za-z0-9_-]+\.json['"]/.exec(serverCode);
@@ -439,10 +439,239 @@ export function ensureCmsDetailStaticParams(serverCode: string): string {
   const snippet = `export async function generateStaticParams() {
   const items = Array.isArray(${varName}) ? ${varName} : [];
   return items
-    .filter((i) => i && i._slug)
-    .map((i) => ({ slug: String(i._slug) }));
+    .filter((i) => i && (i._slug || i.slug || i.id))
+    .map((i) => ({ ${paramName}: String(i.${paramName} || i._slug || i.slug || i.id) }));
 }
 `;
+
+  if (/export\s+default\b/.test(serverCode)) {
+    return serverCode.replace(/export\s+default\b/, `${snippet}\nexport default`);
+  }
+  return serverCode.endsWith('\n') ? `${serverCode}\n${snippet}` : `${serverCode}\n\n${snippet}`;
+}
+
+/**
+ * Discover known static parameter combinations for a dynamic Next.js route path.
+ * Searches:
+ *  1. Local and API CMS collections (cms/*.json).
+ *  2. Internal links in project JSX/TSX files (static hrefs, dynamic concat, template literals).
+ *  3. Dynamic segment patterns in the route path.
+ */
+export function discoverDynamicRouteParams(
+  routePath: string,
+  allFiles: Record<string, string>,
+  _apiConfigs: Record<string, ApiCollectionConfig> = {},
+): { paramNames: string[]; results: Array<Record<string, string>> } | null {
+  const cleanRoute = routePath
+    .replace(/^app\//, '')
+    .replace(/\/?\([^)]+\)\/?/g, '/')
+    .replace(/\/page\.tsx$/, '')
+    .replace(/^\/+/, '');
+  const segments = cleanRoute.split('/').filter(Boolean);
+  const paramNames: string[] = [];
+  const patternParts: string[] = [];
+
+  for (const seg of segments) {
+    const m = seg.match(/^\[([a-zA-Z0-9_-]+)\]$/);
+    if (m) {
+      paramNames.push(m[1]);
+      patternParts.push('([^/]+)');
+    } else {
+      patternParts.push(seg);
+    }
+  }
+
+  if (paramNames.length === 0) return null;
+
+  const routeRegex = new RegExp('^/?' + patternParts.join('/') + '$');
+  const parentSegment = segments.length > 1 ? segments[segments.length - 2] : null;
+
+  // 1. Gather all collections
+  const collections = new Map<string, any[]>();
+  for (const [fPath, content] of Object.entries(allFiles)) {
+    if (fPath.startsWith('cms/') && fPath.endsWith('.json') && !fPath.endsWith('.schema.json')) {
+      const slug = fPath.replace(/^cms\//, '').replace(/\.json$/, '');
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) collections.set(slug, parsed);
+      } catch {}
+    }
+  }
+
+  // 2. Discover known URLs & link patterns from JSX/TSX files
+  const knownUrls = new Set<string>();
+  const foundByParam = new Map<string, Set<string>>();
+  for (const p of paramNames) {
+    foundByParam.set(p, new Set<string>());
+  }
+
+  for (const [fPath, code] of Object.entries(allFiles)) {
+    if (!/\.(tsx|jsx|ts|js)$/.test(fPath)) continue;
+
+    // Static hrefs: href="/..." or href={'/...'}
+    const sMatches = code.matchAll(/href=(?:["']([^"']+)["']|\{["']([^"']+)["']\})/g);
+    for (const m of sMatches) {
+      const val = m[1] || m[2];
+      if (val && val.startsWith('/')) {
+        knownUrls.add(val.split('?')[0].split('#')[0]);
+      }
+    }
+
+    // Dynamic concat: href={"/prefix/" + iterVar.field}
+    const concatMatches = code.matchAll(/href=\{\s*["']([^"']+)["']\s*\+\s*([a-zA-Z0-9_$]+)\.([a-zA-Z0-9_$]+)\s*\}/g);
+    for (const m of concatMatches) {
+      const prefix = m[1];
+      const iterVar = m[2];
+      const field = m[3];
+      const mapMatch = code.match(new RegExp(`([a-zA-Z0-9_$]+)\\.map\\s*\\(\\s*(?:\\(\\s*${iterVar}\\b|${iterVar}\\b)`));
+      const colName = mapMatch ? mapMatch[1] : null;
+      if (colName && collections.has(colName)) {
+        for (const item of collections.get(colName)!) {
+          const val = item[field] || item.slug || item._slug || item.id;
+          if (val) knownUrls.add(prefix + val);
+        }
+      }
+    }
+
+    // Template literals: href={`/prefix/${iterVar.field}`}
+    const tplMatches = code.matchAll(/href=\{\s*`([^`$]+)\$\{([^}]+)\}([^`]*)`\s*\}/g);
+    for (const m of tplMatches) {
+      const prefix = m[1];
+      const expr = m[2].trim();
+      const suffix = m[3] || '';
+      const dotParts = expr.split('.');
+      if (dotParts.length === 2) {
+        const iterVar = dotParts[0];
+        const field = dotParts[1];
+        const mapMatch = code.match(new RegExp(`([a-zA-Z0-9_$]+)\\.map\\s*\\(\\s*(?:\\(\\s*${iterVar}\\b|${iterVar}\\b)`));
+        const colName = mapMatch ? mapMatch[1] : null;
+        if (colName && collections.has(colName)) {
+          for (const item of collections.get(colName)!) {
+            const val = item[field] || item.slug || item._slug || item.id;
+            if (val) knownUrls.add(prefix + val + suffix);
+          }
+        }
+      }
+    }
+  }
+
+  const results: Array<Record<string, string>> = [];
+  const seen = new Set<string>();
+
+  function addCombination(obj: Record<string, string>) {
+    for (const p of paramNames) {
+      if (!obj[p]) return;
+    }
+    const key = JSON.stringify(obj);
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push(obj);
+    }
+  }
+
+  // A. Match URLs against route segments (exact and prefix)
+  for (const u of knownUrls) {
+    const urlParts = u.replace(/^\/+/, '').split('/');
+    if (urlParts.length >= segments.length) {
+      let matches = true;
+      const matchedParams: Record<string, string> = {};
+      for (let k = 0; k < segments.length; k++) {
+        const rSeg = segments[k];
+        const m = rSeg.match(/^\[([a-zA-Z0-9_-]+)\]$/);
+        if (m) {
+          matchedParams[m[1]] = urlParts[k];
+          foundByParam.get(m[1])?.add(urlParts[k]);
+        } else if (rSeg !== urlParts[k]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches && urlParts.length === segments.length) {
+        addCombination(matchedParams);
+      }
+    }
+  }
+
+  // C. Match collections to individual params
+  for (const p of paramNames) {
+    let col = null;
+    if (collections.has(p)) col = collections.get(p);
+    else if (collections.has(p + 's')) col = collections.get(p + 's');
+    else if (collections.has(p + 'es')) col = collections.get(p + 'es');
+    else if (parentSegment && collections.has(parentSegment)) col = collections.get(parentSegment);
+
+    if (col) {
+      for (const item of col) {
+        const val = item[p] || item.slug || item._slug || item.id;
+        if (val) foundByParam.get(p)?.add(String(val));
+      }
+    }
+  }
+
+  // D. Multi-segment Cartesian product
+  if (paramNames.length > 1) {
+    function cartesian(index: number, current: Record<string, string>) {
+      if (index === paramNames.length) {
+        addCombination({ ...current });
+        return;
+      }
+      const p = paramNames[index];
+      const values = Array.from(foundByParam.get(p) || []);
+      for (const v of values) {
+        current[p] = v;
+        cartesian(index + 1, current);
+      }
+    }
+    cartesian(0, {});
+  } else if (paramNames.length === 1) {
+    const p = paramNames[0];
+    for (const v of foundByParam.get(p) || []) {
+      addCombination({ [p]: v });
+    }
+  }
+
+  return { paramNames, results };
+}
+
+/**
+ * Ensure generateStaticParams is present for ANY dynamic route in Hybrid SSG mode.
+ * Handles single-param detail pages, multi-param routes, and queries.
+ */
+export function ensureDynamicRouteStaticParams(options: {
+  routePath: string;
+  serverCode: string;
+  allFiles: Record<string, string>;
+  apiConfigs?: Record<string, ApiCollectionConfig>;
+}): string {
+  const { routePath, serverCode, allFiles, apiConfigs } = options;
+
+  if (hasGenerateStaticParams(serverCode)) return serverCode;
+
+  const cleanRoute = routePath
+    .replace(/^app\//, '')
+    .replace(/\/?\([^)]+\)\/?/g, '/')
+    .replace(/\/page\.tsx$/, '');
+  const matches = cleanRoute.match(/\[([a-zA-Z0-9_-]+)\]/g);
+  if (!matches || matches.length === 0) return serverCode;
+
+  const paramNames = matches.map((m) => m.slice(1, -1));
+
+  // If single param and imports a collection directly, delegate to ensureCmsDetailStaticParams
+  const importMatch = /import\s+([A-Za-z0-9_$]+)\s+from\s+['"]@\/cms\/[A-Za-z0-9_-]+\.json['"]/.exec(serverCode);
+  if (paramNames.length === 1 && importMatch) {
+    return ensureCmsDetailStaticParams(serverCode, paramNames[0]);
+  }
+
+  // Otherwise discover from links & collections
+  const discovered = discoverDynamicRouteParams(routePath, allFiles, apiConfigs);
+  const items = discovered?.results || [];
+
+  const itemsJson = JSON.stringify(items, null, 2);
+  const dynamicParamsSnippet = !serverCode.includes('dynamicParams') ? '\nexport const dynamicParams = true;\n' : '';
+  const snippet = `export async function generateStaticParams() {
+  return ${itemsJson};
+}
+${dynamicParamsSnippet}`;
 
   if (/export\s+default\b/.test(serverCode)) {
     return serverCode.replace(/export\s+default\b/, `${snippet}\nexport default`);

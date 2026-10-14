@@ -158,6 +158,58 @@ export default async function Page() {
     expect(stripped).toContain('export default async function Page');
     expect(stripped).toContain('export const dynamicParams = true;');
   });
+
+  it('Hybrid SSG mode: generates generateStaticParams for arbitrary multi-segment and non-slug dynamic routes', () => {
+    const files = {
+      'app/gallery/[category]/page.tsx': `import PageClient from './page.client';
+export const metadata = {};
+export default function Page() {
+  return <PageClient />;
+}`,
+      'app/gallery/[category]/[place]/page.tsx': `import PageClient from './page.client';
+export const metadata = {};
+export default async function Page() {
+  return <PageClient />;
+}`,
+      'components/Navbar.tsx': `import React from 'react';
+import Link from 'next/link';
+import placements from '@/cms/placements.json';
+export default function Navbar() {
+  return (
+    <div>
+      <Link href="/gallery/women">Women</Link>
+      {placements.map((item: any) => (
+        <Link key={item.slug} href={"/gallery/men/" + item.slug}>{item.name}</Link>
+      ))}
+    </div>
+  );
+}`,
+      'cms/placements.json': JSON.stringify([
+        { name: 'На передпліччі', slug: 'peredplichcha' },
+        { name: 'На спині', slug: 'spina' },
+      ]),
+    };
+
+    const hybridPrepared = prepareSiteFiles(files, { ssg: true });
+
+    // Single-segment non-slug route receives generateStaticParams with discovered categories
+    const catPage = hybridPrepared['app/gallery/[category]/page.tsx'];
+    expect(catPage).toContain('export async function generateStaticParams');
+    expect(catPage).toContain('"category": "women"');
+    expect(catPage).toContain('"category": "men"');
+
+    // Multi-segment dynamic route receives generateStaticParams with cartesian combinations
+    const placePage = hybridPrepared['app/gallery/[category]/[place]/page.tsx'];
+    expect(placePage).toContain('export async function generateStaticParams');
+    expect(placePage).toContain('"category": "men"');
+    expect(placePage).toContain('"place": "peredplichcha"');
+    expect(placePage).toContain('"place": "spina"');
+
+    // In Dynamic mode, they remain clean without generateStaticParams
+    const dynamicPrepared = prepareSiteFiles(hybridPrepared, { ssg: false });
+    expect(dynamicPrepared['app/gallery/[category]/page.tsx']).not.toContain('generateStaticParams');
+    expect(dynamicPrepared['app/gallery/[category]/[place]/page.tsx']).not.toContain('generateStaticParams');
+  });
 });
 
 describe('Server fetch orchestration for arbitrary collection lists', () => {

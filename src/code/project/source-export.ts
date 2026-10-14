@@ -33,6 +33,8 @@ import { getUploadSrcSet, inferImageSizes } from '@/shared/image-utils';
 import { IMAGE_UTILS_TS, OPTIMIZE_IMAGES_SCRIPT } from '@/shared/image-export-constants';
 import {
   ensureCmsDetailStaticParams,
+  ensureDynamicRouteStaticParams,
+  discoverDynamicRouteParams,
   hasGenerateStaticParams,
   stripGenerateStaticParams,
 } from './cms-seo';
@@ -56,6 +58,8 @@ export {
   stripGenerateStaticParams,
   hasGenerateStaticParams,
   ensureCmsDetailStaticParams,
+  ensureDynamicRouteStaticParams,
+  discoverDynamicRouteParams,
   detectPageCollectionQueries,
   injectCmsDatasetsIntoClientPage,
   orchestrateServerFetchForQueries,
@@ -582,15 +586,20 @@ export function prepareSiteFiles(
       files[path] = stripGenerateStaticParams(files[path]);
     }
 
-    // Hybrid SSG: inject generateStaticParams into CMS [slug] detail pages and locale route wrappers
-    if (isHybridMode && /\/\[slug\]\/page\.tsx$/.test(path) && files[path]) {
+    // Hybrid SSG: inject generateStaticParams into all dynamic routes and locale route wrappers
+    if (isHybridMode && (path.endsWith('/page.tsx') || path === 'app/page.tsx') && /\[[a-zA-Z0-9_.-]+\]/.test(path) && files[path]) {
       if (isLocaleRouteFile(path, files[path])) {
         files[path] = files[path].replace(
           /export\s*\{\s*default\s*\}\s*from/,
           'export { default, generateStaticParams } from',
         );
       } else {
-        files[path] = ensureCmsDetailStaticParams(files[path]);
+        files[path] = ensureDynamicRouteStaticParams({
+          routePath: path,
+          serverCode: files[path],
+          allFiles: files,
+          apiConfigs,
+        });
       }
     }
 
