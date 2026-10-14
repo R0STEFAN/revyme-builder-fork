@@ -5,13 +5,30 @@ import sharp from 'sharp';
 import { getDataDirs, getProject } from './storage';
 import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/shared/image-export-constants';
 
-export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
+export type LocalServerState = 'idle' | 'building' | 'running' | 'error' | 'cancelled';
+
+export type BuildStage =
+  | 'idle'
+  | 'exporting'
+  | 'preparing-assets'
+  | 'compiling'
+  | 'collecting'
+  | 'generating'
+  | 'optimizing'
+  | 'done'
+  | 'error'
+  | 'cancelled';
 
 export interface BuildProgress {
-  stage: 'compiling' | 'collecting' | 'generating' | 'optimizing' | 'done';
+  stage: BuildStage;
   label: string;
   percent: number;
+  buildId?: string;
+  startedAt?: number;
+  finishedAt?: number | null;
 }
+
+export type BuildStatus = BuildProgress;
 
 export interface LocalServerStatus {
   status: LocalServerState;
@@ -22,6 +39,11 @@ export interface LocalServerStatus {
   lastError: string | null;
   pid: number | null;
   buildProgress?: BuildProgress | null;
+  buildStatus?: BuildStatus | null;
+  buildId?: string | null;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+  liveLogs?: string[];
 }
 
 export interface LocalServerOptions {
@@ -43,6 +65,10 @@ interface ProjectServerRecord {
   proc: ChildProcess | null;
   isStopping?: boolean;
   buildProgress?: BuildProgress | null;
+  buildId?: string | null;
+  buildStartedAt?: number | null;
+  buildFinishedAt?: number | null;
+  liveLogs?: string[];
 }
 
 export function sanitizeId(id: string): string {
@@ -85,8 +111,13 @@ export function parseBuildProgress(
   output: string,
   current?: BuildProgress | null
 ): BuildProgress {
+  const meta = {
+    ...(current?.buildId ? { buildId: current.buildId } : {}),
+    ...(current?.startedAt ? { startedAt: current.startedAt } : {}),
+  };
+
   if (!output || !output.trim()) {
-    return current || { stage: 'compiling', label: 'Preparing build...', percent: 10 };
+    return current || { stage: 'compiling', label: 'Preparing build...', percent: 10, ...meta };
   }
 
   // Parse milestones from most advanced to earliest
@@ -95,6 +126,7 @@ export function parseBuildProgress(
       stage: 'optimizing',
       label: 'Finalizing page optimization...',
       percent: Math.max(current?.percent ?? 0, 95),
+      ...meta,
     };
   }
 
@@ -107,6 +139,7 @@ export function parseBuildProgress(
       stage: 'generating',
       label: `Generating static pages (${done}/${total})...`,
       percent: Math.max(current?.percent ?? 0, pct),
+      ...meta,
     };
   }
 
@@ -115,6 +148,7 @@ export function parseBuildProgress(
       stage: 'collecting',
       label: 'Collecting page data...',
       percent: Math.max(current?.percent ?? 0, 60),
+      ...meta,
     };
   }
 
@@ -123,6 +157,7 @@ export function parseBuildProgress(
       stage: 'compiling',
       label: 'Validating and compiling...',
       percent: Math.max(current?.percent ?? 0, 45),
+      ...meta,
     };
   }
 
@@ -131,10 +166,11 @@ export function parseBuildProgress(
       stage: 'compiling',
       label: 'Creating optimized production build...',
       percent: Math.max(current?.percent ?? 0, 20),
+      ...meta,
     };
   }
 
-  return current || { stage: 'compiling', label: 'Preparing build...', percent: 10 };
+  return current || { stage: 'compiling', label: 'Preparing build...', percent: 10, ...meta };
 }
 
 export async function killProcessTree(
@@ -340,6 +376,8 @@ export class LocalServerManager {
   private readonly buildsDir: string;
   private readonly publicDir: string | null;
   private readonly servers = new Map<string, ProjectServerRecord>();
+  private readonly activeBuildProcesses = new Map<string, ChildProcess>();
+  private readonly activeBuildControllers = new Map<string, AbortController>();
   private readonly spawnFn: typeof spawn;
   private readonly execFn: typeof exec;
   private readonly execSyncFn: typeof execSync;
@@ -367,17 +405,113 @@ export class LocalServerManager {
     return path.join(this.buildsDir, safeId);
   }
 
+  writeSuccessMarker(targetDir: string, buildId: string): void {
+    try {
+      const nextDir = path.join(targetDir, '.next');
+      if (!fs.existsSync(nextDir)) {
+        fs.mkdirSync(nextDir, { recursive: true });
+      }
+      const markerPath = path.join(nextDir, 'revyme-build-success.json');
+      fs.writeFileSync(
+        markerPath,
+        JSON.stringify({
+          success: true,
+          buildId,
+          builtAt: Date.now(),
+        }, null, 2),
+        'utf-8'
+      );
+      const failedMarker = path.join(nextDir, 'revyme-build-failed.json');
+      if (fs.existsSync(failedMarker)) {
+        try { fs.unlinkSync(failedMarker); } catch { /* ignore */ }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  clearSuccessMarker(targetDir: string): void {
+    try {
+      const nextDir = path.join(targetDir, '.next');
+      const markerPath = path.join(nextDir, 'revyme-build-success.json');
+      if (fs.existsSync(markerPath)) {
+        try { fs.unlinkSync(markerPath); } catch { /* ignore */ }
+      }
+      if (fs.existsSync(nextDir)) {
+        const failedMarker = path.join(nextDir, 'revyme-build-failed.json');
+        fs.writeFileSync(
+          failedMarker,
+          JSON.stringify({
+            failed: true,
+            failedAt: Date.now(),
+          }, null, 2),
+          'utf-8'
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  checkIsBuilt(safeId: string, targetDir: string): boolean {
+    const record = this.servers.get(safeId);
+    if (record) {
+      if (record.status === 'building' || record.status === 'error' || record.status === 'cancelled') {
+        return false;
+      }
+      if (record.isBuilt) return true;
+    }
+    const nextDir = path.join(targetDir, '.next');
+    if (!fs.existsSync(nextDir)) return false;
+    const successMarker = path.join(nextDir, 'revyme-build-success.json');
+    if (fs.existsSync(successMarker)) {
+      try {
+        const marker = JSON.parse(fs.readFileSync(successMarker, 'utf-8'));
+        return Boolean(marker.success);
+      } catch {
+        return false;
+      }
+    }
+    const failedMarker = path.join(nextDir, 'revyme-build-failed.json');
+    if (fs.existsSync(failedMarker)) return false;
+    const buildIdFile = path.join(nextDir, 'BUILD_ID');
+    if (fs.existsSync(buildIdFile)) return true;
+    try {
+      const entries = fs.readdirSync(nextDir);
+      if (entries.length === 0) return true;
+    } catch {
+      // ignore
+    }
+    return false;
+  }
+
+  private appendLiveLog(record: ProjectServerRecord, chunk: string): void {
+    const cleaned = stripAnsi(chunk);
+    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (!record.liveLogs) record.liveLogs = [];
+    record.liveLogs.push(...lines);
+    if (record.liveLogs.length > 200) {
+      record.liveLogs.splice(0, record.liveLogs.length - 200);
+    }
+  }
+
   private getOrCreateRecord(projectId: string): ProjectServerRecord {
     const safeId = sanitizeId(projectId);
     let record = this.servers.get(safeId);
     if (!record) {
       const buildDir = this.getBuildDir(safeId);
-      const nextDir = path.join(buildDir, '.next');
-      const isBuilt = fs.existsSync(nextDir);
+      const isBuilt = this.checkIsBuilt(safeId, buildDir);
       let lastBuiltAt: number | null = null;
       if (isBuilt) {
         try {
-          lastBuiltAt = fs.statSync(nextDir).mtimeMs;
+          const nextDir = path.join(buildDir, '.next');
+          const markerPath = path.join(nextDir, 'revyme-build-success.json');
+          if (fs.existsSync(markerPath)) {
+            const marker = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+            lastBuiltAt = marker.builtAt ?? fs.statSync(markerPath).mtimeMs;
+          } else {
+            lastBuiltAt = fs.statSync(nextDir).mtimeMs;
+          }
         } catch {
           lastBuiltAt = null;
         }
@@ -392,6 +526,7 @@ export class LocalServerManager {
         lastError: null,
         pid: null,
         proc: null,
+        liveLogs: [],
       };
       this.servers.set(safeId, record);
     }
@@ -472,8 +607,8 @@ export class LocalServerManager {
     if (!fs.existsSync(libDir)) fs.mkdirSync(libDir, { recursive: true });
     fs.writeFileSync(imageUtilsPath, IMAGE_UTILS_TS, 'utf-8');
 
-    // Ensure uploads are synced/linked into public/api/uploads and public/uploads
-    this.syncUploads(targetDir);
+    // Ensure uploads are copied into public/api/uploads and public/uploads synchronously (without triggering background image optimization)
+    this.syncUploadFiles(targetDir);
     this.syncPublicAssets(targetDir);
 
     return targetDir;
@@ -506,7 +641,7 @@ export class LocalServerManager {
     }
   }
 
-  async syncUploads(targetDir: string): Promise<void> {
+  syncUploadFiles(targetDir: string): void {
     const uploadsDir = getDataDirs().uploadsDir;
     if (!uploadsDir || !fs.existsSync(uploadsDir)) return;
 
@@ -550,17 +685,30 @@ export class LocalServerManager {
         // ignore errors
       }
     }
+  }
+
+  async syncUploads(
+    targetDir: string,
+    onProgress?: (progress: { processed: number; total: number; filename: string }) => void
+  ): Promise<void> {
+    this.syncUploadFiles(targetDir);
+
+    const publicDir = path.join(targetDir, 'public');
+    const publicApiDir = path.join(publicDir, 'api');
 
     // Run image optimization on public/uploads and public/api/uploads using sharp
     try {
-      await this.optimizeImages(path.join(publicDir, 'uploads'));
-      await this.optimizeImages(path.join(publicApiDir, 'uploads'));
+      await this.optimizeImages(path.join(publicDir, 'uploads'), onProgress);
+      await this.optimizeImages(path.join(publicApiDir, 'uploads'), onProgress);
     } catch {
       // ignore
     }
   }
 
-  async optimizeImages(uploadsTarget: string): Promise<void> {
+  async optimizeImages(
+    uploadsTarget: string,
+    onProgress?: (progress: { processed: number; total: number; filename: string }) => void
+  ): Promise<void> {
     if (!fs.existsSync(uploadsTarget)) return;
 
     const widths = [320, 640, 768, 1024, 1280, 1920];
@@ -569,12 +717,14 @@ export class LocalServerManager {
 
     try {
       const entries = fs.readdirSync(uploadsTarget, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isFile()) continue;
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!imageExts.has(ext)) continue;
-        if (responsiveVariantRe.test(entry.name)) continue;
+      const originalFiles = entries.filter(
+        (e) => e.isFile() && imageExts.has(path.extname(e.name).toLowerCase()) && !responsiveVariantRe.test(e.name)
+      );
+      const totalVariants = originalFiles.length * widths.length;
+      let processedVariants = 0;
 
+      for (const entry of originalFiles) {
+        const ext = path.extname(entry.name).toLowerCase();
         const baseName = entry.name.slice(0, -ext.length);
         const filePath = path.join(uploadsTarget, entry.name);
 
@@ -582,6 +732,8 @@ export class LocalServerManager {
         try {
           fileStat = fs.statSync(filePath);
         } catch {
+          processedVariants += widths.length;
+          onProgress?.({ processed: processedVariants, total: totalVariants, filename: entry.name });
           continue;
         }
 
@@ -593,6 +745,8 @@ export class LocalServerManager {
             if (fs.existsSync(outPath)) {
               const outStat = fs.statSync(outPath);
               if (outStat.mtimeMs >= fileStat.mtimeMs) {
+                processedVariants++;
+                onProgress?.({ processed: processedVariants, total: totalVariants, filename: entry.name });
                 continue;
               }
             }
@@ -605,6 +759,8 @@ export class LocalServerManager {
           } catch {
             // Gracefully ignore individual image resize failures (e.g. invalid image files)
           }
+          processedVariants++;
+          onProgress?.({ processed: processedVariants, total: totalVariants, filename: entry.name });
         }
       }
     } catch {
@@ -696,94 +852,241 @@ export class LocalServerManager {
   ): Promise<{ success: boolean; log: string }> {
     const safeId = sanitizeId(projectId);
     const record = this.getOrCreateRecord(safeId);
+
+    if (record.status === 'building' || this.activeBuildProcesses.has(safeId)) {
+      throw new Error(`Build already in progress for project: ${projectId}`);
+    }
+
+    const buildId = `build_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = Date.now();
+    record.buildId = buildId;
+    record.buildStartedAt = startedAt;
+    record.buildFinishedAt = null;
     record.status = 'building';
     record.lastError = null;
-    record.buildProgress = { stage: 'compiling', label: 'Preparing build...', percent: 10 };
+    record.isBuilt = false;
+    record.liveLogs = [];
+    record.buildProgress = { stage: 'compiling', label: 'Preparing build...', percent: 10, buildId, startedAt };
 
-    if (files) {
-      this.exportProject(safeId, files);
-    } else {
-      const stored = getProject(safeId);
-      if (!stored) {
-        const errLog = `Project not found: ${projectId}`;
-        record.status = 'error';
-        record.lastError = errLog;
-        record.buildProgress = null;
-        return { success: false, log: errLog };
-      }
-      let exportFiles = stored.data?.files || {};
-      if (branchId && stored.data?.branches?.[branchId]?.files) {
-        exportFiles = stored.data.branches[branchId].files;
-      }
-      this.exportProject(safeId, exportFiles);
-    }
+    const abortController = new AbortController();
+    this.activeBuildControllers.set(safeId, abortController);
 
     const targetDir = this.getBuildDir(safeId);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
+    this.clearSuccessMarker(targetDir);
 
-    // Ensure uploads are synced and optimized before building
-    await this.syncUploads(targetDir);
-    this.syncPublicAssets(targetDir);
-
-    // Clean stale .next build cache directory before compiling so Next.js does a 100% fresh build
-    const nextBuildDir = path.join(targetDir, '.next');
-    if (fs.existsSync(nextBuildDir)) {
-      try {
-        fs.rmSync(nextBuildDir, { recursive: true, force: true });
-      } catch {
-        // ignore if locked
-      }
-    }
-
-    const nextBin = resolveNextBin();
-
-    return new Promise<{ success: boolean; log: string }>((resolve) => {
-      let output = '';
-
-      const child = this.spawnFn(process.execPath, [nextBin, 'build'], {
-        cwd: targetDir,
-        env: cleanProcessEnv({
-          NODE_ENV: 'production',
-        }),
-      });
-
-      child.stdout?.on('data', (data) => {
-        output += data.toString();
-        record.buildProgress = parseBuildProgress(output, record.buildProgress);
-      });
-
-      child.stderr?.on('data', (data) => {
-        output += data.toString();
-      });
-
-      child.on('error', (err) => {
-        output += `\n${err.message}`;
-        const cleaned = stripAnsi(output);
-        record.status = 'error';
-        record.lastError = cleaned;
-        record.buildProgress = null;
-        resolve({ success: false, log: cleaned });
-      });
-
-      child.on('close', (code) => {
-        const cleaned = stripAnsi(output);
-        if (code === 0) {
-          record.isBuilt = true;
-          record.lastBuiltAt = Date.now();
-          record.status = record.proc ? 'running' : 'idle';
-          record.lastError = null;
-          record.buildProgress = { stage: 'done', label: 'Build completed successfully', percent: 100 };
-          resolve({ success: true, log: cleaned });
-        } else {
+    try {
+      if (files) {
+        this.exportProject(safeId, files);
+      } else {
+        const stored = getProject(safeId);
+        if (!stored) {
+          const errLog = `Project not found: ${projectId}`;
           record.status = 'error';
-          record.lastError = cleaned || `Build failed with exit code ${code}`;
-          record.buildProgress = null;
-          resolve({ success: false, log: record.lastError });
+          record.lastError = errLog;
+          record.buildProgress = { stage: 'error', label: errLog, percent: 0, buildId, startedAt, finishedAt: Date.now() };
+          return { success: false, log: errLog };
         }
+        let exportFiles = stored.data?.files || {};
+        if (branchId && stored.data?.branches?.[branchId]?.files) {
+          exportFiles = stored.data.branches[branchId].files;
+        }
+        this.exportProject(safeId, exportFiles);
+      }
+
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      if (abortController.signal.aborted) {
+        record.status = 'cancelled';
+        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+        return { success: false, log: 'Build cancelled' };
+      }
+
+      // Preparing assets stage
+      record.buildProgress = {
+        stage: 'preparing-assets',
+        label: 'Preparing and optimizing assets...',
+        percent: 10,
+        buildId,
+        startedAt,
+      };
+
+      await this.syncUploads(targetDir, ({ processed, total, filename }) => {
+        if (abortController.signal.aborted) return;
+        const pct = total > 0 ? Math.min(18, Math.round(10 + (processed / total) * 8)) : 10;
+        record.buildProgress = {
+          stage: 'preparing-assets',
+          label: `Optimizing assets (${processed}/${total}) ${filename}...`,
+          percent: pct,
+          buildId,
+          startedAt,
+        };
       });
-    });
+
+      this.syncPublicAssets(targetDir);
+
+      if (abortController.signal.aborted) {
+        record.status = 'cancelled';
+        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+        return { success: false, log: 'Build cancelled' };
+      }
+
+      // Clean stale .next build cache directory before compiling so Next.js does a 100% fresh build
+      const nextBuildDir = path.join(targetDir, '.next');
+      if (fs.existsSync(nextBuildDir)) {
+        try {
+          fs.rmSync(nextBuildDir, { recursive: true, force: true });
+        } catch {
+          // ignore if locked
+        }
+      }
+
+      const nextBin = resolveNextBin();
+
+      const buildResult = await new Promise<{ success: boolean; log: string }>((resolve) => {
+        let output = '';
+
+        const child = this.spawnFn(process.execPath, [nextBin, 'build'], {
+          cwd: targetDir,
+          env: cleanProcessEnv({
+            NODE_ENV: 'production',
+          }),
+        });
+
+        this.activeBuildProcesses.set(safeId, child);
+
+        child.stdout?.on('data', (data) => {
+          const text = data.toString();
+          output += text;
+          this.appendLiveLog(record, text);
+          record.buildProgress = parseBuildProgress(output, record.buildProgress);
+        });
+
+        child.stderr?.on('data', (data) => {
+          const text = data.toString();
+          output += text;
+          this.appendLiveLog(record, text);
+          const cleaned = stripAnsi(text).trim();
+          if (cleaned) {
+            record.lastError = record.lastError ? `${record.lastError}\n${cleaned}` : cleaned;
+          }
+        });
+
+        child.on('error', (err) => {
+          this.activeBuildProcesses.delete(safeId);
+          output += `\n${err.message}`;
+          const cleaned = stripAnsi(output);
+          record.status = 'error';
+          record.lastError = cleaned;
+          record.isBuilt = false;
+          record.buildProgress = { stage: 'error', label: cleaned, percent: record.buildProgress?.percent ?? 0, buildId, startedAt, finishedAt: Date.now() };
+          this.clearSuccessMarker(targetDir);
+          resolve({ success: false, log: cleaned });
+        });
+
+        child.on('close', (code, signal) => {
+          this.activeBuildProcesses.delete(safeId);
+          const cleaned = stripAnsi(output);
+
+          if (record.status === 'cancelled' || signal === 'SIGTERM') {
+            record.status = 'cancelled';
+            record.isBuilt = false;
+            record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+            this.clearSuccessMarker(targetDir);
+            resolve({ success: false, log: 'Build cancelled' });
+            return;
+          }
+
+          if (code === 0) {
+            record.isBuilt = true;
+            record.lastBuiltAt = Date.now();
+            record.status = record.proc ? 'running' : 'idle';
+            record.lastError = null;
+            record.buildProgress = { stage: 'done', label: 'Build completed successfully', percent: 100, buildId, startedAt, finishedAt: Date.now() };
+            this.writeSuccessMarker(targetDir, buildId);
+            resolve({ success: true, log: cleaned });
+          } else {
+            record.status = 'error';
+            record.isBuilt = false;
+            record.lastError = cleaned || record.lastError || `Build failed with exit code ${code}`;
+            record.buildProgress = {
+              stage: 'error',
+              label: record.lastError,
+              percent: record.buildProgress?.percent ?? 0,
+              buildId,
+              startedAt,
+              finishedAt: Date.now(),
+            };
+            this.clearSuccessMarker(targetDir);
+            resolve({ success: false, log: record.lastError });
+          }
+        });
+      });
+
+      return buildResult;
+    } catch (err: any) {
+      record.status = 'error';
+      record.isBuilt = false;
+      record.lastError = err?.message || String(err);
+      record.buildProgress = {
+        stage: 'error',
+        label: record.lastError,
+        percent: record.buildProgress?.percent ?? 0,
+        buildId,
+        startedAt,
+        finishedAt: Date.now(),
+      };
+      this.clearSuccessMarker(targetDir);
+      throw err;
+    } finally {
+      this.activeBuildProcesses.delete(safeId);
+      this.activeBuildControllers.delete(safeId);
+    }
+  }
+
+  async cancelBuild(projectId: string): Promise<LocalServerStatus> {
+    const safeId = sanitizeId(projectId);
+    const record = this.servers.get(safeId);
+    if (!record || record.status !== 'building') {
+      return this.getStatus(safeId);
+    }
+
+    record.isStopping = true;
+    try {
+      if (this.activeBuildControllers.has(safeId)) {
+        const controller = this.activeBuildControllers.get(safeId);
+        controller?.abort();
+        this.activeBuildControllers.delete(safeId);
+      }
+
+      if (this.activeBuildProcesses.has(safeId)) {
+        const child = this.activeBuildProcesses.get(safeId);
+        if (child) {
+          await killProcessTree(child, child.pid, this.execFn);
+        }
+        this.activeBuildProcesses.delete(safeId);
+      }
+
+      record.status = 'cancelled';
+      record.isBuilt = false;
+      record.lastError = 'Build cancelled by user';
+      record.buildProgress = {
+        stage: 'cancelled',
+        label: 'Build cancelled',
+        percent: 0,
+        buildId: record.buildId || undefined,
+        startedAt: record.buildStartedAt || undefined,
+        finishedAt: Date.now(),
+      };
+
+      const targetDir = this.getBuildDir(safeId);
+      this.clearSuccessMarker(targetDir);
+    } finally {
+      record.isStopping = false;
+    }
+
+    return this.getStatus(safeId);
   }
 
   async start(projectId: string, port = 3000): Promise<LocalServerStatus> {
@@ -977,16 +1280,21 @@ export class LocalServerManager {
   getStatus(projectId: string): LocalServerStatus {
     const safeId = sanitizeId(projectId);
     const targetDir = this.getBuildDir(safeId);
-    const nextDir = path.join(targetDir, '.next');
-    const diskBuilt = fs.existsSync(nextDir);
+    const isBuilt = this.checkIsBuilt(safeId, targetDir);
 
     const record = this.servers.get(safeId);
-    const isBuilt = Boolean(record?.isBuilt || diskBuilt);
 
     let lastBuiltAt = record?.lastBuiltAt ?? null;
-    if (!lastBuiltAt && diskBuilt) {
+    if (!lastBuiltAt && isBuilt) {
       try {
-        lastBuiltAt = fs.statSync(nextDir).mtimeMs;
+        const nextDir = path.join(targetDir, '.next');
+        const markerPath = path.join(nextDir, 'revyme-build-success.json');
+        if (fs.existsSync(markerPath)) {
+          const marker = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+          lastBuiltAt = marker.builtAt ?? fs.statSync(markerPath).mtimeMs;
+        } else {
+          lastBuiltAt = fs.statSync(nextDir).mtimeMs;
+        }
       } catch {
         lastBuiltAt = null;
       }
@@ -999,7 +1307,7 @@ export class LocalServerManager {
       }
     }
 
-    return {
+    const statusObj: LocalServerStatus = {
       status: record?.status ?? 'idle',
       port: record?.port ?? null,
       url: record?.url ?? null,
@@ -1009,9 +1317,36 @@ export class LocalServerManager {
       pid: record?.pid ?? null,
       buildProgress: record?.buildProgress ?? null,
     };
+
+    if (record?.buildId) {
+      statusObj.buildId = record.buildId;
+    }
+    if (record?.buildStartedAt) {
+      statusObj.startedAt = record.buildStartedAt;
+    }
+    if (record?.buildFinishedAt) {
+      statusObj.finishedAt = record.buildFinishedAt;
+    }
+    if (record?.buildProgress) {
+      statusObj.buildStatus = record.buildProgress;
+    }
+    if (record?.liveLogs && record.liveLogs.length > 0) {
+      statusObj.liveLogs = [...record.liveLogs];
+    }
+
+    return statusObj;
   }
 
   dispose(): void {
+    for (const [safeId, buildProc] of this.activeBuildProcesses.entries()) {
+      killProcessTreeSync(buildProc, buildProc.pid, this.execSyncFn);
+    }
+    this.activeBuildProcesses.clear();
+    for (const controller of this.activeBuildControllers.values()) {
+      controller.abort();
+    }
+    this.activeBuildControllers.clear();
+
     for (const record of this.servers.values()) {
       if (record.proc) {
         killProcessTreeSync(record.proc, record.pid, this.execSyncFn);

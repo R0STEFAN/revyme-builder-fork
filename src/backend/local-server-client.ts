@@ -1,12 +1,29 @@
 import { trace } from '@/shared/debug-trace';
 
-export type LocalServerState = 'idle' | 'building' | 'running' | 'error';
+export type LocalServerState = 'idle' | 'building' | 'running' | 'error' | 'cancelled';
+
+export type BuildStage =
+  | 'idle'
+  | 'exporting'
+  | 'preparing-assets'
+  | 'compiling'
+  | 'collecting'
+  | 'generating'
+  | 'optimizing'
+  | 'done'
+  | 'error'
+  | 'cancelled';
 
 export interface BuildProgress {
-  stage: 'compiling' | 'collecting' | 'generating' | 'optimizing' | 'done';
+  stage: BuildStage;
   label: string;
   percent: number;
+  buildId?: string;
+  startedAt?: number;
+  finishedAt?: number | null;
 }
+
+export type BuildStatus = BuildProgress;
 
 export interface LocalServerStatus {
   status: LocalServerState;
@@ -17,6 +34,11 @@ export interface LocalServerStatus {
   lastError: string | null;
   pid: number | null;
   buildProgress?: BuildProgress | null;
+  buildStatus?: BuildStatus | null;
+  buildId?: string | null;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+  liveLogs?: string[];
 }
 
 export interface BuildResult {
@@ -173,3 +195,35 @@ export async function stopLocalServer(projectId: string, port?: number): Promise
     throw err;
   }
 }
+
+/**
+ * Cancel an ongoing Next.js build for a project.
+ */
+export async function cancelLocalServerBuild(projectId: string): Promise<LocalServerStatus> {
+  trace.action('local-server-client:cancel-build', { projectId });
+  try {
+    const res = await fetch(`/api/local-server/${encodeURIComponent(projectId)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data?.error || `Failed to cancel build (${res.status})`;
+      trace.error('local-server-client:cancel-build-fail', { projectId, status: res.status, error: errorMsg });
+      const error = new Error(errorMsg);
+      if (data?.status) {
+        (error as any).status = data.status;
+      }
+      throw error;
+    }
+
+    const status = parseServerStatus(data);
+    trace.action('local-server-client:cancel-build-done', { projectId, status: status?.status });
+    return status;
+  } catch (err: any) {
+    trace.error('local-server-client:cancel-build-error', { projectId, error: String(err?.message || err) });
+    throw err;
+  }
+}
+

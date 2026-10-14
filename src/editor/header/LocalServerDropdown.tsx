@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   fetchLocalServerStatus,
   buildLocalServer,
+  cancelLocalServerBuild,
   startLocalServer,
   stopLocalServer,
   type LocalServerStatus,
@@ -303,6 +304,18 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
     }
   }, [building, buildMode, currentBranch, projectId, refreshStatus]);
 
+  // Handle Cancel Build
+  const handleCancelBuild = useCallback(async () => {
+    try {
+      await cancelLocalServerBuild(projectId);
+      setBuilding(false);
+      toast.info('Build cancelled');
+      await refreshStatus();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel build');
+    }
+  }, [projectId, refreshStatus]);
+
   // Handle Start
   const handleStart = useCallback(async () => {
     if (starting || building || status?.status === 'running') return;
@@ -372,6 +385,9 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
   } else if (isRunning) {
     dotClass = 'bg-emerald-500';
     badgeLabel = `Running: ${status?.port || port}`;
+  } else if (status?.status === 'cancelled') {
+    dotClass = 'bg-amber-400';
+    badgeLabel = 'Cancelled';
   } else if (isError) {
     dotClass = 'bg-red-500';
     badgeLabel = 'Error';
@@ -534,9 +550,19 @@ export function LocalServerDropdown({ open, onClose, onStatusChange }: LocalServ
                 <span className="text-[var(--text-secondary)] truncate max-w-[210px] font-medium">
                   {status?.buildProgress?.label || 'Building application...'}
                 </span>
-                <span className="font-mono text-[var(--accent)] font-semibold shrink-0">
-                  {status?.buildProgress?.percent ?? 15}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[var(--accent)] font-semibold shrink-0">
+                    {status?.buildProgress?.percent ?? 15}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCancelBuild}
+                    className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 cursor-pointer"
+                    title="Cancel build"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
               <div className="w-full h-1.5 bg-[var(--border-light,rgba(255,255,255,0.1))] rounded-full overflow-hidden">
                 <div

@@ -377,11 +377,12 @@ describe('LocalServerManager', () => {
       const buildPromise = manager.build('progress-test', files);
 
       // Initial progress before chunks
-      expect(manager.getStatus('progress-test').buildProgress).toEqual({
-        stage: 'compiling',
-        label: 'Preparing build...',
+      expect(manager.getStatus('progress-test').buildProgress).toMatchObject({
         percent: 10,
       });
+      expect(['preparing-assets', 'compiling']).toContain(
+        manager.getStatus('progress-test').buildProgress?.stage
+      );
 
       // Yield for async export/sync before child is spawned
       await new Promise((r) => setTimeout(r, 5));
@@ -406,7 +407,7 @@ describe('LocalServerManager', () => {
       expect(result.success).toBe(true);
 
       const finalStatus = manager.getStatus('progress-test');
-      expect(finalStatus.buildProgress).toEqual({
+      expect(finalStatus.buildProgress).toMatchObject({
         stage: 'done',
         label: 'Build completed successfully',
         percent: 100,

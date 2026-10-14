@@ -859,7 +859,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       }
 
       // ─── Local Server routes: /api/local-server/:projectId/* ─────────────
-      const localServerMatch = url.match(/^\/api\/local-server\/([^/?#]+)\/(status|build|start|stop)(?:\/)?(?:[?#].*)?$/);
+      const localServerMatch = url.match(/^\/api\/local-server\/([^/?#]+)\/(status|build|start|stop|cancel)(?:\/)?(?:[?#].*)?$/);
       if (localServerMatch) {
         const projectId = decodeURIComponent(localServerMatch[1]);
         const action = localServerMatch[2];
@@ -883,6 +883,19 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             }
           } catch (err: any) {
             return sendJson(res, 500, { error: err.message || 'Build failed', log: err.stack || '' });
+          }
+        }
+
+        // POST /api/local-server/:projectId/cancel
+        if (action === 'cancel' && method === 'POST') {
+          try {
+            const status = await manager.cancelBuild(projectId);
+            return sendJson(res, 200, status);
+          } catch (err: any) {
+            return sendJson(res, 500, {
+              error: err.message || 'Failed to cancel build',
+              status: manager.getStatus(projectId),
+            });
           }
         }
 
