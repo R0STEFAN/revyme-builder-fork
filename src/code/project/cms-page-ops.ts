@@ -25,12 +25,12 @@ import { defaultCanvasBlock } from './canvas-config';
 import { projectFS } from './project-fs';
 import { uniqueRouteSlug, slugToFilePath } from './active-file-store';
 import { getCollectionSchema } from './cms-ops';
-import type { CollectionSchema, FieldDefinition } from '@/shared/types';
+import type { CollectionSchema, FieldDefinition, CollectionQueryConfig } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { rootMountBlockedBy } from './cms-root-mount';
 import { buildCmsDetailServerWrapper, defaultBindings, serializeHeadersForCode } from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
-import { getApiCollection } from './cms-api-config';
+import { getApiCollection, type ApiCollectionConfig } from './cms-api-config';
 import { getItemDisplayLabel } from '@/shared/cms-accessor';
 
 // ─── Field selection ────────────────────────────────────────────────────────
@@ -374,9 +374,13 @@ export const metadata = {};
 export default async function Page() {
   const res = await fetch(\`${fetchUrl}\`, {${methodLine}
     headers: ${headersCode},
+    signal: AbortSignal.timeout(10000),
     next: { revalidate: ${revalidate} },
   });
-  const json = res.ok ? await res.json() : [];
+  if (!res.ok) {
+    throw new Error(\`Failed to fetch CMS index for ${slug}: \${res.status} \${res.statusText}\`);
+  }
+  const json = await res.json();
   const items = ${itemsExtract};
   return <PageClient items={items} />;
 }
@@ -661,4 +665,398 @@ export function cmsItemDisplayLabel(
 /** "blog-posts" / "blog_posts" → "Blog Posts" — collection slug to a title. */
 export function prettyCollectionName(slug: string): string {
   return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── Arbitrary Collection Lists: Detection & Server Orchestration ──────────
+
+export interface DetectedCollectionQuery {
+  listId: string;
+  source: string;
+  queryConfig: CollectionQueryConfig;
+}
+
+/**
+ * Find the closing `>` of a JSX opening tag, taking string literals and braces into account.
+ */
+export function findTagClose(code: string, startIdx: number): number {
+  let braceDepth = 0;
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = startIdx; i < code.length; i++) {
+    const ch = code[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === inString) inString = null;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === '`') {
+      inString = ch;
+      continue;
+    }
+    if (ch === '{') {
+      braceDepth++;
+      continue;
+    }
+    if (ch === '}') {
+      braceDepth--;
+      continue;
+    }
+
+    if (ch === '>' && braceDepth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * Finds the index of the matching `</tagName>` closing tag by balancing tag depth.
+ */
+export function findMatchingCloseTagIndex(code: string, tagName: string, fromIdx: number): number {
+  const openPattern = `<${tagName}`;
+  const closePattern = `</${tagName}>`;
+  let depth = 1;
+  let searchFrom = fromIdx;
+
+  while (depth > 0 && searchFrom < code.length) {
+    const nextOpen = code.indexOf(openPattern, searchFrom);
+    const nextClose = code.indexOf(closePattern, searchFrom);
+    if (nextClose === -1) return -1;
+
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      const after = code[nextOpen + openPattern.length];
+      if (after === ' ' || after === '>' || after === '/' || after === '\n' || after === '\r' || after === '\t') {
+        const gt = findTagClose(code, nextOpen + openPattern.length);
+        if (gt === -1) return -1;
+        if (code[gt - 1] !== '/') {
+          depth++;
+        }
+        searchFrom = gt + 1;
+      } else {
+        searchFrom = nextOpen + openPattern.length;
+      }
+    } else {
+      depth--;
+      if (depth === 0) return nextClose;
+      searchFrom = nextClose + closePattern.length;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Extracts collection list containers with `data-query-config` from a client page.
+ */
+export function detectPageCollectionQueries(code: string): DetectedCollectionQuery[] {
+  if (!code || !code.includes('data-query-config')) return [];
+  const queries: DetectedCollectionQuery[] = [];
+
+  const importMap = new Map<string, string>();
+  const importRegex = /import\s+([a-zA-Z0-9_]+)\s+from\s+['"](?:@\/cms\/|\.\/cms\/|\.\.\/cms\/|cms\/)([^'"]+)\.json['"]/g;
+  let match: RegExpExecArray | null;
+  while ((match = importRegex.exec(code)) !== null) {
+    importMap.set(match[1], match[2]);
+  }
+
+  const tagStartRegex = /<([a-zA-Z0-9_-]+)\s+([^>]*data-query-config[^>]*)>/g;
+  while ((match = tagStartRegex.exec(code)) !== null) {
+    const tagName = match[1];
+    const attrs = match[2];
+    const openTagEnd = tagStartRegex.lastIndex;
+
+    const idMatch = attrs.match(/data-id=["']([^"']+)["']/);
+    const listId = idMatch ? idMatch[1] : '';
+    if (!listId) continue;
+
+    let queryConfig: any = null;
+    const jsonStringifyMatch = attrs.match(/data-query-config=\{JSON\.stringify\(([\s\S]*?)\)\}/);
+    if (jsonStringifyMatch) {
+      const rawPayload = jsonStringifyMatch[1].trim();
+      try {
+        queryConfig = JSON.parse(rawPayload);
+      } catch {
+        try {
+          const evalFn = new Function(`return (${rawPayload});`);
+          queryConfig = evalFn();
+        } catch {
+          /* ignore parse failure */
+        }
+      }
+    } else {
+      const attrMatch = attrs.match(/data-query-config=(?:\{(['"`])([\s\S]*?)\1\}|["'](\{[\s\S]*?\})["'])/);
+      if (attrMatch) {
+        const raw = attrMatch[2] || attrMatch[3];
+        try {
+          queryConfig = JSON.parse(raw);
+        } catch {
+          /* ignore parse failure */
+        }
+      }
+    }
+
+    if (!queryConfig) continue;
+
+    const closeIndex = findMatchingCloseTagIndex(code, tagName, openTagEnd);
+    const innerContent = closeIndex !== -1 ? code.slice(openTagEnd, closeIndex) : code.slice(openTagEnd);
+
+    let source = queryConfig.source || queryConfig.collection || '';
+    if (!source) {
+      const mapMatch = innerContent.match(/\{([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+)*\.map\(/);
+      if (mapMatch) {
+        const varName = mapMatch[1];
+        source = importMap.get(varName) || varName;
+      }
+    }
+    if (!source && importMap.size === 1) {
+      source = [...importMap.values()][0];
+    }
+
+    if (source) {
+      queries.push({ listId, source, queryConfig });
+    }
+  }
+
+  return queries;
+}
+
+/**
+ * Wraps collection list mapping expressions inside collection containers so that they
+ * evaluate against cmsDatasets if provided by the server wrapper:
+ * `{items.map(...)` -> `{(cmsDatasets?.[listId] || cmsDatasets?.[source] || items).map(...)`
+ * Also ensures Page component signature receives `cmsDatasets`.
+ */
+export function injectCmsDatasetsIntoClientPage(code: string, queries?: DetectedCollectionQuery[]): string {
+  const detected = queries ?? detectPageCollectionQueries(code);
+  if (!detected || detected.length === 0) return code;
+
+  let result = code;
+
+  for (const { listId, source } of detected) {
+    const idAttr = `data-id="${listId}"`;
+    const idIdx = result.indexOf(idAttr);
+    if (idIdx === -1) continue;
+
+    const elStart = result.lastIndexOf('<', idIdx);
+    if (elStart === -1) continue;
+    const tagClose = findTagClose(result, elStart + 1);
+    if (tagClose === -1 || result[tagClose - 1] === '/') continue;
+
+    const tagMatch = result.slice(elStart + 1).match(/^([a-zA-Z0-9_-]+)/);
+    if (!tagMatch) continue;
+    const tagName = tagMatch[1];
+
+    const closeIdx = findMatchingCloseTagIndex(result, tagName, tagClose + 1);
+    if (closeIdx === -1) continue;
+
+    const inner = result.slice(tagClose + 1, closeIdx);
+    if (inner.includes('cmsDatasets')) continue;
+
+    const mapRegex = new RegExp(`(\\{\\s*)([a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+\\([^)]*\\))*\\s*\\.map\\()`, 'g');
+    if (!mapRegex.test(inner)) continue;
+
+    const wrappedInner = inner.replace(
+      mapRegex,
+      `$1(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || $2)$3`,
+    );
+
+    result = result.slice(0, tagClose + 1) + wrappedInner + result.slice(closeIdx);
+  }
+
+  if (!result.includes('cmsDatasets')) {
+    return result;
+  }
+
+  if (/export\s+default\s+function\s+Page\s*\([^)]*cmsDatasets/.test(result)) {
+    return result;
+  }
+
+  result = result.replace(
+    /export\s+default\s+function\s+Page\s*\(([^)]*)\)/,
+    (full, params) => {
+      const trimmed = params.trim();
+      if (!trimmed) {
+        return `export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any[]> } = {})`;
+      }
+      if (trimmed.startsWith('{') && trimmed.includes('}')) {
+        const closeBraceIdx = trimmed.indexOf('}');
+        const beforeClose = trimmed.slice(0, closeBraceIdx);
+        const afterClose = trimmed.slice(closeBraceIdx);
+        const withProp = `${beforeClose}, cmsDatasets ${afterClose}`;
+        if (withProp.includes(': {')) {
+          return `export default function Page(${withProp.replace(/: \{\s*/, ': { cmsDatasets?: Record<string, any[]>; ')}`;
+        }
+        return `export default function Page(${withProp})`;
+      }
+      return `export default function Page(${trimmed}, { cmsDatasets }: { cmsDatasets?: Record<string, any[]> } = {})`;
+    },
+  );
+
+  return result;
+}
+
+/**
+ * Emits server-side data fetching orchestration for arbitrary collection lists
+ * into `page.tsx` and passes `cmsDatasets` to `<PageClient />`.
+ */
+export function orchestrateServerFetchForQueries(
+  serverCode: string,
+  queries: DetectedCollectionQuery[],
+  apiConfigs?: Record<string, ApiCollectionConfig>,
+): string {
+  if (!queries || queries.length === 0) return serverCode;
+
+  const apiQueries = queries.filter((q) => {
+    const conf = (apiConfigs && apiConfigs[q.source]) || getApiCollection(q.source);
+    return conf && conf.url;
+  });
+
+  if (apiQueries.length === 0) return serverCode;
+  if (serverCode.includes('cmsDatasets[')) return serverCode;
+
+  const hasExpressions = apiQueries.some((q) =>
+    Array.isArray(q.queryConfig.params) && q.queryConfig.params.some((p) => p.isExpression),
+  );
+
+  const evaluateParamHelper = `function evaluateParam(expr: string, params: Record<string, any>): string {
+  try {
+    const val = new Function('params', 'routeParams', \`return (\${expr});\`)(params, params);
+    return val !== undefined && val !== null ? String(val) : '';
+  } catch {
+    return '';
+  }
+}
+`;
+
+  const extractItemsHelper = `function extractItems(json: any, itemsKey?: string): any[] {
+  if (!json || typeof json !== 'object') return Array.isArray(json) ? json : [];
+  if (itemsKey) {
+    const val = itemsKey.includes('.')
+      ? itemsKey.split('.').reduce((acc: any, p: string) => acc?.[p], json)
+      : json[itemsKey];
+    if (Array.isArray(val)) return val;
+  }
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json.data)) return json.data;
+  if (Array.isArray(json.results)) return json.results;
+  if (Array.isArray(json.items)) return json.items;
+  return [];
+}
+`;
+
+  const fetchLines: string[] = [];
+  fetchLines.push('  const cmsDatasets: Record<string, any[]> = {};');
+
+  apiQueries.forEach((q, idx) => {
+    const conf = ((apiConfigs && apiConfigs[q.source]) || getApiCollection(q.source))!;
+    const headersCode = serializeHeadersForCode(conf.headers);
+    const revalidate = conf.cacheMaxAge ?? 14400;
+    const methodLine = conf.method && conf.method.toUpperCase() !== 'GET'
+      ? `\n        method: '${conf.method.toUpperCase()}',`
+      : '';
+
+    const lines: string[] = [];
+    lines.push(`  const qParams_${idx} = new URLSearchParams();`);
+
+    if (conf.defaultParams) {
+      for (const [k, v] of Object.entries(conf.defaultParams)) {
+        if (v !== undefined && v !== null && v !== '') {
+          lines.push(`  qParams_${idx}.set(${JSON.stringify(k)}, ${JSON.stringify(String(v))});`);
+        }
+      }
+    }
+
+    if (Array.isArray(q.queryConfig.params)) {
+      q.queryConfig.params.forEach((p, pIdx) => {
+        if (!p.key) return;
+        if (p.isExpression) {
+          lines.push(`  const pVal_${idx}_${pIdx} = evaluateParam(${JSON.stringify(p.value)}, routeParams);`);
+          lines.push(`  if (pVal_${idx}_${pIdx}) qParams_${idx}.set(${JSON.stringify(p.key)}, pVal_${idx}_${pIdx});`);
+        } else {
+          lines.push(`  qParams_${idx}.set(${JSON.stringify(p.key)}, ${JSON.stringify(p.value ?? '')});`);
+        }
+      });
+    }
+
+    const sep = conf.url.includes('?') ? '&' : '?';
+    lines.push(`  const qs_${idx} = qParams_${idx}.toString();`);
+    lines.push(`  const url_${idx} = \`${conf.url}\${qs_${idx} ? ('${sep}' + qs_${idx}) : ''}\`;`);
+    lines.push(`  try {`);
+    lines.push(`    const res_${idx} = await fetch(url_${idx}, {${methodLine}`);
+    lines.push(`      headers: ${headersCode},`);
+    lines.push(`      signal: AbortSignal.timeout(10000),`);
+    lines.push(`      next: { revalidate: ${revalidate} },`);
+    lines.push(`    });`);
+    lines.push(`    if (res_${idx}.ok) {`);
+    lines.push(`      const json_${idx} = await res_${idx}.json();`);
+    lines.push(`      const items_${idx} = extractItems(json_${idx}${conf.itemsKey ? `, ${JSON.stringify(conf.itemsKey)}` : ''});`);
+    lines.push(`      cmsDatasets[${JSON.stringify(q.listId)}] = items_${idx};`);
+    lines.push(`      if (!cmsDatasets[${JSON.stringify(q.source)}]) {`);
+    lines.push(`        cmsDatasets[${JSON.stringify(q.source)}] = items_${idx};`);
+    lines.push(`      }`);
+    lines.push(`    } else {`);
+    lines.push(`      console.error('Failed to fetch CMS dataset for ${q.listId}: ' + res_${idx}.status);`);
+    lines.push(`    }`);
+    lines.push(`  } catch (err) {`);
+    lines.push(`    console.error('Error fetching CMS dataset for ${q.listId}:', err);`);
+    lines.push(`  }`);
+
+    fetchLines.push(lines.join('\n'));
+  });
+
+  let updated = serverCode;
+
+  let helpersToInsert = '';
+  if (hasExpressions && !updated.includes('function evaluateParam')) {
+    helpersToInsert += `${evaluateParamHelper}\n`;
+  }
+  if (!updated.includes('function extractItems')) {
+    helpersToInsert += `${extractItemsHelper}\n`;
+  }
+
+  const pageFnMatch = updated.match(/export\s+default\s+(async\s+)?function\s+Page\s*\(([^)]*)\)\s*\{/);
+  if (!pageFnMatch) return updated;
+
+  const fnSignature = pageFnMatch[0];
+  const fnParams = pageFnMatch[2]?.trim() || '';
+
+  let newSignature = fnSignature;
+  if (!fnSignature.includes('async')) {
+    newSignature = newSignature.replace(/export\s+default\s+function/, 'export default async function');
+  }
+  if (!fnParams || fnParams === '') {
+    newSignature = newSignature.replace(
+      /Page\s*\(\s*\)/,
+      'Page({ params }: { params?: Promise<Record<string, string | string[]>> } = {})',
+    );
+  }
+
+  let routeParamsInit = '';
+  if (!updated.includes('routeParams')) {
+    if (updated.includes('await params')) {
+      routeParamsInit = '  const routeParams = (await params) as Record<string, any>;\n';
+    } else {
+      routeParamsInit = '  const routeParams = (params ? await params : {}) as Record<string, any>;\n';
+    }
+  }
+
+  updated = updated.replace(fnSignature, `${helpersToInsert}${newSignature}\n${routeParamsInit}${fetchLines.join('\n\n')}\n`);
+
+  if (!updated.includes('cmsDatasets={cmsDatasets}')) {
+    updated = updated.replace(/<PageClient(\s+[^>]*)?\/>/, (full, existingProps) => {
+      const trimmed = (existingProps || '').trim();
+      const props = trimmed ? ` ${trimmed} cmsDatasets={cmsDatasets}` : ' cmsDatasets={cmsDatasets}';
+      return `<PageClient${props} />`;
+    });
+  }
+
+  return updated;
 }

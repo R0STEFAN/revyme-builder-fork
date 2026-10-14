@@ -241,15 +241,21 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
     const staticParams = includeStaticParams !== false
       ? `\nexport async function generateStaticParams() {
   const endpoint = \`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\`;
-  const res = await fetch(endpoint, {${methodLine}
-    headers: ${headersCode},
-  });
-  if (!res.ok) return [];
-  const json = await res.json();
-  const items = ${itemsExtract};
-  return items
-    .filter((i: any) => i && (i.slug || i._slug))
-    .map((i: any) => ({ slug: String(i.slug || i._slug) }));
+  try {
+    const res = await fetch(endpoint, {${methodLine}
+      headers: ${headersCode},
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const items = ${itemsExtract};
+    return items
+      .filter((i: any) => i && (i.slug || i._slug))
+      .map((i: any) => ({ slug: String(i.slug || i._slug) }));
+  } catch (err) {
+    console.error('Failed to generate static params for ${collection}:', err);
+    return [];
+  }
 }\n`
       : '';
 
@@ -263,14 +269,16 @@ const seoBindings = ${bindingsLiteral};
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
-  const res = await fetch(endpoint, {${methodLine}
-    headers: ${headersCode},
-    next: { revalidate: ${revalidate} },
-  });
-  if (!res.ok) return seoDefaults;
-  const json = await res.json();
-  const item = ${itemExtract};
-  if (!item) return seoDefaults;
+  try {
+    const res = await fetch(endpoint, {${methodLine}
+      headers: ${headersCode},
+      signal: AbortSignal.timeout(10000),
+      next: { revalidate: ${revalidate} },
+    });
+    if (!res.ok) return seoDefaults;
+    const json = await res.json();
+    const item = ${itemExtract};
+    if (!item) return seoDefaults;
 
   const bound = (slot: string) => {
     const field = (seoBindings as Record<string, string>)[slot];
@@ -307,6 +315,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     },
     alternates: { canonical: (seoDefaults as any).canonical || undefined },${robots}
   };
+  } catch {
+    return seoDefaults;
+  }
 }
 ${staticParams}
 export const dynamicParams = true;
@@ -314,11 +325,21 @@ export const dynamicParams = true;
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
-  const res = await fetch(endpoint, {${methodLine}
-    headers: ${headersCode},
-    next: { revalidate: ${revalidate} },
-  });
-  if (!res.ok) notFound();
+  let res;
+  try {
+    res = await fetch(endpoint, {${methodLine}
+      headers: ${headersCode},
+      signal: AbortSignal.timeout(10000),
+      next: { revalidate: ${revalidate} },
+    });
+  } catch (err) {
+    console.error('Network error fetching CMS detail for ' + slug + ':', err);
+    throw err;
+  }
+  if (res.status === 404) notFound();
+  if (!res.ok) {
+    throw new Error(\`Failed to fetch CMS detail for \${slug}: \${res.status} \${res.statusText}\`);
+  }
   const json = await res.json();
   const item = ${itemExtract};
   if (!item) notFound();
@@ -427,3 +448,85 @@ export function ensureCmsDetailStaticParams(serverCode: string): string {
   }
   return serverCode.endsWith('\n') ? `${serverCode}\n${snippet}` : `${serverCode}\n\n${snippet}`;
 }
+
+/**
+ * Strips generateStaticParams from a server page wrapper for Dynamic mode SSR.
+ * Replaces re-export specifiers, strips function declarations, and ensures dynamicParams = true.
+ */
+export function stripGenerateStaticParams(serverCode: string): string {
+  if (!serverCode.includes('generateStaticParams')) return serverCode;
+
+  // 1. Re-export specifiers: export { default, generateStaticParams } from '...'
+  let stripped = serverCode.replace(
+    /export\s*\{\s*(?:default\s*,\s*generateStaticParams|generateStaticParams\s*,\s*default)\s*\}\s*from/g,
+    'export { default } from',
+  );
+  stripped = stripped.replace(
+    /export\s*\{\s*generateStaticParams\s*\}\s*(?:from\s*['"][^'"]+['"])?;?\s*\n?/g,
+    '',
+  );
+
+  // 2. Function declaration: export (async)? function generateStaticParams(...) { ... }
+  const fnRegex = /export\s+(?:async\s+)?function\s+generateStaticParams\s*\([^)]*\)\s*\{/g;
+  let match: RegExpExecArray | null;
+  while ((match = fnRegex.exec(stripped)) !== null) {
+    const startIndex = match.index;
+    const openBraceIndex = match.index + match[0].length - 1;
+    let depth = 1;
+    let i = openBraceIndex + 1;
+    let inString: string | null = null;
+    let escaped = false;
+
+    while (i < stripped.length && depth > 0) {
+      const ch = stripped[i];
+      if (escaped) {
+        escaped = false;
+        i++;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        i++;
+        continue;
+      }
+      if (inString) {
+        if (ch === inString) inString = null;
+        i++;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === '`') {
+        inString = ch;
+        i++;
+        continue;
+      }
+      if (ch === '{') {
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+      }
+      i++;
+    }
+
+    if (depth === 0) {
+      while (i < stripped.length && (stripped[i] === '\n' || stripped[i] === '\r')) {
+        i++;
+      }
+      stripped = stripped.slice(0, startIndex) + stripped.slice(i);
+      fnRegex.lastIndex = startIndex;
+    } else {
+      break;
+    }
+  }
+
+  // Ensure dynamicParams is present for dynamic SSR
+  if (
+    !stripped.includes('dynamicParams') &&
+    !stripped.includes("dynamic = 'force-dynamic'") &&
+    !stripped.includes('dynamic = "force-dynamic"')
+  ) {
+    stripped += '\nexport const dynamicParams = true;\n';
+  }
+
+  return stripped;
+}
+
