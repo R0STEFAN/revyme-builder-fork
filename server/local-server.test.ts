@@ -108,6 +108,11 @@ describe('LocalServerManager', () => {
       const buildDir = manager.getBuildDir('site-built');
       const nextDir = path.join(buildDir, '.next');
       fs.mkdirSync(nextDir, { recursive: true });
+      fs.writeFileSync(path.join(nextDir, 'BUILD_ID'), 'test-build-id');
+      fs.writeFileSync(
+        path.join(nextDir, 'revyme-build-success.json'),
+        JSON.stringify({ success: true, builtAt: Date.now() })
+      );
 
       const status = manager.getStatus('site-built');
       expect(status.isBuilt).toBe(true);
@@ -380,7 +385,7 @@ describe('LocalServerManager', () => {
       expect(manager.getStatus('progress-test').buildProgress).toMatchObject({
         percent: 10,
       });
-      expect(['preparing-assets', 'compiling']).toContain(
+      expect(['exporting', 'preparing-assets', 'compiling']).toContain(
         manager.getStatus('progress-test').buildProgress?.stage
       );
 

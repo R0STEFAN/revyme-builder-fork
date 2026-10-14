@@ -476,12 +476,6 @@ export class LocalServerManager {
     if (fs.existsSync(failedMarker)) return false;
     const buildIdFile = path.join(nextDir, 'BUILD_ID');
     if (fs.existsSync(buildIdFile)) return true;
-    try {
-      const entries = fs.readdirSync(nextDir);
-      if (entries.length === 0) return true;
-    } catch {
-      // ignore
-    }
     return false;
   }
 
@@ -689,7 +683,8 @@ export class LocalServerManager {
 
   async syncUploads(
     targetDir: string,
-    onProgress?: (progress: { processed: number; total: number; filename: string }) => void
+    onProgress?: (progress: { processed: number; total: number; filename: string }) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     this.syncUploadFiles(targetDir);
 
@@ -698,8 +693,8 @@ export class LocalServerManager {
 
     // Run image optimization on public/uploads and public/api/uploads using sharp
     try {
-      await this.optimizeImages(path.join(publicDir, 'uploads'), onProgress);
-      await this.optimizeImages(path.join(publicApiDir, 'uploads'), onProgress);
+      await this.optimizeImages(path.join(publicDir, 'uploads'), onProgress, signal);
+      await this.optimizeImages(path.join(publicApiDir, 'uploads'), onProgress, signal);
     } catch {
       // ignore
     }
@@ -707,9 +702,10 @@ export class LocalServerManager {
 
   async optimizeImages(
     uploadsTarget: string,
-    onProgress?: (progress: { processed: number; total: number; filename: string }) => void
+    onProgress?: (progress: { processed: number; total: number; filename: string }) => void,
+    signal?: AbortSignal
   ): Promise<void> {
-    if (!fs.existsSync(uploadsTarget)) return;
+    if (!fs.existsSync(uploadsTarget) || signal?.aborted) return;
 
     const widths = [320, 640, 768, 1024, 1280, 1920];
     const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -724,6 +720,7 @@ export class LocalServerManager {
       let processedVariants = 0;
 
       for (const entry of originalFiles) {
+        if (signal?.aborted) return;
         const ext = path.extname(entry.name).toLowerCase();
         const baseName = entry.name.slice(0, -ext.length);
         const filePath = path.join(uploadsTarget, entry.name);
@@ -738,6 +735,7 @@ export class LocalServerManager {
         }
 
         for (const w of widths) {
+          if (signal?.aborted) return;
           const outName = `${baseName}-${w}w.webp`;
           const outPath = path.join(uploadsTarget, outName);
 
@@ -866,7 +864,7 @@ export class LocalServerManager {
     record.lastError = null;
     record.isBuilt = false;
     record.liveLogs = [];
-    record.buildProgress = { stage: 'compiling', label: 'Preparing build...', percent: 10, buildId, startedAt };
+    record.buildProgress = { stage: 'exporting', label: 'Exporting project files...', percent: 5, buildId, startedAt };
 
     const abortController = new AbortController();
     this.activeBuildControllers.set(safeId, abortController);
@@ -881,9 +879,11 @@ export class LocalServerManager {
         const stored = getProject(safeId);
         if (!stored) {
           const errLog = `Project not found: ${projectId}`;
+          const finishedAt = Date.now();
+          record.buildFinishedAt = finishedAt;
           record.status = 'error';
           record.lastError = errLog;
-          record.buildProgress = { stage: 'error', label: errLog, percent: 0, buildId, startedAt, finishedAt: Date.now() };
+          record.buildProgress = { stage: 'error', label: errLog, percent: 0, buildId, startedAt, finishedAt };
           return { success: false, log: errLog };
         }
         let exportFiles = stored.data?.files || {};
@@ -898,8 +898,10 @@ export class LocalServerManager {
       }
 
       if (abortController.signal.aborted) {
+        const finishedAt = Date.now();
+        record.buildFinishedAt = finishedAt;
         record.status = 'cancelled';
-        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt };
         return { success: false, log: 'Build cancelled' };
       }
 
@@ -912,23 +914,29 @@ export class LocalServerManager {
         startedAt,
       };
 
-      await this.syncUploads(targetDir, ({ processed, total, filename }) => {
-        if (abortController.signal.aborted) return;
-        const pct = total > 0 ? Math.min(18, Math.round(10 + (processed / total) * 8)) : 10;
-        record.buildProgress = {
-          stage: 'preparing-assets',
-          label: `Optimizing assets (${processed}/${total}) ${filename}...`,
-          percent: pct,
-          buildId,
-          startedAt,
-        };
-      });
+      await this.syncUploads(
+        targetDir,
+        ({ processed, total, filename }) => {
+          if (abortController.signal.aborted) return;
+          const pct = total > 0 ? Math.min(18, Math.round(10 + (processed / total) * 8)) : 10;
+          record.buildProgress = {
+            stage: 'preparing-assets',
+            label: `Optimizing assets (${processed}/${total}) ${filename}...`,
+            percent: pct,
+            buildId,
+            startedAt,
+          };
+        },
+        abortController.signal
+      );
 
       this.syncPublicAssets(targetDir);
 
       if (abortController.signal.aborted) {
+        const finishedAt = Date.now();
+        record.buildFinishedAt = finishedAt;
         record.status = 'cancelled';
-        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+        record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt };
         return { success: false, log: 'Build cancelled' };
       }
 
@@ -946,6 +954,7 @@ export class LocalServerManager {
 
       const buildResult = await new Promise<{ success: boolean; log: string }>((resolve) => {
         let output = '';
+        const MAX_LAST_ERROR_CHARS = 8000;
 
         const child = this.spawnFn(process.execPath, [nextBin, 'build'], {
           cwd: targetDir,
@@ -969,7 +978,10 @@ export class LocalServerManager {
           this.appendLiveLog(record, text);
           const cleaned = stripAnsi(text).trim();
           if (cleaned) {
-            record.lastError = record.lastError ? `${record.lastError}\n${cleaned}` : cleaned;
+            const combined = record.lastError ? `${record.lastError}\n${cleaned}` : cleaned;
+            record.lastError = combined.length > MAX_LAST_ERROR_CHARS
+              ? '...' + combined.slice(combined.length - MAX_LAST_ERROR_CHARS)
+              : combined;
           }
         });
 
@@ -977,10 +989,14 @@ export class LocalServerManager {
           this.activeBuildProcesses.delete(safeId);
           output += `\n${err.message}`;
           const cleaned = stripAnsi(output);
+          const finishedAt = Date.now();
+          record.buildFinishedAt = finishedAt;
           record.status = 'error';
-          record.lastError = cleaned;
+          record.lastError = cleaned.length > MAX_LAST_ERROR_CHARS
+            ? '...' + cleaned.slice(cleaned.length - MAX_LAST_ERROR_CHARS)
+            : cleaned;
           record.isBuilt = false;
-          record.buildProgress = { stage: 'error', label: cleaned, percent: record.buildProgress?.percent ?? 0, buildId, startedAt, finishedAt: Date.now() };
+          record.buildProgress = { stage: 'error', label: record.lastError, percent: record.buildProgress?.percent ?? 0, buildId, startedAt, finishedAt };
           this.clearSuccessMarker(targetDir);
           resolve({ success: false, log: cleaned });
         });
@@ -988,11 +1004,13 @@ export class LocalServerManager {
         child.on('close', (code, signal) => {
           this.activeBuildProcesses.delete(safeId);
           const cleaned = stripAnsi(output);
+          const finishedAt = Date.now();
+          record.buildFinishedAt = finishedAt;
 
           if (record.status === 'cancelled' || signal === 'SIGTERM') {
             record.status = 'cancelled';
             record.isBuilt = false;
-            record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt: Date.now() };
+            record.buildProgress = { stage: 'cancelled', label: 'Build cancelled', percent: 0, buildId, startedAt, finishedAt };
             this.clearSuccessMarker(targetDir);
             resolve({ success: false, log: 'Build cancelled' });
             return;
@@ -1003,20 +1021,23 @@ export class LocalServerManager {
             record.lastBuiltAt = Date.now();
             record.status = record.proc ? 'running' : 'idle';
             record.lastError = null;
-            record.buildProgress = { stage: 'done', label: 'Build completed successfully', percent: 100, buildId, startedAt, finishedAt: Date.now() };
+            record.buildProgress = { stage: 'done', label: 'Build completed successfully', percent: 100, buildId, startedAt, finishedAt };
             this.writeSuccessMarker(targetDir, buildId);
             resolve({ success: true, log: cleaned });
           } else {
             record.status = 'error';
             record.isBuilt = false;
-            record.lastError = cleaned || record.lastError || `Build failed with exit code ${code}`;
+            const rawError = cleaned || record.lastError || `Build failed with exit code ${code}`;
+            record.lastError = rawError.length > MAX_LAST_ERROR_CHARS
+              ? '...' + rawError.slice(rawError.length - MAX_LAST_ERROR_CHARS)
+              : rawError;
             record.buildProgress = {
               stage: 'error',
               label: record.lastError,
               percent: record.buildProgress?.percent ?? 0,
               buildId,
               startedAt,
-              finishedAt: Date.now(),
+              finishedAt,
             };
             this.clearSuccessMarker(targetDir);
             resolve({ success: false, log: record.lastError });
@@ -1026,16 +1047,19 @@ export class LocalServerManager {
 
       return buildResult;
     } catch (err: any) {
+      const finishedAt = Date.now();
+      record.buildFinishedAt = finishedAt;
       record.status = 'error';
       record.isBuilt = false;
-      record.lastError = err?.message || String(err);
+      const errText = err?.message || String(err);
+      record.lastError = errText.length > 8000 ? '...' + errText.slice(errText.length - 8000) : errText;
       record.buildProgress = {
         stage: 'error',
         label: record.lastError,
         percent: record.buildProgress?.percent ?? 0,
         buildId,
         startedAt,
-        finishedAt: Date.now(),
+        finishedAt,
       };
       this.clearSuccessMarker(targetDir);
       throw err;
@@ -1068,6 +1092,8 @@ export class LocalServerManager {
         this.activeBuildProcesses.delete(safeId);
       }
 
+      const finishedAt = Date.now();
+      record.buildFinishedAt = finishedAt;
       record.status = 'cancelled';
       record.isBuilt = false;
       record.lastError = 'Build cancelled by user';
@@ -1077,7 +1103,7 @@ export class LocalServerManager {
         percent: 0,
         buildId: record.buildId || undefined,
         startedAt: record.buildStartedAt || undefined,
-        finishedAt: Date.now(),
+        finishedAt,
       };
 
       const targetDir = this.getBuildDir(safeId);
