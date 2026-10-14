@@ -38,6 +38,14 @@ import { trace } from '@/shared/debug-trace';
 import { usePreviewThumbnail } from './usePreviewThumbnail';
 import ToolInput from '@/editor/controls/ToolInput';
 import Button from '@/design-system/Button';
+import {
+  getApiCollection,
+  resolveEnvHeaders,
+  buildApiRequestUrl,
+  extractApiItems,
+} from '@/code/project/cms-api-config';
+import { getEnvVariables } from '@/editor/left-toolbar/panels/cms/ApiResourceModal';
+import { evaluateQueryParamExpressions } from '@/preview-sandbox/preview-api-query';
 
 /** URL the preview iframe loads. Historically this lived at
  *  `http://localhost:5175` (a separate Vite project). The runtime has since
@@ -372,6 +380,88 @@ export default function PreviewOverlay({ open, onClose }: Props) {
         setIframeReady(true);
         setReadyTick((t) => t + 1);
         trace.action('preview-overlay:ready', { from: e.origin });
+      } else if (e.data?.type === 'preview:render-error') {
+        trace.error('preview-overlay:render-error', {
+          error: e.data.error,
+          url: e.data.url,
+          componentStack: e.data.componentStack,
+        });
+      } else if (e.data?.type === 'preview:fetch-api-query') {
+        const { requestId, source, queryConfig, routeParams, url } = e.data;
+        (async () => {
+          const iframe = iframeRef.current;
+          if (!iframe?.contentWindow) return;
+          try {
+            const apiConfig = getApiCollection(source);
+            if (!apiConfig) {
+              iframe.contentWindow.postMessage(
+                {
+                  type: 'preview:api-query-result',
+                  requestId,
+                  data: null,
+                  error: `Collection "${source}" is not configured for API mode`,
+                },
+                POST_MESSAGE_TARGET,
+              );
+              return;
+            }
+
+            const resolvedParams = queryConfig
+              ? evaluateQueryParamExpressions(queryConfig, routeParams || {})
+              : {};
+            const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams);
+            const envVars = getEnvVariables();
+            const resolvedHeaders = resolveEnvHeaders(apiConfig.headers, envVars);
+
+            trace.action('preview-overlay:fetch-api-query', { source, fullUrl, requestId, url });
+
+            const res = await fetch('/api/proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: fullUrl,
+                method: apiConfig.method || 'GET',
+                headers: resolvedHeaders,
+              }),
+            });
+
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '');
+              iframe.contentWindow.postMessage(
+                {
+                  type: 'preview:api-query-result',
+                  requestId,
+                  data: null,
+                  error: `Proxy error ${res.status}: ${errText}`,
+                },
+                POST_MESSAGE_TARGET,
+              );
+              return;
+            }
+
+            const resJson = await res.json();
+            const items = extractApiItems(resJson, apiConfig.itemsKey);
+            iframe.contentWindow.postMessage(
+              {
+                type: 'preview:api-query-result',
+                requestId,
+                data: Array.isArray(items) ? items : [],
+                error: null,
+              },
+              POST_MESSAGE_TARGET,
+            );
+          } catch (err: any) {
+            iframe.contentWindow.postMessage(
+              {
+                type: 'preview:api-query-result',
+                requestId,
+                data: null,
+                error: err?.message || String(err),
+              },
+              POST_MESSAGE_TARGET,
+            );
+          }
+        })();
       }
     };
     window.addEventListener('message', handler);
@@ -416,6 +506,8 @@ export default function PreviewOverlay({ open, onClose }: Props) {
     const files: Array<[string, string]> = [];
     let globalsCssContent = '';
     for (const path of projectFS.listFiles()) {
+      // Secrets hygiene: do not send secret .env or _meta files to the preview sandbox
+      if (path.startsWith('.env') || path.startsWith('_meta/')) continue;
       let content = projectFS.readFile(path);
       if (content === null) continue;
       // Older projects store dark-mode tokens under `[data-theme="dark"]`,

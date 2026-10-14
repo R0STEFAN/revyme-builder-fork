@@ -11,6 +11,8 @@
 // Uses console (not the editor's `trace`) to match the rest of preview-sandbox,
 // which is its own iframe world and doesn't participate in the canvas debug bus.
 
+import { isPreviewRenderErrorActive } from './PreviewErrorBoundary';
+
 let capturing = false;
 
 // How long to wait for entrance animations to finish before snapshotting.
@@ -60,6 +62,13 @@ export function captureScale(scrollWidth: number): number {
  *  Re-entrant guard — overlapping requests are ignored. */
 export async function captureThumbnail(): Promise<void> {
   if (capturing) return;
+  if (
+    typeof document !== 'undefined' &&
+    (document.querySelector('[data-preview-render-error]') || isPreviewRenderErrorActive())
+  ) {
+    console.warn('[preview] skipping thumbnail capture due to render error');
+    return;
+  }
   capturing = true;
   try {
     // Let web fonts settle so text isn't snapshotted mid-swap.

@@ -65,9 +65,24 @@ import {
   detectRequiredOptionalModules,
   isOptionalModuleLoaded,
 } from '@/canvas/optional-modules-registry';
+import { PreviewErrorBoundary } from './PreviewErrorBoundary';
+import {
+  detectCollectionQueries,
+  wrapCollectionListMapping,
+  dispatchApiQuery,
+  handleApiQueryResult,
+  subscribePreviewQueries,
+  getPreviewDataset,
+  setPreviewDataset,
+  getPreviewQueryStatus,
+  evaluateQueryParamExpressions,
+  buildPreviewQueryKey,
+  usePreviewCollectionData,
+} from './preview-api-query';
 
 // ─── Project files (mirror of parent ProjectFS) ────────────────────────────
 
+let filesRevision = 0;
 const projectFiles: Map<string, string> = new Map();
 const compiledModuleCache: Map<string, any> = new Map();
 
@@ -162,6 +177,19 @@ function createPreviewElement(jsxFn: typeof reactJsx, type: any, props: any, key
       if (stripChildren) delete nextProps.children;
       if (stripLayout) delete nextProps.layout;
     }
+    if (nextProps['data-query-config'] && nextProps['data-id']) {
+      const listId = nextProps['data-id'];
+      const qStatus = getPreviewQueryStatus(listId);
+      if (qStatus.error) {
+        nextProps = { ...nextProps, 'data-preview-api-error': qStatus.error };
+      } else if (qStatus.loading) {
+        nextProps = { ...nextProps, 'data-preview-api-loading': 'true' };
+      }
+      const data = getPreviewDataset(listId);
+      if (Array.isArray(data) && data.length === 0) {
+        nextProps = { ...nextProps, 'data-preview-api-empty': 'true' };
+      }
+    }
   }
   return jsxFn(type, nextProps ?? {}, key);
 }
@@ -251,6 +279,13 @@ const MODULE_MAP: Record<string, any> = {
     Override: RevymeRuntime.Override,
     createStore: RevymeRuntime.createStore,
     hostCompat: RevymeRuntime.hostCompat,
+    usePreviewCollectionData,
+    getPreviewDataset,
+  }),
+  '@revyme/preview-runtime': esm({
+    usePreviewCollectionData,
+    getPreviewDataset,
+    getPreviewQueryStatus,
   }),
   // Legacy `@/lib/...` entries — old projects that still use these paths
   // resolve to the same package functions, so they keep working without a
@@ -395,9 +430,13 @@ function compileFile(filePath: string): any {
     .replace(/^\s*['"]use server['"];?\s*$/m, '')
     .replace(/\bimport\s*\(([^)]+)\)/g, '__import($1)');
 
+  const withWrappedLists = (filePath.endsWith('.tsx') || filePath.endsWith('.jsx'))
+    ? wrapCollectionListMapping(stripped)
+    : stripped;
+
   let transformed: { code?: string };
   try {
-    transformed = transform(stripped, {
+    transformed = transform(withWrappedLists, {
       presets: [
         ['env', { targets: { esmodules: true }, modules: 'commonjs' }],
         // Automatic JSX runtime — Babel emits `import { jsx } from
@@ -445,6 +484,12 @@ function compileFile(filePath: string): any {
         return {};
       }
       if (resolved.endsWith('.json')) {
+        const match = resolved.match(/cms\/([^/]+)\.json$/);
+        if (match) {
+          const slug = match[1];
+          const override = getPreviewDataset(slug);
+          if (override !== undefined) return override;
+        }
         try { return JSON.parse(projectFiles.get(resolved) || '{}'); }
         catch { return {}; }
       }
@@ -459,8 +504,9 @@ function compileFile(filePath: string): any {
   try {
      
     const __import = (spec: string) => loadOptionalModule(spec);
-    const fn = new Function('module', 'exports', 'require', '__import', transformed.code!);
-    fn(moduleObj, moduleObj.exports, requireFn, __import);
+    const __getPreviewData = (source: string, listId?: string) => getPreviewDataset(source, listId);
+    const fn = new Function('module', 'exports', 'require', '__import', '__getPreviewData', transformed.code!);
+    fn(moduleObj, moduleObj.exports, requireFn, __import, __getPreviewData);
   } catch (err) {
     throw new Error(`preview: runtime error in ${filePath}: ${(err as Error).message}`);
   }
@@ -660,10 +706,18 @@ function ComponentPreviewShell({ bg, children }: { bg: string; children: React.R
 
 function PreviewApp() {
   const [url, setUrl] = React.useState(() => location.pathname + location.search);
+  const [, setQueryTick] = React.useState(0);
   React.useEffect(() => {
     const onPop = () => setUrl(location.pathname + location.search);
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  React.useEffect(() => {
+    return subscribePreviewQueries(() => {
+      compiledModuleCache.clear();
+      setQueryTick((t) => t + 1);
+    });
   }, []);
 
   // Component-isolation mode short-circuits the route-resolution path. The
@@ -720,7 +774,9 @@ function PreviewApp() {
       return (
         <ComponentPreviewShell bg={bgCanvas}>
           <PreviewProviders>
-            <Component {...variantProp} />
+            <PreviewErrorBoundary url={previewComponentFile || 'component'} revision={filesRevision}>
+              <Component {...variantProp} />
+            </PreviewErrorBoundary>
           </PreviewProviders>
         </ComponentPreviewShell>
       );
@@ -744,6 +800,40 @@ function PreviewApp() {
   // the params are already correct on first render — no flash of empty
   // params during initial paint.
   setCurrentParams((route?.params as Record<string, string | string[]>) ?? {});
+
+  // API Query Resolution Bridge:
+  // Detect collection queries on active route components and dispatch requests via parent proxy
+  React.useEffect(() => {
+    if (!route) return;
+    const routeParams = (route.params as Record<string, string>) || {};
+    const activeFiles = [
+      variantPageOverrides.get(route.pageFile) ?? route.pageFile,
+      ...route.layoutChain,
+    ];
+
+    for (const filePath of activeFiles) {
+      const content = projectFiles.get(filePath);
+      if (!content) continue;
+      const queries = detectCollectionQueries(content);
+      for (const q of queries) {
+        const resolvedParams = evaluateQueryParamExpressions(q.queryConfig, routeParams);
+        const queryKey = buildPreviewQueryKey(q.source, resolvedParams);
+        const cached = getPreviewDataset(queryKey);
+        if (cached !== undefined) {
+          setPreviewDataset(q.listId, cached);
+          setPreviewDataset(q.source, cached);
+          continue;
+        }
+        dispatchApiQuery({
+          listId: q.listId,
+          source: q.source,
+          queryConfig: q.queryConfig,
+          routeParams,
+          url,
+        });
+      }
+    }
+  }, [url, route?.pageFile, route?.params, filesRevision]);
 
   if (!route) {
     // 404 — try app/not-found.tsx, fall back to default message.
@@ -785,7 +875,11 @@ function PreviewApp() {
       </div>
     );
   }
-  return <>{tree}</>;
+  return (
+    <PreviewErrorBoundary url={url} revision={filesRevision}>
+      {tree}
+    </PreviewErrorBoundary>
+  );
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────────
@@ -823,6 +917,7 @@ window.addEventListener('message', (e) => {
   if (!msg || typeof msg !== 'object') return;
 
   if (msg.type === 'preview:project-files') {
+    filesRevision++;
     projectFiles.clear();
     for (const [path, content] of msg.files as Array<[string, string]>) {
       projectFiles.set(path, content);
@@ -836,6 +931,7 @@ window.addEventListener('message', (e) => {
     rebuildRoutes();
     rerender();
   } else if (msg.type === 'preview:file-update') {
+    filesRevision++;
     projectFiles.set(msg.path, msg.content);
     if (msg.path.startsWith('app/') && (msg.path.endsWith('/page.tsx') || msg.path.endsWith('/layout.tsx'))) {
       rebuildRoutes();
@@ -940,6 +1036,8 @@ window.addEventListener('message', (e) => {
     // dashboard thumbnail. captureThumbnail() defers + posts `preview:thumbnail`
     // back; fire-and-forget so the message handler stays sync.
     void captureThumbnail();
+  } else if (msg.type === 'preview:api-query-result') {
+    handleApiQueryResult(msg);
   }
 });
 
