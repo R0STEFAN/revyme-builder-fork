@@ -459,7 +459,7 @@ export default function Page() { return <div>Authors</div>; }
     expect(repairedAlt).not.toMatch(/<img[^>]*\balt(?!\s*=)/);
 
     const repairedBindings = repairLegacyDetailBindings(repairedAlt);
-    expect(repairedBindings).toContain('typeof item.categories_m2m === \'object\'');
+    expect(repairedBindings).toContain('typeof item?.categories_m2m === \'object\'');
     expect(repairedBindings).toContain('{item.title}');
   });
 });

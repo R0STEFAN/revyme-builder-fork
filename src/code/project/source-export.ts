@@ -40,6 +40,8 @@ import {
   detectPageCollectionQueries,
   injectCmsDatasetsIntoClientPage,
   orchestrateServerFetchForQueries,
+  repairLegacyDetailBindings,
+  repairBareAltAttributes,
   type DetectedCollectionQuery,
 } from './cms-page-ops';
 import { loadCmsProjectConfig, type ApiCollectionConfig } from './cms-api-config';
@@ -595,6 +597,20 @@ export function prepareSiteFiles(
     // Server Component export guard: generateMetadata and metadata must never have 'use client'
     if (files[path] && (files[path].includes('generateMetadata') || files[path].includes('export const metadata') || files[path].includes('generateStaticParams'))) {
       files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
+    }
+
+    // Clean and protect CMS bindings & bare attributes across all pages and components
+    if (files[path] && /\.(tsx|jsx)$/.test(path)) {
+      let updated = files[path];
+      if (updated.includes('<img') && /\balt\b(?!\s*=)/.test(updated)) {
+        updated = repairBareAltAttributes(updated);
+      }
+      if (updated.includes('{item.') || updated.includes('{item?.') || updated.includes('img_file.metadata')) {
+        updated = repairLegacyDetailBindings(updated);
+      }
+      if (updated !== files[path]) {
+        files[path] = updated;
+      }
     }
 
     // Inject responsive image srcSet and sizes into all page and component JSX files

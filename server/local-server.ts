@@ -558,7 +558,30 @@ export class LocalServerManager {
       if (!fs.existsSync(parentDir)) {
         fs.mkdirSync(parentDir, { recursive: true });
       }
-      fs.writeFileSync(fullPath, content, 'utf-8');
+      let fileContent = content;
+      if (/\.(tsx|jsx)$/.test(relativePath)) {
+        fileContent = fileContent.replace(/(<img\b[^>]*?)(\balt\b)(?!\s*=)([^>]*?>?)/gs, (match) => match.replace(/\balt\b(?!\s*=)/, 'alt=""'));
+        fileContent = fileContent.replace(
+          /\{item(?:\.|\?\.)([A-Za-z0-9_]+)(?:\.|\?\.)metadata\}/g,
+          `{typeof item.$1?.metadata === 'object' ? JSON.stringify(item.$1?.metadata) : (item.$1?.metadata ?? '')}`,
+        );
+        fileContent = fileContent.replace(
+          /\{item(?:\.|\?\.)metadata\}/g,
+          `{typeof item?.metadata === 'object' ? JSON.stringify(item?.metadata) : (item?.metadata ?? '')}`,
+        );
+        fileContent = fileContent.replace(
+          /(<(?:p|span|div|h[1-6]|li)\b[^>]*>)\s*\{item(?:\.|\?\.)([A-Za-z0-9_.]+)\}\s*(<\/(?:p|span|div|h[1-6]|li)>)/g,
+          (match, openTag, propPath, closeTag) => {
+            const primitives = ['title', 'id', 'slug', 'rank', 'date_updated', 'seo_title', 'seo_description', 'deskription', 'alt_text', 'name'];
+            if (primitives.includes(propPath)) {
+              return `${openTag}{item.${propPath}}${closeTag}`;
+            }
+            const safePath = 'item?.' + propPath.replace(/\./g, '?.');
+            return `${openTag}{typeof ${safePath} === 'object' && ${safePath} !== null ? (${safePath}?.name || ${safePath}?.title || (Array.isArray(${safePath}) ? ${safePath}.map((c: any) => typeof c === 'object' ? (c?.name || c?.title || c?.id || '') : c).filter(Boolean).join(', ') : JSON.stringify(${safePath}))) : (${safePath} ?? '')}${closeTag}`;
+          },
+        );
+      }
+      fs.writeFileSync(fullPath, fileContent, 'utf-8');
     }
 
     // Scaffold defaults if missing

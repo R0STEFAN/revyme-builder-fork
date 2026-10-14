@@ -1145,7 +1145,7 @@ export default async function Page(${fnParamStr}) {${routeParamsInit}
 export function repairLegacyDetailBindings(code: string): string {
   let result = code;
   result = result.replace(
-    /\{item\.([A-Za-z0-9_]+)(?:\.|\?\.)metadata\}/g,
+    /\{item(?:\.|\?\.)([A-Za-z0-9_]+)(?:\.|\?\.)metadata\}/g,
     `{typeof item.$1?.metadata === 'object' ? JSON.stringify(item.$1?.metadata) : (item.$1?.metadata ?? '')}`,
   );
   result = result.replace(
@@ -1153,13 +1153,14 @@ export function repairLegacyDetailBindings(code: string): string {
     `{typeof item?.metadata === 'object' ? JSON.stringify(item?.metadata) : (item?.metadata ?? '')}`,
   );
   result = result.replace(
-    /(<p\b[^>]*>)\s*\{item\.([A-Za-z0-9_.]+)\}\s*(<\/p>)/g,
+    /(<(?:p|span|div|h[1-6]|li)\b[^>]*>)\s*\{item(?:\.|\?\.)([A-Za-z0-9_.]+)\}\s*(<\/(?:p|span|div|h[1-6]|li)>)/g,
     (match, openTag, propPath, closeTag) => {
       const primitives = ['title', 'id', 'slug', 'rank', 'date_updated', 'seo_title', 'seo_description', 'deskription', 'alt_text', 'name'];
       if (primitives.includes(propPath)) {
         return `${openTag}{item.${propPath}}${closeTag}`;
       }
-      return `${openTag}{typeof item.${propPath} === 'object' && item.${propPath} !== null ? (item.${propPath}?.name || item.${propPath}?.title || (Array.isArray(item.${propPath}) ? item.${propPath}.map((c: any) => c?.name || c?.title || c?.id || '').filter(Boolean).join(', ') : JSON.stringify(item.${propPath}))) : (item.${propPath} ?? '')}${closeTag}`;
+      const safePath = 'item?.' + propPath.replace(/\./g, '?.');
+      return `${openTag}{typeof ${safePath} === 'object' && ${safePath} !== null ? (${safePath}?.name || ${safePath}?.title || (Array.isArray(${safePath}) ? ${safePath}.map((c: any) => typeof c === 'object' ? (c?.name || c?.title || c?.id || '') : c).filter(Boolean).join(', ') : JSON.stringify(${safePath}))) : (${safePath} ?? '')}${closeTag}`;
     },
   );
   return result;
