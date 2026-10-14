@@ -41,7 +41,7 @@ import { checkMotionPropsNeedMotionTag } from './checks/motion-tag';
 import { checkTranslationDialect } from './checks/translation-dialect';
 import { checkMediaBandDialect, checkDuplicateBreakpointStack } from './checks/media-band-dialect';
 import { checkComponentLinks, checkPageLinks } from './checks/link-rules';
-import { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences } from './checks/cms-dialect';
+import { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences, checkCmsQueryConfig } from './checks/cms-dialect';
 import { checkCmsLocaleFilter, checkCmsI18nDirectAccess, checkCmsMapResolves, checkCmsStyleBindingsResolve, checkInlineMapUnsupported } from './checks/cms-locale-dialect';
 import { checkResolutionFidelity } from './checks/fidelity';
 import { checkStyleSurface, checkTextStyleOnFrame, checkElementSurface, checkLoopCarrier, checkPageExports, checkExpressionDataAttrs } from './checks/surface-dialect';
@@ -51,6 +51,7 @@ import { checkConditionalRenderDialect, checkHandWrittenMediaQuery, checkUnreada
 // importers and the test suites are unchanged by the split).
 export type { FileKind, OracleViolation } from './checks/shared';
 export { ensureNodeDimensions } from './checks/node-dimensions';
+export { checkCmsQueryConfig } from './checks/cms-dialect';
 
 /** Imports that resolve in the canvas sandbox. Everything else bounces. */
 // @/icons/* are builder-written (icon-set instances
@@ -1446,6 +1447,7 @@ export function checkFile(
     checkCmsLocaleFilter(code, ast, v);
     checkCmsI18nDirectAccess(code, ast, v);
     checkModuleScopeItemReferences(code, ast, v);
+    checkCmsQueryConfig(code, ast, v);
   }
 
   // What may gate a MOUNTED element. The canvas is rendered from the parsed

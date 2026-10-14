@@ -2,6 +2,7 @@
 // All code moved VERBATIM from check-file.ts (Phase 7.1 god-file split).
 
 import * as t from '@babel/types';
+import { parseExpression } from '@babel/parser';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
 import { isRootMounted } from '@/code/project/cms-root-mount';
 import { paginationStateVar } from '@/code/generation/cms-pagination-gen';
@@ -390,4 +391,232 @@ function checkModuleScopeItemReferences(code: string, ast: t.File, v: OracleViol
   });
 }
 
-export { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences };
+function astToValue(node: t.Node | null | undefined): any {
+  if (!node) return null;
+  if (t.isStringLiteral(node) || t.isNumericLiteral(node) || t.isBooleanLiteral(node)) return node.value;
+  if (t.isNullLiteral(node)) return null;
+  if (t.isArrayExpression(node)) {
+    return node.elements.map((el) => (el && t.isExpression(el) ? astToValue(el) : null));
+  }
+  if (t.isObjectExpression(node)) {
+    const obj: Record<string, any> = {};
+    for (const prop of node.properties) {
+      if (t.isObjectProperty(prop)) {
+        const key = t.isIdentifier(prop.key)
+          ? prop.key.name
+          : t.isStringLiteral(prop.key)
+          ? prop.key.value
+          : t.isNumericLiteral(prop.key)
+          ? String(prop.key.value)
+          : null;
+        if (key != null) {
+          obj[key] = t.isExpression(prop.value) ? astToValue(prop.value) : null;
+        }
+      }
+    }
+    return obj;
+  }
+  return null;
+}
+
+/**
+ * CMS QUERY CONFIG dialect check:
+ * - Flags duplicate `data-query-config` attributes on the same JSX element.
+ * - Validates that `data-query-config` has valid JSON / JS object structure without unescaped or syntax-error expressions.
+ */
+function checkCmsQueryConfig(code: string, ast: t.File, v: OracleViolation[]): void {
+  traverse(ast, {
+    JSXElement(path) {
+      const opening = path.node.openingElement;
+      const tag = jsxTagName(opening.name);
+      const line = opening.loc?.start.line;
+      const attrs = jsxAttrs(opening);
+      const elementId = stringAttr(attrs, 'data-id');
+
+      const queryAttrs = attrs.filter((a) => a.name.name === 'data-query-config');
+      if (queryAttrs.length === 0) return;
+
+      if (queryAttrs.length > 1) {
+        v.push({
+          code: 'CMS_DUPLICATE_QUERY_CONFIG',
+          tier: 3,
+          line,
+          elementId,
+          message: `<${tag}>${elementId ? ` (data-id="${elementId}")` : ''} has duplicate data-query-config attributes. A collection container must not have more than one data-query-config attribute.`,
+        });
+      }
+
+      for (const attr of queryAttrs) {
+        if (!attr.value) {
+          v.push({
+            code: 'CMS_MALFORMED_QUERY_CONFIG',
+            tier: 3,
+            line,
+            elementId,
+            message: `data-query-config on <${tag}>${elementId ? ` (data-id="${elementId}")` : ''} must have a value (expected a JSON string or JSON.stringify(...) expression).`,
+          });
+          continue;
+        }
+
+        let configObj: any = null;
+        let isMalformed = false;
+
+        if (t.isStringLiteral(attr.value)) {
+          try {
+            configObj = JSON.parse(attr.value.value);
+          } catch (e: any) {
+            isMalformed = true;
+            v.push({
+              code: 'CMS_MALFORMED_QUERY_CONFIG',
+              tier: 3,
+              line,
+              elementId,
+              message: `data-query-config on <${tag}> contains invalid JSON: ${e?.message ?? 'parse failure'}`,
+            });
+          }
+        } else if (t.isJSXExpressionContainer(attr.value)) {
+          const expr = attr.value.expression;
+          if (t.isStringLiteral(expr)) {
+            try {
+              configObj = JSON.parse(expr.value);
+            } catch (e: any) {
+              isMalformed = true;
+              v.push({
+                code: 'CMS_MALFORMED_QUERY_CONFIG',
+                tier: 3,
+                line,
+                elementId,
+                message: `data-query-config on <${tag}> contains invalid JSON: ${e?.message ?? 'parse failure'}`,
+              });
+            }
+          } else if (t.isCallExpression(expr)) {
+            const isStringify =
+              t.isMemberExpression(expr.callee) &&
+              t.isIdentifier(expr.callee.object, { name: 'JSON' }) &&
+              t.isIdentifier(expr.callee.property, { name: 'stringify' });
+            if (!isStringify || expr.arguments.length === 0) {
+              isMalformed = true;
+              v.push({
+                code: 'CMS_MALFORMED_QUERY_CONFIG',
+                tier: 3,
+                line,
+                elementId,
+                message: `data-query-config expression on <${tag}> must be JSON.stringify(...) with a config object argument.`,
+              });
+            } else {
+              const arg = expr.arguments[0];
+              if (t.isStringLiteral(arg)) {
+                try {
+                  configObj = JSON.parse(arg.value);
+                } catch (e: any) {
+                  isMalformed = true;
+                  v.push({
+                    code: 'CMS_MALFORMED_QUERY_CONFIG',
+                    tier: 3,
+                    line,
+                    elementId,
+                    message: `data-query-config on <${tag}> contains invalid JSON: ${e?.message ?? 'parse failure'}`,
+                  });
+                }
+              } else if (t.isObjectExpression(arg)) {
+                configObj = astToValue(arg);
+              } else {
+                isMalformed = true;
+                v.push({
+                  code: 'CMS_MALFORMED_QUERY_CONFIG',
+                  tier: 3,
+                  line,
+                  elementId,
+                  message: `data-query-config JSON.stringify argument on <${tag}> must be an object literal or JSON string.`,
+                });
+              }
+            }
+          } else if (t.isObjectExpression(expr)) {
+            configObj = astToValue(expr);
+          } else {
+            isMalformed = true;
+            v.push({
+              code: 'CMS_MALFORMED_QUERY_CONFIG',
+              tier: 3,
+              line,
+              elementId,
+              message: `data-query-config on <${tag}> must be a JSON string or JSON.stringify(...) expression.`,
+            });
+          }
+        } else {
+          isMalformed = true;
+          v.push({
+            code: 'CMS_MALFORMED_QUERY_CONFIG',
+            tier: 3,
+            line,
+            elementId,
+            message: `data-query-config on <${tag}> has unsupported attribute value.`,
+          });
+        }
+
+        if (isMalformed) continue;
+
+        if (!configObj || typeof configObj !== 'object' || Array.isArray(configObj)) {
+          v.push({
+            code: 'CMS_MALFORMED_QUERY_CONFIG',
+            tier: 3,
+            line,
+            elementId,
+            message: `data-query-config on <${tag}> must resolve to an object configuration.`,
+          });
+          continue;
+        }
+
+        if (configObj.params !== undefined) {
+          if (!Array.isArray(configObj.params)) {
+            v.push({
+              code: 'CMS_MALFORMED_QUERY_CONFIG',
+              tier: 3,
+              line,
+              elementId,
+              message: `data-query-config "params" on <${tag}> must be an array.`,
+            });
+            continue;
+          }
+          for (const param of configObj.params) {
+            if (!param || typeof param !== 'object') {
+              v.push({
+                code: 'CMS_MALFORMED_QUERY_CONFIG',
+                tier: 3,
+                line,
+                elementId,
+                message: `data-query-config params on <${tag}> must be parameter objects.`,
+              });
+              continue;
+            }
+            if (typeof param.key !== 'string' || typeof param.value !== 'string') {
+              v.push({
+                code: 'CMS_MALFORMED_QUERY_CONFIG',
+                tier: 3,
+                line,
+                elementId,
+                message: `data-query-config param on <${tag}> must have string "key" and "value" properties.`,
+              });
+              continue;
+            }
+            if (param.isExpression && typeof param.value === 'string') {
+              try {
+                parseExpression(param.value);
+              } catch (err: any) {
+                v.push({
+                  code: 'CMS_MALFORMED_QUERY_CONFIG',
+                  tier: 3,
+                  line,
+                  elementId,
+                  message: `data-query-config param "${param.key}" contains invalid or unescaped JS expression "${param.value}": ${err?.message ?? 'syntax error'}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    },
+  });
+}
+
+export { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences, checkCmsQueryConfig };

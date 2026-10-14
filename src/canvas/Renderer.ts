@@ -1903,14 +1903,12 @@ export function matchesValue(target: any, searchVal: any, exact: boolean): boole
         if (matchesValue(val, searchVal, exact)) return true;
       }
     }
-    try {
-      const json = JSON.stringify(target).toLowerCase();
-      if (!exact) {
+    if (!exact) {
+      try {
+        const json = JSON.stringify(target).toLowerCase();
         if (json.includes(s)) return true;
-      } else {
-        if (json.includes(`"${s}"`) || json.includes(`:${s},`) || json.includes(`:${s}}`)) return true;
-      }
-    } catch {}
+      } catch {}
+    }
     return false;
   }
 
