@@ -3,6 +3,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 
+// Disable sharp cache so Windows file locks on thumbnail files are released immediately after processing
+sharp.cache(false);
+
 export interface ProjectFolder {
   id: string;
   name: string;

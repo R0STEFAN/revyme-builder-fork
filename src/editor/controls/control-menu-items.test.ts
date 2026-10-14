@@ -66,7 +66,7 @@ describe('fieldTypesForProperty — type-matched CMS binding (same rule as varia
 
   it('image props → image/file; href → link/url/text/slug; text content → display text', () => {
     expect(fieldTypesForProperty('backgroundImage')).toEqual(new Set(['image', 'file']));
-    expect(fieldTypesForProperty('src')).toEqual(new Set(['image', 'file']));
+    expect(fieldTypesForProperty('src')).toEqual(new Set(['image', 'file', 'url', 'link', 'text', 'slug']));
     expect(fieldTypesForProperty('href')).toEqual(new Set(['link', 'url', 'text', 'slug']));
     expect(fieldTypesForProperty('textContent')).toEqual(new Set(['text', 'textarea', 'richtext', 'slug']));
   });
