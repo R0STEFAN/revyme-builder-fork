@@ -160,4 +160,70 @@ export default function Page() {
       expect(unbound).not.toContain('item.image_id');
     });
   });
+
+  describe('module-scope protection (Defect #21)', () => {
+    const codeWithCanvasNodes = `'use client';
+import React from 'react';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <h1 data-id="title">Page</h1>
+    </div>
+  );
+}
+
+const canvasNodes = (<>
+  <img data-id="detached-img" src="/old.jpg" />
+  <a data-id="detached-link" href="/old">Link</a>
+  <p data-id="detached-text">Old Text</p>
+</>);
+`;
+
+    it('protects canvasNodes src from unbound item by setting dormant metadata', () => {
+      const result = bindSrcExpressionInCode(
+        codeWithCanvasNodes,
+        'detached-img',
+        '"https://api.example.com/assets/" + item.img_file.id',
+      );
+      expect(result).not.toContain('src={"https://api.example.com/assets/" + item.img_file.id}');
+      expect(result).toContain('src=""');
+      expect(result).toContain('data-dormant-src="&quot;https://api.example.com/assets/&quot; + item.img_file.id"');
+
+      const unbound = unbindSrcExpressionInCode(result, 'detached-img', '/default.jpg');
+      expect(unbound).not.toContain('data-dormant-src');
+      expect(unbound).toContain('src="/default.jpg"');
+    });
+
+    it('protects canvasNodes href from unbound item by setting dormant metadata', () => {
+      const result = bindHrefExpressionInCode(
+        codeWithCanvasNodes,
+        'detached-link',
+        '"/gallery/" + item.slug',
+      );
+      expect(result).not.toContain('href={"/gallery/" + item.slug}');
+      expect(result).toContain('href="#"');
+      expect(result).toContain('data-dormant-href="&quot;/gallery/&quot; + item.slug"');
+
+      const unbound = unbindHrefExpressionInCode(result, 'detached-link', '/fallback');
+      expect(unbound).not.toContain('data-dormant-href');
+      expect(unbound).toContain('href="/fallback"');
+    });
+
+    it('protects canvasNodes text from unbound item by setting dormant metadata', () => {
+      const result = bindTextExpressionInCode(
+        codeWithCanvasNodes,
+        'detached-text',
+        'item.title + " (detached)"',
+      );
+      expect(result).not.toContain('{item.title + " (detached)"}');
+      expect(result).toContain('data-dormant-text="item.title + &quot; (detached)&quot;"');
+      expect(result).toContain('<p data-id="detached-text"');
+      expect(result).toContain('Text</p>');
+
+      const unbound = unbindTextExpressionInCode(result, 'detached-text', 'Static Text');
+      expect(unbound).not.toContain('data-dormant-text');
+      expect(unbound).toContain('Static Text</p>');
+    });
+  });
 });

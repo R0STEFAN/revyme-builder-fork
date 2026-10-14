@@ -9,6 +9,7 @@ import { trace } from '@/shared/debug-trace';
 import { formatBoundStyleValue } from '@/code/features/cms-style-format';
 import { _allViewportWidthsAsc } from './responsive';
 import { toKebab } from '@/shared/css-utils';
+import { evaluateCmsExpression } from '@/shared/cms-accessor';
 
 /** Max image width on canvas — full-res images (5000px+, 10MB) kill scroll performance.
  *  Source code keeps the original URL; only the canvas DOM gets the downsized version. */
@@ -147,15 +148,10 @@ export function applyNodeCmsBindings(
     }
     if (resolved !== undefined) { applyBoundText(el, resolved); textApplied = true; }
   } else if (node.textExpression) {
-    try {
-      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.textExpression}); } catch(e) { return ''; }`);
-      const val = fn(bindingData, bindingData, bindingData);
-      if (val !== undefined && val !== null && val !== '') {
-        applyBoundText(el, String(val));
-        textApplied = true;
-      }
-    } catch {
-      // ignore
+    const val = evaluateCmsExpression(node.textExpression, { item: bindingData, collectionItem: bindingData, row: bindingData });
+    if (val !== undefined && val !== null && val !== '') {
+      applyBoundText(el, String(val));
+      textApplied = true;
     }
   }
 
@@ -192,23 +188,13 @@ export function applyNodeCmsBindings(
   }
 
   if (node.hrefExpression && !opts.skipHref) {
-    try {
-      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.hrefExpression}); } catch(e) { return ''; }`);
-      const val = fn(bindingData, bindingData, bindingData);
-      if (val) el.setAttribute('href', String(val));
-    } catch {
-      // ignore
-    }
+    const val = evaluateCmsExpression(node.hrefExpression, { item: bindingData, collectionItem: bindingData, row: bindingData });
+    if (val) el.setAttribute('href', String(val));
   }
   if (node.srcExpression) {
-    try {
-      const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.srcExpression}); } catch(e) { return ''; }`);
-      const val = fn(bindingData, bindingData, bindingData);
-      if (val) el.setAttribute('src', canvasImageSrc(String(val)));
-      else el.removeAttribute('src');
-    } catch {
-      // ignore
-    }
+    const val = evaluateCmsExpression(node.srcExpression, { item: bindingData, collectionItem: bindingData, row: bindingData });
+    if (val) el.setAttribute('src', canvasImageSrc(String(val)));
+    else el.removeAttribute('src');
   }
   // `styleKeys` = the inline style props this call OWNS (bound or overridden).
   // The caller records them so a binding that disappears (× on the Fill pill

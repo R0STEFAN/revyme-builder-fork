@@ -618,6 +618,26 @@ export function healDanglingCanvasNodeBindings(code: string, row?: Record<string
     if (!healed) break;
   }
 
+  // 3) ATTR expressions (e.g. src={"https://..." + item.img_file.id} or href={"/..." + item.slug}) in canvasNodes.
+  // Module-scope canvasNodes cannot evaluate live `item` without crashing module compilation.
+  const cnIdx = result.indexOf('const canvasNodes');
+  if (cnIdx !== -1) {
+    const canvasPart = result.slice(cnIdx);
+    const attrExprRe = /\b(src|href)=\{\s*([^}]+?\bitem\b[^}]*?)\s*\}/g;
+    if (attrExprRe.test(canvasPart)) {
+      const healedCanvasPart = canvasPart.replace(attrExprRe, (_match, attrName, expr) => {
+        const cleanExpr = expr.trim().replace(/"/g, '&quot;');
+        if (attrName === 'src') {
+          return `src="" data-dormant-src="${cleanExpr}"`;
+        } else {
+          return `href="#" data-dormant-href="${cleanExpr}"`;
+        }
+      });
+      result = result.slice(0, cnIdx) + healedCanvasPart;
+      trace.action('cms-detach:heal-dangling-attr-expressions', { healed: true });
+    }
+  }
+
   return result;
 }
 

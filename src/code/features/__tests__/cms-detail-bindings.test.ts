@@ -8,6 +8,9 @@ import { parseJSXToNodes } from '@/code/parsing/parser';
 import { applyDetailPageBindings } from '@/code/features/cms-page-bindings';
 import { cmsItemDisplayLabel } from '@/code/project/cms-page-ops';
 import { getItemSlug } from '@/code/stores/cms-page-store';
+import { evaluateCmsExpression } from '@/shared/cms-accessor';
+import { checkFile } from '@/code/oracle/check-file';
+import { bindSrcExpressionInCode } from '@/code/generation/expression-gen';
 
 const mockItems = [
   {
@@ -103,10 +106,12 @@ describe('CMS detail page bindings: observations and regression', () => {
     expect(() => compile(currentDetailCode)).not.toThrow();
   });
 
-  it('confirms the original canvasNodes parser dropped dynamic image expressions', () => {
+  it('confirms the canvasNodes parser preserves dynamic image expressions', () => {
     const node = parseJSXToNodes(originalDetailCode).get('field-img_file')!;
     expect(node.attrs.src).toBeUndefined();
-    expect(node.srcExpression).toBeUndefined();
+    expect(node.srcExpression).toBe('"https://api.tattoozp.com/assets/" + item.img_file.id');
+    const resolved = applyDetailPageBindings(new Map([['field-img_file', node]]), mockItems[0]);
+    expect(resolved.get('field-img_file')!.attrs.src).toBe(`https://api.tattoozp.com/assets/${mockItems[0].img_file.id}`);
   });
 
   it('separates the breadcrumb display title from the actual route slug', () => {
@@ -142,6 +147,38 @@ describe('CMS detail page bindings: remaining expected behavior', () => {
     expect(image.srcExpression).toContain('item.img_file.id');
     const resolved = applyDetailPageBindings(nodes, mockItems[0]);
     expect(resolved.get('dup-mv7rocg6-2')!.attrs.src).toBe(`https://api.tattoozp.com/assets/${mockItems[0].img_file.id}`);
+  });
+
+  it('evaluates dynamic expressions consistently across selection change and safe context access', () => {
+    const expr = '"https://api.tattoozp.com/assets/" + item.img_file.id';
+    expect(evaluateCmsExpression(expr, { item: mockItems[0] })).toBe(`https://api.tattoozp.com/assets/${mockItems[0].img_file.id}`);
+
+    const secondItem = {
+      ...mockItems[0],
+      img_file: { ...mockItems[0].img_file, id: 'second-img-uuid' },
+    };
+    expect(evaluateCmsExpression(expr, { item: secondItem })).toBe('https://api.tattoozp.com/assets/second-img-uuid');
+    expect(evaluateCmsExpression('item.nonexistent.deep', { item: mockItems[0] })).toBe('');
+    expect(evaluateCmsExpression('params.slug', { params: { slug: 'dragon-sleeve' } })).toBe('dragon-sleeve');
+  });
+
+  it('protects module-level canvasNodes from bare item references by setting dormant metadata', () => {
+    const code = `
+export default function Page() { return <div data-id="root">Page</div>; }
+const canvasNodes = (<img data-id="canvas-img" src="/placeholder.png" />);
+`;
+    const bound = bindSrcExpressionInCode(code, 'canvas-img', '"https://api.tattoozp.com/assets/" + item.img_file.id');
+    expect(bound).not.toContain('src={"https://api.tattoozp.com/assets/" + item.img_file.id}');
+    expect(bound).toContain('data-dormant-src=');
+    expect(bound).toContain('src=""');
+  });
+
+  it('oracle flags module-scope item references in canvasNodes as tier 3 violation', () => {
+    const violations = checkFile(originalDetailCode, { kind: 'page' });
+    expect(violations.some(v => v.code === 'CMS_ITEM_OUT_OF_SCOPE')).toBe(true);
+
+    const currentViolations = checkFile(currentDetailCode, { kind: 'page' });
+    expect(currentViolations.some(v => v.code === 'CMS_ITEM_OUT_OF_SCOPE')).toBe(false);
   });
 
   it('renders the corrected detail page without exposing object metadata as a React child', () => {

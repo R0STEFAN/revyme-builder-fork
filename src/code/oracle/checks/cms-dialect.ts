@@ -361,4 +361,33 @@ function checkCmsNavDialect(code: string, ast: t.File, v: OracleViolation[], kin
   });
 }
 
-export { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect };
+/**
+ * Detect if `canvasNodes` or any module-level variable references `item` outside
+ * a function scope where `item` is declared (Defect #21).
+ * References to `item` at module scope crash runtime compilation with `item is not defined`.
+ */
+function checkModuleScopeItemReferences(code: string, ast: t.File, v: OracleViolation[]): void {
+  traverse(ast, {
+    Identifier(path) {
+      if (path.node.name !== 'item') return;
+      if (!path.isReferencedIdentifier()) return;
+
+      const inCanvasNodes = !!path.findParent((p) =>
+        t.isVariableDeclarator(p.node) && t.isIdentifier(p.node.id, { name: 'canvasNodes' })
+      );
+      const enclosingFn = path.getFunctionParent();
+
+      if (inCanvasNodes || !enclosingFn) {
+        const line = path.node.loc?.start.line;
+        v.push({
+          code: 'CMS_ITEM_OUT_OF_SCOPE',
+          tier: 3,
+          line,
+          message: `Module-scope declaration ${inCanvasNodes ? '(canvasNodes)' : ''} references "item" at line ${line}, but "item" is only declared inside the Page or component function scope. Referencing "item" at module scope causes runtime crash "item is not defined" before the component renders. Move the expression into the component body or use static attributes with dormant metadata.`,
+        });
+      }
+    },
+  });
+}
+
+export { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences };

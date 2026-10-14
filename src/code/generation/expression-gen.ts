@@ -2,12 +2,73 @@
 // Pure string transforms: code in → code out.
 
 import { trace } from '@/shared/debug-trace';
+import { parse } from '@babel/parser';
 import {
   findTagClose,
   findMatchingCloseTagIndex,
   insertAfterLastImportLine,
 } from './generator-utils';
 import { findJSXElementByDataId, findClosingTag, insertConstIntoEnclosingFn } from './cms-gen';
+
+/**
+ * Check if an element is located at module scope (e.g. inside `const canvasNodes = (<>...</>)`
+ * or hoisted slot root `const cn_... = ...`) outside the `Page` or component function body.
+ */
+export function isNodeInModuleScope(code: string, nodeId: string): boolean {
+  const elStart = findJSXElementByDataId(code, nodeId);
+  if (elStart === -1) return false;
+
+  const canvasNodesStart = code.indexOf('const canvasNodes');
+  if (canvasNodesStart !== -1 && elStart > canvasNodesStart) {
+    return true;
+  }
+
+  try {
+    const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    let inFn = false;
+    let found = false;
+
+    const walk = (node: any, currentInFn: boolean) => {
+      if (!node || typeof node !== 'object') return;
+      const isFn = node.type === 'FunctionDeclaration' ||
+                   node.type === 'FunctionExpression' ||
+                   node.type === 'ArrowFunctionExpression';
+      const nextInFn = currentInFn || isFn;
+
+      if (node.type === 'JSXOpeningElement') {
+        const idAttr = node.attributes?.find(
+          (a: any) => a.type === 'JSXAttribute' && a.name?.name === 'data-id' && a.value?.value === nodeId
+        );
+        if (idAttr) {
+          inFn = nextInFn;
+          found = true;
+          return;
+        }
+      }
+
+      for (const k of Object.keys(node)) {
+        if (k === 'loc' || found) continue;
+        const child = node[k];
+        if (Array.isArray(child)) {
+          for (const c of child) {
+            walk(c, nextInFn);
+            if (found) return;
+          }
+        } else if (child && typeof child === 'object') {
+          walk(child, nextInFn);
+          if (found) return;
+        }
+      }
+    };
+
+    walk(ast.program, false);
+    if (found) return !inFn;
+  } catch {
+    // Fallback to position check
+  }
+
+  return canvasNodesStart !== -1 && elStart > canvasNodesStart;
+}
 
 /**
  * Ensure `useParams` from `next/navigation` is imported and called if expression references `params`.
@@ -34,13 +95,40 @@ export function bindTextExpressionInCode(code: string, nodeId: string, expressio
     return code;
   }
 
+  const cleanExpr = expression.trim();
+
+  // Module scope protection (Defect #21): if node is outside component scope (e.g. in canvasNodes)
+  // and references item, do not inject live item that crashes module compilation.
+  if (isNodeInModuleScope(code, nodeId) && /\bitem\b/.test(cleanExpr)) {
+    const openTagEnd = findTagClose(code, elStart + 1);
+    if (openTagEnd !== -1) {
+      const tagSlice = code.slice(elStart, openTagEnd + 1);
+      const strippedTag = stripAttrFromTag(tagSlice, 'data-dormant-text');
+      const bindingAttr = `data-dormant-text="${cleanExpr.replace(/"/g, '&quot;')}"`;
+      let newTagSlice: string;
+      const insertIdx = strippedTag.length - 1;
+      const closingChar = strippedTag[insertIdx];
+      if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+        newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${bindingAttr} />`;
+      } else {
+        newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${bindingAttr}>`;
+      }
+      let result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+      const updatedClosing = findClosingTag(result, elStart);
+      if (updatedClosing) {
+        result = result.slice(0, updatedClosing.contentStart) + 'Text' + result.slice(updatedClosing.closeTagStart);
+      }
+      trace.action('expression-gen:bindTextExpression:dormant', { nodeId, expression: cleanExpr });
+      return result;
+    }
+  }
+
   const closing = findClosingTag(code, elStart);
   if (!closing) {
     trace.error('expression-gen:bindTextExpression', { message: 'Cannot find closing tag', nodeId });
     return code;
   }
 
-  const cleanExpr = expression.trim();
   const binding = `{${cleanExpr}}`;
   let result = code.slice(0, closing.contentStart) + binding + code.slice(closing.closeTagStart);
   result = ensureParamsHookIfUsed(result, nodeId, cleanExpr);
@@ -98,9 +186,29 @@ export function bindHrefExpressionInCode(code: string, nodeId: string, expressio
 
   const tagSlice = code.slice(elStart, openTagEnd + 1);
   const cleanExpr = expression.trim();
+
+  // Module scope protection (Defect #21): if node is outside component scope (e.g. in canvasNodes)
+  // and references item, do not inject live item that crashes module compilation.
+  if (isNodeInModuleScope(code, nodeId) && /\bitem\b/.test(cleanExpr)) {
+    const strippedTag = stripAttrFromTag(stripHrefFromTag(tagSlice), 'data-dormant-href');
+    const escaped = cleanExpr.replace(/"/g, '&quot;');
+    const binding = `href="#" data-dormant-href="${escaped}"`;
+    let newTagSlice: string;
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+    }
+    const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+    trace.action('expression-gen:bindHrefExpression:dormant', { nodeId, expression: cleanExpr });
+    return result;
+  }
+
   const binding = `href={${cleanExpr}}`;
 
-  const strippedTag = stripHrefFromTag(tagSlice);
+  const strippedTag = stripAttrFromTag(stripHrefFromTag(tagSlice), 'data-dormant-href');
   let newTagSlice: string;
   const insertIdx = strippedTag.length - 1;
   const closingChar = strippedTag[insertIdx];
@@ -124,6 +232,16 @@ export function unbindTextExpressionInCode(code: string, nodeId: string, fallbac
   const elStart = findJSXElementByDataId(code, nodeId);
   if (elStart === -1) return code;
 
+  // Strip data-dormant-text if present on opening tag
+  const openTagEnd = findTagClose(code, elStart + 1);
+  if (openTagEnd !== -1) {
+    const tagSlice = code.slice(elStart, openTagEnd + 1);
+    const strippedTag = stripAttrFromTag(tagSlice, 'data-dormant-text');
+    if (strippedTag !== tagSlice) {
+      code = code.slice(0, elStart) + strippedTag + code.slice(openTagEnd + 1);
+    }
+  }
+
   const closing = findClosingTag(code, elStart);
   if (!closing) return code;
 
@@ -143,7 +261,7 @@ export function unbindHrefExpressionInCode(code: string, nodeId: string, fallbac
   if (openTagEnd === -1) return code;
 
   const tagSlice = code.slice(elStart, openTagEnd + 1);
-  const strippedTag = stripHrefFromTag(tagSlice);
+  const strippedTag = stripAttrFromTag(stripHrefFromTag(tagSlice), 'data-dormant-href');
   if (strippedTag === tagSlice) return code;
 
   const binding = `href="${fallbackHref}"`;
@@ -179,9 +297,29 @@ export function bindSrcExpressionInCode(code: string, nodeId: string, expression
 
   const tagSlice = code.slice(elStart, openTagEnd + 1);
   const cleanExpr = expression.trim();
+
+  // Module scope protection (Defect #21): if node is outside component scope (e.g. in canvasNodes)
+  // and references item, do not inject live item that crashes module compilation.
+  if (isNodeInModuleScope(code, nodeId) && /\bitem\b/.test(cleanExpr)) {
+    const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'src'), 'data-dormant-src');
+    const escaped = cleanExpr.replace(/"/g, '&quot;');
+    const binding = `src="" data-dormant-src="${escaped}"`;
+    let newTagSlice: string;
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+    }
+    const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+    trace.action('expression-gen:bindSrcExpression:dormant', { nodeId, expression: cleanExpr });
+    return result;
+  }
+
   const binding = `src={${cleanExpr}}`;
 
-  const strippedTag = stripAttrFromTag(tagSlice, 'src');
+  const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'src'), 'data-dormant-src');
   let newTagSlice: string;
   const insertIdx = strippedTag.length - 1;
   const closingChar = strippedTag[insertIdx];
@@ -209,7 +347,7 @@ export function unbindSrcExpressionInCode(code: string, nodeId: string, fallback
   if (openTagEnd === -1) return code;
 
   const tagSlice = code.slice(elStart, openTagEnd + 1);
-  const strippedTag = stripAttrFromTag(tagSlice, 'src');
+  const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'src'), 'data-dormant-src');
   if (strippedTag === tagSlice) return code;
 
   let newTagSlice: string;

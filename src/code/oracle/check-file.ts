@@ -41,7 +41,7 @@ import { checkMotionPropsNeedMotionTag } from './checks/motion-tag';
 import { checkTranslationDialect } from './checks/translation-dialect';
 import { checkMediaBandDialect, checkDuplicateBreakpointStack } from './checks/media-band-dialect';
 import { checkComponentLinks, checkPageLinks } from './checks/link-rules';
-import { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect } from './checks/cms-dialect';
+import { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences } from './checks/cms-dialect';
 import { checkCmsLocaleFilter, checkCmsI18nDirectAccess, checkCmsMapResolves, checkCmsStyleBindingsResolve, checkInlineMapUnsupported } from './checks/cms-locale-dialect';
 import { checkResolutionFidelity } from './checks/fidelity';
 import { checkStyleSurface, checkTextStyleOnFrame, checkElementSurface, checkLoopCarrier, checkPageExports, checkExpressionDataAttrs } from './checks/surface-dialect';
@@ -1445,6 +1445,7 @@ export function checkFile(
     checkCmsRowNavMarker(code, ast, v);
     checkCmsLocaleFilter(code, ast, v);
     checkCmsI18nDirectAccess(code, ast, v);
+    checkModuleScopeItemReferences(code, ast, v);
   }
 
   // What may gate a MOUNTED element. The canvas is rendered from the parsed

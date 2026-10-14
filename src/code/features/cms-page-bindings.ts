@@ -16,19 +16,9 @@
 import type { CanvasNode } from '../parsing/parser';
 import { formatBoundStyleValue } from './cms-style-format';
 import { trace } from '@/shared/debug-trace';
+import { getNestedValue, evaluateCmsExpression } from '@/shared/cms-accessor';
 
-function getNestedValue(obj: Record<string, unknown> | null, path: string): unknown {
-  if (!obj || !path) return undefined;
-  if (path in obj) return (obj as any)[path];
-  if (!path.includes('.')) return (obj as any)[path];
-  const parts = path.split('.');
-  let current: any = obj;
-  for (const part of parts) {
-    if (current == null || typeof current !== 'object') return undefined;
-    current = current[part];
-  }
-  return current;
-}
+export { evaluateCmsExpression };
 
 function formatTextValue(val: unknown): string {
   if (val == null) return '';
@@ -63,25 +53,45 @@ function formatAttrValue(val: unknown): string {
 export function applyDetailPageBindings(
   nodes: Map<string, CanvasNode>,
   item: Record<string, unknown> | null,
+  context?: { params?: any },
 ): Map<string, CanvasNode> {
   if (!item) return nodes;
   const out = new Map(nodes);
   let mutatedCount = 0;
+  const exprContext = {
+    item,
+    collectionItem: item,
+    row: item,
+    params: context?.params ?? (item as any)?.params,
+  };
 
   for (const [id, node] of out) {
     let cloned: CanvasNode | null = null;
 
     // Dynamic image src expression (e.g. "https://api.example.com/assets/" + item.img_file.id)
     if (node.srcExpression) {
-      try {
-        const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.srcExpression}); } catch(e) { return ''; }`);
-        const evaluated = fn(item, item, item);
-        if (evaluated) {
-          if (!cloned) cloned = { ...node };
-          cloned.attrs = { ...cloned.attrs, src: String(evaluated) };
-        }
-      } catch {
-        // ignore evaluation errors
+      const evaluated = evaluateCmsExpression(node.srcExpression, exprContext);
+      if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+        if (!cloned) cloned = { ...node };
+        cloned.attrs = { ...cloned.attrs, src: String(evaluated) };
+      }
+    }
+
+    // Dynamic href expression (e.g. "/gallery/" + item.slug)
+    if (node.hrefExpression) {
+      const evaluated = evaluateCmsExpression(node.hrefExpression, exprContext);
+      if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+        if (!cloned) cloned = { ...node };
+        cloned.attrs = { ...cloned.attrs, href: String(evaluated) };
+      }
+    }
+
+    // Dynamic text expression (e.g. item.title + " - " + item.category.title)
+    if (node.textExpression) {
+      const evaluated = evaluateCmsExpression(node.textExpression, exprContext);
+      if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+        if (!cloned) cloned = { ...node };
+        cloned.textContent = formatTextValue(evaluated);
       }
     }
 

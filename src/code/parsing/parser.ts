@@ -2379,6 +2379,20 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             }
           }
         }
+        for (const a of (opening.attributes as any[])) {
+          if (a.type === 'JSXAttribute' && a.name) {
+            if (a.name.name === 'data-dormant-src' && a.value?.type === 'StringLiteral' && !srcExpression) {
+              srcExpression = a.value.value;
+              trace.action('parser:dormant-src-expression', { nodeId: id, srcExpression });
+            } else if (a.name.name === 'data-dormant-href' && a.value?.type === 'StringLiteral' && !hrefExpression) {
+              hrefExpression = a.value.value;
+              trace.action('parser:dormant-href-expression', { nodeId: id, hrefExpression });
+            } else if (a.name.name === 'data-dormant-text' && a.value?.type === 'StringLiteral' && !textExpression) {
+              textExpression = a.value.value;
+              trace.action('parser:dormant-text-expression', { nodeId: id, textExpression });
+            }
+          }
+        }
 
         // Text animation nodes: extract plain text by collapsing motion.span wrappers.
         // LEGACY ONLY — this tag-strips the raw source, which is what the build-time span
@@ -3066,6 +3080,48 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         _svgAttrCount++; // aggregated — see parser:svg-attrs-summary
       }
 
+      let hrefExpression: string | undefined;
+      let srcExpression: string | undefined;
+      let textExpression: string | undefined;
+
+      // Extract dynamic attribute expressions (src / href) and dormant expressions from attributes
+      for (const a of (opening.attributes as any[])) {
+        if (a.type !== 'JSXAttribute' || !a.name) continue;
+        const attrName = a.name.name;
+        if (attrName === 'href') {
+          if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+            const expr = a.value.expression as any;
+            if (expr.start != null && expr.end != null) {
+              hrefExpression = code.slice(expr.start, expr.end);
+              trace.action('parser:canvasNodes-href-expression', { nodeId: id, hrefExpression });
+            }
+          }
+        } else if (attrName === 'src') {
+          if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+            const expr = a.value.expression as any;
+            if (expr.start != null && expr.end != null) {
+              srcExpression = code.slice(expr.start, expr.end);
+              trace.action('parser:canvasNodes-src-expression', { nodeId: id, srcExpression });
+            }
+          }
+        } else if (attrName === 'data-dormant-src' && a.value?.type === 'StringLiteral') {
+          if (!srcExpression) {
+            srcExpression = a.value.value;
+            trace.action('parser:canvasNodes-dormant-src-expression', { nodeId: id, srcExpression });
+          }
+        } else if (attrName === 'data-dormant-href' && a.value?.type === 'StringLiteral') {
+          if (!hrefExpression) {
+            hrefExpression = a.value.value;
+            trace.action('parser:canvasNodes-dormant-href-expression', { nodeId: id, hrefExpression });
+          }
+        } else if (attrName === 'data-dormant-text' && a.value?.type === 'StringLiteral') {
+          if (!textExpression) {
+            textExpression = a.value.value;
+            trace.action('parser:canvasNodes-dormant-text-expression', { nodeId: id, textExpression });
+          }
+        }
+      }
+
       // Extract text content — CANVAS-SPECIFIC (preserved walker difference):
       // plain JSXText + `{"literal"}` children only. The main walker's richer
       // text extraction (CMS `{item.field}` bindings, `{prop}` text variables,
@@ -3108,6 +3164,12 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
                   }
                 } catch {}
               }
+            }
+          } else if (child.expression && child.expression.type !== 'JSXEmptyExpression') {
+            const expr = child.expression as any;
+            if (expr.start != null && expr.end != null) {
+              textExpression = code.slice(expr.start, expr.end);
+              trace.action('parser:canvasNodes-text-expression', { nodeId: id, textExpression });
             }
           }
         }
@@ -3168,6 +3230,9 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         responsiveAttrPropBandsAcc, responsivePropFieldBindings,
       });
       if (attrTranslationKeys) node.attrTranslationKeys = attrTranslationKeys;
+      if (textExpression) node.textExpression = textExpression;
+      if (srcExpression) node.srcExpression = srcExpression;
+      if (hrefExpression) node.hrefExpression = hrefExpression;
 
       // Orphaned component-variable bindings — a prop-bound node dragged onto the
       // canvas keeps its purple pill (Content/Style) via `data-var-orphan`. THIS is

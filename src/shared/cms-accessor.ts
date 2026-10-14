@@ -142,3 +142,47 @@ export function buildDatasetKey(options: DatasetKeyParams): string {
 
   return [project, branch, page, listNodeId, queryHash, serializedParams].join(':');
 }
+
+export interface CmsExpressionContext {
+  item?: any;
+  params?: any;
+  collectionItem?: any;
+  row?: any;
+  [key: string]: any;
+}
+
+/**
+ * Pure expression evaluator for CMS dynamic bindings (src, href, text).
+ * Safely evaluates JS expressions (concatenations, template strings, property accesses like
+ * `item.img_file.id`, `params.slug`, etc.) without crashing when properties or context are missing.
+ */
+export function evaluateCmsExpression(
+  expr: string | null | undefined,
+  context: CmsExpressionContext = {},
+): any {
+  if (!expr || typeof expr !== 'string' || !expr.trim()) return undefined;
+  const cleanExpr = expr.trim();
+  try {
+    const item = context.item ?? context.collectionItem ?? context.row;
+    const collectionItem = context.collectionItem ?? item;
+    const row = context.row ?? item;
+    const params = context.params ?? {};
+
+    const customKeys = Object.keys(context).filter(
+      (k) => !['item', 'collectionItem', 'row', 'params'].includes(k)
+    );
+    const customVals = customKeys.map((k) => context[k]);
+
+    const fn = new Function(
+      'item',
+      'collectionItem',
+      'row',
+      'params',
+      ...customKeys,
+      `try { return (${cleanExpr}); } catch(e) { return ''; }`
+    );
+    return fn(item, collectionItem, row, params, ...customVals);
+  } catch {
+    return '';
+  }
+}
