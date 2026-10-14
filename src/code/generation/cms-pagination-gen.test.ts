@@ -435,3 +435,76 @@ export default function Page() {
     parses(off);
   });
 });
+
+describe('remote pagination for API collections and data-query-config', () => {
+  const API_PAGE = `import React from 'react';
+import posts from '@/cms/posts.json';
+export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any[]> } = {}) {
+  return <div data-id="root">
+    <div data-id="api-list" data-query-config='{"source":"posts"}'>
+      {(cmsDatasets?.['api-list'] || cmsDatasets?.['posts'] || posts).map((item, idx) => (
+        <div data-id="row" key={idx}>{item.title}</div>
+      ))}
+    </div>
+  </div>;
+}`;
+
+  it('generates remote Load More pagination with fetch relay, state management, and deduplication', () => {
+    const out = setPaginationInCode(API_PAGE, 'api-list', { mode: 'loadMore', perPage: 10 });
+    expect(out).toContain('data-remote-pagination="true"');
+    expect(out).toContain('data-pagination="loadMore:10"');
+    expect(out).toContain('const [itemsApiList, setItemsApiList] = useState');
+    expect(out).toContain('const [pageApiList, setPageApiList] = useState(1)');
+    expect(out).toContain('const [hasMoreApiList, setHasMoreApiList] = useState(true)');
+    expect(out).toContain('const [loadingApiList, setLoadingApiList] = useState(false)');
+    expect(out).toContain('const [errorApiList, setErrorApiList] = useState(null)');
+    expect(out).toContain('const abortApiListRef = useRef(null)');
+    expect(out).toContain("fetch('/api/cms/query'");
+    expect(out).toContain("collection: 'posts'");
+    expect(out).toContain('it.id ?? it._id ?? it.slug ?? it._slug');
+    expect(out).toContain('const retryApiList = loadMoreApiList');
+    expect(out).toContain('{hasMoreApiList && <LoadMore data-id="loadmore-api-list" data-pagination-ui="true" onLoadMore={loadMoreApiList} />}');
+    expect(out).toContain('{itemsApiList.map((item, idx) =>');
+    parses(out);
+  });
+
+  it('generates remote Infinite Scroll pagination with sentinel, spinner, and intersection observer', () => {
+    const out = setPaginationInCode(API_PAGE, 'api-list', { mode: 'infinite', perPage: 5 });
+    expect(out).toContain('data-remote-pagination="true"');
+    expect(out).toContain('data-pagination="infinite:5"');
+    expect(out).toContain('const sentinelApiListRef = useRef(null)');
+    expect(out).toContain('new IntersectionObserver');
+    expect(out).toContain('loadMoreApiList()');
+    expect(out).toContain('{hasMoreApiList && <div ref={sentinelApiListRef} data-id="sentinel-api-list" data-pagination-ui="true"');
+    expect(out).toContain('<Spinner data-id="spinner-api-list" />');
+    expect(out).toContain("import Spinner from '@/components/Spinner';");
+    parses(out);
+  });
+
+  it('resets remote pagination when initial collection source changes', () => {
+    const out = setPaginationInCode(API_PAGE, 'api-list', { mode: 'loadMore', perPage: 10 });
+    expect(out).toMatch(/useEffect\(\(\) => \{\s*setItemsApiList\(Array\.isArray\([\s\S]*?\)\s*\?\s*[\s\S]*?:\s*\[\]\);\s*setPageApiList\(1\);\s*setHasMoreApiList\(true\);/);
+    parses(out);
+  });
+
+  it('cleanly removes remote pagination and restores original mapping head', () => {
+    const on = setPaginationInCode(API_PAGE, 'api-list', { mode: 'loadMore', perPage: 10 });
+    const off = removePaginationInCode(on, 'api-list');
+    expect(off).not.toContain('data-remote-pagination');
+    expect(off).not.toContain('data-pagination');
+    expect(off).not.toContain('itemsApiList');
+    expect(off).not.toContain('loadMoreApiList');
+    expect(off).not.toContain('loadmore-api-list');
+    expect(off).toContain("(cmsDatasets?.['api-list'] || cmsDatasets?.['posts'] || posts).map(");
+    parses(off);
+  });
+
+  it('collects remote hooks for moving a list between function bodies', () => {
+    const on = setPaginationInCode(API_PAGE, 'api-list', { mode: 'loadMore', perPage: 10 });
+    const hooks = collectPaginationHooks(on, 'api-list');
+    expect(hooks.some(h => h.includes('const [itemsApiList, setItemsApiList] = useState'))).toBe(true);
+    expect(hooks.some(h => h.includes('const [pageApiList, setPageApiList] = useState(1)'))).toBe(true);
+    expect(hooks.some(h => h.includes('const loadMoreApiList = useCallback'))).toBe(true);
+  });
+});
+

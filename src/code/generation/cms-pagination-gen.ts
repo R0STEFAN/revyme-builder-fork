@@ -22,6 +22,7 @@ import {
 } from './cms-gen';
 import { insertConstIntoEnclosingFn, listConfigVar } from './cms-responsive-gen';
 import { ensureTextNodeNowrap } from './label-nowrap';
+import { getApiCollection } from '../project/cms-api-config';
 
 export type PaginationMode = 'loadMore' | 'infinite';
 
@@ -106,19 +107,57 @@ export function paginationStateVar(listId: string): string {
  *  pagination after a source change (so the sentinel guard + IntersectionObserver
  *  `<slug>.length` references regenerate against the NEW slug instead of crashing
  *  on the old one). */
+/** Read the `data-pagination="<mode>:<perPage>"` marker off a collection list's
+ *  opening tag. Returns null when the list isn't paginated. Used to RE-APPLY
+ *  pagination after a source change (so the sentinel guard + IntersectionObserver
+ *  `<slug>.length` references regenerate against the NEW slug instead of crashing
+ *  on the old one). */
 export function readPaginationMarker(
   code: string,
   parentId: string,
-): { mode: PaginationMode; perPage: number } | null {
+): { mode: PaginationMode; perPage: number; isRemote?: boolean } | null {
   const elStart = findJSXElementByDataId(code, parentId);
   if (elStart === -1) return null;
   const tagClose = findTagClose(code, elStart);
   if (tagClose === -1) return null;
-  const m = /data-pagination="(loadMore|infinite):(\d+)"/.exec(code.slice(elStart, tagClose));
+  const tagSlice = code.slice(elStart, tagClose);
+  const m = /data-pagination="(loadMore|infinite):(\d+)"/.exec(tagSlice);
   if (!m) return null;
-  return { mode: m[1] as PaginationMode, perPage: parseInt(m[2], 10) };
+  const isRemote = /data-remote-pagination="true"/.test(tagSlice) || /data-query-config=/.test(tagSlice);
+  return { mode: m[1] as PaginationMode, perPage: parseInt(m[2], 10), ...(isRemote ? { isRemote: true } : {}) };
 }
 const setterFor = (v: string) => 'set' + v.charAt(0).toUpperCase() + v.slice(1);
+
+export function toPascalCase(id: string): string {
+  const parts = id.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+}
+
+/**
+ * Detects whether a collection list is remote (belongs to an API collection or has data-query-config).
+ */
+export function isRemoteCollectionList(
+  code: string,
+  parentId: string,
+  opts?: { isRemote?: boolean; queryConfig?: any },
+  slug?: string,
+): boolean {
+  if (opts?.isRemote !== undefined) return opts.isRemote;
+  if (opts?.queryConfig) return true;
+  const elStart = findJSXElementByDataId(code, parentId);
+  if (elStart === -1) return false;
+  const tagClose = findTagClose(code, elStart);
+  if (tagClose === -1) return false;
+  const tagSlice = code.slice(elStart, tagClose);
+  if (tagSlice.includes('data-query-config') || tagSlice.includes('data-remote-pagination="true"')) return true;
+  if (slug) {
+    try {
+      const col = getApiCollection(slug);
+      if (col && col.url) return true;
+    } catch {}
+  }
+  return false;
+}
 
 /** Remove ORPHANED pagination hooks — `useState`/`useRef`/`useEffect` for a
  *  `vis*` state var that is no longer SLICED by any `.map()` chain (i.e. its
@@ -142,6 +181,22 @@ export function pruneOrphanedPaginationHooks(code: string): string {
     result = result.replace(new RegExp(`\\n?\\s*useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${refVar}\\.current[\\s\\S]*?\\}\\s*,\\s*\\[\\]\\s*\\);`, 'g'), '');
     trace.action('cms-pagination:prune-orphan', { stateVar });
   }
+
+  // Remote pagination orphans: itemsVar without any .map() reference
+  const remoteDeclRe = /const \[(items[A-Za-z0-9]+), setItems[A-Za-z0-9]+\] = useState\([^)]*\);/g;
+  const remoteOrphans: string[] = [];
+  let rm: RegExpExecArray | null;
+  while ((rm = remoteDeclRe.exec(code)) !== null) {
+    const itemsVar = rm[1];
+    if (!new RegExp(`\\b${itemsVar}\\b.*\\.map\\(`).test(code)) remoteOrphans.push(itemsVar);
+  }
+  for (const itemsVar of remoteOrphans) {
+    const capitalId = itemsVar.slice('items'.length);
+    const parentId = capitalId.charAt(0).toLowerCase() + capitalId.slice(1);
+    result = removePaginationInCode(result, parentId);
+    trace.action('cms-pagination:prune-remote-orphan', { itemsVar });
+  }
+
   return result;
 }
 
@@ -357,7 +412,7 @@ export function extractFilteredCollectionExpr(content: string, mapDotIdx: number
 export function setPaginationInCode(
   code: string,
   parentId: string,
-  opts: { mode: PaginationMode; perPage: number },
+  opts: { mode: PaginationMode; perPage: number; isRemote?: boolean; queryConfig?: any },
 ): string {
   const { mode, perPage } = opts;
   trace.fn('cms-pagination:set', { parentId, mode, perPage });
@@ -374,12 +429,107 @@ export function setPaginationInCode(
   const mapRe = new RegExp(COLLECTION_MAP_CALL_RE.source, 'g');
   const mapMatch = mapRe.exec(content);
   if (!mapMatch) { trace.error('cms-pagination:set', { message: 'no .map()', parentId }); return code; }
-  // Handles BOTH the inline chain AND the responsive `__applyListConfig(slug, cfg)`
-  // head (findCollectionChainHead returns null on the latter → pagination silently bailed).
-  const slug = extractCollectionSlug(content, mapMatch.index);
+  const openingTag = working.slice(elStart, closing.contentStart);
+  let slug = extractCollectionSlug(content, mapMatch.index);
+  if (!slug) {
+    const cmsMatch = content.slice(0, mapMatch.index).match(/\bcmsDatasets\b[\s\S]*?\|\|\s*([a-zA-Z0-9_]+)\s*\)/);
+    if (cmsMatch) {
+      slug = cmsMatch[1];
+    }
+  }
+  if (!slug) {
+    const queryConfigMatch = openingTag.match(/data-query-config=(?:'\{[\s\S]*?"source"\s*:\s*"([^"]+)"[\s\S]*?\}'|"\{[\s\S]*?\\"source\\"\s*:\s*\\"([^\\"]+)\\"[\s\S]*?\}")/);
+    if (queryConfigMatch) {
+      slug = queryConfigMatch[1] || queryConfigMatch[2];
+    }
+  }
+  if (!slug && opts?.queryConfig?.source) {
+    slug = opts.queryConfig.source;
+  }
   if (!slug) { trace.error('cms-pagination:set', { message: 'no chain head', parentId }); return code; }
   const filteredExpr = extractFilteredCollectionExpr(content, mapMatch.index, slug);
 
+  const isRemote = isRemoteCollectionList(working, parentId, opts, slug);
+
+  if (isRemote) {
+    const capitalId = toPascalCase(parentId);
+    const itemsVar = 'items' + capitalId;
+    const setItemsVar = 'setItems' + capitalId;
+    const pageVar = 'page' + capitalId;
+    const setPageVar = 'setPage' + capitalId;
+    const hasMoreVar = 'hasMore' + capitalId;
+    const setHasMoreVar = 'setHasMore' + capitalId;
+    const loadingVar = 'loading' + capitalId;
+    const setLoadingVar = 'setLoading' + capitalId;
+    const errorVar = 'error' + capitalId;
+    const setErrorVar = 'setError' + capitalId;
+    const abortRef = 'abort' + capitalId + 'Ref';
+    const sentinelRef = 'sentinel' + capitalId + 'Ref';
+    const loadMoreFn = 'loadMore' + capitalId;
+    const retryFn = 'retry' + capitalId;
+
+    let initialExpr = filteredExpr;
+    const cmsDatasetMatch = content.slice(0, mapMatch.index).match(/\((cmsDatasets\?\.\[[^\]]+\][^)]*)\)/);
+    if (cmsDatasetMatch) {
+      initialExpr = cmsDatasetMatch[0];
+    }
+
+    let newContent: string;
+    if (content.includes(initialExpr)) {
+      newContent = content.replace(initialExpr, itemsVar);
+    } else {
+      const head = findCollectionChainHead(content, mapMatch.index);
+      if (head) {
+        newContent = content.slice(0, head.slugStart) + itemsVar + content.slice(head.slugEnd);
+      } else {
+        newContent = content.slice(0, mapMatch.index) + itemsVar + content.slice(mapMatch.index);
+      }
+    }
+
+    const sliceBeforeMap = /\.slice\(\s*0\s*,\s*[^)]+\)\s*(?=\.map\()/;
+    newContent = newContent.replace(sliceBeforeMap, '');
+
+    if (mode === 'loadMore') {
+      newContent += `\n      {${hasMoreVar} && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={${loadMoreFn}} />}\n    `;
+    } else {
+      newContent += `\n      {${hasMoreVar} && <div ref={${sentinelRef}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+    }
+
+    let result = working.slice(0, closing.contentStart) + newContent + working.slice(closing.closeTagStart);
+
+    const tagClose = findTagClose(result, elStart);
+    if (tagClose !== -1 && !/data-pagination=/.test(result.slice(elStart, tagClose))) {
+      result = result.slice(0, tagClose) + ` data-pagination="${mode}:${perPage}" data-remote-pagination="true"` + result.slice(tagClose);
+    }
+
+    const hookLines: string[] = [
+      `const [${itemsVar}, ${setItemsVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr} : []));`,
+      `const [${pageVar}, ${setPageVar}] = useState(1);`,
+      `const [${hasMoreVar}, ${setHasMoreVar}] = useState(true);`,
+      `const [${loadingVar}, ${setLoadingVar}] = useState(false);`,
+      `const [${errorVar}, ${setErrorVar}] = useState(null);`,
+      `const ${abortRef} = useRef(null);`,
+      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr} : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
+      `const ${loadMoreFn} = useCallback(async () => { if (${loadingVar} || !${hasMoreVar}) return; ${abortRef}.current?.abort(); const ctrl = new AbortController(); ${abortRef}.current = ctrl; ${setLoadingVar}(true); ${setErrorVar}(null); try { const nextPage = ${pageVar} + 1; const res = await fetch('/api/cms/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: '${slug}', page: nextPage, limit: ${perPage}, offset: (nextPage - 1) * ${perPage} }), signal: ctrl.signal }); if (!res.ok) throw new Error('Failed to load more items'); const data = await res.json(); if (data.ok && Array.isArray(data.items)) { ${setItemsVar}((prev: any[]) => { const existingIds = new Set(prev.map((it: any) => it.id ?? it._id ?? it.slug ?? it._slug)); const newItems = data.items.filter((it: any) => { const id = it.id ?? it._id ?? it.slug ?? it._slug; return id != null ? !existingIds.has(id) : true; }); return [...prev, ...newItems]; }); ${setPageVar}(nextPage); ${setHasMoreVar}(Boolean(data.hasMore ?? (data.items.length >= ${perPage}))); } else { ${setHasMoreVar}(false); } } catch (err: any) { if (err.name !== 'AbortError') ${setErrorVar}(err.message || 'Error loading more'); } finally { ${setLoadingVar}(false); } }, [${loadingVar}, ${hasMoreVar}, ${pageVar}]);`,
+      `const ${retryFn} = ${loadMoreFn};`,
+    ];
+    if (mode === 'infinite') {
+      hookLines.push(`const ${sentinelRef} = useRef(null);`);
+      hookLines.push(`useEffect(() => { const el = ${sentinelRef}.current; if (!el) return; const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) { ${loadMoreFn}(); } }); io.observe(el); return () => io.disconnect(); }, [${loadMoreFn}]);`);
+    }
+
+    for (const line of hookLines) {
+      result = ensureHook(result, parentId, line);
+    }
+
+    if (mode === 'loadMore') result = ensureLoadMoreImport(result);
+    if (mode === 'infinite') result = ensureSpinnerImport(result);
+
+    trace.action('cms-pagination:set:remote:done', { parentId, mode, perPage, itemsVar });
+    return result;
+  }
+
+  // --- Local pagination path ---
   const stateVar = paginationStateVar(parentId);
   const setter = setterFor(stateVar);
 
@@ -445,38 +595,90 @@ export function removePaginationInCode(code: string, parentId: string): string {
   const stateVar = paginationStateVar(parentId);
   const setter = setterFor(stateVar);
   const refVar = stateVar + 'Ref';
+  const capitalId = toPascalCase(parentId);
+  const itemsVar = 'items' + capitalId;
+  const setItemsVar = 'setItems' + capitalId;
+  const pageVar = 'page' + capitalId;
+  const setPageVar = 'setPage' + capitalId;
+  const hasMoreVar = 'hasMore' + capitalId;
+  const setHasMoreVar = 'setHasMore' + capitalId;
+  const loadingVar = 'loading' + capitalId;
+  const setLoadingVar = 'setLoading' + capitalId;
+  const errorVar = 'error' + capitalId;
+  const setErrorVar = 'setError' + capitalId;
+  const abortRef = 'abort' + capitalId + 'Ref';
+  const sentinelRef = 'sentinel' + capitalId + 'Ref';
+  const loadMoreFn = 'loadMore' + capitalId;
+  const retryFn = 'retry' + capitalId;
+
   let result = code;
 
-  // Strip the data-pagination attr.
-  result = result.replace(new RegExp(`\\s*data-pagination="[^"]*"`), '');
+  // Find initialExpr from itemsVar declaration if present
+  let initialExpr: string | null = null;
+  const prefixRe = new RegExp(`const\\s*\\[${itemsVar},\\s*${setItemsVar}\\]\\s*=\\s*useState\\(\\(\\)\\s*=>\\s*\\(Array\\.isArray\\(`);
+  const match = prefixRe.exec(result);
+  if (match) {
+    const argStart = match.index + match[0].length;
+    let depth = 1;
+    let i = argStart;
+    while (i < result.length && depth > 0) {
+      const ch = result[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      if (depth === 0) {
+        initialExpr = result.slice(argStart, i).trim();
+        break;
+      }
+      i++;
+    }
+  }
+
+  // Strip the data-pagination and data-remote-pagination attrs.
+  result = result.replace(/\s*data-remote-pagination="[^"]*"/g, '');
+  result = result.replace(/\s*data-pagination="[^"]*"/g, '');
+
   // Strip the Load More COMPONENT instance block (`{cond && <LoadMore .../>}`).
   result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
+  result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
   // (legacy) Strip an old raw-button Load More block, if any remains.
   result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <button data-id="loadmore-${parentId}"[\\s\\S]*?</button>\\}`), '');
   // Strip the infinite-scroll sentinel+Spinner block (`{cond && <div ref>...<Spinner/></div>}`).
   result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
+  result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
   // (legacy) Strip an old self-closing sentinel div, if any remains.
   result = result.replace(new RegExp(`\\s*<div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
+  result = result.replace(new RegExp(`\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
+
   // Drop the LoadMore + Spinner imports if no instance of each remains.
   result = pruneLoadMoreImport(result);
   result = pruneSpinnerImport(result);
   // Collapse `.slice(0, stateVar)` back out of the chain (global — duplicates).
   result = result.replace(new RegExp(`\\.slice\\(0, ${stateVar}\\)`, 'g'), '');
 
-  // Remove the hooks. Match by IDENTIFIER (not the emitted spacing) and GLOBALLY,
-  // so a babel-reformatted body (`{const el` instead of `{ const el`) and any
-  // ACCUMULATED DUPLICATES (e.g. a `c+1` and a stale `c+3` observer) are all
-  // stripped. The previous brittle, single-shot, space-exact regexes silently
-  // failed after a reformat → duplicate observers piled up; and a partial
-  // `removeHook` left `(N);` residue (babel then simplified it to a stray `N;`).
+  // Remove the local hooks.
   result = result.replace(new RegExp(`\\n?\\s*const \\[${stateVar}, ${setter}\\] = useState\\([^)]*\\);`, 'g'), '');
   result = result.replace(new RegExp(`\\n?\\s*const ${refVar} = useRef\\([^)]*\\);`, 'g'), '');
   result = result.replace(new RegExp(`\\n?\\s*useEffect\\(\\s*\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${refVar}\\.current[\\s\\S]*?\\}\\s*,\\s*\\[\\]\\s*\\);`, 'g'), '');
 
-  // Heal stray bare-number expression-statements left by the OLD buggy removal
-  // (`removeHook` left `(N);` → babel → `N;`, accumulating a `;2;3;3;…` trail).
-  // A `;` immediately followed by one-or-more bare integer statements is never
-  // legitimate code, so collapse the run back to a single `;`.
+  // Remove remote hooks BEFORE restoring mapping head!
+  result = result.replace(new RegExp(`\\n?\\s*const \\[${itemsVar}, ${setItemsVar}\\] = useState\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const \\[${pageVar}, ${setPageVar}\\] = useState\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const \\[${hasMoreVar}, ${setHasMoreVar}\\] = useState\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const \\[${loadingVar}, ${setLoadingVar}\\] = useState\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const \\[${errorVar}, ${setErrorVar}\\] = useState\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const ${abortRef} = useRef\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const ${sentinelRef} = useRef\\([\\s\\S]*?\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*useEffect\\(\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${setItemsVar}[\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const ${loadMoreFn} = useCallback\\([\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*const ${retryFn} = [^;]+;`, 'g'), '');
+  result = result.replace(new RegExp(`\\n?\\s*useEffect\\(\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${sentinelRef}[\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`, 'g'), '');
+
+  // Restore mapping head if itemsVar was used
+  if (initialExpr) {
+    result = result.replace(new RegExp(`\\b${itemsVar}\\b`, 'g'), initialExpr);
+  }
+
+  // Heal stray bare-number expression-statements left by the OLD buggy removal.
   result = result.replace(/;(?:\s*\d+;)+/g, ';');
 
   return result;
@@ -517,12 +719,42 @@ export function collectPaginationHooks(code: string, containerId: string): strin
   const stateVar = paginationStateVar(containerId);
   const setter = setterFor(stateVar);
   const refVar = stateVar + 'Ref';
+  const capitalId = toPascalCase(containerId);
+  const itemsVar = 'items' + capitalId;
+  const setItemsVar = 'setItems' + capitalId;
+  const pageVar = 'page' + capitalId;
+  const setPageVar = 'setPage' + capitalId;
+  const hasMoreVar = 'hasMore' + capitalId;
+  const setHasMoreVar = 'setHasMore' + capitalId;
+  const loadingVar = 'loading' + capitalId;
+  const setLoadingVar = 'setLoading' + capitalId;
+  const errorVar = 'error' + capitalId;
+  const setErrorVar = 'setError' + capitalId;
+  const abortRef = 'abort' + capitalId + 'Ref';
+  const sentinelRef = 'sentinel' + capitalId + 'Ref';
+  const loadMoreFn = 'loadMore' + capitalId;
+  const retryFn = 'retry' + capitalId;
+
   const hooks: string[] = [];
-  const grab = (re: RegExp) => { const m = code.match(re); if (m) hooks.push(m[0]); };
+  const grab = (re: RegExp) => { const m = code.match(re); if (m) hooks.push(m[0].trim()); };
   grab(new RegExp(`const ${listConfigVar(containerId)} = useResponsiveListConfig\\([\\s\\S]*?\\);`));
   grab(new RegExp(`const \\[${stateVar}, ${setter}\\] = useState\\([^)]*\\);`));
   grab(new RegExp(`const ${refVar} = useRef\\([^)]*\\);`));
   grab(new RegExp(`useEffect\\(\\(\\) => \\{[\\s\\S]*?${refVar}[\\s\\S]*?\\}, \\[\\]\\);`));
+
+  // Remote hooks
+  grab(new RegExp(`const \\[${itemsVar}, ${setItemsVar}\\] = useState\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const \\[${pageVar}, ${setPageVar}\\] = useState\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const \\[${hasMoreVar}, ${setHasMoreVar}\\] = useState\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const \\[${loadingVar}, ${setLoadingVar}\\] = useState\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const \\[${errorVar}, ${setErrorVar}\\] = useState\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const ${abortRef} = useRef\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`const ${sentinelRef} = useRef\\([\\s\\S]*?\\);`));
+  grab(new RegExp(`useEffect\\(\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${setItemsVar}[\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`));
+  grab(new RegExp(`const ${loadMoreFn} = useCallback\\([\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`));
+  grab(new RegExp(`const ${retryFn} = [^;]+;`));
+  grab(new RegExp(`useEffect\\(\\(\\)\\s*=>\\s*\\{[\\s\\S]*?${sentinelRef}[\\s\\S]*?\\},\\s*\\[[\\s\\S]*?\\]\\);`));
+
   return hooks;
 }
 
