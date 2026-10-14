@@ -800,7 +800,8 @@ export function cmsNavHrefExpr(collection: string, colVar: string, mode: 'self' 
   if (mode === 'row') {
     // Falls back gracefully to the collection's own root if the item happens
     // to be missing a slug — symmetric with prev/next out-of-bounds.
-    return base + '${' + (itemVar || 'item') + "?._slug ?? ''}`";
+    const v = itemVar || 'item';
+    return base + '${' + v + "?._slug || " + v + "?.slug || " + v + "?.id || ''}`";
   }
   const offset = mode === 'prev' ? '- 1' : '+ 1';
   return base + '${' + colVar + '['

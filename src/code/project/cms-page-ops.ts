@@ -31,6 +31,7 @@ import { rootMountBlockedBy } from './cms-root-mount';
 import { buildCmsDetailServerWrapper, defaultBindings, serializeHeadersForCode } from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
 import { getApiCollection } from './cms-api-config';
+import { getItemDisplayLabel } from '@/shared/cms-accessor';
 
 // ─── Field selection ────────────────────────────────────────────────────────
 
@@ -634,18 +635,8 @@ export function cmsItemDisplayLabel(
   fallbackSlug?: string | null,
 ): string {
   if (!item) return fallbackSlug ?? '';
-  const priorityKeys = ['title', 'name', 'label', 'headline', 'header', 'slug'];
-  for (const pk of priorityKeys) {
-    if (typeof item[pk] === 'string' && item[pk].trim()) {
-      return item[pk];
-    }
-  }
-  const textKey = Object.keys(item).find(
-    (k) => !k.startsWith('_') && k !== 'id' && typeof item[k] === 'string' && (item[k] as string).trim(),
-  );
-  if (textKey && item[textKey]) return item[textKey];
-  const slug = item._slug ?? item.slug ?? item.id ?? item._id;
-  return slug != null ? String(slug) : (fallbackSlug ?? '');
+  const label = getItemDisplayLabel(item);
+  return label || (fallbackSlug ?? '');
 }
 
 /** "blog-posts" / "blog_posts" → "Blog Posts" — collection slug to a title. */

@@ -84,7 +84,7 @@ describe('createCmsIndexPageFile', () => {
     // Row links carry the data-cms-nav marker + the SAFE optional-slug form
     // (matches the generator's cmsNavHrefExpr; oracle CMS_NAV_LINK_MISSING_MARKER).
     expect(client).toContain('data-cms-nav="row"');
-    expect(client).toContain("href={`/blog/${item?._slug ?? ''}`}");
+    expect(client).toContain("href={`/blog/${item?._slug || item?.slug || item?.id || ''}`}");
   });
 });
 

@@ -61,15 +61,8 @@ export const previewSlugByFileAtom = atom<Map<string, string>>(new Map());
  */
 export const slugPageReferrerByFileAtom = atom<Map<string, string>>(new Map());
 
-/**
- * Universal item identifier / slug resolver.
- * Handles local CMS items (_slug, _id) and external API items (slug, id, _slug, _id).
- */
-export function getItemSlug(item: Record<string, any> | undefined | null): string {
-  if (!item) return '';
-  const val = item._slug ?? item.slug ?? item.id ?? item._id;
-  return val != null ? String(val) : '';
-}
+import { getItemSlug } from '@/shared/cms-accessor';
+export { getItemSlug };
 
 /**
  * Convenience — the slug currently previewed for the ACTIVE file. Falls

@@ -19,6 +19,8 @@ export interface ApiCollectionConfig {
   defaultParams?: Record<string, string>; // e.g. { fields: "*.*", user_field_names: "true" }
   cacheMaxAge?: number; // in seconds, default: 14400 (4 hours)
   itemsKey?: string; // e.g. "data" for Directus/Strapi, "results" for Baserow
+  idField?: string;
+  slugField?: string;
 }
 
 export interface CmsProjectConfig {
@@ -59,6 +61,7 @@ export function saveCmsProjectConfig(config: CmsProjectConfig): void {
 /** Retrieve an API collection configuration by slug */
 export function getApiCollection(slug: string): ApiCollectionConfig | null {
   const config = loadCmsProjectConfig();
+  if (config.mode !== 'api') return null;
   return config.apiCollections[slug] ?? null;
 }
 

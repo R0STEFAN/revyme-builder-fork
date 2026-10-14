@@ -3,6 +3,7 @@
 
 import * as t from '@babel/types';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
+import { isRootMounted } from '@/code/project/cms-root-mount';
 import { paginationStateVar } from '@/code/generation/cms-pagination-gen';
 import { traverse, jsxTagName, jsxAttrs, stringAttr } from './shared';
 import { MOTION_LINK_DECL_ANY_RE } from '@/code/generation/generator-attrs';
@@ -347,7 +348,10 @@ function checkCmsNavDialect(code: string, ast: t.File, v: OracleViolation[], kin
         });
         return;
       }
-      if (norm(hrefExpr) !== norm(expected)) {
+      const legacyExpected = mode === 'row'
+        ? ((isRootMounted(authCollection || 'COLLECTION') ? '`/' : '`/' + (authCollection || 'COLLECTION') + '/') + '${' + itemVar + "?._slug ?? ''}`")
+        : null;
+      if (norm(hrefExpr) !== norm(expected) && (!legacyExpected || norm(hrefExpr) !== norm(legacyExpected))) {
         v.push({
           code: 'CMS_NAV_HREF_MISMATCH', tier: 2, line,
           message: `[CMS nav] the data-cms-nav="${mode}" href at line ${line} does not match the resolver the Link tool generates and reads back. Expected exactly: href={${expected}}`,

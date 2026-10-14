@@ -52,14 +52,14 @@ const nav = (code: string) => checkFile(code, { kind: 'page' }).filter((x) => x.
 describe('a collection mounted at the root', () => {
   it('links without a collection segment', () => {
     expect(cmsNavHrefExpr('team', 'team', 'self')).toBe("`/${params?.slug ?? ''}`");
-    expect(cmsNavHrefExpr('team', 'team', 'row')).toBe("`/${item?._slug ?? ''}`");
+    expect(cmsNavHrefExpr('team', 'team', 'row')).toBe("`/${item?._slug || item?.slug || item?.id || ''}`");
     expect(cmsNavHrefExpr('team', 'team', 'next'))
       .toBe("`/${team[team.findIndex((i) => i._slug === params?.slug) + 1]?._slug ?? ''}`");
   });
 
   it('leaves a nested collection exactly where it was', () => {
     expect(cmsNavHrefExpr('blog', 'blog', 'self')).toBe("`/blog/${params?.slug ?? ''}`");
-    expect(cmsNavHrefExpr('blog', 'blog', 'row')).toBe("`/blog/${item?._slug ?? ''}`");
+    expect(cmsNavHrefExpr('blog', 'blog', 'row')).toBe("`/blog/${item?._slug || item?.slug || item?.id || ''}`");
   });
 
   it('the oracle accepts the root form it generates', () => {

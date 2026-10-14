@@ -265,6 +265,23 @@ export interface CollectionItem {
   [fieldId: string]: any;
 }
 
+export type ApiItem = {
+  id?: string | number;
+  slug?: string;
+  [key: string]: any;
+};
+
+export type CmsItem = CollectionItem | ApiItem | Record<string, any>;
+
+export interface CmsQueryResult<T = unknown> {
+  items: T[];
+  total?: number;
+  hasMore?: boolean;
+  nextCursor?: string | number;
+  status: 'idle' | 'loading' | 'success' | 'empty' | 'error';
+  error?: string;
+}
+
 export interface FilterConfig {
   field: string;
   operator: 'equals' | 'not_equals' | 'contains' | 'not_contains'
