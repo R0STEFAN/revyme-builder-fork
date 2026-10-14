@@ -45,6 +45,7 @@ export const FIELD_TYPES: { value: FieldDefinition['type']; label: string }[] = 
   { value: 'slug', label: 'Slug' },
   { value: 'reference', label: 'Reference' },
   { value: 'multi-reference', label: 'Multi-Reference' },
+  { value: 'json', label: 'JSON / Object' },
 ];
 
 // ─── ID Generation ──────────────────────────────────────────────────────────

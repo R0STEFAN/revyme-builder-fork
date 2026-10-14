@@ -66,8 +66,44 @@ export function inferFieldType(val: any, key: string): FieldDefinition['type'] {
     if (val.includes('\n') || val.length > 80) return 'textarea';
     return 'text';
   }
+  if (Array.isArray(val)) {
+    if (val.length > 0 && typeof val[0] === 'string') return 'tags';
+    return 'json';
+  }
+  if (val !== null && typeof val === 'object') {
+    if (isLikelyImageField(key, val)) return 'image';
+    if (isDirectusAsset(val)) return 'file';
+    return 'json';
+  }
   return 'text';
 }
+
+export function isDirectusAsset(val: any): boolean {
+  if (!val || typeof val !== 'object') return false;
+  if ('filename_disk' in val || 'filename_download' in val) return true;
+  if ('id' in val && typeof val.type === 'string' && (val.type.startsWith('image/') || val.type.startsWith('video/') || val.type.startsWith('audio/') || val.type.includes('pdf'))) {
+    return true;
+  }
+  return false;
+}
+
+export const TECHNICAL_ASSET_SUBFIELDS = new Set([
+  'metadata',
+  'filesize',
+  'storage',
+  'modified_on',
+  'modified_by',
+  'uploaded_on',
+  'uploaded_by',
+  'created_on',
+  'created_by',
+  'charset',
+  'duration',
+  'width',
+  'height',
+  'embed',
+  'folder',
+]);
 
 export function isLikelyImageField(key: string, val: any): boolean {
   const lKey = key.toLowerCase();
@@ -123,22 +159,30 @@ export function inferSchemaFromItems(slug: string, name: string, items: any[]): 
       if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
         // Nested object (e.g. Directus file object, Strapi relation, author object)
         const isImg = isLikelyImageField(key, val);
+        const isAsset = isImg || isDirectusAsset(val);
+        const parentType: FieldDefinition['type'] = isImg ? 'image' : isAsset ? 'file' : 'json';
         if (!fieldsMap.has(key)) {
           fieldsMap.set(key, {
             id: key,
             name: formatFieldName(key),
-            type: isImg ? 'image' : 'text',
+            type: parentType,
           });
-        } else if (isImg && fieldsMap.get(key)!.type !== 'image') {
-          fieldsMap.get(key)!.type = 'image';
+        } else if (isAsset && fieldsMap.get(key)!.type !== 'image' && fieldsMap.get(key)!.type !== 'file') {
+          fieldsMap.get(key)!.type = parentType;
         }
 
         for (const [subKey, subVal] of Object.entries(val)) {
+          if (isAsset && TECHNICAL_ASSET_SUBFIELDS.has(subKey.toLowerCase())) {
+            continue;
+          }
           const nestedId = `${key}.${subKey}`;
           if (!fieldsMap.has(nestedId)) {
             let subType = inferFieldType(subVal, subKey);
             if (subKey === 'filename_disk' || (typeof subVal === 'string' && /\.(png|jpe?g|webp|gif|svg|avif)($|\?)/i.test(subVal))) {
               subType = 'image';
+            }
+            if (typeof subVal === 'object' && subVal !== null) {
+              subType = isLikelyImageField(subKey, subVal) ? 'image' : 'json';
             }
             fieldsMap.set(nestedId, {
               id: nestedId,

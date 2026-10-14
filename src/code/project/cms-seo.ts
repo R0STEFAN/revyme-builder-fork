@@ -81,7 +81,11 @@ export function bindableFields(schema: CollectionSchema | null, slot: CmsSeoSlot
  *  heading and body fields. */
 export function defaultBindings(schema: CollectionSchema | null): CmsSeoBindings {
   if (!schema) return {};
-  const text = schema.fields.filter((f) => TEXT_TYPES.has(f.type) && f.type !== 'slug');
+  const text = schema.fields.filter((f) =>
+    TEXT_TYPES.has(f.type) &&
+    f.type !== 'slug' &&
+    !schema.fields.some(other => other.id.startsWith(`${f.id}.`)),
+  );
   const image = schema.fields.find((f) => IMAGE_TYPES.has(f.type));
   const title = text[0];
   const body = text.find((f) => f.id !== title?.id);
@@ -142,6 +146,9 @@ export function serializeHeadersForCode(headers: Record<string, string> | undefi
     if (!v) continue;
     if (v.includes('process.env.')) {
       const replaced = v.replace(/process\.env\.([A-Za-z0-9_]+)/g, '${process.env.$1}');
+      entries.push(`${JSON.stringify(k)}: \`${replaced}\``);
+    } else if (v.includes('env:')) {
+      const replaced = v.replace(/env:([A-Za-z0-9_]+)/g, '${process.env.$1}');
       entries.push(`${JSON.stringify(k)}: \`${replaced}\``);
     } else if (v.includes('$')) {
       const replaced = v.replace(/\$([A-Za-z0-9_]+)/g, '${process.env.$1}');
@@ -227,6 +234,25 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
       ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
       : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
 
+    const methodLine = apiConfig.method && apiConfig.method.toUpperCase() !== 'GET'
+      ? `\n    method: '${apiConfig.method.toUpperCase()}',`
+      : '';
+
+    const staticParams = includeStaticParams !== false
+      ? `\nexport async function generateStaticParams() {
+  const endpoint = \`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\`;
+  const res = await fetch(endpoint, {${methodLine}
+    headers: ${headersCode},
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  const items = ${itemsExtract};
+  return items
+    .filter((i: any) => i && (i.slug || i._slug))
+    .map((i: any) => ({ slug: String(i.slug || i._slug) }));
+}\n`
+      : '';
+
     return `import PageClient from './page.client';
 import { notFound } from 'next/navigation';
 
@@ -237,7 +263,7 @@ const seoBindings = ${bindingsLiteral};
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
-  const res = await fetch(endpoint, {
+  const res = await fetch(endpoint, {${methodLine}
     headers: ${headersCode},
     next: { revalidate: ${revalidate} },
   });
@@ -249,7 +275,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const bound = (slot: string) => {
     const field = (seoBindings as Record<string, string>)[slot];
     if (!field || !item) return undefined;
-    const value = item[field];
+    const value = field.includes('.')
+      ? field.split('.').reduce((acc: any, part: string) => acc?.[part], item)
+      : item[field];
+    if (typeof value === 'object' && value !== null) {
+      return value.url || (value.id ? \`/assets/\${value.id}\` : undefined) || value.filename_disk || undefined;
+    }
     return typeof value === 'string' && value ? value : undefined;
   };
   const pick = (slot: string, fallbackSlot?: string) =>
@@ -277,26 +308,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical: (seoDefaults as any).canonical || undefined },${robots}
   };
 }
-
-export async function generateStaticParams() {
-  const endpoint = \`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\`;
-  const res = await fetch(endpoint, {
-    headers: ${headersCode},
-  });
-  if (!res.ok) return [];
-  const json = await res.json();
-  const items = ${itemsExtract};
-  return items
-    .filter((i: any) => i && (i.slug || i._slug))
-    .map((i: any) => ({ slug: String(i.slug || i._slug) }));
-}
-
+${staticParams}
 export const dynamicParams = true;
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
-  const res = await fetch(endpoint, {
+  const res = await fetch(endpoint, {${methodLine}
     headers: ${headersCode},
     next: { revalidate: ${revalidate} },
   });
@@ -335,7 +353,12 @@ export async function generateMetadata({ params }) {
   const bound = (slot) => {
     const field = seoBindings[slot];
     if (!field || !item) return undefined;
-    const value = item[field];
+    const value = field.includes('.')
+      ? field.split('.').reduce((acc, part) => acc?.[part], item)
+      : item[field];
+    if (typeof value === 'object' && value !== null) {
+      return value.url || (value.id ? \`/assets/\${value.id}\` : undefined) || value.filename_disk || undefined;
+    }
     return typeof value === 'string' && value ? value : undefined;
   };
   const pick = (slot, fallbackSlot) =>

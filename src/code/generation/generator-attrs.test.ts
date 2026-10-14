@@ -69,6 +69,19 @@ describe('updateHtmlAttrsInCode — single-quoted (JSON) attrs', () => {
     expect(out).not.toContain('data-overlay-trigger');
   });
 
+  it('updates bare legacy alt in place without creating a duplicate attribute', () => {
+    const bareCode = `<img data-id="img-1" alt src="/pic.webp" />`;
+    const out = updateHtmlAttrsInCode(bareCode, 'img-1', { alt: 'A beautiful photo' });
+    expect(out).toContain('alt="A beautiful photo"');
+    expect(out).not.toMatch(/\balt\b.*?\balt=/);
+  });
+
+  it('removes bare legacy alt cleanly when value is empty', () => {
+    const bareCode = `<img data-id="img-1" alt src="/pic.webp" />`;
+    const out = updateHtmlAttrsInCode(bareCode, 'img-1', { alt: '' });
+    expect(out).not.toMatch(/\balt\b/);
+  });
+
   it('inserts new attribute before style prop in JSX', () => {
     const input = `<CTAButton data-id="cta-btn-root" data-name="CTA Button" style={{ width: '204px' }} />`;
     const out = updateHtmlAttrsInCode(input, 'cta-btn-root', { 'data-1': 'wert' });

@@ -9,6 +9,7 @@ import { SVG_SHAPE_TAGS } from '@/shared/constants';
 import { trace } from '@/shared/debug-trace';
 import { translateShapeGeometry, translatePathD } from '@/shared/svg-geometry';
 import { generate, findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findSubtreeRange } from './generator-utils';
+import { escapeRegExp } from '@/shared/regex-utils';
 
 // ─── Variant Style Update ───────────────────────────────────────────────────
 
@@ -50,30 +51,25 @@ export function updateHtmlAttrsInCode(
   let tagStr = code.slice(tagStart, tagEnd + 1);
 
   for (const [key, value] of Object.entries(attrs)) {
+    const escapedKey = escapeRegExp(key);
     if (value === '') {
       // Require a whitespace prefix so we don't strip `data-id="..."`
       // when removing `id`. `data-id` has `-` before `id`, not whitespace,
-      // so this regex won't accidentally match it. Match quote styles and JSX expressions
-      // (a JSON attr like data-overlay-trigger is single-quoted; a variable attr is {var}).
-      tagStr = tagStr.replace(new RegExp(`\\s+${key}=(?:"[^"]*"|'[^']*'|\\{[^}]*\\})`, 'g'), '');
+      // so this regex won't accidentally match it. Match quote styles, JSX expressions,
+      // and bare legacy attributes (e.g. bare `alt`, `disabled`).
+      tagStr = tagStr.replace(new RegExp(`\\s+${escapedKey}(?:=(?:"[^"]*"|'[^']*'|\\{[^}]*\\}))?(?=[\\s/>]|$)`, 'g'), '');
     } else {
-      // Same whitespace-prefix guard. The previous regex `(${key}=)"…"`
-      // matched substring positions inside other attribute names — most
-      // notably `data-id="…"` when updating `id`, which silently
-      // overwrote the node's data-id and made it disappear from the
-      // parser/selection. The whitespace anchor pins the match to the
-      // start of an attribute name.
-      //
+      // Same whitespace-prefix guard.
       // CRITICAL: match BOTH single- AND double-quoted existing values, as
-      // well as JSX expression containers `{...}`.
+      // well as JSX expression containers `{...}`, AND bare legacy attributes (e.g. bare `alt`).
       // If the incoming value has the `var:<name>` sentinel (a component prop reference),
       // emit `{name}` (JSX expression) instead of quoting as `"var:name"`.
       const lit = value.startsWith('var:')
         ? `{${value.slice(4)}}`
         : (value.includes('"') ? `'${value}'` : `"${value}"`);
-      const attrRegex = new RegExp(`(\\s)(${key}=)(?:"[^"]*"|'[^']*'|\\{[^}]*\\})`);
+      const attrRegex = new RegExp(`(\\s)(${escapedKey})(?:=(?:"[^"]*"|'[^']*'|\\{[^}]*\\}))?(?=[\\s/>]|$)`);
       if (attrRegex.test(tagStr)) {
-        tagStr = tagStr.replace(attrRegex, `$1$2${lit}`);
+        tagStr = tagStr.replace(attrRegex, `$1$2=${lit}`);
       } else {
         // Insert new attribute before style prop if present, matching standard JSX ordering (attrs -> style -> close)
         const styleMatch = tagStr.match(/(\s+)style\s*=/);

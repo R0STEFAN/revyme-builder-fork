@@ -475,6 +475,45 @@ export function quoteStyleValue(v: unknown): string {
   }
   return s.includes("'") ? JSON.stringify(s) : `'${s}'`;
 }
+// ─── Boolean HTML Attributes ────────────────────────────────────────────────
+export const BOOLEAN_HTML_ATTRS = new Set([
+  'disabled',
+  'checked',
+  'readOnly',
+  'readonly',
+  'required',
+  'autoFocus',
+  'autofocus',
+  'multiple',
+  'controls',
+  'muted',
+  'loop',
+  'autoPlay',
+  'autoplay',
+  'playsInline',
+  'playsinline',
+  'default',
+  'defer',
+  'async',
+  'open',
+  'hidden',
+  'reversed',
+  'scoped',
+  'seamless',
+  'itemScope',
+  'itemscope',
+  'noValidate',
+  'novalidate',
+  'formNoValidate',
+  'formnovalidate',
+  'allowFullScreen',
+  'allowfullscreen',
+  'inert',
+]);
+
+export function isBooleanAttr(key: string): boolean {
+  return BOOLEAN_HTML_ATTRS.has(key) || BOOLEAN_HTML_ATTRS.has(key.toLowerCase());
+}
 
 /**
  * Serialize an HTML/JSX attribute key+value into source text. Mirrors
@@ -489,15 +528,21 @@ export function quoteStyleValue(v: unknown): string {
  * threw "Target ref is defined but not hydrated" because the ref
  * stayed at its initial `null`.
  *
- * Boolean attrs (`controls`, `autoplay`, etc.) carry `v === ''` and
- * render as bare attributes. Strings get quoted as before.
+ * True boolean attrs (`controls`, `autoplay`, etc.) carry `v === ''` and
+ * render as bare attributes. Non-boolean string attrs (`alt`, `aria-label`, etc.)
+ * serialize empty values as `key=""` so React doesn't warn about non-boolean true.
  */
 export function serializeJSXAttr(key: string, value: string): string {
   if (value.startsWith('var:')) {
     const ident = value.slice(4);
     if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(ident)) return ` ${key}={${ident}}`;
   }
-  if (value === '') return ` ${key}`;
+  if (value === '') {
+    if (isBooleanAttr(key)) {
+      return ` ${key}`;
+    }
+    return ` ${key}=""`;
+  }
   // JSON-valued attrs (`data-instance-fx`, `data-scroll-variant`, `data-responsive`) embed
   // DOUBLE quotes; wrapping them in `"…"` produces `data-instance-fx="{"hover"…` which the JSX
   // parser chokes on at the first inner `"` ("Unexpected token"). Wrap any value that contains a

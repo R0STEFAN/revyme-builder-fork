@@ -30,6 +30,23 @@ function getNestedValue(obj: Record<string, unknown> | null, path: string): unkn
   return current;
 }
 
+function formatTextValue(val: unknown): string {
+  if (val == null) return '';
+  if (typeof val === 'object') {
+    const obj = val as Record<string, any>;
+    if (typeof obj.name === 'string') return obj.name;
+    if (typeof obj.title === 'string') return obj.title;
+    if (typeof obj.label === 'string') return obj.label;
+    if (typeof obj.value === 'string' || typeof obj.value === 'number') return String(obj.value);
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return '';
+    }
+  }
+  return String(val);
+}
+
 function formatAttrValue(val: unknown): string {
   if (typeof val === 'object' && val !== null) {
     return (val as any).url || (val as any).src || (val as any).id || (val as any).filename_disk || '';
@@ -54,13 +71,27 @@ export function applyDetailPageBindings(
   for (const [id, node] of out) {
     let cloned: CanvasNode | null = null;
 
+    // Dynamic image src expression (e.g. "https://api.example.com/assets/" + item.img_file.id)
+    if (node.srcExpression) {
+      try {
+        const fn = new Function('item', 'collectionItem', 'row', `try { return (${node.srcExpression}); } catch(e) { return ''; }`);
+        const evaluated = fn(item, item, item);
+        if (evaluated) {
+          if (!cloned) cloned = { ...node };
+          cloned.attrs = { ...cloned.attrs, src: String(evaluated) };
+        }
+      } catch {
+        // ignore evaluation errors
+      }
+    }
+
     // Text / single-attribute binding.
     if (node.binding) {
       const rawVal = getNestedValue(item, node.binding.field);
       if (rawVal !== undefined) {
-        cloned = { ...node };
+        if (!cloned) cloned = { ...node };
         if (node.binding.property === 'text') {
-          cloned.textContent = String(rawVal ?? '');
+          cloned.textContent = formatTextValue(rawVal);
         } else {
           cloned.attrs = { ...cloned.attrs, [node.binding.property]: formatAttrValue(rawVal) };
         }
@@ -107,7 +138,7 @@ export function applyDetailPageBindings(
         if (rawVal === undefined) continue;
         if (!cloned) cloned = { ...node };
         if (ob.prop === '__text') {
-          cloned.textContent = String(rawVal ?? '');
+          cloned.textContent = formatTextValue(rawVal);
         } else if (ob.prop.startsWith('__style.')) {
           const cssProp = ob.prop.slice('__style.'.length);
           cloned.styles = { ...cloned.styles, [cssProp]: formatBoundStyleValue(cssProp, (rawVal as any) ?? '') };

@@ -240,7 +240,7 @@ export interface FieldDefinition {
   name: string;
   type: 'text' | 'textarea' | 'richtext' | 'number' | 'boolean' | 'date'
       | 'image' | 'file' | 'link' | 'url' | 'color' | 'enum' | 'tags' | 'slug'
-      | 'reference' | 'multi-reference';
+      | 'reference' | 'multi-reference' | 'json';
   required?: boolean;
   translatable?: boolean;
   description?: string;      // optional help text for the item editor

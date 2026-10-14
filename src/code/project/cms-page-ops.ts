@@ -43,7 +43,8 @@ import { getItemDisplayLabel } from '@/shared/cms-accessor';
 function firstTextField(schema: CollectionSchema | null): string {
   if (!schema) return '_slug';
   const text = schema.fields.find(f =>
-    f.type === 'text' || f.type === 'textarea' || f.type === 'richtext' || f.type === 'slug',
+    (f.type === 'text' || f.type === 'textarea' || f.type === 'richtext' || f.type === 'slug') &&
+    !schema.fields.some(other => other.id.startsWith(`${f.id}.`)),
   );
   return text?.id ?? '_slug';
 }
@@ -56,7 +57,9 @@ function firstTextField(schema: CollectionSchema | null): string {
 function firstBodyField(schema: CollectionSchema | null, headingField: string): string | null {
   if (!schema) return null;
   const text = schema.fields.find(f =>
-    (f.type === 'text' || f.type === 'textarea' || f.type === 'richtext') && f.id !== headingField,
+    (f.type === 'text' || f.type === 'textarea' || f.type === 'richtext') &&
+    f.id !== headingField &&
+    !schema.fields.some(other => other.id.startsWith(`${f.id}.`)),
   );
   return text?.id ?? null;
 }
@@ -72,12 +75,16 @@ type RenderScope = 'detail' | 'card';
 
 /**
  * A safe JS accessor for a field id: `item.foo` when the id is a valid
- * identifier, `item['foo-bar']` otherwise. New field ids are always
- * camelCase identifiers, but older collections may carry hyphenated ids
- * (e.g. `cover-image`) where `item.cover-image` is a syntax error.
+ * identifier, `item.foo?.bar` when nested, `item['foo-bar']` otherwise.
  */
 function itemAccess(itemVar: string, fieldId: string): string {
-  if (fieldId.split('.').every((part) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(part))) {
+  if (fieldId.includes('.')) {
+    const parts = fieldId.split('.');
+    if (parts.every((part) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(part))) {
+      return `${itemVar}.${parts.join('?.')}`;
+    }
+  }
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(fieldId)) {
     return `${itemVar}.${fieldId}`;
   }
   return `${itemVar}[${JSON.stringify(fieldId)}]`;
@@ -107,7 +114,8 @@ function renderFieldJsx(
       // keeps consistent aspect across mismatched source images.
       const height = scope === 'detail' ? '400px' : '180px';
       const radius = scope === 'detail' ? '12px' : '8px';
-      return `      <img data-id="${id}" data-name="${field.name}" src={${access}} alt="" style={{
+      const srcExpr = `typeof ${access} === 'object' && ${access} !== null ? (${access}.url || (${access}.id ? \`/assets/\${${access}.id}\` : '') || ${access}.filename_disk || '') : ${access}`;
+      return `      <img data-id="${id}" data-name="${field.name}" src={${srcExpr}} alt="" style={{
         width: '100%', height: '${height}',
         objectFit: 'cover', borderRadius: '${radius}',
         display: 'block'
@@ -127,7 +135,7 @@ function renderFieldJsx(
         fontSize: '${fontSize}', fontWeight: '${weight}', color: '${color}',
         fontFamily: 'Inter, sans-serif',
         margin: 0
-      }}>{${access}}</p>`;
+      }}>{typeof ${access} === 'object' && ${access} !== null ? (${access}.name || ${access}.title || ${access}.label || JSON.stringify(${access})) : ${access}}</p>`;
     }
     case 'textarea':
     case 'richtext': {
@@ -141,7 +149,7 @@ function renderFieldJsx(
         fontSize: '${fontSize}', color: '#475569', lineHeight: '${lineHeight}',
         fontFamily: 'Inter, sans-serif',
         margin: 0${maxWidth}
-      }}>{${access}}</p>`;
+      }}>{typeof ${access} === 'object' && ${access} !== null ? (${access}.name || ${access}.title || ${access}.label || JSON.stringify(${access})) : ${access}}</p>`;
     }
     case 'number':
     case 'date': {
@@ -208,6 +216,9 @@ function renderFieldJsx(
         border: '1px solid #e2e8f0'
       }} />`;
     }
+    case 'json':
+      // Generic object/json fields are not rendered as raw text elements to avoid React child crashes
+      return null;
     // reference / multi-reference are intentionally omitted — they need a
     // join + nested map which is too much to scaffold; the user can add
     // them via the CMS binding menu after the page exists.
@@ -230,9 +241,13 @@ function renderAllFields(
 ): string {
   if (!schema) return '';
   const blocks: string[] = [];
+  // Filter out parent container fields when their subfields exist in schema (e.g. omit 'author' when 'author.name' exists)
+  const fieldsToRender = schema.fields.filter(f =>
+    !schema.fields.some(other => other.id.startsWith(`${f.id}.`)),
+  );
   // Image fields first — visual anchor at the top.
   // Then heading. Then everything else in schema order.
-  const ordered = [...schema.fields].sort((a, b) => {
+  const ordered = [...fieldsToRender].sort((a, b) => {
     const aImage = a.type === 'image' || a.type === 'file';
     const bImage = b.type === 'image' || b.type === 'file';
     if (aImage && !bImage) return -1;
@@ -348,12 +363,16 @@ export function createCmsIndexPageFile(slug: string): string {
       ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
       : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
 
+    const methodLine = apiConfig.method && apiConfig.method.toUpperCase() !== 'GET'
+      ? `\n    method: '${apiConfig.method.toUpperCase()}',`
+      : '';
+
     serverCode = `import PageClient from './page.client';
 
 export const metadata = {};
 
 export default async function Page() {
-  const res = await fetch(\`${fetchUrl}\`, {
+  const res = await fetch(\`${fetchUrl}\`, {${methodLine}
     headers: ${headersCode},
     next: { revalidate: ${revalidate} },
   });

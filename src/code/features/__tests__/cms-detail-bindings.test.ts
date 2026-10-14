@@ -67,7 +67,7 @@ export default function Page({ item: serverItem }: { item?: any } = {}) {
         alt=""
         src={"https://api.tattoozp.com/assets/" + item.img_file.id}
       />
-      <div data-id="field-img_file.metadata">{item.img_file.metadata}</div>
+      <div data-id="field-img_file.metadata">{typeof item.img_file?.metadata === 'object' ? JSON.stringify(item.img_file?.metadata) : item.img_file?.metadata}</div>
     </div>
   );
 }
