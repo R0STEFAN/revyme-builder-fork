@@ -5,6 +5,9 @@ import {
   edgeResizeUrl,
   isPreviewAppliedSrc,
   initCanvasImagePreview,
+  unreadableOrigins,
+  clearPreviewCache,
+  ensurePreview,
 } from '../canvas-image-preview';
 
 describe('canvas image preview: URL filtering and edge routing', () => {
@@ -38,6 +41,7 @@ describe('canvas image preview: CORS degradation', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
+    clearPreviewCache();
     // Simulate browser CORS failure when fetching cross-origin assets without ACAO
     globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch (CORS header missing)'));
   });
@@ -62,5 +66,20 @@ describe('canvas image preview: CORS degradation', () => {
     expect(img.getAttribute('src')).toBe(directusUrl);
     expect(img.dataset.cipSrcset).toBeUndefined();
     expect(isPreviewAppliedSrc(img, directusUrl)).toBe(false);
+  });
+
+  it('records failing origin in negative cache and avoids subsequent fetches for that origin', async () => {
+    const url1 = 'https://api.tattoozp.com/assets/img-1.jpg';
+    const res1 = await ensurePreview(url1);
+    expect(res1).toBeNull();
+    expect(unreadableOrigins.has('https://api.tattoozp.com')).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    // Second image from the same unreadable origin
+    const url2 = 'https://api.tattoozp.com/assets/img-2.jpg';
+    const res2 = await ensurePreview(url2);
+    expect(res2).toBeNull();
+    // Fetch should still have been called only once because url2 was skipped by unreadableOrigins
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

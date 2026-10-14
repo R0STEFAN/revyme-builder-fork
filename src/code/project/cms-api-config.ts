@@ -89,3 +89,148 @@ export function setCmsMode(mode: 'local' | 'api'): void {
     saveCmsProjectConfig(config);
   }
 }
+
+/**
+ * Resolves env references in headers.
+ * Supports:
+ * - env:TOKEN
+ * - process.env.TOKEN
+ * - $TOKEN
+ * E.g. "Bearer env:AUDIT_TOKEN" -> "Bearer " + envVars.AUDIT_TOKEN
+ */
+export function resolveEnvHeaders(
+  headers: Record<string, string> | undefined,
+  envVars: Record<string, string> | undefined,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!headers) return result;
+  const env = envVars || {};
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (!key.trim() || value === undefined || value === null) continue;
+    let val = String(value);
+
+    // 1. process.env.TOKEN
+    val = val.replace(/process\.env\.([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
+    // 2. env:TOKEN
+    val = val.replace(/env:([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
+    // 3. $TOKEN
+    val = val.replace(/\$([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
+
+    result[key] = val;
+  }
+
+  return result;
+}
+
+/**
+ * Canonical URL builder for API CMS collections.
+ * Merges apiConfig.defaultParams and queryParams safely without duplicating query string delimiters.
+ */
+export function buildApiRequestUrl(
+  apiConfig: ApiCollectionConfig,
+  queryParams?: Record<string, string>,
+): string {
+  const rawUrl = apiConfig.url || '';
+  try {
+    const isAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl);
+    const urlObj = new URL(rawUrl, typeof location !== 'undefined' ? location.origin : 'http://localhost');
+
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null && v !== '') {
+          urlObj.searchParams.set(k, String(v));
+        }
+      }
+    }
+    if (queryParams) {
+      for (const [k, v] of Object.entries(queryParams)) {
+        if (v !== undefined && v !== null && v !== '') {
+          urlObj.searchParams.set(k, String(v));
+        }
+      }
+    }
+
+    if (isAbsolute) {
+      return urlObj.toString();
+    } else {
+      return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+    }
+  } catch {
+    const [base, existingQuery] = rawUrl.split('?');
+    const params = new URLSearchParams(existingQuery || '');
+    if (apiConfig.defaultParams) {
+      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+        if (v !== undefined && v !== null && v !== '') {
+          params.set(k, String(v));
+        }
+      }
+    }
+    if (queryParams) {
+      for (const [k, v] of Object.entries(queryParams)) {
+        if (v !== undefined && v !== null && v !== '') {
+          params.set(k, String(v));
+        }
+      }
+    }
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+}
+
+/**
+ * Extracts items safely from root array or configured itemsKey, data, results, items.
+ * Returns [] if empty, preserving empty array distinction from null/error.
+ */
+export function extractApiItems(responseJson: any, itemsKey?: string): any[] {
+  if (!responseJson || typeof responseJson !== 'object') {
+    return Array.isArray(responseJson) ? responseJson : [];
+  }
+
+  if (itemsKey) {
+    if (Array.isArray(responseJson[itemsKey])) {
+      return responseJson[itemsKey];
+    }
+    if (itemsKey.includes('.')) {
+      const parts = itemsKey.split('.');
+      let cur = responseJson;
+      for (const part of parts) {
+        if (!cur || typeof cur !== 'object') {
+          cur = undefined;
+          break;
+        }
+        cur = cur[part];
+      }
+      if (Array.isArray(cur)) return cur;
+    }
+  }
+
+  if (Array.isArray(responseJson)) {
+    return responseJson;
+  }
+  if (Array.isArray(responseJson.data)) {
+    return responseJson.data;
+  }
+  if (Array.isArray(responseJson.results)) {
+    return responseJson.results;
+  }
+  if (Array.isArray(responseJson.items)) {
+    return responseJson.items;
+  }
+
+  return [];
+}
+
+/**
+ * Detects which key contains the array of items in an API response if not already configured.
+ */
+export function detectApiItemsKey(responseJson: any, explicitKey?: string): string | undefined {
+  if (!responseJson || typeof responseJson !== 'object') return undefined;
+  if (explicitKey && Array.isArray(responseJson[explicitKey])) return explicitKey;
+  if (Array.isArray(responseJson)) return undefined;
+  if (Array.isArray(responseJson.data)) return 'data';
+  if (Array.isArray(responseJson.results)) return 'results';
+  if (Array.isArray(responseJson.items)) return 'items';
+  return undefined;
+}
+

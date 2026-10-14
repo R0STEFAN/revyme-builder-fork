@@ -158,12 +158,47 @@ function releaseSlot(): void {
   jobQueue.shift()?.();
 }
 
+/**
+ * Origins that failed CORS or network reads.
+ * Speculative fetches are suppressed for these origins to prevent console error storms
+ * (e.g. 93 Directus images on an unconfigured host).
+ */
+export const unreadableOrigins = new Set<string>();
+
+export function clearUnreadableOrigins(): void {
+  unreadableOrigins.clear();
+}
+
+export function getUrlOrigin(url: string): string | null {
+  try {
+    const u = new URL(url, typeof location !== 'undefined' ? location.href : 'http://localhost/');
+    if (!/^https?:$/.test(u.protocol)) return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
 async function buildPreview(url: string): Promise<string | null> {
+  const origin = getUrlOrigin(url);
+  if (origin && unreadableOrigins.has(origin)) {
+    return null;
+  }
+
   await acquireSlot();
   try {
     // credentials omitted: previews must never leak cookies to image hosts,
     // and the sandbox origin isn't the app origin anyway.
-    const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    let resp: Response;
+    try {
+      resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    } catch (fetchErr: any) {
+      if (origin && (fetchErr instanceof TypeError || fetchErr?.name === 'TypeError' || (fetchErr?.message && /CORS|Failed to fetch/i.test(fetchErr.message)))) {
+        unreadableOrigins.add(origin);
+        trace.action('canvas-image-preview:origin-cors-blocked', { origin });
+      }
+      return null;
+    }
     if (!resp.ok) return null;
     const blob = await resp.blob();
     if (!/^image\//.test(blob.type)) return null;
@@ -196,11 +231,17 @@ async function buildPreview(url: string): Promise<string | null> {
   }
 }
 
+export function clearPreviewCache(): void {
+  previewCache.clear();
+  pendingJobs.clear();
+  unreadableOrigins.clear();
+}
+
 /** Resolve (and memoize) the preview for a URL. Null = use the original.
  *  Degradation chain: edge resize (zone-hosted, no full download at all) →
  *  client-side downscale (full download once, small bitmap thereafter) →
  *  original. */
-function ensurePreview(url: string): Promise<string | null> {
+export function ensurePreview(url: string): Promise<string | null> {
   if (previewCache.has(url)) return Promise.resolve(previewCache.get(url) ?? null);
   const pending = pendingJobs.get(url);
   if (pending) return pending;

@@ -135,7 +135,11 @@ export function buildFilterExpression(fg: FilterGroup): string {
       if (isDeep && refSlug) {
         return `(!params?.${f.valueVar} || (Array.isArray(item.${rootField}) ? item.${rootField}.some((x: any) => { if (typeof x === 'object' && x !== null) return String(x?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase()); const str = String(x).toLowerCase(); if (str === String(params.${f.valueVar}).toLowerCase()) return true; const found = (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).find((c: any) => String(c._id).toLowerCase() === str || String(c.id).toLowerCase() === str || String(c.slug).toLowerCase() === str || String(c._slug).toLowerCase() === str); return found ? String(found?.${subPath} ?? found?.slug ?? found?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : false; }) : (typeof item.${rootField} === 'object' && item.${rootField} !== null ? String(item.${rootField}?.${subPath}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() : (typeof ${refSlug} !== 'undefined' ? ${refSlug} : []).some((c: any) => (String(c._id) === String(item.${rootField}) || String(c.id) === String(item.${rootField})) && String(c?.${subPath} ?? c?.slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase()))))`;
       }
-      return `(!params?.${f.valueVar} || (Array.isArray(item.${f.field}) ? item.${f.field}.some((x: any) => (typeof x === 'object' ? (x?.slug === params.${f.valueVar} || String(x?.id) === String(params.${f.valueVar}) || x?._slug === params.${f.valueVar} || String(x?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(x).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase())) : String(x).toLowerCase() === String(params.${f.valueVar}).toLowerCase())) : (typeof item.${f.field} === 'object' && item.${f.field} !== null ? (item.${f.field}?.slug === params.${f.valueVar} || String(item.${f.field}?.id) === String(params.${f.valueVar}) || item.${f.field}?._slug === params.${f.valueVar} || String(item.${f.field}?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || JSON.stringify(item.${f.field}).toLowerCase().includes(String(params.${f.valueVar}).toLowerCase())) : (String(item.${f.field}).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || ((f.field === 'slug' || f.field === '_slug' || f.field === 'id') && (String(item.slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || String(item._slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase() || String(item.id).toLowerCase() === String(params.${f.valueVar}).toLowerCase()))))))`;
+      const isSlugField = f.field === 'slug' || f.field === '_slug' || f.field === 'id';
+      const slugFallback = isSlugField
+        ? ` || (String(item.slug || item._slug).toLowerCase() === String(params.${f.valueVar}).toLowerCase())`
+        : '';
+      return `(!params?.${f.valueVar} || (Array.isArray(item.${f.field}) ? item.${f.field}.some((x: any) => (typeof x === 'object' ? (x?.slug === params.${f.valueVar} || String(x?.id) === String(params.${f.valueVar}) || x?._slug === params.${f.valueVar} || String(x?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase()) : String(x).toLowerCase() === String(params.${f.valueVar}).toLowerCase())) : (typeof item.${f.field} === 'object' && item.${f.field} !== null ? (item.${f.field}?.slug === params.${f.valueVar} || String(item.${f.field}?.id) === String(params.${f.valueVar}) || item.${f.field}?._slug === params.${f.valueVar} || String(item.${f.field}?.name).toLowerCase() === String(params.${f.valueVar}).toLowerCase()) : (String(item.${f.field}).toLowerCase() === String(params.${f.valueVar}).toLowerCase()${slugFallback}))))`;
     }
     // Date-aware LHS for comparison operators (see DATE_ONLY_RE note above).
     const dateCmp = isDateVal(f.value) || (Array.isArray(f.value) && (isDateVal(f.value[0]) || isDateVal(f.value[1])));
@@ -1001,6 +1005,63 @@ export function extractCollectionSlug(content: string, mapDotIdx: number): strin
   return span ? span.slug : null;
 }
 
+function stripQueryConfigAttr(tag: string): string {
+  let idx = 0;
+  const attrName = 'data-query-config';
+  while ((idx = tag.indexOf(attrName, idx)) !== -1) {
+    if (idx > 0 && !/\s/.test(tag[idx - 1])) {
+      idx += attrName.length;
+      continue;
+    }
+    let start = idx;
+    while (start > 0 && /\s/.test(tag[start - 1])) start--;
+
+    let after = idx + attrName.length;
+    while (after < tag.length && /\s/.test(tag[after])) after++;
+    if (after < tag.length && tag[after] === '=') {
+      after++; // skip '='
+      while (after < tag.length && /\s/.test(tag[after])) after++;
+      if (tag[after] === '"' || tag[after] === "'") {
+        const quote = tag[after];
+        const endQuote = tag.indexOf(quote, after + 1);
+        if (endQuote !== -1) {
+          tag = tag.slice(0, start) + tag.slice(endQuote + 1);
+          idx = start;
+          continue;
+        }
+      } else if (tag[after] === '{') {
+        let depth = 0;
+        let inString: string | null = null;
+        let endBrace = -1;
+        for (let i = after; i < tag.length; i++) {
+          const ch = tag[i];
+          if (inString) {
+            if (ch === '\\') { i++; continue; }
+            if (ch === inString) inString = null;
+          } else if (ch === '"' || ch === "'" || ch === '`') {
+            inString = ch;
+          } else if (ch === '{') {
+            depth++;
+          } else if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+              endBrace = i;
+              break;
+            }
+          }
+        }
+        if (endBrace !== -1) {
+          tag = tag.slice(0, start) + tag.slice(endBrace + 1);
+          idx = start;
+          continue;
+        }
+      }
+    }
+    idx += attrName.length;
+  }
+  return tag;
+}
+
 /**
  * Injects, updates, or removes `data-query-config={JSON.stringify(queryConfig)}`
  * on the collection list container element identified by `parentId`.
@@ -1018,9 +1079,7 @@ export function updateCollectionQueryConfig(
 
   const openingTag = code.slice(elStart, tagClose);
   // Strip existing data-query-config
-  const cleanedOpening = openingTag
-    .replace(/\s*data-query-config=\{JSON\.stringify\([^)]+\)\}/g, '')
-    .replace(/\s*data-query-config=(?:"[^"]*"|'[^']*')/g, '');
+  const cleanedOpening = stripQueryConfigAttr(openingTag);
 
   let newOpening = cleanedOpening;
   if (queryConfig && queryConfig.params && queryConfig.params.length > 0) {

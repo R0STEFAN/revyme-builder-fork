@@ -13,7 +13,7 @@ import {
   cmsModeAtom,
   apiCollectionsConfigAtom,
 } from '@/code/stores/cms-store';
-import { setCmsMode, removeApiCollection } from '@/code/project/cms-api-config';
+import { setCmsMode, removeApiCollection, resolveEnvHeaders, buildApiRequestUrl, extractApiItems } from '@/code/project/cms-api-config';
 import { ApiResourceModal, inferSchemaFromItems, getEnvVariables } from './cms/ApiResourceModal';
 import { toast } from 'sonner';
 import {
@@ -324,39 +324,25 @@ function ApiCollectionListView({
     toast.info(`Refreshing ${col.name}...`);
     try {
       const envVars = getEnvVariables();
-      const resolvedHeaders: Record<string, string> = {};
-      for (const [k, v] of Object.entries(col.headers)) {
-        let val = v;
-        const envMatch = val.match(/env:([A-Za-z0-9_]+)/);
-        if (envMatch) {
-          val = val.replace(`env:${envMatch[1]}`, envVars[envMatch[1]] || '');
-        }
-        resolvedHeaders[k] = val;
-      }
+      const resolvedHeaders = resolveEnvHeaders(col.headers, envVars);
+      const url = buildApiRequestUrl(col);
       const res = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: col.url,
-          method: col.method,
+          url,
+          method: col.method || 'GET',
           headers: resolvedHeaders,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      let items: any[] = [];
-      if (col.itemsKey && Array.isArray(json[col.itemsKey])) {
-        items = json[col.itemsKey];
-      } else if (Array.isArray(json)) {
-        items = json;
-      } else if (Array.isArray(json.data)) {
-        items = json.data;
-      } else if (Array.isArray(json.results)) {
-        items = json.results;
-      }
+      const items = extractApiItems(json, col.itemsKey);
       saveCollectionData(slug, items);
-      const schema = inferSchemaFromItems(slug, col.name, items);
-      saveCollectionSchema(slug, schema);
+      if (items.length > 0) {
+        const schema = inferSchemaFromItems(slug, col.name, items);
+        saveCollectionSchema(slug, schema);
+      }
       refresh();
       toast.success(`Refreshed ${col.name} (${items.length} items)`);
     } catch (err: any) {

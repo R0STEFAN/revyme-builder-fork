@@ -11,6 +11,10 @@ import {
   saveApiCollection,
   getApiCollection,
   setCmsMode,
+  resolveEnvHeaders,
+  buildApiRequestUrl,
+  extractApiItems,
+  detectApiItemsKey,
   type ApiCollectionConfig,
   type ApiProvider,
 } from '@/code/project/cms-api-config';
@@ -395,23 +399,18 @@ export function ApiResourceModal({
     }
     setTesting(true);
     setTestResult(null);
-    const testUrl = appendQueryParams(url, params);
+    const paramRecord = Object.fromEntries(
+      params.filter(p => p.key.trim().length > 0).map(p => [p.key.trim(), p.value])
+    );
+    const testUrl = buildApiRequestUrl({ url, defaultParams: paramRecord } as ApiCollectionConfig);
     trace.action('api-resource:test-connection', { url: testUrl, method });
 
     try {
       const envVars = getEnvVariables();
-      const resolvedHeaders: Record<string, string> = {};
-      for (const h of headers) {
-        if (!h.key.trim()) continue;
-        let val = h.value;
-        const envMatch = val.match(/env:([A-Za-z0-9_]+)/);
-        if (envMatch) {
-          const envVarName = envMatch[1];
-          const actualVal = envVars[envVarName] || '';
-          val = val.replace(`env:${envVarName}`, actualVal);
-        }
-        resolvedHeaders[h.key] = val;
-      }
+      const headersRecord = Object.fromEntries(
+        headers.filter(h => h.key.trim().length > 0).map(h => [h.key.trim(), h.value])
+      );
+      const resolvedHeaders = resolveEnvHeaders(headersRecord, envVars);
 
       const proxyRes = await fetch('/api/proxy', {
         method: 'POST',
@@ -428,23 +427,8 @@ export function ApiResourceModal({
       }
 
       const data = await proxyRes.json();
-      let items: any[] = [];
-      let detectedKey = itemsKey;
-
-      if (detectedKey && Array.isArray(data[detectedKey])) {
-        items = data[detectedKey];
-      } else if (Array.isArray(data)) {
-        items = data;
-      } else if (Array.isArray(data.data)) {
-        items = data.data;
-        detectedKey = 'data';
-      } else if (Array.isArray(data.results)) {
-        items = data.results;
-        detectedKey = 'results';
-      } else if (Array.isArray(data.items)) {
-        items = data.items;
-        detectedKey = 'items';
-      }
+      const items = extractApiItems(data, itemsKey);
+      const detectedKey = detectApiItemsKey(data, itemsKey);
 
       if (detectedKey && !itemsKey) {
         setItemsKey(detectedKey);

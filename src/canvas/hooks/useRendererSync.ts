@@ -46,7 +46,13 @@ import { trace } from '@/shared/debug-trace';
 import type { PostMessageBridge } from '@/canvas-sandbox/bridge-host';
 import type { ViewportConfig, SnapGuide, SpacingGuide, CollectionQueryConfig } from '@/shared/types';
 import type { AddViewportMenuState } from '../ui/AddViewportMenu';
-import { getApiCollection, type ApiCollectionConfig } from '@/code/project/cms-api-config';
+import {
+  getApiCollection,
+  resolveEnvHeaders,
+  buildApiRequestUrl,
+  extractApiItems,
+  type ApiCollectionConfig,
+} from '@/code/project/cms-api-config';
 import { getEnvVariables } from '@/editor/left-toolbar/panels/cms/ApiResourceModal';
 
 /** Safely evaluate expression like `params.category` or `params.category || "all"` against route params. */
@@ -90,35 +96,7 @@ export function resolveApiEndpointWithParams(
   apiConfig: ApiCollectionConfig,
   resolvedParams: Record<string, string>,
 ): string {
-  try {
-    const url = new URL(apiConfig.url);
-    if (apiConfig.defaultParams) {
-      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
-        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-      }
-    }
-    for (const [k, v] of Object.entries(resolvedParams)) {
-      if (v !== undefined && v !== null && v !== '') {
-        url.searchParams.set(k, String(v));
-      }
-    }
-    return url.toString();
-  } catch {
-    const query = new URLSearchParams();
-    if (apiConfig.defaultParams) {
-      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
-        if (v !== undefined && v !== null) query.set(k, String(v));
-      }
-    }
-    for (const [k, v] of Object.entries(resolvedParams)) {
-      if (v !== undefined && v !== null && v !== '') {
-        query.set(k, String(v));
-      }
-    }
-    const qStr = query.toString();
-    if (!qStr) return apiConfig.url;
-    return apiConfig.url.includes('?') ? `${apiConfig.url}&${qStr}` : `${apiConfig.url}?${qStr}`;
-  }
+  return buildApiRequestUrl(apiConfig, resolvedParams);
 }
 
 export interface UseRendererSyncOptions {
@@ -207,7 +185,7 @@ export function useRendererSync(
 
   const [dynamicApiData, setDynamicApiData] = useState<Record<string, any[]>>({});
 
-  // Background fetch for API CMS collections with dynamic query parameter expressions
+  // Background fetch for API CMS collections with dynamic or static query parameters
   useEffect(() => {
     let cancelled = false;
     for (const node of nodes.values()) {
@@ -216,23 +194,13 @@ export function useRendererSync(
       const apiConfig = getApiCollection(source);
       if (!apiConfig) continue;
 
-      const hasExpressions = node.collectionList.queryConfig.params.some(p => p.isExpression);
-      if (!hasExpressions) continue;
-
       const resolvedParams = evaluateQueryParamExpressions(node.collectionList.queryConfig, activeRouteParams);
-      const fullUrl = resolveApiEndpointWithParams(apiConfig, resolvedParams);
+      const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams);
 
       (async () => {
         try {
           const envVars = getEnvVariables();
-          const resolvedHeaders: Record<string, string> = {};
-          for (const [k, v] of Object.entries(apiConfig.headers || {})) {
-            let replaced = v;
-            for (const [envKey, envVal] of Object.entries(envVars)) {
-              replaced = replaced.split(`process.env.${envKey}`).join(envVal).split(`$${envKey}`).join(envVal);
-            }
-            resolvedHeaders[k] = replaced;
-          }
+          const resolvedHeaders = resolveEnvHeaders(apiConfig.headers, envVars);
 
           const res = await fetch('/api/proxy', {
             method: 'POST',
@@ -245,19 +213,8 @@ export function useRendererSync(
           });
           if (!res.ok || cancelled) return;
           const data = await res.json();
-          let items: any[] = [];
-          if (apiConfig.itemsKey && Array.isArray(data[apiConfig.itemsKey])) {
-            items = data[apiConfig.itemsKey];
-          } else if (Array.isArray(data)) {
-            items = data;
-          } else if (Array.isArray(data.data)) {
-            items = data.data;
-          } else if (Array.isArray(data.results)) {
-            items = data.results;
-          } else if (Array.isArray(data.items)) {
-            items = data.items;
-          }
-          if (!cancelled && items.length > 0) {
+          const items = extractApiItems(data, apiConfig.itemsKey);
+          if (!cancelled && Array.isArray(items)) {
             setDynamicApiData(prev => ({ ...prev, [source]: items }));
           }
         } catch {
