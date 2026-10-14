@@ -37,6 +37,8 @@ export interface FlatLayer {
   /** This node is the collection-list TEMPLATE ROW (the `.map()` body root, the
    *  one record) → single-cylinder CMS item icon. NOT its descendants. */
   isCmsItem?: boolean;
+  /** When true, this viewport header row represents a hidden viewport */
+  isVpHidden?: boolean;
 }
 
 // ─── Frame Icon ───────────────────────────────────────────────────────────
@@ -986,7 +988,7 @@ export const LayerRow = React.memo(function LayerRow({
             className="text-xs font-medium select-none transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
             style={{
               color: isSelected ? selFg : isChildOfSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-              opacity: node.fromLayout ? 0.5 : 1,
+              opacity: node.fromLayout ? 0.5 : (isVpHeader && layer.isVpHidden ? 0.45 : 1),
               // Always fit the visible width (sx + vw) minus this text's indent
               // and a reserve for the sticky lock/eye icons + edge padding.
               // Updates on horizontal scroll purely via the CSS vars → the name
@@ -1006,15 +1008,12 @@ export const LayerRow = React.memo(function LayerRow({
         {/* Lock & Visibility actions — visible on hover, always visible when hidden/locked.
          *  Out of the row WHILE RENAMING: the name field sits where they'd be clicked by mistake,
          *  and the name gets the full width. They come back with the commit. */}
-        {!isRenaming && !isViewer && !isVpHeader && layer.nodeId && (() => {
+        {!isRenaming && !isViewer && (layer.nodeId || (isVpHeader && layer.viewportId)) && (() => {
           // Use the row-level `effectiveHidden` from the resolver (which
           // already cascades base + default-variant + per-variant + @media
-          // overrides). The previous `|| node.styles.display === 'none'`
-          // fallback short-circuited the resolver for any node with
-          // inline `display: 'none'` baked in — exactly the case where
-          // a non-default variant un-hides via `display: ''`.
-          const isHidden = effectiveHidden;
-          const isLocked = node.styles.pointerEvents === 'none';
+          // overrides). For viewport header rows, use `isVpHidden`.
+          const isHidden = isVpHeader ? !!layer.isVpHidden : effectiveHidden;
+          const isLocked = !isVpHeader && node.styles.pointerEvents === 'none';
           // Each action shows ON ITS OWN when its state is on: a locked row shows
           // the padlock (solid fill, full-strength colour), a hidden row shows the
           // crossed eye — the other icon stays hover-only. Showing both at once made
@@ -1024,33 +1023,39 @@ export const LayerRow = React.memo(function LayerRow({
           const onColor = isSelected ? selFg : 'var(--text-primary)';
           return (
             <div className="flex items-center gap-0.5 shrink-0 sticky right-2 z-10">
+              {!isVpHeader && layer.nodeId && (
+                <button
+                  draggable={false}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); onToggleLock(layer.nodeId!); }}
+                  className={`p-0.5 rounded hover:bg-[var(--bg-hover)] transition-all ${isLocked ? 'opacity-100' : hoverOnly}`}
+                  title={isLocked ? 'Unlock layer' : 'Lock layer'}
+                  data-locked={isLocked ? 'true' : undefined}
+                >
+                  {isLocked ? (
+                    // SOLID padlock: filled body + closed shackle, full colour.
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={onColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" fill={onColor} /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  ) : (
+                    // Open padlock outline (shackle lifted) — no slash, so "unlocked"
+                    // can't be mistaken for "locked and crossed".
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                    </svg>
+                  )}
+                </button>
+              )}
               <button
                 draggable={false}
                 onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); onToggleLock(layer.nodeId!); }}
-                className={`p-0.5 rounded hover:bg-[var(--bg-hover)] transition-all ${isLocked ? 'opacity-100' : hoverOnly}`}
-                title={isLocked ? 'Unlock layer' : 'Lock layer'}
-                data-locked={isLocked ? 'true' : undefined}
-              >
-                {isLocked ? (
-                  // SOLID padlock: filled body + closed shackle, full colour.
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={onColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" fill={onColor} /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                ) : (
-                  // Open padlock outline (shackle lifted) — no slash, so "unlocked"
-                  // can't be mistaken for "locked and crossed".
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                  </svg>
-                )}
-              </button>
-              <button
-                draggable={false}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); onToggleVisibility(layer.nodeId!, layer.viewportId); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleVisibility(layer.nodeId || '', layer.viewportId);
+                }}
                 className={`p-0.5 rounded hover:bg-[var(--bg-hover)] transition-all ${isHidden ? 'opacity-100' : hoverOnly}`}
-                title={isHidden ? 'Show layer' : 'Hide layer'}
+                title={isVpHeader ? (isHidden ? 'Show breakpoint on canvas' : 'Hide breakpoint from canvas') : (isHidden ? 'Show layer' : 'Hide layer')}
+                data-hidden={isHidden ? 'true' : undefined}
               >
                 {isHidden ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={onColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

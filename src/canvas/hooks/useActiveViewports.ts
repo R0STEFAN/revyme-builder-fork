@@ -99,7 +99,9 @@ export function computeActiveViewports(
     }];
   }
 
-  return vpConfigs.map(v => withLiveWidth({ ...v }, vpWidths[v.id]));
+  const visibleConfigs = vpConfigs.filter(v => !v.hidden);
+  const effectiveConfigs = visibleConfigs.length > 0 ? visibleConfigs : vpConfigs.slice(0, 1);
+  return effectiveConfigs.map(v => withLiveWidth({ ...v }, vpWidths[v.id]));
 }
 
 // Recomputes on every input change (cheap)…

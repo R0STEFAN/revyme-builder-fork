@@ -17,7 +17,10 @@ export function parseCanvasConfig(code: string): CanvasConfig | null {
     const parsed = JSON.parse(match[1]);
     trace.fn('canvas-config:parse', { viewportCount: parsed.viewports?.length });
     return {
-      viewports: parsed.viewports || [],
+      viewports: (parsed.viewports || []).map((v: any) => ({
+        ...v,
+        hidden: Boolean(v.hidden),
+      })),
       positions: parsed.positions || {},
     };
   } catch {
@@ -41,6 +44,9 @@ export function serializeCanvasConfig(config: CanvasConfig): string {
         id: v.id, label: v.label, width: v.width,
         isPrimary: v.isPrimary || false, order: v.order ?? 0,
       };
+      if (v.hidden) {
+        out.hidden = true;
+      }
       // The width the tile RENDERS at, when it differs from the band's top.
       // Same rule as `height`: written only when set, because this is an
       // allow-list — a field missing here is silently dropped on the next

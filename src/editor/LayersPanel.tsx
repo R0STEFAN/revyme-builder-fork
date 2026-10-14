@@ -9,7 +9,7 @@ import { overlayEditingIdAtom } from '@/code/stores/overlay-store';
 import { nodesAtom, selectedNodeAtom, selectedIdsAtom, layerDropTargetAtom, nodeTreeStructureVersionAtom, getCachedNodesMap } from '@/code/stores/store';
 import { activeFilePathAtom, isComponentFilePath, isComponentLikeFilePath, isIconSetFilePath, getLayoutForPage, getLayoutClientPath } from '@/code/project/active-file-store';
 import { flushNow } from '@/code/mutation/mutation-queue';
-import { visibleViewportsAtom, interactingViewportIdAtom, viewportsConfigAtom, viewportWidthsAtom } from '@/code/stores/viewport-store';
+import { visibleViewportsAtom, interactingViewportIdAtom, viewportsConfigAtom, viewportWidthsAtom, toggleViewportHidden } from '@/code/stores/viewport-store';
 import { containerOverridesAtom } from '@/code/stores/container-query-store';
 import { activeLocaleAtom, isDefaultLocaleAtom } from '@/code/stores/locale-store';
 import { getContentRoot, updateNodeStyles, setStyleContext, isPrimaryViewport, flushAndForceStructuralRender, redirectToFitTextWrapper } from '@/canvas/node-ops';
@@ -162,13 +162,14 @@ export default function LayersPanel() {
 
   function cachedLayer(id: string, nodeId: string | null, node: CanvasNode, depth: number,
     hasChildren: boolean, isExpanded: boolean, vpId: string,
-    vpLabel?: string, vpWidth?: number): FlatLayer {
+    vpLabel?: string, vpWidth?: number, isVpHidden?: boolean): FlatLayer {
     const prev = layerCacheRef.current.get(id);
     if (prev && prev.node === node && prev.depth === depth &&
-        prev.hasChildren === hasChildren && prev.isExpanded === isExpanded) {
+        prev.hasChildren === hasChildren && prev.isExpanded === isExpanded &&
+        prev.isVpHidden === Boolean(isVpHidden)) {
       return prev;
     }
-    const layer: FlatLayer = { id, nodeId, node, depth, hasChildren, isExpanded, viewportId: vpId };
+    const layer: FlatLayer = { id, nodeId, node, depth, hasChildren, isExpanded, viewportId: vpId, isVpHidden: Boolean(isVpHidden) };
     if (vpLabel) layer.viewportLabel = vpLabel;
     if (vpWidth) layer.viewportWidth = vpWidth;
     // CMS collection-list icons (mirrors the reference): the container that holds the
@@ -452,12 +453,12 @@ export default function LayersPanel() {
         // pin the displayed name to the old label forever.
         const prevHeader = vpHeaderCacheRef.current.get(vpRowId);
         let vpNode: CanvasNode;
-        if (prevHeader && prevHeader.childCount === variantChildren.length && prevHeader.layer.node.name === vp.label) {
+        if (prevHeader && prevHeader.childCount === variantChildren.length && prevHeader.layer.node.name === vp.label && prevHeader.layer.isVpHidden === Boolean(vp.hidden)) {
           vpNode = prevHeader.layer.node;
         } else {
           vpNode = { id: vpRowId, type: 'viewport', name: vp.label, parentId: null, children: variantChildren, styles: {}, attrs: {}, textContent: '', order: vp.order, isCanvasNode: false } as CanvasNode;
         }
-        const headerLayer = cachedLayer(vpRowId, null, vpNode, 0, hasChildren, vpExpanded, vp.id, vp.label, vp.width);
+        const headerLayer = cachedLayer(vpRowId, null, vpNode, 0, hasChildren, vpExpanded, vp.id, vp.label, vp.width, vp.hidden);
         headerLayer.isVariantHeader = true;
         vpHeaderCacheRef.current.set(vpRowId, { layer: headerLayer, childCount: variantChildren.length });
         result.push(headerLayer);
@@ -514,12 +515,12 @@ export default function LayersPanel() {
         // via rename. Match the same invalidation rule for consistency.
         const prevHeader = vpHeaderCacheRef.current.get(vpRowId);
         let vpNode: CanvasNode;
-        if (prevHeader && prevHeader.childCount === pageChildren.length && prevHeader.layer.node.name === vp.label) {
+        if (prevHeader && prevHeader.childCount === pageChildren.length && prevHeader.layer.node.name === vp.label && prevHeader.layer.isVpHidden === Boolean(vp.hidden)) {
           vpNode = prevHeader.layer.node;
         } else {
           vpNode = { id: vpRowId, type: 'viewport', name: vp.label, parentId: null, children: pageChildren, styles: {}, attrs: {}, textContent: '', order: vp.order, isCanvasNode: false } as CanvasNode;
         }
-        const headerLayer = cachedLayer(vpRowId, null, vpNode, 0, hasChildren, vpExpanded, vp.id, vp.label, vp.width);
+        const headerLayer = cachedLayer(vpRowId, null, vpNode, 0, hasChildren, vpExpanded, vp.id, vp.label, vp.width, vp.hidden);
         vpHeaderCacheRef.current.set(vpRowId, { layer: headerLayer, childCount: pageChildren.length });
         result.push(headerLayer);
 
@@ -819,6 +820,11 @@ export default function LayersPanel() {
   // imperatively for the duration of this single write and Canvas's
   // render-time sync (Canvas.tsx:412) will restore on the next pass.
   const handleToggleVisibility = useCallback((nodeId: string, layerVpId?: string) => {
+    // If nodeId is empty, this is a viewport header toggle
+    if (!nodeId && layerVpId) {
+      toggleViewportHidden(layerVpId);
+      return;
+    }
     const contentEl = getContentRoot();
     if (!contentEl) return;
     const node = nodes.get(nodeId);

@@ -3,7 +3,8 @@
 // Canvas renders the content inside a container at the active viewport width.
 // Viewports are freely positioned on the canvas (x, y stored here).
 
-import { atom } from 'jotai';
+import { atom, getDefaultStore } from 'jotai';
+import { toast } from 'sonner';
 import type { ViewportConfig } from '@/shared/types';
 import { activeFilePathAtom, activeCodeAtom, isComponentFilePath, isIconSetFilePath } from '../project/active-file-store';
 import { projectVersionAtom, projectFS } from '../project/project-fs';
@@ -318,10 +319,48 @@ export const interactingViewportIdAtom = atom(
     // No viewports parsed yet (boot, mid-rebuild) — keep the raw value rather
     // than inventing a fallback that a later render would have to undo.
     if (visible.length === 0) return raw;
-    if (visible.some((v) => v.id === raw)) return raw;
-    const fallback = (visible.find((v) => v.isPrimary) ?? visible[0]).id;
+    const canvasViewports = visible.filter((v) => !v.hidden);
+    if (canvasViewports.some((v) => v.id === raw)) return raw;
+    const fallback = (canvasViewports.find((v) => v.isPrimary) ?? canvasViewports[0] ?? visible[0]).id;
     trace.fn('viewport-store:interacting-vp-gone', { raw, fallback });
     return fallback;
   },
   (_get, set, next: string) => { set(interactingViewportIdRawAtom, next); },
 );
+
+export interface ToggleViewportResult {
+  success: boolean;
+  reason?: 'last_visible' | 'not_found';
+}
+
+/**
+ * Toggle visibility of a viewport on the canvas.
+ * When hidden: the viewport's frame and header are not rendered on the canvas,
+ * but all responsive rules, styles, and config in ProjectFS remain intact.
+ * At least one viewport must remain visible.
+ */
+export function toggleViewportHidden(vpId: string): ToggleViewportResult {
+  const store = getDefaultStore();
+  const configs = store.get(viewportsConfigAtom);
+  const target = configs.find(v => v.id === vpId);
+  if (!target) return { success: false, reason: 'not_found' };
+
+  const visibleCount = configs.filter(v => !v.hidden).length;
+  if (!target.hidden && visibleCount <= 1) {
+    try {
+      toast.info('Cannot hide the last visible viewport');
+    } catch {
+      /* ignore if toast unavailable */
+    }
+    return { success: false, reason: 'last_visible' };
+  }
+
+  const nextHidden = !target.hidden;
+  trace.action('viewport-store:toggle-hidden', { vpId, nextHidden });
+  store.set(viewportsConfigAtom, (prev) =>
+    prev.map((v) => (v.id === vpId ? { ...v, hidden: nextHidden } : v))
+  );
+
+  return { success: true };
+}
+

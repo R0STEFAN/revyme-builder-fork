@@ -183,6 +183,8 @@ export interface ViewportConfig {
   order: number;
   x: number;
   y: number;
+  /** When true, this viewport is hidden from the canvas view (retaining styles in code). */
+  hidden?: boolean;
 }
 
 /** What a viewport's tile is drawn at — its design width when it has one. */
