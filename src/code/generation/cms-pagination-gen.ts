@@ -474,15 +474,20 @@ export function setPaginationInCode(
       initialExpr = cmsDatasetMatch[0];
     }
 
+    const beforeMap = content.slice(0, mapMatch.index);
     let newContent: string;
-    if (content.includes(initialExpr)) {
-      newContent = content.replace(initialExpr, itemsVar);
+    if (cmsDatasetMatch && typeof cmsDatasetMatch.index === 'number') {
+      const matchStart = cmsDatasetMatch.index;
+      const matchEnd = matchStart + cmsDatasetMatch[0].length;
+      newContent = beforeMap.slice(0, matchStart) + itemsVar + beforeMap.slice(matchEnd) + content.slice(mapMatch.index);
     } else {
       const head = findCollectionChainHead(content, mapMatch.index);
       if (head) {
         newContent = content.slice(0, head.slugStart) + itemsVar + content.slice(head.slugEnd);
+      } else if (beforeMap.endsWith(initialExpr)) {
+        newContent = beforeMap.slice(0, beforeMap.length - initialExpr.length) + itemsVar + content.slice(mapMatch.index);
       } else {
-        newContent = content.slice(0, mapMatch.index) + itemsVar + content.slice(mapMatch.index);
+        newContent = content.replace(initialExpr, itemsVar);
       }
     }
 

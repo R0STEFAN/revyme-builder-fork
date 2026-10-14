@@ -726,9 +726,10 @@ export interface SourceExport {
  * but retains .env.example.
  */
 export function isSecretEnvFile(path: string): boolean {
-  const filename = path.split('/').pop() || path;
+  const normalized = path.replace(/\\/g, '/');
+  const filename = normalized.split('/').pop() || normalized;
   if (filename === '.env.example') return false;
-  return /(^|\/)\.env(\..+)?$/.test(path) || /^\.env(\..+)?$/.test(filename);
+  return /(^|\/)\.env(\..+)?$/.test(normalized) || /^\.env(\..+)?$/.test(filename);
 }
 
 /** Generate .env.example documenting referenced environment variables without leaking secret values. */
