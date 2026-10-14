@@ -68,6 +68,10 @@ describe('EmblaCarousel Component Metadata', () => {
     // Check specific nested controls
     const layoutControls = meta?.controls.layout?.controls;
     expect(layoutControls?.visibleSlides?.type).toBe('select');
+    expect(layoutControls?.visibleSlidesTablet?.type).toBe('select');
+    expect(layoutControls?.visibleSlidesTablet?.default).toBe('inherit');
+    expect(layoutControls?.visibleSlidesMobile?.type).toBe('select');
+    expect(layoutControls?.visibleSlidesMobile?.default).toBe('inherit');
     expect(layoutControls?.gap?.type).toBe('number');
     expect(layoutControls?.aspectRatio?.type).toBe('select');
     expect(layoutControls?.objectFit?.type).toBe('select');
@@ -617,6 +621,45 @@ describe('EmblaCarousel Component Metadata', () => {
     expect(slideChild).toBeTruthy();
     expect(slideChild.style.backgroundSize).toBe('contain');
     expect(slideChild.style.backgroundPosition).toContain('top');
+  });
+
+  it('renders responsive slide sizes in style tag with tablet and mobile rules', () => {
+    const Comp = compileCodeComponent(EMBLA_CAROUSEL_COMPONENT, 'EmblaCarousel') as React.ComponentType<any>;
+    const { container } = render(
+      React.createElement(
+        Comp,
+        {
+          visibleSlides: '3',
+          visibleSlidesTablet: '2',
+          visibleSlidesMobile: '1',
+          gap: 16,
+        },
+        React.createElement('div', { key: '1' }, 'S1'),
+        React.createElement('div', { key: '2' }, 'S2'),
+        React.createElement('div', { key: '3' }, 'S3'),
+      ),
+    );
+
+    const styleTag = container.querySelector('style');
+    expect(styleTag).toBeTruthy();
+    const css = styleTag?.textContent || '';
+    expect(css).toContain('--embla-slide-size');
+    expect(css).toContain('@media (max-width: 1024px)');
+    expect(css).toContain('@container (max-width: 1024px)');
+    expect(css).toContain('@media (max-width: 640px)');
+    expect(css).toContain('@container (max-width: 640px)');
+
+    const slide = container.querySelector('[data-embla-slide="0"]') as HTMLElement;
+    expect(slide.style.flex).toContain('--embla-slide-size');
+  });
+
+  it('auto-migrates existing EmblaCarousel lacking visibleSlidesTablet in syncBuiltInCodeComponents', () => {
+    const fs = new InMemoryProjectFS(createDefaultProject());
+    fs.writeFile('components/EmblaCarousel.tsx', `'use client';\n// "visibleWidth"\n// WheelGesturesPlugin\n// minHeight: isVertical && isFitHeight ? '450px'\n// "slideEffects"\n// data-embla-parallax-target\n// resolvedBgSize\n// handleProgressClick\nexport default function EmblaCarousel() { return null; }`);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).not.toContain('visibleSlidesTablet');
+
+    syncBuiltInCodeComponents(fs);
+    expect(fs.readFile('components/EmblaCarousel.tsx')).toBe(EMBLA_CAROUSEL_COMPONENT);
   });
 });
 

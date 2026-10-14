@@ -2583,8 +2583,8 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
     // `readFile` returns null/undefined for missing files. Skip both — only
     // consider files the user actually has in their project.
     if (existing == null) continue;
-    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth, broken wheelGestures, vertical axis fix, slideEffects, parallax target, resolvedBgSize, or handleProgressClick
-    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin') || !existing.includes("minHeight: isVertical && isFitHeight ? '450px'") || !existing.includes('"slideEffects"') || !existing.includes('data-embla-parallax-target') || !existing.includes('resolvedBgSize') || !existing.includes('handleProgressClick'))) {
+    // Auto-migrate EmblaCarousel if user has an older version without visibleWidth, broken wheelGestures, vertical axis fix, slideEffects, parallax target, resolvedBgSize, handleProgressClick, or visibleSlidesTablet
+    if (path === 'components/EmblaCarousel.tsx' && (!existing.includes('"visibleWidth"') || !existing.includes('WheelGesturesPlugin') || !existing.includes("minHeight: isVertical && isFitHeight ? '450px'") || !existing.includes('"slideEffects"') || !existing.includes('data-embla-parallax-target') || !existing.includes('resolvedBgSize') || !existing.includes('handleProgressClick') || !existing.includes('"visibleSlidesTablet"'))) {
       fs.writeFile(path, template);
       continue;
     }

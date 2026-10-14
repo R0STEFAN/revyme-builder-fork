@@ -21,6 +21,26 @@ export const EMBLA_CAROUSEL_COMPONENT = `'use client';
       { "label": "Custom (Peeking)", "value": "custom" },
       { "label": "Auto (Content)", "value": "auto" }
     ]},
+    "visibleSlidesTablet": { "type": "select", "label": "Visible Slides (Tablet)", "default": "inherit", "options": [
+      { "label": "Inherit (Desktop)", "value": "inherit" },
+      { "label": "1 Slide", "value": "1" },
+      { "label": "2 Slides", "value": "2" },
+      { "label": "3 Slides", "value": "3" },
+      { "label": "4 Slides", "value": "4" },
+      { "label": "5 Slides", "value": "5" },
+      { "label": "6 Slides", "value": "6" },
+      { "label": "Custom (Peeking)", "value": "custom" },
+      { "label": "Auto (Content)", "value": "auto" }
+    ]},
+    "visibleSlidesMobile": { "type": "select", "label": "Visible Slides (Mobile)", "default": "inherit", "options": [
+      { "label": "Inherit (Tablet / Desktop)", "value": "inherit" },
+      { "label": "1 Slide", "value": "1" },
+      { "label": "2 Slides", "value": "2" },
+      { "label": "3 Slides", "value": "3" },
+      { "label": "4 Slides", "value": "4" },
+      { "label": "Custom (Peeking)", "value": "custom" },
+      { "label": "Auto (Content)", "value": "auto" }
+    ]},
     "visibleWidth": { "type": "number", "label": "Visible Content Width (%)", "min": 40, "max": 100, "step": 1, "default": 100 },
     "customSlideWidth": { "type": "text", "label": "Slide Width", "default": "80%" },
     "gap": { "type": "number", "label": "Slide Gap", "min": 0, "max": 120, "step": 2, "default": 16 },
@@ -170,6 +190,8 @@ import { withResponsiveProps, useStaticCanvas } from '@revyme/runtime';
 
 function EmblaCarousel({
   visibleSlides = '1',
+  visibleSlidesTablet = 'inherit',
+  visibleSlidesMobile = 'inherit',
   visibleWidth = 100,
   customSlideWidth = '80%',
   gap = 16,
@@ -455,6 +477,14 @@ function EmblaCarousel({
     return () => ro.disconnect();
   }, [emblaApi]);
 
+  // Recalibrate Embla metrics when slide sizing controls change
+  useEffect(() => {
+    if (!emblaApi) return;
+    try {
+      emblaApi.reInit();
+    } catch (e) {}
+  }, [emblaApi, visibleSlides, visibleSlidesTablet, visibleSlidesMobile, customSlideWidth, gap, visibleWidth]);
+
   const bgSizeMap = {
     cover: 'cover',
     contain: 'contain',
@@ -618,38 +648,46 @@ function EmblaCarousel({
     );
   }
 
-  let flexBasis = '0 0 100%';
   const numGap = Number(gap || 0);
   const vWidth = Math.max(30, Math.min(100, Number(visibleWidth || 100)));
-  const scaleMultiplier = (100 / vWidth).toFixed(4);
+  const scaledPercentage = (10000 / vWidth).toFixed(2) + '%';
 
-  if (visibleSlides === 'custom') {
-    flexBasis = '0 0 ' + (customSlideWidth || '80%');
-  } else if (visibleSlides === 'auto') {
-    flexBasis = '0 0 auto';
-  } else {
-    const n = Number(visibleSlides) || 1;
+  const resolveSlideBasis = (slidesVal) => {
+    if (slidesVal === 'custom') {
+      return '0 0 ' + (customSlideWidth || '80%');
+    }
+    if (slidesVal === 'auto') {
+      return '0 0 auto';
+    }
+    const n = Number(slidesVal) || 1;
     if (vWidth < 100) {
       if (numGap > 0) {
-        flexBasis = '0 0 calc((100% * ' + scaleMultiplier + ' - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
-      } else {
-        flexBasis = '0 0 calc((100% * ' + scaleMultiplier + ') / ' + n + ')';
+        return '0 0 calc((' + scaledPercentage + ' - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
       }
-    } else {
-      if (numGap > 0) {
-        flexBasis = '0 0 calc((100% - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
-      } else {
-        flexBasis = '0 0 calc(100% / ' + n + ')';
-      }
+      return '0 0 calc(' + scaledPercentage + ' / ' + n + ')';
     }
-  }
+    if (numGap > 0) {
+      return '0 0 calc((100% - ' + ((n - 1) * numGap) + 'px) / ' + n + ')';
+    }
+    return '0 0 calc(100% / ' + n + ')';
+  };
+
+  const desktopFlexBasis = resolveSlideBasis(visibleSlides);
+  const effectiveTabletSlides = visibleSlidesTablet && visibleSlidesTablet !== 'inherit'
+    ? visibleSlidesTablet
+    : visibleSlides;
+  const tabletFlexBasis = resolveSlideBasis(effectiveTabletSlides);
+  const effectiveMobileSlides = visibleSlidesMobile && visibleSlidesMobile !== 'inherit'
+    ? visibleSlidesMobile
+    : effectiveTabletSlides;
+  const mobileFlexBasis = resolveSlideBasis(effectiveMobileSlides);
 
   const isFill = !aspectRatio || aspectRatio === 'fill';
   const isAutoRatio = aspectRatio === 'auto';
   const radiusPx = Number(slideRadius || 0);
 
   const slideOuterStyle = {
-    flex: flexBasis,
+    flex: 'var(--embla-slide-size, ' + desktopFlexBasis + ')',
     minWidth: 0,
     minHeight: 0,
     height: '100%',
@@ -1259,10 +1297,26 @@ function EmblaCarousel({
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
+        containerType: 'inline-size',
         ...props.style,
       }}
     >
       <style>{
+        '[data-embla-root="' + carouselId + '"] { ' +
+        '--embla-slide-size: ' + desktopFlexBasis + '; ' +
+        '} ' +
+        '@media (max-width: 1024px) { ' +
+        '[data-embla-root="' + carouselId + '"] { --embla-slide-size: ' + tabletFlexBasis + '; } ' +
+        '} ' +
+        '@container (max-width: 1024px) { ' +
+        '[data-embla-root="' + carouselId + '"] { --embla-slide-size: ' + tabletFlexBasis + '; } ' +
+        '} ' +
+        '@media (max-width: 640px) { ' +
+        '[data-embla-root="' + carouselId + '"] { --embla-slide-size: ' + mobileFlexBasis + '; } ' +
+        '} ' +
+        '@container (max-width: 640px) { ' +
+        '[data-embla-root="' + carouselId + '"] { --embla-slide-size: ' + mobileFlexBasis + '; } ' +
+        '} ' +
         '[data-embla-root="' + carouselId + '"] [data-embla-slide-inner] > *, ' +
         '[data-embla-root="' + carouselId + '"] [data-embla-parallax-target] > * { ' +
         'position: absolute !important; ' +
