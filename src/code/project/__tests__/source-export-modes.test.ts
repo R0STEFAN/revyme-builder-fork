@@ -208,6 +208,47 @@ export default function Page() {
     expect(queries[0].queryConfig.params).toHaveLength(3);
   });
 
+  it('detects collection query config and injects cmsDatasets even with pagination .slice() and multiple imports', () => {
+    const paginatedClientPage = `import tattoos from '@/cms/tattoos.json';
+import categories from '@/cms/categories.json';
+import placements from '@/cms/placements.json';
+
+export default function Page() {
+  const [limit] = useState(9);
+  return (
+    <div data-id="root">
+      <div
+        data-id="gallery-grid"
+        data-pagination="loadMore:9"
+        data-query-config={JSON.stringify({
+          isApiMode: true,
+          params: [
+            { key: 'filter[category][_eq]', value: 'params.category', isExpression: true },
+            { key: 'filter[place][_eq]', value: 'params.place', isExpression: true },
+          ],
+        })}
+      >
+        {tattoos.slice(0, limit).map((item: any, idx: number) => (
+          <div data-id="card" key={idx}>
+            <p data-id="title">{item.title}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}`;
+
+    const queries = detectPageCollectionQueries(paginatedClientPage);
+    expect(queries).toHaveLength(1);
+    expect(queries[0].listId).toBe('gallery-grid');
+    expect(queries[0].source).toBe('tattoos');
+
+    const updatedClient = injectCmsDatasetsIntoClientPage(paginatedClientPage, queries);
+    expect(updatedClient).toContain(
+      "(cmsDatasets?.['gallery-grid'] || cmsDatasets?.['tattoos'] || tattoos).slice(0, limit).map(",
+    );
+  });
+
   it('injects cmsDatasets into client page mapping and Page component signature', () => {
     const updatedClient = injectCmsDatasetsIntoClientPage(clientPageWithList);
 

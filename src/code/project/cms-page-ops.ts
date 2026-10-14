@@ -780,10 +780,18 @@ export function detectPageCollectionQueries(code: string): DetectedCollectionQue
 
     let source = queryConfig.source || queryConfig.collection || '';
     if (!source) {
-      const mapMatch = innerContent.match(/\{([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+)*\.map\(/);
+      const mapMatch = innerContent.match(/\{([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+(?:\([^)]*\))?)*\s*\.map\(/);
       if (mapMatch) {
         const varName = mapMatch[1];
         source = importMap.get(varName) || varName;
+      }
+    }
+    if (!source) {
+      for (const [varName, colSlug] of importMap.entries()) {
+        if (new RegExp(`\\b${varName}\\b[\\s\\S]*?\\.map\\(`).test(innerContent)) {
+          source = colSlug;
+          break;
+        }
       }
     }
     if (!source && importMap.size === 1) {
@@ -830,7 +838,7 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
     const inner = result.slice(tagClose + 1, closeIdx);
     if (inner.includes('cmsDatasets')) continue;
 
-    const mapRegex = new RegExp(`(\\{\\s*)([a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+\\([^)]*\\))*\\s*\\.map\\()`, 'g');
+    const mapRegex = new RegExp(`(\\{\\s*)([a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;
 
     const wrappedInner = inner.replace(

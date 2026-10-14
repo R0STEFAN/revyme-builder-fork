@@ -714,10 +714,15 @@ export class LocalServerManager {
     const publicDir = path.join(targetDir, 'public');
     const publicApiDir = path.join(publicDir, 'api');
 
-    // Run image optimization on public/uploads and public/api/uploads using sharp
+    // Run image optimization on public/uploads, then sync generated variants to public/api/uploads
+    // without performing redundant Sharp re-encoding.
     try {
-      await this.optimizeImages(path.join(publicDir, 'uploads'), onProgress, signal);
-      await this.optimizeImages(path.join(publicApiDir, 'uploads'), onProgress, signal);
+      const pubUploads = path.join(publicDir, 'uploads');
+      const pubApiUploads = path.join(publicApiDir, 'uploads');
+      await this.optimizeImages(pubUploads, onProgress, signal);
+      if (fs.existsSync(pubUploads) && fs.existsSync(pubApiUploads)) {
+        this.copyDirFiles(pubUploads, pubApiUploads);
+      }
     } catch {
       // ignore
     }
@@ -757,8 +762,8 @@ export class LocalServerManager {
           continue;
         }
 
+        const pendingWidths: number[] = [];
         for (const w of widths) {
-          if (signal?.aborted) return;
           const outName = `${baseName}-${w}w.webp`;
           const outPath = path.join(uploadsTarget, outName);
 
@@ -771,17 +776,33 @@ export class LocalServerManager {
                 continue;
               }
             }
-
-            await sharp(filePath, { failOnError: false })
-              .rotate()
-              .resize(w, null, { withoutEnlargement: true })
-              .webp({ quality: 82 })
-              .toFile(outPath);
           } catch {
-            // Gracefully ignore individual image resize failures (e.g. invalid image files)
+            // ignore
           }
-          processedVariants++;
-          onProgress?.({ processed: processedVariants, total: totalVariants, filename: entry.name });
+
+          pendingWidths.push(w);
+        }
+
+        if (pendingWidths.length > 0) {
+          await Promise.all(
+            pendingWidths.map(async (w) => {
+              if (signal?.aborted) return;
+              const outName = `${baseName}-${w}w.webp`;
+              const outPath = path.join(uploadsTarget, outName);
+
+              try {
+                await sharp(filePath, { failOnError: false })
+                  .rotate()
+                  .resize(w, null, { withoutEnlargement: true })
+                  .webp({ quality: 82 })
+                  .toFile(outPath);
+              } catch {
+                // Gracefully ignore individual image resize failures (e.g. invalid image files)
+              }
+              processedVariants++;
+              onProgress?.({ processed: processedVariants, total: totalVariants, filename: entry.name });
+            })
+          );
         }
       }
     } catch {
@@ -858,6 +879,12 @@ export class LocalServerManager {
         try {
           if (!fs.existsSync(destFile) || fs.statSync(srcFile).mtimeMs > fs.statSync(destFile).mtimeMs) {
             fs.copyFileSync(srcFile, destFile);
+            try {
+              const stat = fs.statSync(srcFile);
+              fs.utimesSync(destFile, stat.atime, stat.mtime);
+            } catch {
+              // ignore
+            }
           }
         } catch {
           // ignore individual copy errors
