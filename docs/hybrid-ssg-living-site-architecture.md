@@ -125,19 +125,63 @@ export async function POST(req: NextRequest) {
 
 ---
 
-### Pillar C: Dynamic Navigation & Overlays (Stale-While-Revalidate)
+### Pillar C: Component & Overlay Data Strategy: Dynamic Mode vs Hybrid SSG
 
 #### Problem:
-Client components (like `Navbar.tsx`) currently import `@/cms/placements.json`. When a new item is added to Directus, the link doesn't appear in the dropdown until a re-sync + rebuild.
+Client components (like `Navbar.tsx` or design component overlays) currently import `@/cms/placements.json`.
+- In **Hybrid SSG Mode**: When a new item is added to Directus, the link doesn't appear in the dropdown until a re-sync + rebuild unless client revalidation is used.
+- In **Dynamic Mode (`buildMode: 'dynamic'` or `ssg: false`)**: The user expects the entire site to be 100% dynamic, pulling fresh data directly from Directus on every visit. However, because components like `Navbar.tsx` are client components with hardcoded imports to `@/cms/placements.json`, the overlay menu remains frozen at export time and violates the contract of Dynamic Mode!
 
-#### Architecture:
-Use **Stale-While-Revalidate on the client** inside interactive overlay/nav components:
+#### Architecture by Build Mode:
+
+##### 1. Dynamic Mode (`buildMode: 'dynamic'` or `ssg: false`): Direct API Query
+In Dynamic Mode, the export pipeline in `source-export.ts` must strip static `@/cms/*.json` imports from components and overlays (just like it already does for `page.client.tsx`). Instead, it injects a **direct live fetch**:
 
 ```tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import initialPlacements from '@/cms/placements.json'; // 0ms initial render
+
+export default function Navbar() {
+  // Dynamic Mode: Always pull fresh records directly from the live API
+  const [placements, setPlacements] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchLivePlacements() {
+      try {
+        const res = await fetch('/api/cms/query?source=placements', {
+          cache: 'no-store', // Always bypass cache in Dynamic Mode
+        });
+        if (res.ok) {
+          const fresh = await res.json();
+          if (active && Array.isArray(fresh)) {
+            setPlacements(fresh);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load dynamic overlay collection:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    fetchLivePlacements();
+    return () => { active = false; };
+  }, []);
+
+  // Render navigation using live `placements`
+}
+```
+
+##### 2. Hybrid SSG Mode (`buildMode: 'hybrid'` or `ssg: true`): Stale-While-Revalidate (SWR)
+In Hybrid SSG Mode, we want **instant 0ms initial paint** (zero layout shift) combined with seamless background updates:
+
+```tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import initialPlacements from '@/cms/placements.json'; // 0ms initial render snapshot
 
 export default function Navbar() {
   const [placements, setPlacements] = useState(initialPlacements);
@@ -168,9 +212,9 @@ export default function Navbar() {
 ```
 
 #### Key Guarantees:
-1. **0ms Initial Paint**: Zero layout shift, no blank box, no loading spinner. The cached static JSON paints immediately.
-2. **Instant Update**: If Directus has a new placement, it smoothly merges in the background.
-3. **Immediate Routing**: When clicked, the new `/gallery/men/new-place` link is picked up by `dynamicParams = true` on the server and statically generated live.
+1. **Dynamic Mode Accuracy**: In Dynamic Mode, every visitor sees 100% real-time data from Directus without build-time stale snapshots anywhere on the site.
+2. **Hybrid SSG Speed**: In Hybrid SSG, 0ms initial paint with zero layout shift, silently updated in the background.
+3. **Immediate Routing**: When clicked, any new item (`/gallery/men/new-place`) is rendered on-demand on the server (`dynamicParams = true`).
 
 ---
 
@@ -181,7 +225,8 @@ export default function Navbar() {
 - [x] **Idempotence & Dynamic Guard**: Ensure `export const dynamicParams = true;` is present and `generateStaticParams` is never duplicated.
 - [x] **Vitest Coverage**: 12+ test cases covering single-segment, multi-segment, and Dynamic mode stripping in `source-export-modes.test.ts`.
 - [ ] **On-Demand Revalidate Handler**: Add `app/api/revalidate/route.ts` generation to `source-export.ts` when API collections are present.
-- [ ] **Client SWR Helper for Nav**: Provide an automated transform for component collection lists to utilize Stale-While-Revalidate over `/api/cms/query`.
+- [ ] **Component & Overlay Data Transform (Dynamic Mode)**: In `source-export.ts`, detect `@/cms/*.json` imports in `components/*.tsx` (like `Navbar.tsx`) and replace with live fetch `/api/cms/query?source=<collection>` with `cache: 'no-store'`.
+- [ ] **Component & Overlay Data Transform (Hybrid SSG Mode)**: In `source-export.ts`, convert component collection lists to Stale-While-Revalidate (SWR) using initial snapshot + background `/api/cms/query`.
 - [ ] **Directus Webhook Guide**: Generate a documentation modal or preset in Revyme settings explaining how to point Directus webhooks to `/api/revalidate?secret=...`.
 
 ---
