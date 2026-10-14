@@ -183,19 +183,73 @@ export function useRendererSync(
     setPreviewRouteParams(activeRouteParams);
   }, [activeRouteParams]);
 
-  const [dynamicApiData, setDynamicApiData] = useState<Record<string, any[]>>({});
+  const [listDatasets, setListDatasets] = useState<Record<string, any[]>>({});
+  const nodeRequestGenRef = useRef<Record<string, number>>({});
+  const nodeActiveKeyRef = useRef<Record<string, string>>({});
+  const activeControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const prevActiveFileRef = useRef<string>(activeFilePath);
 
-  // Background fetch for API CMS collections with dynamic or static query parameters
+  // Background fetch for API CMS collections with dynamic or static query parameters per node
   useEffect(() => {
-    let cancelled = false;
+    // If active file switched, cancel active requests and reset datasets
+    if (prevActiveFileRef.current !== activeFilePath) {
+      for (const ctrl of activeControllersRef.current.values()) {
+        ctrl.abort();
+      }
+      activeControllersRef.current.clear();
+      nodeActiveKeyRef.current = {};
+      nodeRequestGenRef.current = {};
+      setListDatasets({});
+      prevActiveFileRef.current = activeFilePath;
+    }
+
+    const targetNodes: Array<{ id: string; source: string; queryConfig?: CollectionQueryConfig | null }> = [];
     for (const node of nodes.values()) {
-      if (!node.collectionList?.source || !node.collectionList.queryConfig) continue;
+      if (!node.collectionList?.source) continue;
       const source = node.collectionList.source;
       const apiConfig = getApiCollection(source);
       if (!apiConfig) continue;
+      targetNodes.push({
+        id: node.id,
+        source,
+        queryConfig: node.collectionList.queryConfig,
+      });
+    }
 
-      const resolvedParams = evaluateQueryParamExpressions(node.collectionList.queryConfig, activeRouteParams);
+    // Clean up listDatasets entries for nodes that no longer exist
+    const targetNodeIds = new Set(targetNodes.map(t => t.id));
+    setListDatasets(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (!targetNodeIds.has(id)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    for (const { id: nodeId, source, queryConfig } of targetNodes) {
+      const apiConfig = getApiCollection(source)!;
+      const resolvedParams = queryConfig
+        ? evaluateQueryParamExpressions(queryConfig, activeRouteParams)
+        : {};
       const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams);
+      const requestKey = `${fullUrl}|${apiConfig.method || 'GET'}`;
+
+      // Avoid refetching if same node already has data for this exact request
+      if (nodeActiveKeyRef.current[nodeId] === requestKey && listDatasets[nodeId] !== undefined) {
+        continue;
+      }
+
+      // Cancel prior in-flight request for this specific node
+      activeControllersRef.current.get(nodeId)?.abort();
+
+      nodeActiveKeyRef.current[nodeId] = requestKey;
+      const gen = (nodeRequestGenRef.current[nodeId] = (nodeRequestGenRef.current[nodeId] || 0) + 1);
+      const controller = new AbortController();
+      activeControllersRef.current.set(nodeId, controller);
 
       (async () => {
         try {
@@ -210,23 +264,38 @@ export function useRendererSync(
               method: apiConfig.method || 'GET',
               headers: resolvedHeaders,
             }),
+            signal: controller.signal,
           });
-          if (!res.ok || cancelled) return;
+
+          if (!res.ok || controller.signal.aborted) return;
+          if (nodeRequestGenRef.current[nodeId] !== gen || nodeActiveKeyRef.current[nodeId] !== requestKey) return;
+
           const data = await res.json();
+          if (controller.signal.aborted || nodeRequestGenRef.current[nodeId] !== gen || nodeActiveKeyRef.current[nodeId] !== requestKey) return;
+
           const items = extractApiItems(data, apiConfig.itemsKey);
-          if (!cancelled && Array.isArray(items)) {
-            setDynamicApiData(prev => ({ ...prev, [source]: items }));
+          if (Array.isArray(items)) {
+            // Note: empty responses ([]) are set directly without checking items.length > 0
+            setListDatasets(prev => ({ ...prev, [nodeId]: items }));
           }
-        } catch {
+        } catch (err: any) {
+          if (err?.name === 'AbortError' || controller.signal.aborted) return;
           // Ignore network errors in background preview
+        } finally {
+          if (activeControllersRef.current.get(nodeId) === controller) {
+            activeControllersRef.current.delete(nodeId);
+          }
         }
       })();
     }
 
     return () => {
-      cancelled = true;
+      for (const ctrl of activeControllersRef.current.values()) {
+        ctrl.abort();
+      }
+      activeControllersRef.current.clear();
     };
-  }, [nodes, activeRouteParams]);
+  }, [nodes, activeRouteParams, activeFilePath]);
 
 
   const setSelectedIds = useSetAtom(selectedIdsAtom);
@@ -402,11 +471,10 @@ export function useRendererSync(
       // placeholder for every collection list.
       cmsCollections: {
         schemas: Object.fromEntries(cmsSchemas),
-        data: {
-          ...Object.fromEntries(cmsData),
-          ...dynamicApiData,
-        },
+        data: Object.fromEntries(cmsData),
+        listData: listDatasets,
       },
+      listDatasets,
       previewRouteParams: activeRouteParams,
     };
     trace.action('renderer:render', {
@@ -447,7 +515,7 @@ export function useRendererSync(
     // re-renders the canvas immediately (otherwise the panel would update
     // but ghost copies on canvas would stay stale until another mutation
     // triggered a render).
-  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeRouteParams, activeFilePath, dynamicApiData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [renderer, nodes, vpPositions, setSelectedIds, startTextEdit, commitTextEdit, activeLocale, localeOverrides, sandboxReady, cmsSchemas, cmsData, cmsPageMeta, previewItem, activeRouteParams, activeFilePath, listDatasets]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // ─── Viewport headers render effect ─────────────────────────────────────

@@ -164,7 +164,7 @@ export class PostMessageBridge implements CanvasBridge {
     activeLocale?: string,
     defaultLocale?: string,
     transform?: { x: number; y: number; scale: number },
-    cmsCollections?: { data: Record<string, any[]>; schemas: Record<string, any> },
+    cmsCollections?: { data: Record<string, any[]>; schemas: Record<string, any>; listData?: Record<string, any[]> },
     localeOverrides?: Map<string, import('@/shared/types').NodeOverride>,
     layoutCss?: string,
     /** File-switch renders: disable the per-element subtree-skip (see RenderInput). */
@@ -173,6 +173,7 @@ export class PostMessageBridge implements CanvasBridge {
      *  the file-switch cull reset exists for cross-file id collisions only. */
     preserveCulling?: boolean,
     previewRouteParams?: Record<string, string>,
+    listDatasets?: Record<string, any[]>,
   ): void {
     if (transform) this.currentTransform = { ...transform };
     // Maps don't survive structured cloning the way objects do — Comlink
@@ -212,6 +213,7 @@ export class PostMessageBridge implements CanvasBridge {
       defaultLocale,
       transform,
       cmsCollections,
+      listDatasets: listDatasets || cmsCollections?.listData,
       previewRouteParams,
       localeOverrides: localeOverridesObj,
       distrustPatchKeys,

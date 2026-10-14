@@ -22,7 +22,7 @@ import { hasMotionTransformProp, motionPropsToCSSTransform, foldMotionTransforms
 import { simpleHash } from '@/shared/hash-utils';
 import { getOrCreateCanvasStyleEl, getActiveFilePath, getPreviewRouteParams } from './node-ops';
 
-import { getCollectionData, getCollectionSchema, listCollections } from '@/code/project/cms-ops';
+import { getCollectionData, getCollectionSchema, listCollections, getCollectionListData } from '@/code/project/cms-ops';
 import { getLayoutForPage, getLayoutClientPath } from '@/code/project/active-file-store';
 import { projectFS } from '@/code/project/project-fs';
 import {
@@ -687,6 +687,45 @@ let _responsiveCssFp = '';
 // translation map already disabled the skip.
 let _activeRenderLocale = '';
 
+let _currentInput: {
+  listDatasets?: Record<string, any[]>;
+  cmsCollections?: {
+    data?: Record<string, any[]>;
+    schemas?: Record<string, any>;
+    listData?: Record<string, any[]>;
+  };
+} | null = null;
+
+let _listDatasets: Record<string, any[]> | null = null;
+
+export function setRendererListDatasets(datasets: Record<string, any[]> | null): void {
+  _listDatasets = datasets;
+}
+
+export function getRendererListDatasets(): Record<string, any[]> | null {
+  return _listDatasets;
+}
+
+export function setRendererCurrentInput(input: typeof _currentInput): void {
+  _currentInput = input;
+}
+
+export function resolveCollectionRawData(nodeId: string, source: string): any[] {
+  const fromListDatasets = _listDatasets?.[nodeId];
+  if (fromListDatasets !== undefined) return fromListDatasets;
+
+  const fromInputDatasets = _currentInput?.listDatasets?.[nodeId];
+  if (fromInputDatasets !== undefined) return fromInputDatasets;
+
+  const fromInputListData = _currentInput?.cmsCollections?.listData?.[nodeId];
+  if (fromInputListData !== undefined) return fromInputListData;
+
+  const fromCmsOps = (getCollectionListData as ((id: string) => any[] | undefined) | undefined)?.(nodeId);
+  if (fromCmsOps !== undefined) return fromCmsOps;
+
+  return getCollectionData(source);
+}
+
 const SIG_JSON_REPLACER = (_key: string, value: unknown): unknown =>
   value instanceof Set ? Array.from(value as Set<string>).sort() : value;
 
@@ -834,7 +873,16 @@ export function renderNodes(
   defaultLocale?: string,
   localeOverrides?: Map<string, NodeOverride>,
   distrustPatchKeys?: boolean,
+  cmsCollections?: { data: Record<string, any[]>; schemas: Record<string, any>; listData?: Record<string, any[]> },
+  listDatasets?: Record<string, any[]>,
 ) {
+  _currentInput = {
+    cmsCollections,
+    listDatasets: listDatasets || cmsCollections?.listData,
+  };
+  if (listDatasets || cmsCollections?.listData) {
+    _listDatasets = listDatasets || cmsCollections?.listData || null;
+  }
   const t0 = performance.now();
   _sigCache = new Map();
   _patchSkipCount = 0;
@@ -2997,7 +3045,7 @@ export function patchElement(
   // handle them so that adding/removing items in the data array is reflected.
   if (node.collectionList) {
     const { source, templateIds } = node.collectionList;
-    const rawData = getCollectionData(source);
+    const rawData = resolveCollectionRawData(node.id, source);
     // Resolve the active variant the SAME way as applyNodeCmsBindings: artboard
     // variantName → instance per-viewport variant → baked componentVariant. Then
     // applyChainConfig merges base ← per-viewport ← per-variant config overrides.
@@ -4056,7 +4104,7 @@ function buildNodeElement(
   // (already built above as a normal child), items 1+ = ghost copies.
   if (node.collectionList) {
     const { source, templateIds } = node.collectionList;
-    const rawData = getCollectionData(source);
+    const rawData = resolveCollectionRawData(node.id, source);
     // Resolve the active variant the SAME way as applyNodeCmsBindings: artboard
     // variantName → instance per-viewport variant → baked componentVariant. Then
     // applyChainConfig merges base ← per-viewport ← per-variant config overrides.

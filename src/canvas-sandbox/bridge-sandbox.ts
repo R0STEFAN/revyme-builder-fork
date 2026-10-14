@@ -22,7 +22,7 @@ import { setPushedLayoutCss } from '@/canvas/renderer/responsive';
 import { replayOverlayPlacements } from '@/canvas/renderer/overlay-portals';
 import { setSandboxCmsCollections } from './stubs/cms-ops';
 import { setPreviewRouteParams } from './stubs/node-ops';
-import { renderNodes, setRendererDragLockedNodeIds } from '@/canvas/Renderer';
+import { renderNodes, setRendererDragLockedNodeIds, setRendererListDatasets } from '@/canvas/Renderer';
 import { viewportBandPinOps } from '@/canvas/resize/viewport-band-pin-store';
 import { clearMeasureReplayCache } from './sandbox/measure';
 import {
@@ -234,6 +234,9 @@ const api: SandboxApi = {
       // Mirror CMS schemas + item data into the sandbox stubs so collection
       // lists render real ghost copies instead of the empty-state placeholder.
       if (input.cmsCollections) setSandboxCmsCollections(input.cmsCollections);
+      if (input.listDatasets || input.cmsCollections?.listData) {
+        setRendererListDatasets(input.listDatasets || input.cmsCollections?.listData || null);
+      }
       if (input.previewRouteParams) setPreviewRouteParams(input.previewRouteParams);
       // Apply transform BEFORE render so getBoundingClientRect includes pan/zoom
       if (input.transform) {
@@ -355,6 +358,8 @@ const api: SandboxApi = {
         // every locale renders the default-locale JSX text.
         input.localeOverrides ? new Map(Object.entries(input.localeOverrides)) : undefined,
         input.distrustPatchKeys,
+        input.cmsCollections,
+        input.listDatasets || input.cmsCollections?.listData,
       );
       trace.action('canvas-sandbox:render-done', { children: contentRoot.children.length });
       // Re-cull SYNCHRONOUSLY before measuring: at high zoom this drops the

@@ -11,6 +11,7 @@
 
 let _data: Record<string, any[]> = {};
 let _schemas: Record<string, any> = {};
+let _listData: Record<string, any[]> = {};
 
 /** Replace the entire schema + data tables. Called from bridge-sandbox.ts
  *  on every `render()` from the parent so collection content stays current
@@ -18,9 +19,11 @@ let _schemas: Record<string, any> = {};
 export function setSandboxCmsCollections(payload: {
   data: Record<string, any[]>;
   schemas: Record<string, any>;
+  listData?: Record<string, any[]>;
 }): void {
   _data = payload.data || {};
   _schemas = payload.schemas || {};
+  _listData = payload.listData || {};
 }
 
 export function listCollections(): string[] {
@@ -30,6 +33,10 @@ export function listCollections(): string[] {
 
 export function getCollectionData(slug: string): any[] {
   return _data[slug] ?? [];
+}
+
+export function getCollectionListData(nodeId: string): any[] | undefined {
+  return _listData[nodeId];
 }
 
 export function getCollectionSchema(slug: string): any {

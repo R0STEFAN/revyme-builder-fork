@@ -48,7 +48,12 @@ export interface RenderInput {
   localeOverrides?: Map<string, NodeOverride>;
   /** CMS schemas + item data mirrored into the iframe stub so collection
    *  list ghost copies render against real rows. See bridge-host's render. */
-  cmsCollections?: { data: Record<string, any[]>; schemas: Record<string, any> };
+  cmsCollections?: {
+    data: Record<string, any[]>;
+    schemas: Record<string, any>;
+    listData?: Record<string, any[]>;
+  };
+  listDatasets?: Record<string, any[]>;
   /** Live test route parameters for dynamic routes preview (e.g. { category: 'men', place: 'noga' }). */
   previewRouteParams?: Record<string, string>;
 }
@@ -88,6 +93,8 @@ export class CanvasRenderer {
     localeOverrides?: RenderInput['localeOverrides'];
     cmsSchemas?: Record<string, unknown>;
     cmsData?: Record<string, unknown>;
+    cmsListData?: Record<string, unknown>;
+    listDatasets?: Record<string, unknown>;
     previewRouteParams?: Record<string, string>;
   } | null = null;
 
@@ -105,6 +112,8 @@ export class CanvasRenderer {
       p.localeOverrides === input.localeOverrides &&
       shallowRecordEqual(p.cmsSchemas, input.cmsCollections?.schemas) &&
       shallowRecordEqual(p.cmsData, input.cmsCollections?.data) &&
+      shallowRecordEqual(p.cmsListData, input.cmsCollections?.listData) &&
+      shallowRecordEqual(p.listDatasets, input.listDatasets) &&
       shallowRecordEqual(p.previewRouteParams, input.previewRouteParams)
     );
   }
@@ -121,6 +130,8 @@ export class CanvasRenderer {
       localeOverrides: input.localeOverrides,
       cmsSchemas: input.cmsCollections?.schemas,
       cmsData: input.cmsCollections?.data,
+      cmsListData: input.cmsCollections?.listData,
+      listDatasets: input.listDatasets,
       previewRouteParams: input.previewRouteParams,
     };
   }
@@ -273,7 +284,10 @@ export class CanvasRenderer {
         layout: p.layoutCss !== input.layoutCss,
         locale: p.activeLocale !== input.activeLocale || p.defaultLocale !== input.defaultLocale,
         overrides: p.localeOverrides !== input.localeOverrides,
-        cms: !shallowRecordEqual(p.cmsSchemas, input.cmsCollections?.schemas) || !shallowRecordEqual(p.cmsData, input.cmsCollections?.data),
+        cms: !shallowRecordEqual(p.cmsSchemas, input.cmsCollections?.schemas) ||
+             !shallowRecordEqual(p.cmsData, input.cmsCollections?.data) ||
+             !shallowRecordEqual(p.cmsListData, input.cmsCollections?.listData) ||
+             !shallowRecordEqual(p.listDatasets, input.listDatasets),
       });
     }
 
@@ -303,6 +317,7 @@ export class CanvasRenderer {
       // guards cross-file id collisions and would cost a full re-measure here.
       opts?.distrustPatchKeys ? true : undefined,
       input.previewRouteParams,
+      input.listDatasets || input.cmsCollections?.listData,
     );
     this.rememberForward(input, viewportsJson);
     // The owed structural render (if any) just reached the iframe.
@@ -347,6 +362,7 @@ export class CanvasRenderer {
       true,
       undefined,
       input.previewRouteParams,
+      input.listDatasets || input.cmsCollections?.listData,
     );
     // Forced renders bypass the duplicate check but still count as the
     // last forwarded state for subsequent regular renders.

@@ -944,3 +944,13 @@ export function duplicateCollection(slug: string): string | null {
   trace.action('cms-ops:duplicateCollection', { from: slug, to: newSlug, itemCount: items.length });
   return newSlug;
 }
+
+let _cmsListData: Record<string, any[]> = {};
+
+export function setCmsListDatasets(datasets: Record<string, any[]>): void {
+  _cmsListData = datasets;
+}
+
+export function getCollectionListData(nodeId: string): any[] | undefined {
+  return _cmsListData[nodeId];
+}

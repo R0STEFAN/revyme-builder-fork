@@ -109,7 +109,9 @@ export interface RenderInput {
   cmsCollections?: {
     data: Record<string, any[]>;
     schemas: Record<string, any>;
+    listData?: Record<string, any[]>;
   };
+  listDatasets?: Record<string, any[]>;
   /** Live test route parameters for dynamic routes preview (e.g. { category: 'men', place: 'noga' }). */
   previewRouteParams?: Record<string, string>;
 }
