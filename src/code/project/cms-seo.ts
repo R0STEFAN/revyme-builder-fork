@@ -38,7 +38,7 @@
 
 import { parseLocalObjectFromCode } from '../generation/metadata-gen';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
-import { getApiCollection } from './cms-api-config';
+import { getApiCollection, type ApiCollectionConfig } from './cms-api-config';
 
 /** The SEO slots that can take a per-item binding.
  *
@@ -167,6 +167,7 @@ export interface BuildDetailWrapperInput {
   defaults?: Record<string, unknown>;
   bindings?: CmsSeoBindings;
   includeStaticParams?: boolean;
+  apiConfig?: ApiCollectionConfig | null;
 }
 
 /**
@@ -184,7 +185,7 @@ export interface BuildDetailWrapperInput {
  */
 export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): string {
   const { collection, defaults = {}, bindings = {}, includeStaticParams } = input;
-  const apiConfig = getApiCollection(collection);
+  const apiConfig = input.apiConfig !== undefined ? input.apiConfig : getApiCollection(collection);
 
   const defaultsLiteral = inlineObject([
     ['title', defaults.title],

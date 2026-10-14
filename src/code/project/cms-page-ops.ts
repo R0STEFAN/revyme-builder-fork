@@ -28,7 +28,14 @@ import { getCollectionSchema } from './cms-ops';
 import type { CollectionSchema, FieldDefinition, CollectionQueryConfig } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { rootMountBlockedBy } from './cms-root-mount';
-import { buildCmsDetailServerWrapper, defaultBindings, serializeHeadersForCode } from './cms-seo';
+import {
+  buildCmsDetailServerWrapper,
+  defaultBindings,
+  serializeHeadersForCode,
+  parseCmsSeoBindings,
+  parseCmsSeoDefaults,
+  hasGenerateStaticParams,
+} from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
 import { getApiCollection, type ApiCollectionConfig } from './cms-api-config';
 import { getItemDisplayLabel } from '@/shared/cms-accessor';
@@ -347,44 +354,7 @@ export function createCmsIndexPageFile(slug: string): string {
   let clientMapExpr = `{${varName}.map((item, idx) => (`;
 
   if (apiConfig) {
-    const headersCode = serializeHeadersForCode(apiConfig.headers);
-    const revalidate = apiConfig.cacheMaxAge ?? 14400;
-    const defaultQuery = new URLSearchParams();
-    if (apiConfig.defaultParams) {
-      for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
-        if (v !== undefined && v !== null && v !== '') defaultQuery.set(k, String(v));
-      }
-    }
-    const defaultQueryStr = defaultQuery.toString();
-    const fetchUrl = defaultQueryStr
-      ? `${apiConfig.url}${apiConfig.url.includes('?') ? '&' : '?'}${defaultQueryStr}`
-      : apiConfig.url;
-    const itemsExtract = apiConfig.itemsKey
-      ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
-      : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
-
-    const methodLine = apiConfig.method && apiConfig.method.toUpperCase() !== 'GET'
-      ? `\n    method: '${apiConfig.method.toUpperCase()}',`
-      : '';
-
-    serverCode = `import PageClient from './page.client';
-
-export const metadata = {};
-
-export default async function Page() {
-  const res = await fetch(\`${fetchUrl}\`, {${methodLine}
-    headers: ${headersCode},
-    signal: AbortSignal.timeout(10000),
-    next: { revalidate: ${revalidate} },
-  });
-  if (!res.ok) {
-    throw new Error(\`Failed to fetch CMS index for ${slug}: \${res.status} \${res.statusText}\`);
-  }
-  const json = await res.json();
-  const items = ${itemsExtract};
-  return <PageClient items={items} />;
-}
-`;
+    serverCode = buildCmsIndexServerWrapper(slug, apiConfig);
     clientSignature = `export default function Page({ items: serverItems }: { items?: any[] } = {}) {
   const items = serverItems ?? ${varName};`;
     clientMapExpr = `{items.map((item, idx) => (`;
@@ -1059,4 +1029,383 @@ export function orchestrateServerFetchForQueries(
   }
 
   return updated;
+}
+
+// ─── API CMS Config Synchronization & Wrapper Migration ───────────────────
+
+/**
+ * Generates or updates the server page.tsx wrapper for a CMS index page.
+ * Preserves custom metadata, layouts, route parameters, and additional fetch orchestration.
+ */
+export function buildCmsIndexServerWrapper(
+  collectionSlug: string,
+  apiConfig: ApiCollectionConfig,
+  existingServerCode?: string,
+): string {
+  const headersCode = serializeHeadersForCode(apiConfig.headers);
+  const revalidate = apiConfig.cacheMaxAge ?? 14400;
+  const defaultQuery = new URLSearchParams();
+  if (apiConfig.defaultParams) {
+    for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
+      if (v !== undefined && v !== null && v !== '') defaultQuery.set(k, String(v));
+    }
+  }
+  const defaultQueryStr = defaultQuery.toString();
+  const fetchUrl = defaultQueryStr
+    ? `${apiConfig.url}${apiConfig.url.includes('?') ? '&' : '?'}${defaultQueryStr}`
+    : apiConfig.url;
+  const itemsExtract = apiConfig.itemsKey
+    ? `(Array.isArray(json[${JSON.stringify(apiConfig.itemsKey)}]) ? json[${JSON.stringify(apiConfig.itemsKey)}] : [])`
+    : `(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : (Array.isArray(json.results) ? json.results : [])))`;
+
+  const methodLine = apiConfig.method && apiConfig.method.toUpperCase() !== 'GET'
+    ? `\n    method: '${apiConfig.method.toUpperCase()}',`
+    : '';
+
+  // Preserve existing metadata export if present
+  let metadataBlock = 'export const metadata = {};';
+  if (existingServerCode) {
+    const metaMatch = existingServerCode.match(/export\s+const\s+metadata\s*=\s*(\{[\s\S]*?\});/);
+    if (metaMatch) {
+      metadataBlock = `export const metadata = ${metaMatch[1].trim()};`;
+    }
+  }
+
+  // Preserve custom imports (excluding PageClient and cms json imports)
+  const customImports: string[] = [];
+  if (existingServerCode) {
+    const importRegex = /import\s+[^;]+from\s+['"][^'"]+['"];?/g;
+    let m: RegExpExecArray | null;
+    while ((m = importRegex.exec(existingServerCode)) !== null) {
+      const imp = m[0].trim();
+      if (!imp.includes('./page.client') && !imp.includes('/cms/') && !customImports.includes(imp)) {
+        customImports.push(imp);
+      }
+    }
+  }
+
+  // Preserve custom layout wrapper around PageClient if present
+  let returnJsx = '<PageClient items={items} />;';
+  if (existingServerCode) {
+    const returnMatch = existingServerCode.match(/return\s*\(\s*(<[\s\S]*?PageClient[\s\S]*?>)\s*\);/)
+      || existingServerCode.match(/return\s*(<[\s\S]*?PageClient[\s\S]*?\/>);/);
+    if (returnMatch) {
+      const rawReturn = returnMatch[1].trim();
+      if (rawReturn.includes('cmsDatasets')) {
+        returnJsx = rawReturn.replace(/<PageClient[^>]*\/>/, '<PageClient items={items} cmsDatasets={cmsDatasets} />') + ';';
+      } else if (
+        rawReturn !== '<PageClient />' &&
+        rawReturn !== '<PageClient items={items} />'
+      ) {
+        returnJsx = rawReturn.replace(/<PageClient[^>]*\/>/, '<PageClient items={items} />') + ';';
+      }
+    }
+  }
+
+  // Preserve route params if Page had params parameter
+  let paramsSignature = '';
+  let routeParamsInit = '';
+  if (existingServerCode) {
+    const pageFnMatch = existingServerCode.match(/export\s+default\s+(async\s+)?function\s+Page\s*\(([^)]*)\)/);
+    if (pageFnMatch && pageFnMatch[2].trim()) {
+      paramsSignature = pageFnMatch[2].trim();
+      if (existingServerCode.includes('routeParams') && existingServerCode.includes('await params')) {
+        routeParamsInit = '\n  const routeParams = (params ? await params : {}) as Record<string, any>;';
+      }
+    }
+  }
+
+  const fnParamStr = paramsSignature ? paramsSignature : '';
+  const importsStr = customImports.length > 0 ? `\n${customImports.join('\n')}` : '';
+
+  return `import PageClient from './page.client';${importsStr}
+
+${metadataBlock}
+
+export default async function Page(${fnParamStr}) {${routeParamsInit}
+  const res = await fetch(\`${fetchUrl}\`, {${methodLine}
+    headers: ${headersCode},
+    signal: AbortSignal.timeout(10000),
+    next: { revalidate: ${revalidate} },
+  });
+  if (!res.ok) {
+    throw new Error(\`Failed to fetch CMS index for ${collectionSlug}: \${res.status} \${res.statusText}\`);
+  }
+  const json = await res.json();
+  const items = ${itemsExtract};
+  return ${returnJsx}
+}
+`;
+}
+
+/**
+ * Repaired legacy auto-generated `{item.img_file.metadata}` bindings to safe string representations
+ * so rendering nested metadata objects in React components will not trigger child-object crashes.
+ */
+export function repairLegacyDetailBindings(code: string): string {
+  let result = code;
+  result = result.replace(
+    /\{item\.([A-Za-z0-9_]+)(?:\.|\?\.)metadata\}/g,
+    `{typeof item.$1?.metadata === 'object' ? JSON.stringify(item.$1?.metadata) : (item.$1?.metadata ?? '')}`,
+  );
+  result = result.replace(
+    /\{item(?:\.|\?\.)metadata\}/g,
+    `{typeof item?.metadata === 'object' ? JSON.stringify(item?.metadata) : (item?.metadata ?? '')}`,
+  );
+  return result;
+}
+
+/**
+ * Repairs bare `alt` attributes on <img> tags (e.g. `<img ... alt />` which compiles to `alt={true}`)
+ * to standard string attributes `alt=""`.
+ */
+export function repairBareAltAttributes(code: string): string {
+  return code.replace(/(<img\b[^>]*?)(\balt)(?!\s*=)([^>]*?>)/g, '$1alt=""$3');
+}
+
+export function isDetailPageForCollection(
+  pagePath: string,
+  collectionSlug: string,
+  clientCode: string,
+  serverCode: string,
+): boolean {
+  if (clientCode && clientCode.includes('@cmsPage')) {
+    const meta = parseCmsPageMeta(clientCode);
+    if (meta && meta.collection === collectionSlug && meta.kind === 'detail') {
+      return true;
+    }
+  }
+
+  if (pagePath.endsWith('/[slug]/page.tsx') || pagePath.includes('/[slug]/')) {
+    const normalized = pagePath.replace(/\/\([^)]+\)/g, '');
+    if (
+      normalized.includes(`/${collectionSlug}/[slug]/`) ||
+      normalized.endsWith(`/${collectionSlug}/[slug]/page.tsx`)
+    ) {
+      return true;
+    }
+    if (
+      serverCode.includes(`@/cms/${collectionSlug}.json`) ||
+      serverCode.includes(`Failed to fetch CMS detail for ${collectionSlug}`) ||
+      clientCode.includes(`@/cms/${collectionSlug}.json`)
+    ) {
+      return true;
+    }
+  }
+
+  if (
+    serverCode.includes(`@/cms/${collectionSlug}.json`) &&
+    serverCode.includes('generateMetadata')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isIndexPageForCollection(
+  pagePath: string,
+  collectionSlug: string,
+  clientCode: string,
+  serverCode: string,
+): boolean {
+  if (pagePath.includes('/[slug]/') || pagePath.endsWith('/[slug]/page.tsx')) {
+    return false;
+  }
+
+  if (clientCode && clientCode.includes('@cmsPage')) {
+    const meta = parseCmsPageMeta(clientCode);
+    if (meta && meta.collection === collectionSlug && meta.kind === 'index') {
+      return true;
+    }
+  }
+
+  if (serverCode.includes(`Failed to fetch CMS index for ${collectionSlug}`)) {
+    return true;
+  }
+
+  if (serverCode.includes(`@/cms/${collectionSlug}.json`)) {
+    return true;
+  }
+
+  if (clientCode.includes(`@/cms/${collectionSlug}.json`)) {
+    return true;
+  }
+
+  const normalized = pagePath.replace(/\/\([^)]+\)/g, '');
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length >= 2 && parts[parts.length - 2] === collectionSlug) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Scans ProjectFS for all index and detail pages associated with collectionSlug,
+ * upgrading local server wrappers to API fetch wrappers and synchronizing
+ * endpoint URL, method, headers, revalidation, and items extraction.
+ * Preserves user code, SEO bindings, route parameters, and layout components.
+ */
+export function syncAffectedCmsPageWrappers(
+  collectionSlug: string,
+  apiConfig: ApiCollectionConfig,
+): string[] {
+  const modified: string[] = [];
+  const allFiles = projectFS.listFiles('app/');
+  const pageFiles = allFiles.filter(f => f === 'app/page.tsx' || f.endsWith('/page.tsx'));
+
+  for (const pagePath of pageFiles) {
+    const clientPath = pagePath.replace(/\/page\.tsx$/, '/page.client.tsx');
+    const hasClient = projectFS.exists(clientPath);
+    const clientCode = hasClient ? projectFS.readFile(clientPath) || '' : '';
+    const serverCode = projectFS.readFile(pagePath) || '';
+
+    const isDetail = isDetailPageForCollection(pagePath, collectionSlug, clientCode, serverCode);
+    const isIndex = !isDetail && isIndexPageForCollection(pagePath, collectionSlug, clientCode, serverCode);
+
+    if (isDetail) {
+      // 1. Sync detail server wrapper
+      const defaults = parseCmsSeoDefaults(serverCode);
+      const bindings = parseCmsSeoBindings(serverCode);
+      const includeStaticParams = hasGenerateStaticParams(serverCode)
+        ? true
+        : serverCode.includes('dynamicParams')
+          ? false
+          : undefined;
+
+      let newServerCode = buildCmsDetailServerWrapper({
+        collection: collectionSlug,
+        defaults,
+        bindings,
+        includeStaticParams,
+        apiConfig,
+      });
+
+      // Preserve custom imports
+      const customImports: string[] = [];
+      const importRegex = /import\s+[^;]+from\s+['"][^'"]+['"];?/g;
+      let m: RegExpExecArray | null;
+      while ((m = importRegex.exec(serverCode)) !== null) {
+        const imp = m[0].trim();
+        if (
+          !imp.includes('./page.client') &&
+          !imp.includes('next/navigation') &&
+          !imp.includes('/cms/') &&
+          !customImports.includes(imp)
+        ) {
+          customImports.push(imp);
+        }
+      }
+      if (customImports.length > 0) {
+        newServerCode = newServerCode.replace(
+          "import PageClient from './page.client';",
+          `import PageClient from './page.client';\n${customImports.join('\n')}`,
+        );
+      }
+
+      // Preserve custom layout wrapper around PageClient if present
+      const returnMatch = serverCode.match(/return\s*\(\s*(<[\s\S]*?PageClient[\s\S]*?>)\s*\);/)
+        || serverCode.match(/return\s*(<[\s\S]*?PageClient[\s\S]*?\/>);/);
+      if (returnMatch) {
+        const rawReturn = returnMatch[1].trim();
+        if (
+          rawReturn !== '<PageClient />' &&
+          rawReturn !== '<PageClient item={item} />' &&
+          rawReturn !== '<PageClient items={items} />'
+        ) {
+          const customWrapperReturn = rawReturn.replace(/<PageClient[^>]*\/>/, '<PageClient item={item} />');
+          newServerCode = newServerCode.replace(
+            'return <PageClient item={item} />;',
+            `return ${customWrapperReturn};`,
+          );
+        }
+      }
+
+      if (newServerCode !== serverCode) {
+        projectFS.writeFile(pagePath, newServerCode);
+        modified.push(pagePath);
+      }
+
+      // 2. Sync / repair detail client file
+      if (hasClient) {
+        let updatedClient = clientCode;
+
+        // Upgrade signature if local
+        if (
+          updatedClient.includes('export default function Page() {') &&
+          !updatedClient.includes('serverItem')
+        ) {
+          const varName = collectionVarName(collectionSlug);
+          updatedClient = updatedClient.replace(
+            'export default function Page() {',
+            'export default function Page({ item: serverItem }: { item?: any } = {}) {',
+          );
+          updatedClient = updatedClient.replace(
+            new RegExp(`const item = ${varName}\\.find\\([\\s\\S]*?\\)(?:\\s*\\?\\?\\s*${varName}\\[0\\])?;`),
+            `const item = serverItem ?? (${varName}.find((i) => (i.slug || i._slug || String(i.id)) === params?.slug) ?? ${varName}[0]);`,
+          );
+        }
+
+        // Repair legacy {item.img_file.metadata}
+        updatedClient = repairLegacyDetailBindings(updatedClient);
+
+        // Repair bare alt
+        updatedClient = repairBareAltAttributes(updatedClient);
+
+        if (updatedClient !== clientCode) {
+          projectFS.writeFile(clientPath, updatedClient);
+          modified.push(clientPath);
+        }
+      }
+    } else if (isIndex) {
+      // 1. Sync index server wrapper
+      let newServerCode = buildCmsIndexServerWrapper(collectionSlug, apiConfig, serverCode);
+
+      // If client page had data-query-config queries, re-orchestrate server fetch if needed
+      if (hasClient) {
+        const queries = detectPageCollectionQueries(clientCode);
+        if (queries.length > 0) {
+          newServerCode = orchestrateServerFetchForQueries(newServerCode, queries, { [collectionSlug]: apiConfig });
+        }
+      }
+
+      if (newServerCode !== serverCode) {
+        projectFS.writeFile(pagePath, newServerCode);
+        modified.push(pagePath);
+      }
+
+      // 2. Sync index client file if upgrading from local
+      if (hasClient) {
+        let updatedClient = clientCode;
+        if (
+          updatedClient.includes('export default function Page() {') &&
+          !updatedClient.includes('serverItems')
+        ) {
+          const varName = collectionVarName(collectionSlug);
+          if (updatedClient.includes(`import ${varName} from '@/cms/${collectionSlug}.json';`)) {
+            updatedClient = updatedClient.replace(
+              'export default function Page() {',
+              `export default function Page({ items: serverItems }: { items?: any[] } = {}) {\n  const items = serverItems ?? ${varName};`,
+            );
+            updatedClient = updatedClient.replace(
+              `{${varName}.map((item, idx) => (`,
+              `{items.map((item, idx) => (`,
+            );
+          }
+        }
+
+        // Repair bare alt
+        updatedClient = repairBareAltAttributes(updatedClient);
+
+        if (updatedClient !== clientCode) {
+          projectFS.writeFile(clientPath, updatedClient);
+          modified.push(clientPath);
+        }
+      }
+    }
+  }
+
+  trace.action('cms-page-ops:syncAffectedCmsPageWrappers', { collectionSlug, modifiedCount: modified.length, modified });
+  return modified;
 }

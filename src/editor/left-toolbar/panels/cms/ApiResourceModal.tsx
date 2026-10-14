@@ -7,6 +7,7 @@ import Button from '@/design-system/Button';
 import { ToolInput, ToolSelect } from '@/editor/controls';
 import { projectFS } from '@/code/project/project-fs';
 import { saveCollectionSchema, saveCollectionData, slugify } from '@/code/project/cms-ops';
+import { syncAffectedCmsPageWrappers } from '@/code/project/cms-page-ops';
 import {
   saveApiCollection,
   getApiCollection,
@@ -506,6 +507,9 @@ export function ApiResourceModal({
     if (testResult?.items) {
       saveCollectionData(finalSlug, testResult.items);
     }
+
+    // 3. Synchronize affected page wrappers (index & detail) immediately in ProjectFS
+    syncAffectedCmsPageWrappers(finalSlug, finalConfig);
 
     toast.success(`API Collection "${finalConfig.name}" saved!`);
     onSaved(finalSlug);

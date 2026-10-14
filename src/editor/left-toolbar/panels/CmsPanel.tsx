@@ -13,7 +13,8 @@ import {
   cmsModeAtom,
   apiCollectionsConfigAtom,
 } from '@/code/stores/cms-store';
-import { setCmsMode, removeApiCollection, resolveEnvHeaders, buildApiRequestUrl, extractApiItems } from '@/code/project/cms-api-config';
+import { setCmsMode, removeApiCollection, resolveEnvHeaders, buildApiRequestUrl, extractApiItems, loadCmsProjectConfig } from '@/code/project/cms-api-config';
+import { syncAffectedCmsPageWrappers } from '@/code/project/cms-page-ops';
 import { ApiResourceModal, inferSchemaFromItems, getEnvVariables } from './cms/ApiResourceModal';
 import { toast } from 'sonner';
 import {
@@ -956,7 +957,14 @@ export default function CmsPanel() {
           </button>
           <button
             type="button"
-            onClick={() => { setCmsMode('api'); refresh(); }}
+            onClick={() => {
+              setCmsMode('api');
+              const { apiCollections } = loadCmsProjectConfig();
+              for (const [colSlug, conf] of Object.entries(apiCollections)) {
+                syncAffectedCmsPageWrappers(colSlug, conf);
+              }
+              refresh();
+            }}
             className={`px-2 py-0.5 rounded transition-colors font-medium ${cmsMode === 'api' ? 'bg-[var(--accent)] text-[var(--accent-fg,#000)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer'}`}
           >
             External API
