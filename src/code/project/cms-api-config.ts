@@ -108,16 +108,10 @@ export function resolveEnvHeaders(
 
   for (const [key, value] of Object.entries(headers)) {
     if (!key.trim() || value === undefined || value === null) continue;
-    let val = String(value);
+    const val = String(value);
 
-    // 1. process.env.TOKEN
-    val = val.replace(/process\.env\.([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
-    // 2. env:TOKEN
-    val = val.replace(/env:([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
-    // 3. $TOKEN
-    val = val.replace(/\$([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
-
-    result[key] = val;
+    // Single-pass replacement avoids treating resolved values containing '$' as further variable references
+    result[key] = val.replace(/(?:process\.env\.|env:|\$)([A-Za-z0-9_]+)/g, (_, name) => env[name] ?? '');
   }
 
   return result;

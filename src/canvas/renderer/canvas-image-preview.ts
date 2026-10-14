@@ -194,6 +194,9 @@ async function buildPreview(url: string): Promise<string | null> {
       resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
     } catch (fetchErr: any) {
       if (origin && (fetchErr instanceof TypeError || fetchErr?.name === 'TypeError' || (fetchErr?.message && /CORS|Failed to fetch/i.test(fetchErr.message)))) {
+        if (typeof window !== 'undefined' && origin === window.location.origin) {
+          return null;
+        }
         unreadableOrigins.add(origin);
         trace.action('canvas-image-preview:origin-cors-blocked', { origin });
       }

@@ -82,4 +82,11 @@ describe('canvas image preview: CORS degradation', () => {
     // Fetch should still have been called only once because url2 was skipped by unreadableOrigins
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('does not negative-cache window.location.origin even if a fetch error occurs', async () => {
+    const appUrl = `${window.location.origin}/test-image.jpg`;
+    const res = await ensurePreview(appUrl);
+    expect(res).toBeNull();
+    expect(unreadableOrigins.has(window.location.origin)).toBe(false);
+  });
 });
