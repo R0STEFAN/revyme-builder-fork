@@ -16,12 +16,18 @@ import {
 } from './canvas-image-preview';
 
 describe('shouldPreviewUrl', () => {
-  it('accepts http(s), protocol-relative and root/relative raster URLs', () => {
+  it('accepts zone-hosted (revyme.app) and root/relative raster URLs', () => {
     expect(shouldPreviewUrl('https://assets.revyme.app/u/photo.jpg')).toBe(true);
-    expect(shouldPreviewUrl('http://images.unsplash.com/x.png?w=4000')).toBe(true);
-    expect(shouldPreviewUrl('//cdn.example.com/a.webp')).toBe(true);
+    expect(shouldPreviewUrl('//assets.revyme.app/a.webp')).toBe(true);
     expect(shouldPreviewUrl('/images/hero.jpg')).toBe(true);
     expect(shouldPreviewUrl('./local.jpeg')).toBe(true);
+  });
+
+  it('rejects external cross-origin URLs (headless CMS / third-party hosts) to prevent CORS errors', () => {
+    expect(shouldPreviewUrl('http://images.unsplash.com/x.png?w=4000')).toBe(false);
+    expect(shouldPreviewUrl('//cdn.example.com/a.webp')).toBe(false);
+    expect(shouldPreviewUrl('https://api.tattoozp.com/assets/436f6e77-e4d1-451d-9a71-0b2a9e4c2588?width=500&quality=80')).toBe(false);
+    expect(shouldPreviewUrl('https://x.com/photo.jpg')).toBe(false);
   });
 
   it('rejects data:/blob: (already local) and non-URL strings', () => {
@@ -32,10 +38,9 @@ describe('shouldPreviewUrl', () => {
   });
 
   it('rejects SVG (resolution-free) and GIF (animation would freeze)', () => {
-    expect(shouldPreviewUrl('https://x.com/icon.svg')).toBe(false);
-    expect(shouldPreviewUrl('https://x.com/loop.gif')).toBe(false);
-    expect(shouldPreviewUrl('https://x.com/loop.gif?v=2')).toBe(false);
-    expect(shouldPreviewUrl('https://x.com/photo.jpg')).toBe(true);
+    expect(shouldPreviewUrl('https://assets.revyme.app/icon.svg')).toBe(false);
+    expect(shouldPreviewUrl('https://assets.revyme.app/loop.gif')).toBe(false);
+    expect(shouldPreviewUrl('https://assets.revyme.app/loop.gif?v=2')).toBe(false);
   });
 
   it('rejects URLs that are already edge-transform previews', () => {

@@ -49,16 +49,44 @@ const MAX_CONCURRENT = 4;
 
 // ─── Pure helpers (unit-tested) ──────────────────────────────────────────
 
+/** Hosts whose images can be rewritten through the zone's edge resizer. */
+export const EDGE_RESIZE_HOST = /(^|\.)revyme\.app$/i;
+
+/** Is this URL eligible for downscaled canvas preview?
+ *  Only same-origin / relative URLs (e.g. /uploads/... from local media library)
+ *  and zone-hosted URLs (*.revyme.app) are preview candidates.
+ *  External third-party API / Headless CMS images are rendered directly
+ *  by the browser without client-side fetch downscaling to avoid CORS failures. */
+export function isPreviewableHost(url: string): boolean {
+  const u = url.trim();
+  if (!u) return false;
+  if ((u.startsWith('/') && !u.startsWith('//')) || u.startsWith('.')) return true;
+  try {
+    const base = typeof location !== 'undefined' ? location.href : 'http://localhost/';
+    const parsed = new URL(u, base);
+    if (typeof location !== 'undefined' && parsed.origin === location.origin) {
+      return true;
+    }
+    if (EDGE_RESIZE_HOST.test(parsed.hostname)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /** Is this URL a candidate for previewing? data:/blob: are already local;
  *  SVG is resolution-free; GIF previews would freeze the animation; a
- *  /cdn-cgi/image/ URL is already a transformed preview. The extension check
- *  is a pre-filter — the fetch result's MIME is re-checked. */
+ *  /cdn-cgi/image/ URL is already a transformed preview.
+ *  External API / Headless CMS URLs are excluded to prevent CORS errors in the browser. */
 export function shouldPreviewUrl(url: string): boolean {
   const u = url.trim();
   if (!u || u.startsWith('data:') || u.startsWith('blob:')) return false;
   if (u.includes('/cdn-cgi/image/')) return false;
   if (!/^(https?:)?\/\//.test(u) && !u.startsWith('/') && !u.startsWith('.')) return false;
   if (/\.(svg|gif)(\?|#|$)/i.test(u)) return false;
+  if (!isPreviewableHost(u)) return false;
   return true;
 }
 
@@ -68,9 +96,6 @@ export function shouldPreviewUrl(url: string): boolean {
 // on the zone, "this zone only" sources) serves an edge-resized WebP/AVIF, so
 // the first load downloads ~100KB instead of the multi-MB camera file. Other
 // hosts keep the client-side downscale pipeline below.
-
-/** Hosts whose images can be rewritten through the zone's edge resizer. */
-const EDGE_RESIZE_HOST = /(^|\.)revyme\.app$/i;
 
 /** Rewrite an image URL to its edge-resized preview form, or null when the
  *  host isn't behind the zone resizer. fit=scale-down + both dimensions =
@@ -179,7 +204,10 @@ export function getUrlOrigin(url: string): string | null {
   }
 }
 
-async function buildPreview(url: string): Promise<string | null> {
+export async function buildPreview(url: string): Promise<string | null> {
+  if (!isPreviewableHost(url)) {
+    return null;
+  }
   const origin = getUrlOrigin(url);
   if (origin && unreadableOrigins.has(origin)) {
     return null;
@@ -245,6 +273,7 @@ export function clearPreviewCache(): void {
  *  client-side downscale (full download once, small bitmap thereafter) →
  *  original. */
 export function ensurePreview(url: string): Promise<string | null> {
+  if (!shouldPreviewUrl(url)) return Promise.resolve(null);
   if (previewCache.has(url)) return Promise.resolve(previewCache.get(url) ?? null);
   const pending = pendingJobs.get(url);
   if (pending) return pending;
