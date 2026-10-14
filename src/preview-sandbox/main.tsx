@@ -78,6 +78,7 @@ import {
   evaluateQueryParamExpressions,
   buildPreviewQueryKey,
   usePreviewCollectionData,
+  syncActiveRouteQueries,
 } from './preview-api-query';
 
 // ─── Project files (mirror of parent ProjectFS) ────────────────────────────
@@ -820,7 +821,7 @@ function PreviewApp() {
     }
   }
 
-  const path = url.split('?')[0] || '/';
+  const path = url.split('#')[0].split('?')[0] || '/';
   const route = resolveRoute(routes, path);
 
   // Publish the resolved route params to the shim so `useParams()` calls
@@ -830,39 +831,31 @@ function PreviewApp() {
   // params during initial paint.
   setCurrentParams((route?.params as Record<string, string | string[]>) ?? {});
 
-  // API Query Resolution Bridge:
-  // Detect collection queries on active route components and dispatch requests via parent proxy
-  React.useEffect(() => {
-    if (!route) return;
-    const routeParams = (route.params as Record<string, string>) || {};
-    const activeFiles = [
-      variantPageOverrides.get(route.pageFile) ?? route.pageFile,
-      ...route.layoutChain,
-    ];
+  const routeParams = (route?.params as Record<string, string>) || {};
+  const activeFiles = route
+    ? [variantPageOverrides.get(route.pageFile) ?? route.pageFile, ...route.layoutChain]
+    : [];
 
-    for (const filePath of activeFiles) {
-      const content = projectFiles.get(filePath);
-      if (!content) continue;
-      const queries = detectCollectionQueries(content);
-      for (const q of queries) {
-        const resolvedParams = evaluateQueryParamExpressions(q.queryConfig, routeParams);
-        const queryKey = buildPreviewQueryKey(q.source, resolvedParams);
-        const cached = getPreviewDataset(queryKey);
-        if (cached !== undefined) {
-          setPreviewDataset(q.listId, cached);
-          setPreviewDataset(q.source, cached);
-          continue;
-        }
-        dispatchApiQuery({
-          listId: q.listId,
-          source: q.source,
-          queryConfig: q.queryConfig,
-          routeParams,
-          url,
-        });
-      }
+  // Synchronously sync queries for the active route BEFORE compiling and rendering Page.
+  // Cache hits immediately populate listId and source datasets in this exact render tick.
+  // Cache misses evict stale datasets from previous routes to prevent leaking or inverting data.
+  const { neededQueries } = React.useMemo(() => {
+    return syncActiveRouteQueries(projectFiles, activeFiles, routeParams, url);
+  }, [url, route?.pageFile, JSON.stringify(routeParams), filesRevision]);
+
+  // Dispatch API queries for cache misses
+  React.useEffect(() => {
+    if (!route || neededQueries.length === 0) return;
+    for (const { query: q } of neededQueries) {
+      dispatchApiQuery({
+        listId: q.listId,
+        source: q.source,
+        queryConfig: q.queryConfig,
+        routeParams,
+        url,
+      });
     }
-  }, [url, route?.pageFile, route?.params, filesRevision]);
+  }, [url, route?.pageFile, JSON.stringify(routeParams), filesRevision, neededQueries]);
 
   if (!route) {
     // 404 — try app/not-found.tsx, fall back to default message.
@@ -889,11 +882,17 @@ function PreviewApp() {
     // `@/components/...`) resolve through the standard project-file pipeline.
     const pageFileToCompile = variantPageOverrides.get(route.pageFile) ?? route.pageFile;
     const Page = compileFile(pageFileToCompile).default;
-    tree = <Page params={route.params} searchParams={Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''))} />;
+    tree = (
+      <Page
+        key={url}
+        params={route.params}
+        searchParams={Object.fromEntries(new URLSearchParams(url.split('?')[1] || ''))}
+      />
+    );
     // Wrap in layouts (innermost first as we walk back up the chain).
     for (let i = route.layoutChain.length - 1; i >= 0; i--) {
       const Layout = compileFile(route.layoutChain[i]).default;
-      tree = <Layout params={route.params}>{tree}</Layout>;
+      tree = <Layout key={route.layoutChain[i]} params={route.params}>{tree}</Layout>;
     }
   } catch (err) {
     return (
@@ -1088,6 +1087,22 @@ window.addEventListener('locale-change', (e) => {
   const detail = (e as CustomEvent).detail;
   if (detail && typeof detail.locale === 'string') syncHtmlLang(detail.locale);
 });
+
+// Global anchor interceptor for seamless client navigation in preview sandbox
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    const target = (e.target as Element)?.closest?.('a');
+    if (!target) return;
+    const href = target.getAttribute('href');
+    if (!href) return;
+    if (/^https?:\/\//.test(href) || href.startsWith('//') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('#')) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    history.pushState(null, '', href);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+}
 
 // Tell the parent we're alive and ready to receive files.
 parent.postMessage({ type: 'preview:ready' }, '*');

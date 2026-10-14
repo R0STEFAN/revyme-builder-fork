@@ -395,3 +395,60 @@ export function usePreviewCollectionData(source: string, listId?: string): any[]
   }, []);
   return getPreviewDataset(source, listId);
 }
+
+export interface RouteQuerySyncResult {
+  neededQueries: Array<{
+    query: DetectedQuery;
+    queryKey: string;
+    resolvedParams: Record<string, string>;
+  }>;
+}
+
+/**
+ * Synchronously synchronizes query datasets for the active route before rendering.
+ * 1. For each collection query on the active files:
+ *    - Resolves parameters against current route params.
+ *    - Looks up the cached dataset by queryKey.
+ *    - If cached: immediately updates listId and source datasets, loading = false.
+ *    - If not cached: clears stale listId data so previous route data never leaks, loading = true.
+ * 2. Returns the list of queries that still need network dispatch.
+ */
+export function syncActiveRouteQueries(
+  files: Map<string, string>,
+  activeFilePaths: string[],
+  routeParams: Record<string, string>,
+  url: string,
+): RouteQuerySyncResult {
+  const neededQueries: Array<{
+    query: DetectedQuery;
+    queryKey: string;
+    resolvedParams: Record<string, string>;
+  }> = [];
+
+  for (const filePath of activeFilePaths) {
+    const content = files.get(filePath);
+    if (!content) continue;
+    const queries = detectCollectionQueries(content);
+    for (const q of queries) {
+      const resolvedParams = evaluateQueryParamExpressions(q.queryConfig, routeParams);
+      const queryKey = buildPreviewQueryKey(q.source, resolvedParams);
+      const cached = previewDatasets.get(queryKey);
+      if (cached !== undefined) {
+        setPreviewDataset(q.listId, cached);
+        setPreviewDataset(q.source, cached);
+        setPreviewQueryStatus(q.listId, { loading: false, error: null });
+        setPreviewQueryStatus(q.source, { loading: false, error: null });
+      } else {
+        // Evict stale dataset from a previous route so it cannot leak or invert
+        setPreviewDataset(q.listId, []);
+        setPreviewDataset(q.source, []);
+        setPreviewQueryStatus(q.listId, { loading: true, error: null });
+        setPreviewQueryStatus(q.source, { loading: true, error: null });
+        neededQueries.push({ query: q, queryKey, resolvedParams });
+      }
+    }
+  }
+
+  return { neededQueries };
+}
+

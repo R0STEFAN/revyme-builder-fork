@@ -12,8 +12,10 @@ import {
   getPreviewDataset,
   setPreviewDataset,
   getPreviewQueryStatus,
+  setPreviewQueryStatus,
   clearPreviewDatasets,
   subscribePreviewQueries,
+  syncActiveRouteQueries,
 } from '../preview-api-query';
 
 describe('preview-api-query', () => {
@@ -385,6 +387,122 @@ describe('preview-api-query', () => {
       // Verifies /gallery/men/peredplichcha renders 19 items instead of 93 or 47
       expect(getPreviewDataset('tattoos')?.length).toBe(19);
       expect(getPreviewDataset('tattoos', 'gallery')?.length).toBe(19);
+    });
+
+    it('syncActiveRouteQueries immediately serves cached route data and clears stale data on cache misses', () => {
+      const pageCode = `
+        import tattoos from '@/cms/tattoos.json';
+        export default function Page() {
+          return (
+            <div data-id="grid-main" data-query-config={JSON.stringify({
+              isApiMode: true,
+              params: [
+                { key: 'filter[categories_m2m][categories_id][slug][_eq]', value: 'params.category', isExpression: true },
+              ]
+            })}>
+              {tattoos.map((it: any) => <div key={it.id}>{it.title}</div>)}
+            </div>
+          );
+        }
+      `;
+      const files = new Map<string, string>([
+        ['app/gallery/[category]/page.client.tsx', pageCode],
+      ]);
+      const activeFilePaths = ['app/gallery/[category]/page.client.tsx'];
+
+      // 1. Visit /gallery/men (uncached initially)
+      const res1 = syncActiveRouteQueries(files, activeFilePaths, { category: 'men' }, '/gallery/men');
+      expect(res1.neededQueries.length).toBe(1);
+      expect(res1.neededQueries[0].query.listId).toBe('grid-main');
+      expect(getPreviewDataset('tattoos', 'grid-main')).toEqual([]);
+      expect(getPreviewQueryStatus('grid-main').loading).toBe(true);
+
+      // Simulate query arrival for men (47 items)
+      const menItems = Array.from({ length: 47 }, (_, i) => ({ id: `m${i}`, title: `Men Tattoo ${i}` }));
+      const menKey = res1.neededQueries[0].queryKey;
+      setPreviewDataset(menKey, menItems);
+      setPreviewDataset('grid-main', menItems);
+      setPreviewDataset('tattoos', menItems);
+      setPreviewQueryStatus('grid-main', { loading: false, error: null });
+
+      // Verify men items are active
+      expect(getPreviewDataset('tattoos', 'grid-main')?.length).toBe(47);
+
+      // 2. Navigate to /gallery/women (uncached initially)
+      const res2 = syncActiveRouteQueries(files, activeFilePaths, { category: 'women' }, '/gallery/women');
+      expect(res2.neededQueries.length).toBe(1);
+      // Stale men data is evicted immediately, preventing leak or inversion!
+      expect(getPreviewDataset('tattoos', 'grid-main')).toEqual([]);
+      expect(getPreviewQueryStatus('grid-main').loading).toBe(true);
+
+      // Simulate query arrival for women (44 items)
+      const womenItems = Array.from({ length: 44 }, (_, i) => ({ id: `w${i}`, title: `Women Tattoo ${i}` }));
+      const womenKey = res2.neededQueries[0].queryKey;
+      setPreviewDataset(womenKey, womenItems);
+      setPreviewDataset('grid-main', womenItems);
+      setPreviewDataset('tattoos', womenItems);
+      setPreviewQueryStatus('grid-main', { loading: false, error: null });
+
+      // Verify women items are active
+      expect(getPreviewDataset('tattoos', 'grid-main')?.length).toBe(44);
+
+      // 3. Navigate BACK to /gallery/men (cached)
+      const res3 = syncActiveRouteQueries(files, activeFilePaths, { category: 'men' }, '/gallery/men');
+      // No network query needed!
+      expect(res3.neededQueries.length).toBe(0);
+      // Immediately serves 47 men items synchronously on this render tick!
+      expect(getPreviewDataset('tattoos', 'grid-main')?.length).toBe(47);
+      expect(getPreviewDataset('tattoos', 'grid-main')?.[0].title).toBe('Men Tattoo 0');
+      expect(getPreviewQueryStatus('grid-main').loading).toBe(false);
+
+      // 4. Navigate BACK to /gallery/women (cached)
+      const res4 = syncActiveRouteQueries(files, activeFilePaths, { category: 'women' }, '/gallery/women');
+      expect(res4.neededQueries.length).toBe(0);
+      // Immediately serves 44 women items synchronously!
+      expect(getPreviewDataset('tattoos', 'grid-main')?.length).toBe(44);
+      expect(getPreviewDataset('tattoos', 'grid-main')?.[0].title).toBe('Women Tattoo 0');
+    });
+
+    it('returns to previously visited sub-routes (peredplichcha -> ruka -> peredplichcha) with immediate cache hits', () => {
+      const pageCode = `
+        import tattoos from '@/cms/tattoos.json';
+        export default function Page() {
+          return (
+            <div data-id="grid-sub" data-query-config={JSON.stringify({
+              isApiMode: true,
+              params: [
+                { key: 'category', value: 'params.category', isExpression: true },
+                { key: 'place', value: 'params.place', isExpression: true },
+              ]
+            })}>
+              {tattoos.map((it: any) => <div key={it.id}>{it.title}</div>)}
+            </div>
+          );
+        }
+      `;
+      const files = new Map<string, string>([
+        ['app/gallery/[category]/[place]/page.client.tsx', pageCode],
+      ]);
+      const activeFilePaths = ['app/gallery/[category]/[place]/page.client.tsx'];
+
+      // Visit /gallery/men/peredplichcha
+      const s1 = syncActiveRouteQueries(files, activeFilePaths, { category: 'men', place: 'peredplichcha' }, '/gallery/men/peredplichcha');
+      const pItems = Array.from({ length: 19 }, (_, i) => ({ id: `p${i}`, title: `Forearm ${i}` }));
+      setPreviewDataset(s1.neededQueries[0].queryKey, pItems);
+      setPreviewDataset('grid-sub', pItems);
+
+      // Visit /gallery/men/ruka
+      const s2 = syncActiveRouteQueries(files, activeFilePaths, { category: 'men', place: 'ruka' }, '/gallery/men/ruka');
+      const rItems = Array.from({ length: 25 }, (_, i) => ({ id: `r${i}`, title: `Arm ${i}` }));
+      setPreviewDataset(s2.neededQueries[0].queryKey, rItems);
+      setPreviewDataset('grid-sub', rItems);
+      expect(getPreviewDataset('tattoos', 'grid-sub')?.length).toBe(25);
+
+      // Return to /gallery/men/peredplichcha
+      const s3 = syncActiveRouteQueries(files, activeFilePaths, { category: 'men', place: 'peredplichcha' }, '/gallery/men/peredplichcha');
+      expect(s3.neededQueries.length).toBe(0); // Cache hit!
+      expect(getPreviewDataset('tattoos', 'grid-sub')?.length).toBe(19); // Immediately 19 items without getting stuck!
+      expect(getPreviewDataset('tattoos', 'grid-sub')?.[0].title).toBe('Forearm 0');
     });
   });
 });
