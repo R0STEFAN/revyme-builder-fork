@@ -442,4 +442,25 @@ export default function Page() { return <div>Authors</div>; }
     expect(repaired).toContain('altitude="1200"');
     expect(repaired).toContain('<img data-id="img-2" src="/b.jpg" alt="" />');
   });
+
+  it('repairs multiline bare alt attributes across newlines and guards complex relation properties', () => {
+    const multilineCode = `
+      <img
+        data-id="img-multiline"
+        src={item.cover}
+        alt
+        style={{ width: '100%' }}
+      />
+      <p data-id="p1">{item.categories_m2m}</p>
+      <p data-id="p2">{item.title}</p>
+    `;
+    const repairedAlt = repairBareAltAttributes(multilineCode);
+    expect(repairedAlt).toContain('alt=""');
+    expect(repairedAlt).not.toMatch(/<img[^>]*\balt(?!\s*=)/);
+
+    const repairedBindings = repairLegacyDetailBindings(repairedAlt);
+    expect(repairedBindings).toContain('typeof item.categories_m2m === \'object\'');
+    expect(repairedBindings).toContain('{item.title}');
+  });
 });
+

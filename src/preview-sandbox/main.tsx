@@ -163,6 +163,27 @@ function unwrapDocumentTags(type: any, props: any): { handled: true; children: a
 // children — match that here so the preview degrades gracefully instead.
 const PREVIEW_VOID_TAGS = new Set(['input', 'br', 'hr', 'img', 'area', 'base', 'col', 'embed', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 
+function sanitizePreviewChild(child: any): any {
+  if (child == null || typeof child === 'boolean') return child;
+  if (typeof child !== 'object') return child;
+  if (React.isValidElement(child)) return child;
+  if (Array.isArray(child)) {
+    return child.map(sanitizePreviewChild);
+  }
+  const obj = child as Record<string, any>;
+  if (typeof obj.name === 'string') return obj.name;
+  if (typeof obj.title === 'string') return obj.title;
+  if (typeof obj.label === 'string') return obj.label;
+  if (typeof obj.value === 'string' || typeof obj.value === 'number') return String(obj.value);
+  const keys = Object.keys(obj);
+  if (keys.length === 0) return '';
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '';
+  }
+}
+
 function createPreviewElement(jsxFn: typeof reactJsx, type: any, props: any, key?: any) {
   const unwrap = unwrapDocumentTags(type, props);
   if (unwrap.handled) {
@@ -170,12 +191,20 @@ function createPreviewElement(jsxFn: typeof reactJsx, type: any, props: any, key
   }
   let nextProps = props;
   if (nextProps && typeof type === 'string') {
+    if (type === 'img' && typeof nextProps.alt === 'boolean') {
+      nextProps = { ...nextProps, alt: '' };
+    }
     const stripChildren = nextProps.children != null && PREVIEW_VOID_TAGS.has(type);
     const stripLayout = typeof nextProps.layout === 'boolean';
     if (stripChildren || stripLayout) {
       nextProps = { ...nextProps };
       if (stripChildren) delete nextProps.children;
       if (stripLayout) delete nextProps.layout;
+    } else if (nextProps.children !== undefined) {
+      const sanitized = sanitizePreviewChild(nextProps.children);
+      if (sanitized !== nextProps.children) {
+        nextProps = { ...nextProps, children: sanitized };
+      }
     }
     if (nextProps['data-query-config'] && nextProps['data-id']) {
       const listId = nextProps['data-id'];

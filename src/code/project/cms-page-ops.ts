@@ -1152,6 +1152,16 @@ export function repairLegacyDetailBindings(code: string): string {
     /\{item(?:\.|\?\.)metadata\}/g,
     `{typeof item?.metadata === 'object' ? JSON.stringify(item?.metadata) : (item?.metadata ?? '')}`,
   );
+  result = result.replace(
+    /(<p\b[^>]*>)\s*\{item\.([A-Za-z0-9_.]+)\}\s*(<\/p>)/g,
+    (match, openTag, propPath, closeTag) => {
+      const primitives = ['title', 'id', 'slug', 'rank', 'date_updated', 'seo_title', 'seo_description', 'deskription', 'alt_text', 'name'];
+      if (primitives.includes(propPath)) {
+        return `${openTag}{item.${propPath}}${closeTag}`;
+      }
+      return `${openTag}{typeof item.${propPath} === 'object' && item.${propPath} !== null ? (item.${propPath}?.name || item.${propPath}?.title || (Array.isArray(item.${propPath}) ? item.${propPath}.map((c: any) => c?.name || c?.title || c?.id || '').filter(Boolean).join(', ') : JSON.stringify(item.${propPath}))) : (item.${propPath} ?? '')}${closeTag}`;
+    },
+  );
   return result;
 }
 
@@ -1160,7 +1170,9 @@ export function repairLegacyDetailBindings(code: string): string {
  * to standard string attributes `alt=""`.
  */
 export function repairBareAltAttributes(code: string): string {
-  return code.replace(/(<img\b[^>]*?)(\balt\b)(?!\s*=)([^>]*?>)/g, '$1alt=""$3');
+  return code.replace(/(<img\b[^>]*?)(\balt\b)(?!\s*=)([^>]*?>?)/gs, (match) => {
+    return match.replace(/\balt\b(?!\s*=)/, 'alt=""');
+  });
 }
 
 export function isDetailPageForCollection(

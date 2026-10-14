@@ -101,6 +101,21 @@ export async function captureThumbnail(): Promise<void> {
       cacheBust: false,
       imagePlaceholder: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
       onImageErrorHandler: () => true,
+      filter: (domNode) => {
+        if (domNode instanceof HTMLImageElement || (domNode && (domNode as HTMLElement).tagName === 'IMG')) {
+          const src = (domNode as HTMLImageElement).src;
+          if (src && !src.startsWith('data:') && !src.startsWith('blob:')) {
+            try {
+              const u = new URL(src, window.location.href);
+              if (u.origin !== window.location.origin) {
+                // Skip cross-origin images in html-to-image to prevent browser CORS ERR_FAILED console logs
+                return false;
+              }
+            } catch {}
+          }
+        }
+        return true;
+      },
     });
     parent.postMessage({ type: 'preview:thumbnail', dataUrl }, '*');
   } catch (err) {
