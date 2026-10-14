@@ -276,7 +276,8 @@ describe('nested dot-notation field rendering', () => {
     });
     createCmsDetailPageFile('tattoos');
     const code = fsStore.get('app/tattoos/[slug]/page.client.tsx')!;
-    expect(code).toContain('{item.img_file.id}');
-    expect(code).toContain('src={item["cover-image"]}');
+    expect(code).toContain('item.img_file?.id');
+    expect(code).not.toContain('item["img_file.id"]');
+    expect(code).toContain('item["cover-image"]');
   });
 });

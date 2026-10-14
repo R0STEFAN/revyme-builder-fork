@@ -45,7 +45,6 @@ import {
   extractApiItems,
 } from '@/code/project/cms-api-config';
 import { getEnvVariables } from '@/editor/left-toolbar/panels/cms/ApiResourceModal';
-import { evaluateQueryParamExpressions } from '@/preview-sandbox/preview-api-query';
 
 /** URL the preview iframe loads. Historically this lived at
  *  `http://localhost:5175` (a separate Vite project). The runtime has since
@@ -387,7 +386,7 @@ export default function PreviewOverlay({ open, onClose }: Props) {
           componentStack: e.data.componentStack,
         });
       } else if (e.data?.type === 'preview:fetch-api-query') {
-        const { requestId, source, queryConfig, routeParams, url } = e.data;
+        const { requestId, source, resolvedParams, url } = e.data;
         (async () => {
           const iframe = iframeRef.current;
           if (!iframe?.contentWindow) return;
@@ -406,10 +405,18 @@ export default function PreviewOverlay({ open, onClose }: Props) {
               return;
             }
 
-            const resolvedParams = queryConfig
-              ? evaluateQueryParamExpressions(queryConfig, routeParams || {})
-              : {};
-            const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams);
+            // Security: validate that resolvedParams are strictly plain strings.
+            // Do NOT evaluate expressions or invoke new Function in the parent frame.
+            const sanitizedParams: Record<string, string> = {};
+            if (resolvedParams && typeof resolvedParams === 'object') {
+              for (const [k, v] of Object.entries(resolvedParams)) {
+                if (typeof k === 'string' && typeof v === 'string') {
+                  sanitizedParams[k] = v;
+                }
+              }
+            }
+
+            const fullUrl = buildApiRequestUrl(apiConfig, sanitizedParams);
             const envVars = getEnvVariables();
             const resolvedHeaders = resolveEnvHeaders(apiConfig.headers, envVars);
 

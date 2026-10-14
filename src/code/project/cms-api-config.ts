@@ -228,3 +228,38 @@ export function detectApiItemsKey(responseJson: any, explicitKey?: string): stri
   return undefined;
 }
 
+/** Safely evaluate expression like `params.category` or `params.category || "all"` against route params. */
+export function evaluateParamExpression(expr: string, params: Record<string, string>): string {
+  if (!expr || !expr.trim()) return '';
+  const trimmed = expr.trim();
+  try {
+    const fn = new Function('params', `with({ params }) { return (${trimmed}); }`);
+    const val = fn(params || {});
+    return val !== undefined && val !== null ? String(val) : '';
+  } catch {
+    const match = trimmed.match(/^params\.([a-zA-Z0-9_]+)$/);
+    if (match && params && params[match[1]] !== undefined) {
+      return String(params[match[1]]);
+    }
+    return '';
+  }
+}
+
+/** Evaluate all parameters in a CollectionQueryConfig against current route parameters. */
+export function evaluateQueryParamExpressions(
+  queryConfig: import('@/shared/types').CollectionQueryConfig | undefined,
+  routeParams: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!queryConfig || !Array.isArray(queryConfig.params)) return result;
+  for (const p of queryConfig.params) {
+    if (!p.key) continue;
+    if (p.isExpression) {
+      result[p.key] = evaluateParamExpression(p.value, routeParams);
+    } else {
+      result[p.key] = p.value ?? '';
+    }
+  }
+  return result;
+}
+

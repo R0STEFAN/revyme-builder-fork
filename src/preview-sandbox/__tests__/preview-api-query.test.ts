@@ -5,6 +5,8 @@ import {
   buildPreviewQueryKey,
   detectCollectionQueries,
   wrapCollectionListMapping,
+  findTagClose,
+  findMatchingCloseTagIndex,
   dispatchApiQuery,
   handleApiQueryResult,
   getPreviewDataset,
@@ -133,6 +135,28 @@ describe('preview-api-query', () => {
       `;
       expect(detectCollectionQueries(code)).toEqual([]);
     });
+
+    it('handles nested tags of the same type without prematurely closing container search', () => {
+      const code = `
+        import tattoos from '@/cms/tattoos.json';
+        export default function Page() {
+          return (
+            <div data-id="outer-grid" data-query-config='{"isApiMode":true,"params":[]}'>
+              <div className="header">
+                <div>Nested Header</div>
+              </div>
+              <div className="content">
+                {tattoos.map((item) => <div key={item.id}>{item.name}</div>)}
+              </div>
+            </div>
+          );
+        }
+      `;
+      const queries = detectCollectionQueries(code);
+      expect(queries).toHaveLength(1);
+      expect(queries[0].listId).toBe('outer-grid');
+      expect(queries[0].source).toBe('tattoos');
+    });
   });
 
   describe('wrapCollectionListMapping', () => {
@@ -155,6 +179,54 @@ describe('preview-api-query', () => {
 
       expect(wrapped).toContain("__getPreviewData('tattoos', 'gallery-grid')");
       expect(wrapped).toContain('|| tattoos).map(');
+    });
+
+    it('correctly handles nested elements of the same tag name when wrapping mapping', () => {
+      const code = `
+        <div data-id="gallery-grid" data-query-config={JSON.stringify({ isApiMode: true, params: [] })}>
+          <div className="toolbar">
+            <div className="inner-filter">Filter</div>
+          </div>
+          <div className="list-wrapper">
+            {tattoos.map((item) => (
+              <div key={item.id}>{item.name}</div>
+            ))}
+          </div>
+        </div>
+      `;
+
+      const wrapped = wrapCollectionListMapping(code, [
+        {
+          listId: 'gallery-grid',
+          source: 'tattoos',
+          queryConfig: { isApiMode: true, params: [] },
+        },
+      ]);
+
+      expect(wrapped).toContain("__getPreviewData('tattoos', 'gallery-grid')");
+      expect(wrapped).toContain('|| tattoos).map(');
+      expect(wrapped).toContain('<div className="list-wrapper">');
+    });
+  });
+
+  describe('findMatchingCloseTagIndex and findTagClose', () => {
+    it('correctly balances nested tags of the same name', () => {
+      const code = '<div><div><span>hello</span></div></div>';
+      // From after the opening '<div' (index 4)
+      const closeIdx = findMatchingCloseTagIndex(code, 'div', 4);
+      expect(closeIdx).toBe(code.length - 6);
+    });
+
+    it('ignores self-closing tags of the same name', () => {
+      const code = '<div><div className="divider" /><span>content</span></div>';
+      const closeIdx = findMatchingCloseTagIndex(code, 'div', 4);
+      expect(closeIdx).toBe(code.length - 6);
+    });
+
+    it('finds tag closing bracket even with attributes and braces', () => {
+      const code = '<div className={"foo>bar"} title="baz">';
+      const gt = findTagClose(code, 4);
+      expect(gt).toBe(code.length - 1);
     });
   });
 
@@ -188,6 +260,7 @@ describe('preview-api-query', () => {
       expect(sentPayload.requestId).toBe(reqId);
       expect(sentPayload.source).toBe('tattoos');
       expect(sentPayload.routeParams).toEqual({ category: 'men' });
+      expect(sentPayload.resolvedParams).toEqual({ 'filter[category][_eq]': 'men' });
       expect(sentPayload.url).toBe('/gallery/men');
 
       // Verify no secrets or env files are attached

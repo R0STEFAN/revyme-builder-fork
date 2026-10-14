@@ -93,6 +93,7 @@ describe('cms-api-config', () => {
   });
 
   it('gets, saves, and removes an individual API collection', () => {
+    setCmsMode('api');
     expect(getApiCollection('articles')).toBeNull();
 
     const articleCol: ApiCollectionConfig = {

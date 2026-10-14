@@ -5,6 +5,12 @@
 
 import * as React from 'react';
 import type { CollectionQueryConfig } from '@/shared/types';
+import {
+  evaluateParamExpression,
+  evaluateQueryParamExpressions,
+} from '@/code/project/cms-api-config';
+
+export { evaluateParamExpression, evaluateQueryParamExpressions };
 
 export interface DetectedQuery {
   listId: string;
@@ -25,42 +31,89 @@ export interface QueryStatus {
   error: string | null;
 }
 
-// ─── Query Param Evaluation ──────────────────────────────────────────────────
+// ─── Balanced JSX Tag Helpers ────────────────────────────────────────────────
 
-/** Safely evaluate expression like `params.category` or `params.category || "all"` against route params. */
-export function evaluateParamExpression(expr: string, params: Record<string, string>): string {
-  if (!expr || !expr.trim()) return '';
-  const trimmed = expr.trim();
-  try {
-    const fn = new Function('params', `with({ params }) { return (${trimmed}); }`);
-    const val = fn(params || {});
-    return val !== undefined && val !== null ? String(val) : '';
-  } catch {
-    const match = trimmed.match(/^params\.([a-zA-Z0-9_]+)$/);
-    if (match && params && params[match[1]] !== undefined) {
-      return String(params[match[1]]);
+/**
+ * Find the closing `>` of a JSX opening tag, taking string literals and braces into account.
+ */
+export function findTagClose(code: string, startIdx: number): number {
+  let braceDepth = 0;
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = startIdx; i < code.length; i++) {
+    const ch = code[i];
+    if (escaped) {
+      escaped = false;
+      continue;
     }
-    return '';
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === inString) inString = null;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === '`') {
+      inString = ch;
+      continue;
+    }
+    if (ch === '{') {
+      braceDepth++;
+      continue;
+    }
+    if (ch === '}') {
+      braceDepth--;
+      continue;
+    }
+
+    if (ch === '>' && braceDepth === 0) return i;
   }
+  return -1;
 }
 
-/** Evaluate all parameters in a CollectionQueryConfig against current route parameters. */
-export function evaluateQueryParamExpressions(
-  queryConfig: CollectionQueryConfig | undefined,
-  routeParams: Record<string, string>,
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (!queryConfig || !Array.isArray(queryConfig.params)) return result;
-  for (const p of queryConfig.params) {
-    if (!p.key) continue;
-    if (p.isExpression) {
-      result[p.key] = evaluateParamExpression(p.value, routeParams);
+/**
+ * Finds the index of the matching `</tagName>` closing tag by balancing tag depth.
+ * Correctly accounts for nested tags of the same name and self-closing tags.
+ */
+export function findMatchingCloseTagIndex(code: string, tagName: string, fromIdx: number): number {
+  const openPattern = `<${tagName}`;
+  const closePattern = `</${tagName}>`;
+  let depth = 1;
+  let searchFrom = fromIdx;
+
+  while (depth > 0 && searchFrom < code.length) {
+    const nextOpen = code.indexOf(openPattern, searchFrom);
+    const nextClose = code.indexOf(closePattern, searchFrom);
+    if (nextClose === -1) return -1;
+
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      const after = code[nextOpen + openPattern.length];
+      if (after === ' ' || after === '>' || after === '/' || after === '\n' || after === '\r' || after === '\t') {
+        const gt = findTagClose(code, nextOpen + openPattern.length);
+        if (gt === -1) return -1;
+        // Not self-closing -> increment depth
+        if (code[gt - 1] !== '/') {
+          depth++;
+        }
+        searchFrom = gt + 1;
+      } else {
+        searchFrom = nextOpen + openPattern.length;
+      }
     } else {
-      result[p.key] = p.value ?? '';
+      depth--;
+      if (depth === 0) return nextClose;
+      searchFrom = nextClose + closePattern.length;
     }
   }
-  return result;
+
+  return -1;
 }
+
+// ─── Query Param Evaluation & Key Building ───────────────────────────────────
 
 /** Stable query cache key based on collection source and resolved query parameters. */
 export function buildPreviewQueryKey(source: string, resolvedParams: Record<string, string>): string {
@@ -76,6 +129,7 @@ export function buildPreviewQueryKey(source: string, resolvedParams: Record<stri
 /**
  * Extracts collection list containers with `data-query-config` from a component/page TSX source.
  * Identifies the list node ID, the source collection slug, and the parsed query configuration.
+ * Uses balanced tag matching so nested tags of the same type do not truncate the container slice.
  */
 export function detectCollectionQueries(code: string): DetectedQuery[] {
   if (!code || !code.includes('data-query-config')) return [];
@@ -89,9 +143,6 @@ export function detectCollectionQueries(code: string): DetectedQuery[] {
     importMap.set(match[1], match[2]);
   }
 
-  // Find tags with data-query-config
-  // Handles both <tag ... data-id="..." ... data-query-config={...}> ... </tag>
-  // and self-closing or multi-line configurations.
   const tagStartRegex = /<([a-zA-Z0-9_-]+)\s+([^>]*data-query-config[^>]*)>/g;
   while ((match = tagStartRegex.exec(code)) !== null) {
     const tagName = match[1];
@@ -130,11 +181,9 @@ export function detectCollectionQueries(code: string): DetectedQuery[] {
 
     if (!queryConfig) continue;
 
-    // Search for the collection variable mapped inside this container
-    // Find matching close tag or search next chunk of code
-    const closeTagStr = `</${tagName}>`;
-    const closeIndex = code.indexOf(closeTagStr, openTagEnd);
-    const innerContent = closeIndex !== -1 ? code.slice(openTagEnd, closeIndex) : code.slice(openTagEnd, openTagEnd + 2000);
+    // Use balanced close tag matching instead of naive indexOf
+    const closeIndex = findMatchingCloseTagIndex(code, tagName, openTagEnd);
+    const innerContent = closeIndex !== -1 ? code.slice(openTagEnd, closeIndex) : code.slice(openTagEnd);
 
     let source = (queryConfig as any).source || '';
     if (!source) {
@@ -160,6 +209,7 @@ export function detectCollectionQueries(code: string): DetectedQuery[] {
  * Wraps collection list mapping expressions inside collection containers so that they
  * evaluate against the resolved preview dataset if available:
  * `{tattoos.map(...)` -> `{((typeof __getPreviewData === 'function' && __getPreviewData('tattoos', 'tattoos-grid')) || tattoos).map(...)`
+ * Uses balanced tag matching so nested child elements of the same tag type do not terminate the container early.
  */
 export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[]): string {
   const detected = queries ?? detectCollectionQueries(code);
@@ -173,20 +223,18 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
 
     const elStart = result.lastIndexOf('<', idIdx);
     if (elStart === -1) continue;
-    const tagClose = result.indexOf('>', idIdx);
-    if (tagClose === -1) continue;
+    const tagClose = findTagClose(result, elStart + 1);
+    if (tagClose === -1 || result[tagClose - 1] === '/') continue;
 
-    // Search for close tag
     const tagMatch = result.slice(elStart + 1).match(/^([a-zA-Z0-9_-]+)/);
     if (!tagMatch) continue;
     const tagName = tagMatch[1];
-    const closeTagStr = `</${tagName}>`;
-    const elEnd = result.indexOf(closeTagStr, tagClose);
-    if (elEnd === -1) continue;
 
-    const inner = result.slice(tagClose + 1, elEnd);
-    // Find `{<varName>(.filter|.sort|.slice)*.map(`
-    // where varName maps to source or is equal to source
+    // Balanced close tag matching: skip nested same-type tags (e.g. nested <div>)
+    const closeIdx = findMatchingCloseTagIndex(result, tagName, tagClose + 1);
+    if (closeIdx === -1) continue;
+
+    const inner = result.slice(tagClose + 1, closeIdx);
     const mapRegex = new RegExp(`(\\{\\s*)(${source})(\\s*(?:\\.[a-zA-Z0-9_]+\\([^)]*\\))*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;
 
@@ -195,7 +243,7 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
       `$1((typeof __getPreviewData === 'function' && __getPreviewData('${source}', '${listId}')) || $2)$3`,
     );
 
-    result = result.slice(0, tagClose + 1) + wrappedInner + result.slice(elEnd);
+    result = result.slice(0, tagClose + 1) + wrappedInner + result.slice(closeIdx);
   }
 
   return result;
@@ -266,6 +314,7 @@ export function dispatchApiQuery(args: {
 }): string {
   const { source, queryConfig, routeParams, url, listId } = args;
   const requestId = `query_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Evaluated in the preview iframe (user code runtime sandbox)
   const resolvedParams = evaluateQueryParamExpressions(queryConfig, routeParams);
   const queryKey = buildPreviewQueryKey(source, resolvedParams);
 
@@ -292,6 +341,7 @@ export function dispatchApiQuery(args: {
           source,
           queryConfig,
           routeParams,
+          resolvedParams, // Send already-evaluated strings so parent frame avoids new Function
           url,
         },
         '*',
