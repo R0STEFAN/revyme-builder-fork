@@ -18,13 +18,13 @@ import {
   previewSlugByFileAtom,
   previewRouteParamsByFileAtom,
   slugPageReferrerByFileAtom,
-  getItemSlug,
 } from '@/code/stores/cms-page-store';
+import { getItemSlug, getItemDisplayLabel, getItemRecordId } from '@/shared/cms-accessor';
 import { setPreviewRouteParams, forceCanvasRender } from '@/canvas/node-ops';
 import { collectionDataAtom } from '@/code/stores/cms-store';
 import { selectedIdsAtom } from '@/code/stores/store';
 import { activeFilePathAtom, getSlugPageParentFile, getFileDisplayName, syncUrlToPage } from '@/code/project/active-file-store';
-import { cmsItemDisplayLabel as itemLabel, prettyCollectionName as prettyCollection } from '@/code/project/cms-page-ops';
+import { prettyCollectionName as prettyCollection } from '@/code/project/cms-page-ops';
 import { openCmsEditorAtom } from '@/code/stores/cms-editor-store';
 import { leftPanelAtom } from '@/code/stores/left-panel-store';
 import { flushNow, syncQueueCode } from '@/code/mutation/mutation-queue';
@@ -33,6 +33,47 @@ import { projectFS } from '@/code/project/project-fs';
 import { PageDocumentIcon, CmsIcon, CmsItemIcon } from '@/shared/icons';
 import { stopHoverProbe } from './useSuppressCanvasHover';
 import { trace } from '@/shared/debug-trace';
+
+/**
+ * Multi-field matching helper for CMS slug breadcrumb search.
+ * Searches across getItemDisplayLabel, getItemSlug, getItemRecordId,
+ * it.title, it.name, it.slug, and it._slug. Case-insensitive.
+ */
+export function matchesBreadcrumbSearch(
+  it: Record<string, any> | undefined | null,
+  query: string,
+): boolean {
+  if (!it || typeof it !== 'object') return false;
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const displayLabel = getItemDisplayLabel(it);
+  const slug = getItemSlug(it);
+  const recordId = getItemRecordId(it);
+
+  const candidates: (string | undefined)[] = [
+    displayLabel || undefined,
+    slug || undefined,
+    recordId != null ? String(recordId) : undefined,
+    it.title != null && typeof it.title !== 'object' ? String(it.title) : undefined,
+    it.name != null && typeof it.name !== 'object' ? String(it.name) : undefined,
+    it.slug != null && typeof it.slug !== 'object' ? String(it.slug) : undefined,
+    it._slug != null && typeof it._slug !== 'object' ? String(it._slug) : undefined,
+  ];
+
+  return candidates.some((cand) => cand != null && cand.toLowerCase().includes(q));
+}
+
+/**
+ * Filter collection items by query string matching any key label or slug field.
+ */
+export function filterBreadcrumbItems<T extends Record<string, any>>(
+  items: T[],
+  query: string,
+): T[] {
+  if (!query || !query.trim()) return items;
+  return items.filter((it) => matchesBreadcrumbSearch(it, query));
+}
 
 function Chevron() {
   return (
@@ -72,7 +113,7 @@ export default function SlugPageBreadcrumb() {
   useLayoutEffect(() => {
     if (!open) { setMenuPos(null); return; }
     const r = itemBtnRef.current?.getBoundingClientRect();
-    if (r) setMenuPos({ left: r.left, top: r.bottom + 6, width: Math.max(r.width, 240) });
+    if (r) setMenuPos({ left: r.left, top: r.bottom + 6, width: Math.max(r.width, 280) });
   }, [open]);
 
   // PATH gate FIRST: `cmsPageMetaAtom` derives from stableCodeAtom, which
@@ -90,10 +131,11 @@ export default function SlugPageBreadcrumb() {
 
   const currentIdx = Math.max(0, items.findIndex((i) => getItemSlug(i) === activeSlug));
   const current = items[currentIdx];
-  const currentLabel = itemLabel(current, activeSlug);
+  const currentSlug = getItemSlug(current) || (activeSlug ?? '');
+  const currentLabel = getItemDisplayLabel(current) || currentSlug;
+  const hasDistinctSlug = Boolean(currentSlug && currentSlug !== currentLabel);
 
-  const q = query.trim().toLowerCase();
-  const filtered = q ? items.filter((it) => itemLabel(it).toLowerCase().includes(q)) : items;
+  const filtered = filterBreadcrumbItems(items, query);
 
   const pick = (slug: string) => {
     setPreviewSlugMap((prev) => {
@@ -205,11 +247,17 @@ export default function SlugPageBreadcrumb() {
           <button
             ref={itemBtnRef}
             onClick={() => setOpen((o) => !o)}
-            className={`${pillBase} max-w-[300px] hover:brightness-125 cursor-pointer`}
+            className={`${pillBase} max-w-[340px] hover:brightness-125 cursor-pointer`}
             style={{ color: 'var(--accent-text)' }}
+            title={hasDistinctSlug ? `${currentLabel} (${currentSlug})` : currentLabel}
           >
             <span className="flex-shrink-0 flex items-center"><CmsItemIcon size={14} /></span>
             <span className="truncate">{currentLabel}</span>
+            {hasDistinctSlug && (
+              <span className="truncate font-mono text-[11px] opacity-70 flex-shrink-0 max-w-[120px]">
+                ({currentSlug})
+              </span>
+            )}
             <span className="text-[10px] font-semibold text-[var(--text-tertiary)] tabular-nums ml-0.5 flex-shrink-0">
               {currentIdx + 1}/{items.length}
             </span>
@@ -264,7 +312,8 @@ export default function SlugPageBreadcrumb() {
               ) : (
                 filtered.map((it, idx) => {
                   const itSlug = getItemSlug(it);
-                  const isCurrent = itSlug === getItemSlug(current);
+                  const isCurrent = itSlug === currentSlug;
+                  const itLabel = getItemDisplayLabel(it) || itSlug;
                   return (
                     <button
                       key={itSlug || String(idx)}
@@ -276,7 +325,12 @@ export default function SlugPageBreadcrumb() {
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                         )}
                       </span>
-                      <span className="truncate flex-1">{itemLabel(it)}</span>
+                      <span className="truncate flex-1">{itLabel}</span>
+                      {itSlug ? (
+                        <span className="font-mono text-[10px] text-[var(--text-tertiary)] group-hover:text-[var(--accent-fg)] opacity-75 flex-shrink-0">
+                          /{itSlug}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })
