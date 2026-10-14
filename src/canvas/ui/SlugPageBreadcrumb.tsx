@@ -113,7 +113,11 @@ export default function SlugPageBreadcrumb() {
   useLayoutEffect(() => {
     if (!open) { setMenuPos(null); return; }
     const r = itemBtnRef.current?.getBoundingClientRect();
-    if (r) setMenuPos({ left: r.left, top: r.bottom + 6, width: Math.max(r.width, 280) });
+    if (r) {
+      const dropdownWidth = Math.max(420, Math.min(540, window.innerWidth - 32));
+      const left = Math.max(16, Math.min(r.left, window.innerWidth - dropdownWidth - 16));
+      setMenuPos({ left, top: r.bottom + 6, width: dropdownWidth });
+    }
   }, [open]);
 
   // PATH gate FIRST: `cmsPageMetaAtom` derives from stableCodeAtom, which
@@ -192,7 +196,7 @@ export default function SlugPageBreadcrumb() {
   };
 
   const pillBase =
-    'flex items-center gap-1.5 px-2 h-[30px] bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] cut-corners text-xs font-medium transition-all whitespace-nowrap';
+    'flex items-center gap-1.5 px-2.5 h-[30px] bg-[var(--button-secondary-bg,rgba(255,255,255,0.06))] cut-corners text-xs font-medium transition-all whitespace-nowrap';
 
   return createPortal(
     <>
@@ -247,18 +251,13 @@ export default function SlugPageBreadcrumb() {
           <button
             ref={itemBtnRef}
             onClick={() => setOpen((o) => !o)}
-            className={`${pillBase} max-w-[340px] hover:brightness-125 cursor-pointer`}
+            className={`${pillBase} max-w-[420px] hover:brightness-125 cursor-pointer`}
             style={{ color: 'var(--accent-text)' }}
-            title={hasDistinctSlug ? `${currentLabel} (${currentSlug})` : currentLabel}
+            title={hasDistinctSlug ? `${currentLabel}\n/${currentSlug}` : currentLabel}
           >
             <span className="flex-shrink-0 flex items-center"><CmsItemIcon size={14} /></span>
-            <span className="truncate">{currentLabel}</span>
-            {hasDistinctSlug && (
-              <span className="truncate font-mono text-[11px] opacity-70 flex-shrink-0 max-w-[120px]">
-                ({currentSlug})
-              </span>
-            )}
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] tabular-nums ml-0.5 flex-shrink-0">
+            <span className="truncate font-medium">{currentLabel}</span>
+            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] tabular-nums ml-1 flex-shrink-0 px-1.5 py-0.5 rounded bg-[var(--grid-line)]">
               {currentIdx + 1}/{items.length}
             </span>
             <CaretDown />
@@ -287,15 +286,15 @@ export default function SlugPageBreadcrumb() {
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="fixed z-[9999] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-[var(--shadow-lg)] py-1.5 flex flex-col"
-            style={{ left: menuPos.left, top: menuPos.top, width: menuPos.width, maxHeight: 420 }}
+            className="fixed z-[9999] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-[var(--shadow-lg)] py-2 flex flex-col"
+            style={{ left: menuPos.left, top: menuPos.top, width: menuPos.width, maxHeight: 460 }}
           >
             {/* Search */}
-            <div className="px-2 pb-1.5">
+            <div className="px-2.5 pb-2">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Type to search..."
+                placeholder="Type to search by title or slug..."
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); setQuery(''); }
@@ -305,32 +304,65 @@ export default function SlugPageBreadcrumb() {
               />
             </div>
 
+            {/* Header / counter */}
+            <div className="px-3 pb-1 text-[10px] font-medium text-[var(--text-tertiary)] flex justify-between items-center select-none border-b border-[var(--border-light)] mb-1">
+              <span>{filtered.length} {filtered.length === 1 ? 'item' : 'items'}</span>
+              <span>Click to preview template</span>
+            </div>
+
             {/* Item list */}
-            <div className="scrollbar-hide overflow-y-auto" style={{ maxHeight: 360 }}>
+            <div className="scrollbar-hide overflow-y-auto flex flex-col gap-0.5 pt-0.5" style={{ maxHeight: 380 }}>
               {filtered.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-[var(--text-tertiary)]">No items</div>
+                <div className="px-3 py-4 text-xs text-center text-[var(--text-tertiary)]">No items found</div>
               ) : (
                 filtered.map((it, idx) => {
                   const itSlug = getItemSlug(it);
                   const isCurrent = itSlug === currentSlug;
                   const itLabel = getItemDisplayLabel(it) || itSlug;
+                  const showSlug = Boolean(itSlug && itSlug !== itLabel);
+
                   return (
                     <button
                       key={itSlug || String(idx)}
                       onClick={() => pick(itSlug)}
-                      className="group flex items-center gap-2 mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer text-xs text-[var(--text-primary)] hover:bg-[var(--accent)] hover:text-[var(--accent-fg)] transition-colors"
+                      className={`group flex items-start gap-2.5 mx-1.5 px-2.5 py-2 cut-corners w-[calc(100%-12px)] text-left cursor-pointer transition-colors ${
+                        isCurrent
+                          ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
+                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-active,rgba(255,255,255,0.08))]'
+                      }`}
                     >
-                      <span className="w-3.5 flex-shrink-0 flex items-center justify-center">
-                        {isCurrent && (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      <span className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
+                        {isCurrent ? (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-light)] group-hover:bg-[var(--text-secondary)] transition-colors" />
                         )}
                       </span>
-                      <span className="truncate flex-1">{itLabel}</span>
-                      {itSlug ? (
-                        <span className="font-mono text-[10px] text-[var(--text-tertiary)] group-hover:text-[var(--accent-fg)] opacity-75 flex-shrink-0">
-                          /{itSlug}
-                        </span>
-                      ) : null}
+                      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                        <div
+                          className={`text-xs font-medium truncate leading-snug ${
+                            isCurrent ? 'text-[var(--accent-fg)]' : 'text-[var(--text-primary)]'
+                          }`}
+                          title={itLabel}
+                        >
+                          {itLabel}
+                        </div>
+                        {showSlug && (
+                          <div
+                            className={`font-mono text-[11px] truncate flex items-center gap-0.5 leading-snug ${
+                              isCurrent
+                                ? 'text-[var(--accent-fg)] opacity-85'
+                                : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
+                            }`}
+                            title={`/${itSlug}`}
+                          >
+                            <span className="opacity-60">/</span>
+                            <span className="truncate">{itSlug}</span>
+                          </div>
+                        )}
+                      </div>
                     </button>
                   );
                 })
