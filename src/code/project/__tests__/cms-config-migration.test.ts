@@ -371,4 +371,75 @@ export default function Page() { return <div>Detail</div>; }
     expect(projectFS.readFile('app/(marketing)/posts/page.tsx')).toContain('https://directus.example.com/items/posts');
     expect(projectFS.readFile('app/[locale]/(marketing)/posts/[slug]/page.tsx')).toContain('https://directus.example.com/items/posts');
   });
+
+  it('does not touch arbitrary pages (like home or about) or different collections importing json', () => {
+    // 1. Home page importing posts for a card list
+    projectFS.writeFile('app/page.tsx', `
+import PageClient from './page.client';
+export const metadata = { title: "Home" };
+export default function Page() { return <PageClient />; }
+`);
+    projectFS.writeFile('app/page.client.tsx', `
+import posts from '@/cms/posts.json';
+export default function Page() { return <div>Latest: {posts.length}</div>; }
+`);
+
+    // 2. About page importing posts for a team/posts showcase
+    projectFS.writeFile('app/about/page.tsx', `
+import PageClient from './page.client';
+export const metadata = { title: "About" };
+export default function Page() { return <PageClient />; }
+`);
+    projectFS.writeFile('app/about/page.client.tsx', `
+import posts from '@/cms/posts.json';
+export default function Page() { return <div>About with {posts.length} posts</div>; }
+`);
+
+    // 3. Different collection route (authors)
+    projectFS.writeFile('app/authors/page.tsx', `
+import PageClient from './page.client';
+export const metadata = { title: "Authors" };
+export default function Page() { return <PageClient />; }
+`);
+    projectFS.writeFile('app/authors/page.client.tsx', `
+/** @cmsPage {
+  "collection": "authors",
+  "kind": "index"
+} */
+import posts from '@/cms/posts.json';
+export default function Page() { return <div>Authors</div>; }
+`);
+
+    const apiConfig: ApiCollectionConfig = {
+      slug: 'posts',
+      name: 'Posts',
+      provider: 'directus',
+      url: 'https://directus.example.com/items/posts',
+      method: 'GET',
+      headers: {},
+    };
+
+    const modified = syncAffectedCmsPageWrappers('posts', apiConfig);
+    expect(modified).not.toContain('app/page.tsx');
+    expect(modified).not.toContain('app/page.client.tsx');
+    expect(modified).not.toContain('app/about/page.tsx');
+    expect(modified).not.toContain('app/about/page.client.tsx');
+    expect(modified).not.toContain('app/authors/page.tsx');
+    expect(modified).not.toContain('app/authors/page.client.tsx');
+
+    expect(projectFS.readFile('app/page.tsx')).not.toContain('fetch(');
+    expect(projectFS.readFile('app/about/page.tsx')).not.toContain('fetch(');
+    expect(projectFS.readFile('app/authors/page.tsx')).not.toContain('fetch(');
+  });
+
+  it('respects word boundary in repairBareAltAttributes and ignores altText or altitude', () => {
+    const codeWithAltProps = `
+      <img data-id="img-1" src="/a.jpg" altText="sample description" altitude="1200" />
+      <img data-id="img-2" src="/b.jpg" alt />
+    `;
+    const repaired = repairBareAltAttributes(codeWithAltProps);
+    expect(repaired).toContain('altText="sample description"');
+    expect(repaired).toContain('altitude="1200"');
+    expect(repaired).toContain('<img data-id="img-2" src="/b.jpg" alt="" />');
+  });
 });

@@ -1160,7 +1160,7 @@ export function repairLegacyDetailBindings(code: string): string {
  * to standard string attributes `alt=""`.
  */
 export function repairBareAltAttributes(code: string): string {
-  return code.replace(/(<img\b[^>]*?)(\balt)(?!\s*=)([^>]*?>)/g, '$1alt=""$3');
+  return code.replace(/(<img\b[^>]*?)(\balt\b)(?!\s*=)([^>]*?>)/g, '$1alt=""$3');
 }
 
 export function isDetailPageForCollection(
@@ -1169,35 +1169,23 @@ export function isDetailPageForCollection(
   clientCode: string,
   serverCode: string,
 ): boolean {
-  if (clientCode && clientCode.includes('@cmsPage')) {
-    const meta = parseCmsPageMeta(clientCode);
-    if (meta && meta.collection === collectionSlug && meta.kind === 'detail') {
-      return true;
+  // 1. Check for @cmsPage annotation in client or server code
+  const codeWithAnnotation = (clientCode.includes('@cmsPage') && clientCode) || (serverCode.includes('@cmsPage') && serverCode);
+  if (codeWithAnnotation) {
+    const meta = parseCmsPageMeta(codeWithAnnotation);
+    if (meta) {
+      return meta.collection === collectionSlug && meta.kind === 'detail';
     }
   }
 
+  // 2. When @cmsPage is NOT present, match only if the route folder explicitly corresponds to collectionSlug/[slug]
   if (pagePath.endsWith('/[slug]/page.tsx') || pagePath.includes('/[slug]/')) {
     const normalized = pagePath.replace(/\/\([^)]+\)/g, '');
-    if (
-      normalized.includes(`/${collectionSlug}/[slug]/`) ||
-      normalized.endsWith(`/${collectionSlug}/[slug]/page.tsx`)
-    ) {
+    const parts = normalized.split('/').filter(Boolean);
+    const slugIdx = parts.indexOf('[slug]');
+    if (slugIdx > 0 && parts[slugIdx - 1] === collectionSlug) {
       return true;
     }
-    if (
-      serverCode.includes(`@/cms/${collectionSlug}.json`) ||
-      serverCode.includes(`Failed to fetch CMS detail for ${collectionSlug}`) ||
-      clientCode.includes(`@/cms/${collectionSlug}.json`)
-    ) {
-      return true;
-    }
-  }
-
-  if (
-    serverCode.includes(`@/cms/${collectionSlug}.json`) &&
-    serverCode.includes('generateMetadata')
-  ) {
-    return true;
   }
 
   return false;
@@ -1209,32 +1197,24 @@ export function isIndexPageForCollection(
   clientCode: string,
   serverCode: string,
 ): boolean {
+  // Never treat a dynamic [slug] detail page as an index page
   if (pagePath.includes('/[slug]/') || pagePath.endsWith('/[slug]/page.tsx')) {
     return false;
   }
 
-  if (clientCode && clientCode.includes('@cmsPage')) {
-    const meta = parseCmsPageMeta(clientCode);
-    if (meta && meta.collection === collectionSlug && meta.kind === 'index') {
-      return true;
+  // 1. Check for @cmsPage annotation in client or server code
+  const codeWithAnnotation = (clientCode.includes('@cmsPage') && clientCode) || (serverCode.includes('@cmsPage') && serverCode);
+  if (codeWithAnnotation) {
+    const meta = parseCmsPageMeta(codeWithAnnotation);
+    if (meta) {
+      return meta.collection === collectionSlug && meta.kind === 'index';
     }
   }
 
-  if (serverCode.includes(`Failed to fetch CMS index for ${collectionSlug}`)) {
-    return true;
-  }
-
-  if (serverCode.includes(`@/cms/${collectionSlug}.json`)) {
-    return true;
-  }
-
-  if (clientCode.includes(`@/cms/${collectionSlug}.json`)) {
-    return true;
-  }
-
+  // 2. When @cmsPage is NOT present, only match if the route folder explicitly corresponds to collectionSlug
   const normalized = pagePath.replace(/\/\([^)]+\)/g, '');
   const parts = normalized.split('/').filter(Boolean);
-  if (parts.length >= 2 && parts[parts.length - 2] === collectionSlug) {
+  if (parts.length >= 2 && parts[parts.length - 2] === collectionSlug && parts[parts.length - 1] === 'page.tsx') {
     return true;
   }
 
