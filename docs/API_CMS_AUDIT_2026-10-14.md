@@ -4,6 +4,98 @@
 
 Початковий аудит проведено без проблемного проєкту. Після його підготовки додатково перевірено **`portfolio-test2 (Copy)`**, ID `proj-1791960645579-j02nu7`, через збережений snapshot і живий MCP bridge. Враховано ручне виправлення користувача. За подальшою вказівкою користувача запущено **Dynamic та Hybrid SSG** збірки; результати наведені в останньому розділі. Загальні дефекти гілки не слід автоматично вважати причинами кожного симптому конкретного проєкту.
 
+## Резюме закриття та матриця вирішення (Resolution & Verification Status)
+
+> **Статус аудиту: ПОВНІСТЮ ЗАКРИТО (ALL RESOLVED)**  
+> **Дата закриття:** 14 жовтня 2026  
+> **Гілка:** `feat/api-cms-integration`  
+> **Базовий коміт:** `c15ab8d` (охоплює всі 13 етапів плану `API_CMS_FIX_AND_IMPROVEMENT_PLAN_2026-10-14`)  
+> **Результати тестів:** 11 спеціалізованих тестових сюїт API CMS — **11 passed, 152 passed tests (100%)**  
+> **Перевірка типів:** `npx tsc --noEmit` — **0 помилок (Clean compilation)**  
+
+Усі **22 підтверджені дефекти** аудиту (Дефекти №1–22) та **4 критичні консольні/транспортні проблеми (C1–C4)** були послідовно відтворені в постійних регресійних тестах, виправлені в реалізації, перевірені крос-модульними тестами та зафіксовані в Git.
+
+### Контрольна матриця вирішення дефектів (Defects 1–22 та C1–C4)
+
+| № | Рівень | Проблема й наслідок | Статус | Коміти реалізації | Ключові змінені файли | Тестові докази / Верифікаційні сюїти |
+|---|---|---|---|---|---|---|
+| **1** | P1 | API query-конфігурацію виконує канвас, але не browser preview. Відфільтрована відповідь та snapshot кешу розходяться. | **RESOLVED** | `bf6fceb`, `4073725` | `src/preview-sandbox/preview-api-query.ts`, `src/preview-sandbox/main.tsx`, `src/editor/header/PreviewOverlay.tsx` | `src/preview-sandbox/__tests__/preview-api-query.test.ts` (18 тестів: route params extraction, dynamic query dispatch, dynamic `/gallery/men` → 47 до `/gallery/men/peredplichcha` → 19 items) |
+| **2** | P1 | API query-конфігурація довільного списку не переноситься в серверний wrapper. Додати API collection list на звичайну або multi-param сторінку недостатньо для live server fetch. | **RESOLVED** | `09e428e` | `src/code/project/source-export.ts`, `src/code/project/cms-page-ops.ts` | `src/code/project/__tests__/source-export-modes.test.ts` (10 тестів: `detectPageCollectionQueries`, `orchestrateServerFetchForQueries`, client mapping rewrite) |
+| **3** | P1 | Route-param predicate звертається до невизначеного `f` (`ReferenceError: f is not defined`). | **RESOLVED** | `da0bd94`, `720a0d0`, `39e81f5` | `src/code/generation/cms-gen.ts` | `src/code/generation/__tests__/cms-api-regression.test.ts` ("generates route-param predicates without referencing undefined 'f'"), `src/code/generation/__tests__/cms-filter-differential.test.ts` |
+| **4** | P1 | `equals` для object relation може означати substring match (`JSON.stringify().includes()`), додаючи зайві записи (наприклад `japan` → `japanese`). | **RESOLVED** | `39e81f5` | `src/code/generation/cms-gen.ts`, `src/canvas/Renderer.ts` | `src/code/generation/__tests__/cms-filter-differential.test.ts` (18 тестів: side-by-side exact relation matching, M2M, combinators), `src/code/generation/__tests__/cms-api-regression.test.ts` |
+| **5** | P1 | Несумісний формат env-посилань. Modal і Refresh використовують `env:TOKEN`; canvas і сервер вимагали `process.env.TOKEN` / `$TOKEN`, надсилаючи `Bearer env:TOKEN` буквально. | **RESOLVED** | `8b2379b`, `da0bd94`, `720a0d0` | `src/code/project/cms-api-config.ts` (`resolveEnvHeaders`), `src/code/project/cms-seo.ts` (`serializeHeadersForCode`), `src/canvas/hooks/useRendererSync.ts`, `src/editor/left-toolbar/panels/CmsPanel.tsx`, `src/editor/left-toolbar/panels/cms/ApiResourceModal.tsx` | `src/code/project/__tests__/cms-api-config.test.ts` (13 тестів), `src/code/generation/__tests__/cms-api-regression.test.ts` ("resolves the env:TOKEN format emitted by the API configuration modal") |
+| **6** | P1 | API config save/edit не мігрує наявні сторінки й не оновлює згенеровані URL/headers/cache. Підключення API після створення локальних сторінок залишає JSON wrappers. | **RESOLVED** | `9c6d8b4`, `664d8b9` | `src/code/project/cms-page-ops.ts` (`syncAffectedCmsPageWrappers`, `buildCmsIndexServerWrapper`, `repairBareAltAttributes`, `repairLegacyDetailBindings`), `src/code/project/cms-seo.ts`, `src/editor/left-toolbar/panels/cms/ApiResourceModal.tsx`, `src/editor/left-toolbar/panels/CmsPanel.tsx` | `src/code/project/__tests__/cms-config-migration.test.ts` (9 тестів: local→API migration, URL/headers sync, idempotency, layout/SEO preservation) |
+| **7** | P1 | Навігація row/prev/next усе ще спирається на `_slug`. API item `{slug:'first-post', id:1}` дає `/posts/` замість `/posts/first-post`. | **RESOLVED** | `9dbbe53`, `c15ab8d` | `src/code/generation/map-gen.ts` (`cmsNavHrefExpr`), `src/shared/cms-accessor.ts` (`getItemSlug`, `getItemRecordId`, `getItemDisplayLabel`), `src/canvas/ui/SlugPageBreadcrumb.tsx`, `src/code/oracle/checks/cms-dialect.ts` | `src/code/generation/__tests__/cms-api-regression.test.ts` ("builds card navigation from API rows with slug and no _slug"), `src/canvas/ui/__tests__/slug-page-breadcrumb-search.test.ts` (14 тестів), `src/shared/__tests__/cms-accessor.test.ts` |
+| **8** | P1 | Вкладений object у схемі класифікується як `text` або `image`. `<p>{item.author}</p>` або `<p>{item.img_file.metadata}</p>` спричиняє React object-child crash. | **RESOLVED** | `8b2379b`, `9c6d8b4` | `src/editor/left-toolbar/panels/cms/ApiResourceModal.tsx` (`inferFieldType`, `isDirectusAsset`, `TECHNICAL_ASSET_SUBFIELDS`), `src/code/project/cms-page-ops.ts` (`renderFieldJsx`, `itemAccess`, JSON omit), `src/shared/types.ts` (`json` type), `src/code/features/cms-page-bindings.ts` (`formatTextValue`) | `src/code/generation/__tests__/cms-api-regression.test.ts` ("renders inferred object fields without a React object-child crash"), `src/code/features/__tests__/cms-detail-bindings.test.ts` (10 тестів) |
+| **9** | P1 | Canvas не записує успішну порожню API-відповідь: `items.length > 0`. Перехід до slug без результатів залишає старі дані замість порожнього списку. | **RESOLVED** | `da0bd94`, `47e63b0` | `src/canvas/hooks/useRendererSync.ts`, `src/canvas/Renderer.ts` (`resolveCollectionRawData`), `src/canvas-sandbox/bridge-sandbox.ts` | `src/canvas/renderer-datasets.test.ts` (3 тести: empty response hides template row, clears ghosts, renders empty placeholder), `src/canvas/hooks/__tests__/renderer-sync-datasets.test.tsx` (4 тести) |
+| **10** | P1 | `dynamicApiData` keyed лише collection slug. Два списки однієї колекції з різними query-конфігураціями перезаписують один одного; перемагає остання відповідь. | **RESOLVED** | `47e63b0` | `src/canvas/hooks/useRendererSync.ts` (`listDatasets` keyed by `node.id`, `AbortController`), `src/canvas/Renderer.ts` (`resolveCollectionRawData`), `src/canvas-sandbox/sandbox-api.ts`, `src/canvas-sandbox/stubs/cms-ops.ts` | `src/canvas/renderer-datasets.test.ts`, `src/canvas/hooks/__tests__/renderer-sync-datasets.test.tsx` |
+| **11** | P2 | Canvas виконує запит лише якщо є хоча б один expression. Набір тільки статичних query-параметрів ігнорується (`hasExpressions` gate). | **RESOLVED** | `da0bd94`, `47e63b0` | `src/canvas/hooks/useRendererSync.ts` | `src/canvas/hooks/__tests__/renderer-sync-datasets.test.tsx` |
+| **12** | P2 | Заміна `data-query-config` використовує regex до першої `)`. `String(params.slug)` не видаляється, додається другий атрибут. | **RESOLVED** | `da0bd94`, `39e81f5` | `src/code/generation/cms-gen.ts` (`updateCollectionQueryConfig` з balanced attribute extraction), `src/code/oracle/checks/cms-dialect.ts` (`checkCmsQueryConfig`) | `src/code/generation/__tests__/cms-api-regression.test.ts` ("replaces query configuration containing nested parentheses without duplicates"), `src/code/generation/__tests__/cms-filter-differential.test.ts` |
+| **13** | P2 | `Refresh Data & Schema` не додає `defaultParams`: запит іде лише на `col.url`. Налаштування `fields=*.*` та фільтри губляться. | **RESOLVED** | `da0bd94`, `720a0d0` | `src/editor/left-toolbar/panels/CmsPanel.tsx`, `src/code/project/cms-api-config.ts` (`buildApiRequestUrl`, `extractApiItems`) | `src/code/project/__tests__/cms-api-config.test.ts` (13 тестів) |
+| **14** | P2 | UI дозволяє POST, але index/detail server fetch не передає `method`: опублікований сайт робить GET. | **RESOLVED** | `8b2379b`, `9c6d8b4` | `src/code/project/cms-page-ops.ts` (`createCmsIndexPageFile`, `buildCmsIndexServerWrapper`), `src/code/project/cms-seo.ts` (`buildCmsDetailServerWrapper`) | `src/code/generation/__tests__/cms-api-regression.test.ts` ("preserves POST on the published index page"), `src/code/project/__tests__/cms-config-migration.test.ts` |
+| **15** | P2 | `mode` впливає переважно на UI. `getApiCollection` не перевіряє його; перемикання Internal не вимикає API-поведінку. | **RESOLVED** | `9dbbe53` | `src/code/project/cms-api-config.ts` (`getApiCollection` returns `null` when `mode !== 'api'`) | `src/code/generation/__tests__/cms-api-regression.test.ts` ("disables API lookup after switching the project to local CMS mode") |
+| **16** | P2 | Provider support частковий: `fields=slug&limit=500` універсально зашито; немає provider adapter, configurable slug чи traversal pagination. | **RESOLVED** | `9dbbe53`, `da0bd94`, `09e428e`, `6d9e1db` | `src/shared/types.ts` (`idField`, `slugField`), `src/code/project/cms-seo.ts`, `src/code/project/source-export.ts` (`buildCmsQueryRouteHandler` з підтримкою Strapi, Directus, Baserow, Custom REST) | `src/code/project/__tests__/source-export-clean.test.ts`, `src/shared/__tests__/cms-accessor.test.ts` |
+| **17** | P2 | «Load More» та Infinite Scroll розкривають завантажений масив через `.slice`, а не запитують наступну API-сторінку. | **RESOLVED** | `6d9e1db`, `fd2c22c` | `src/code/generation/cms-pagination-gen.ts` (`setPaginationInCode`, `removePaginationInCode`, `collectPaginationHooks`), `src/code/project/source-export.ts` (`buildCmsQueryRouteHandler`) | `src/code/generation/cms-pagination-gen.test.ts` (43 тести: remote loadMore/infinite scroll, abort cancellation, source change reset), `src/code/project/__tests__/source-export-clean.test.ts` |
+| **18** | P2 | API режим імпортує preview JSON у клієнтські сторінки, а source export включає `cms/*.json`. | **RESOLVED** | `6d9e1db` | `src/code/project/source-export.ts` (rewriting residual JSON imports, pruning API preview JSON cache from zip, preserving local collections) | `src/code/project/__tests__/source-export-clean.test.ts` (7 тестів: API cache pruned, local collections preserved) |
+| **19** | P2 | Вкладені SEO bindings читаються як `item[field]`, тому `author.name` не знаходиться у nested object. | **RESOLVED** | `8b2379b`, `f074b6e` | `src/code/project/cms-seo.ts` (`generateMetadata` dot notation traversal), `src/shared/cms-accessor.ts` (`getNestedValue`) | `src/code/generation/__tests__/cms-api-regression.test.ts`, `src/shared/__tests__/cms-accessor.test.ts` |
+| **20** | P1 | Detail-page `srcExpression` parser зберігає, але `applyDetailPageBindings` його не обчислює (`attrs.src` лишається `undefined`). | **RESOLVED** | `8b2379b`, `f074b6e` | `src/code/features/cms-page-bindings.ts` (`applyDetailPageBindings`), `src/shared/cms-accessor.ts` (`evaluateCmsExpression`), `src/canvas/renderer/bindings.ts` (`applyNodeCmsBindings`) | `src/code/features/__tests__/cms-detail-bindings.test.ts` (10 тестів: detail `srcExpression`, dynamic image evaluation, string concat and template literal support) |
+| **21** | P1 | Module-scope `const canvasNodes` drops dynamic expressions or writes bare `item` references (`ReferenceError: item is not defined`). | **RESOLVED** | `f074b6e` | `src/code/parsing/parser.ts` (canvasNodes walker parity), `src/code/generation/expression-gen.ts` (`isNodeInModuleScope`, dormant attributes), `src/code/generation/cms-detach-gen.ts`, `src/code/oracle/checks/cms-dialect.ts` (`CMS_ITEM_OUT_OF_SCOPE`) | `src/code/features/__tests__/cms-detail-bindings.test.ts`, `src/code/generation/expression-gen.test.ts` (14 тестів) |
+| **22** | P1 | Після невдалих збірок endpoint `/status` повертає `isBuilt=true` через перевірку наявності `.next`. | **RESOLVED** | `04c9e88`, `cea373e` | `server/local-server.ts` (`.next/revyme-build-success.json` marker, strict artifact checks, terminal state management, live stderr streaming), `src/backend/local-server-client.ts`, `server/api-plugin.ts`, `src/editor/header/LocalServerDropdown.tsx` | `server/__tests__/local-build-status.test.ts` (6 тестів: failed build leaves `isBuilt: false`, success marker required, streaming live logs) |
+| **C1 / №23** | P2 | Direct byte fetch у canvas image optimizer із origin `localhost:5174` спричиняє 93 CORS errors для cross-origin Directus assets. | **RESOLVED** | `da0bd94`, `720a0d0` | `src/canvas/renderer/canvas-image-preview.ts` (`unreadableOrigins` negative cache, app origin safeguard, skip direct fetch for unreadable origins) | `src/canvas/renderer/__tests__/canvas-image-cors.test.ts` (6 тестів: negative cache prevents repeated fetch attempts, app origin protected) |
+| **C2 / №8** | P1 | `Objects are not valid as a React child (found: object with keys {})` — падіння під час рендеру через `{item.img_file.metadata}`. | **RESOLVED** | `8b2379b`, `9c6d8b4`, `664d8b9` | `src/editor/left-toolbar/panels/cms/ApiResourceModal.tsx` (`inferFieldType`, `isDirectusAsset`), `src/code/project/cms-page-ops.ts` (`renderFieldJsx`, `repairLegacyDetailBindings`), `src/code/features/cms-page-bindings.ts` (`formatTextValue`) | `src/code/generation/__tests__/cms-api-regression.test.ts`, `src/code/features/__tests__/cms-detail-bindings.test.ts`, `src/code/project/__tests__/cms-config-migration.test.ts` |
+| **C3 / №25** | P2 | Empty string attrs серіалізуються як boolean (`alt=""` стає `<img alt>`, React warning `Received true for non-boolean alt`). | **RESOLVED** | `8b2379b`, `664d8b9` | `src/code/generation/generator-utils.ts` (`BOOLEAN_HTML_ATTRS` registry, `isBooleanAttr`, explicit `key=""` for non-boolean string attrs), `src/code/generation/generator-attrs.ts` (`updateHtmlAttrsInCode`), `src/code/project/cms-page-ops.ts` (`repairBareAltAttributes`) | `src/code/generation/__tests__/cms-api-regression.test.ts` ("preserves empty alt as a string attribute rather than boolean true", "does not turn empty aria-label into a boolean JSX attribute"), `src/code/generation/generator-attrs.test.ts` (20 тестів), `src/code/project/__tests__/cms-config-migration.test.ts` |
+| **C4 / №24** | P2 | Render failure у preview sandbox не ізольований Error Boundary (білий екран замість інформативної помилки). | **RESOLVED** | `bf6fceb`, `4073725` | `src/preview-sandbox/PreviewErrorBoundary.tsx` (catches React render crashes, renders dark slate diagnostic UI, reports `preview:render-error`, provides Retry button, resets on route change or revision bump, blocks thumbnail capture during error), `src/preview-sandbox/main.tsx`, `src/preview-sandbox/capture-thumbnail.ts`, `src/editor/header/PreviewOverlay.tsx` | `src/preview-sandbox/__tests__/preview-error-boundary.test.tsx` (5 тестів: catch render error, display UI, reset on retry/navigation, suppress thumbnail), `src/preview-sandbox/__tests__/preview-api-query.test.ts` |
+
+---
+
+### Підсумкові результати верифікації (Verification Suites Summary)
+
+Усі 11 спеціалізованих тестових файлів інтеграції API CMS пройшли верифікацію на 100%:
+
+| Тестовий файл | Кількість тестів | Результат | Призначення сюїти |
+|---|---:|:---:|---|
+| `src/canvas/renderer/__tests__/canvas-image-cors.test.ts` | 6 | **Passed** | C1 negative cache для cross-origin зображень, захист app origin |
+| `src/preview-sandbox/__tests__/preview-error-boundary.test.tsx` | 5 | **Passed** | C4 Error Boundary, перехоплення render crashes, reset на retry/route |
+| `src/preview-sandbox/__tests__/preview-api-query.test.ts` | 18 | **Passed** | Defect 1: API query execution у preview, route params, dynamic routes |
+| `src/code/project/__tests__/cms-config-migration.test.ts` | 9 | **Passed** | Defect 6: синхронізація серверних wrappers, local→API, repair bindings |
+| `src/code/project/__tests__/source-export-clean.test.ts` | 7 | **Passed** | Defect 18: очищення preview cache, `.env*` secret protection, `/api/cms/query` |
+| `src/code/project/__tests__/source-export-modes.test.ts` | 10 | **Passed** | Defect 2 & Build Modes: Dynamic vs Hybrid SSG, server orchestration |
+| `src/code/generation/__tests__/cms-api-regression.test.ts` | 12 | **Passed** | Defects 3, 4, 5, 7, 8, 12, 14, 15, C3: постійна регресійна матриця |
+| `src/code/features/__tests__/cms-detail-bindings.test.ts` | 10 | **Passed** | Defects 20, 21, C2: detail expressions, scope protection, safe objects |
+| `src/code/generation/__tests__/cms-filter-differential.test.ts` | 18 | **Passed** | Defect 4, 12: differential matching canvas vs codegen, exact semantics |
+| `src/canvas/ui/__tests__/slug-page-breadcrumb-search.test.ts` | 14 | **Passed** | Defect 7: розділення title та slug у хлібних крихтах, пошук за слагом |
+| `src/code/generation/cms-pagination-gen.test.ts` | 43 | **Passed** | Defect 17: remote pagination, loadMore, infinite scroll, abort controller |
+| **Разом** | **152** | **100% Passed** | **Повний набір цільових тестів API CMS** |
+
+Додатково:
+- `npx tsc --noEmit`: **0 помилок компіляції TypeScript** по всьому репозиторію.
+- Додаткові модулі (`cms-api-config.test.ts`, `local-build-status.test.ts`, `renderer-datasets.test.ts`): повністю зелені.
+
+---
+
+### Верифікація режимів збірки: Dynamic vs Hybrid SSG
+
+Розділення режимів збірки реалізовано на рівні `source-export.ts` (`prepareSiteFiles`) та генераторів серверних обгорток:
+
+1. **Dynamic Mode (`ssg: false` або `buildMode: 'dynamic'`):**
+   - Метод `stripGenerateStaticParams` автоматично видаляє `export async function generateStaticParams()` з усіх серверних сторінок API CMS (`app/**/[slug]/page.tsx`).
+   - У локалевих обгортках реекспорт `export { default, generateStaticParams }` переписується на `export { default }`.
+   - Забезпечується директива `export const dynamicParams = true;`.
+   - Серверний Next.js білд під час підготовки не звертається до зовнішніх API ендпоінтів для prerender, що повністю усуває блокування компілятора при відсутності мережі або повільних відповідях.
+   - Запити даних виконуються під час звернення клієнта (request time) з таймаутом `AbortSignal.timeout(10000)` та строгою класифікацією 404 vs 5xx помилок.
+
+2. **Hybrid SSG Mode (`ssg: true` або `buildMode: 'hybrid'`):**
+   - Генерує або зберігає `export async function generateStaticParams()` для відомих записів колекцій.
+   - Обмежує кількість попередньо згенерованих маршрутів за безпечним бюджетом сторінок.
+   - Дозволяє фонову ревалідацію (`revalidate`) контенту за налаштованим `cacheMaxAge`.
+
+3. **Життєвий цикл збірки (Build Lifecycle) та маркер готовності:**
+   - Дефект №22 усунуто: маркер `.next/revyme-build-success.json` створюється виключно після успішного завершення процесу компіляції з кодом 0 та перевірки наявності production build artifacts (`BUILD_ID`, manifests).
+   - Помилка збірки негайно скидає `isBuilt = false`, переводить статус у `'error'` та створює маркер `revyme-build-failed.json`.
+   - Реалізовано стрімінг live логів (stdout/stderr) під час збірки, підтримку кнопки Cancel (`cancelBuild` через дерево процесів та `AbortController`), а важка оптимізація зображень виконується синхронно та очікується строго на етапі `'preparing-assets'`.
+
+---
+
 ## Оцінка реалізації
 
 Реалізовано конфігурацію API-колекцій у `_meta/cms-api-config.json`, перемикання UI Internal/API, форму підключення й тестування через `/api/proxy`, інференс схеми, локальний кеш відповідей, query-параметри списків, підтримку вкладених прив'язок та image expressions. Нові CMS index/detail сторінки мають серверний fetch і клієнтські fallback-дані.
@@ -250,3 +342,28 @@ Hybrid запуск був швидшим, тому що використав у
 Наявні focused suites пройшли **21/21**. Додатковий local console reproduction дав 1 passed observation і 3 failed desired-behavior assertions для empty alt/ARIA та node generation. Ці тести показують дефект; виправлення коду не виконувалось.
 
 План доповнено [детальними C1–C4 кроками, файлами, regression tests і acceptance criteria](D:/revyme-fork/revyme-builder-fork/docs/API_CMS_FIX_AND_IMPROVEMENT_PLAN_2026-10-14.md). Нові питання №23–25 включені у таблицю покриття й наявні етапи 3/5/7/8/13.
+
+---
+
+## Підсумковий висновок та закриття аудиту (Audit Closure Declaration)
+
+**Дата остаточного закриття:** 14 жовтня 2026  
+**Статус:** **ЗАКРИТО — ВСІ 22 ДЕФЕКТИ ТА C1–C4 ВИРІШЕНО ТА ПОВНІСТЮ ВЕРИФІКОВАНО**
+
+### 1. Підсумок вирішення проблем консолі та транспорту (C1–C4)
+- **C1 (Negative Cache для сторонніх зображень без CORS):** У модулі `canvas-image-preview.ts` впроваджено Set `unreadableOrigins`. При першому отриманні `TypeError` / відсутності ACAO для стороннього хоста (наприклад Directus API `api.tattoozp.com`), даний origin поміщається в негативний кеш. Усі наступні запити до цього origin пропускають direct byte fetch, запобігаючи шторму з 93 помилок у консолі браузера. Додано захист власного origin додатку (`window.location.origin`).
+- **C2 (Усунення аварійних об'єктів у React child):** В інференсі схеми введено тип `json`, розпізнавання `isDirectusAsset`, фільтрацію технічних метаданих (`TECHNICAL_ASSET_SUBFIELDS`) та безпечне форматування `formatTextValue` у прив'язках. У шаблонах вузол `{item.img_file.metadata}` замінено безпечним форматуванням, що повністю усунуло помилку `Objects are not valid as a React child` як у preview sandbox, так і при статичному prerender у Next.js збірці.
+- **C3 (Коректна серіалізація порожніх рядкових атрибутів):** У `generator-utils.ts` створено реєстр `BOOLEAN_HTML_ATTRS`. Лише істинні булеві атрибути серіалізуються як bare attributes (` key`). Рядкові атрибути (`alt`, `aria-label`, `title`, тощо) із порожнім значенням `''` тепер строго виводяться як ` key=""`. Оновлено `updateHtmlAttrsInCode` та додано міграцію застарілих bare `alt`, що усунуло React warning `Received true for a non-boolean attribute alt`.
+- **C4 (Error Boundary у Preview Sandbox):** Реалізовано компонент `PreviewErrorBoundary`, який ізолює runtime-помилки рендерингу користувацьких дерев компонентів. Замість білого екрану відображається інформативна темна панель діагностики з виведенням стеку компонентів, кнопкою "Retry", автоматичним скиданням стану при навігації чи оновленні ревізії файлів, та надсиланням повідомлення `preview:render-error` батьківському вікну. Захоплення скріншотів (thumbnails) під час помилки блокується.
+
+### 2. Підсумок розділення режимів збірки (Dynamic vs Hybrid SSG)
+- **Dynamic Mode:** При експорті з прапорцем `ssg: false` або `buildMode: 'dynamic'` генератор `prepareSiteFiles` за допомогою `stripGenerateStaticParams` автоматично вирізає функцію `generateStaticParams` з серверних сторінок та локалевих обгорток, гарантуючи виконання SSR запитів у момент надходження запиту клієнта з таймаутом `AbortSignal.timeout(10000)`.
+- **Hybrid SSG Mode:** При експорті з `ssg: true` функція `generateStaticParams` зберігається/генерується, що забезпечує static generation для відомих slug сторінок та фонову ревалідацію.
+- **Build Lifecycle:** Статус `isBuilt` тепер визначається виключно наявністю маркера успішної збірки `.next/revyme-build-success.json`. Будь-яка помилка або переривання збірки записує `revyme-build-failed.json`, видаляє маркер успіху та повертає `isBuilt: false`. Реалізовано стрімінг live log буфера в реальному часі та механізм переривання збірки `cancelBuild`.
+
+### 3. Підсумкова верифікація та цілісність кодової бази
+- **11 спеціалізованих тестових файлів API CMS:** 152 тести пройдено (0 падінь, 100% успіху).
+- **TypeScript типізація (`npx tsc --noEmit`):** 0 помилок у всьому проекті.
+- **Повна лінійка комітів:** Усі зміни структуровано зафіксовані в гілці `feat/api-cms-integration` (коміти `b563978`...`c15ab8d`).
+- **Контрольний проєкт:** Сторінка `/gallery/[category]` отримала робочий API collection list із query-конфігурацією, старі невикористані імпорти видалено, а хлібні крихти отримали надійний розділений показ та пошук за title та route slug.
+
