@@ -131,7 +131,7 @@ export function ensureCmsImageUtilsImport(ast: t.File): void {
  */
 export function injectResponsiveImageSrcSets(
   code: string,
-  apiConfigs?: Record<string, ApiCollectionConfig>,
+  apiConfigs?: Record<string, Partial<ApiCollectionConfig>>,
 ): string {
   if (!code.includes('<img') && !code.includes('<motion.img')) return code;
 

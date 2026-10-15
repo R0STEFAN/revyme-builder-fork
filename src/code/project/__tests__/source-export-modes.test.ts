@@ -11,7 +11,7 @@ import {
   injectResponsiveImageSrcSets,
 } from '../source-export';
 import { buildCmsDetailServerWrapper } from '../cms-seo';
-import { saveApiCollection, setCmsMode } from '../cms-api-config';
+import { saveApiCollection, setCmsMode, type ApiCollectionConfig } from '../cms-api-config';
 
 beforeEach(() => {
   saveApiCollection('posts', {
@@ -470,12 +470,18 @@ describe('buildCmsQueryRouteHandler caching & revalidate', () => {
       articles: {
         slug: 'articles',
         name: 'Articles',
+        provider: 'directus' as const,
+        method: 'GET',
+        headers: {},
         url: 'https://cms.example.com/items/articles',
         revalidateTtl: 300,
       },
       tags: {
         slug: 'tags',
         name: 'Tags',
+        provider: 'directus' as const,
+        method: 'GET',
+        headers: {},
         url: 'https://cms.example.com/items/tags',
       },
     });
@@ -537,16 +543,19 @@ export default function Page() {
   );
 }
 `;
-    const apiConfigs = {
+    const apiConfigs: Record<string, ApiCollectionConfig> = {
       banner: {
         slug: 'banner',
         name: 'Banner',
+        provider: 'directus',
+        method: 'GET',
+        headers: {},
         url: 'https://cms.example.com/items/banner',
         imageOptimization: {
           enabled: true,
-          engine: 'directus' as const,
+          engine: 'directus',
           quality: 80,
-          format: 'webp' as const,
+          format: 'webp',
         },
       },
     };
@@ -572,14 +581,17 @@ export default function Page() {
   );
 }
 `;
-    const apiConfigs = {
+    const apiConfigs: Record<string, ApiCollectionConfig> = {
       banner: {
         slug: 'banner',
         name: 'Banner',
+        provider: 'directus',
+        method: 'GET',
+        headers: {},
         url: 'https://cms.example.com/items/banner',
         imageOptimization: {
           enabled: true,
-          engine: 'directus' as const,
+          engine: 'directus',
         },
       },
     };
