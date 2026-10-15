@@ -36,7 +36,13 @@
 //     export, the static export and the preview sandbox intact; a field id
 //     read at runtime does not.
 
-import { parseLocalObjectFromCode } from '../generation/metadata-gen';
+import {
+  parseLocalObjectFromCode,
+  updateMetadataInCode,
+  extractExportObject,
+  moduleParses,
+  type SiteMetadata,
+} from '../generation/metadata-gen';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { getApiCollection, type ApiCollectionConfig } from './cms-api-config';
 
@@ -486,6 +492,205 @@ export default function Page() {
   return <PageClient />;
 }
 `;
+}
+
+/**
+ * Remove any generated dynamic SEO blocks (`seoDefaults`, `seoBindings`, `seoExpressions`,
+ * and `export async function generateMetadata`) from a page server wrapper.
+ */
+export function stripGenerateMetadataFromCode(code: string): string {
+  let cleaned = code;
+  cleaned = cleaned.replace(/(?:export\s+)?const\s+seoDefaults(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
+  cleaned = cleaned.replace(/(?:export\s+)?const\s+seoBindings(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
+  cleaned = cleaned.replace(/(?:export\s+)?const\s+seoExpressions(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
+
+  const genMetaIdx = cleaned.indexOf('export async function generateMetadata');
+  if (genMetaIdx !== -1) {
+    const paramOpen = cleaned.indexOf('(', genMetaIdx);
+    if (paramOpen !== -1) {
+      let parenDepth = 0;
+      let paramClose = -1;
+      for (let i = paramOpen; i < cleaned.length; i++) {
+        if (cleaned[i] === '(') parenDepth++;
+        else if (cleaned[i] === ')') {
+          parenDepth--;
+          if (parenDepth === 0) {
+            paramClose = i;
+            break;
+          }
+        }
+      }
+      if (paramClose !== -1) {
+        const braceStart = cleaned.indexOf('{', paramClose);
+        if (braceStart !== -1) {
+          let depth = 0;
+          let endIdx = -1;
+          for (let i = braceStart; i < cleaned.length; i++) {
+            if (cleaned[i] === '{') depth++;
+            else if (cleaned[i] === '}') {
+              depth--;
+              if (depth === 0) {
+                endIdx = i + 1;
+                break;
+              }
+            }
+          }
+          if (endIdx !== -1) {
+            while (endIdx < cleaned.length && (cleaned[endIdx] === '\n' || cleaned[endIdx] === '\r' || cleaned[endIdx] === ' ')) {
+              endIdx++;
+            }
+            cleaned = cleaned.slice(0, genMetaIdx) + cleaned.slice(endIdx);
+          }
+        }
+      }
+    }
+  }
+  return cleaned;
+}
+
+export function formToSiteMetadata(defaults: Record<string, unknown>): SiteMetadata {
+  return {
+    title: (defaults.title as string) || undefined,
+    description: (defaults.description as string) || undefined,
+    openGraph: {
+      title: (defaults.ogTitle as string) || undefined,
+      description: (defaults.ogDescription as string) || undefined,
+      images: defaults.ogImage ? [defaults.ogImage as string] : [],
+    },
+    twitter: {
+      card: defaults.twitterCard || undefined,
+      title: defaults.twitterTitle || undefined,
+      description: defaults.twitterDescription || undefined,
+      image: defaults.twitterImage || undefined,
+    } as Record<string, unknown>,
+    alternates: {
+      canonical: defaults.canonical || undefined,
+    } as Record<string, unknown>,
+    robots: {
+      index: defaults.robotsIndex !== false,
+      follow: defaults.robotsFollow !== false,
+    } as Record<string, unknown>,
+  };
+}
+
+export interface BuildStandardWrapperInput {
+  defaults?: Record<string, unknown>;
+  expressions?: CmsSeoExpressions;
+  existingCode?: string;
+}
+
+/**
+ * Server wrapper generator for standard (non-CMS detail) pages.
+ *
+ * Supports both static metadata (`export const metadata = { ... }`) and dynamic
+ * expressions (`generateMetadata` evaluating formulas with `params`).
+ * Ensures Next.js invariants: never emits both `metadata` and `generateMetadata` simultaneously.
+ */
+export function buildStandardPageServerWrapper(input: BuildStandardWrapperInput): string {
+  const { defaults = {}, expressions = {}, existingCode = '' } = input;
+  const hasExprs = Object.values(expressions).some((v) => typeof v === 'string' && v.trim().length > 0);
+
+  if (!hasExprs) {
+    const siteMeta = formToSiteMetadata(defaults);
+    const cleaned = stripGenerateMetadataFromCode(existingCode);
+    const fallbackWrapper = `import PageClient from './page.client';\n\nexport const metadata = {};\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
+    return updateMetadataInCode(cleaned.trim().length > 0 ? cleaned : fallbackWrapper, siteMeta);
+  }
+
+  // Dynamic expressions present: emit generateMetadata
+  const defaultsLiteral = inlineObject([
+    ['title', defaults.title],
+    ['description', defaults.description],
+    ['ogTitle', defaults.ogTitle],
+    ['ogDescription', defaults.ogDescription],
+    ['ogImage', defaults.ogImage],
+    ['twitterCard', defaults.twitterCard],
+    ['twitterTitle', defaults.twitterTitle],
+    ['twitterDescription', defaults.twitterDescription],
+    ['twitterImage', defaults.twitterImage],
+    ['canonical', defaults.canonical],
+  ]);
+
+  const allExpressionSlots = [
+    'title', 'description', 'canonical',
+    'ogTitle', 'ogDescription', 'ogImage',
+    'twitterTitle', 'twitterDescription', 'twitterImage',
+  ];
+  const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
+
+  const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
+    ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
+    : '';
+
+  // Clean existing code: remove export const metadata and any existing generateMetadata
+  let base = existingCode;
+  const metaBlock = extractExportObject(base, 'metadata');
+  if (metaBlock) {
+    base = base.slice(0, metaBlock.start) + base.slice(metaBlock.end);
+  }
+  base = stripGenerateMetadataFromCode(base);
+
+  const dynBlock = `const seoDefaults = ${defaultsLiteral};
+
+const seoExpressions = ${expressionsLiteral};
+
+export async function generateMetadata({ params }) {
+  const resolved = (await params) || {};
+  const evalExpr = (expr) => {
+    try {
+      const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+      const fn = new Function('params', 'item', \`return (\${unwrapped});\`);
+      const val = fn(resolved, {});
+      if (val === undefined || val === null) return undefined;
+      if (typeof val === 'object') {
+        return val.url || (val.id ? \`/assets/\${val.id}\` : undefined) || val.filename_disk || undefined;
+      }
+      return String(val);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const pick = (slot, fallbackSlot) => {
+    const expr = seoExpressions[slot];
+    if (expr) {
+      const v = evalExpr(expr);
+      if (v !== undefined && v !== '') return v;
+    }
+    return seoDefaults[slot] ?? (fallbackSlot ? (seoExpressions[fallbackSlot] ? evalExpr(seoExpressions[fallbackSlot]) : seoDefaults[fallbackSlot]) : undefined);
+  };
+
+  const title = pick('title');
+  const description = pick('description');
+  const ogImage = pick('ogImage');
+  const twitterImage = pick('twitterImage') ?? ogImage;
+  const canonical = pick('canonical');
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: pick('ogTitle', 'title'),
+      description: pick('ogDescription', 'description'),
+      images: ogImage ? [ogImage] : [],
+    },
+    twitter: {
+      card: seoDefaults.twitterCard || undefined,
+      title: pick('twitterTitle', 'title'),
+      description: pick('twitterDescription', 'description'),
+      image: twitterImage,
+    },
+    alternates: { canonical: canonical || seoDefaults.canonical || undefined },${robots}
+  };
+}`;
+
+  if (base.includes('export default')) {
+    const defIdx = base.indexOf('export default');
+    const out = base.slice(0, defIdx).trimEnd() + '\n\n' + dynBlock + '\n\n' + base.slice(defIdx).trimStart();
+    if (moduleParses(out)) return out;
+  }
+
+  return `import PageClient from './page.client';\n\n${dynBlock}\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
 }
 
 /** The collection a detail page's wrapper imports, when it has per-item SEO. */

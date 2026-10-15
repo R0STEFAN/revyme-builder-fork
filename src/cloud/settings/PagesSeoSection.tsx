@@ -42,6 +42,7 @@ import {
   type CmsSeoExpressions,
   bindableFields,
   buildCmsDetailServerWrapper,
+  buildStandardPageServerWrapper,
   hasCmsSeo,
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
@@ -388,9 +389,9 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     // `generateMetadata`. Legacy detail pages still have the plain
     // `export const metadata` and read through the normal path until the
     // first save migrates them.
-    if (cms && hasCmsSeo(code)) return { ...EMPTY_META, ...(parseCmsSeoDefaults(code) as Partial<PageMeta>) };
+    if (hasCmsSeo(code)) return { ...EMPTY_META, ...(parseCmsSeoDefaults(code) as Partial<PageMeta>) };
     return metaToForm(parseMetadataFromCode(code));
-  }, [metadataPath, version, cms]);
+  }, [metadataPath, version]);
 
   const initialBindings = useMemo<CmsSeoBindings>(() => {
     void version;
@@ -403,9 +404,8 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
 
   const initialExpressions = useMemo<CmsSeoExpressions>(() => {
     void version;
-    if (!cms) return {};
     return parseCmsSeoExpressions(projectFS.readFile(metadataPath) ?? '');
-  }, [cms, metadataPath, version]);
+  }, [metadataPath, version]);
 
   const [expressions, setExpressions] = useState<CmsSeoExpressions>(initialExpressions);
   useEffect(() => { setExpressions(initialExpressions); }, [initialExpressions]);
@@ -437,6 +437,12 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // silently ignores in favour of `generateMetadata` — the edit would look
   // saved and never render.
   const writeMeta = useCallback((next: PageMeta, nextBindings: CmsSeoBindings, nextExpressions: CmsSeoExpressions) => {
+    if (!projectFS.exists(metadataPath)) {
+      projectFS.writeFile(
+        metadataPath,
+        `import PageClient from './page.client';\n\nexport const metadata = {};\n\nexport default function Page() {\n  return <PageClient />;\n}\n`,
+      );
+    }
     if (cms) {
       modifyProjectFile(metadataPath, () =>
         buildCmsDetailServerWrapper({
@@ -447,7 +453,12 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
         }));
       return;
     }
-    modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, formToMeta(next)));
+    modifyProjectFile(metadataPath, (code) =>
+      buildStandardPageServerWrapper({
+        defaults: next as unknown as Record<string, unknown>,
+        expressions: nextExpressions,
+        existingCode: code,
+      }));
   }, [cms, metadataPath]);
 
   const save = useCallback(() => {
@@ -555,14 +566,8 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // form state (a follow-up Save button click commits those).
   const commitImageField = useCallback((field: 'ogImage' | 'twitterImage', url: string) => {
     trace.action('pages-seo:commit-image', { field, hasUrl: url.length > 0, urlLen: url.length });
-    // A bound wrapper has no `metadata` export to patch — regenerate it with
-    // the new URL as that slot's static value.
-    if (cms) { writeMeta({ ...form, [field]: url }, bindings, expressions); return; }
-    const partial: SiteMetadata = field === 'ogImage'
-      ? { openGraph: { images: url ? [url] : [] } }
-      : { twitter: { image: url || '' } as Record<string, unknown> };
-    modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, partial));
-  }, [metadataPath, cms, form, bindings, expressions, writeMeta]);
+    writeMeta({ ...form, [field]: url }, bindings, expressions);
+  }, [form, bindings, expressions, writeMeta]);
 
   return (
     <div className="space-y-8">
@@ -766,7 +771,14 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
             expressions[activeExprSlot.slot] ||
             (bindings[activeExprSlot.slot as CmsSeoSlot]
               ? `item.${bindings[activeExprSlot.slot as CmsSeoSlot]}`
-              : (form as any)[activeExprSlot.slot] || '')
+              : (form as any)[activeExprSlot.slot]
+                ? (typeof (form as any)[activeExprSlot.slot] === 'string' &&
+                   ((form as any)[activeExprSlot.slot].startsWith('`') ||
+                    (form as any)[activeExprSlot.slot].startsWith('"') ||
+                    (form as any)[activeExprSlot.slot].startsWith("'"))
+                    ? (form as any)[activeExprSlot.slot]
+                    : JSON.stringify(String((form as any)[activeExprSlot.slot])))
+                : '')
           }
           targetProperty={activeExprSlot.targetProperty}
           collectionSlug={cms?.collection}

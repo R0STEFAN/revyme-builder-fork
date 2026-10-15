@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import {
   buildCmsDetailServerWrapper,
+  buildStandardPageServerWrapper,
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
   parseCmsSeoExpressions,
@@ -324,5 +325,119 @@ describe('buildCmsDetailServerWrapper with seoExpressions', () => {
     expect(parsed.ogImage).toBe('item.cover');
   });
 });
+
+describe('buildStandardPageServerWrapper', () => {
+  async function runStandardGenerateMetadata(src: string, params: Record<string, string>) {
+    const body = src
+      .slice(src.indexOf('const seoDefaults'), src.indexOf('export default'))
+      .replace('export async function', 'async function');
+    const factory = new Function(`return (async function() {
+      ${body}
+      return generateMetadata({ params: Promise.resolve(${JSON.stringify(params)}) });
+    })()`);
+    return await factory();
+  }
+
+  it('generates clean static metadata when no expressions are present', () => {
+    const code = buildStandardPageServerWrapper({
+      defaults: { title: 'Home Page', description: 'Welcome home' },
+    });
+
+    expect(code).toContain('export const metadata = {');
+    expect(code).toContain('title: "Home Page"');
+    expect(code).not.toContain('generateMetadata');
+    expect(hasCmsSeo(code)).toBe(false);
+
+    const parsed = parseMetadataFromCode(code);
+    expect(parsed.title).toBe('Home Page');
+    expect(parsed.description).toBe('Welcome home');
+  });
+
+  it('generates dynamic generateMetadata with seoExpressions when expressions are provided', async () => {
+    const code = buildStandardPageServerWrapper({
+      defaults: { title: 'Default Title' },
+      expressions: {
+        title: '`Revyme · ${params.category || "All"}`',
+        canonical: '`https://example.com/${params.category}`',
+      },
+    });
+
+    expect(code).not.toContain('export const metadata');
+    expect(code).toContain('export async function generateMetadata');
+    expect(hasCmsSeo(code)).toBe(true);
+
+    const parsedExprs = parseCmsSeoExpressions(code);
+    expect(parsedExprs.title).toBe('`Revyme · ${params.category || "All"}`');
+    expect(parsedExprs.canonical).toBe('`https://example.com/${params.category}`');
+
+    const parsedDefaults = parseCmsSeoDefaults(code);
+    expect(parsedDefaults.title).toBe('Default Title');
+
+    const runtimeMeta = await runStandardGenerateMetadata(code, { category: 'shoes' });
+    expect(runtimeMeta.title).toBe('Revyme · shoes');
+    expect(runtimeMeta.alternates.canonical).toBe('https://example.com/shoes');
+  });
+
+  it('transitions from static metadata to dynamic wrapper cleanly without duplicate exports', () => {
+    const initialStatic = `import PageClient from './page.client';
+
+export const metadata = {
+  title: "Existing Static Title",
+};
+
+export default function Page() {
+  return <PageClient />;
+}
+`;
+
+    const dynamicCode = buildStandardPageServerWrapper({
+      defaults: { title: 'Existing Static Title' },
+      expressions: { title: '`Dynamic: ${params.slug}`' },
+      existingCode: initialStatic,
+    });
+
+    expect(dynamicCode).not.toContain('export const metadata');
+    expect(dynamicCode).toContain('export async function generateMetadata');
+    expect(hasCmsSeo(dynamicCode)).toBe(true);
+    expect(parseCmsSeoExpressions(dynamicCode).title).toBe('`Dynamic: ${params.slug}`');
+
+    // And transitions back to static when expressions are cleared
+    const revertedStatic = buildStandardPageServerWrapper({
+      defaults: { title: 'Existing Static Title' },
+      expressions: {},
+      existingCode: dynamicCode,
+    });
+
+    expect(revertedStatic).toContain('export const metadata = {');
+    expect(revertedStatic).not.toContain('generateMetadata');
+    expect(revertedStatic).not.toContain('seoExpressions');
+    expect(hasCmsSeo(revertedStatic)).toBe(false);
+    expect(parseMetadataFromCode(revertedStatic).title).toBe('Existing Static Title');
+  });
+
+  it('preserves custom imports and custom page body when applying expressions', () => {
+    const existing = `import PageClient from './page.client';
+import customBanner from '@/assets/banner.json';
+
+export const metadata = {};
+
+export default function Page({ params }: any) {
+  return <PageClient banner={customBanner} />;
+}
+`;
+
+    const result = buildStandardPageServerWrapper({
+      defaults: { title: 'Custom Page' },
+      expressions: { title: '`Title: ${params.id}`' },
+      existingCode: existing,
+    });
+
+    expect(result).toContain("import customBanner from '@/assets/banner.json';");
+    expect(result).toContain('export default function Page({ params }: any) {');
+    expect(result).toContain('<PageClient banner={customBanner} />');
+    expect(hasCmsSeo(result)).toBe(true);
+  });
+});
+
 
 

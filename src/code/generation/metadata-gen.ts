@@ -86,7 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 /** Locate `export const <name> = { … };` with a BALANCED, string-aware scan
  *  (quotes, template literals, escapes). Returns the full statement span and
  *  the object literal's text. Never confused by `};` inside stored strings. */
-function extractExportObject(
+export function extractExportObject(
   code: string,
   name: string,
   /** When false, a plain `const <name> = {` (no `export`) also matches. A CMS
@@ -167,7 +167,7 @@ function legacyObjectToRecord(objStr: string): Record<string, any> {
 /** Does the generated module still parse? The last line of defense — a
  *  writer bug must surface as a bounced edit, never a broken layout.tsx
  *  (a syntax error in the server layout takes down every route). */
-function moduleParses(code: string): boolean {
+export function moduleParses(code: string): boolean {
   try {
     parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     return true;
