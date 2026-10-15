@@ -746,5 +746,31 @@ export default function Page() {
     expect(out).toContain('data-prefetch="intent"');
     expect(out).toContain('router.prefetch');
   });
+
+  it('honors responsive data-prefetch overrides across breakpoints', () => {
+    const customCode = `'use client';
+import React from 'react';
+import Link from 'next/link';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <Link data-prefetch="intent" data-prefetch-tablet="viewport" data-prefetch-mobile="viewport" href="/page1">Responsive Link</Link>
+    </div>
+  );
+}
+`;
+    const files = {
+      'app/custom/page.client.tsx': customCode,
+    };
+
+    const prepared = prepareSiteFiles(files);
+    const out = prepared['app/custom/page.client.tsx'];
+    expect(out).toContain('data-prefetch="intent"');
+    expect(out).toContain('data-prefetch-tablet="viewport"');
+    expect(out).toContain('data-prefetch-mobile="viewport"');
+    expect(out).toContain('prefetch={false}');
+    expect(out).toContain('router.prefetch');
+  });
 });
 

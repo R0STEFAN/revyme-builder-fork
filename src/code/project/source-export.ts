@@ -906,8 +906,18 @@ export function injectDifferentiatedLinkPrefetch(code: string, filePath: string)
       }
     };
 
-    if (explicitPrefetch === 'off') {
+    const hasResponsivePrefetch = opening.attributes.some(
+      (a) =>
+        t.isJSXAttribute(a) &&
+        t.isJSXIdentifier(a.name) &&
+        (a.name.name === 'data-prefetch-tablet' || a.name.name === 'data-prefetch-mobile'),
+    );
+
+    if (explicitPrefetch === 'off' && !hasResponsivePrefetch) {
       setPrefetchProp(false);
+    } else if (hasResponsivePrefetch) {
+      setPrefetchProp(false);
+      injectSafeHoverPrefetch();
     } else if (explicitPrefetch === 'viewport') {
       setPrefetchProp(true);
     } else if (explicitPrefetch === 'intent') {

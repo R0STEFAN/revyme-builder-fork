@@ -513,7 +513,8 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolea
       const links = overlay.querySelectorAll('a[href^="/"]');
       const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
       links.forEach((a) => {
-        if (a.getAttribute('data-prefetch') === 'off') return;
+        const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
+        if (mode === 'off') return;
         const href = a.getAttribute('href');
         if (href && router && router.prefetch) router.prefetch(href);
       });
@@ -566,7 +567,8 @@ export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false)
         const links = overlay.querySelectorAll('a[href^="/"]');
         const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
         links.forEach((a) => {
-          if (a.getAttribute('data-prefetch') === 'off') return;
+          const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
+          if (mode === 'off') return;
           const href = a.getAttribute('href');
           if (href && router && router.prefetch) router.prefetch(href);
         });

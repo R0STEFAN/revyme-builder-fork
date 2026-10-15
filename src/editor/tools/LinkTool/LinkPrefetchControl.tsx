@@ -14,21 +14,30 @@ export type LinkPrefetchMode = 'auto' | 'intent' | 'viewport' | 'off';
 interface LinkPrefetchControlProps {
   value: LinkPrefetchMode;
   onChange: (mode: LinkPrefetchMode) => void;
+  /** Per-viewport override on a replica → label goes purple + offers Reset Override. */
+  overridden?: boolean;
+  onResetOverride?: () => void;
 }
 
-export default function LinkPrefetchControl({ value, onChange }: LinkPrefetchControlProps) {
-  trace.fn('LinkPrefetchControl:render', { value });
+export default function LinkPrefetchControl({ value, onChange, overridden, onResetOverride }: LinkPrefetchControlProps) {
+  trace.fn('LinkPrefetchControl:render', { value, overridden });
   const hoistItem = useHoistMenuItem();
 
   return (
     <div className="flex items-center justify-between w-full">
-      <ControlLabel label="Prefetch" property="data-prefetch" plain={!hoistItem} />
+      <ControlLabel
+        label="Prefetch"
+        property="data-prefetch"
+        plain={!hoistItem}
+        overridden={overridden}
+        onResetOverride={onResetOverride}
+      />
       <div className="flex items-center gap-2 w-full">
         <ToolSegmentedControl
           value={value || 'auto'}
           onChange={(val) => {
             const mode = val as LinkPrefetchMode;
-            trace.action('link-prefetch:change', { mode });
+            trace.action('link-prefetch:change', { mode, overridden });
             onChange(mode);
           }}
           options={[

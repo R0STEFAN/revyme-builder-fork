@@ -92,7 +92,7 @@ function LinkVarBoundRow({ label, property, varName, onDetach, overridden, onRes
 }
 
 export default function LinkTool() {
-  const { node, nodeId, isReplica, vpWidth } = useControl();
+  const { node, nodeId, isReplica, vpWidth, vpId } = useControl();
   const [hrefExpressionOpen, setHrefExpressionOpen] = useState(false);
   const collectionSchemas = useAtomValue(collectionSchemasAtom);
   // The active replica's banded media-query (for per-viewport link variables). Null on the primary.
@@ -112,8 +112,61 @@ export default function LinkTool() {
   const smoothScroll = node?.attrs?.['data-smooth-scroll'] ?? '';
   const relValue = node?.attrs?.rel ?? '';
   const keepParams = node?.attrs?.['data-keep-params'] ?? '';
-  const prefetchAttr = (node?.attrs?.['data-prefetch'] as LinkPrefetchMode) || 'auto';
-  // CMS detail-page navigation: the `data-cms-nav` marker (set by the Slug
+  // Prefetch strategy with responsive overrides:
+  // - Desktop (primary): `data-prefetch`
+  // - Tablet: `data-prefetch-tablet`
+  // - Mobile: `data-prefetch-mobile`
+  const basePrefetch = (node?.attrs?.['data-prefetch'] as LinkPrefetchMode) || 'auto';
+  const tabletPrefetch = node?.attrs?.['data-prefetch-tablet'] as LinkPrefetchMode | undefined;
+  const mobilePrefetch = node?.attrs?.['data-prefetch-mobile'] as LinkPrefetchMode | undefined;
+
+  const isMobileVp = isReplica && (vpId === 'mobile' || (vpWidth !== undefined && vpWidth < 810));
+  const isTabletVp = isReplica && !isMobileVp && (vpId === 'tablet' || (vpWidth !== undefined && vpWidth < 1200));
+  const activePrefetchAttrKey = isMobileVp
+    ? 'data-prefetch-mobile'
+    : isTabletVp
+      ? 'data-prefetch-tablet'
+      : isReplica
+        ? `data-prefetch-${vpId}`
+        : 'data-prefetch';
+
+  let effPrefetch: LinkPrefetchMode = basePrefetch;
+  let isPrefetchOverridden = false;
+
+  if (isReplica) {
+    if (isMobileVp) {
+      if (mobilePrefetch) {
+        effPrefetch = mobilePrefetch;
+        isPrefetchOverridden = true;
+      } else if (tabletPrefetch) {
+        effPrefetch = tabletPrefetch;
+        isPrefetchOverridden = false;
+      } else {
+        effPrefetch = basePrefetch;
+        isPrefetchOverridden = false;
+      }
+    } else if (isTabletVp) {
+      if (tabletPrefetch) {
+        effPrefetch = tabletPrefetch;
+        isPrefetchOverridden = true;
+      } else {
+        effPrefetch = basePrefetch;
+        isPrefetchOverridden = false;
+      }
+    } else {
+      const customPrefetch = node?.attrs?.[activePrefetchAttrKey] as LinkPrefetchMode | undefined;
+      if (customPrefetch) {
+        effPrefetch = customPrefetch;
+        isPrefetchOverridden = true;
+      } else {
+        effPrefetch = basePrefetch;
+        isPrefetchOverridden = false;
+      }
+    }
+  } else {
+    effPrefetch = basePrefetch;
+    isPrefetchOverridden = false;
+  }
   // control or an Insert-panel prev/next drop) records a prev/next binding.
   const cmsPageMeta = useAtomValue(cmsPageMetaAtom);
   const isDetailPage = cmsPageMeta?.kind === 'detail';
@@ -437,7 +490,7 @@ export default function LinkTool() {
   // (the auto `noopener noreferrer` on external links shouldn't auto-open Rel).
   const showRel = (!!relValue && !relVar && parseRelTokens(relValue).some(isUserRelToken)) || !!relVar || addedControls.has('rel');
   const showParams = !!keepParams || !!paramsVar || addedControls.has('params');
-  const showPrefetch = (!!prefetchAttr && prefetchAttr !== 'auto') || addedControls.has('prefetch');
+  const showPrefetch = (!!basePrefetch && basePrefetch !== 'auto') || !!tabletPrefetch || !!mobilePrefetch || addedControls.has('prefetch');
   const showTracking = !!trackingId || !!trackingVar || addedControls.has('tracking');
 
   const detachLinkVar = useCallback((attrName: string, propName: string, kind: LinkAttrKind) => {
@@ -634,15 +687,34 @@ export default function LinkTool() {
   }, [nodeId]);
 
   // Prefetch strategy — auto / intent / viewport / off
+  // Prefetch strategy — auto / intent / viewport / off (responsive-aware)
   const handlePrefetchChange = useCallback((mode: LinkPrefetchMode) => {
     if (!nodeId) return;
-    trace.action('link-tool:prefetch-change', { nodeId, mode });
+    trace.action('link-tool:prefetch-change', { nodeId, mode, isReplica, activePrefetchAttrKey });
+    if (isReplica) {
+      queueMutation({
+        type: 'updateHtmlAttrs',
+        nodeId,
+        attrs: { [activePrefetchAttrKey]: mode === 'auto' ? '' : mode },
+      });
+    } else {
+      queueMutation({
+        type: 'updateHtmlAttrs',
+        nodeId,
+        attrs: { 'data-prefetch': mode === 'auto' ? '' : mode },
+      });
+    }
+  }, [nodeId, isReplica, activePrefetchAttrKey]);
+
+  const resetPrefetchOverride = useCallback(() => {
+    if (!nodeId || !isReplica) return;
+    trace.action('link-tool:reset-prefetch-replica', { nodeId, activePrefetchAttrKey });
     queueMutation({
       type: 'updateHtmlAttrs',
       nodeId,
-      attrs: { 'data-prefetch': mode === 'auto' ? '' : mode },
+      attrs: { [activePrefetchAttrKey]: '' },
     });
-  }, [nodeId]);
+  }, [nodeId, isReplica, activePrefetchAttrKey]);
 
   // Show/hide an optional Link sub-control (Rel / Parameters / Prefetch) from the `+`
   // add-menu. Unchecking clears the literal attr too (a bound variable is
@@ -659,7 +731,15 @@ export default function LinkTool() {
           { type: 'syncLinkHandler', nodeId },
         ]);
       } else if (key === 'prefetch') {
-        queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-prefetch': '' } });
+        queueMutation({
+          type: 'updateHtmlAttrs',
+          nodeId,
+          attrs: {
+            'data-prefetch': '',
+            'data-prefetch-tablet': '',
+            'data-prefetch-mobile': '',
+          },
+        });
       } else {
         setLocalTracking('');
         queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-revyme-track': '' } });
@@ -1026,7 +1106,12 @@ export default function LinkTool() {
 
         {/* Prefetch strategy — Auto / Intent / Viewport / Off */}
         {showPrefetch && (
-          <LinkPrefetchControl value={prefetchAttr} onChange={handlePrefetchChange} />
+          <LinkPrefetchControl
+            value={effPrefetch}
+            onChange={handlePrefetchChange}
+            overridden={isPrefetchOverridden}
+            onResetOverride={resetPrefetchOverride}
+          />
         )}
 
         {/* Anchor moved to its own "Scroll Section" tool (ScrollSectionTool) —
