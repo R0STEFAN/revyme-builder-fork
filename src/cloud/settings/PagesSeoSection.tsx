@@ -33,14 +33,19 @@ const CUSTOM_TEXT = '__custom__';
 
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { collectionSchemasAtom } from '@/code/stores/cms-store';
+import ExpressionBoundPill from '@/editor/controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '@/editor/ui/ExpressionEditorPopup';
+import { validateCmsExpression } from '@/shared/cms-expression-validator';
 import {
   type CmsSeoSlot,
   type CmsSeoBindings,
+  type CmsSeoExpressions,
   bindableFields,
   buildCmsDetailServerWrapper,
   hasCmsSeo,
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
+  parseCmsSeoExpressions,
 } from '@/code/project/cms-seo';
 
 // ─── Page list helpers ──────────────────────────────────────────────────────
@@ -396,6 +401,23 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   const [bindings, setBindings] = useState<CmsSeoBindings>(initialBindings);
   useEffect(() => { setBindings(initialBindings); }, [initialBindings]);
 
+  const initialExpressions = useMemo<CmsSeoExpressions>(() => {
+    void version;
+    if (!cms) return {};
+    return parseCmsSeoExpressions(projectFS.readFile(metadataPath) ?? '');
+  }, [cms, metadataPath, version]);
+
+  const [expressions, setExpressions] = useState<CmsSeoExpressions>(initialExpressions);
+  useEffect(() => { setExpressions(initialExpressions); }, [initialExpressions]);
+
+  const [activeExprSlot, setActiveExprSlot] = useState<{
+    slot: string;
+    targetProperty: 'text' | 'src' | 'href';
+    label: string;
+  } | null>(null);
+
+  const [exprError, setExprError] = useState<string | null>(null);
+
   const [form, setForm] = useState<PageMeta>(initial);
   // Reset form state when the parent swaps to a different page. The
   // PagesSeoSection passes `key={page.filePath}` so this remounts in
@@ -404,8 +426,9 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
 
   const dirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(initial)
-      || JSON.stringify(bindings) !== JSON.stringify(initialBindings),
-    [form, initial, bindings, initialBindings],
+      || JSON.stringify(bindings) !== JSON.stringify(initialBindings)
+      || JSON.stringify(expressions) !== JSON.stringify(initialExpressions),
+    [form, initial, bindings, initialBindings, expressions, initialExpressions],
   );
 
   // One writer per page kind. A bound wrapper is REGENERATED whole rather
@@ -413,13 +436,14 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // `export const metadata`, which Next.js rejects outright and vinext
   // silently ignores in favour of `generateMetadata` — the edit would look
   // saved and never render.
-  const writeMeta = useCallback((next: PageMeta, nextBindings: CmsSeoBindings) => {
+  const writeMeta = useCallback((next: PageMeta, nextBindings: CmsSeoBindings, nextExpressions: CmsSeoExpressions) => {
     if (cms) {
       modifyProjectFile(metadataPath, () =>
         buildCmsDetailServerWrapper({
           collection: cms.collection,
           defaults: next as unknown as Record<string, unknown>,
           bindings: nextBindings,
+          expressions: nextExpressions,
         }));
       return;
     }
@@ -428,9 +452,9 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
 
   const save = useCallback(() => {
     if (!dirty) return;
-    trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings });
-    writeMeta(form, bindings);
-  }, [dirty, form, bindings, metadataPath, page.filePath, cms, writeMeta]);
+    trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings, expressions });
+    writeMeta(form, bindings, expressions);
+  }, [dirty, form, bindings, expressions, metadataPath, page.filePath, cms, writeMeta]);
 
   // Binding changes are discrete picks, like the image fields — commit them
   // straight away so a pick can't be lost by forgetting Save. Any in-flight
@@ -440,8 +464,28 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     if (fieldId) next[slot] = fieldId; else delete next[slot];
     setBindings(next);
     trace.action('pages-seo:bind', { slot, fieldId, collection: cms?.collection });
-    writeMeta(form, next);
-  }, [bindings, form, cms, writeMeta]);
+    writeMeta(form, next, expressions);
+  }, [bindings, form, expressions, cms, writeMeta]);
+
+  const updateExpression = useCallback((slot: string, expr: string) => {
+    if (expr) {
+      const check = validateCmsExpression(expr);
+      if (!check.valid) {
+        setExprError(check.error || 'Invalid expression syntax or forbidden access');
+        return;
+      }
+    }
+    setExprError(null);
+    const next = { ...expressions };
+    if (expr) {
+      next[slot] = expr;
+    } else {
+      delete next[slot];
+    }
+    setExpressions(next);
+    trace.action('pages-seo:set-expression', { slot, expr, collection: cms?.collection });
+    writeMeta(form, bindings, next);
+  }, [expressions, form, bindings, cms, writeMeta]);
 
   const update = <K extends keyof PageMeta>(key: K, value: PageMeta[K]) => {
     setForm((cur) => ({ ...cur, [key]: value }));
@@ -468,6 +512,40 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
    *  slot's typed value would never render, so the box is hidden. */
   const showStatic = (slot: CmsSeoSlot): boolean => !cms || !bindings[slot];
 
+  const renderFieldWithFx = (
+    slot: string,
+    targetProperty: 'text' | 'src' | 'href',
+    label: string,
+    children: React.ReactNode,
+  ) => {
+    const expr = expressions[slot];
+    if (expr) {
+      return (
+        <ExpressionBoundPill
+          expression={expr}
+          onEdit={() => setActiveExprSlot({ slot, targetProperty, label })}
+          onClear={() => updateExpression(slot, '')}
+        />
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5 w-full">
+        <div className="flex-1 min-w-0">{children}</div>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveExprSlot({ slot, targetProperty, label });
+          }}
+          title="Dynamic Expression (Formula)"
+          className="shrink-0 h-[32px] px-2 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-xs font-mono font-bold"
+        >
+          fx
+        </button>
+      </div>
+    );
+  };
+
   // Image picks are discrete (Choose / Remove) — no "drafting" like
   // text inputs have. Requiring users to hit the Save button after
   // picking caused the "I uploaded but it disappears on reload" bug:
@@ -479,93 +557,121 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     trace.action('pages-seo:commit-image', { field, hasUrl: url.length > 0, urlLen: url.length });
     // A bound wrapper has no `metadata` export to patch — regenerate it with
     // the new URL as that slot's static value.
-    if (cms) { writeMeta({ ...form, [field]: url }, bindings); return; }
+    if (cms) { writeMeta({ ...form, [field]: url }, bindings, expressions); return; }
     const partial: SiteMetadata = field === 'ogImage'
       ? { openGraph: { images: url ? [url] : [] } }
       : { twitter: { image: url || '' } as Record<string, unknown> };
     modifyProjectFile(metadataPath, (code) => updateMetadataInCode(code, partial));
-  }, [metadataPath, cms, form, bindings, writeMeta]);
+  }, [metadataPath, cms, form, bindings, expressions, writeMeta]);
 
   return (
     <div className="space-y-8">
+      {exprError && (
+        <div className="p-3 text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded flex items-center justify-between">
+          <span>{exprError}</span>
+          <button type="button" onClick={() => setExprError(null)} className="font-bold ml-2">✕</button>
+        </div>
+      )}
       <SettingsGroup
         title={`SEO · ${page.label}`}
         action={<SaveButton onClick={save} saving={false} dirty={dirty} />}
       >
         <SettingsRow label="Title" htmlFor="seo-title">
-          {bindFor('title')}
-          {showStatic('title') && (
-            <input
-              id="seo-title"
-              type="text"
-              value={form.title}
-              onChange={(e) => update('title', e.target.value)}
-              className={ROW_INPUT_CLS}
-              placeholder="Page title, falls back to the site title"
-            />
-          )}
+          {renderFieldWithFx('title', 'text', 'Title', (
+            <>
+              {bindFor('title')}
+              {showStatic('title') && (
+                <input
+                  id="seo-title"
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => update('title', e.target.value)}
+                  className={ROW_INPUT_CLS}
+                  placeholder="Page title, falls back to the site title"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="Description" htmlFor="seo-description" align="top">
-          {bindFor('description')}
-          {showStatic('description') && (
-            <textarea
-              id="seo-description"
-              rows={3}
-              value={form.description}
-              onChange={(e) => update('description', e.target.value)}
-              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-              placeholder="A brief description that shows in search results."
-            />
-          )}
+          {renderFieldWithFx('description', 'text', 'Description', (
+            <>
+              {bindFor('description')}
+              {showStatic('description') && (
+                <textarea
+                  id="seo-description"
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => update('description', e.target.value)}
+                  className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+                  placeholder="A brief description that shows in search results."
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="Canonical URL" htmlFor="seo-canonical">
-          <input
-            id="seo-canonical"
-            type="url"
-            value={form.canonical}
-            onChange={(e) => update('canonical', e.target.value)}
-            className={ROW_INPUT_CLS}
-            placeholder="https://example.com/about"
-          />
+          {renderFieldWithFx('canonical', 'href', 'Canonical URL', (
+            <input
+              id="seo-canonical"
+              type="url"
+              value={form.canonical}
+              onChange={(e) => update('canonical', e.target.value)}
+              className={ROW_INPUT_CLS}
+              placeholder="https://example.com/about"
+            />
+          ))}
         </SettingsRow>
       </SettingsGroup>
 
       <SettingsGroup title="Open Graph (Facebook, LinkedIn, iMessage)">
         <SettingsRow label="OG title" htmlFor="og-title">
-          {bindFor('ogTitle')}
-          {showStatic('ogTitle') && (
-            <input
-              id="og-title"
-              type="text"
-              value={form.ogTitle}
-              onChange={(e) => update('ogTitle', e.target.value)}
-              className={ROW_INPUT_CLS}
-              placeholder="Falls back to page title when empty"
-            />
-          )}
+          {renderFieldWithFx('ogTitle', 'text', 'OG title', (
+            <>
+              {bindFor('ogTitle')}
+              {showStatic('ogTitle') && (
+                <input
+                  id="og-title"
+                  type="text"
+                  value={form.ogTitle}
+                  onChange={(e) => update('ogTitle', e.target.value)}
+                  className={ROW_INPUT_CLS}
+                  placeholder="Falls back to page title when empty"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="OG description" htmlFor="og-description" align="top">
-          {bindFor('ogDescription')}
-          {showStatic('ogDescription') && (
-            <textarea
-              id="og-description"
-              rows={3}
-              value={form.ogDescription}
-              onChange={(e) => update('ogDescription', e.target.value)}
-              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-              placeholder="Falls back to page description when empty"
-            />
-          )}
+          {renderFieldWithFx('ogDescription', 'text', 'OG description', (
+            <>
+              {bindFor('ogDescription')}
+              {showStatic('ogDescription') && (
+                <textarea
+                  id="og-description"
+                  rows={3}
+                  value={form.ogDescription}
+                  onChange={(e) => update('ogDescription', e.target.value)}
+                  className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+                  placeholder="Falls back to page description when empty"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="OG image" align="top">
-          {bindFor('ogImage')}
-          {showStatic('ogImage') && (
-            <ImagePickerField
-              value={form.ogImage}
-              onChange={(url) => { update('ogImage', url); commitImageField('ogImage', url); }}
-              hint="1200×630 recommended"
-            />
-          )}
+          {renderFieldWithFx('ogImage', 'src', 'OG image', (
+            <>
+              {bindFor('ogImage')}
+              {showStatic('ogImage') && (
+                <ImagePickerField
+                  value={form.ogImage}
+                  onChange={(url) => { update('ogImage', url); commitImageField('ogImage', url); }}
+                  hint="1200×630 recommended"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
       </SettingsGroup>
 
@@ -582,40 +688,52 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
           />
         </SettingsRow>
         <SettingsRow label="Title" htmlFor="tw-title">
-          {bindFor('twitterTitle')}
-          {showStatic('twitterTitle') && (
-            <input
-              id="tw-title"
-              type="text"
-              value={form.twitterTitle}
-              onChange={(e) => update('twitterTitle', e.target.value)}
-              className={ROW_INPUT_CLS}
-              placeholder="Falls back to OG title / page title"
-            />
-          )}
+          {renderFieldWithFx('twitterTitle', 'text', 'Twitter title', (
+            <>
+              {bindFor('twitterTitle')}
+              {showStatic('twitterTitle') && (
+                <input
+                  id="tw-title"
+                  type="text"
+                  value={form.twitterTitle}
+                  onChange={(e) => update('twitterTitle', e.target.value)}
+                  className={ROW_INPUT_CLS}
+                  placeholder="Falls back to OG title / page title"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="Description" htmlFor="tw-description" align="top">
-          {bindFor('twitterDescription')}
-          {showStatic('twitterDescription') && (
-            <textarea
-              id="tw-description"
-              rows={3}
-              value={form.twitterDescription}
-              onChange={(e) => update('twitterDescription', e.target.value)}
-              className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-              placeholder="Falls back to OG description / page description"
-            />
-          )}
+          {renderFieldWithFx('twitterDescription', 'text', 'Twitter description', (
+            <>
+              {bindFor('twitterDescription')}
+              {showStatic('twitterDescription') && (
+                <textarea
+                  id="tw-description"
+                  rows={3}
+                  value={form.twitterDescription}
+                  onChange={(e) => update('twitterDescription', e.target.value)}
+                  className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
+                  placeholder="Falls back to OG description / page description"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
         <SettingsRow label="Image" align="top">
-          {bindFor('twitterImage')}
-          {showStatic('twitterImage') && (
-            <ImagePickerField
-              value={form.twitterImage}
-              onChange={(url) => { update('twitterImage', url); commitImageField('twitterImage', url); }}
-              hint="Falls back to the OG image"
-            />
-          )}
+          {renderFieldWithFx('twitterImage', 'src', 'Twitter image', (
+            <>
+              {bindFor('twitterImage')}
+              {showStatic('twitterImage') && (
+                <ImagePickerField
+                  value={form.twitterImage}
+                  onChange={(url) => { update('twitterImage', url); commitImageField('twitterImage', url); }}
+                  hint="Falls back to the OG image"
+                />
+              )}
+            </>
+          ))}
         </SettingsRow>
       </SettingsGroup>
 
@@ -635,6 +753,28 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
           />
         </SettingsRow>
       </SettingsGroup>
+
+      {activeExprSlot && (
+        <ExpressionEditorPopup
+          isOpen={true}
+          onClose={() => setActiveExprSlot(null)}
+          onApply={(expr) => {
+            updateExpression(activeExprSlot.slot, expr);
+            setActiveExprSlot(null);
+          }}
+          initialExpression={
+            expressions[activeExprSlot.slot] ||
+            (bindings[activeExprSlot.slot as CmsSeoSlot]
+              ? `item.${bindings[activeExprSlot.slot as CmsSeoSlot]}`
+              : (form as any)[activeExprSlot.slot] || '')
+          }
+          targetProperty={activeExprSlot.targetProperty}
+          collectionSlug={cms?.collection}
+          itemVar="item"
+          fields={cms?.schema?.fields ?? []}
+          filePath={page.filePath}
+        />
+      )}
     </div>
   );
 }

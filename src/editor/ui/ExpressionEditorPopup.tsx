@@ -18,6 +18,7 @@ interface ExpressionEditorPopupProps {
   collectionSlug?: string;
   itemVar?: string;
   fields?: FieldDefinition[];
+  filePath?: string;
 }
 
 export default function ExpressionEditorPopup({
@@ -29,9 +30,11 @@ export default function ExpressionEditorPopup({
   collectionSlug,
   itemVar = 'item',
   fields = [],
+  filePath,
 }: ExpressionEditorPopupProps) {
   const [expression, setExpression] = useState(initialExpression);
   const activeFilePath = useAtomValue(activeFilePathAtom);
+  const effectiveFilePath = filePath || activeFilePath;
   const collectionData = useAtomValue(collectionDataAtom);
   const collectionSchemas = useAtomValue(collectionSchemasAtom);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,11 +48,11 @@ export default function ExpressionEditorPopup({
 
   // Extract route parameters from active file path (e.g. `app/gallery/[category]/[place]/page.client.tsx` -> `['category', 'place']`)
   const routeParams = useMemo(() => {
-    if (!activeFilePath) return [];
-    const matches = Array.from(activeFilePath.matchAll(/\[([^/\]]+)\]/g));
+    if (!effectiveFilePath) return [];
+    const matches = Array.from(effectiveFilePath.matchAll(/\[([^/\]]+)\]/g));
     const params = matches.map(m => m[1]).filter(p => !p.startsWith('...'));
     return Array.from(new Set(params));
-  }, [activeFilePath]);
+  }, [effectiveFilePath]);
 
   // Insert token or text into current cursor position in the textarea
   const insertToken = useCallback((token: string) => {
