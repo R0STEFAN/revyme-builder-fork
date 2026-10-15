@@ -223,16 +223,16 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           const data = bundle.data || { format: 'revyme-v1', files: {} };
           const assets = bundle.assets || {};
 
+          const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           let savedAssetCount = 0;
           for (const [filename, assetData] of Object.entries(assets)) {
             if (assetData && typeof assetData === 'object' && (assetData as any).base64) {
               const buf = Buffer.from((assetData as any).base64, 'base64');
-              saveUploadExact(filename, buf);
+              saveUploadExact(filename, buf, undefined, newId);
               savedAssetCount++;
             }
           }
 
-          const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const saved = saveProject(newId, data, name, undefined, bundle.folderId ?? null, bundle.previewImage ?? null);
 
           // Extract any custom fonts from globals.css if not already in bundle.customFonts

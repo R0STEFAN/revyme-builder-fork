@@ -2,8 +2,42 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, exec, execSync, type ChildProcess } from 'node:child_process';
 import sharp from 'sharp';
-import { getDataDirs, getProject } from './storage';
+import { getDataDirs, getProject, readUploadsMeta } from './storage';
 import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/shared/image-export-constants';
+
+function extractReferencedUploads(files: Record<string, string> | Iterable<string>, allUploadFiles: string[]): Set<string> {
+  const referenced = new Set<string>();
+  const values = Array.isArray(files)
+    ? files
+    : (files instanceof Set || files instanceof Map
+        ? Array.from(files.values())
+        : (typeof (files as any)?.[Symbol.iterator] === 'function'
+            ? Array.from(files as any)
+            : Object.values(files || {})));
+
+  const regex = /(?:\/api)?\/uploads\/([a-zA-Z0-9_.-]+)/g;
+  for (const text of values) {
+    if (!text || typeof text !== 'string') continue;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      if (m[1]) {
+        const safeName = m[1].split('?')[0].split('#')[0];
+        referenced.add(safeName);
+      }
+    }
+  }
+
+  if (allUploadFiles.length > 0) {
+    const combinedContent = values.filter((t) => typeof t === 'string').join('\n');
+    for (const file of allUploadFiles) {
+      if (combinedContent.includes(file)) {
+        referenced.add(file);
+      }
+    }
+  }
+
+  return referenced;
+}
 
 export type LocalServerState = 'idle' | 'building' | 'running' | 'error' | 'cancelled';
 
@@ -625,7 +659,7 @@ export class LocalServerManager {
     fs.writeFileSync(imageUtilsPath, IMAGE_UTILS_TS, 'utf-8');
 
     // Ensure uploads are copied into public/api/uploads and public/uploads synchronously (without triggering background image optimization)
-    this.syncUploadFiles(targetDir);
+    this.syncUploadFiles(targetDir, projectId, files);
     this.syncPublicAssets(targetDir);
 
     return targetDir;
@@ -658,9 +692,68 @@ export class LocalServerManager {
     }
   }
 
-  syncUploadFiles(targetDir: string): void {
+  syncUploadFiles(targetDir: string, projectId?: string, files?: Record<string, string>): void {
     const uploadsDir = getDataDirs().uploadsDir;
     if (!uploadsDir || !fs.existsSync(uploadsDir)) return;
+
+    const safeProjectId = projectId ? sanitizeId(projectId) : '';
+    let resolvedFiles = files;
+    if (!resolvedFiles && safeProjectId) {
+      try {
+        const stored = getProject(safeProjectId);
+        resolvedFiles = stored?.data?.files;
+      } catch {
+        // ignore
+      }
+    }
+
+    const allEntries = fs.readdirSync(uploadsDir, { withFileTypes: true });
+    const allFiles = allEntries.filter((e) => e.isFile()).map((e) => e.name);
+
+    let allowedUploads: Set<string>;
+    const allowedBaseNames = new Set<string>();
+
+    if (!safeProjectId) {
+      allowedUploads = new Set(allFiles);
+    } else {
+      allowedUploads = new Set<string>();
+      const referenced = resolvedFiles ? extractReferencedUploads(resolvedFiles, allFiles) : new Set<string>();
+      let meta: Record<string, any> = {};
+      try {
+        meta = readUploadsMeta();
+      } catch {
+        meta = {};
+      }
+
+      for (const file of allFiles) {
+        // Thumbnail handling: only include thumbnails belonging to this project
+        if (file.startsWith('thumbnail-')) {
+          if (file.startsWith(`thumbnail-${safeProjectId}.`)) {
+            allowedUploads.add(file);
+          }
+          continue;
+        }
+
+        // If explicitly referenced in project code/content/CMS:
+        if (referenced.has(file)) {
+          allowedUploads.add(file);
+          continue;
+        }
+
+        const fileMeta = meta[file];
+        // If tagged for an explicit DIFFERENT project and not referenced, skip it
+        if (fileMeta?.projectId && fileMeta.projectId !== safeProjectId && fileMeta.projectId !== 'local') {
+          continue;
+        }
+
+        allowedUploads.add(file);
+      }
+    }
+
+    for (const filename of allowedUploads) {
+      const ext = path.extname(filename);
+      allowedBaseNames.add(ext ? path.basename(filename, ext) : filename);
+    }
 
     const publicDir = path.join(targetDir, 'public');
     const publicApiDir = path.join(publicDir, 'api');
@@ -672,6 +765,8 @@ export class LocalServerManager {
       path.join(publicApiDir, 'uploads'),
       path.join(publicDir, 'uploads'),
     ];
+
+    const responsiveVariantRe = /^(.+)-(\d+)w\.webp$/;
 
     for (const targetPath of targets) {
       try {
@@ -697,7 +792,45 @@ export class LocalServerManager {
           fs.mkdirSync(targetPath, { recursive: true });
         }
 
-        this.copyDirFiles(uploadsDir, targetPath);
+        // 1. Clean stale/foreign files that do not belong to this project
+        if (safeProjectId) {
+          const existing = fs.readdirSync(targetPath, { withFileTypes: true });
+          for (const item of existing) {
+            if (!item.isFile()) continue;
+            if (allowedUploads.has(item.name)) continue;
+
+            // Check if it's a responsive variant of an allowed file
+            const variantMatch = item.name.match(responsiveVariantRe);
+            if (variantMatch && allowedBaseNames.has(variantMatch[1])) {
+              continue;
+            }
+
+            try {
+              fs.unlinkSync(path.join(targetPath, item.name));
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        // 2. Copy allowed files into targetPath
+        for (const file of allowedUploads) {
+          const srcFile = path.join(uploadsDir, file);
+          const destFile = path.join(targetPath, file);
+          try {
+            if (!fs.existsSync(destFile) || fs.statSync(srcFile).mtimeMs > fs.statSync(destFile).mtimeMs) {
+              fs.copyFileSync(srcFile, destFile);
+              try {
+                const stat = fs.statSync(srcFile);
+                fs.utimesSync(destFile, stat.atime, stat.mtime);
+              } catch {
+                // ignore
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
       } catch {
         // ignore errors
       }
@@ -707,9 +840,12 @@ export class LocalServerManager {
   async syncUploads(
     targetDir: string,
     onProgress?: (progress: { processed: number; total: number; filename: string }) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    projectId?: string,
+    files?: Record<string, string>
   ): Promise<void> {
-    this.syncUploadFiles(targetDir);
+    const resolvedProjectId = projectId || path.basename(targetDir);
+    this.syncUploadFiles(targetDir, resolvedProjectId, files);
 
     const publicDir = path.join(targetDir, 'public');
     const publicApiDir = path.join(publicDir, 'api');
@@ -742,7 +878,7 @@ export class LocalServerManager {
     try {
       const entries = fs.readdirSync(uploadsTarget, { withFileTypes: true });
       const originalFiles = entries.filter(
-        (e) => e.isFile() && imageExts.has(path.extname(e.name).toLowerCase()) && !responsiveVariantRe.test(e.name)
+        (e) => e.isFile() && imageExts.has(path.extname(e.name).toLowerCase()) && !responsiveVariantRe.test(e.name) && !e.name.startsWith('thumbnail-')
       );
       const totalVariants = originalFiles.length * widths.length;
       let processedVariants = 0;
@@ -923,6 +1059,7 @@ export class LocalServerManager {
     this.clearSuccessMarker(targetDir);
 
     try {
+      let targetFiles = files;
       if (files) {
         this.exportProject(safeId, files);
       } else {
@@ -940,6 +1077,7 @@ export class LocalServerManager {
         if (branchId && stored.data?.branches?.[branchId]?.files) {
           exportFiles = stored.data.branches[branchId].files;
         }
+        targetFiles = exportFiles;
         this.exportProject(safeId, exportFiles);
       }
 
@@ -977,7 +1115,9 @@ export class LocalServerManager {
             startedAt,
           };
         },
-        abortController.signal
+        abortController.signal,
+        safeId,
+        targetFiles
       );
 
       this.syncPublicAssets(targetDir);
@@ -1203,7 +1343,14 @@ export class LocalServerManager {
     }
 
     // Ensure uploads are synced before starting
-    await this.syncUploads(targetDir);
+    let startFiles: Record<string, string> | undefined;
+    try {
+      const stored = getProject(safeId);
+      startFiles = stored?.data?.files;
+    } catch {
+      // ignore
+    }
+    await this.syncUploads(targetDir, undefined, undefined, safeId, startFiles);
 
     const nextBin = resolveNextBin();
 

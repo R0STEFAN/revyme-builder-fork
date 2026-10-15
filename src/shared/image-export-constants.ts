@@ -169,6 +169,7 @@ async function optimizeDirectory(dir) {
       const ext = path.extname(entry.name).toLowerCase();
       if (!IMAGE_EXTS.has(ext)) continue;
       if (RESPONSIVE_VARIANT_RE.test(entry.name)) continue;
+      if (entry.name.startsWith('thumbnail-')) continue;
 
       const baseName = entry.name.slice(0, -ext.length);
       let fileStat;

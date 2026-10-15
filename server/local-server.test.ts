@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { LocalServerManager, sanitizeId, parseBuildProgress, type BuildProgress } from './local-server';
-import { saveProject } from './storage';
+import { saveProject, saveUpload } from './storage';
 
 const TEST_DIR = path.resolve(process.cwd(), '.test-local-server');
 const TEST_BUILDS_DIR = path.join(TEST_DIR, 'builds');
@@ -257,6 +257,70 @@ describe('LocalServerManager', () => {
       // New files should exist
       expect(fs.existsSync(path.join(targetDir, 'app/(main)/about-me/page.tsx'))).toBe(true);
       expect(fs.existsSync(path.join(targetDir, 'app/(main)/page.tsx'))).toBe(true);
+    });
+
+    it('isolates uploads per project and ignores foreign CMS project assets unless referenced', () => {
+      const prevEnv = process.env.REVYME_DATA_DIR;
+      process.env.REVYME_DATA_DIR = TEST_STORAGE_DIR;
+      const uploadsDir = path.join(TEST_STORAGE_DIR, 'uploads');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+
+      try {
+        const upForeign = saveUpload('foreign-cms-img.webp', Buffer.from('foreign-cms'), TEST_STORAGE_DIR, 'proj-cms');
+        const upOwn = saveUpload('my-own-img.webp', Buffer.from('my-img'), TEST_STORAGE_DIR, 'proj-new');
+        const upRef = saveUpload('referenced-cms-img.webp', Buffer.from('ref-cms'), TEST_STORAGE_DIR, 'proj-cms');
+
+        const files: Record<string, string> = {
+          'app/page.tsx': `export default () => <img src="/api/uploads/${upRef.filename}" />;`,
+        };
+
+        const targetDir = manager.exportProject('proj-new', files);
+        const pubUploads = path.join(targetDir, 'public', 'uploads');
+
+        // my-own-img should be included because its projectId is proj-new
+        expect(fs.existsSync(path.join(pubUploads, upOwn.filename))).toBe(true);
+
+        // referenced-cms-img should be included because it is referenced in page.tsx
+        expect(fs.existsSync(path.join(pubUploads, upRef.filename))).toBe(true);
+
+        // foreign-cms-img MUST NOT be included because it belongs to proj-cms and is not referenced
+        expect(fs.existsSync(path.join(pubUploads, upForeign.filename))).toBe(false);
+      } finally {
+        process.env.REVYME_DATA_DIR = prevEnv;
+      }
+    });
+
+    it('cleans up stale foreign uploads and responsive variants from previous builds', () => {
+      const prevEnv = process.env.REVYME_DATA_DIR;
+      process.env.REVYME_DATA_DIR = TEST_STORAGE_DIR;
+      const uploadsDir = path.join(TEST_STORAGE_DIR, 'uploads');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+
+      try {
+        // Project A (CMS) uploads
+        saveUpload('old-cms.webp', Buffer.from('old-cms'), TEST_STORAGE_DIR, 'proj-cms');
+
+        // Pre-populate target build directory with old foreign assets and their variants
+        const targetDir = manager.getBuildDir('proj-clean');
+        const pubUploads = path.join(targetDir, 'public', 'uploads');
+        fs.mkdirSync(pubUploads, { recursive: true });
+        fs.writeFileSync(path.join(pubUploads, 'old-cms.webp'), 'foreign');
+        fs.writeFileSync(path.join(pubUploads, 'old-cms-640w.webp'), 'foreign-variant');
+        fs.writeFileSync(path.join(pubUploads, 'thumbnail-proj-cms.jpg'), 'foreign-thumb');
+
+        // Export proj-clean with NO uploads referenced
+        const files: Record<string, string> = {
+          'app/page.tsx': 'export default () => <div>Pure page</div>;',
+        };
+        manager.exportProject('proj-clean', files);
+
+        // All foreign assets and their variants should be cleaned up
+        expect(fs.existsSync(path.join(pubUploads, 'old-cms.webp'))).toBe(false);
+        expect(fs.existsSync(path.join(pubUploads, 'old-cms-640w.webp'))).toBe(false);
+        expect(fs.existsSync(path.join(pubUploads, 'thumbnail-proj-cms.jpg'))).toBe(false);
+      } finally {
+        process.env.REVYME_DATA_DIR = prevEnv;
+      }
     });
   });
 
