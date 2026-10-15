@@ -7,6 +7,7 @@ import {
   saveProject,
   saveProjectThumbnail,
   deleteProject,
+  deleteProjects,
   duplicateProject,
   saveUpload,
   saveUploadExact,
@@ -211,6 +212,26 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
           return sendJson(res, 201, saved);
         } catch (err: any) {
           return sendJson(res, 400, { error: err.message || 'Failed to create project' });
+        }
+      }
+
+      // ─── POST /api/projects/batch-delete ──────────────────────────────────
+      if (url === '/api/projects/batch-delete' && method === 'POST') {
+        try {
+          const bodyBuf = await readBodyBuffer(req);
+          const body = JSON.parse(bodyBuf.toString('utf-8') || '{}');
+          const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
+          for (const id of ids) {
+            try {
+              await manager.stop(id);
+              const bDir = manager.getBuildDir(id);
+              if (fs.existsSync(bDir)) fs.rmSync(bDir, { recursive: true, force: true });
+            } catch {}
+          }
+          const result = deleteProjects(ids);
+          return sendJson(res, 200, { success: true, ...result });
+        } catch (err: any) {
+          return sendJson(res, 500, { error: err.message || 'Failed to delete projects' });
         }
       }
 
@@ -824,6 +845,11 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
 
         // DELETE /api/projects/:id
         if (method === 'DELETE' && !isDuplicate && !isThumbnail) {
+          try {
+            await manager.stop(id);
+            const bDir = manager.getBuildDir(id);
+            if (fs.existsSync(bDir)) fs.rmSync(bDir, { recursive: true, force: true });
+          } catch {}
           const ok = deleteProject(id);
           if (!ok) {
             return sendJson(res, 404, { error: 'Project not found' });

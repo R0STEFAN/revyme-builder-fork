@@ -7,6 +7,7 @@ import {
   saveProject,
   saveProjectThumbnail,
   deleteProject,
+  deleteProjects,
   duplicateProject,
   saveUpload,
   getUploadFilePath,
@@ -91,6 +92,37 @@ describe('Self-host storage', () => {
     expect(deleted).toBe(true);
     expect(listProjects(TEST_DATA_DIR).length).toBe(0);
     expect(getProject('to-delete', TEST_DATA_DIR)).toBeNull();
+  });
+
+  it('deletes multiple projects and their files at once', () => {
+    saveProject('proj-1', { files: { 'app/page.tsx': '// p1' } }, 'Site 1', TEST_DATA_DIR);
+    saveProject('proj-2', { files: { 'app/page.tsx': '// p2' } }, 'Site 2', TEST_DATA_DIR);
+    saveProject('proj-3', { files: { 'app/page.tsx': '// p3' } }, 'Site 3', TEST_DATA_DIR);
+    expect(listProjects(TEST_DATA_DIR).length).toBe(3);
+
+    // Save an upload associated with proj-1
+    const upload1 = saveUpload('p1-photo.png', Buffer.from('photo 1'), TEST_DATA_DIR, 'proj-1');
+    const p1FilePath = getUploadFilePath(upload1.filename, TEST_DATA_DIR);
+    expect(fs.existsSync(p1FilePath!)).toBe(true);
+
+    // Save thumbnail for proj-2
+    saveProjectThumbnail(
+      'proj-2',
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      TEST_DATA_DIR
+    );
+
+    const result = deleteProjects(['proj-1', 'proj-2'], TEST_DATA_DIR);
+    expect(result.deleted).toEqual(['proj-1', 'proj-2']);
+    expect(result.failed).toEqual([]);
+
+    // Remaining projects
+    const remaining = listProjects(TEST_DATA_DIR);
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].id).toBe('proj-3');
+
+    // Associated upload file for proj-1 should be cleaned up
+    expect(fs.existsSync(p1FilePath!)).toBe(false);
   });
 
   it('handles uploads safely', () => {

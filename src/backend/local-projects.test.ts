@@ -3,6 +3,7 @@ import {
   listAllProjects,
   createProject,
   deleteProject,
+  deleteProjects,
   duplicateProject,
   migrateLocalStorageProjectsToServer,
   listAllFolders,
@@ -47,6 +48,42 @@ describe('local-projects management', () => {
 
     await deleteProject(created.id);
     expect(localStorage.getItem(`revyme-project-${created.id}`)).toBeNull();
+  });
+
+  it('deletes multiple projects from localStorage with deleteProjects', async () => {
+    const p1 = await createProject('Project 1');
+    const p2 = await createProject('Project 2');
+    const p3 = await createProject('Project 3');
+
+    expect(localStorage.getItem(`revyme-project-${p1.id}`)).not.toBeNull();
+    expect(localStorage.getItem(`revyme-project-${p2.id}`)).not.toBeNull();
+    expect(localStorage.getItem(`revyme-project-${p3.id}`)).not.toBeNull();
+
+    const res = await deleteProjects([p1.id, p2.id]);
+    expect(res.deleted).toContain(p1.id);
+    expect(res.deleted).toContain(p2.id);
+
+    expect(localStorage.getItem(`revyme-project-${p1.id}`)).toBeNull();
+    expect(localStorage.getItem(`revyme-project-${p2.id}`)).toBeNull();
+    expect(localStorage.getItem(`revyme-project-${p3.id}`)).not.toBeNull();
+  });
+
+  it('calls /api/projects/batch-delete when server is reachable', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, deleted: ['proj-a', 'proj-b'], failed: [] }),
+    });
+    vi.stubGlobal('fetch', request);
+    try {
+      const res = await deleteProjects(['proj-a', 'proj-b']);
+      expect(res.deleted).toEqual(['proj-a', 'proj-b']);
+      expect(request).toHaveBeenCalledWith('/api/projects/batch-delete', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ ids: ['proj-a', 'proj-b'] }),
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('duplicates project from localStorage', async () => {

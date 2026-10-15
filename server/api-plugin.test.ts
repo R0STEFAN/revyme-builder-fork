@@ -918,5 +918,23 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(afterDel.status).toBe(404);
     });
   });
+
+  describe('POST /api/projects/batch-delete', () => {
+    it('deletes multiple projects and stops their local servers', async () => {
+      const res = await dispatch({
+        method: 'POST',
+        url: '/api/projects/batch-delete',
+        body: { ids: ['proj-batch-1', 'proj-batch-2'] },
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockManager.stop).toHaveBeenCalledWith('proj-batch-1');
+      expect(mockManager.stop).toHaveBeenCalledWith('proj-batch-2');
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.deleted)).toBe(true);
+      expect(Array.isArray(res.body.failed)).toBe(true);
+    });
+  });
 });
+
 

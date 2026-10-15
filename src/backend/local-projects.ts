@@ -204,6 +204,61 @@ export async function deleteProject(id: string): Promise<boolean> {
 }
 
 /**
+ * Delete multiple projects by ID from both server and localStorage.
+ */
+export async function deleteProjects(ids: string[]): Promise<{ deleted: string[]; failed: string[] }> {
+  const result: { deleted: string[]; failed: string[] } = { deleted: [], failed: [] };
+  if (!ids || ids.length === 0) return result;
+
+  // 1. Try server batch-delete API
+  let serverHandled = false;
+  if (typeof fetch === 'function' && typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/projects/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        result.deleted = Array.isArray(data.deleted) ? data.deleted : ids;
+        result.failed = Array.isArray(data.failed) ? data.failed : [];
+        serverHandled = true;
+      }
+    } catch {
+      // server unreachable
+    }
+  }
+
+  // If server batch-delete wasn't handled, fallback to individual deleteProject calls
+  if (!serverHandled) {
+    for (const id of ids) {
+      const ok = await deleteProject(id);
+      if (ok) {
+        result.deleted.push(id);
+      } else {
+        result.failed.push(id);
+      }
+    }
+  }
+
+  // 2. Also clean up localStorage for all deleted/specified IDs
+  if (typeof window !== 'undefined' && window.localStorage) {
+    for (const id of ids) {
+      localStorage.removeItem(STORAGE_PREFIX + id);
+      localStorage.removeItem(NAME_PREFIX + id);
+      localStorage.removeItem(FOLDER_PROJECT_PREFIX + id);
+      localStorage.removeItem(PREVIEW_PREFIX + id);
+      if (!result.deleted.includes(id)) {
+        result.deleted.push(id);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Duplicate a project.
  */
 export async function duplicateProject(id: string, newName?: string): Promise<LocalProjectItem | null> {

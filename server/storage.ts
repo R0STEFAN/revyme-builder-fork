@@ -240,7 +240,7 @@ export function saveProjectThumbnail(
  * Delete a project by ID.
  */
 export function deleteProject(id: string, customRoot?: string): boolean {
-  const { projectsDir, versionsDir } = getDataDirs(customRoot);
+  const { projectsDir, versionsDir, uploadsDir, thumbnailsDir } = getDataDirs(customRoot);
   const safeId = sanitizeId(id);
   const filePath = path.join(projectsDir, `${safeId}.json`);
 
@@ -259,8 +259,69 @@ export function deleteProject(id: string, customRoot?: string): boolean {
     }
   }
 
+  // Also clean up thumbnail file if exists
+  try {
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      const thumbUpload = path.join(uploadsDir, `thumbnail-${safeId}.${ext}`);
+      if (fs.existsSync(thumbUpload)) {
+        try { fs.unlinkSync(thumbUpload); } catch {}
+      }
+      const thumbCache = path.join(thumbnailsDir, `thumbnail-${safeId}.${ext}.webp`);
+      if (fs.existsSync(thumbCache)) {
+        try { fs.unlinkSync(thumbCache); } catch {}
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Clean up any uploaded assets tagged to this project
+  try {
+    const meta = readUploadsMeta(customRoot);
+    let metaChanged = false;
+    for (const [fn, item] of Object.entries(meta)) {
+      if (item.projectId === id) {
+        const uPath = path.join(uploadsDir, fn);
+        if (fs.existsSync(uPath)) {
+          try { fs.unlinkSync(uPath); } catch {}
+        }
+        const tPath = path.join(thumbnailsDir, `${fn}.webp`);
+        if (fs.existsSync(tPath)) {
+          try { fs.unlinkSync(tPath); } catch {}
+        }
+        delete meta[fn];
+        metaChanged = true;
+      }
+    }
+    if (metaChanged) {
+      writeUploadsMeta(meta, customRoot);
+    }
+  } catch {
+    // ignore
+  }
+
   return true;
 }
+
+/**
+ * Delete multiple projects by ID.
+ */
+export function deleteProjects(
+  ids: string[],
+  customRoot?: string
+): { deleted: string[]; failed: string[] } {
+  const deleted: string[] = [];
+  const failed: string[] = [];
+  for (const id of ids) {
+    if (deleteProject(id, customRoot)) {
+      deleted.push(id);
+    } else {
+      failed.push(id);
+    }
+  }
+  return { deleted, failed };
+}
+
 
 /**
  * Duplicate an existing project.

@@ -7,6 +7,7 @@ import {
   listAllProjects,
   createProject,
   deleteProject,
+  deleteProjects,
   duplicateProject,
   migrateLocalStorageProjectsToServer,
   listAllFolders,
@@ -72,6 +73,11 @@ export default function SelfHostDashboard() {
   // Delete confirm state
   const [deleteItem, setDeleteItem] = useState<LocalProjectItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Multi-selection states
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Folder modal states
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
@@ -157,6 +163,38 @@ export default function SelfHostDashboard() {
   const hasLocalStorageOnly = useMemo(() => {
     return projects.some((p) => p.isLocalStorageOnly);
   }, [projects]);
+
+  const isAllFilteredSelected = useMemo(() => {
+    if (filteredProjects.length === 0) return false;
+    return filteredProjects.every((p) => selectedProjectIds.has(p.id));
+  }, [filteredProjects, selectedProjectIds]);
+
+  const toggleSelect = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedProjectIds((prev) => {
+      const next = new Set(prev);
+      for (const p of filteredProjects) {
+        next.add(p.id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedProjectIds(new Set());
+  };
 
   // Actions
   const handleOpen = (id: string) => {
@@ -301,12 +339,42 @@ export default function SelfHostDashboard() {
       setDeleting(true);
       await deleteProject(deleteItem.id);
       toast.success('Project deleted');
+      setSelectedProjectIds((prev) => {
+        if (!prev.has(deleteItem.id)) return prev;
+        const next = new Set(prev);
+        next.delete(deleteItem.id);
+        return next;
+      });
       setDeleteItem(null);
       await fetchProjects();
     } catch {
       toast.error('Failed to delete project');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedProjectIds.size === 0) return;
+    const idsToDelete = Array.from(selectedProjectIds);
+    try {
+      setBulkDeleting(true);
+      trace.action('dashboard:bulk-delete-projects', { count: idsToDelete.length, ids: idsToDelete });
+      const result = await deleteProjects(idsToDelete);
+      const count = result.deleted.length;
+      if (count > 0) {
+        toast.success(`Deleted ${count} project${count === 1 ? '' : 's'}`);
+      }
+      if (result.failed.length > 0) {
+        toast.error(`Failed to delete ${result.failed.length} project${result.failed.length === 1 ? '' : 's'}`);
+      }
+      clearSelection();
+      setBulkDeleteOpen(false);
+      await fetchProjects();
+    } catch {
+      toast.error('Failed to delete projects');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -707,16 +775,86 @@ export default function SelfHostDashboard() {
               </p>
             </div>
 
-            <div className="w-full sm:w-72">
-              <input
-                type="text"
-                placeholder="Search projects..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs rounded bg-[var(--bg-secondary,#18181b)] border border-[var(--border-subtle,rgba(255,255,255,0.1))] text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent,#eab308)]"
-              />
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {filteredProjects.length > 0 && (
+                <button
+                  type="button"
+                  onClick={isAllFilteredSelected ? clearSelection : selectAllFiltered}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                    selectedProjectIds.size > 0
+                      ? 'bg-[var(--accent,#eab308)]/15 border-[var(--accent,#eab308)]/40 text-[var(--accent,#eab308)] font-medium'
+                      : 'bg-[var(--bg-secondary,#18181b)] border-[var(--border-subtle,rgba(255,255,255,0.1))] hover:border-[var(--accent,#eab308)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                  title={isAllFilteredSelected ? 'Deselect all projects' : 'Select all projects'}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                  <span>{isAllFilteredSelected ? 'Deselect All' : 'Select All'}</span>
+                </button>
+              )}
+
+              <div className="w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs rounded bg-[var(--bg-secondary,#18181b)] border border-[var(--border-subtle,rgba(255,255,255,0.1))] text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent,#eab308)]"
+                />
+              </div>
             </div>
           </div>
+
+          {/* Multi-Selection Action Bar */}
+          {selectedProjectIds.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[var(--bg-secondary,#18181b)] border border-[var(--accent,#eab308)]/30 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--accent,#eab308)] text-black text-[11px] font-bold">
+                    {selectedProjectIds.size}
+                  </span>
+                  <span className="text-xs font-semibold text-[var(--text-primary)]">
+                    {selectedProjectIds.size === 1 ? '1 project selected' : `${selectedProjectIds.size} projects selected`}
+                  </span>
+                </div>
+                <span className="text-[var(--text-secondary)] text-xs">•</span>
+                <button
+                  type="button"
+                  onClick={isAllFilteredSelected ? clearSelection : selectAllFiltered}
+                  className="text-xs text-[var(--accent,#eab308)] hover:underline cursor-pointer font-medium"
+                >
+                  {isAllFilteredSelected ? 'Deselect all' : `Select all (${filteredProjects.length})`}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSelection}
+                >
+                  Clear selection
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setBulkDeleteOpen(true)}
+                  icon={
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  }
+                >
+                  Delete ({selectedProjectIds.size})
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Projects Grid */}
           {loading ? (
@@ -765,36 +903,68 @@ export default function SelfHostDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredProjects.map((p) => (
-                <div
-                  key={p.id}
-                  className="group relative flex flex-col justify-between p-4 rounded-xl bg-[var(--bg-secondary,#18181b)] border border-[var(--border-subtle,rgba(255,255,255,0.08))] hover:border-[var(--border-hover,rgba(255,255,255,0.2))] hover:shadow-lg transition-all duration-150"
-                >
-                  <div>
-                    {/* Card Visual Header */}
-                    <div
-                      onClick={() => handleOpen(p.id)}
-                      className="h-36 rounded-lg bg-gradient-to-br from-[var(--bg-hover,#27272a)] to-[var(--bg-primary,#121214)] border border-[var(--border-subtle,rgba(255,255,255,0.08))] flex flex-col items-center justify-center cursor-pointer group-hover:brightness-105 transition-all overflow-hidden relative"
-                    >
-                      {p.previewImage ? (
-                        <img
-                          src={p.previewImage}
-                          alt={p.name}
-                          className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-[var(--bg-secondary,#18181b)]/80 flex items-center justify-center text-[var(--text-secondary)]">
-                          <svg className="w-5 h-5 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <path d="M3 9h18M9 21V9" />
-                          </svg>
+              {filteredProjects.map((p) => {
+                const isSelected = selectedProjectIds.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className={`group relative flex flex-col justify-between p-4 rounded-xl bg-[var(--bg-secondary,#18181b)] border transition-all duration-150 ${
+                      isSelected
+                        ? 'border-[var(--accent,#eab308)] ring-1 ring-[var(--accent,#eab308)]/50 shadow-lg shadow-[var(--accent,#eab308)]/5'
+                        : 'border-[var(--border-subtle,rgba(255,255,255,0.08))] hover:border-[var(--border-hover,rgba(255,255,255,0.2))] hover:shadow-lg'
+                    }`}
+                  >
+                    <div>
+                      {/* Card Visual Header */}
+                      <div
+                        onClick={() => handleOpen(p.id)}
+                        className="h-36 rounded-lg bg-gradient-to-br from-[var(--bg-hover,#27272a)] to-[var(--bg-primary,#121214)] border border-[var(--border-subtle,rgba(255,255,255,0.08))] flex flex-col items-center justify-center cursor-pointer group-hover:brightness-105 transition-all overflow-hidden relative"
+                      >
+                        {/* Multi-select checkbox */}
+                        <div
+                          className="absolute top-2.5 left-2.5 z-20"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            title={isSelected ? 'Deselect project' : 'Select project'}
+                            aria-label={isSelected ? `Deselect ${p.name}` : `Select ${p.name}`}
+                            onClick={(e) => toggleSelect(p.id, e)}
+                            className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-[var(--accent,#eab308)] text-black shadow-md ring-2 ring-[var(--accent,#eab308)]/50 opacity-100'
+                                : 'bg-black/60 backdrop-blur-md text-white/80 border border-white/30 opacity-0 group-hover:opacity-100 hover:bg-black/80 hover:scale-105 hover:border-white/60'
+                            } ${selectedProjectIds.size > 0 ? '!opacity-100' : ''}`}
+                          >
+                            {isSelected ? (
+                              <svg className="w-3.5 h-3.5 stroke-[3]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              <div className="w-2.5 h-2.5 rounded-sm border border-white/60" />
+                            )}
+                          </button>
                         </div>
-                      )}
-                      <span className="absolute bottom-2 right-2 text-[10px] text-white/90 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded font-medium shadow">
-                        {p.fileCount} files
-                      </span>
-                    </div>
+
+                        {p.previewImage ? (
+                          <img
+                            src={p.previewImage}
+                            alt={p.name}
+                            className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-[var(--bg-secondary,#18181b)]/80 flex items-center justify-center text-[var(--text-secondary)]">
+                            <svg className="w-5 h-5 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <path d="M3 9h18M9 21V9" />
+                            </svg>
+                          </div>
+                        )}
+                        <span className="absolute bottom-2 right-2 text-[10px] text-white/90 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded font-medium shadow">
+                          {p.fileCount} files
+                        </span>
+                      </div>
 
                     {/* Title & Metadata */}
                     <div className="mt-3">
@@ -1012,7 +1182,8 @@ export default function SelfHostDashboard() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </main>
@@ -1108,6 +1279,18 @@ export default function SelfHostDashboard() {
         confirmLabel="Delete Project"
         danger
         loading={deleting}
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDeleteConfirm}
+        title={selectedProjectIds.size === 1 ? 'Delete Project' : `Delete ${selectedProjectIds.size} Projects`}
+        message={`Are you sure you want to delete ${selectedProjectIds.size === 1 ? 'this project' : `these ${selectedProjectIds.size} projects`}?\nAll pages, versions, and uploaded files in ${selectedProjectIds.size === 1 ? 'this project' : 'these projects'} will be permanently removed.`}
+        confirmLabel={selectedProjectIds.size === 1 ? 'Delete Project' : `Delete ${selectedProjectIds.size} Projects`}
+        danger
+        loading={bulkDeleting}
       />
 
       {/* Create New Folder Modal */}
