@@ -2,6 +2,7 @@
 // Preset, This Page (Exit) + Next/Any Page (Enter) rows. Each side opens a
 // SideEditor sub-panel. See plan §6.2.
 
+import { useRef, useEffect } from 'react';
 import { ToolRow, ToolSelect, ControlActionRow, RemoveButton } from '../../controls';
 import { useToolPopup } from '../../ui/ToolPopup';
 import SideEditor from './SideEditor';
@@ -23,22 +24,42 @@ export default function PageEffectPopup({ effect, onChange, targetOptions }: {
   targetOptions: { value: string; label: string }[];
 }) {
   const { pushPanel } = useToolPopup();
+  const effectRef = useRef(effect);
+  effectRef.current = effect;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    effectRef.current = effect;
+  }, [effect]);
 
   const setPreset = (preset: string) => {
-    if (preset === 'custom') { onChange({ ...effect, preset }); return; }
+    if (preset === 'custom') {
+      const next = { ...effectRef.current, preset };
+      effectRef.current = next;
+      onChangeRef.current(next);
+      return;
+    }
     const sides = applyPreset(preset);
-    onChange({ ...effect, preset, exit: sides.exit, enter: sides.enter });
+    const next = { ...effectRef.current, preset, exit: sides.exit, enter: sides.enter };
+    effectRef.current = next;
+    onChangeRef.current(next);
   };
 
   // Editing any side flips the preset to 'custom' (design-tool parity).
   const setSide = (which: 'exit' | 'enter', side: SideConfig | undefined) => {
-    onChange({ ...effect, preset: 'custom', [which]: side });
+    const next = { ...effectRef.current, preset: 'custom', [which]: side };
+    effectRef.current = next;
+    onChangeRef.current(next);
   };
 
   const openSide = (which: 'exit' | 'enter') => {
-    const title = which === 'exit' ? 'This Page' : effect.target === 'all' ? 'Any Page' : 'Next Page';
+    const title = which === 'exit' ? 'This Page' : effectRef.current.target === 'all' ? 'Any Page' : 'Next Page';
     pushPanel(title, () => (
-      <SideEditor side={(which === 'exit' ? effect.exit : effect.enter) ?? createDefaultSide()} onChange={(s) => setSide(which, s)} />
+      <SideEditor
+        side={(which === 'exit' ? effectRef.current.exit : effectRef.current.enter) ?? createDefaultSide()}
+        onChange={(s) => setSide(which, s)}
+      />
     ));
   };
 
@@ -47,7 +68,15 @@ export default function PageEffectPopup({ effect, onChange, targetOptions }: {
   return (
     <div className="flex flex-col gap-2 p-1">
       <ToolRow label="Target">
-        <ToolSelect value={effect.target} onChange={(v) => onChange({ ...effect, target: v })} options={targetOptions} />
+        <ToolSelect
+          value={effect.target}
+          onChange={(v) => {
+            const next = { ...effectRef.current, target: v };
+            effectRef.current = next;
+            onChangeRef.current(next);
+          }}
+          options={targetOptions}
+        />
       </ToolRow>
       <ToolRow label="Preset">
         <ToolSelect value={effect.preset} onChange={setPreset} options={PRESET_OPTIONS} />
@@ -61,7 +90,11 @@ export default function PageEffectPopup({ effect, onChange, targetOptions }: {
             <RemoveButton onClick={() => setSide('exit', undefined)} />
           </ControlActionRow>
         ) : (
-          <ControlActionRow className="!pr-2" onClick={() => { setSide('exit', createDefaultSide()); openSide('exit'); }}>
+          <ControlActionRow className="!pr-2" onClick={() => {
+            const side = createDefaultSide();
+            setSide('exit', side);
+            openSide('exit');
+          }}>
             <span className="flex-1 text-left text-[var(--text-secondary)]">Add Exit…</span>
           </ControlActionRow>
         )}
@@ -75,7 +108,11 @@ export default function PageEffectPopup({ effect, onChange, targetOptions }: {
             <RemoveButton onClick={() => setSide('enter', undefined)} />
           </ControlActionRow>
         ) : (
-          <ControlActionRow className="!pr-2" onClick={() => { setSide('enter', createDefaultSide()); openSide('enter'); }}>
+          <ControlActionRow className="!pr-2" onClick={() => {
+            const side = createDefaultSide();
+            setSide('enter', side);
+            openSide('enter');
+          }}>
             <span className="flex-1 text-left text-[var(--text-secondary)]">Add Enter…</span>
           </ControlActionRow>
         )}
