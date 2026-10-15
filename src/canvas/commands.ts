@@ -818,6 +818,10 @@ function wrapInternal(
     // path writes `0 0 auto` on every flow child, and the wrapper is one.
     if (!flowPlacement.flex && !flowPlacement.flexShrink) flowPlacement.flex = '0 0 auto';
   }
+  // No `backgroundColor` on any wrapper: CSS already paints it see-through, and a
+  // written `rgba(0, 0, 0, 0)` made the Fill row read "Add" while its picker
+  // opened at 0% alpha — every colour picked stayed invisible (user report
+  // 2026-10-15). With no fill, Add starts from an opaque colour like any frame.
   let baseFrameStyles: Record<string, string>;
   if (allSameParentFlow) {
     // Flow wrapper: parent is flex/grid/static and the selected children
@@ -834,7 +838,6 @@ function wrapInternal(
           // won't shrink-to-content under `auto`, but does under min-content.
           width: FIT_SIZE,
           height: FIT_SIZE,
-          backgroundColor: TRANSPARENT_FILL,
           overflow: wrapOverflow,
           ...flowPlacement,
         }
@@ -849,7 +852,6 @@ function wrapInternal(
           width: `${Math.round(flowBbox!.width)}px`,
           height: `${Math.round(flowBbox!.height)}px`,
           flex: '0 0 auto',
-          backgroundColor: TRANSPARENT_FILL,
           overflow: wrapOverflow,
           ...flowPlacement,
         }
@@ -859,7 +861,6 @@ function wrapInternal(
           // it never collapses.
           width: 'auto',
           height: 'auto',
-          backgroundColor: TRANSPARENT_FILL,
           overflow: wrapOverflow,
           ...flowPlacement,
         };
@@ -885,7 +886,6 @@ function wrapInternal(
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: TRANSPARENT_FILL,
           overflow: wrapOverflow,
         }
       : {
@@ -899,7 +899,6 @@ function wrapInternal(
           // invisible (live find 2026-09-07).
           width: !bakeFlowToAbsolute ? 'auto' : (cs.width || 'auto'),
           height: !bakeFlowToAbsolute ? 'auto' : (cs.height || 'auto'),
-          backgroundColor: TRANSPARENT_FILL,
           overflow: wrapOverflow,
         };
   } else if (layout) {
@@ -917,7 +916,6 @@ function wrapInternal(
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: TRANSPARENT_FILL,
       overflow: wrapOverflow,
     };
   } else {
@@ -930,7 +928,6 @@ function wrapInternal(
       top: `${Math.round(bbox!.top)}px`,
       width: `${Math.round(bbox!.width)}px`,
       height: `${Math.round(bbox!.height)}px`,
-      backgroundColor: TRANSPARENT_FILL,
       overflow: wrapOverflow,
     };
   }
