@@ -1,5 +1,7 @@
 // image-utils.ts — Helpers for responsive image srcSet and sizes generation across editor and exported runtime.
 
+import type { CmsImageOptimizationConfig } from '@/code/project/cms-api-config';
+
 export const RESPONSIVE_IMAGE_WIDTHS = [320, 640, 768, 1024, 1280, 1920] as const;
 
 export interface InferImageSizesOptions {
@@ -86,3 +88,73 @@ export function getUploadSrcSet(src: string | undefined | null): string | undefi
   const basePath = clean.slice(0, lastDot);
   return RESPONSIVE_IMAGE_WIDTHS.map((w) => `${basePath}-${w}w.webp ${w}w`).join(', ');
 }
+
+// ─── CMS Dynamic Image Optimization ───────────────────────────────────────
+
+export const DEFAULT_CMS_IMAGE_WIDTHS = [320, 640, 768, 1024, 1280];
+
+const SIGNED_URL_PATTERNS = [
+  /[?&](X-Amz-Signature|sig|signature|hmac)=/i,
+  /\/s--[A-Za-z0-9_-]+--\//, // Cloudinary signed URL pattern
+];
+
+export function isSignedImageUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return SIGNED_URL_PATTERNS.some((pat) => pat.test(url));
+}
+
+export function getCmsImageSrcSet(
+  src: string | undefined | null,
+  config?: CmsImageOptimizationConfig
+): string | undefined {
+  if (!src || typeof src !== 'string' || !config || !config.enabled) return undefined;
+  if (isSignedImageUrl(src)) return undefined; // Bypass signed URLs to prevent 403 Forbidden
+
+  const widths = config.widths && config.widths.length > 0 ? config.widths : DEFAULT_CMS_IMAGE_WIDTHS;
+  const quality = config.quality ?? 82;
+  const format = config.format ?? 'webp';
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(src);
+  } catch {
+    return undefined;
+  }
+
+  switch (config.engine) {
+    case 'directus': {
+      return widths
+        .map((w) => {
+          const u = new URL(parsedUrl.toString());
+          u.searchParams.set('width', String(w));
+          u.searchParams.set('quality', String(quality));
+          u.searchParams.set('format', format);
+          return `${u.toString()} ${w}w`;
+        })
+        .join(', ');
+    }
+    case 'cloudflare': {
+      const zone = (config.cloudflareZoneUrl || '').replace(/\/$/, '');
+      const prefix = `${zone}/cdn-cgi/image/width=`;
+      return widths
+        .map((w) => `${prefix}${w},quality=${quality},format=${format === 'auto' ? 'auto' : format}/${src} ${w}w`)
+        .join(', ');
+    }
+    case 'custom': {
+      if (!config.customPattern) return undefined;
+      return widths
+        .map((w) => {
+          const transformed = config.customPattern!
+            .replace('{url}', src)
+            .replace('{w}', String(w))
+            .replace('{q}', String(quality))
+            .replace('{format}', format);
+          return `${transformed} ${w}w`;
+        })
+        .join(', ');
+    }
+    default:
+      return undefined;
+  }
+}
+

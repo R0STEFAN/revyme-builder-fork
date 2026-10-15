@@ -9,6 +9,18 @@ export const CMS_API_CONFIG_PATH = '_meta/cms-api-config.json';
 
 export type ApiProvider = 'directus' | 'baserow' | 'strapi' | 'custom_rest';
 
+export type CmsImageTransformEngine = 'directus' | 'cloudflare' | 'custom';
+
+export interface CmsImageOptimizationConfig {
+  enabled: boolean;
+  engine: CmsImageTransformEngine;
+  quality?: number;
+  format?: 'webp' | 'avif' | 'auto';
+  widths?: number[];
+  cloudflareZoneUrl?: string;
+  customPattern?: string;
+}
+
 export interface ApiCollectionConfig {
   slug: string;
   name: string;
@@ -18,6 +30,8 @@ export interface ApiCollectionConfig {
   headers: Record<string, string>; // e.g. { Authorization: "Bearer env:DIRECTUS_TOKEN" }
   defaultParams?: Record<string, string>; // e.g. { fields: "*.*", user_field_names: "true" }
   cacheMaxAge?: number; // in seconds, default: 14400 (4 hours)
+  revalidateTtl?: number; // in seconds, ISR / upstream fetch cache TTL
+  imageOptimization?: CmsImageOptimizationConfig;
   itemsKey?: string; // e.g. "data" for Directus/Strapi, "results" for Baserow
   idField?: string;
   slugField?: string;

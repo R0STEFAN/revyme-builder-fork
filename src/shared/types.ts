@@ -484,3 +484,12 @@ export interface LocaleOverrides {
     };
   };
 }
+
+// ─── CMS Config Types ───────────────────────────────────────────────────
+
+export type {
+  CmsImageOptimizationConfig,
+  CmsImageTransformEngine,
+  ApiCollectionConfig,
+} from '@/code/project/cms-api-config';
+
