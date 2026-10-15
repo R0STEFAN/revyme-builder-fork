@@ -4,23 +4,24 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import LinkPrefetchControl from './LinkPrefetchControl';
 
 describe('LinkPrefetchControl', () => {
-  it('renders prefetch options and handles change', () => {
+  it('renders prefetch options and handles change via dropdown', () => {
     const onChange = vi.fn();
-    render(<LinkPrefetchControl value="intent" onChange={onChange} />);
+    const { container } = render(<LinkPrefetchControl value="intent" onChange={onChange} />);
 
     expect(screen.getByText('Prefetch')).toBeDefined();
-    expect(screen.getByText('Intent')).toBeDefined();
+    const select = container.querySelector('select');
+    expect(select).toBeDefined();
+    expect(select?.value).toBe('intent');
 
-    // Click "View" (viewport)
-    const viewButton = screen.getByText('View');
-    fireEvent.click(viewButton);
+    // Change to viewport
+    fireEvent.change(select!, { target: { value: 'viewport' } });
     expect(onChange).toHaveBeenCalledWith('viewport');
   });
 
   it('renders overridden state with Reset Override', () => {
     const onChange = vi.fn();
     const onReset = vi.fn();
-    render(
+    const { container } = render(
       <LinkPrefetchControl
         value="viewport"
         onChange={onChange}
@@ -29,8 +30,8 @@ describe('LinkPrefetchControl', () => {
       />
     );
 
-    // Should indicate overridden
     expect(screen.getByText('Prefetch')).toBeDefined();
-    expect(screen.getByText('View')).toBeDefined();
+    const select = container.querySelector('select');
+    expect(select?.value).toBe('viewport');
   });
 });
