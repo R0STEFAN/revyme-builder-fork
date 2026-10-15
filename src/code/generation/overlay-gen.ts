@@ -511,8 +511,9 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolea
     if (!overlay) return;
     try {
       const links = overlay.querySelectorAll('a[href^="/"]');
-      const router = typeof window !== 'undefined' ? (window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
+      const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
       links.forEach((a) => {
+        if (a.getAttribute('data-prefetch') === 'off') return;
         const href = a.getAttribute('href');
         if (href && router && router.prefetch) router.prefetch(href);
       });
@@ -563,8 +564,9 @@ export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false)
       if (!overlay) return;
       try {
         const links = overlay.querySelectorAll('a[href^="/"]');
-        const router = typeof window !== 'undefined' ? (window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
+        const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
         links.forEach((a) => {
+          if (a.getAttribute('data-prefetch') === 'off') return;
           const href = a.getAttribute('href');
           if (href && router && router.prefetch) router.prefetch(href);
         });

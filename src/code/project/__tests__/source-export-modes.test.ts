@@ -717,5 +717,34 @@ export default function List() {
     expect(prepared['components/Navbar.tsx']).toContain('prefetch={true}');
     expect(prepared['app/list/page.client.tsx']).toContain('router.prefetch');
   });
+
+  it('honors explicit data-prefetch choices: off, viewport, intent', () => {
+    const customCode = `'use client';
+import React from 'react';
+import Link from 'next/link';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <Link data-prefetch="off" href="/page1">Disabled</Link>
+      <Link data-prefetch="viewport" href="/page2">Eager</Link>
+      <Link data-prefetch="intent" href="/page3">Intent</Link>
+    </div>
+  );
+}
+`;
+    const files = {
+      'app/custom/page.client.tsx': customCode,
+    };
+
+    const prepared = prepareSiteFiles(files);
+    const out = prepared['app/custom/page.client.tsx'];
+    expect(out).toContain('data-prefetch="off"');
+    expect(out).toContain('prefetch={false}');
+    expect(out).toContain('data-prefetch="viewport"');
+    expect(out).toContain('prefetch={true}');
+    expect(out).toContain('data-prefetch="intent"');
+    expect(out).toContain('router.prefetch');
+  });
 });
 

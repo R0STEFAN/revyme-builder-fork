@@ -159,7 +159,7 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
 
   if (enter) {
     const t = resolveTiming(enter.transition);
-    lines.push(`.revyme-pt-enter { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-enter.revyme-pt-entering { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; }`);
     const mf = enter.mask ? maskToClip(enter.mask, 'clipped') : null;
     const mt = enter.mask ? maskToClip(enter.mask, 'full') : null;
     lines.push('@keyframes revyme-vt-enter {');

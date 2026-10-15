@@ -44,6 +44,7 @@ import { syncLinkHandlerInCode } from '@/code/generation/generator-styles';
 import LinkSectionControl from './LinkSectionControl';
 import LinkRelControl from './LinkRelControl';
 import LinkParamsControl from './LinkParamsControl';
+import LinkPrefetchControl, { type LinkPrefetchMode } from './LinkPrefetchControl';
 import { parseRelTokens, isUserRelToken } from './link-rel-utils';
 import LinkSlugControl, { type CmsNavMode, type SlugVariantContext } from './LinkSlugControl';
 import { expediteStableAtomSync } from '@/canvas/hooks/useStableAtomSync';
@@ -111,6 +112,7 @@ export default function LinkTool() {
   const smoothScroll = node?.attrs?.['data-smooth-scroll'] ?? '';
   const relValue = node?.attrs?.rel ?? '';
   const keepParams = node?.attrs?.['data-keep-params'] ?? '';
+  const prefetchAttr = (node?.attrs?.['data-prefetch'] as LinkPrefetchMode) || 'auto';
   // CMS detail-page navigation: the `data-cms-nav` marker (set by the Slug
   // control or an Insert-panel prev/next drop) records a prev/next binding.
   const cmsPageMeta = useAtomValue(cmsPageMetaAtom);
@@ -171,7 +173,7 @@ export default function LinkTool() {
   // Optional controls toggled via the section's `+` menu (Rel / Parameters).
   // A control is shown when manually added OR when its attr is already present
   // (incl. as a variable). Tracking stays always-visible (existing behaviour).
-  const [addedControls, setAddedControls] = useState<Set<'rel' | 'params' | 'tracking'>>(new Set());
+  const [addedControls, setAddedControls] = useState<Set<'rel' | 'params' | 'tracking' | 'prefetch'>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   // ─── Navigation attribute → variable ───────────────────────────────
@@ -435,6 +437,7 @@ export default function LinkTool() {
   // (the auto `noopener noreferrer` on external links shouldn't auto-open Rel).
   const showRel = (!!relValue && !relVar && parseRelTokens(relValue).some(isUserRelToken)) || !!relVar || addedControls.has('rel');
   const showParams = !!keepParams || !!paramsVar || addedControls.has('params');
+  const showPrefetch = (!!prefetchAttr && prefetchAttr !== 'auto') || addedControls.has('prefetch');
   const showTracking = !!trackingId || !!trackingVar || addedControls.has('tracking');
 
   const detachLinkVar = useCallback((attrName: string, propName: string, kind: LinkAttrKind) => {
@@ -630,10 +633,21 @@ export default function LinkTool() {
     ]);
   }, [nodeId]);
 
-  // Show/hide an optional Link sub-control (Rel / Parameters) from the `+`
+  // Prefetch strategy — auto / intent / viewport / off
+  const handlePrefetchChange = useCallback((mode: LinkPrefetchMode) => {
+    if (!nodeId) return;
+    trace.action('link-tool:prefetch-change', { nodeId, mode });
+    queueMutation({
+      type: 'updateHtmlAttrs',
+      nodeId,
+      attrs: { 'data-prefetch': mode === 'auto' ? '' : mode },
+    });
+  }, [nodeId]);
+
+  // Show/hide an optional Link sub-control (Rel / Parameters / Prefetch) from the `+`
   // add-menu. Unchecking clears the literal attr too (a bound variable is
   // detached via its pill ×, not here).
-  const toggleOptionalControl = useCallback((key: 'rel' | 'params' | 'tracking', currentlyShown: boolean) => {
+  const toggleOptionalControl = useCallback((key: 'rel' | 'params' | 'tracking' | 'prefetch', currentlyShown: boolean) => {
     if (!nodeId) return;
     trace.action('link-tool:toggle-optional', { nodeId, key, currentlyShown });
     if (currentlyShown) {
@@ -644,6 +658,8 @@ export default function LinkTool() {
           { type: 'updateHtmlAttrs', nodeId, attrs: { 'data-keep-params': '' } },
           { type: 'syncLinkHandler', nodeId },
         ]);
+      } else if (key === 'prefetch') {
+        queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-prefetch': '' } });
       } else {
         setLocalTracking('');
         queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-revyme-track': '' } });
@@ -761,7 +777,7 @@ export default function LinkTool() {
   // blue `hover:!bg-[var(--accent)]`, white-on-hover text, backdrop to close.
   // Nothing left to add → hide the `+` entirely (Rel + Parameters + Tracking
   // all already on the link).
-  const allOptionalAdded = showRel && showParams && showTracking;
+  const allOptionalAdded = showRel && showParams && showPrefetch && showTracking;
   const addMenuAction = allOptionalAdded ? null : (
     <div className="relative">
       <button
@@ -780,7 +796,7 @@ export default function LinkTool() {
             {/* Only controls NOT yet on the link — once added it's shown in the
                 section, so it drops off the menu (no checkmark / left gutter). */}
             {(() => {
-              const opts = ([['rel', 'Rel', showRel], ['params', 'Parameters', showParams], ['tracking', 'Tracking', showTracking]] as const).filter(([, , shown]) => !shown);
+              const opts = ([['rel', 'Rel', showRel], ['params', 'Parameters', showParams], ['prefetch', 'Prefetch', showPrefetch], ['tracking', 'Tracking', showTracking]] as const).filter(([, , shown]) => !shown);
               if (opts.length === 0) {
                 return <div className="px-2.5 py-1.5 text-xs text-[var(--text-secondary)] whitespace-nowrap">All controls added</div>;
               }
@@ -1006,6 +1022,11 @@ export default function LinkTool() {
           <HoistMenuItemProvider item={makeLinkVarItem('data-keep-params', 'smooth', keepParams === 'true' ? 'true' : 'false', 'boolean', 'Parameters')}>
             <LinkParamsControl value={keepParams === 'true'} onChange={handleParamsChange} />
           </HoistMenuItemProvider>
+        )}
+
+        {/* Prefetch strategy — Auto / Intent / Viewport / Off */}
+        {showPrefetch && (
+          <LinkPrefetchControl value={prefetchAttr} onChange={handlePrefetchChange} />
         )}
 
         {/* Anchor moved to its own "Scroll Section" tool (ScrollSectionTool) —

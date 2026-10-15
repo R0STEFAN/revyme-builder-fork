@@ -856,56 +856,47 @@ export function injectDifferentiatedLinkPrefetch(code: string, filePath: string)
 
     const isRepeater = hasCmsNav || inRepeaterAncestor;
 
-    if (isNavFile || inNavAncestor) {
-      // Primary Navigation: inject prefetch={true}
-      const prefetchIdx = opening.attributes.findIndex(
-        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'prefetch',
-      );
-      if (prefetchIdx === -1) {
-        opening.attributes.push(
-          t.jsxAttribute(t.jsxIdentifier('prefetch'), t.jsxExpressionContainer(t.booleanLiteral(true))),
-        );
-        touched = true;
-      } else {
-        const existing = opening.attributes[prefetchIdx] as t.JSXAttribute;
-        if (
-          t.isJSXExpressionContainer(existing.value) &&
-          t.isBooleanLiteral(existing.value.expression) &&
-          !existing.value.expression.value
-        ) {
-          existing.value = t.jsxExpressionContainer(t.booleanLiteral(true));
-          touched = true;
-        }
+    // Check explicit data-prefetch attribute
+    const prefetchAttrIdx = opening.attributes.findIndex(
+      (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'data-prefetch',
+    );
+    let explicitPrefetch: string | null = null;
+    if (prefetchAttrIdx !== -1) {
+      const attr = opening.attributes[prefetchAttrIdx] as t.JSXAttribute;
+      if (t.isStringLiteral(attr.value)) {
+        explicitPrefetch = attr.value.value;
       }
-    } else if (isRepeater) {
-      // Intent-based prefetch on collection repeater items
-      const prefetchIdx = opening.attributes.findIndex(
-        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'prefetch',
-      );
-      if (prefetchIdx === -1) {
-        opening.attributes.push(
-          t.jsxAttribute(t.jsxIdentifier('prefetch'), t.jsxExpressionContainer(t.booleanLiteral(false))),
-        );
-        touched = true;
-      } else {
-        const existing = opening.attributes[prefetchIdx] as t.JSXAttribute;
-        if (
-          t.isJSXExpressionContainer(existing.value) &&
-          t.isBooleanLiteral(existing.value.expression) &&
-          existing.value.expression.value
-        ) {
-          existing.value = t.jsxExpressionContainer(t.booleanLiteral(false));
-          touched = true;
-        }
-      }
+    }
 
-      // Add onMouseEnter if absent
+    const setPrefetchProp = (val: boolean) => {
+      const prefetchIdx = opening.attributes.findIndex(
+        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'prefetch',
+      );
+      if (prefetchIdx === -1) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('prefetch'), t.jsxExpressionContainer(t.booleanLiteral(val))),
+        );
+        touched = true;
+      } else {
+        const existing = opening.attributes[prefetchIdx] as t.JSXAttribute;
+        if (
+          !t.isJSXExpressionContainer(existing.value) ||
+          !t.isBooleanLiteral(existing.value.expression) ||
+          existing.value.expression.value !== val
+        ) {
+          existing.value = t.jsxExpressionContainer(t.booleanLiteral(val));
+          touched = true;
+        }
+      }
+    };
+
+    const injectSafeHoverPrefetch = () => {
       const hasOnMouseEnter = opening.attributes.some(
         (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'onMouseEnter',
       );
       if (!hasOnMouseEnter) {
         const parsed = parseJSX(
-          '<a onMouseEnter={(e) => { const href = e.currentTarget.getAttribute("href"); if (href && typeof router !== "undefined" && router.prefetch) router.prefetch(href); }} />',
+          '<a onMouseEnter={(e) => { const href = e.currentTarget.getAttribute("href"); const router = typeof window !== "undefined" ? (window.__revyme_router || window.router) : null; if (href && router && router.prefetch) router.prefetch(href); }} />',
         );
         if (parsed) {
           const attr = (parsed.program.body[0] as any).expression.openingElement.attributes[0];
@@ -913,6 +904,26 @@ export function injectDifferentiatedLinkPrefetch(code: string, filePath: string)
           touched = true;
         }
       }
+    };
+
+    if (explicitPrefetch === 'off') {
+      setPrefetchProp(false);
+    } else if (explicitPrefetch === 'viewport') {
+      setPrefetchProp(true);
+    } else if (explicitPrefetch === 'intent') {
+      setPrefetchProp(false);
+      injectSafeHoverPrefetch();
+    } else if (isNavFile || inNavAncestor) {
+      setPrefetchProp(true);
+    } else if (isRepeater) {
+      setPrefetchProp(false);
+      if (prefetchAttrIdx === -1) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('data-prefetch'), t.stringLiteral('intent')),
+        );
+        touched = true;
+      }
+      injectSafeHoverPrefetch();
     }
   };
 
