@@ -4,6 +4,9 @@ import {
   buildCmsDetailServerWrapper,
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
+  parseCmsSeoExpressions,
+  discoverDynamicRouteParams,
+  MAX_PRERENDER_COMBINATIONS,
   hasCmsSeo,
   bindableFields,
   defaultBindings,
@@ -45,6 +48,7 @@ async function runGenerateMetadata(src: string, items: unknown[] | null, slug: s
   const body = src
     .slice(src.indexOf('const seoDefaults'), src.indexOf('export default'))
     .replace('export async function', 'async function')
+    .replace(/export\s+const\s+dynamicParams\s*=\s*true;?/g, '')
     // A distinct name: the emitted code declares its own `items`, so reusing
     // that identifier would shadow the injection and throw on its own TDZ.
     .replace(new RegExp(`\\b${importVar}\\b`, 'g'), '__cmsData');
@@ -61,6 +65,7 @@ async function runGenerateStaticParams(src: string, items: unknown[] | null) {
   const body = src
     .slice(src.indexOf('export async function generateStaticParams'), src.indexOf('export default'))
     .replace('export async function generateStaticParams', 'async function generateStaticParams')
+    .replace(/export\s+const\s+dynamicParams\s*=\s*true;?/g, '')
     .replace(new RegExp(`\\b${importVar}\\b`, 'g'), '__cmsData');
   const factory = new Function('__cmsData', `${body}\nreturn generateStaticParams;`);
   const fn = factory(items) as () => Promise<Array<{ slug: string }>>;
@@ -259,5 +264,65 @@ export default function Page() {
     expect(injected).toContain('const items = Array.isArray(customPosts) ? customPosts : [];');
     expect(hasGenerateStaticParams(injected)).toBe(true);
   });
+
+  it('caps multi-segment route Cartesian product combinations to MAX_PRERENDER_COMBINATIONS', () => {
+    const allFiles: Record<string, string> = {
+      'cms/categories.json': JSON.stringify(Array.from({ length: 100 }, (_, i) => ({ slug: `cat-${i}` }))),
+      'cms/products.json': JSON.stringify(Array.from({ length: 1000 }, (_, i) => ({ slug: `prod-${i}` }))),
+    };
+    const discovered = discoverDynamicRouteParams('app/[category]/[product]/page.tsx', allFiles);
+    expect(discovered).not.toBeNull();
+    expect(discovered!.results.length).toBeLessThanOrEqual(MAX_PRERENDER_COMBINATIONS);
+    expect(discovered!.results.length).toBe(500);
+  });
 });
+
+describe('buildCmsDetailServerWrapper with seoExpressions', () => {
+  const src = buildCmsDetailServerWrapper({
+    collection: 'articles',
+    defaults: { title: 'Default Title', canonical: 'https://example.com/blog' },
+    bindings: { description: 'excerpt' },
+    expressions: {
+      title: '`${item.name} | Revyme Store`',
+      canonical: '`https://example.com/blog/${item._slug}`',
+      ogImage: 'item.cover',
+    },
+  });
+
+  it('evaluates expression formulas in generateMetadata at runtime', async () => {
+    const meta = await runGenerateMetadata(src, ITEMS, 'first');
+    expect(meta.title).toBe('First Post | Revyme Store');
+    expect(meta.description).toBe('About the first');
+    expect(meta.alternates.canonical).toBe('https://example.com/blog/first');
+    expect(meta.openGraph.images).toEqual(['https://cdn/a.png']);
+  });
+
+  it('expression takes priority over plain field binding', async () => {
+    const srcWithBoth = buildCmsDetailServerWrapper({
+      collection: 'articles',
+      bindings: { title: 'name' },
+      expressions: { title: '`Custom: ${item.name}`' },
+    });
+    const meta = await runGenerateMetadata(srcWithBoth, ITEMS, 'first');
+    expect(meta.title).toBe('Custom: First Post');
+  });
+
+  it('safely falls back to default if expression throws', async () => {
+    const srcBadExpr = buildCmsDetailServerWrapper({
+      collection: 'articles',
+      defaults: { title: 'Fallback Title' },
+      expressions: { title: 'item.nonExistent.deepProp' },
+    });
+    const meta = await runGenerateMetadata(srcBadExpr, ITEMS, 'first');
+    expect(meta.title).toBe('Fallback Title');
+  });
+
+  it('parses seoExpressions back from generated server wrapper', () => {
+    const parsed = parseCmsSeoExpressions(src);
+    expect(parsed.title).toBe('`${item.name} | Revyme Store`');
+    expect(parsed.canonical).toBe('`https://example.com/blog/${item._slug}`');
+    expect(parsed.ogImage).toBe('item.cover');
+  });
+});
+
 

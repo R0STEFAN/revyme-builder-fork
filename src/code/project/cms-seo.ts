@@ -119,6 +119,23 @@ export function parseCmsSeoDefaults(serverCode: string): Record<string, any> {
   return parseLocalObjectFromCode(serverCode, 'seoDefaults');
 }
 
+export type CmsSeoExpressions = Partial<Record<string, string>>;
+
+export function parseCmsSeoExpressions(serverCode: string): CmsSeoExpressions {
+  const raw = parseLocalObjectFromCode(serverCode, 'seoExpressions');
+  const out: CmsSeoExpressions = {};
+  const validKeys = [
+    'title', 'description', 'canonical',
+    'ogTitle', 'ogDescription', 'ogImage',
+    'twitterTitle', 'twitterDescription', 'twitterImage',
+  ];
+  for (const key of validKeys) {
+    const v = raw[key];
+    if (typeof v === 'string' && v) out[key] = v;
+  }
+  return out;
+}
+
 // ─── Write ──────────────────────────────────────────────────────────────────
 
 /** kebab-or-digit-leading collection slug → a legal JS identifier. Mirrors
@@ -166,6 +183,7 @@ export interface BuildDetailWrapperInput {
    *  empty. Flat keys matching CMS_SEO_SLOTS, plus `canonical`/robots. */
   defaults?: Record<string, unknown>;
   bindings?: CmsSeoBindings;
+  expressions?: CmsSeoExpressions;
   includeStaticParams?: boolean;
   apiConfig?: ApiCollectionConfig | null;
 }
@@ -184,7 +202,7 @@ export interface BuildDetailWrapperInput {
  * static defaults rather than throw and 500 the route.
  */
 export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): string {
-  const { collection, defaults = {}, bindings = {}, includeStaticParams } = input;
+  const { collection, defaults = {}, bindings = {}, expressions = {}, includeStaticParams } = input;
   const apiConfig = input.apiConfig !== undefined ? input.apiConfig : getApiCollection(collection);
 
   const defaultsLiteral = inlineObject([
@@ -200,6 +218,13 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
     ['canonical', defaults.canonical],
   ]);
   const bindingsLiteral = inlineObject(CMS_SEO_SLOTS.map(({ key }) => [key, bindings[key as CmsSeoSlot]]));
+
+  const allExpressionSlots = [
+    'title', 'description', 'canonical',
+    'ogTitle', 'ogDescription', 'ogImage',
+    'twitterTitle', 'twitterDescription', 'twitterImage',
+  ];
+  const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
 
   const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
     ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
@@ -267,6 +292,8 @@ const seoDefaults = ${defaultsLiteral};
 
 const seoBindings = ${bindingsLiteral};
 
+const seoExpressions = ${expressionsLiteral};
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
@@ -281,7 +308,27 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const item = ${itemExtract};
     if (!item) return seoDefaults;
 
+  const evalExpr = (expr: string) => {
+    try {
+      const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+      const fn = new Function('item', 'params', \`return (\${unwrapped});\`);
+      const val = fn(item, { slug });
+      if (val === undefined || val === null) return undefined;
+      if (typeof val === 'object') {
+        return val.url || (val.id ? \`/assets/\${val.id}\` : undefined) || val.filename_disk || undefined;
+      }
+      return String(val);
+    } catch {
+      return undefined;
+    }
+  };
+
   const bound = (slot: string) => {
+    const expr = (seoExpressions as Record<string, string>)[slot];
+    if (expr) {
+      const v = evalExpr(expr);
+      if (v !== undefined && v !== '') return v;
+    }
     const field = (seoBindings as Record<string, string>)[slot];
     if (!field || !item) return undefined;
     const value = field.includes('.')
@@ -299,6 +346,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description = pick('description');
   const ogImage = pick('ogImage');
   const twitterImage = pick('twitterImage') ?? ogImage;
+  const canonical = pick('canonical');
 
   return {
     title,
@@ -314,7 +362,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description: pick('twitterDescription', 'description'),
       image: twitterImage,
     },
-    alternates: { canonical: (seoDefaults as any).canonical || undefined },${robots}
+    alternates: { canonical: canonical || (seoDefaults as any).canonical || undefined },${robots}
   };
   } catch {
     return seoDefaults;
@@ -368,11 +416,33 @@ const seoDefaults = ${defaultsLiteral};
 
 const seoBindings = ${bindingsLiteral};
 
+const seoExpressions = ${expressionsLiteral};
+
 export async function generateMetadata({ params }) {
   const resolved = await params;
   const items = Array.isArray(${varName}) ? ${varName} : [];
   const item = items.find((i) => i && i._slug === resolved?.slug);
+  const evalExpr = (expr) => {
+    try {
+      const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+      const fn = new Function('item', 'params', \`return (\${unwrapped});\`);
+      const val = fn(item, { slug: resolved?.slug, ...(resolved || {}) });
+      if (val === undefined || val === null) return undefined;
+      if (typeof val === 'object') {
+        return val.url || (val.id ? \`/assets/\${val.id}\` : undefined) || val.filename_disk || undefined;
+      }
+      return String(val);
+    } catch {
+      return undefined;
+    }
+  };
+
   const bound = (slot) => {
+    const expr = seoExpressions[slot];
+    if (expr) {
+      const v = evalExpr(expr);
+      if (v !== undefined && v !== '') return v;
+    }
     const field = seoBindings[slot];
     if (!field || !item) return undefined;
     const value = field.includes('.')
@@ -390,6 +460,7 @@ export async function generateMetadata({ params }) {
   const description = pick('description');
   const ogImage = pick('ogImage');
   const twitterImage = pick('twitterImage') ?? ogImage;
+  const canonical = pick('canonical');
 
   return {
     title,
@@ -405,10 +476,12 @@ export async function generateMetadata({ params }) {
       description: pick('twitterDescription', 'description'),
       image: twitterImage,
     },
-    alternates: { canonical: seoDefaults.canonical || undefined },${robots}
+    alternates: { canonical: canonical || seoDefaults.canonical || undefined },${robots}
   };
 }
 ${staticParams}
+export const dynamicParams = true;
+
 export default function Page() {
   return <PageClient />;
 }
@@ -449,6 +522,8 @@ export function ensureCmsDetailStaticParams(serverCode: string, paramName = 'slu
   }
   return serverCode.endsWith('\n') ? `${serverCode}\n${snippet}` : `${serverCode}\n\n${snippet}`;
 }
+
+export const MAX_PRERENDER_COMBINATIONS = 500;
 
 /**
  * Discover known static parameter combinations for a dynamic Next.js route path.
@@ -559,6 +634,7 @@ export function discoverDynamicRouteParams(
   const seen = new Set<string>();
 
   function addCombination(obj: Record<string, string>) {
+    if (results.length >= MAX_PRERENDER_COMBINATIONS) return;
     for (const p of paramNames) {
       if (!obj[p]) return;
     }
@@ -571,6 +647,7 @@ export function discoverDynamicRouteParams(
 
   // A. Match URLs against route segments (exact and prefix)
   for (const u of knownUrls) {
+    if (results.length >= MAX_PRERENDER_COMBINATIONS) break;
     const urlParts = u.replace(/^\/+/, '').split('/');
     if (urlParts.length >= segments.length) {
       let matches = true;
@@ -595,9 +672,11 @@ export function discoverDynamicRouteParams(
   // C. Match collections to individual params
   for (const p of paramNames) {
     let col = null;
+    const iesPlural = p.endsWith('y') ? p.slice(0, -1) + 'ies' : null;
     if (collections.has(p)) col = collections.get(p);
     else if (collections.has(p + 's')) col = collections.get(p + 's');
     else if (collections.has(p + 'es')) col = collections.get(p + 'es');
+    else if (iesPlural && collections.has(iesPlural)) col = collections.get(iesPlural);
     else if (parentSegment && collections.has(parentSegment)) col = collections.get(parentSegment);
 
     if (col) {
@@ -611,6 +690,7 @@ export function discoverDynamicRouteParams(
   // D. Multi-segment Cartesian product
   if (paramNames.length > 1) {
     function cartesian(index: number, current: Record<string, string>) {
+      if (results.length >= MAX_PRERENDER_COMBINATIONS) return;
       if (index === paramNames.length) {
         addCombination({ ...current });
         return;
@@ -618,6 +698,7 @@ export function discoverDynamicRouteParams(
       const p = paramNames[index];
       const values = Array.from(foundByParam.get(p) || []);
       for (const v of values) {
+        if (results.length >= MAX_PRERENDER_COMBINATIONS) break;
         current[p] = v;
         cartesian(index + 1, current);
       }
@@ -626,6 +707,7 @@ export function discoverDynamicRouteParams(
   } else if (paramNames.length === 1) {
     const p = paramNames[0];
     for (const v of foundByParam.get(p) || []) {
+      if (results.length >= MAX_PRERENDER_COMBINATIONS) break;
       addCombination({ [p]: v });
     }
   }

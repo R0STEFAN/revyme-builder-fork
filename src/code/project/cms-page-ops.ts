@@ -34,6 +34,7 @@ import {
   serializeHeadersForCode,
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
+  parseCmsSeoExpressions,
   hasGenerateStaticParams,
 } from './cms-seo';
 import { cmsNavHrefExpr } from '@/code/generation/map-gen';
@@ -1269,6 +1270,7 @@ export function syncAffectedCmsPageWrappers(
       // 1. Sync detail server wrapper
       const defaults = parseCmsSeoDefaults(serverCode);
       const bindings = parseCmsSeoBindings(serverCode);
+      const expressions = parseCmsSeoExpressions(serverCode);
       const includeStaticParams = hasGenerateStaticParams(serverCode)
         ? true
         : serverCode.includes('dynamicParams')
@@ -1279,6 +1281,7 @@ export function syncAffectedCmsPageWrappers(
         collection: collectionSlug,
         defaults,
         bindings,
+        expressions,
         includeStaticParams,
         apiConfig,
       });
