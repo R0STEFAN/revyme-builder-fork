@@ -17,6 +17,7 @@ import {
   syncOverlayAppearTransformInCode,
   healMissingOverlayEffectsInCode,
   buildRelativeOverlayPosEffect,
+  buildFixedOverlayRuntimeEffect,
   transferRootOverlayToInstanceInCode,
   transferDescendantOverlaysToMasterInCode,
   reattachPastedOverlayInCode,
@@ -1854,6 +1855,16 @@ describe('healMissingOverlayEffectsInCode — restores a dropped positioner', ()
     expectParses(healed);
     expect(healed).toContain('onOverlayClick');
     expect(healed).toContain('overlay.addEventListener(\'click\', onOverlayClick, true);');
+  });
+
+  test('injects router.prefetch on opened overlay links for fixed and relative overlays', () => {
+    const fixedCode = buildFixedOverlayRuntimeEffect('ov1', 'ov1Open');
+    expect(fixedCode).toContain('router.prefetch');
+    expect(fixedCode).toContain("overlay.querySelectorAll('a[href^=\"/\"]')");
+
+    const relCode = buildRelativeOverlayPosEffect('ov1', false);
+    expect(relCode).toContain('router.prefetch');
+    expect(relCode).toContain("overlay.querySelectorAll('a[href^=\"/\"]')");
   });
 });
 

@@ -499,15 +499,24 @@ function buildOverlayHoverMirrorAttr(triggerConfig: OverlayTriggerConfig, overla
  *  `pageScroll === 'auto'`. Backdrop = a press whose target is the overlay
  *  element itself (not its content). fill/zIndex live in the element style
  *  (config-baked at create; the editor Renderer also applies them live). */
-export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped = false): string {
-  const varName = stateVarName(overlayId);
+export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolean | string = false): string {
+  const isScoped = scoped === true || scoped === 'scoped';
+  const varName = (typeof scoped === 'string' && scoped !== 'scoped') ? scoped : stateVarName(overlayId);
   const setVarName = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
   const esc = escapeRegExp(overlayId);
   void esc;
   return `  useEffect(() => {
     if (!${varName}) return;
-    const overlay = ${findLitJs(overlayId, scoped)};
+    const overlay = ${findLitJs(overlayId, isScoped)};
     if (!overlay) return;
+    try {
+      const links = overlay.querySelectorAll('a[href^="/"]');
+      const router = typeof window !== 'undefined' ? (window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
+      links.forEach((a) => {
+        const href = a.getAttribute('href');
+        if (href && router && router.prefetch) router.prefetch(href);
+      });
+    } catch {}
     const cfg = JSON.parse(overlay.getAttribute('data-overlay') || '{}');
     if (cfg.fill) overlay.style.backgroundColor = cfg.fill;
     if (cfg.zIndex != null) overlay.style.zIndex = String(cfg.zIndex);
@@ -552,6 +561,14 @@ export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false)
     const position = () => {
       const overlay = ${findLitJs(overlayId, scoped)};
       if (!overlay) return;
+      try {
+        const links = overlay.querySelectorAll('a[href^="/"]');
+        const router = typeof window !== 'undefined' ? (window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
+        links.forEach((a) => {
+          const href = a.getAttribute('href');
+          if (href && router && router.prefetch) router.prefetch(href);
+        });
+      } catch {}
       const raw = JSON.parse(overlay.getAttribute('data-overlay') || '{}');
       let cfg = raw;
       if (raw.responsive) {
