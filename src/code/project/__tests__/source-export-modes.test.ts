@@ -6,6 +6,9 @@ import {
   detectPageCollectionQueries,
   injectCmsDatasetsIntoClientPage,
   orchestrateServerFetchForQueries,
+  buildCmsQueryRouteHandler,
+  buildCmsRevalidateRouteHandler,
+  injectResponsiveImageSrcSets,
 } from '../source-export';
 import { buildCmsDetailServerWrapper } from '../cms-seo';
 import { saveApiCollection, setCmsMode } from '../cms-api-config';
@@ -460,3 +463,190 @@ describe('Application-Level Timeout & Error Handling in Server Wrappers', () => 
     expect(wrapper).toContain('throw err;');
   });
 });
+
+describe('buildCmsQueryRouteHandler caching & revalidate', () => {
+  it('emits next: { revalidate: ... } with configured TTL or default 60', () => {
+    const handler = buildCmsQueryRouteHandler({
+      articles: {
+        slug: 'articles',
+        name: 'Articles',
+        url: 'https://cms.example.com/items/articles',
+        revalidateTtl: 300,
+      },
+      tags: {
+        slug: 'tags',
+        name: 'Tags',
+        url: 'https://cms.example.com/items/tags',
+      },
+    });
+
+    expect(handler).toContain('next: {');
+    expect(handler).toContain('revalidate: config.revalidateTtl ?? 60');
+    expect(handler).toContain('"revalidateTtl": 300');
+  });
+});
+
+describe('Component data adaptation in source export', () => {
+  it('adapts component CMS imports into /api/cms/query POST relay with { collection: ... }', () => {
+    const navComponent = `'use client';
+import React from 'react';
+import categories from '@/cms/categories.json';
+
+export default function Navbar() {
+  return (
+    <nav data-id="nav">
+      {categories.map((c: any) => <a key={c.id} href={'/cat/' + c.slug}>{c.name}</a>)}
+    </nav>
+  );
+}
+`;
+    const files = {
+      '_meta/cms-api-config.json': JSON.stringify({
+        mode: 'api',
+        apiCollections: {
+          categories: {
+            slug: 'categories',
+            name: 'Categories',
+            url: 'https://cms.example.com/items/categories',
+          },
+        },
+      }),
+      'components/Navbar.tsx': navComponent,
+    };
+
+    const prepared = prepareSiteFiles(files, { buildMode: 'dynamic' });
+    const result = prepared['components/Navbar.tsx'];
+
+    expect(result).toContain("fetch('/api/cms/query'");
+    expect(result).toContain("collection: 'categories'");
+    expect(result).not.toContain("source: 'categories'");
+    expect(result).not.toContain("source=");
+  });
+});
+
+describe('Remote CMS image optimization in export pipeline', () => {
+  it('attaches srcSet and preserves query params for remote CMS images', () => {
+    const pageWithImage = `'use client';
+import React from 'react';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <img src="https://cms.example.com/assets/banner-123.jpg?token=secret123" style={{ width: '800px' }} />
+    </div>
+  );
+}
+`;
+    const apiConfigs = {
+      banner: {
+        slug: 'banner',
+        name: 'Banner',
+        url: 'https://cms.example.com/items/banner',
+        imageOptimization: {
+          enabled: true,
+          engine: 'directus' as const,
+          quality: 80,
+          format: 'webp' as const,
+        },
+      },
+    };
+
+    const out = injectResponsiveImageSrcSets(pageWithImage, apiConfigs);
+    expect(out).toContain('srcSet="');
+    expect(out).toContain('width=640');
+    expect(out).toContain('quality=80');
+    expect(out).toContain('format=webp');
+    expect(out).toContain('token=secret123');
+    expect(out).toContain('640w');
+  });
+
+  it('bypasses signed remote image URLs without attaching transformed srcSet', () => {
+    const pageWithSignedImage = `'use client';
+import React from 'react';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <img src="https://cms.example.com/assets/img.jpg?X-Amz-Signature=abcdef123456" style={{ width: '800px' }} />
+    </div>
+  );
+}
+`;
+    const apiConfigs = {
+      banner: {
+        slug: 'banner',
+        name: 'Banner',
+        url: 'https://cms.example.com/items/banner',
+        imageOptimization: {
+          enabled: true,
+          engine: 'directus' as const,
+        },
+      },
+    };
+
+    const out = injectResponsiveImageSrcSets(pageWithSignedImage, apiConfigs);
+    expect(out).not.toContain('width=640');
+  });
+});
+
+describe('On-demand revalidation handler generation', () => {
+  it('emits app/api/revalidate/route.ts when API collections exist', () => {
+    const files = {
+      '_meta/cms-api-config.json': JSON.stringify({
+        mode: 'api',
+        apiCollections: {
+          posts: {
+            slug: 'posts',
+            name: 'Posts',
+            url: 'https://cms.example.com/items/posts',
+          },
+        },
+      }),
+      'app/page.tsx': 'export default function Page() { return <div>Home</div>; }',
+    };
+
+    const prepared = prepareSiteFiles(files);
+    expect(prepared['app/api/revalidate/route.ts']).toBeDefined();
+    expect(prepared['app/api/revalidate/route.ts']).toContain('revalidatePath');
+    expect(prepared['app/api/revalidate/route.ts']).toContain('revalidateTag');
+    expect(prepared['app/api/revalidate/route.ts']).toContain('REVALIDATION_SECRET');
+  });
+});
+
+describe('Differentiated link prefetching', () => {
+  it('injects prefetch={true} on navigation links and intent prefetch on repeating collection items', () => {
+    const navCode = `'use client';
+import React from 'react';
+import Link from 'next/link';
+
+export default function Navbar() {
+  return (
+    <nav data-id="nav">
+      <Link href="/about">About</Link>
+    </nav>
+  );
+}
+`;
+    const repeaterCode = `'use client';
+import React from 'react';
+import Link from 'next/link';
+
+export default function List() {
+  return (
+    <div data-id="root">
+      <Link data-cms-nav="row" href="/posts/hello">Hello</Link>
+    </div>
+  );
+}
+`;
+    const files = {
+      'components/Navbar.tsx': navCode,
+      'app/list/page.client.tsx': repeaterCode,
+    };
+
+    const prepared = prepareSiteFiles(files);
+    expect(prepared['components/Navbar.tsx']).toContain('prefetch={true}');
+    expect(prepared['app/list/page.client.tsx']).toContain('router.prefetch');
+  });
+});
+

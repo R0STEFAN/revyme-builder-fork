@@ -29,7 +29,7 @@ import { generate } from '../generation/generator-utils';
 import { healMissingOverlayEffectsInCode } from '../generation/overlay-gen';
 import { PAGE_TRANSITIONS_SOURCE, PAGE_EFFECTS_RUNTIME_SOURCE } from '../generation/page-transitions-gen';
 import { transformSiteFilesForNextFonts } from '../generation/next-font-gen';
-import { getUploadSrcSet, inferImageSizes } from '@/shared/image-utils';
+import { getUploadSrcSet, inferImageSizes, getCmsImageSrcSet, isSignedImageUrl } from '@/shared/image-utils';
 import { IMAGE_UTILS_TS, OPTIMIZE_IMAGES_SCRIPT } from '@/shared/image-export-constants';
 import {
   ensureCmsDetailStaticParams,
@@ -46,7 +46,7 @@ import {
   repairBareAltAttributes,
   type DetectedCollectionQuery,
 } from './cms-page-ops';
-import { loadCmsProjectConfig, type ApiCollectionConfig } from './cms-api-config';
+import { loadCmsProjectConfig, type ApiCollectionConfig, type CmsImageOptimizationConfig } from './cms-api-config';
 import { isLocaleRouteFile } from './locale-route-ops';
 import { escapeRegExp } from '@/shared/regex-utils';
 
@@ -95,11 +95,44 @@ export function ensureGetUploadSrcSetImport(ast: t.File): void {
   }
 }
 
+/** Ensure import { getCmsImageSrcSet } from '@/lib/image-utils' is present in the AST */
+export function ensureCmsImageUtilsImport(ast: t.File): void {
+  let hasImport = false;
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.source.value !== '@/lib/image-utils') continue;
+    for (const spec of node.specifiers) {
+      if (
+        spec.type === 'ImportSpecifier' &&
+        spec.imported.type === 'Identifier' &&
+        spec.imported.name === 'getCmsImageSrcSet'
+      ) {
+        hasImport = true;
+      }
+    }
+  }
+  if (!hasImport) {
+    const importDecl = t.importDeclaration(
+      [t.importSpecifier(t.identifier('getCmsImageSrcSet'), t.identifier('getCmsImageSrcSet'))],
+      t.stringLiteral('@/lib/image-utils'),
+    );
+    let lastImportIdx = -1;
+    for (let i = 0; i < ast.program.body.length; i++) {
+      if (ast.program.body[i].type === 'ImportDeclaration') lastImportIdx = i;
+    }
+    if (lastImportIdx >= 0) ast.program.body.splice(lastImportIdx + 1, 0, importDecl);
+    else ast.program.body.unshift(importDecl);
+  }
+}
+
 /**
  * Scan JSX code and automatically inject responsive srcSet and sizes into any
  * <img ...> and <motion.img ...> tags that reference uploads or dynamic CMS expressions.
  */
-export function injectResponsiveImageSrcSets(code: string): string {
+export function injectResponsiveImageSrcSets(
+  code: string,
+  apiConfigs?: Record<string, ApiCollectionConfig>,
+): string {
   if (!code.includes('<img') && !code.includes('<motion.img')) return code;
 
   const ast = parseJSX(code);
@@ -227,8 +260,7 @@ export function injectResponsiveImageSrcSets(code: string): string {
       }
     };
 
-    if (t.isStringLiteral(srcAttr.value)) {
-      const srcVal = srcAttr.value.value.trim();
+    const handleSrcString = (srcVal: string) => {
       const staticSrcSet = getUploadSrcSet(srcVal);
       if (staticSrcSet) {
         opening.attributes.push(
@@ -236,32 +268,78 @@ export function injectResponsiveImageSrcSets(code: string): string {
         );
         applySizes();
         touched = true;
+        return;
       }
+
+      if ((srcVal.startsWith('http://') || srcVal.startsWith('https://')) && apiConfigs) {
+        let matchedOpt: CmsImageOptimizationConfig | undefined;
+        try {
+          const srcOrigin = new URL(srcVal).origin;
+          for (const cfg of Object.values(apiConfigs)) {
+            if (cfg.imageOptimization?.enabled) {
+              if (cfg.url && new URL(cfg.url).origin === srcOrigin) {
+                matchedOpt = cfg.imageOptimization;
+                break;
+              }
+              if (!matchedOpt) matchedOpt = cfg.imageOptimization;
+            }
+          }
+        } catch {}
+
+        if (matchedOpt) {
+          const remoteSrcSet = getCmsImageSrcSet(srcVal, matchedOpt);
+          if (remoteSrcSet) {
+            opening.attributes.push(
+              t.jsxAttribute(t.jsxIdentifier('srcSet'), t.stringLiteral(remoteSrcSet)),
+            );
+            applySizes();
+            touched = true;
+            return;
+          }
+        }
+      }
+    };
+
+    if (t.isStringLiteral(srcAttr.value)) {
+      handleSrcString(srcAttr.value.value.trim());
     } else if (t.isJSXExpressionContainer(srcAttr.value)) {
       const expr = srcAttr.value.expression;
       if (t.isStringLiteral(expr)) {
-        const srcVal = expr.value.trim();
-        const staticSrcSet = getUploadSrcSet(srcVal);
-        if (staticSrcSet) {
+        handleSrcString(expr.value.trim());
+      } else if (t.isExpression(expr) && !t.isJSXEmptyExpression(expr)) {
+        // Dynamic expression e.g. item.photo or image
+        const activeOpt = Object.values(apiConfigs || {}).find(
+          (c) => c.imageOptimization?.enabled,
+        )?.imageOptimization;
+
+        if (activeOpt) {
+          ensureCmsImageUtilsImport(ast);
           opening.attributes.push(
-            t.jsxAttribute(t.jsxIdentifier('srcSet'), t.stringLiteral(staticSrcSet)),
+            t.jsxAttribute(
+              t.jsxIdentifier('srcSet'),
+              t.jsxExpressionContainer(
+                t.callExpression(t.identifier('getCmsImageSrcSet'), [
+                  t.cloneNode(expr),
+                  t.valueToNode(activeOpt),
+                ]),
+              ),
+            ),
+          );
+          applySizes();
+          touched = true;
+        } else {
+          ensureGetUploadSrcSetImport(ast);
+          opening.attributes.push(
+            t.jsxAttribute(
+              t.jsxIdentifier('srcSet'),
+              t.jsxExpressionContainer(
+                t.callExpression(t.identifier('getUploadSrcSet'), [t.cloneNode(expr)]),
+              ),
+            ),
           );
           applySizes();
           touched = true;
         }
-      } else if (t.isExpression(expr) && !t.isJSXEmptyExpression(expr)) {
-        // Dynamic expression e.g. item.photo or image
-        ensureGetUploadSrcSetImport(ast);
-        opening.attributes.push(
-          t.jsxAttribute(
-            t.jsxIdentifier('srcSet'),
-            t.jsxExpressionContainer(
-              t.callExpression(t.identifier('getUploadSrcSet'), [t.cloneNode(expr)]),
-            ),
-          ),
-        );
-        applySizes();
-        touched = true;
       }
     }
   };
@@ -308,6 +386,7 @@ export function buildCmsQueryRouteHandler(apiConfigs: Record<string, ApiCollecti
       defaultParams: cfg.defaultParams || {},
       itemsKey: cfg.itemsKey,
       provider: cfg.provider || 'custom_rest',
+      revalidateTtl: cfg.revalidateTtl,
     };
   }
 
@@ -322,6 +401,7 @@ const API_COLLECTIONS: Record<string, {
   defaultParams?: Record<string, string>;
   itemsKey?: string;
   provider?: string;
+  revalidateTtl?: number;
 }> = ${JSON.stringify(sanitizedConfigs, null, 2)};
 
 function extractApiItems(responseJson: any, itemsKey?: string): any[] {
@@ -431,6 +511,7 @@ async function handleQuery(payload: {
     const res = await fetch(targetUrl.toString(), {
       method: config.method || 'GET',
       headers,
+      next: { revalidate: config.revalidateTtl ?? 60 },
       signal: AbortSignal.timeout(10000),
     });
 
@@ -487,6 +568,300 @@ export async function GET(req: Request) {
   return handleQuery({ collection, page, limit, offset, params });
 }
 `;
+}
+
+/**
+ * Generates on-demand cache revalidation route for app/api/revalidate/route.ts.
+ * Allows CMS webhooks to trigger instantaneous cache purging.
+ */
+export function buildCmsRevalidateRouteHandler(): string {
+  return `// AUTO-GENERATED by Revyme — On-demand revalidation handler for live CMS updates. Do not edit.
+import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath, revalidateTag } from 'next/cache';
+
+export async function POST(req: NextRequest) {
+  const secret = req.nextUrl.searchParams.get('secret') || req.headers.get('x-revalidate-secret');
+  const expectedSecret = process.env.REVALIDATION_SECRET || 'revyme-revalidate-token';
+
+  if (secret !== expectedSecret) {
+    return NextResponse.json({ message: 'Invalid secret token' }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { path, tag, collection } = body;
+
+    if (path) {
+      revalidatePath(path);
+      return NextResponse.json({ revalidated: true, path, now: Date.now() });
+    }
+
+    if (tag) {
+      revalidateTag(tag);
+      return NextResponse.json({ revalidated: true, tag, now: Date.now() });
+    }
+
+    if (collection) {
+      revalidatePath('/', 'layout');
+      return NextResponse.json({ revalidated: true, collection, now: Date.now() });
+    }
+
+    // Fallback: revalidate layout
+    revalidatePath('/', 'layout');
+    return NextResponse.json({ revalidated: true, fallback: true, now: Date.now() });
+  } catch (err: any) {
+    return NextResponse.json({ message: err?.message || 'Revalidation failed' }, { status: 500 });
+  }
+}
+`;
+}
+
+/**
+ * Adapt component CMS imports (@/cms/<slug>.json) into live /api/cms/query relay calls.
+ * In Dynamic Mode: imports are stripped and component fetches via POST /api/cms/query.
+ * In Hybrid SSG Mode: static import serves as initial SWR state, refreshed via POST /api/cms/query.
+ */
+export function adaptComponentCmsQueries(
+  code: string,
+  apiConfigs: Record<string, ApiCollectionConfig>,
+  isDynamic: boolean,
+): string {
+  if (!code.includes('/cms/') || Object.keys(apiConfigs).length === 0) return code;
+
+  let updatedCode = code;
+  const injectedHooks: string[] = [];
+
+  for (const apiSlug of Object.keys(apiConfigs)) {
+    const importRe = new RegExp(
+      `import\\s+([A-Za-z0-9_$]+)\\s+from\\s+['"](?:@|\\.\\.)\\/cms\\/${escapeRegExp(apiSlug)}\\.json['"];?`,
+      'g',
+    );
+    let match: RegExpExecArray | null;
+    while ((match = importRe.exec(updatedCode)) !== null) {
+      const fullImport = match[0];
+      const importVar = match[1];
+      const capVar = importVar.charAt(0).toUpperCase() + importVar.slice(1);
+
+      if (isDynamic) {
+        // Strip static JSON import
+        updatedCode = updatedCode.replace(fullImport, '');
+        injectedHooks.push(
+          `  const [${importVar}, set${capVar}] = React.useState<any[]>([]);\n` +
+          `  React.useEffect(() => {\n` +
+          `    fetch('/api/cms/query', {\n` +
+          `      method: 'POST',\n` +
+          `      headers: { 'Content-Type': 'application/json' },\n` +
+          `      body: JSON.stringify({ collection: '${apiSlug}' }),\n` +
+          `      cache: 'no-store',\n` +
+          `    })\n` +
+          `      .then((res) => res.json())\n` +
+          `      .then((data) => {\n` +
+          `        if (data && data.ok && Array.isArray(data.items)) set${capVar}(data.items);\n` +
+          `      })\n` +
+          `      .catch(() => {});\n` +
+          `  }, []);`,
+        );
+      } else {
+        // Hybrid SWR: retain initial static data, refresh in background
+        const initialVar = `${importVar}Initial`;
+        updatedCode = updatedCode.replace(
+          fullImport,
+          `import ${initialVar} from '@/cms/${apiSlug}.json';`,
+        );
+        injectedHooks.push(
+          `  const [${importVar}, set${capVar}] = React.useState<any[]>(${initialVar});\n` +
+          `  React.useEffect(() => {\n` +
+          `    fetch('/api/cms/query', {\n` +
+          `      method: 'POST',\n` +
+          `      headers: { 'Content-Type': 'application/json' },\n` +
+          `      body: JSON.stringify({ collection: '${apiSlug}' }),\n` +
+          `    })\n` +
+          `      .then((res) => res.json())\n` +
+          `      .then((data) => {\n` +
+          `        if (data && data.ok && Array.isArray(data.items)) set${capVar}(data.items);\n` +
+          `      })\n` +
+          `      .catch(() => {});\n` +
+          `  }, []);`,
+        );
+      }
+    }
+  }
+
+  if (injectedHooks.length === 0) return code;
+
+  // Ensure 'use client' is present
+  if (!updatedCode.includes("'use client'") && !updatedCode.includes('"use client"')) {
+    updatedCode = `'use client';\n${updatedCode}`;
+  }
+
+  // Ensure React is imported
+  if (!/\bimport\s+.*?\bReact\b.*?from\s+['"]react['"]/.test(updatedCode)) {
+    updatedCode = `import React from 'react';\n${updatedCode}`;
+  }
+
+  // Inject hooks into default export or primary component function
+  const funcMatch = updatedCode.match(
+    /(?:export\s+default\s+function\s*[\w$]*\s*\([^)]*\)\s*\{|function\s+[\w$]+\s*\([^)]*\)\s*\{)/,
+  );
+  if (funcMatch && funcMatch.index !== undefined) {
+    const insertPos = funcMatch.index + funcMatch[0].length;
+    updatedCode =
+      updatedCode.slice(0, insertPos) +
+      '\n' +
+      injectedHooks.join('\n') +
+      '\n' +
+      updatedCode.slice(insertPos);
+  }
+
+  return updatedCode;
+}
+
+/**
+ * Injects differentiated prefetching:
+ * - Primary Navigation & Header <Link> tags receive prefetch={true}.
+ * - Repeating collection links (e.g. data-cms-nav="row", data-cms-card) receive intent prefetch on hover.
+ */
+export function injectDifferentiatedLinkPrefetch(code: string, filePath: string): string {
+  if (!code.includes('<Link') && !code.includes('<MotionLink')) return code;
+
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let touched = false;
+  const isNavFile = /navbar|header|nav|menu/i.test(filePath);
+
+  const checkLink = (opening: t.JSXOpeningElement, inNavAncestor: boolean, inRepeaterAncestor: boolean) => {
+    const isLinkTag =
+      (t.isJSXIdentifier(opening.name) && opening.name.name === 'Link') ||
+      (t.isJSXIdentifier(opening.name) && opening.name.name === 'MotionLink');
+
+    if (!isLinkTag) return;
+
+    // Check if this link has data-cms-nav or is inside repeater
+    const hasCmsNav = opening.attributes.some(
+      (a) =>
+        t.isJSXAttribute(a) &&
+        t.isJSXIdentifier(a.name) &&
+        (a.name.name === 'data-cms-nav' || a.name.name === 'data-cms-card' || a.name.name === 'data-cms-item'),
+    );
+
+    const isRepeater = hasCmsNav || inRepeaterAncestor;
+
+    if (isNavFile || inNavAncestor) {
+      // Primary Navigation: inject prefetch={true}
+      const prefetchIdx = opening.attributes.findIndex(
+        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'prefetch',
+      );
+      if (prefetchIdx === -1) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('prefetch'), t.jsxExpressionContainer(t.booleanLiteral(true))),
+        );
+        touched = true;
+      } else {
+        const existing = opening.attributes[prefetchIdx] as t.JSXAttribute;
+        if (
+          t.isJSXExpressionContainer(existing.value) &&
+          t.isBooleanLiteral(existing.value.expression) &&
+          !existing.value.expression.value
+        ) {
+          existing.value = t.jsxExpressionContainer(t.booleanLiteral(true));
+          touched = true;
+        }
+      }
+    } else if (isRepeater) {
+      // Intent-based prefetch on collection repeater items
+      const prefetchIdx = opening.attributes.findIndex(
+        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'prefetch',
+      );
+      if (prefetchIdx === -1) {
+        opening.attributes.push(
+          t.jsxAttribute(t.jsxIdentifier('prefetch'), t.jsxExpressionContainer(t.booleanLiteral(false))),
+        );
+        touched = true;
+      } else {
+        const existing = opening.attributes[prefetchIdx] as t.JSXAttribute;
+        if (
+          t.isJSXExpressionContainer(existing.value) &&
+          t.isBooleanLiteral(existing.value.expression) &&
+          existing.value.expression.value
+        ) {
+          existing.value = t.jsxExpressionContainer(t.booleanLiteral(false));
+          touched = true;
+        }
+      }
+
+      // Add onMouseEnter if absent
+      const hasOnMouseEnter = opening.attributes.some(
+        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'onMouseEnter',
+      );
+      if (!hasOnMouseEnter) {
+        const parsed = parseJSX(
+          '<a onMouseEnter={(e) => { const href = e.currentTarget.getAttribute("href"); if (href && typeof router !== "undefined" && router.prefetch) router.prefetch(href); }} />',
+        );
+        if (parsed) {
+          const attr = (parsed.program.body[0] as any).expression.openingElement.attributes[0];
+          opening.attributes.push(attr);
+          touched = true;
+        }
+      }
+    }
+  };
+
+  const walk = (node: any, inNav: boolean, inRepeater: boolean) => {
+    if (!node || typeof node !== 'object') return;
+
+    let currentNav = inNav;
+    let currentRepeater = inRepeater;
+
+    if (node.type === 'JSXElement') {
+      const opening = node.openingElement;
+      const tagName = t.isJSXIdentifier(opening.name) ? opening.name.name.toLowerCase() : '';
+      if (tagName === 'nav' || tagName === 'header') {
+        currentNav = true;
+      }
+      const hasNavAttr = opening.attributes.some(
+        (a: any) =>
+          t.isJSXAttribute(a) &&
+          t.isJSXIdentifier(a.name) &&
+          (a.name.name === 'data-nav' ||
+            (a.name.name === 'data-name' &&
+              t.isStringLiteral(a.value) &&
+              (a.value.value === 'Navbar' || a.value.value === 'Header'))),
+      );
+      if (hasNavAttr) currentNav = true;
+
+      checkLink(opening, currentNav, currentRepeater);
+    } else if (node.type === 'CallExpression') {
+      // Check for .map(...) which creates repeater rows
+      if (
+        t.isMemberExpression(node.callee) &&
+        t.isIdentifier(node.callee.property) &&
+        node.callee.property.name === 'map'
+      ) {
+        currentRepeater = true;
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      if (key === 'parent' || key === 'tokens') continue;
+      const child = node[key];
+      if (Array.isArray(child)) {
+        for (const c of child) walk(c, currentNav, currentRepeater);
+      } else if (child && typeof child === 'object') {
+        walk(child, currentNav, currentRepeater);
+      }
+    }
+  };
+
+  walk(ast.program, isNavFile, false);
+
+  if (!touched) return code;
+
+  try {
+    return generate(ast, { retainLines: false, concise: false }, code).code;
+  } catch {
+    return code;
+  }
 }
 
 export interface PrepareSiteFilesOptions {
@@ -622,9 +997,19 @@ export function prepareSiteFiles(
       }
     }
 
+    // Differentiated Link prefetching: navigation links get prefetch={true}, repeater links get intent prefetch
+    if (files[path] && /\.(tsx|jsx)$/.test(path) && (files[path].includes('<Link') || files[path].includes('<MotionLink'))) {
+      files[path] = injectDifferentiatedLinkPrefetch(files[path], path);
+    }
+
+    // Adapt component CMS queries: convert static @/cms/*.json imports to live /api/cms/query relay
+    if (files[path] && path.startsWith('components/') && /\.(tsx|jsx)$/.test(path)) {
+      files[path] = adaptComponentCmsQueries(files[path], apiConfigs, isDynamicMode);
+    }
+
     // Inject responsive image srcSet and sizes into all page and component JSX files
     if (files[path] && /\.(tsx|jsx)$/.test(path) && (files[path].includes('<img') || files[path].includes('<motion.img'))) {
-      files[path] = injectResponsiveImageSrcSets(files[path]);
+      files[path] = injectResponsiveImageSrcSets(files[path], apiConfigs);
     }
   }
 
@@ -639,9 +1024,14 @@ export function prepareSiteFiles(
     files['scripts/optimize-images.mjs'] = OPTIMIZE_IMAGES_SCRIPT;
   }
 
-  // Provide server query relay route handler if API collections exist
-  if (Object.keys(apiConfigs).length > 0 && !files['app/api/cms/query/route.ts']) {
-    files['app/api/cms/query/route.ts'] = buildCmsQueryRouteHandler(apiConfigs);
+  // Provide server query relay route handler & on-demand revalidation route if API collections exist
+  if (Object.keys(apiConfigs).length > 0) {
+    if (!files['app/api/cms/query/route.ts']) {
+      files['app/api/cms/query/route.ts'] = buildCmsQueryRouteHandler(apiConfigs);
+    }
+    if (!files['app/api/revalidate/route.ts']) {
+      files['app/api/revalidate/route.ts'] = buildCmsRevalidateRouteHandler();
+    }
   }
 
   return files;
