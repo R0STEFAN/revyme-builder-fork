@@ -617,6 +617,111 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * Locate the opening brace index of the primary component function body.
+ * Accurately handles:
+ * - `export default function ComponentName(...) {`
+ * - `export default function(...) {`
+ * - `export default withResponsiveProps(ComponentName);` where `function ComponentName(...) {` is defined
+ * - `export default ComponentName;`
+ * - `const ComponentName = (...) => { ... }; export default withResponsiveProps(ComponentName);`
+ * - Correctly skips helper functions and subcomponents (like `MotionLinkBase`) that precede the main component.
+ */
+export function findComponentBodyInsertionIndex(code: string): number {
+  try {
+    const ast = parseJSX(code);
+    if (ast) {
+      let exportIdent: string | null = null;
+      let directFunctionBody: any = null;
+
+      for (const node of ast.program.body) {
+        if (t.isExportDefaultDeclaration(node)) {
+          const decl = node.declaration;
+          if (t.isFunctionDeclaration(decl) || t.isFunctionExpression(decl) || t.isArrowFunctionExpression(decl)) {
+            directFunctionBody = decl.body;
+            break;
+          } else if (t.isIdentifier(decl)) {
+            exportIdent = decl.name;
+          } else if (t.isCallExpression(decl)) {
+            const firstArg = decl.arguments[0];
+            if (firstArg) {
+              if (t.isIdentifier(firstArg)) {
+                exportIdent = firstArg.name;
+              } else if (t.isFunctionExpression(firstArg) || t.isArrowFunctionExpression(firstArg)) {
+                directFunctionBody = firstArg.body;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (directFunctionBody && (directFunctionBody as any).start != null) {
+        if (t.isBlockStatement(directFunctionBody)) {
+          return (directFunctionBody as any).start + 1;
+        }
+      }
+
+      if (exportIdent) {
+        for (const node of ast.program.body) {
+          if (t.isFunctionDeclaration(node) && node.id && node.id.name === exportIdent) {
+            if (node.body && (node.body as any).start != null) {
+              return (node.body as any).start + 1;
+            }
+          }
+          if (t.isVariableDeclaration(node)) {
+            for (const d of node.declarations) {
+              if (t.isIdentifier(d.id) && d.id.name === exportIdent && d.init) {
+                if (t.isArrowFunctionExpression(d.init) || t.isFunctionExpression(d.init)) {
+                  if (t.isBlockStatement(d.init.body) && (d.init.body as any).start != null) {
+                    return (d.init.body as any).start + 1;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback: regex scan targeting the exported identifier
+  const exportName = code.match(/export\s+default\s+function\s+([A-Za-z0-9_$]+)/)?.[1]
+    ?? code.match(/export\s+default\s+(?:withResponsiveProps|memo|React\.memo)?\s*\(\s*([A-Za-z0-9_$]+)\s*\)/)?.[1]
+    ?? code.match(/export\s+default\s+([A-Za-z0-9_$]+)\s*;/)?.[1];
+
+  const startRe = exportName
+    ? new RegExp(`function\\s+${exportName}\\s*\\(`)
+    : /export\s+default\s+function\s*[\w$]*\s*\(/;
+
+  const m = startRe.exec(code);
+  if (m) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0;
+    for (; i < code.length; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')') { depth--; if (depth === 0) { i++; break; } }
+    }
+    while (i < code.length && code[i] !== '{') i++;
+    if (i < code.length && code[i] === '{') return i + 1;
+  }
+
+  // Last-resort fallback: first function starting with a capital letter (PascalCase component)
+  const compMatch = code.match(/function\s+([A-Z]\w*)\s*\(/);
+  if (compMatch && compMatch.index !== undefined) {
+    let i = compMatch.index + compMatch[0].length - 1;
+    let depth = 0;
+    for (; i < code.length; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')') { depth--; if (depth === 0) { i++; break; } }
+    }
+    while (i < code.length && code[i] !== '{') i++;
+    if (i < code.length && code[i] === '{') return i + 1;
+  }
+
+  return -1;
+}
+
+/**
  * Adapt component CMS imports (@/cms/<slug>.json) into live /api/cms/query relay calls.
  * In Dynamic Mode: imports are stripped and component fetches via POST /api/cms/query.
  * In Hybrid SSG Mode: static import serves as initial SWR state, refreshed via POST /api/cms/query.
@@ -640,7 +745,14 @@ export function adaptComponentCmsQueries(
     while ((match = importRe.exec(updatedCode)) !== null) {
       const fullImport = match[0];
       const importVar = match[1];
+      if (importVar.endsWith('Initial')) {
+        continue;
+      }
       const capVar = importVar.charAt(0).toUpperCase() + importVar.slice(1);
+
+      if (updatedCode.includes(`const [${importVar}, set${capVar}] = React.useState`)) {
+        continue;
+      }
 
       if (isDynamic) {
         // Strip static JSON import
@@ -700,11 +812,8 @@ export function adaptComponentCmsQueries(
   }
 
   // Inject hooks into default export or primary component function
-  const funcMatch = updatedCode.match(
-    /(?:export\s+default\s+function\s*[\w$]*\s*\([^)]*\)\s*\{|function\s+[\w$]+\s*\([^)]*\)\s*\{)/,
-  );
-  if (funcMatch && funcMatch.index !== undefined) {
-    const insertPos = funcMatch.index + funcMatch[0].length;
+  const insertPos = findComponentBodyInsertionIndex(updatedCode);
+  if (insertPos !== -1) {
     updatedCode =
       updatedCode.slice(0, insertPos) +
       '\n' +

@@ -528,6 +528,63 @@ export default function Navbar() {
     expect(result).not.toContain("source: 'categories'");
     expect(result).not.toContain("source=");
   });
+
+  it('injects CMS query hooks into the primary component instead of preceding helper functions (e.g. MotionLinkBase)', () => {
+    const navWithHelpers = `'use client';
+import React, { useState } from 'react';
+import Link from 'next/link';
+import placements from '@/cms/placements.json';
+import { withResponsiveProps } from '@revyme/runtime';
+
+const MotionLink = React.forwardRef(function MotionLinkBase({ href, ...props }: any, ref: any) {
+  return href ? <Link ref={ref} href={href} {...props} /> : <div ref={ref} {...props} />;
+});
+
+function Navbar({ style }: any) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  return (
+    <nav style={style}>
+      <button onClick={() => setDropdownOpen(!dropdownOpen)}>Menu</button>
+      {dropdownOpen && (
+        <div>
+          {placements.map((item: any, idx: number) => (
+            <MotionLink key={idx} href={'/items/' + item.slug}>{item.name}</MotionLink>
+          ))}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+`;
+
+    const files = {
+      '_meta/cms-api-config.json': JSON.stringify({
+        mode: 'api',
+        apiCollections: {
+          placements: {
+            slug: 'placements',
+            name: 'Placements',
+            url: 'https://cms.example.com/items/placements',
+          },
+        },
+      }),
+      'components/Navbar.tsx': navWithHelpers,
+    };
+
+    const prepared = prepareSiteFiles(files, { ssg: true });
+    const result = prepared['components/Navbar.tsx'];
+
+    // Ensure placements hook was NOT placed inside MotionLinkBase
+    const motionLinkPart = result.slice(0, result.indexOf('function Navbar'));
+    expect(motionLinkPart).not.toContain('const [placements, setPlacements]');
+
+    // Ensure placements hook WAS placed inside Navbar
+    const navbarPart = result.slice(result.indexOf('function Navbar'));
+    expect(navbarPart).toContain('const [placements, setPlacements] = React.useState<any[]>(placementsInitial);');
+    expect(navbarPart).toContain("collection: 'placements'");
+  });
 });
 
 describe('Remote CMS image optimization in export pipeline', () => {
