@@ -82,7 +82,7 @@ describe('view-transition-css: buildViewTransitionCSS', () => {
     expect(css).toContain('@keyframes revyme-vt-exit');
     expect(css).toContain('@keyframes revyme-vt-enter');
     expect(css).toContain('prefers-reduced-motion: reduce');
-    expect(css).toContain('mix-blend-mode: plus-lighter');
+    expect(css).toContain('mix-blend-mode: normal');
   });
   it('transform effect (slide) → normal blend (opaque overlap, no bright seam)', () => {
     const css = buildViewTransitionCSS(undefined, { ...createDefaultSide(), offsetX: 100 });

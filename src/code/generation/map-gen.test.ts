@@ -751,7 +751,7 @@ export default function Page() {
 }`;
     const out = setCmsNavHrefInCode(MAP_PAGE, 'link-1', 'row', 'collection-3-2', 'item');
     expect(out).toContain('data-cms-nav="row"');
-    expect(out).toContain("href={`/collection-3-2/${item?._slug ?? ''}`}");
+    expect(out).toContain("href={`/collection-3-2/${item?._slug || item?.slug || item?.id || ''}`}");
     // Should NOT use detail-page constructs.
     expect(out).not.toContain('params?.slug');
     expect(out).not.toContain('findIndex');
@@ -771,7 +771,7 @@ export default function Page() {
   );
 }`;
     const out = setCmsNavHrefInCode(POST_PAGE, 'link-1', 'row', 'collection-3-2', 'post');
-    expect(out).toContain("href={`/collection-3-2/${post?._slug ?? ''}`}");
+    expect(out).toContain("href={`/collection-3-2/${post?._slug || post?.slug || post?.id || ''}`}");
   });
 
   it('clears a row binding on mode "none"', () => {

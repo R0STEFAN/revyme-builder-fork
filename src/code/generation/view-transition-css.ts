@@ -128,21 +128,10 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
   lines.push('@media (prefers-reduced-motion: reduce) {');
   lines.push('  .revyme-pt-exit, .revyme-pt-enter { animation-duration: 0s !important; animation-delay: 0s !important; }');
   lines.push('}');
-  lines.push('[data-revyme-pt-stage] { position: relative; width: 100%; }');
+  lines.push('[data-revyme-pt-stage] { position: relative; width: 100%; isolation: isolate; }');
   lines.push('[data-revyme-pt-stage].revyme-pt-animating { overflow: clip; }');
-  lines.push('.revyme-pt-exit { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }');
-  lines.push('.revyme-pt-enter { width: 100%; }');
-
-  const anyTransform =
-    (!!exit && (sideToTransform(exit) !== 'none' || !!exit.mask)) ||
-    (!!enter && (sideToTransform(enter) !== 'none' || !!enter.mask));
-  if (anyTransform) {
-    lines.push('[data-revyme-pt-stage] { isolation: auto; }');
-    lines.push('.revyme-pt-exit, .revyme-pt-enter { mix-blend-mode: normal; }');
-  } else {
-    lines.push('[data-revyme-pt-stage] { isolation: isolate; }');
-    lines.push('.revyme-pt-exit, .revyme-pt-enter { mix-blend-mode: plus-lighter; }');
-  }
+  lines.push('.revyme-pt-exit { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 2; mix-blend-mode: normal; }');
+  lines.push('.revyme-pt-enter { width: 100%; position: relative; z-index: 1; mix-blend-mode: normal; }');
 
   if (exit) {
     const t = resolveTiming(exit.transition);
