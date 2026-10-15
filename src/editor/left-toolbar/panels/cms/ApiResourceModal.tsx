@@ -18,6 +18,8 @@ import {
   detectApiItemsKey,
   type ApiCollectionConfig,
   type ApiProvider,
+  type CmsImageOptimizationConfig,
+  type CmsImageTransformEngine,
 } from '@/code/project/cms-api-config';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { toast } from 'sonner';
@@ -240,7 +242,16 @@ export function ApiResourceModal({
   ]);
   const [params, setParams] = useState<Array<{ key: string; value: string }>>([]);
   const [cacheMaxAge, setCacheMaxAge] = useState(14400);
+  const [revalidateTtl, setRevalidateTtl] = useState<number | undefined>(undefined);
   const [itemsKey, setItemsKey] = useState('');
+
+  // Image optimization & CDN config
+  const [imageOptEnabled, setImageOptEnabled] = useState(false);
+  const [imageEngine, setImageEngine] = useState<CmsImageTransformEngine>('directus');
+  const [imageQuality, setImageQuality] = useState(82);
+  const [imageFormat, setImageFormat] = useState<'webp' | 'avif' | 'auto'>('webp');
+  const [cloudflareZoneUrl, setCloudflareZoneUrl] = useState('');
+  const [customPattern, setCustomPattern] = useState('');
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -262,6 +273,7 @@ export function ApiResourceModal({
         setMethod(existing.method);
         setUrl(existing.url);
         setCacheMaxAge(existing.cacheMaxAge ?? 14400);
+        setRevalidateTtl(existing.revalidateTtl);
         setItemsKey(existing.itemsKey ?? '');
         setHeaders(
           Object.entries(existing.headers).map(([k, v]) => ({ key: k, value: v }))
@@ -273,6 +285,13 @@ export function ApiResourceModal({
         } else {
           setParams([]);
         }
+        const imgOpt = existing.imageOptimization;
+        setImageOptEnabled(Boolean(imgOpt?.enabled));
+        setImageEngine(imgOpt?.engine ?? (existing.provider === 'directus' ? 'directus' : 'cloudflare'));
+        setImageQuality(imgOpt?.quality ?? 82);
+        setImageFormat(imgOpt?.format ?? 'webp');
+        setCloudflareZoneUrl(imgOpt?.cloudflareZoneUrl ?? '');
+        setCustomPattern(imgOpt?.customPattern ?? '');
       }
     } else if (isOpen) {
       setName('');
@@ -281,9 +300,16 @@ export function ApiResourceModal({
       setMethod('GET');
       setUrl('');
       setCacheMaxAge(14400);
+      setRevalidateTtl(undefined);
       setItemsKey('');
       setHeaders([{ key: 'Content-Type', value: 'application/json' }]);
       setParams([]);
+      setImageOptEnabled(false);
+      setImageEngine('directus');
+      setImageQuality(82);
+      setImageFormat('webp');
+      setCloudflareZoneUrl('');
+      setCustomPattern('');
       setTestResult(null);
       setInferredSchema(null);
     }
@@ -484,6 +510,17 @@ export function ApiResourceModal({
       }
     }
 
+    const imageOptimization: CmsImageOptimizationConfig | undefined = imageOptEnabled
+      ? {
+          enabled: true,
+          engine: imageEngine,
+          quality: imageQuality,
+          format: imageFormat,
+          cloudflareZoneUrl: cloudflareZoneUrl.trim() || undefined,
+          customPattern: customPattern.trim() || undefined,
+        }
+      : undefined;
+
     const finalConfig: ApiCollectionConfig = {
       slug: finalSlug,
       name: name || finalSlug,
@@ -493,6 +530,8 @@ export function ApiResourceModal({
       headers: headersRecord,
       defaultParams: Object.keys(paramsRecord).length > 0 ? paramsRecord : undefined,
       cacheMaxAge,
+      revalidateTtl: revalidateTtl || undefined,
+      imageOptimization,
       itemsKey: itemsKey || undefined,
     };
 
@@ -582,6 +621,15 @@ export function ApiResourceModal({
                 value={String(cacheMaxAge)}
                 onChange={v => setCacheMaxAge(Number(v) || 14400)}
                 placeholder="14400"
+                text
+              />
+            </div>
+            <div className="w-[100px] flex flex-col gap-1">
+              <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">ISR TTL (s)</label>
+              <ToolInput
+                value={revalidateTtl !== undefined ? String(revalidateTtl) : ''}
+                onChange={v => setRevalidateTtl(v ? Number(v) : undefined)}
+                placeholder="60"
                 text
               />
             </div>
@@ -714,6 +762,88 @@ export function ApiResourceModal({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Image Optimization & CDN Section */}
+          <div className="flex flex-col gap-2 border border-[var(--border-light)] rounded p-2.5 bg-black/[0.02] dark:bg-white/[0.02]">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-xs text-[var(--text-primary)]">
+                Image Optimization & CDN
+              </span>
+              <label className="flex items-center gap-1.5 cursor-pointer text-[11px]">
+                <input
+                  type="checkbox"
+                  checked={imageOptEnabled}
+                  onChange={e => setImageOptEnabled(e.target.checked)}
+                  className="rounded border-[var(--border-light)] text-purple-600 focus:ring-0"
+                />
+                <span className="text-[var(--text-secondary)]">Enable responsive srcSet</span>
+              </label>
+            </div>
+
+            {imageOptEnabled && (
+              <div className="flex flex-col gap-2.5 pt-2 border-t border-[var(--border-light)]">
+                <div className="flex gap-2">
+                  <div className="flex-1 flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Engine</label>
+                    <ToolSelect
+                      value={imageEngine}
+                      onChange={v => setImageEngine(v as CmsImageTransformEngine)}
+                      options={[
+                        { value: 'directus', label: 'Directus (/assets?width=...)' },
+                        { value: 'cloudflare', label: 'Cloudflare Images (/cdn-cgi/...)' },
+                        { value: 'custom', label: 'Custom Pattern' },
+                      ]}
+                    />
+                  </div>
+                  <div className="w-[80px] flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Quality</label>
+                    <ToolInput
+                      value={String(imageQuality)}
+                      onChange={v => setImageQuality(parseInt(v, 10) || 80)}
+                      placeholder="80"
+                      text
+                    />
+                  </div>
+                  <div className="w-[90px] flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Format</label>
+                    <ToolSelect
+                      value={imageFormat}
+                      onChange={v => setImageFormat(v as any)}
+                      options={[
+                        { value: 'webp', label: 'WebP' },
+                        { value: 'avif', label: 'AVIF' },
+                        { value: 'auto', label: 'Auto' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {imageEngine === 'cloudflare' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Cloudflare Zone URL</label>
+                    <ToolInput
+                      value={cloudflareZoneUrl}
+                      onChange={setCloudflareZoneUrl}
+                      placeholder="https://example.com"
+                      text
+                    />
+                  </div>
+                )}
+
+                {imageEngine === 'custom' && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-[var(--text-disabled)]">Custom Pattern ({'{url}'}, {'{w}'}, {'{q}'}, {'{format}'})</label>
+                    <ToolInput
+                      value={customPattern}
+                      onChange={setCustomPattern}
+                      placeholder="{url}?w={w}&q={q}&fmt={format}"
+                      text
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
