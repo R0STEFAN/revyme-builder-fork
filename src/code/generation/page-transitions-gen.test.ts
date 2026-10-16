@@ -55,7 +55,7 @@ describe('page-transitions-gen: generated source files', () => {
   it('the runtime helpers module is valid TS with @rt-v7 marker', () => {
     parsesTs(PAGE_EFFECTS_RUNTIME_SOURCE);
     expect(PAGE_EFFECTS_RUNTIME_SOURCE).toContain('@rt-v7');
-    expect(PAGE_TRANSITIONS_SOURCE).toContain('@rt-v8');
+    expect(PAGE_TRANSITIONS_SOURCE).toContain('@rt-v9');
   });
   it('path helpers sit next to the LayoutClient', () => {
     expect(pageEffectsDataPath('app/(Body)/LayoutClient.tsx')).toBe('app/(Body)/page-effects.ts');
