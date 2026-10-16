@@ -569,7 +569,18 @@ function compileFile(filePath: string): any {
 
   try {
      
-    const __import = (spec: string) => loadOptionalModule(spec);
+    const __import = async (spec: string) => {
+      if (MODULE_MAP[spec]) return MODULE_MAP[spec];
+      if (isOptionalModuleLoaded(spec)) return getLoadedOptionalModule(spec);
+      try {
+        return await loadOptionalModule(spec);
+      } catch {
+        return await import(/* @vite-ignore */ spec);
+      }
+    };
+    if (typeof window !== 'undefined') {
+      (window as any).__import = __import;
+    }
     const __getPreviewData = (source: string, listId?: string) => getPreviewDataset(source, listId);
     const fn = new Function('module', 'exports', 'require', '__import', '__getPreviewData', transformed.code!);
     fn(moduleObj, moduleObj.exports, requireFn, __import, __getPreviewData);

@@ -482,9 +482,17 @@ export function compileCodeComponent(
       return {};
     };
 
-    const __import = (spec: string) => {
-      return loadOptionalModule(spec);
+    const __import = async (spec: string) => {
+      if (MODULE_MAP[spec]) return MODULE_MAP[spec];
+      try {
+        return await loadOptionalModule(spec);
+      } catch {
+        return await import(/* @vite-ignore */ spec);
+      }
     };
+    if (typeof window !== 'undefined') {
+      (window as any).__import = __import;
+    }
 
     // 7. Execute — the IIFE returns the component function
     const factory = eval(result.code);

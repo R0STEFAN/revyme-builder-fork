@@ -37,6 +37,7 @@ export const DESIGN_CURSOR_COMPONENT = `'use client';
 
 import { useRef, useEffect } from 'react';
 import { withResponsiveProps, useStaticCanvas } from '@revyme/runtime';
+import { animate } from 'framer-motion';
 
 function DesignCursor({
   align = 'top-right',
@@ -93,71 +94,55 @@ function DesignCursor({
     let mouseX = 0, mouseY = 0;
     let labelX = 0, labelY = 0;
     let xAnim = null, yAnim = null;
-    let cancelled = false;
-    let onMove = null, onEnter = null, onLeave = null;
 
-    // framer-motion's animate API drives the spring on the label
-    // independently of the arrow (which snaps without easing).
-    //
-    // Bypass static analysis — the live site's bundler (Next.js / Vite)
-    // would otherwise parse \`import('https://...')\` at build time and
-    // strip or fail it. The editor preview already uses this same trick
-    // in code-component-runtime.ts.
-    const dynamicImport = new Function('s', 'return import(s)');
-    dynamicImport('https://esm.sh/framer-motion').then(function (mod) {
-      if (cancelled) return;
-      const animate = mod.animate;
-
-      function animateLabel(tx, ty) {
-        if (xAnim) xAnim.stop();
-        if (yAnim) yAnim.stop();
-        xAnim = animate(labelX, tx, {
-          type: 'spring', stiffness: stiffness, damping: damping, mass: mass,
-          onUpdate: function (v) { labelX = v; labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)'; },
-        });
-        yAnim = animate(labelY, ty, {
-          type: 'spring', stiffness: stiffness, damping: damping, mass: mass,
-          onUpdate: function (v) { labelY = v; labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)'; },
-        });
-      }
-
-      onMove = function (e) {
-        const rect = container.getBoundingClientRect();
-        mouseX = e.clientX - rect.left;
-        mouseY = e.clientY - rect.top;
-        cursorEl.style.transform = 'translate3d(' + mouseX + 'px,' + mouseY + 'px,0)';
-        animateLabel(mouseX + followOffset.x, mouseY + followOffset.y);
-      };
-      onEnter = function (e) {
-        container.style.cursor = 'none';
-        const rect = container.getBoundingClientRect();
-        mouseX = e.clientX - rect.left;
-        mouseY = e.clientY - rect.top;
-        labelX = mouseX + followOffset.x;
-        labelY = mouseY + followOffset.y;
-        cursorEl.style.transform = 'translate3d(' + mouseX + 'px,' + mouseY + 'px,0)';
-        labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)';
-        cursorEl.style.opacity = '1';
-        labelEl.style.opacity = '1';
-      };
-      onLeave = function () {
-        container.style.cursor = '';
-        cursorEl.style.opacity = '0';
-        labelEl.style.opacity = '0';
-      };
-
-      container.addEventListener('mousemove', onMove);
-      container.addEventListener('mouseenter', onEnter);
-      container.addEventListener('mouseleave', onLeave);
-    }).catch(function () { /* esm.sh unreachable — silently no-op */ });
-
-    return function () {
-      cancelled = true;
+    function animateLabel(tx, ty) {
       if (xAnim) xAnim.stop();
       if (yAnim) yAnim.stop();
-      if (onMove) container.removeEventListener('mousemove', onMove);
-      if (onEnter) container.removeEventListener('mouseenter', onEnter);
-      if (onLeave) container.removeEventListener('mouseleave', onLeave);
+      xAnim = animate(labelX, tx, {
+        type: 'spring', stiffness: stiffness, damping: damping, mass: mass,
+        onUpdate: function (v) { labelX = v; labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)'; },
+      });
+      yAnim = animate(labelY, ty, {
+        type: 'spring', stiffness: stiffness, damping: damping, mass: mass,
+        onUpdate: function (v) { labelY = v; labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)'; },
+      });
+    }
+
+    const onMove = function (e) {
+      const rect = container.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+      cursorEl.style.transform = 'translate3d(' + mouseX + 'px,' + mouseY + 'px,0)';
+      animateLabel(mouseX + followOffset.x, mouseY + followOffset.y);
+    };
+    const onEnter = function (e) {
+      container.style.cursor = 'none';
+      const rect = container.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+      labelX = mouseX + followOffset.x;
+      labelY = mouseY + followOffset.y;
+      cursorEl.style.transform = 'translate3d(' + mouseX + 'px,' + mouseY + 'px,0)';
+      labelEl.style.transform = 'translate3d(' + labelX + 'px,' + labelY + 'px,0)';
+      cursorEl.style.opacity = '1';
+      labelEl.style.opacity = '1';
+    };
+    const onLeave = function () {
+      container.style.cursor = '';
+      cursorEl.style.opacity = '0';
+      labelEl.style.opacity = '0';
+    };
+
+    container.addEventListener('mousemove', onMove);
+    container.addEventListener('mouseenter', onEnter);
+    container.addEventListener('mouseleave', onLeave);
+
+    return function () {
+      if (xAnim) xAnim.stop();
+      if (yAnim) yAnim.stop();
+      container.removeEventListener('mousemove', onMove);
+      container.removeEventListener('mouseenter', onEnter);
+      container.removeEventListener('mouseleave', onLeave);
       container.style.cursor = '';
       if (cursorEl.parentNode) cursorEl.parentNode.removeChild(cursorEl);
       if (labelEl.parentNode) labelEl.parentNode.removeChild(labelEl);
