@@ -900,7 +900,7 @@ export function injectDifferentiatedLinkPrefetch(code: string, filePath: string)
       );
       if (!hasOnMouseEnter) {
         const parsed = parseJSX(
-          '<a onMouseEnter={(e) => { const href = e.currentTarget.getAttribute("href"); const router = typeof window !== "undefined" ? (window.__revyme_router || window.router) : null; if (href && router && router.prefetch) router.prefetch(href); }} />',
+          '<a onMouseEnter={(e) => { const href = e.currentTarget.getAttribute("href"); const router = typeof window !== "undefined" ? (window.__revyme_router || window.router) : null; if (href && router && router.prefetch) router.prefetch(href, { kind: "full" }); }} />',
         );
         if (parsed) {
           const attr = (parsed.program.body[0] as any).expression.openingElement.attributes[0];

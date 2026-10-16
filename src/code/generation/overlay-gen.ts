@@ -516,7 +516,7 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolea
         const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
         if (mode === 'off') return;
         const href = a.getAttribute('href');
-        if (href && router && router.prefetch) router.prefetch(href);
+        if (href && router && router.prefetch) router.prefetch(href, { kind: 'full' });
       });
     } catch {}
     const cfg = JSON.parse(overlay.getAttribute('data-overlay') || '{}');
@@ -570,7 +570,7 @@ export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false)
           const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
           if (mode === 'off') return;
           const href = a.getAttribute('href');
-          if (href && router && router.prefetch) router.prefetch(href);
+          if (href && router && router.prefetch) router.prefetch(href, { kind: 'full' });
         });
       } catch {}
       const raw = JSON.parse(overlay.getAttribute('data-overlay') || '{}');

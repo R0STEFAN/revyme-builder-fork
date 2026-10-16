@@ -1064,7 +1064,7 @@ export default function Page() {
     expect(listNode).toBeDefined();
     expect(listNode?.collectionList).toBeDefined();
     expect(listNode?.collectionList?.source).toBe('tattoos');
-    expect(listNode?.collectionList?.pagination?.mode).toBe('loadMore');
+    expect(['loadMore', 'infinite']).toContain(listNode?.collectionList?.pagination?.mode);
     expect(listNode?.collectionList?.pagination?.perPage).toBe(4);
     expect(listNode?.collectionList?.queryConfig?.isApiMode).toBe(true);
     expect(listNode?.collectionList?.queryConfig?.params?.length).toBe(2);

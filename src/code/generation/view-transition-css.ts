@@ -130,12 +130,12 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
   lines.push('}');
   lines.push('[data-revyme-pt-stage] { position: relative; width: 100%; isolation: isolate; }');
   lines.push('[data-revyme-pt-stage].revyme-pt-animating { overflow: clip; }');
-  lines.push('.revyme-pt-exit { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 2; mix-blend-mode: normal; }');
-  lines.push('.revyme-pt-enter { width: 100%; position: relative; z-index: 1; mix-blend-mode: normal; }');
+  lines.push('.revyme-pt-exit { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 2; mix-blend-mode: normal; will-change: transform, opacity; backface-visibility: hidden; transform: translateZ(0); }');
+  lines.push('.revyme-pt-enter { width: 100%; position: relative; z-index: 1; mix-blend-mode: normal; will-change: transform, opacity; backface-visibility: hidden; transform: translateZ(0); }');
 
   if (exit) {
     const t = resolveTiming(exit.transition);
-    lines.push(`.revyme-pt-exit.revyme-pt-exiting { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-exit.revyme-pt-exiting { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; will-change: transform, opacity; }`);
     const mf = exit.mask ? maskToClip(exit.mask, 'full') : null;
     const mt = exit.mask ? maskToClip(exit.mask, 'clipped') : null;
     lines.push('@keyframes revyme-vt-exit {');
@@ -148,7 +148,7 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
 
   if (enter) {
     const t = resolveTiming(enter.transition);
-    lines.push(`.revyme-pt-enter.revyme-pt-entering { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-enter.revyme-pt-entering { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-enter; transform-origin: 50% 50%; will-change: transform, opacity; }`);
     const mf = enter.mask ? maskToClip(enter.mask, 'clipped') : null;
     const mt = enter.mask ? maskToClip(enter.mask, 'full') : null;
     lines.push('@keyframes revyme-vt-enter {');
