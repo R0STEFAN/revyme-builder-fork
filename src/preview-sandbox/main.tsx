@@ -774,7 +774,10 @@ function PreviewApp() {
   const [url, setUrl] = React.useState(() => location.pathname + location.search);
   const [, setQueryTick] = React.useState(0);
   React.useEffect(() => {
-    const onPop = () => setUrl(location.pathname + location.search);
+    const onPop = () => {
+      compiledModuleCache.clear();
+      setUrl(location.pathname + location.search);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -876,6 +879,7 @@ function PreviewApp() {
   // Cache hits immediately populate listId and source datasets in this exact render tick.
   // Cache misses evict stale datasets from previous routes to prevent leaking or inverting data.
   const { neededQueries } = React.useMemo(() => {
+    compiledModuleCache.clear();
     return syncActiveRouteQueries(projectFiles, activeFiles, routeParams, url);
   }, [url, route?.pageFile, JSON.stringify(routeParams), filesRevision]);
 
@@ -1002,6 +1006,7 @@ window.addEventListener('message', (e) => {
     }
     rerender();
   } else if (msg.type === 'preview:navigate') {
+    compiledModuleCache.clear();
     history.pushState(null, '', msg.url);
     window.dispatchEvent(new PopStateEvent('popstate'));
   } else if (msg.type === 'preview:force-theme') {
@@ -1135,6 +1140,7 @@ if (typeof document !== 'undefined') {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     if (e.defaultPrevented) return;
     e.preventDefault();
+    compiledModuleCache.clear();
     history.pushState(null, '', href);
     window.dispatchEvent(new PopStateEvent('popstate'));
   });

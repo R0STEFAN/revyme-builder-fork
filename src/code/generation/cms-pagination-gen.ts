@@ -524,6 +524,17 @@ export function setPaginationInCode(
 
     let result = working.slice(0, closing.contentStart) + newContent + working.slice(closing.closeTagStart);
 
+    if (loadMoreWasOutside && mode === 'loadMore') {
+      result = result.replace(
+        new RegExp(`(\\{\\s*)[a-zA-Z0-9_.]+\\s*(&&\\s*<${LOADMORE_COMPONENT_NAME}\\b[^>]*?data-id="loadmore-${parentId}")`),
+        `$1${hasMoreVar} $2`,
+      );
+      result = result.replace(
+        new RegExp(`(<${LOADMORE_COMPONENT_NAME}\\b[^>]*?data-id="loadmore-${parentId}"[^>]*?onLoadMore=\\{)[^}]+(\\})`),
+        `$1${loadMoreFn}$2`,
+      );
+    }
+
     const tagClose = findTagClose(result, elStart);
     if (tagClose !== -1 && !/data-pagination=/.test(result.slice(elStart, tagClose))) {
       result = result.slice(0, tagClose) + ` data-pagination="${mode}:${perPage}" data-remote-pagination="true"` + result.slice(tagClose);
@@ -563,7 +574,7 @@ export function setPaginationInCode(
     hookLines.push(
       `const [${itemsVar}, ${setItemsVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr}.slice(0, ${perPage}) : []));`,
       `const [${pageVar}, ${setPageVar}] = useState(1);`,
-      `const [${hasMoreVar}, ${setHasMoreVar}] = useState(true);`,
+      `const [${hasMoreVar}, ${setHasMoreVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr}.length > ${perPage} : true));`,
       `const [${loadingVar}, ${setLoadingVar}] = useState(false);`,
       `const [${errorVar}, ${setErrorVar}] = useState(null);`,
       `const ${abortRef} = useRef(null);`,
@@ -572,7 +583,7 @@ export function setPaginationInCode(
       hookLines.push(`const ${sentinelRef} = useRef(null);`);
     }
     hookLines.push(
-      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr}.slice(0, ${perPage}) : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
+      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr}.slice(0, ${perPage}) : []); ${setPageVar}(1); ${setHasMoreVar}(Array.isArray(${initialExpr}) ? ${initialExpr}.length > ${perPage} : true); ${setErrorVar}(null); }, [${initialExpr}]);`,
       `const ${loadMoreFn} = useCallback(async () => { if (${loadingVar} || !${hasMoreVar}) return; ${abortRef}.current?.abort(); const ctrl = new AbortController(); ${abortRef}.current = ctrl; ${setLoadingVar}(true); ${setErrorVar}(null); try { const nextPage = ${pageVar} + 1; const res = await fetch('/api/cms/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: '${slug}', page: nextPage, limit: ${perPage}, offset: (nextPage - 1) * ${perPage}${queryParamsPayload} }), signal: ctrl.signal }); if (!res.ok) throw new Error('Failed to load more items'); const data = await res.json(); if (data.ok && Array.isArray(data.items)) { ${setItemsVar}((prev: any[]) => { const existingIds = new Set(prev.map((it: any) => it.id ?? it._id ?? it.slug ?? it._slug)); const newItems = data.items.filter((it: any) => { const id = it.id ?? it._id ?? it.slug ?? it._slug; return id != null ? !existingIds.has(id) : true; }); return [...prev, ...newItems]; }); ${setPageVar}(nextPage); ${setHasMoreVar}(Boolean(data.hasMore ?? (data.items.length >= ${perPage}))); } else { ${setHasMoreVar}(false); } } catch (err: any) { if (err.name !== 'AbortError') ${setErrorVar}(err.message || 'Error loading more'); } finally { ${setLoadingVar}(false); } }, [${loadingVar}, ${hasMoreVar}, ${pageVar}]);`,
       `const ${retryFn} = ${loadMoreFn};`,
     );

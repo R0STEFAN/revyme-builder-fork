@@ -455,7 +455,7 @@ export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any
     expect(out).toContain('data-pagination="loadMore:10"');
     expect(out).toContain('const [itemsApiList, setItemsApiList] = useState');
     expect(out).toContain('const [pageApiList, setPageApiList] = useState(1)');
-    expect(out).toContain('const [hasMoreApiList, setHasMoreApiList] = useState(true)');
+    expect(out).toContain("const [hasMoreApiList, setHasMoreApiList] = useState(() => (Array.isArray((cmsDatasets?.['api-list'] || cmsDatasets?.['posts'] || posts)) ? (cmsDatasets?.['api-list'] || cmsDatasets?.['posts'] || posts).length > 10 : true));");
     expect(out).toContain('const [loadingApiList, setLoadingApiList] = useState(false)');
     expect(out).toContain('const [errorApiList, setErrorApiList] = useState(null)');
     expect(out).toContain('const abortApiListRef = useRef(null)');
@@ -489,7 +489,7 @@ export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any
 
   it('resets remote pagination when initial collection source changes', () => {
     const out = setPaginationInCode(API_PAGE, 'api-list', { mode: 'loadMore', perPage: 10 });
-    expect(out).toMatch(/useEffect\(\(\) => \{\s*setItemsApiList\(Array\.isArray\([\s\S]*?\)\s*\?\s*[\s\S]*?:\s*\[\]\);\s*setPageApiList\(1\);\s*setHasMoreApiList\(true\);/);
+    expect(out).toMatch(/useEffect\(\(\) => \{\s*setItemsApiList\(Array\.isArray\([\s\S]*?\)\s*\?\s*[\s\S]*?:\s*\[\]\);\s*setPageApiList\(1\);\s*setHasMoreApiList\(Array\.isArray\([\s\S]*?\)\s*\?\s*[\s\S]*?\.length\s*>\s*10\s*:\s*true\);/);
     parses(out);
   });
 
@@ -619,5 +619,21 @@ export default function Page() {
     expect(paginated).toContain('useState(4)');
     expect(paginated).toContain('posts.slice(0, visList)');
   });
+
+  it('evaluates initial hasMoreVar dynamically based on initialExpr.length > perPage', () => {
+    const page = `import React from 'react';
+import posts from '@/cms/posts.json';
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="col" data-query-config='{"source":"posts"}'>
+      {posts.map((p) => <div data-id="row" key={p.id}>{p.title}</div>)}
+    </div>
+  </div>;
+}`;
+    const paginated = setPaginationInCode(page, 'col', { mode: 'loadMore', perPage: 4 });
+    expect(paginated).toContain('const [hasMoreCol, setHasMoreCol] = useState(() => (Array.isArray(posts) ? posts.length > 4 : true));');
+    expect(paginated).toContain('setHasMoreCol(Array.isArray(posts) ? posts.length > 4 : true);');
+  });
 });
+
 

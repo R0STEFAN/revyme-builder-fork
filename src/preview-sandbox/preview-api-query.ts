@@ -260,6 +260,27 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
 
     const inner = result.slice(tagClose + 1, closeIdx);
     const pagMatch = result.slice(elStart, tagClose).match(/data-pagination="(?:loadMore|infinite):(\d+)"/);
+    if (pagMatch) {
+      const limit = parseInt(pagMatch[1], 10);
+      const itemsMatch = inner.match(/\{items([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+(?:\([^)]*\))?)*\s*\.map\(/);
+      if (itemsMatch) {
+        const capitalId = itemsMatch[1];
+        const hasMoreVar = 'hasMore' + capitalId;
+        const setHasMoreVar = 'setHasMore' + capitalId;
+
+        const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*(React\\.)?useState(?:<[^>]*>)?\\s*\\([^)]*\\);?`);
+        result = result.replace(
+          hasMoreUseStateRe,
+          (_match, reactPrefix) => `const [${hasMoreVar}, ${setHasMoreVar}] = ${reactPrefix || ''}useState(() => (Array.isArray(${source}) ? ${source}.length > ${limit} : true));`
+        );
+
+        const setHasMoreRe = new RegExp(`(${setHasMoreVar}\\s*\\()\\s*(?:true|Array\\.isArray\\([\\s\\S]*?\\)\\s*\\?\\s*[\\s\\S]*?\\.length\\s*(?:>=|>)\\s*\\d+\\s*:\\s*true)\\s*(\\))`, 'g');
+        result = result.replace(
+          setHasMoreRe,
+          `$1Array.isArray(${source}) ? ${source}.length > ${limit} : true$2`
+        );
+      }
+    }
     const targetSource = pagMatch ? source : `${source}|items[a-zA-Z0-9_]+`;
     const mapRegex = new RegExp(`(\\{\\s*)(${targetSource})(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;

@@ -840,7 +840,9 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
 
   let result = code;
 
-  for (const { listId, source } of detected) {
+  for (const queryItem of detected) {
+    const { listId, source } = queryItem;
+    const paginationLimit = queryItem.paginationLimit;
     const idAttr = `data-id="${listId}"`;
     const idIdx = result.indexOf(idAttr);
     if (idIdx === -1) continue;
@@ -870,16 +872,33 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
     if (isRemotePaginated) {
       const datasetExpr = `(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || ${source})`;
       const setter = 'set' + mappedVar.charAt(0).toUpperCase() + mappedVar.slice(1);
+      const capitalId = mappedVar.slice('items'.length);
+      const hasMoreVar = 'hasMore' + capitalId;
+      const setHasMoreVar = 'setHasMore' + capitalId;
+      const tagSlice = result.slice(elStart, tagClose);
+      const pagMatch = tagSlice.match(/data-pagination="(?:loadMore|infinite):(\d+)"/);
+      const limit = paginationLimit || (pagMatch ? parseInt(pagMatch[1], 10) : 4);
+
       // Update useState for mappedVar
       const useStateRe = new RegExp(`(const\\s*\\[\\s*${mappedVar}\\s*,[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\(?Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:\\s*\\[\\]\\s*\\)?\\);?)`);
       result = result.replace(useStateRe, (full, p1, p2, p3) => `${p1}${datasetExpr}${p2}${datasetExpr}${p3}`);
 
-      // Update useEffect for mappedVar
+      // Update useEffect for mappedVar and hasMoreVar
       const useEffectRe = new RegExp(`(useEffect\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*${setter}\\s*\\(\\s*(?:Array\\.isArray|\\(Array\\.isArray)\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:[^;]+;[\\s\\S]*?,\\s*\\[)([^\\]]+)(\\]\\s*\\);?)`);
       result = result.replace(useEffectRe, (full, p1, p2, p3, deps, p5) => {
         const newDeps = deps.includes('cmsDatasets') ? deps : `${deps}, cmsDatasets`;
-        return `${p1}${datasetExpr}${p2}${datasetExpr}${p3}${newDeps}${p5}`;
+        let effectBody = `${p1}${datasetExpr}${p2}${datasetExpr}${p3}${newDeps}${p5}`;
+        const setHasMoreRe = new RegExp(`(${setHasMoreVar}\\s*\\()\\s*(?:true|Array\\.isArray\\([\\s\\S]*?\\)\\s*\\?\\s*[\\s\\S]*?\\.length\\s*(?:>=|>)\\s*\\d+\\s*:\\s*true)\\s*(\\))`);
+        effectBody = effectBody.replace(setHasMoreRe, `$1Array.isArray(${datasetExpr}) ? ${datasetExpr}.length > ${limit} : true$2`);
+        return effectBody;
       });
+
+      // Update useState for hasMoreVar
+      const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*useState(?:<[^>]*>)?\\s*\\([^)]*\\);?`);
+      result = result.replace(
+        hasMoreUseStateRe,
+        `const [${hasMoreVar}, ${setHasMoreVar}] = useState(() => (Array.isArray(${datasetExpr}) ? ${datasetExpr}.length > ${limit} : true));`
+      );
     } else {
       const wrappedInner = inner.replace(
         mapRegex,
@@ -1005,7 +1024,11 @@ export function orchestrateServerFetchForQueries(
     }
 
     if (q.paginationLimit && (!Array.isArray(q.queryConfig.params) || !q.queryConfig.params.some((p: any) => p.key === 'limit'))) {
-      lines.push(`  qParams_${idx}.set("limit", ${JSON.stringify(String(q.paginationLimit))});`);
+      lines.push(`  qParams_${idx}.set("limit", ${JSON.stringify(String(q.paginationLimit + 1))});`);
+    }
+
+    if (conf.provider === 'directus' || conf.url.includes('/items/')) {
+      lines.push(`  if (!qParams_${idx}.has("meta")) qParams_${idx}.set("meta", "*");`);
     }
 
     const sep = conf.url.includes('?') ? '&' : '?';

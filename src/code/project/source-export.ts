@@ -498,11 +498,12 @@ async function handleQuery(payload: {
     if (page !== undefined) targetUrl.searchParams.set('page', String(page));
     else if (offset !== undefined) targetUrl.searchParams.set('page', String(Math.floor(offset / effectiveLimit) + 1));
   } else if (provider === 'directus') {
-    targetUrl.searchParams.set('limit', String(effectiveLimit));
+    targetUrl.searchParams.set('meta', '*');
+    targetUrl.searchParams.set('limit', String(effectiveLimit + 1));
     if (offset !== undefined) targetUrl.searchParams.set('offset', String(offset));
     else if (page !== undefined) targetUrl.searchParams.set('page', String(page));
   } else {
-    targetUrl.searchParams.set('limit', String(effectiveLimit));
+    targetUrl.searchParams.set('limit', String(effectiveLimit + 1));
     if (offset !== undefined) targetUrl.searchParams.set('offset', String(offset));
     if (page !== undefined) targetUrl.searchParams.set('page', String(page));
   }
@@ -520,9 +521,12 @@ async function handleQuery(payload: {
     }
 
     const json = await res.json();
-    const items = extractApiItems(json, config.itemsKey);
+    let items = extractApiItems(json, config.itemsKey);
 
-    let hasMore = items.length >= effectiveLimit;
+    let hasMore = items.length > effectiveLimit;
+    if (items.length > effectiveLimit) {
+      items = items.slice(0, effectiveLimit);
+    }
     if (json && typeof json === 'object') {
       if (typeof json.count === 'number') {
         const currentCount = (offset !== undefined ? offset : ((page ?? 1) - 1) * effectiveLimit) + items.length;

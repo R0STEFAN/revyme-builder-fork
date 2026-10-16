@@ -304,6 +304,30 @@ export default function Page() {
     );
   });
 
+  it('injects datasetExpr into hasMoreVar useState and useEffect for remote paginated collections', () => {
+    const remotePage = `import React, { useState, useEffect } from 'react';
+import tattoos from '@/cms/tattoos.json';
+import LoadMore from '@/components/LoadMore';
+export default function Page() {
+  const [itemsGrid, setItemsGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.slice(0, 4) : []));
+  const [hasMoreGrid, setHasMoreGrid] = useState(true);
+  useEffect(() => {
+    setItemsGrid(Array.isArray(tattoos) ? tattoos.slice(0, 4) : []);
+    setHasMoreGrid(true);
+  }, [tattoos]);
+  return <div data-id="root">
+    <div data-id="grid" data-query-config='{"source":"tattoos"}' data-pagination="loadMore:4" data-remote-pagination="true">
+      {itemsGrid.map((item, idx) => <div data-id="card" key={idx}>{item.title}</div>)}
+    </div>
+    {hasMoreGrid && <LoadMore data-id="loadmore-grid" />}
+  </div>;
+}`;
+    const queries = detectPageCollectionQueries(remotePage);
+    const updated = injectCmsDatasetsIntoClientPage(remotePage, queries);
+    expect(updated).toContain("const [hasMoreGrid, setHasMoreGrid] = useState(() => (Array.isArray((cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos)) ? (cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos).length > 4 : true));");
+    expect(updated).toContain("setHasMoreGrid(Array.isArray((cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos)) ? (cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos).length > 4 : true);");
+  });
+
   it('injects cmsDatasets into client page mapping and Page component signature', () => {
     const updatedClient = injectCmsDatasetsIntoClientPage(clientPageWithList);
 
@@ -455,14 +479,14 @@ export default function Page() {
     expect(queries[0].paginationLimit).toBe(4);
 
     const prepared = prepareSiteFiles(files, { ssg: false });
-    expect(prepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "4")');
+    expect(prepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "5")');
     expect(prepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('<PageClient cmsDatasets={cmsDatasets} />');
     expect(prepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain("cmsDatasets?.['frame-mv7ra9vc-5']");
     expect(prepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain('{itemsFrameMv7ra9vc5.map(');
     expect(prepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain('[tattoos, cmsDatasets]');
 
     const ssgPrepared = prepareSiteFiles(files, { ssg: true });
-    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "4")');
+    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "5")');
     expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('<PageClient cmsDatasets={cmsDatasets} />');
     expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain("cmsDatasets?.['frame-mv7ra9vc-5']");
     expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain('{itemsFrameMv7ra9vc5.map(');
