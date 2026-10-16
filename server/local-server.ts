@@ -1168,10 +1168,16 @@ export class LocalServerManager {
           this.appendLiveLog(record, text);
           const cleaned = stripAnsi(text).trim();
           if (cleaned) {
-            const combined = record.lastError ? `${record.lastError}\n${cleaned}` : cleaned;
-            record.lastError = combined.length > MAX_LAST_ERROR_CHARS
-              ? '...' + combined.slice(combined.length - MAX_LAST_ERROR_CHARS)
-              : combined;
+            const lines = cleaned.split('\n').map((l) => l.trim()).filter(Boolean);
+            const isOnlyWarning = lines.length > 0 && lines.every((l) =>
+              l.startsWith('⚠') || l.toLowerCase().startsWith('warn') || l.toLowerCase().startsWith('info')
+            );
+            if (!isOnlyWarning) {
+              const combined = record.lastError ? `${record.lastError}\n${cleaned}` : cleaned;
+              record.lastError = combined.length > MAX_LAST_ERROR_CHARS
+                ? '...' + combined.slice(combined.length - MAX_LAST_ERROR_CHARS)
+                : combined;
+            }
           }
         });
 

@@ -1117,6 +1117,14 @@ export function prepareSiteFiles(
       files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
     }
 
+    // Ensure metadataBase is set on root layout metadata to prevent Next.js build-time metadataBase warnings
+    if ((path === 'app/layout.tsx' || path.endsWith('/layout.tsx')) && files[path] && files[path].includes('export const metadata') && !files[path].includes('metadataBase')) {
+      files[path] = files[path].replace(
+        /export const metadata = \{/,
+        "export const metadata = {\n  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),",
+      );
+    }
+
     // Clean and protect CMS bindings & bare attributes across all pages and components
     if (files[path] && /\.(tsx|jsx)$/.test(path)) {
       let updated = files[path];
