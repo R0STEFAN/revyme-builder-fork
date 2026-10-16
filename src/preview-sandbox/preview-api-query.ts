@@ -268,7 +268,7 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
         const hasMoreVar = 'hasMore' + capitalId;
         const setHasMoreVar = 'setHasMore' + capitalId;
 
-        const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*(React\\.)?useState(?:<[^>]*>)?\\s*\\([^)]*\\);?`);
+        const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*(React\\.)?useState[^\n]+;?`);
         result = result.replace(
           hasMoreUseStateRe,
           (_match, reactPrefix) => `const [${hasMoreVar}, ${setHasMoreVar}] = ${reactPrefix || ''}useState(() => (Array.isArray(${source}) ? ${source}.length > ${limit} : true));`

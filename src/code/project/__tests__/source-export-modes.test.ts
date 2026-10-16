@@ -328,6 +328,25 @@ export default function Page() {
     expect(updated).toContain("setHasMoreGrid(Array.isArray((cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos)) ? (cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos).length > 4 : true);");
   });
 
+  it('safely injects datasetExpr into hasMoreVar useState when already initialized with lazy arrow function', () => {
+    const remotePage = `import React, { useState, useEffect } from 'react';
+import tattoos from '@/cms/tattoos.json';
+import Spinner from '@/components/Spinner';
+export default function Page() {
+  const [itemsGrid, setItemsGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.slice(0, 4) : []));
+  const [hasMoreGrid, setHasMoreGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.length > 4 : true));
+  return <div data-id="root">
+    <div data-id="grid" data-query-config='{"source":"tattoos"}' data-pagination="infinite:4" data-remote-pagination="true">
+      {itemsGrid.map((item, idx) => <div data-id="card" key={idx}>{item.title}</div>)}
+    </div>
+  </div>;
+}`;
+    const queries = detectPageCollectionQueries(remotePage);
+    const updated = injectCmsDatasetsIntoClientPage(remotePage, queries);
+    expect(updated).toContain("const [hasMoreGrid, setHasMoreGrid] = useState(() => (Array.isArray((cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos)) ? (cmsDatasets?.['grid'] || cmsDatasets?.['tattoos'] || tattoos).length > 4 : true));");
+    expect(updated).not.toContain("=> (Array.isArray(tattoos) ? tattoos.length > 4 : true)); =>");
+  });
+
   it('injects cmsDatasets into client page mapping and Page component signature', () => {
     const updatedClient = injectCmsDatasetsIntoClientPage(clientPageWithList);
 

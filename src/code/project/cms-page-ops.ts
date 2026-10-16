@@ -880,8 +880,11 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
       const limit = paginationLimit || (pagMatch ? parseInt(pagMatch[1], 10) : 4);
 
       // Update useState for mappedVar
-      const useStateRe = new RegExp(`(const\\s*\\[\\s*${mappedVar}\\s*,[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\(?Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:\\s*\\[\\]\\s*\\)?\\);?)`);
-      result = result.replace(useStateRe, (full, p1, p2, p3) => `${p1}${datasetExpr}${p2}${datasetExpr}${p3}`);
+      const useStateRe = new RegExp(`const\\s*\\[\\s*${mappedVar}\\s*,\\s*${setter}\\s*\\]\\s*=\\s*(React\\.)?useState[^\n]+;?`);
+      result = result.replace(
+        useStateRe,
+        (_match, reactPrefix) => `const [${mappedVar}, ${setter}] = ${reactPrefix || ''}useState(() => (Array.isArray(${datasetExpr}) ? ${datasetExpr}.slice(0, ${limit}) : []));`
+      );
 
       // Update useEffect for mappedVar and hasMoreVar
       const useEffectRe = new RegExp(`(useEffect\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*${setter}\\s*\\(\\s*(?:Array\\.isArray|\\(Array\\.isArray)\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:[^;]+;[\\s\\S]*?,\\s*\\[)([^\\]]+)(\\]\\s*\\);?)`);
@@ -894,10 +897,10 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
       });
 
       // Update useState for hasMoreVar
-      const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*useState(?:<[^>]*>)?\\s*\\([^)]*\\);?`);
+      const hasMoreUseStateRe = new RegExp(`const\\s*\\[\\s*${hasMoreVar}\\s*,\\s*${setHasMoreVar}\\s*\\]\\s*=\\s*(React\\.)?useState[^\n]+;?`);
       result = result.replace(
         hasMoreUseStateRe,
-        `const [${hasMoreVar}, ${setHasMoreVar}] = useState(() => (Array.isArray(${datasetExpr}) ? ${datasetExpr}.length > ${limit} : true));`
+        (_match, reactPrefix) => `const [${hasMoreVar}, ${setHasMoreVar}] = ${reactPrefix || ''}useState(() => (Array.isArray(${datasetExpr}) ? ${datasetExpr}.length > ${limit} : true));`
       );
     } else {
       const wrappedInner = inner.replace(

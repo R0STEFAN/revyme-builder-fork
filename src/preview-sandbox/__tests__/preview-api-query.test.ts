@@ -546,6 +546,25 @@ describe('preview-api-query', () => {
       expect(wrapped).toContain("const [hasMoreGrid, setHasMoreGrid] = React.useState(() => (Array.isArray(tattoos) ? tattoos.length > 4 : true));");
       expect(wrapped).toContain("setHasMoreGrid(Array.isArray(tattoos) ? tattoos.length > 4 : true)");
     });
+
+    it('safely handles hasMoreVar that is already initialized with a lazy arrow function without duplicating tokens', () => {
+      const code = `
+        import tattoos from '@/cms/tattoos.json';
+        export default function Page() {
+          const [itemsGrid, setItemsGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.slice(0, 4) : []));
+          const [hasMoreGrid, setHasMoreGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.length > 4 : true));
+          return (
+            <div data-id="grid" data-query-config={JSON.stringify({ isApiMode: true })} data-pagination="infinite:4">
+              {itemsGrid.map((item: any) => <div>{item.title}</div>)}
+            </div>
+          );
+        }
+      `;
+      const detected = detectCollectionQueries(code);
+      const wrapped = wrapCollectionListMapping(code, detected);
+      expect(wrapped).toContain("const [hasMoreGrid, setHasMoreGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.length > 4 : true));");
+      expect(wrapped).not.toContain("=> (Array.isArray(tattoos) ? tattoos.length > 4 : true)); =>");
+    });
   });
 });
 
