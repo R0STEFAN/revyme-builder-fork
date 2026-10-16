@@ -33,6 +33,7 @@ export const ACCORDION_COMPONENT = `'use client';
   },
   "allowMultiple": { "type": "toggle", "label": "Allow Multiple Open", "default": false },
   "gap": { "type": "number", "label": "Gap", "min": 0, "max": 40, "step": 1, "default": 10, "unit": "px" },
+  "padding": { "type": "number", "label": "Padding", "min": 0, "max": 60, "step": 1, "default": 16, "unit": "px" },
   "background": { "type": "color", "label": "Background", "default": "#1f1f1f" },
   "textColor": { "type": "color", "label": "Question Color", "default": "#ffffff" },
   "titleFont": { "type": "font", "label": "Title Font", "default": "Inter, sans-serif" },
@@ -63,6 +64,7 @@ function Accordion({
   ],
   allowMultiple = false,
   gap = 10,
+  padding = 16,
   background = '#1f1f1f',
   textColor = '#ffffff',
   titleFont = 'Inter, sans-serif',
@@ -140,8 +142,7 @@ function Accordion({
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'flex-start',
-              gap: '5px',
-              padding: '15px',
+              padding: padding + 'px',
               backgroundColor: background,
               borderRadius: borderRadius + 'px',
               border: '1px solid ' + borderColor,
@@ -244,6 +245,7 @@ function Accordion({
               <p
                 style={{
                   margin: 0,
+                  paddingTop: '10px',
                   fontSize: fontSize + 'px',
                   fontWeight: 500,
                   lineHeight: '1.5em',

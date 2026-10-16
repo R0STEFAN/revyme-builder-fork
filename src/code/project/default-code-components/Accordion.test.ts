@@ -13,7 +13,7 @@ describe('Accordion template', () => {
     expect(meta!.label).toBe('Accordion');
     expect(meta!.comment).toBeTruthy();
     expect(Object.keys(meta!.controls)).toEqual([
-      'items', 'allowMultiple', 'gap',
+      'items', 'allowMultiple', 'gap', 'padding',
       'background', 'textColor', 'titleFont',
       'answerColor', 'answerFont',
       'iconBackground', 'iconColor',
@@ -22,6 +22,7 @@ describe('Accordion template', () => {
     expect(meta!.controls.items.type).toBe('objectList');
     expect(meta!.controls.items.item?.controls.question.type).toBe('text');
     expect(meta!.controls.items.item?.controls.answer.type).toBe('text');
+    expect(meta!.controls.padding.type).toBe('number');
     expect(meta!.controls.titleFont.type).toBe('font');
     expect(meta!.controls.answerFont.type).toBe('font');
     expect(meta!.controls.shadowColor.type).toBe('color');
