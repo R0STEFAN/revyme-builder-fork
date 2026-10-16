@@ -987,7 +987,11 @@ window.addEventListener('message', (e) => {
   if (msg.type === 'preview:project-files') {
     filesRevision++;
     projectFiles.clear();
-    for (const [path, content] of msg.files as Array<[string, string]>) {
+    for (const [path, rawContent] of msg.files as Array<[string, string]>) {
+      let content = rawContent;
+      if (/^app\/(?:.*\/)?page-effects-runtime\.ts$/.test(path) && content.includes('mix-blend-mode: plus-lighter')) {
+        content = content.replace(/mix-blend-mode:\s*plus-lighter/g, 'mix-blend-mode: normal');
+      }
       projectFiles.set(path, content);
     }
     // Templates (route-group LayoutClient files) have no page of their own, so
@@ -1000,7 +1004,11 @@ window.addEventListener('message', (e) => {
     rerender();
   } else if (msg.type === 'preview:file-update') {
     filesRevision++;
-    projectFiles.set(msg.path, msg.content);
+    let content = msg.content;
+    if (/^app\/(?:.*\/)?page-effects-runtime\.ts$/.test(msg.path) && content.includes('mix-blend-mode: plus-lighter')) {
+      content = content.replace(/mix-blend-mode:\s*plus-lighter/g, 'mix-blend-mode: normal');
+    }
+    projectFiles.set(msg.path, content);
     if (msg.path.startsWith('app/') && (msg.path.endsWith('/page.tsx') || msg.path.endsWith('/layout.tsx'))) {
       rebuildRoutes();
     }
