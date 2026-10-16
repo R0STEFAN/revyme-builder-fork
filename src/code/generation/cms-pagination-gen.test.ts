@@ -465,6 +465,12 @@ export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any
     expect(out).toContain('const retryApiList = loadMoreApiList');
     expect(out).toContain('{hasMoreApiList && <LoadMore data-id="loadmore-api-list" data-pagination-ui="true" onLoadMore={loadMoreApiList} />}');
     expect(out).toContain('{itemsApiList.map((item, idx) =>');
+    const itemsPos = out.indexOf('const [itemsApiList');
+    const loadMorePos = out.indexOf('const loadMoreApiList = useCallback');
+    const retryPos = out.indexOf('const retryApiList = loadMoreApiList');
+    expect(itemsPos).toBeGreaterThan(-1);
+    expect(itemsPos).toBeLessThan(loadMorePos);
+    expect(loadMorePos).toBeLessThan(retryPos);
     parses(out);
   });
 
@@ -505,6 +511,56 @@ export default function Page({ cmsDatasets }: { cmsDatasets?: Record<string, any
     expect(hooks.some(h => h.includes('const [itemsApiList, setItemsApiList] = useState'))).toBe(true);
     expect(hooks.some(h => h.includes('const [pageApiList, setPageApiList] = useState(1)'))).toBe(true);
     expect(hooks.some(h => h.includes('const loadMoreApiList = useCallback'))).toBe(true);
+  });
+
+  it('generates remote Load More with query params from data-query-config', () => {
+    const pageWithQuery = `import React from 'react';
+import tattoos from '@/cms/tattoos.json';
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="grid" data-query-config={JSON.stringify({"isApiMode":true,"params":[{"key":"filter[category][_eq]","value":"params.category","isExpression":true}]})}>
+      {tattoos.map((item, idx) => (
+        <div data-id="row" key={idx}>{item.title}</div>
+      ))}
+    </div>
+  </div>;
+}`;
+    const out = setPaginationInCode(pageWithQuery, 'grid', { mode: 'loadMore', perPage: 3 });
+    expect(out).toContain('params?.category');
+    expect(out).toContain('key: "filter[category][_eq]"');
+    expect(out).toContain('useParams');
+    expect(out).toContain('const params = useParams()');
+    expect(out.indexOf('const params = useParams();')).toBeLessThan(out.indexOf('const [itemsGrid, setItemsGrid]'));
+    expect(out.indexOf('const [itemsGrid, setItemsGrid]')).toBeLessThan(out.indexOf('const loadMoreGrid'));
+    expect(out.indexOf('const loadMoreGrid')).toBeLessThan(out.indexOf('const retryGrid'));
+    parses(out);
+  });
+
+  it('correctly cleans and re-applies remote pagination on portfolio-test2 gallery page', () => {
+    const fs = require('fs');
+    const json = JSON.parse(fs.readFileSync('data/projects/proj-1791960645579-j02nu7.json', 'utf8'));
+    const file = json.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'];
+
+    const cleaned = removePaginationInCode(file, 'frame-mv7ra9vc-5');
+    expect(cleaned).not.toContain('itemsFrameMv7ra9vc5');
+    expect(cleaned).not.toContain('loadMoreFrameMv7ra9vc5');
+    expect(cleaned).not.toContain('data-pagination');
+    expect(cleaned).toContain('{tattoos.map(');
+    parses(cleaned);
+
+    const regenerated = setPaginationInCode(cleaned, 'frame-mv7ra9vc-5', { mode: 'loadMore', perPage: 3 });
+    expect(regenerated).toContain('const params = useParams();');
+    expect(regenerated.indexOf('const params = useParams();')).toBeLessThan(regenerated.indexOf('const [itemsFrameMv7ra9vc5, setItemsFrameMv7ra9vc5]'));
+    expect(regenerated.indexOf('const [itemsFrameMv7ra9vc5, setItemsFrameMv7ra9vc5]')).toBeLessThan(regenerated.indexOf('const loadMoreFrameMv7ra9vc5'));
+    expect(regenerated.indexOf('const loadMoreFrameMv7ra9vc5')).toBeLessThan(regenerated.indexOf('const retryFrameMv7ra9vc5'));
+    expect(regenerated).toContain('key: "filter[categories_m2m][categories_id][slug][_eq]", value: params?.category');
+    expect(regenerated).toContain('key: "filter[placements_m2m][placements_id][slug][_eq]", value: params?.place');
+    parses(regenerated);
+
+    if (file !== regenerated) {
+      json.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'] = regenerated;
+      fs.writeFileSync('data/projects/proj-1791960645579-j02nu7.json', JSON.stringify(json, null, 2), 'utf8');
+    }
   });
 });
 

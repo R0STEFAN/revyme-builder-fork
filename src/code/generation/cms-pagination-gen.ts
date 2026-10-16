@@ -12,7 +12,7 @@
 import { trace } from '@/shared/debug-trace';
 import { escapeRegExp } from '@/shared/regex-utils';
 import { projectFS } from '../project/project-fs';
-import { findTagClose, insertAfterLastImportLine } from './generator-utils';
+import { findTagClose, insertAfterLastImportLine, ensureNamedImport } from './generator-utils';
 import {
   findJSXElementByDataId,
   findClosingTag,
@@ -507,23 +507,60 @@ export function setPaginationInCode(
       result = result.slice(0, tagClose) + ` data-pagination="${mode}:${perPage}" data-remote-pagination="true"` + result.slice(tagClose);
     }
 
-    const hookLines: string[] = [
+    let queryParamsPayload = '';
+    let resolvedQueryConfig = opts?.queryConfig;
+    if (!resolvedQueryConfig) {
+      const jsonMatch = openingTag.match(/data-query-config=\{JSON\.stringify\(([\s\S]*?)\)\}/);
+      if (jsonMatch) {
+        try { resolvedQueryConfig = JSON.parse(jsonMatch[1]); } catch {}
+      } else {
+        const attrMatch = openingTag.match(/data-query-config=(?:'([\s\S]*?)'|"([\s\S]*?)")/);
+        if (attrMatch) {
+          try { resolvedQueryConfig = JSON.parse(attrMatch[1] || attrMatch[2]); } catch {}
+        }
+      }
+    }
+    if (resolvedQueryConfig?.params && Array.isArray(resolvedQueryConfig.params) && resolvedQueryConfig.params.length > 0) {
+      const entries = resolvedQueryConfig.params.map((p: any) => {
+        if (p.isExpression && p.value) {
+          const safeVal = String(p.value).replace(/\bparams\.([a-zA-Z0-9_]+)/g, 'params?.$1');
+          return `{ key: ${JSON.stringify(p.key)}, value: ${safeVal} }`;
+        }
+        return `{ key: ${JSON.stringify(p.key)}, value: ${JSON.stringify(p.value ?? '')} }`;
+      });
+      queryParamsPayload = `, params: [${entries.join(', ')}]`;
+    }
+
+    const hookLines: string[] = [];
+    if (queryParamsPayload.includes('params?.')) {
+      result = ensureNamedImport(result, 'next/navigation', ['useParams']);
+      result = result.replace(/\n?\s*const\s+params\s*=\s*useParams\s*\(\s*\);?/g, '');
+      hookLines.push('const params = useParams();');
+    }
+
+    hookLines.push(
       `const [${itemsVar}, ${setItemsVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr} : []));`,
       `const [${pageVar}, ${setPageVar}] = useState(1);`,
       `const [${hasMoreVar}, ${setHasMoreVar}] = useState(true);`,
       `const [${loadingVar}, ${setLoadingVar}] = useState(false);`,
       `const [${errorVar}, ${setErrorVar}] = useState(null);`,
       `const ${abortRef} = useRef(null);`,
-      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr} : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
-      `const ${loadMoreFn} = useCallback(async () => { if (${loadingVar} || !${hasMoreVar}) return; ${abortRef}.current?.abort(); const ctrl = new AbortController(); ${abortRef}.current = ctrl; ${setLoadingVar}(true); ${setErrorVar}(null); try { const nextPage = ${pageVar} + 1; const res = await fetch('/api/cms/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: '${slug}', page: nextPage, limit: ${perPage}, offset: (nextPage - 1) * ${perPage} }), signal: ctrl.signal }); if (!res.ok) throw new Error('Failed to load more items'); const data = await res.json(); if (data.ok && Array.isArray(data.items)) { ${setItemsVar}((prev: any[]) => { const existingIds = new Set(prev.map((it: any) => it.id ?? it._id ?? it.slug ?? it._slug)); const newItems = data.items.filter((it: any) => { const id = it.id ?? it._id ?? it.slug ?? it._slug; return id != null ? !existingIds.has(id) : true; }); return [...prev, ...newItems]; }); ${setPageVar}(nextPage); ${setHasMoreVar}(Boolean(data.hasMore ?? (data.items.length >= ${perPage}))); } else { ${setHasMoreVar}(false); } } catch (err: any) { if (err.name !== 'AbortError') ${setErrorVar}(err.message || 'Error loading more'); } finally { ${setLoadingVar}(false); } }, [${loadingVar}, ${hasMoreVar}, ${pageVar}]);`,
-      `const ${retryFn} = ${loadMoreFn};`,
-    ];
+    );
     if (mode === 'infinite') {
       hookLines.push(`const ${sentinelRef} = useRef(null);`);
-      hookLines.push(`useEffect(() => { const el = ${sentinelRef}.current; if (!el) return; const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) { ${loadMoreFn}(); } }); io.observe(el); return () => io.disconnect(); }, [${loadMoreFn}]);`);
+    }
+    hookLines.push(
+      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr} : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
+      `const ${loadMoreFn} = useCallback(async () => { if (${loadingVar} || !${hasMoreVar}) return; ${abortRef}.current?.abort(); const ctrl = new AbortController(); ${abortRef}.current = ctrl; ${setLoadingVar}(true); ${setErrorVar}(null); try { const nextPage = ${pageVar} + 1; const res = await fetch('/api/cms/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: '${slug}', page: nextPage, limit: ${perPage}, offset: (nextPage - 1) * ${perPage}${queryParamsPayload} }), signal: ctrl.signal }); if (!res.ok) throw new Error('Failed to load more items'); const data = await res.json(); if (data.ok && Array.isArray(data.items)) { ${setItemsVar}((prev: any[]) => { const existingIds = new Set(prev.map((it: any) => it.id ?? it._id ?? it.slug ?? it._slug)); const newItems = data.items.filter((it: any) => { const id = it.id ?? it._id ?? it.slug ?? it._slug; return id != null ? !existingIds.has(id) : true; }); return [...prev, ...newItems]; }); ${setPageVar}(nextPage); ${setHasMoreVar}(Boolean(data.hasMore ?? (data.items.length >= ${perPage}))); } else { ${setHasMoreVar}(false); } } catch (err: any) { if (err.name !== 'AbortError') ${setErrorVar}(err.message || 'Error loading more'); } finally { ${setLoadingVar}(false); } }, [${loadingVar}, ${hasMoreVar}, ${pageVar}]);`,
+      `const ${retryFn} = ${loadMoreFn};`,
+    );
+    if (mode === 'infinite') {
+      hookLines.push(
+        `useEffect(() => { const el = ${sentinelRef}.current; if (!el) return; const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) { ${loadMoreFn}(); } }); io.observe(el); return () => io.disconnect(); }, [${loadMoreFn}]);`,
+      );
     }
 
-    for (const line of hookLines) {
+    for (const line of [...hookLines].reverse()) {
       result = ensureHook(result, parentId, line);
     }
 

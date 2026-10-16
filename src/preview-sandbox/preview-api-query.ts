@@ -190,7 +190,23 @@ export function detectCollectionQueries(code: string): DetectedQuery[] {
       const mapMatch = innerContent.match(/\{([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+(?:\([^)]*\))?)*\s*\.map\(/);
       if (mapMatch) {
         const varName = mapMatch[1];
-        source = importMap.get(varName) || varName;
+        source = importMap.get(varName) || '';
+        if (!source && varName.startsWith('items')) {
+          const stateMatch = code.match(
+            new RegExp(`const\\s*\\[${varName},[^\\]]*\\]\\s*=\\s*(?:React\\.)?useState[\\s\\S]*?(?:;|\\n\\s*(?:const|let|var|function|return|\\/\\/))`)
+          );
+          if (stateMatch) {
+            for (const [vName, colSlug] of importMap.entries()) {
+              if (new RegExp(`\\b${vName}\\b`).test(stateMatch[0])) {
+                source = colSlug;
+                break;
+              }
+            }
+          }
+        }
+        if (!source && !varName.startsWith('items')) {
+          source = varName;
+        }
       }
     }
     if (!source) {
@@ -243,7 +259,7 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
     if (closeIdx === -1) continue;
 
     const inner = result.slice(tagClose + 1, closeIdx);
-    const mapRegex = new RegExp(`(\\{\\s*)(${source})(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
+    const mapRegex = new RegExp(`(\\{\\s*)(${source}|items[a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;
 
     const wrappedInner = inner.replace(

@@ -504,5 +504,24 @@ describe('preview-api-query', () => {
       expect(getPreviewDataset('tattoos', 'grid-sub')?.length).toBe(19); // Immediately 19 items without getting stuck!
       expect(getPreviewDataset('tattoos', 'grid-sub')?.[0].title).toBe('Forearm 0');
     });
+
+    it('wraps collection list with itemsVar mapping to preview data', () => {
+      const code = `
+        import tattoos from '@/cms/tattoos.json';
+        export default function Page() {
+          const [itemsList, setItemsList] = React.useState(() => (Array.isArray(tattoos) ? tattoos : []));
+          return (
+            <div data-id="grid" data-query-config={JSON.stringify({ isApiMode: true })}>
+              {itemsList.map((item: any) => <div>{item.title}</div>)}
+            </div>
+          );
+        }
+      `;
+      const detected = detectCollectionQueries(code);
+      expect(detected.length).toBe(1);
+      expect(detected[0].source).toBe('tattoos');
+      const wrapped = wrapCollectionListMapping(code, detected);
+      expect(wrapped).toContain("__getPreviewData('tattoos', 'grid')");
+    });
   });
 });

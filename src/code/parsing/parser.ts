@@ -1831,15 +1831,45 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
     traverse(ast, {
       VariableDeclarator(path) {
         const n: any = path.node;
-        if (n.id?.type !== 'Identifier' || n.init?.type !== 'CallExpression') return;
-        if (n.init.callee?.type !== 'Identifier' || n.init.callee.name !== 'useResponsiveListConfig') return;
-        const a = n.init.arguments || [];
-        responsiveListConfigs.set(n.id.name, {
-          base: toBaseDims(astLiteralToValue(a[0])),
-          viewport: toOverrideMap(astLiteralToValue(a[1])),
-          variants: toOverrideMap(astLiteralToValue(a[4])),
-        });
-        trace.action('parser:responsive-list-config', { cfgVar: n.id.name });
+        if (n.id?.type === 'Identifier' && n.init?.type === 'CallExpression') {
+          if (n.init.callee?.type === 'Identifier' && n.init.callee.name === 'useResponsiveListConfig') {
+            const a = n.init.arguments || [];
+            responsiveListConfigs.set(n.id.name, {
+              base: toBaseDims(astLiteralToValue(a[0])),
+              viewport: toOverrideMap(astLiteralToValue(a[1])),
+              variants: toOverrideMap(astLiteralToValue(a[4])),
+            });
+            trace.action('parser:responsive-list-config', { cfgVar: n.id.name });
+            return;
+          }
+        }
+
+        // Pre-scan remote pagination items state:
+        // `const [itemsVar, setItemsVar] = useState(() => (Array.isArray(slug) ? slug : []));`
+        if (n.id?.type === 'ArrayPattern' && n.id.elements?.[0]?.type === 'Identifier') {
+          const firstIdent = n.id.elements[0].name;
+          if (firstIdent.startsWith('items') && n.init?.type === 'CallExpression') {
+            const calleeName = n.init.callee?.name || n.init.callee?.property?.name;
+            if (calleeName === 'useState') {
+              let matchedSlug: string | null = null;
+              path.traverse({
+                Identifier(idPath: any) {
+                  if (matchedSlug) return;
+                  if (cmsImports.has(idPath.node.name)) {
+                    matchedSlug = cmsImports.get(idPath.node.name)!;
+                  }
+                },
+              });
+              if (!matchedSlug && cmsImports.size === 1) {
+                matchedSlug = [...cmsImports.values()][0];
+              }
+              if (matchedSlug) {
+                cmsImports.set(firstIdent, matchedSlug);
+                trace.action('parser:remote-pagination-items-mapped', { itemsVar: firstIdent, slug: matchedSlug });
+              }
+            }
+          }
+        }
       },
     });
   }
@@ -2780,7 +2810,35 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         // After unwinding the chain, the cursor must be a bare identifier.
         if (!cursor || cursor.type !== 'Identifier') return;
         const sourceVarName = cursor.name;
-        const cmsSlug = cmsImports.get(sourceVarName);
+        let cmsSlug = cmsImports.get(sourceVarName);
+        if (!cmsSlug && sourceVarName.startsWith('items')) {
+          let p: any = path.parentPath;
+          while (p) {
+            if (p.node.type === 'JSXElement') {
+              const attrs = p.node.openingElement?.attributes || [];
+              const qc = attrs.find((a: any) => a.name?.name === 'data-query-config');
+              if (qc) {
+                const val = qc.value?.value || qc.value?.expression?.arguments?.[0]?.value || qc.value?.expression?.value;
+                if (typeof val === 'string') {
+                  try {
+                    const parsed = JSON.parse(val);
+                    if (parsed.source && cmsImports.has(parsed.source)) {
+                      cmsSlug = cmsImports.get(parsed.source);
+                    }
+                  } catch {}
+                }
+              }
+              break;
+            }
+            p = p.parentPath;
+          }
+          if (!cmsSlug && cmsImports.size === 1) {
+            cmsSlug = [...cmsImports.values()][0];
+          }
+          if (cmsSlug) {
+            cmsImports.set(sourceVarName, cmsSlug);
+          }
+        }
         // Inline (non-CMS) `.map()` repeaters were retired 2026-09-07: only a
         // CMS import resolves to a collection list. Anything else is ignored by
         // the parser and rejected by the oracle (CMS_MAP_UNRESOLVED).

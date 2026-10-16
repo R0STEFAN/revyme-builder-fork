@@ -1033,6 +1033,44 @@ import team from '@/cms/team.json';
     expect(pg.perPage).toBe(4);
   });
 
+  test('reads remote pagination back from data-pagination marker and itemsVar mapping', () => {
+    const code = `
+import React, { useState } from 'react';
+import tattoos from '@/cms/tattoos.json';
+export default function Page() {
+  const [itemsList, setItemsList] = useState(() => (Array.isArray(tattoos) ? tattoos : []));
+  return (
+    <div data-id="list" data-pagination="loadMore:5" data-remote-pagination="true" data-query-config='{"isApiMode":true}'>
+      {itemsList.map((item, idx) => (
+        <div data-id="card" key={idx}>{item.title}</div>
+      ))}
+    </div>
+  );
+}`;
+    const cl = parseJSXToNodes(code).get('list')?.collectionList;
+    expect(cl).toBeDefined();
+    expect(cl?.source).toBe('tattoos');
+    expect(cl?.pagination?.mode).toBe('loadMore');
+    expect(cl?.pagination?.perPage).toBe(5);
+    expect(parseJSXToNodes(code).get('card')?.isCollectionTemplate).toBe(true);
+  });
+
+  test('parses gallery subroute page from portfolio-test2 with remote pagination', () => {
+    const fs = require('fs');
+    const json = JSON.parse(fs.readFileSync('data/projects/proj-1791960645579-j02nu7.json', 'utf8'));
+    const file = json.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'];
+    const nodes = parseJSXToNodes(file);
+    const listNode = nodes.get('frame-mv7ra9vc-5');
+    expect(listNode).toBeDefined();
+    expect(listNode?.collectionList).toBeDefined();
+    expect(listNode?.collectionList?.source).toBe('tattoos');
+    expect(listNode?.collectionList?.pagination?.mode).toBe('loadMore');
+    expect(listNode?.collectionList?.pagination?.perPage).toBe(3);
+    expect(listNode?.collectionList?.queryConfig?.isApiMode).toBe(true);
+    expect(listNode?.collectionList?.queryConfig?.params?.length).toBe(2);
+    expect(nodes.get('item-mv7ra9vd-6')?.isCollectionTemplate).toBe(true);
+  });
+
   test('parses a LEGACY single 2-branch sort into a 1-element array (back-compat)', () => {
     const code = `
 import team from '@/cms/team.json';
