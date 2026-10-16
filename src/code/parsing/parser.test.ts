@@ -1065,7 +1065,7 @@ export default function Page() {
     expect(listNode?.collectionList).toBeDefined();
     expect(listNode?.collectionList?.source).toBe('tattoos');
     expect(listNode?.collectionList?.pagination?.mode).toBe('loadMore');
-    expect(listNode?.collectionList?.pagination?.perPage).toBe(3);
+    expect(listNode?.collectionList?.pagination?.perPage).toBe(4);
     expect(listNode?.collectionList?.queryConfig?.isApiMode).toBe(true);
     expect(listNode?.collectionList?.queryConfig?.params?.length).toBe(2);
     expect(nodes.get('item-mv7ra9vd-6')?.isCollectionTemplate).toBe(true);

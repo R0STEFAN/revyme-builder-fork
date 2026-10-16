@@ -869,12 +869,13 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
     const isRemotePaginated = mappedVar.startsWith('items') && result.includes(`[${mappedVar},`);
     if (isRemotePaginated) {
       const datasetExpr = `(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || ${source})`;
+      const setter = 'set' + mappedVar.charAt(0).toUpperCase() + mappedVar.slice(1);
       // Update useState for mappedVar
-      const useStateRe = new RegExp(`(const\\s*\\[${mappedVar},[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\(\\(\\)\\s*=>\\s*\\(?Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:\\s*\\[\\]\\s*\\)?\\);?)`);
-      result = result.replace(useStateRe, `$1${datasetExpr}$2${datasetExpr}$3`);
+      const useStateRe = new RegExp(`(const\\s*\\[\\s*${mappedVar}\\s*,[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\(?Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:\\s*\\[\\]\\s*\\)?\\);?)`);
+      result = result.replace(useStateRe, (full, p1, p2, p3) => `${p1}${datasetExpr}${p2}${datasetExpr}${p3}`);
 
       // Update useEffect for mappedVar
-      const useEffectRe = new RegExp(`(useEffect\\(\\(\\)\\s*=>\\s*\\{\\s*set${mappedVar.slice(5)}\\s*\\(\\s*Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:[^;]+;[^}]+,\\s*\\[)([^\\]]+)(\\]\\);?)`);
+      const useEffectRe = new RegExp(`(useEffect\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*${setter}\\s*\\(\\s*(?:Array\\.isArray|\\(Array\\.isArray)\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:[^;]+;[\\s\\S]*?,\\s*\\[)([^\\]]+)(\\]\\s*\\);?)`);
       result = result.replace(useEffectRe, (full, p1, p2, p3, deps, p5) => {
         const newDeps = deps.includes('cmsDatasets') ? deps : `${deps}, cmsDatasets`;
         return `${p1}${datasetExpr}${p2}${datasetExpr}${p3}${newDeps}${p5}`;
