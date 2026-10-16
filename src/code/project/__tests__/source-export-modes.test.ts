@@ -441,6 +441,31 @@ export default function Page() {
     expect(serverResult).toContain('cmsDatasets["list-men"] = items_1;');
     expect(serverResult).toContain('<PageClient cmsDatasets={cmsDatasets} />');
   });
+  it('prepares gallery route from portfolio-test2 with queryConfig and remote pagination', () => {
+    const fs = require('fs');
+    const project = JSON.parse(fs.readFileSync('data/projects/proj-1791960645579-j02nu7.json', 'utf8'));
+    const files = {
+      '_meta/cms-api-config.json': project.data.files['_meta/cms-api-config.json'],
+      'app/(main)/gallery/[category]/[place]/page.client.tsx': project.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'],
+      'app/(main)/gallery/[category]/[place]/page.tsx': project.data.files['app/(main)/gallery/[category]/[place]/page.tsx'],
+    };
+    const queries = detectPageCollectionQueries(files['app/(main)/gallery/[category]/[place]/page.client.tsx']);
+    expect(queries).toHaveLength(1);
+    expect(queries[0].source).toBe('tattoos');
+    expect(queries[0].paginationLimit).toBe(3);
+
+    const prepared = prepareSiteFiles(files, { ssg: false });
+    expect(prepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "3")');
+    expect(prepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('<PageClient cmsDatasets={cmsDatasets} />');
+    expect(prepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain("cmsDatasets?.['frame-mv7ra9vc-5']");
+    expect(prepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain('{itemsFrameMv7ra9vc5.map(');
+
+    const ssgPrepared = prepareSiteFiles(files, { ssg: true });
+    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('qParams_0.set("limit", "3")');
+    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.tsx']).toContain('<PageClient cmsDatasets={cmsDatasets} />');
+    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain("cmsDatasets?.['frame-mv7ra9vc-5']");
+    expect(ssgPrepared['app/(main)/gallery/[category]/[place]/page.client.tsx']).toContain('{itemsFrameMv7ra9vc5.map(');
+  });
 });
 
 describe('Application-Level Timeout & Error Handling in Server Wrappers', () => {

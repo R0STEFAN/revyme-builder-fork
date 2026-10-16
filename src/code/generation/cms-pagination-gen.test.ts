@@ -556,11 +556,6 @@ export default function Page() {
     expect(regenerated).toContain('key: "filter[categories_m2m][categories_id][slug][_eq]", value: params?.category');
     expect(regenerated).toContain('key: "filter[placements_m2m][placements_id][slug][_eq]", value: params?.place');
     parses(regenerated);
-
-    if (file !== regenerated) {
-      json.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'] = regenerated;
-      fs.writeFileSync('data/projects/proj-1791960645579-j02nu7.json', JSON.stringify(json, null, 2), 'utf8');
-    }
   });
 
   it('preserves LoadMore placement when moved outside the collection container', () => {

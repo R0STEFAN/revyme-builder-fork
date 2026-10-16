@@ -644,6 +644,7 @@ export interface DetectedCollectionQuery {
   listId: string;
   source: string;
   queryConfig: CollectionQueryConfig;
+  paginationLimit?: number;
 }
 
 /**
@@ -776,6 +777,9 @@ export function detectPageCollectionQueries(code: string): DetectedCollectionQue
 
     if (!queryConfig) continue;
 
+    const pagMatch = attrs.match(/data-pagination="(?:loadMore|infinite):(\d+)"/);
+    const paginationLimit = pagMatch ? parseInt(pagMatch[1], 10) : undefined;
+
     const closeIndex = findMatchingCloseTagIndex(code, tagName, openTagEnd);
     const innerContent = closeIndex !== -1 ? code.slice(openTagEnd, closeIndex) : code.slice(openTagEnd);
 
@@ -784,7 +788,24 @@ export function detectPageCollectionQueries(code: string): DetectedCollectionQue
       const mapMatch = innerContent.match(/\{([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9_]+(?:\([^)]*\))?)*\s*\.map\(/);
       if (mapMatch) {
         const varName = mapMatch[1];
-        source = importMap.get(varName) || varName;
+        if (importMap.has(varName)) {
+          source = importMap.get(varName)!;
+        } else if (varName.startsWith('items')) {
+          // Check for remote pagination useState declaration
+          const stateMatch = new RegExp(`const\\s*\\[${varName},[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\(\\(\\)\\s*=>\\s*\\(?Array\\.isArray\\(([a-zA-Z0-9_]+)\\)`).exec(code);
+          if (stateMatch && (importMap.has(stateMatch[1]) || !stateMatch[1].startsWith('items'))) {
+            source = importMap.get(stateMatch[1]) || stateMatch[1];
+          }
+        }
+        if (!source && !varName.startsWith('items')) {
+          source = importMap.get(varName) || varName;
+        }
+      }
+    }
+    if (!source) {
+      const colMatch = new RegExp(`collection:\\s*['"]([a-zA-Z0-9_-]+)['"]`).exec(code);
+      if (colMatch && (importMap.has(colMatch[1]) || !colMatch[1].startsWith('items'))) {
+        source = colMatch[1];
       }
     }
     if (!source) {
@@ -800,7 +821,7 @@ export function detectPageCollectionQueries(code: string): DetectedCollectionQue
     }
 
     if (source) {
-      queries.push({ listId, source, queryConfig });
+      queries.push({ listId, source, queryConfig, ...(paginationLimit ? { paginationLimit } : {}) });
     }
   }
 
@@ -841,13 +862,30 @@ export function injectCmsDatasetsIntoClientPage(code: string, queries?: Detected
 
     const mapRegex = new RegExp(`(\\{\\s*)([a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;
+    mapRegex.lastIndex = 0;
+    const mapMatch = mapRegex.exec(inner);
+    const mappedVar = mapMatch ? mapMatch[2] : '';
 
-    const wrappedInner = inner.replace(
-      mapRegex,
-      `$1(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || $2)$3`,
-    );
+    const isRemotePaginated = mappedVar.startsWith('items') && result.includes(`[${mappedVar},`);
+    if (isRemotePaginated) {
+      const datasetExpr = `(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || ${source})`;
+      // Update useState for mappedVar
+      const useStateRe = new RegExp(`(const\\s*\\[${mappedVar},[^\\]]+\\]\\s*=\\s*useState(?:<[^>]*>)?\\(\\(\\)\\s*=>\\s*\\(?Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:\\s*\\[\\]\\s*\\)?\\);?)`);
+      result = result.replace(useStateRe, `$1${datasetExpr}$2${datasetExpr}$3`);
 
-    result = result.slice(0, tagClose + 1) + wrappedInner + result.slice(closeIdx);
+      // Update useEffect for mappedVar
+      const useEffectRe = new RegExp(`(useEffect\\(\\(\\)\\s*=>\\s*\\{\\s*set${mappedVar.slice(5)}\\s*\\(\\s*Array\\.isArray\\()[^)]+(\\)\\s*\\?\\s*)[^.]+(\\.slice\\(0,\\s*\\d+\\)\\s*:[^;]+;[^}]+,\\s*\\[)([^\\]]+)(\\]\\);?)`);
+      result = result.replace(useEffectRe, (full, p1, p2, p3, deps, p5) => {
+        const newDeps = deps.includes('cmsDatasets') ? deps : `${deps}, cmsDatasets`;
+        return `${p1}${datasetExpr}${p2}${datasetExpr}${p3}${newDeps}${p5}`;
+      });
+    } else {
+      const wrappedInner = inner.replace(
+        mapRegex,
+        `$1(cmsDatasets?.['${listId}'] || cmsDatasets?.['${source}'] || $2)$3`,
+      );
+      result = result.slice(0, tagClose + 1) + wrappedInner + result.slice(closeIdx);
+    }
   }
 
   if (!result.includes('cmsDatasets')) {
@@ -963,6 +1001,10 @@ export function orchestrateServerFetchForQueries(
           lines.push(`  qParams_${idx}.set(${JSON.stringify(p.key)}, ${JSON.stringify(p.value ?? '')});`);
         }
       });
+    }
+
+    if (q.paginationLimit && (!Array.isArray(q.queryConfig.params) || !q.queryConfig.params.some((p: any) => p.key === 'limit'))) {
+      lines.push(`  qParams_${idx}.set("limit", ${JSON.stringify(String(q.paginationLimit))});`);
     }
 
     const sep = conf.url.includes('?') ? '&' : '?';
