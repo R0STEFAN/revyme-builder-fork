@@ -217,7 +217,7 @@ const LOADMORE_IMPORT = `import ${LOADMORE_COMPONENT_NAME} from '@/components/Lo
 
 /** Add `import LoadMore from '@/components/LoadMore'` after the last import (idempotent). */
 function ensureLoadMoreImport(code: string): string {
-  if (code.includes(LOADMORE_IMPORT)) return code;
+  if (code.includes(LOADMORE_IMPORT) || new RegExp(`\\bimport\\s+(?:\\{\\s*${LOADMORE_COMPONENT_NAME}\\s*\\}|${LOADMORE_COMPONENT_NAME})\\s+from`).test(code)) return code;
   return insertAfterLastImportLine(code, LOADMORE_IMPORT) ?? code;
 }
 
@@ -316,7 +316,7 @@ const SPINNER_IMPORT = `import ${SPINNER_COMPONENT_NAME} from '@/components/Spin
 
 /** Add `import Spinner from '@/components/Spinner'` after the last import (idempotent). */
 function ensureSpinnerImport(code: string): string {
-  if (code.includes(SPINNER_IMPORT)) return code;
+  if (code.includes(SPINNER_IMPORT) || new RegExp(`\\bimport\\s+(?:\\{\\s*${SPINNER_COMPONENT_NAME}\\s*\\}|${SPINNER_COMPONENT_NAME})\\s+from`).test(code)) return code;
   return insertAfterLastImportLine(code, SPINNER_IMPORT) ?? code;
 }
 
@@ -417,8 +417,23 @@ export function setPaginationInCode(
   const { mode, perPage } = opts;
   trace.fn('cms-pagination:set', { parentId, mode, perPage });
 
+  const loadMoreId = `loadmore-${parentId}`;
+  const sentinelId = `sentinel-${parentId}`;
+  const existingLoadMoreIdx = code.indexOf(`data-id="${loadMoreId}"`);
+  const existingSentinelIdx = code.indexOf(`data-id="${sentinelId}"`);
+  const initialElStart = findJSXElementByDataId(code, parentId);
+  const initialClosing = initialElStart !== -1 ? findClosingTag(code, initialElStart) : null;
+  const isInsideInitialParent = (idx: number) => Boolean(initialClosing && initialClosing.contentStart !== -1 && idx > initialClosing.contentStart && idx < initialClosing.closeTagStart);
+  const loadMoreWasOutside = existingLoadMoreIdx !== -1 && !isInsideInitialParent(existingLoadMoreIdx);
+  const sentinelWasOutside = existingSentinelIdx !== -1 && !isInsideInitialParent(existingSentinelIdx);
+
+  const wasRemote = Boolean(opts?.isRemote || isRemoteCollectionList(code, parentId, opts));
+
   // Start clean so re-applying a different mode doesn't stack scaffolds.
-  const working = removePaginationInCode(code, parentId);
+  // Preserve external UI if the mode matches (so moved buttons stay where the user put them)
+  const working = removePaginationInCode(code, parentId, {
+    preserveExternalUi: (mode === 'loadMore' && loadMoreWasOutside) || (mode === 'infinite' && sentinelWasOutside),
+  });
 
   const elStart = findJSXElementByDataId(working, parentId);
   if (elStart === -1) { trace.error('cms-pagination:set', { message: 'list not found', parentId }); return code; }
@@ -449,7 +464,7 @@ export function setPaginationInCode(
   if (!slug) { trace.error('cms-pagination:set', { message: 'no chain head', parentId }); return code; }
   const filteredExpr = extractFilteredCollectionExpr(content, mapMatch.index, slug);
 
-  const isRemote = isRemoteCollectionList(working, parentId, opts, slug);
+  const isRemote = wasRemote || isRemoteCollectionList(working, parentId, opts, slug);
 
   if (isRemote) {
     const capitalId = toPascalCase(parentId);
@@ -469,6 +484,9 @@ export function setPaginationInCode(
     const retryFn = 'retry' + capitalId;
 
     let initialExpr = filteredExpr;
+    if (!initialExpr || initialExpr === itemsVar || initialExpr.startsWith('items')) {
+      initialExpr = slug;
+    }
     const cmsDatasetMatch = content.slice(0, mapMatch.index).match(/\((cmsDatasets\?\.\[[^\]]+\][^)]*)\)/);
     if (cmsDatasetMatch) {
       initialExpr = cmsDatasetMatch[0];
@@ -495,9 +513,13 @@ export function setPaginationInCode(
     newContent = newContent.replace(sliceBeforeMap, '');
 
     if (mode === 'loadMore') {
-      newContent += `\n      {${hasMoreVar} && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={${loadMoreFn}} />}\n    `;
+      if (!loadMoreWasOutside) {
+        newContent += `\n      {${hasMoreVar} && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={${loadMoreFn}} />}\n    `;
+      }
     } else {
-      newContent += `\n      {${hasMoreVar} && <div ref={${sentinelRef}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+      if (!sentinelWasOutside) {
+        newContent += `\n      {${hasMoreVar} && <div ref={${sentinelRef}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+      }
     }
 
     let result = working.slice(0, closing.contentStart) + newContent + working.slice(closing.closeTagStart);
@@ -539,7 +561,7 @@ export function setPaginationInCode(
     }
 
     hookLines.push(
-      `const [${itemsVar}, ${setItemsVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr} : []));`,
+      `const [${itemsVar}, ${setItemsVar}] = useState(() => (Array.isArray(${initialExpr}) ? ${initialExpr}.slice(0, ${perPage}) : []));`,
       `const [${pageVar}, ${setPageVar}] = useState(1);`,
       `const [${hasMoreVar}, ${setHasMoreVar}] = useState(true);`,
       `const [${loadingVar}, ${setLoadingVar}] = useState(false);`,
@@ -550,7 +572,7 @@ export function setPaginationInCode(
       hookLines.push(`const ${sentinelRef} = useRef(null);`);
     }
     hookLines.push(
-      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr} : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
+      `useEffect(() => { ${setItemsVar}(Array.isArray(${initialExpr}) ? ${initialExpr}.slice(0, ${perPage}) : []); ${setPageVar}(1); ${setHasMoreVar}(true); ${setErrorVar}(null); }, [${initialExpr}]);`,
       `const ${loadMoreFn} = useCallback(async () => { if (${loadingVar} || !${hasMoreVar}) return; ${abortRef}.current?.abort(); const ctrl = new AbortController(); ${abortRef}.current = ctrl; ${setLoadingVar}(true); ${setErrorVar}(null); try { const nextPage = ${pageVar} + 1; const res = await fetch('/api/cms/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: '${slug}', page: nextPage, limit: ${perPage}, offset: (nextPage - 1) * ${perPage}${queryParamsPayload} }), signal: ctrl.signal }); if (!res.ok) throw new Error('Failed to load more items'); const data = await res.json(); if (data.ok && Array.isArray(data.items)) { ${setItemsVar}((prev: any[]) => { const existingIds = new Set(prev.map((it: any) => it.id ?? it._id ?? it.slug ?? it._slug)); const newItems = data.items.filter((it: any) => { const id = it.id ?? it._id ?? it.slug ?? it._slug; return id != null ? !existingIds.has(id) : true; }); return [...prev, ...newItems]; }); ${setPageVar}(nextPage); ${setHasMoreVar}(Boolean(data.hasMore ?? (data.items.length >= ${perPage}))); } else { ${setHasMoreVar}(false); } } catch (err: any) { if (err.name !== 'AbortError') ${setErrorVar}(err.message || 'Error loading more'); } finally { ${setLoadingVar}(false); } }, [${loadingVar}, ${hasMoreVar}, ${pageVar}]);`,
       `const ${retryFn} = ${loadMoreFn};`,
     );
@@ -592,19 +614,30 @@ export function setPaginationInCode(
   // Guard condition checks filteredExpr.length (not raw unfiltered slug.length)
   // so the button/sentinel hides when all items matching active filters/sort are displayed.
   if (mode === 'loadMore') {
-    newContent += `\n      {${stateVar} < ${filteredExpr}.length && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={() => ${setter}((c) => c + ${perPage})} />}\n    `;
+    if (!loadMoreWasOutside) {
+      newContent += `\n      {${stateVar} < ${filteredExpr}.length && <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}" data-pagination-ui="true" onLoadMore={() => ${setter}((c) => c + ${perPage})} />}\n    `;
+    }
   } else {
-    // Infinite scroll: the sentinel is the IntersectionObserver target AND shows
-    // the animated Spinner loader while more rows can load (hidden once exhausted).
-    const refVar = stateVar + 'Ref';
-    // `alignSelf: center` keeps the sentinel from STRETCHING to the list width
-    // (flex column default) — otherwise its full-width box made the spinner's
-    // hit-area swallow hovers/clicks across the whole list. Now it hugs the
-    // spinner and centres itself.
-    newContent += `\n      {${stateVar} < ${filteredExpr}.length && <div ref={${refVar}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+    if (!sentinelWasOutside) {
+      // Infinite scroll: the sentinel is the IntersectionObserver target AND shows
+      // the animated Spinner loader while more rows can load (hidden once exhausted).
+      const refVar = stateVar + 'Ref';
+      // `alignSelf: center` keeps the sentinel from STRETCHING to the list width
+      // (flex column default) — otherwise its full-width box made the spinner's
+      // hit-area swallow hovers/clicks across the whole list. Now it hugs the
+      // spinner and centres itself.
+      newContent += `\n      {${stateVar} < ${filteredExpr}.length && <div ref={${refVar}} data-id="sentinel-${parentId}" data-pagination-ui="true" style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', padding: '12px' }}><${SPINNER_COMPONENT_NAME} data-id="spinner-${parentId}" /></div>}\n    `;
+    }
   }
 
   let result = working.slice(0, closing.contentStart) + newContent + working.slice(closing.closeTagStart);
+
+  if (loadMoreWasOutside && mode === 'loadMore') {
+    result = result.replace(
+      new RegExp(`(<${LOADMORE_COMPONENT_NAME}\\b[^>]*?data-id="loadmore-${parentId}"[^>]*?onLoadMore=\\{)(?:\\(\\)\\s*=>\\s*set[A-Za-z0-9]+\\(\\([a-z]\\)\\s*=>\\s*[a-z]\\s*\\+\\s*\\d+\\)|[a-zA-Z0-9_]+)(\\})`),
+      `$1() => ${setter}((c) => c + ${perPage})$2`,
+    );
+  }
 
   // 3. data-pagination marker on the opening tag (positions before contentStart are
   // unchanged so far — do this BEFORE any top-of-file/body insertion shifts them).
@@ -633,7 +666,7 @@ export function setPaginationInCode(
 
 /** Remove pagination from the list `parentId` — strips the marker, scaffold, the
  *  `.slice(0, <stateVar>)`, and the hooks. Idempotent (no-op if not paginated). */
-export function removePaginationInCode(code: string, parentId: string): string {
+export function removePaginationInCode(code: string, parentId: string, opts?: { preserveExternalUi?: boolean }): string {
   const stateVar = paginationStateVar(parentId);
   const setter = setterFor(stateVar);
   const refVar = stateVar + 'Ref';
@@ -655,9 +688,17 @@ export function removePaginationInCode(code: string, parentId: string): string {
 
   let result = code;
 
+  const elStart = findJSXElementByDataId(code, parentId);
+  const closing = elStart !== -1 ? findClosingTag(code, elStart) : null;
+  const isInsideParent = (idx: number) => Boolean(closing && closing.contentStart !== -1 && idx > closing.contentStart && idx < closing.closeTagStart);
+  const loadMoreIdx = code.indexOf(`data-id="loadmore-${parentId}"`);
+  const sentinelIdx = code.indexOf(`data-id="sentinel-${parentId}"`);
+  const preserveLoadMore = Boolean(opts?.preserveExternalUi && loadMoreIdx !== -1 && !isInsideParent(loadMoreIdx));
+  const preserveSentinel = Boolean(opts?.preserveExternalUi && sentinelIdx !== -1 && !isInsideParent(sentinelIdx));
+
   // Find initialExpr from itemsVar declaration if present
   let initialExpr: string | null = null;
-  const prefixRe = new RegExp(`const\\s*\\[${itemsVar},\\s*${setItemsVar}\\]\\s*=\\s*useState\\(\\(\\)\\s*=>\\s*\\(Array\\.isArray\\(`);
+  const prefixRe = new RegExp(`const\\s*\\[${itemsVar},\\s*${setItemsVar}\\]\\s*=\\s*useState(?:<[^>]*>)?\\(\\(\\)\\s*=>\\s*\\(?Array\\.isArray\\(`);
   const match = prefixRe.exec(result);
   if (match) {
     const argStart = match.index + match[0].length;
@@ -668,10 +709,37 @@ export function removePaginationInCode(code: string, parentId: string): string {
       if (ch === '(') depth++;
       else if (ch === ')') depth--;
       if (depth === 0) {
-        initialExpr = result.slice(argStart, i).trim();
+        const raw = result.slice(argStart, i).trim();
+        if (raw && raw !== itemsVar && !raw.startsWith('items')) {
+          initialExpr = raw;
+        }
         break;
       }
       i++;
+    }
+  }
+  if (!initialExpr && elStart !== -1) {
+    const tagClose = findTagClose(result, elStart);
+    if (tagClose !== -1) {
+      const opening = result.slice(elStart, tagClose);
+      const queryConfigMatch = opening.match(/data-query-config=(?:'\{[\s\S]*?"source"\s*:\s*"([^"]+)"[\s\S]*?\}'|"\{[\s\S]*?\\"source\\"\s*:\s*\\"([^\\"]+)\\"[\s\S]*?\}")/);
+      if (queryConfigMatch) {
+        const s = queryConfigMatch[1] || queryConfigMatch[2];
+        if (s && s !== itemsVar && !s.startsWith('items')) {
+          initialExpr = s;
+        }
+      }
+    }
+  }
+  if (!initialExpr) {
+    const importRegex = /import\s+([a-zA-Z0-9_]+)\s+from\s+['"](?:@\/cms\/|\.\/cms\/|\.\.\/cms\/|cms\/)([^'"]+)\.json['"]/g;
+    const cmsImports: string[] = [];
+    let im: RegExpExecArray | null;
+    while ((im = importRegex.exec(result)) !== null) {
+      cmsImports.push(im[1]);
+    }
+    if (cmsImports.length === 1) {
+      initialExpr = cmsImports[0];
     }
   }
 
@@ -679,21 +747,24 @@ export function removePaginationInCode(code: string, parentId: string): string {
   result = result.replace(/\s*data-remote-pagination="[^"]*"/g, '');
   result = result.replace(/\s*data-pagination="[^"]*"/g, '');
 
-  // Strip the Load More COMPONENT instance block (`{cond && <LoadMore .../>}`).
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
-  result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
-  // (legacy) Strip an old raw-button Load More block, if any remains.
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <button data-id="loadmore-${parentId}"[\\s\\S]*?</button>\\}`), '');
-  // Strip the infinite-scroll sentinel+Spinner block (`{cond && <div ref>...<Spinner/></div>}`).
-  result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
-  result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
-  // (legacy) Strip an old self-closing sentinel div, if any remains.
-  result = result.replace(new RegExp(`\\s*<div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
-  result = result.replace(new RegExp(`\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
+  if (!preserveLoadMore) {
+    // Strip the Load More COMPONENT instance block (`{cond && <LoadMore .../>}`).
+    result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
+    result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<${LOADMORE_COMPONENT_NAME} data-id="loadmore-${parentId}"[\\s\\S]*?/>\\}`), '');
+    // (legacy) Strip an old raw-button Load More block, if any remains.
+    result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <button data-id="loadmore-${parentId}"[\\s\\S]*?</button>\\}`), '');
+    result = pruneLoadMoreImport(result);
+  }
 
-  // Drop the LoadMore + Spinner imports if no instance of each remains.
-  result = pruneLoadMoreImport(result);
-  result = pruneSpinnerImport(result);
+  if (!preserveSentinel) {
+    // Strip the infinite-scroll sentinel+Spinner block (`{cond && <div ref>...<Spinner/></div>}`).
+    result = result.replace(new RegExp(`\\s*\\{${stateVar} < [\\s\\S]*?&& <div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
+    result = result.replace(new RegExp(`\\s*\\{${hasMoreVar}\\s*&&\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[\\s\\S]*?</div>\\}`), '');
+    // (legacy) Strip an old self-closing sentinel div, if any remains.
+    result = result.replace(new RegExp(`\\s*<div ref=\\{${refVar}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
+    result = result.replace(new RegExp(`\\s*<div ref=\\{${sentinelRef}\\} data-id="sentinel-${parentId}"[^>]*/>`), '');
+    result = pruneSpinnerImport(result);
+  }
   // Collapse `.slice(0, stateVar)` back out of the chain (global — duplicates).
   result = result.replace(new RegExp(`\\.slice\\(0, ${stateVar}\\)`, 'g'), '');
 

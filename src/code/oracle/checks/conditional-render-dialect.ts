@@ -189,7 +189,7 @@ const READABLE_HANDLERS = new Set([
   // Forms.
   'onSubmit', 'onChange',
   // Instance props the builder wires (Load More, plugin trigger, icon pick).
-  'onLoadMore', 'onTrigger', 'onPick',
+  'onLoadMore', 'onRetry', 'onTrigger', 'onPick',
   // Every framer gesture/viewport event, taken from the ONE list the codebase
   // already maintains (motion-tag.ts). Hand-curating this set is how the first
   // version of this rule flagged `onTapCancel` — which the composed-fx press

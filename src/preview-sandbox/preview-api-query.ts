@@ -259,7 +259,9 @@ export function wrapCollectionListMapping(code: string, queries?: DetectedQuery[
     if (closeIdx === -1) continue;
 
     const inner = result.slice(tagClose + 1, closeIdx);
-    const mapRegex = new RegExp(`(\\{\\s*)(${source}|items[a-zA-Z0-9_]+)(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
+    const pagMatch = result.slice(elStart, tagClose).match(/data-pagination="(?:loadMore|infinite):(\d+)"/);
+    const targetSource = pagMatch ? source : `${source}|items[a-zA-Z0-9_]+`;
+    const mapRegex = new RegExp(`(\\{\\s*)(${targetSource})(\\s*(?:\\.[a-zA-Z0-9_]+(?:\\([^)]*\\))?)*\\s*\\.map\\()`, 'g');
     if (!mapRegex.test(inner)) continue;
 
     const wrappedInner = inner.replace(

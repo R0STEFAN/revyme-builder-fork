@@ -115,6 +115,42 @@ const compiledModuleCache: Map<string, any> = new Map();
             }),
           );
         }
+        if (path === '/api/cms/query') {
+          try {
+            const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+            const collection = body.collection || '';
+            const page = body.page || 1;
+            const limit = body.limit || 10;
+            const offset = body.offset ?? (page - 1) * limit;
+
+            const allItems = getPreviewDataset(collection) || [];
+            const slice = allItems.slice(offset, offset + limit);
+            const hasMore = (offset + limit) < allItems.length;
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  ok: true,
+                  items: slice,
+                  hasMore,
+                  total: allItems.length,
+                  page,
+                }),
+                {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' },
+                },
+              ),
+            );
+          } catch (e) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ ok: false, error: String(e) }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+              }),
+            );
+          }
+        }
       }
     } catch {
       /* fall through to the real fetch */

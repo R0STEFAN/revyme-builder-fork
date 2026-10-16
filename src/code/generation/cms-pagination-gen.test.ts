@@ -562,5 +562,67 @@ export default function Page() {
       fs.writeFileSync('data/projects/proj-1791960645579-j02nu7.json', JSON.stringify(json, null, 2), 'utf8');
     }
   });
+
+  it('preserves LoadMore placement when moved outside the collection container', () => {
+    const pageWithExternalButton = `import React, { useState, useEffect, useRef, useCallback } from 'react';
+import tattoos from '@/cms/tattoos.json';
+import LoadMore from '@/components/LoadMore';
+
+export default function Page() {
+  const [itemsGrid, setItemsGrid] = useState(() => (Array.isArray(tattoos) ? tattoos.slice(0, 4) : []));
+  const [pageGrid, setPageGrid] = useState(1);
+  const [hasMoreGrid, setHasMoreGrid] = useState(true);
+  const [loadingGrid, setLoadingGrid] = useState(false);
+  const [errorGrid, setErrorGrid] = useState(null);
+  const abortGridRef = useRef(null);
+  useEffect(() => { setItemsGrid(Array.isArray(tattoos) ? tattoos.slice(0, 4) : []); setPageGrid(1); setHasMoreGrid(true); setErrorGrid(null); }, [tattoos]);
+  const loadMoreGrid = useCallback(async () => {}, []);
+  const retryGrid = useCallback(() => {}, []);
+
+  return <div data-id="root">
+    <div data-id="grid" data-pagination="loadMore:4" data-remote-pagination="true">
+      {itemsGrid.map((item, idx) => (
+        <div data-id="card" key={idx}>{item.title}</div>
+      ))}
+    </div>
+    <div data-id="footer">
+      {hasMoreGrid && <LoadMore data-id="loadmore-grid" onLoadMore={loadMoreGrid} loading={loadingGrid} error={errorGrid} onRetry={retryGrid} />}
+    </div>
+  </div>;
+}`;
+
+    // Changing perPage from 4 to 8
+    const updated = setPaginationInCode(pageWithExternalButton, 'grid', { mode: 'loadMore', perPage: 8 });
+    parses(updated);
+    // Button must NOT be inside grid
+    const gridStart = updated.indexOf('data-id="grid"');
+    const footerStart = updated.indexOf('data-id="footer"');
+    const buttonIdx = updated.indexOf('data-id="loadmore-grid"');
+    expect(buttonIdx).toBeGreaterThan(footerStart);
+    // And there must be only 1 loadmore-grid
+    const occurrences = (updated.match(/data-id="loadmore-grid"/g) || []).length;
+    expect(occurrences).toBe(1);
+    // Initial slice in useState and useEffect must be 8
+    expect(updated).toContain('tattoos.slice(0, 8)');
+    expect(updated).toContain('data-pagination="loadMore:8"');
+    expect(updated).toContain('limit: 8');
+  });
+
+  it('slices local collection state to perPage on initial render', () => {
+    const localPage = `import React from 'react';
+import posts from '@/cms/posts.json';
+
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="list">
+      {posts.map((p) => <div data-id="row" key={p.id}>{p.title}</div>)}
+    </div>
+  </div>;
+}`;
+    const paginated = setPaginationInCode(localPage, 'list', { mode: 'loadMore', perPage: 4 });
+    parses(paginated);
+    expect(paginated).toContain('useState(4)');
+    expect(paginated).toContain('posts.slice(0, visList)');
+  });
 });
 
