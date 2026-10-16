@@ -14,13 +14,17 @@ describe('Accordion template', () => {
     expect(meta!.comment).toBeTruthy();
     expect(Object.keys(meta!.controls)).toEqual([
       'items', 'allowMultiple', 'gap',
-      'background', 'textColor', 'answerColor',
+      'background', 'textColor', 'titleFont',
+      'answerColor', 'answerFont',
       'iconBackground', 'iconColor',
-      'borderColor', 'borderRadius', 'fontSize',
+      'borderColor', 'borderRadius', 'shadowColor', 'fontSize',
     ]);
     expect(meta!.controls.items.type).toBe('objectList');
     expect(meta!.controls.items.item?.controls.question.type).toBe('text');
     expect(meta!.controls.items.item?.controls.answer.type).toBe('text');
+    expect(meta!.controls.titleFont.type).toBe('font');
+    expect(meta!.controls.answerFont.type).toBe('font');
+    expect(meta!.controls.shadowColor.type).toBe('color');
   });
 
   it('exports default via withResponsiveProps', () => {
@@ -47,5 +51,17 @@ describe('Accordion template', () => {
     // Item 1 is closed by default, but its answer must still be present in the HTML output
     expect(html).toContain('Yes! In the Properties panel');
     expect(html).toContain('aria-hidden="true"');
+  });
+
+  it('renders custom shadow and font styles when provided', async () => {
+    const Comp = compileCodeComponent(ACCORDION_COMPONENT, 'Accordion', { previewMode: false });
+    const html = renderToStaticMarkup(createElement(Comp as any, {
+      titleFont: 'Playfair Display, serif',
+      answerFont: 'Roboto, sans-serif',
+      shadowColor: 'rgba(255, 0, 0, 0.5)',
+    }));
+    expect(html).toContain('Playfair Display, serif');
+    expect(html).toContain('Roboto, sans-serif');
+    expect(html).toContain('rgba(255, 0, 0, 0.5)');
   });
 });

@@ -35,11 +35,14 @@ export const ACCORDION_COMPONENT = `'use client';
   "gap": { "type": "number", "label": "Gap", "min": 0, "max": 40, "step": 1, "default": 10, "unit": "px" },
   "background": { "type": "color", "label": "Background", "default": "#1f1f1f" },
   "textColor": { "type": "color", "label": "Question Color", "default": "#ffffff" },
+  "titleFont": { "type": "font", "label": "Title Font", "default": "Inter, sans-serif" },
   "answerColor": { "type": "color", "label": "Answer Color", "default": "#999999" },
+  "answerFont": { "type": "font", "label": "Answer Font", "default": "Inter, sans-serif" },
   "iconBackground": { "type": "color", "label": "Icon Background", "default": "rgba(38, 38, 38, 0.99)" },
   "iconColor": { "type": "color", "label": "Icon Color", "default": "#999999" },
   "borderColor": { "type": "color", "label": "Border Color", "default": "rgba(255, 255, 255, 0.07)" },
   "borderRadius": { "type": "number", "label": "Radius", "min": 0, "max": 40, "step": 1, "default": 16, "unit": "px" },
+  "shadowColor": { "type": "color", "label": "Shadow Color", "default": "rgba(0, 0, 0, 0.15)" },
   "fontSize": { "type": "number", "label": "Font Size", "min": 10, "max": 32, "step": 1, "default": 14, "unit": "px" }
 } */
 
@@ -62,11 +65,14 @@ function Accordion({
   gap = 10,
   background = '#1f1f1f',
   textColor = '#ffffff',
+  titleFont = 'Inter, sans-serif',
   answerColor = '#999999',
+  answerFont = 'Inter, sans-serif',
   iconBackground = 'rgba(38, 38, 38, 0.99)',
   iconColor = '#999999',
   borderColor = 'rgba(255, 255, 255, 0.07)',
   borderRadius = 16,
+  shadowColor = 'rgba(0, 0, 0, 0.15)',
   fontSize = 14,
   ...props
 }: any) {
@@ -93,6 +99,12 @@ function Accordion({
       return [index];
     });
   };
+
+  const fontTitle = titleFont || props.questionFont || 'Inter, -apple-system, BlinkMacSystemFont, sans-serif';
+  const fontAnswer = answerFont || 'Inter, -apple-system, BlinkMacSystemFont, sans-serif';
+  const computedShadow = shadowColor && shadowColor !== 'transparent' && shadowColor !== 'none'
+    ? '0px 2px 4px 0px ' + shadowColor + ', 0px 5px 10px 0px ' + shadowColor
+    : 'none';
 
   return (
     <div
@@ -133,7 +145,7 @@ function Accordion({
               backgroundColor: background,
               borderRadius: borderRadius + 'px',
               border: '1px solid ' + borderColor,
-              boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.15), 0px 5px 10px 0px rgba(0, 0, 0, 0.1)',
+              boxShadow: computedShadow,
               overflow: 'hidden',
               cursor: 'pointer',
               boxSizing: 'border-box',
@@ -157,7 +169,7 @@ function Accordion({
                   fontWeight: 500,
                   lineHeight: 1.4,
                   color: textColor,
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                  fontFamily: fontTitle,
                   userSelect: 'none',
                   wordBreak: 'break-word',
                 }}
@@ -236,7 +248,7 @@ function Accordion({
                   fontWeight: 500,
                   lineHeight: '1.5em',
                   color: answerColor,
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                  fontFamily: fontAnswer,
                   userSelect: 'none',
                   wordBreak: 'break-word',
                 }}
