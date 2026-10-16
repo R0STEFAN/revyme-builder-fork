@@ -152,6 +152,24 @@ describe('view-transition-css: resolvePageEffect', () => {
   it('null when no default + no bucket', () => {
     expect(resolvePageEffect({ pages: {} }, '/a', '/b')).toBeNull();
   });
+  it('matches dynamic route patterns for source and target', () => {
+    const dynMap: PageEffectsMap = {
+      pages: {
+        '/gallery/[category]/[place]': {
+          byTarget: {
+            '/tattoos/[slug]': eff('gallery-to-tattoo'),
+          },
+        },
+      },
+    };
+    expect(
+      resolvePageEffect(
+        dynMap,
+        '/gallery/men/peredplichcha',
+        '/tattoos/viyskove-tatu-shevron-saper-smert-z-aviaciyinoyu-bomboiu-zaporizhzhia',
+      )?.preset,
+    ).toBe('gallery-to-tattoo');
+  });
 });
 
 describe('view-transition-css: defaults', () => {

@@ -135,7 +135,7 @@ export function buildViewTransitionCSS(exit?: SideConfig, enter?: SideConfig): s
 
   if (exit) {
     const t = resolveTiming(exit.transition);
-    lines.push(`.revyme-pt-exit { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; }`);
+    lines.push(`.revyme-pt-exit.revyme-pt-exiting { animation: ${t.duration}s ${t.easing} ${t.delay}s both revyme-vt-exit; transform-origin: 50% 50%; }`);
     const mf = exit.mask ? maskToClip(exit.mask, 'full') : null;
     const mt = exit.mask ? maskToClip(exit.mask, 'clipped') : null;
     lines.push('@keyframes revyme-vt-exit {');
@@ -224,12 +224,41 @@ export function applyPreset(name: string): PresetSides {
   return f ? f() : {};
 }
 
-// ─── Resolution (§2) ─────────────────────────────────────────────────────────
+function routeMatches(pattern: string, actual: string): boolean {
+  if (!pattern || !actual) return false;
+  if (pattern === actual) return true;
+  if (pattern.indexOf('[') === -1) return false;
+  const patternParts = pattern.split('/').filter(Boolean);
+  const actualParts = actual.split('/').filter(Boolean);
+  if (patternParts.length !== actualParts.length) return false;
+  for (let i = 0; i < patternParts.length; i++) {
+    const p = patternParts[i];
+    if (p.startsWith('[') && p.endsWith(']')) continue;
+    if (p !== actualParts[i]) return false;
+  }
+  return true;
+}
 
 /** Pick the effect for a navigation source→dest: byTarget > all > __default > null. */
 export function resolvePageEffect(map: PageEffectsMap, source: string, dest: string): PageEffect | null {
-  const bucket = map?.pages?.[source];
-  const eff = bucket?.byTarget?.[dest] ?? bucket?.all ?? map?.__default ?? null;
+  const pages = map?.pages;
+  let bucket = pages?.[source];
+  if (!bucket && pages) {
+    for (const key of Object.keys(pages)) {
+      if (routeMatches(key, source)) { bucket = pages[key]; break; }
+    }
+  }
+  let eff: PageEffect | null = null;
+  if (bucket?.byTarget) {
+    if (bucket.byTarget[dest]) {
+      eff = bucket.byTarget[dest];
+    } else {
+      for (const tKey of Object.keys(bucket.byTarget)) {
+        if (routeMatches(tKey, dest)) { eff = bucket.byTarget[tKey]; break; }
+      }
+    }
+  }
+  if (!eff) eff = bucket?.all ?? map?.__default ?? null;
   trace.fn('view-transition-css:resolve', { source, dest, preset: eff?.preset ?? null });
   return eff;
 }
