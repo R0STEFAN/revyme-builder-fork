@@ -508,7 +508,7 @@ export class ToolbarDragStrategy implements DragStrategy {
         delete (styles as Record<string, string>).flex;
       }
 
-      const children = curItem.children?.();
+      const children = curItem.children?.(nodeId);
       const normalized = normalizeLayoutDescriptor({
         tag: curItem.elementType, id: nodeId, styles, children,
         attrs: curItem.defaultAttrs, textContent: curItem.textContent,
