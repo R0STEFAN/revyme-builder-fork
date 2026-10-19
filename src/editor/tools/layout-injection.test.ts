@@ -57,8 +57,7 @@ const replicaCtxArgs: Array<{ vpId: string; filePath: string; vpWidths: Record<s
 /** What `display` computes to on the viewport being edited ('' = cold cache). */
 let computedDisplay = '';
 
-// Import AFTER mocks so the module picks up the mocked node-ops.
-import { injectFlexLayoutOnFrame, shouldInjectLayoutOnAuto, rebaseChildrenForDirectionFlip } from './layout-injection';
+import { injectFlexLayoutOnFrame, shouldInjectLayoutOnAuto, rebaseChildrenForDirectionFlip, isDefaultFrameOrLayoutName, autoUpdateLayoutNodeName } from './layout-injection';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -796,5 +795,76 @@ describe('injectFlexLayoutOnFrame — a frame hidden in the BASE but shown here'
     computedDisplay = '';
     injectFlexLayoutOnFrame('parent', makeNodes(makeNode('parent', [], { display: 'none' })), 'mobile');
     expect(parentStyles()).not.toHaveProperty('display');
+  });
+});
+
+describe('isDefaultFrameOrLayoutName', () => {
+  it('identifies default structural names', () => {
+    expect(isDefaultFrameOrLayoutName('Frame')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Frame 1')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Row')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Rows')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Column')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Columns')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Grid')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('Grids')).toBe(true);
+    expect(isDefaultFrameOrLayoutName('')).toBe(true);
+    expect(isDefaultFrameOrLayoutName(null)).toBe(true);
+    expect(isDefaultFrameOrLayoutName(undefined)).toBe(true);
+  });
+
+  it('rejects user custom names', () => {
+    expect(isDefaultFrameOrLayoutName('Header')).toBe(false);
+    expect(isDefaultFrameOrLayoutName('HeroSection')).toBe(false);
+    expect(isDefaultFrameOrLayoutName('Card')).toBe(false);
+    expect(isDefaultFrameOrLayoutName('Navbar')).toBe(false);
+    expect(isDefaultFrameOrLayoutName('Footer')).toBe(false);
+  });
+});
+
+describe('autoUpdateLayoutNodeName', () => {
+  beforeEach(() => {
+    queueMutation.mockClear();
+    getContentRoot.mockReturnValue(document.createElement('div'));
+  });
+
+  it('renames a default Frame to Rows when vertical flex is set', () => {
+    const nodes = makeNodes(makeNode('f1', [], {}));
+    nodes.get('f1')!.name = 'Frame';
+    autoUpdateLayoutNodeName('f1', 'rows', nodes);
+    expect(queueMutation).toHaveBeenCalledWith({ type: 'renameNode', nodeId: 'f1', name: 'Rows' });
+    expect(nodes.get('f1')!.name).toBe('Rows');
+  });
+
+  it('renames Rows to Columns when horizontal flex is set', () => {
+    const nodes = makeNodes(makeNode('f1', [], {}));
+    nodes.get('f1')!.name = 'Rows';
+    autoUpdateLayoutNodeName('f1', 'columns', nodes);
+    expect(queueMutation).toHaveBeenCalledWith({ type: 'renameNode', nodeId: 'f1', name: 'Columns' });
+    expect(nodes.get('f1')!.name).toBe('Columns');
+  });
+
+  it('renames Columns to Grid when grid is set', () => {
+    const nodes = makeNodes(makeNode('f1', [], {}));
+    nodes.get('f1')!.name = 'Columns';
+    autoUpdateLayoutNodeName('f1', 'grid', nodes);
+    expect(queueMutation).toHaveBeenCalledWith({ type: 'renameNode', nodeId: 'f1', name: 'Grid' });
+    expect(nodes.get('f1')!.name).toBe('Grid');
+  });
+
+  it('renames Grid to Frame when layout is removed', () => {
+    const nodes = makeNodes(makeNode('f1', [], {}));
+    nodes.get('f1')!.name = 'Grid';
+    autoUpdateLayoutNodeName('f1', 'frame', nodes);
+    expect(queueMutation).toHaveBeenCalledWith({ type: 'renameNode', nodeId: 'f1', name: 'Frame' });
+    expect(nodes.get('f1')!.name).toBe('Frame');
+  });
+
+  it('does NOT rename custom named elements', () => {
+    const nodes = makeNodes(makeNode('f1', [], {}));
+    nodes.get('f1')!.name = 'UserProfile';
+    autoUpdateLayoutNodeName('f1', 'rows', nodes);
+    expect(queueMutation).not.toHaveBeenCalled();
+    expect(nodes.get('f1')!.name).toBe('UserProfile');
   });
 });

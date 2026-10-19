@@ -8,7 +8,7 @@ import { isFrameTag, isTextTag } from '@/shared/constants';
 import { layerAcceptsInsideDrop } from './drag';
 import { useIsViewer } from '@/code/stores/viewer-mode-store';
 import { isVectorSetComponentFile } from '@/code/project/active-file-store';
-import { DesktopViewportIcon, TabletViewportIcon, MobileViewportIcon, ComponentClusterIcon, CmsIcon, CmsItemIcon, FrameToolbarIcon } from '@/shared/icons';
+import { DesktopViewportIcon, TabletViewportIcon, MobileViewportIcon, ComponentClusterIcon, CmsIcon, CmsItemIcon, FrameToolbarIcon, LayoutRowsIcon, LayoutColumnsIcon, LayoutGridIcon } from '@/shared/icons';
 import { IconSetIcon } from '@/editor/left-toolbar/panels/LibraryPanel/items/IconSetRow';
 import LayerPreview, { deriveLayerPreview } from './LayerPreview';
 import type { PresetToken } from '@/shared/types';
@@ -92,16 +92,17 @@ const GridLayoutIcon = ({ size = 14 }: { size?: number }) => (
  *  everything else keeps the plain frame outline. `inline-flex` / `inline-grid`
  *  count — they place children the same way. Direction defaults to `row`, which
  *  is also the CSS initial value. */
-const FrameGlyph = ({ display, flexDirection, size = 14 }: {
+const FrameGlyph = ({ display, flexDirection, size = 16 }: {
   display?: string;
   flexDirection?: string;
   size?: number;
 }) => {
   const d = (display ?? '').trim();
   if (d === 'flex' || d === 'inline-flex') {
-    return <FlexLayoutIcon column={(flexDirection ?? '').trim().startsWith('column')} size={size} />;
+    const isColumn = (flexDirection ?? '').trim().startsWith('column');
+    return isColumn ? <LayoutRowsIcon size={size} /> : <LayoutColumnsIcon size={size} />;
   }
-  if (d === 'grid' || d === 'inline-grid') return <GridLayoutIcon size={size} />;
+  if (d === 'grid' || d === 'inline-grid') return <LayoutGridIcon size={size} />;
   return <FrameIcon size={size} />;
 };
 
@@ -943,25 +944,40 @@ export const LayerRow = React.memo(function LayerRow({
             // puts components and the CMS container/item glyphs above `preview`.
             : node.attrs?.['data-overlay'] ? (
               <span style={{ color: isSelected ? selFg : '#bababa' }}><OverlayIcon size={18} /></span>
-            )
-            : preview ? (
-              // Derived from parsed props — see LayerPreview.tsx. Only reached
-              // for plain element nodes: viewport headers, components, CMS
-              // containers and vectors above all carry semantic glyphs that say
-              // more than a swatch would.
-              <LayerPreview spec={preview} size={18} onError={() => setPreviewFailed(true)} />
-            ) : (
-              // currentColor: dark on the gold/violet selection fill, neutral
-              // grey otherwise. A fixed #bababa washed out on the accent row.
-              <span style={{ color: isSelected ? selFg : '#bababa' }}>
-                {isTextTag(node.type) ? <TextIcon size={18} />
-                    : <FrameGlyph
-                        display={layerDisplay ?? node.styles?.display}
-                        flexDirection={layerFlexDirection ?? node.styles?.flexDirection}
-                        size={18}
-                      />}
-              </span>
-            )}
+            ) : (() => {
+              const effectiveDisplay = (layerDisplay ?? node.styles?.display ?? '').trim();
+              const effectiveDirection = layerFlexDirection ?? node.styles?.flexDirection;
+              const isLayout = !isTextTag(node.type) && (
+                effectiveDisplay === 'flex' ||
+                effectiveDisplay === 'inline-flex' ||
+                effectiveDisplay === 'grid' ||
+                effectiveDisplay === 'inline-grid'
+              );
+              if (isLayout) {
+                return (
+                  <span style={{ color: isSelected ? selFg : '#bababa' }}>
+                    <FrameGlyph
+                      display={effectiveDisplay}
+                      flexDirection={effectiveDirection}
+                      size={16}
+                    />
+                  </span>
+                );
+              }
+              if (preview) {
+                return <LayerPreview spec={preview} size={18} onError={() => setPreviewFailed(true)} />;
+              }
+              return (
+                <span style={{ color: isSelected ? selFg : '#bababa' }}>
+                  {isTextTag(node.type) ? <TextIcon size={18} />
+                      : <FrameGlyph
+                          display={effectiveDisplay}
+                          flexDirection={effectiveDirection}
+                          size={16}
+                        />}
+                </span>
+              );
+            })()}
         </div>
         </div>
 

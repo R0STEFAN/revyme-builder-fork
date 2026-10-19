@@ -65,7 +65,7 @@ function deriveRadius(styles: Record<string, string>, size: number): number | st
 
   const px = parseFloat(first);
   if (!Number.isFinite(px)) return undefined;
-  if (px <= 0) return 0;
+  if (px <= 0) return undefined;
 
   const w = parseFloat(styles.width ?? '');
   const h = parseFloat(styles.height ?? '');
@@ -211,7 +211,7 @@ export default function LayerPreview({ spec, size, onError }: Props) {
   const frame: React.CSSProperties = {
     width: size,
     height: size,
-    borderRadius: spec.kind === 'svg' ? 0 : (spec.radius ?? DEFAULT_RADIUS),
+    borderRadius: spec.kind === 'svg' ? 0 : typeof spec.radius === 'number' ? Math.max(DEFAULT_RADIUS, spec.radius) : (spec.radius ?? DEFAULT_RADIUS),
     overflow: 'hidden',
     flexShrink: 0,
     // A hairline keeps a white or near-panel fill from dissolving into the row.

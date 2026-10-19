@@ -33,7 +33,69 @@ import { resolveEffectiveStylesForViewport } from '@/code/stores/container-query
 import type { ContainerOverrideMap } from '@/code/stores/container-query-store';
 import { getReplicaContext } from '@/canvas/drag/replica-context';
 import { queueMutation } from '@/code/mutation/mutation-queue';
+import { getCachedNodesMap } from '@/code/stores/store';
 import { trace } from '@/shared/debug-trace';
+
+/**
+ * Returns true if the node's name is a default/structural name (Frame, Rows, Columns, Grid)
+ * and therefore safe to be updated automatically when layout changes.
+ * Custom names (like "Navbar", "Hero", "ProfileCard") return false and are preserved.
+ */
+export function isDefaultFrameOrLayoutName(name?: string | null): boolean {
+  if (!name) return true;
+  const trimmed = name.trim();
+  return /^(Frame|Row|Rows|Column|Columns|Grid|Grids)(\s*\d+)?$/i.test(trimmed);
+}
+
+/**
+ * Automatically update a node's name to match its layout type:
+ * - 'rows': 'Rows' (vertical flex)
+ * - 'columns': 'Columns' (horizontal flex)
+ * - 'grid': 'Grid'
+ * - 'frame': 'Frame' (no layout)
+ * If the node was given a custom name by the user, it is left untouched.
+ */
+export function autoUpdateLayoutNodeName(
+  nodeId: string,
+  layoutType: 'rows' | 'columns' | 'grid' | 'frame',
+  nodes?: Map<string, CanvasNode>,
+): void {
+  const node = (nodes ?? (typeof getCachedNodesMap === 'function' ? getCachedNodesMap() : null))?.get(nodeId);
+  if (!node) return;
+  const currentName = node.name || node.attrs?.['data-name'] || '';
+  if (!isDefaultFrameOrLayoutName(currentName)) return;
+
+  const nameMap: Record<string, string> = {
+    rows: 'Rows',
+    columns: 'Columns',
+    grid: 'Grid',
+    frame: 'Frame',
+  };
+  const newName = nameMap[layoutType];
+  if (!newName || newName === currentName) return;
+
+  const contentEl = getContentRoot();
+  if (contentEl) {
+    contentEl.querySelectorAll(`[data-id="${nodeId}"]`).forEach((el) => {
+      (el as HTMLElement).setAttribute('data-name', newName);
+    });
+  }
+  const cached = typeof getCachedNodesMap === 'function' ? getCachedNodesMap().get(nodeId) : null;
+  if (cached) {
+    cached.name = newName;
+    if (!cached.attrs) cached.attrs = {};
+    cached.attrs['data-name'] = newName;
+  }
+  if (nodes) {
+    const n = nodes.get(nodeId);
+    if (n) {
+      n.name = newName;
+      if (!n.attrs) n.attrs = {};
+      n.attrs['data-name'] = newName;
+    }
+  }
+  queueMutation({ type: 'renameNode', nodeId, name: newName });
+}
 
 // ─── Gate ────────────────────────────────────────────────────────────────────
 
@@ -254,6 +316,7 @@ export function injectFlexLayoutOnFrame(
     styles: layoutStyles,
     contentEl,
   });
+  autoUpdateLayoutNodeName(nodeId, 'rows', nodes);
 
   // REPLICA NEUTRALIZATION — on a non-primary viewport the '' clears below
   // only DELETE this vp's band override, and the PRIMARY's absolute-layout

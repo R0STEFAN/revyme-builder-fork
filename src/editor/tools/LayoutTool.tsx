@@ -14,7 +14,7 @@ import { useControl } from '../controls/ControlProvider';
 import { getAlignOptions, getJustifyOptions } from '../controls/css-property-options';
 import { LocalePillOrLegacy } from '../controls/LocaleBoundPill';
 import { updateNodeStyles, getContentRoot, findNodeSize, findNodeRect } from '@/canvas/node-ops';
-import { injectFlexLayoutOnFrame, resolveLayoutInjectionTargets, rebaseChildrenForDirectionFlip } from './layout-injection';
+import { injectFlexLayoutOnFrame, resolveLayoutInjectionTargets, rebaseChildrenForDirectionFlip, autoUpdateLayoutNodeName } from './layout-injection';
 import { flushNow } from '@/code/mutation/mutation-queue';
 import { transformManager } from '@/canvas/transform';
 import { useAtomValue } from 'jotai';
@@ -1021,6 +1021,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
         },
         contentEl,
       });
+      autoUpdateLayoutNodeName(nodeId, 'frame');
 
       trace.action('layout:remove', { nodeId, childCount: childData.length, parentDims, vpId, isComponentFile, removedDisplay });
     } else {
@@ -1130,6 +1131,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
         ...clearGrid,
       };
       onUpdateMultiple(isHidden ? flexStyles : { display: 'flex', ...flexStyles });
+      autoUpdateLayoutNodeName(nodeId, 'rows');
       // Strip leftover grid-child props from every in-flow child.
       cleanChildren({}, clearGridChildProps);
     } else if (type === 'grid') {
@@ -1152,6 +1154,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
       // row in an auto-height container collapses — see grid-config.ts).
       const gridStyles = { ...flexToGridParentStyles(styles.height), ...clearFlex };
       onUpdateMultiple(isHidden ? gridStyles : { display: 'grid', ...gridStyles });
+      autoUpdateLayoutNodeName(nodeId, 'grid');
       cleanChildren((child) => gridChildFillStyles(child.styles, styles.height), clearFlexChildProps);
     }
   }, [hasGrid, nodeId, onUpdateMultiple, styles.display, styles.height]);
@@ -1198,6 +1201,7 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
   const handleDirectionChange = useCallback((value: string) => {
     trace.action('layout:direction-change', { nodeId, value, from: flexDirection });
     onUpdate('flexDirection', value);
+    autoUpdateLayoutNodeName(nodeId, value.startsWith('column') ? 'rows' : 'columns');
     // Flipping the axis rotates which dimension the children's `flex` governs —
     // re-base them in the SAME scope so their Fill keeps its dimension and any
     // explicit size on the new main axis actually applies (a row-authored

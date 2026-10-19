@@ -360,7 +360,6 @@ export function startFrameCreation(
         width: `${Math.round(width)}px`,
         height: `${Math.round(height)}px`,
         backgroundColor: nextFrameColor(),
-        borderRadius: '0px',
         overflow: 'hidden',
         left: `${Math.round(left)}px`,
         top: `${Math.round(top)}px`,
@@ -373,7 +372,7 @@ export function startFrameCreation(
       if (placeholder) {
         placeholder.style.backgroundColor = styles.backgroundColor;
         placeholder.style.border = 'none';
-        placeholder.style.borderRadius = styles.borderRadius;
+        placeholder.style.borderRadius = styles.borderRadius || '0px';
         // Drop the placeholder UNDER the selection overlay. While drawing it was
         // zIndex 1000 (above everything), but now it's just standing in for the
         // committed frame and must sit BELOW the selection handles — otherwise it
