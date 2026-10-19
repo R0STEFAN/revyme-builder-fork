@@ -37,7 +37,7 @@ import SelectionFade from './SelectionFade';
 import RotateHandle from './RotateHandle';
 import BorderRadiusHandle from './BorderRadiusHandle';
 import ObjectPositionHandle from './ObjectPositionHandle';
-import FontSizeHandle, { isFontSizeHandleEligible } from './FontSizeHandle';
+import FontSizeHandle, { isFontSizeHandleEligible, hasTypographyPresetOrVar } from './FontSizeHandle';
 import PaddingHandles from './PaddingHandles';
 import { resolveOverlaySize, resolveOverlayInsets } from './overlay-size';
 import GapHandles from './GapHandles';
@@ -899,6 +899,7 @@ export default function SelectionOverlay({ onGripDragStart, onSnapGuidesChange }
                   height: resolvedSize.height,
                   hasHInset: insets.hasHInset,
                   hasVInset: insets.hasVInset,
+                  hasTypographyPreset: hasTypographyPresetOrVar(selNode.styles),
                 });
               })() && (
                 <FontSizeHandle

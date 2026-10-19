@@ -25,6 +25,20 @@ export interface FontSizeHandleEligibilityParams {
   height?: string | null;
   hasHInset?: boolean;
   hasVInset?: boolean;
+  hasTypographyPreset?: boolean;
+}
+
+/**
+ * Check if the element has an active typography preset or font-size variable applied.
+ * In that case, font size is governed by the preset/variable and the drag handle must be hidden.
+ */
+export function hasTypographyPresetOrVar(styles?: Record<string, string> | null): boolean {
+  if (!styles) return false;
+  const ff = styles.fontFamily || '';
+  const fs = styles.fontSize || '';
+  if (ff.includes('var(--typo-') || fs.includes('var(--typo-')) return true;
+  if (fs.startsWith('var(')) return true;
+  return false;
 }
 
 /**
@@ -32,10 +46,12 @@ export interface FontSizeHandleEligibilityParams {
  * 1. Element is a text tag (p, h1-h6, span, etc.)
  * 2. Width is fit/auto/max-content (and not 100% or pinned inset)
  * 3. Height is fit/auto/max-content (and not pinned inset)
+ * 4. No typography preset or font-size variable is applied
  */
 export function isFontSizeHandleEligible(params: FontSizeHandleEligibilityParams): boolean {
   if (!isTextTag(params.tag)) return false;
   if (params.hasHInset || params.hasVInset) return false;
+  if (params.hasTypographyPreset) return false;
   const fitWidth = !params.width || isFitSize(params.width);
   const fitHeight = !params.height || isFitSize(params.height);
   return fitWidth && fitHeight;

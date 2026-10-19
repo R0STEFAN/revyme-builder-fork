@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isFontSizeHandleEligible,
+  hasTypographyPresetOrVar,
   computeNewFontSize,
   MIN_FONT_SIZE,
   MAX_FONT_SIZE,
@@ -34,9 +35,30 @@ describe('isFontSizeHandleEligible', () => {
     expect(isFontSizeHandleEligible({ tag: 'h2', width: 'max-content', height: '100px' })).toBe(false);
   });
 
-  it('rejects text tags with pinned horizontal or vertical insets', () => {
-    expect(isFontSizeHandleEligible({ tag: 'p', width: 'auto', height: 'auto', hasHInset: true })).toBe(false);
-    expect(isFontSizeHandleEligible({ tag: 'p', width: 'auto', height: 'auto', hasVInset: true })).toBe(false);
+  it('rejects text tags when a typography preset or font-size variable is applied', () => {
+    expect(isFontSizeHandleEligible({ tag: 'p', width: 'auto', height: 'auto', hasTypographyPreset: true })).toBe(false);
+    expect(isFontSizeHandleEligible({ tag: 'h1', width: 'max-content', height: 'auto', hasTypographyPreset: true })).toBe(false);
+  });
+});
+
+describe('hasTypographyPresetOrVar', () => {
+  it('detects typography preset references in fontFamily or fontSize', () => {
+    expect(hasTypographyPresetOrVar({ fontFamily: 'var(--typo-heading-font)' })).toBe(true);
+    expect(hasTypographyPresetOrVar({ fontSize: 'var(--typo-heading-size)' })).toBe(true);
+    expect(hasTypographyPresetOrVar({ fontFamily: 'var(--typo-body-font)', fontSize: '16px' })).toBe(true);
+  });
+
+  it('detects generic CSS variable bindings on fontSize', () => {
+    expect(hasTypographyPresetOrVar({ fontSize: 'var(--custom-title-size)' })).toBe(true);
+    expect(hasTypographyPresetOrVar({ fontSize: 'var(--headerSize, 24px)' })).toBe(true);
+  });
+
+  it('returns false for literal values or unstyled nodes', () => {
+    expect(hasTypographyPresetOrVar({ fontFamily: 'Inter, sans-serif', fontSize: '16px' })).toBe(false);
+    expect(hasTypographyPresetOrVar({ fontSize: '32px' })).toBe(false);
+    expect(hasTypographyPresetOrVar({})).toBe(false);
+    expect(hasTypographyPresetOrVar(null)).toBe(false);
+    expect(hasTypographyPresetOrVar(undefined)).toBe(false);
   });
 });
 

@@ -46,7 +46,12 @@ export function updatePresetToken(name: string, value: string): void {
     trace.error('preset-ops:updatePresetToken', 'tokens.css not found');
     return;
   }
-  const updated = updatePresetTokenInCSS(css, name, value);
+  let updated = updatePresetTokenInCSS(css, name, value);
+  // If this token had an override in :root.dark (such as typo-*-color),
+  // update :root.dark as well so dark mode doesn't shadow the user's edit
+  if (getDarkTokenValue(name)) {
+    updated = addDarkTokenValueToCSS(updated, name, value);
+  }
   projectFS.writeFile(TOKENS_PATH, updated);
   trace.action('preset-ops:updatePresetToken:done', { name });
 }
@@ -72,7 +77,8 @@ export function removePresetToken(name: string): void {
     trace.error('preset-ops:removePresetToken', 'tokens.css not found');
     return;
   }
-  const updated = removePresetTokenFromCSS(css, name);
+  let updated = removePresetTokenFromCSS(css, name);
+  updated = removeDarkTokenFromCSS(updated, name);
   projectFS.writeFile(TOKENS_PATH, updated);
   trace.action('preset-ops:removePresetToken:done', { name });
 }
@@ -152,6 +158,26 @@ export function addDarkTokenValueToCSS(css: string, tokenName: string, darkValue
     out += `\n\n:root.dark {\n  --${tokenName}: ${darkValue};\n}\n`;
   }
   return out;
+}
+
+/**
+ * Remove a dark theme token value from tokens.css under `:root.dark`.
+ */
+export function removeDarkTokenFromCSS(css: string, tokenName: string): string {
+  let out = migrateLegacyDarkBlock(css);
+  const darkMatch = out.match(DARK_BLOCK_REGEX);
+  if (!darkMatch) return out;
+  let body = darkMatch[2];
+  const propRegex = new RegExp(`^[ \t]*--${tokenName}\\s*:[^;]*;[ \t]*\n?`, 'm');
+  if (!propRegex.test(body)) return out;
+  body = body.replace(propRegex, '');
+  return out.replace(DARK_BLOCK_REGEX, `$1${body}$3`);
+}
+
+export function removeDarkTokenValue(tokenName: string): void {
+  const css = projectFS.readFile(TOKENS_PATH) || '';
+  projectFS.writeFile(TOKENS_PATH, removeDarkTokenFromCSS(css, tokenName));
+  trace.action('preset-ops:remove-dark-token', { tokenName });
 }
 
 // ─── Google Font Import Injection ────────────────────────────────────────────

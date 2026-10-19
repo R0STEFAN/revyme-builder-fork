@@ -1,7 +1,7 @@
 // preset-ops.test.ts — token-resolution helpers used for editor preview swatches.
 
 import { describe, test, expect } from 'vitest';
-import { resolveCssTokens, resolveTokenValue, addWorkspaceFontFacesToCss, removeWorkspaceFontFacesFromCss, addDarkTokenValueToCSS, type WorkspaceFontFaceSpec } from './preset-ops';
+import { resolveCssTokens, resolveTokenValue, addWorkspaceFontFacesToCss, removeWorkspaceFontFacesFromCss, addDarkTokenValueToCSS, removeDarkTokenFromCSS, type WorkspaceFontFaceSpec } from './preset-ops';
 import type { PresetToken } from '@/shared/types';
 
 const TOKENS: PresetToken[] = [
@@ -196,5 +196,29 @@ describe('removeWorkspaceFontFacesFromCss', () => {
     expect(cleaned).not.toContain('@font-face');
     expect(cleaned).not.toContain('/* Workspace custom fonts */');
     expect(cleaned).toContain(':root { --x: 1; }');
+  });
+});
+
+describe('removeDarkTokenFromCSS', () => {
+  test('removes an existing token from :root.dark', () => {
+    const css = `:root {
+  --typo-heading-color: #261818;
+}
+
+:root.dark {
+  --color-surface: #0f0f1a;
+  --typo-heading-color: #ffffff;
+  --color-text: #f5f5f5;
+}`;
+    const cleaned = removeDarkTokenFromCSS(css, 'typo-heading-color');
+    expect(cleaned).not.toContain('--typo-heading-color: #ffffff;');
+    expect(cleaned).toContain('--color-surface: #0f0f1a;');
+    expect(cleaned).toContain('--color-text: #f5f5f5;');
+    expect(cleaned).toContain('--typo-heading-color: #261818;');
+  });
+
+  test('returns unchanged CSS when token is not in :root.dark', () => {
+    const css = `:root.dark { --color-surface: #0f0f1a; }`;
+    expect(removeDarkTokenFromCSS(css, 'nonexistent')).toBe(css);
   });
 });

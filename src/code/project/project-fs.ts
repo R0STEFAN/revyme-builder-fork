@@ -2165,8 +2165,6 @@ a {
   --color-text: #f5f5f5;
   --color-text-muted: #a1a1aa;
   --color-text-light: #71717a;
-  --typo-heading-color: #ffffff;
-  --typo-body-color: #d4d4d8;
   --shadow-card: 0 1px 3px rgba(0,0,0,0.4);
   --shadow-elevated: 0 4px 12px rgba(0,0,0,0.6);
 }
