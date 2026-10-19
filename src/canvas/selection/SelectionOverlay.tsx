@@ -37,6 +37,7 @@ import SelectionFade from './SelectionFade';
 import RotateHandle from './RotateHandle';
 import BorderRadiusHandle from './BorderRadiusHandle';
 import ObjectPositionHandle from './ObjectPositionHandle';
+import FontSizeHandle, { isFontSizeHandleEligible } from './FontSizeHandle';
 import PaddingHandles from './PaddingHandles';
 import { resolveOverlaySize, resolveOverlayInsets } from './overlay-size';
 import GapHandles from './GapHandles';
@@ -877,6 +878,34 @@ export default function SelectionOverlay({ onGripDragStart, onSnapGuidesChange }
                   nodeId={selectedId}
                   vpId={vpId}
                   nodeType={nodes.get(selectedId)?.type ?? ''}
+                  color={selectionColor}
+                  onInteracting={setInteracting}
+                />
+              )}
+              {/* Font-size handle (bottom-right dot on fit/fit text): renders when
+                  the selected element is a text tag and both width and height are
+                  Fit/auto. When both axes are fit, standard ResizeHandles hides all
+                  circles. This Framer-parity handle lets the user drag the corner
+                  to scale font-size interactively, automatically expanding or
+                  contracting the text container. */}
+              {(() => {
+                const selNode = liveNode(selectedId);
+                if (!selNode) return false;
+                const resolvedSize = resolveOverlaySize(selNode, vpId, allViewportConfigs, isInComponentMaster);
+                const insets = resolveOverlayInsets(selNode, vpId, allViewportConfigs, isInComponentMaster);
+                return isFontSizeHandleEligible({
+                  tag: selNode.type,
+                  width: resolvedSize.width,
+                  height: resolvedSize.height,
+                  hasHInset: insets.hasHInset,
+                  hasVInset: insets.hasVInset,
+                });
+              })() && (
+                <FontSizeHandle
+                  corners={corners}
+                  rotation={rotation}
+                  nodeId={selectedId}
+                  vpId={vpId}
                   color={selectionColor}
                   onInteracting={setInteracting}
                 />
