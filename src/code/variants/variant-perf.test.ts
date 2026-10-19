@@ -129,6 +129,57 @@ function C() {
     expect(cleaned).not.toContain('contain:');
     expect(cleaned).not.toContain('willChange');
   });
+
+  it('excludes components with overflow: visible on root style and strips snippet', () => {
+    const heavyWithVisible = `
+const pillVariants = {
+  default: { left: '8px' },
+  'variant-1': { left: '171px' },
+};
+function C() {
+  return <motion.div data-id="root" style={{ position: 'absolute', width: '512px', overflow: 'visible' }} />;
+}
+`;
+    expect(ensureRootPerfIsolation(heavyWithVisible)).not.toContain('contain:');
+
+    const heavyWithSnippetAndVisible = `
+const pillVariants = {
+  default: { left: '8px' },
+  'variant-1': { left: '171px' },
+};
+function C() {
+  return <motion.div data-id="root" style={{
+    contain: 'layout paint',
+    willChange: 'transform',
+    position: 'absolute',
+    width: '512px',
+    overflow: 'visible',
+  }} />;
+}
+`;
+    const cleaned = ensureRootPerfIsolation(heavyWithSnippetAndVisible);
+    expect(cleaned).not.toContain('contain:');
+    expect(cleaned).not.toContain('willChange');
+    expect(cleaned).toContain("position: 'absolute'");
+  });
+
+  it('excludes components with overflow: visible in root variants and strips snippet', () => {
+    const heavyWithVariantVisible = `
+const rootVariants = {
+  default: { overflow: 'visible' },
+};
+const childVariants = {
+  default: { left: '0px' },
+  'variant-1': { left: '100px' },
+};
+function C() {
+  return <motion.div data-id="root" variants={rootVariants} style={{ contain: 'layout paint', willChange: 'transform', position: 'relative', width: '300px' }} />;
+}
+`;
+    const cleaned = ensureRootPerfIsolation(heavyWithVariantVisible);
+    expect(cleaned).not.toContain('contain:');
+    expect(cleaned).not.toContain('willChange');
+  });
 });
 
 describe('isHeavyAnimatedProp', () => {

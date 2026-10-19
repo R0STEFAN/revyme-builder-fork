@@ -68,6 +68,34 @@ export function variantsAnimateHeavyProps(code: string): boolean {
 
 const ISOLATION_SNIPPET = "contain: 'layout paint', willChange: 'transform', ";
 
+function rootHasVisibleOverflow(code: string, styleBody: string, rootId: string): boolean {
+  if (/overflow(?:X|Y)?\s*:\s*['"]visible['"]/.test(styleBody)) return true;
+  // Look for variants attribute on root tag
+  const rootTagFull = code.match(new RegExp(`<motion\\.\\w+[^>]*data-id="${rootId}"[^>]*>`, 's'));
+  if (rootTagFull) {
+    const varMatch = rootTagFull[0].match(/variants=\{([A-Za-z0-9_]+)\}/);
+    if (varMatch) {
+      const varDecl = code.match(new RegExp(`const\\s+${varMatch[1]}\\s*=\\s*\\{`));
+      if (varDecl && varDecl.index !== undefined) {
+        const open = varDecl.index + varDecl[0].length - 1;
+        let depth = 0;
+        let close = -1;
+        for (let i = open; i < code.length; i++) {
+          if (code[i] === '{') depth++;
+          else if (code[i] === '}') { depth--; if (depth === 0) { close = i; break; } }
+        }
+        if (close > 0) {
+          const varBody = code.slice(open + 1, close);
+          if (/overflow(?:X|Y)?\s*:\s*['"]visible['"]/.test(varBody)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+const SNIPPET_RE = /contain:\s*['"]layout paint['"],?\s*willChange:\s*['"]transform['"],?\s*/;
+
 /** BIDIRECTIONAL perf-isolation maintenance on the component ROOT (the
  *  first data-id-bearing motion element — LayoutGroup/MotionConfig wrappers
  *  carry no data-id). Idempotent both ways:
@@ -78,12 +106,9 @@ const ISOLATION_SNIPPET = "contain: 'layout paint', willChange: 'transform', ";
  *      other form is never touched (conservative: we only ever delete our
  *      own contiguous snippet). */
 export function ensureRootPerfIsolation(code: string): string {
-  // Overlays (data-overlay) rely on position: fixed to escape component overflow and
-  // align to the viewport. Applying `contain: paint` or `willChange: transform` creates
-  // a containing block for fixed descendants, trapping and clipping the overlay.
-  const heavy = variantsAnimateHeavyProps(code) && !code.includes('data-overlay');
-  const rootTag = code.match(/<motion\.\w+[^>]*data-id="[^"]+"[^>]*style=\{\{/s);
+  const rootTag = code.match(/<motion\.\w+[^>]*data-id="([^"]+)"[^>]*style=\{\{/s);
   if (!rootTag || rootTag.index === undefined) return code;
+  const rootId = rootTag[1];
   const styleOpen = rootTag.index + rootTag[0].length;
   let depth = 2;
   let end = styleOpen;
@@ -93,22 +118,31 @@ export function ensureRootPerfIsolation(code: string): string {
   }
   const styleBody = code.slice(styleOpen, end);
 
+  // Overlays (data-overlay) rely on position: fixed to escape component overflow and
+  // align to the viewport. Applying `contain: paint` or `willChange: transform` creates
+  // a containing block for fixed descendants, trapping and clipping the overlay.
+  //
+  // Similarly, components with visible overflow (`overflow: visible` or visible overflow
+  // in root variants) rely on children rendering outside component bounds (dropdown menus,
+  // tooltips, popovers, overflowing frames). Applying `contain: paint` acts as
+  // `overflow: clip` per CSS Containment spec, forcibly clipping all descendants.
+  const hasVisibleOverflow = rootHasVisibleOverflow(code, styleBody, rootId);
+  const heavy = variantsAnimateHeavyProps(code) && !code.includes('data-overlay') && !hasVisibleOverflow;
+
   if (heavy) {
     if (styleBody.includes('contain:')) return code;
     trace.action('variant-perf:root-isolation-injected', {});
     return code.slice(0, styleOpen) + ' ' + ISOLATION_SNIPPET + code.slice(styleOpen);
   }
 
-  // No heavy animated props → drop OUR snippet if it's what's there.
-  const snippetIdx = styleBody.indexOf(ISOLATION_SNIPPET.trim());
-  if (snippetIdx < 0) return code;
+  // No heavy animated props, or has overlay/visible overflow → drop OUR snippet if present.
+  const snippetMatch = styleBody.match(SNIPPET_RE);
+  if (!snippetMatch || snippetMatch.index === undefined) return code;
   trace.action('variant-perf:root-isolation-removed', {});
-  const abs = styleOpen + snippetIdx;
-  let removeEnd = abs + ISOLATION_SNIPPET.trim().length;
-  // swallow the trailing space our injection added
-  while (code[removeEnd] === ' ') removeEnd++;
+  const abs = styleOpen + snippetMatch.index;
+  const removeEnd = abs + snippetMatch[0].length;
   let removeStart = abs;
-  // swallow the leading space our injection added
+  // swallow leading whitespace/newline up to styleOpen or line start
   while (removeStart > styleOpen && code[removeStart - 1] === ' ') removeStart--;
-  return code.slice(0, removeStart) + ' ' + code.slice(removeEnd);
+  return code.slice(0, removeStart) + (code[removeStart - 1] === '\n' ? '' : ' ') + code.slice(removeEnd).replace(/^\s+/, '');
 }
