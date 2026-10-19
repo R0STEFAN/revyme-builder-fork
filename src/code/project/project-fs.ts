@@ -20,6 +20,7 @@ import { ensureLayoutFile } from '@/code/generation/metadata-gen';
 import { DIRECTUS_SYNC_PLUGIN_SOURCE } from './default-plugins/DirectusSync';
 import { healSectionOffsets } from '@/code/generation/generator-motion-scroll';
 import { healEventOverlayToggle } from '@/code/generation/event-overlay-heal';
+import { healDuplicateJsxAttributes } from '@/code/generation/duplicate-attr-heal';
 import { healGlideItemWrappers } from '@/code/generation/glide-gen';
 import { formatOverrideSource } from '@/code/generation/format-override-source';
 import { OVERRIDES_DIR } from '@/code/generation/code-override-gen';
@@ -550,6 +551,18 @@ export class InMemoryProjectFS implements ProjectFS {
       if (healed !== src) {
         this.activeFiles().set(path, healed);
         trace.action('project-fs:migrated-event-overlay-toggle', { path });
+      }
+    }
+    // Duplicate JSX attribute heal: `<Hero layout="a" layout={b} />` renders
+    // `b` (the later key wins) while the regex writers kept editing the dead
+    // first copy — edits that "did nothing". Keeping only the LAST copy never
+    // changes what renders; parse-gated inside the heal.
+    for (const [path, src] of this.files) {
+      if (!path.endsWith('.tsx') || !(path.startsWith('app/') || path.startsWith('components/'))) continue;
+      const healed = healDuplicateJsxAttributes(src);
+      if (healed !== src) {
+        this.activeFiles().set(path, healed);
+        trace.action('project-fs:migrated-duplicate-attributes', { path });
       }
     }
     // Bundled override files (imported from a site before the import
