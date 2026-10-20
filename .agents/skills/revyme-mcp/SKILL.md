@@ -305,7 +305,52 @@ Every page begins with a top-level flex column wrapper:
 
 ---
 
-### E. Hover Animations & Interactive States (100% GUI-Parity Standard)
+### E. Utopia Fluid Typography & Spacing Standard (utopia.fyi)
+
+Revyme adopts the **Utopia fluid responsive methodology** (from [utopia.fyi](https://utopia.fyi)).
+Instead of rigid breakpoints where text and padding snap abruptly, Utopia interpolates dimensions smoothly between **Mobile (375px)** and **Desktop (1200px)** via pure CSS `clamp()`.
+
+#### 1. Why Fluid clamp() Outperforms Rigid Media Queries
+- **Continuous Scaling**: Between 375px and 1200px (and beyond), font sizes and section paddings scale fluidly with viewport width.
+- **Zero Breakpoint Snapping**: No sudden jumps where text awkwardly overflows or breaks onto three lines.
+- **Zero Media Query Bloat**: A single declaration `fontSize: "clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)"` looks perfect on Mobile (36px), Tablet (46px), and Desktop (58px)!
+
+#### 2. Utopia Fluid Scale Reference
+Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for full mathematical tables. Key values:
+
+- **Typography Steps**:
+  - `Hero Display`: `clamp(2.75rem, 2.02rem + 3.1vw, 4.75rem)` (44px → 76px)
+  - `H1 / Headline`: `clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)` (36px → 58px)
+  - `H2 / Section Title`: `clamp(1.75rem, 1.39rem + 1.55vw, 2.75rem)` (28px → 44px)
+  - `H3 / Card Title`: `clamp(1.5rem, 1.27rem + 0.97vw, 2.125rem)` (24px → 34px)
+  - `H4 / Subtitle`: `clamp(1.25rem, 1.11rem + 0.58vw, 1.625rem)` (20px → 26px)
+  - `Body Base`: `clamp(0.9375rem, 0.89rem + 0.19vw, 1.0625rem)` (15px → 17px)
+  - `Small Caption`: `clamp(0.8125rem, 0.78rem + 0.12vw, 0.875rem)` (13px → 14px)
+
+- **Spacing Steps**:
+  - `Section Y Padding`: `clamp(3.5rem, 2.27rem + 5.24vw, 6.875rem)` (56px → 110px)
+  - `Container Gutter`: `clamp(1rem, 0.64rem + 1.55vw, 2rem)` (16px → 32px)
+  - `Card Padding`: `clamp(1.25rem, 0.89rem + 1.55vw, 2.25rem)` (20px → 36px)
+  - `Grid Gap`: `clamp(1rem, 0.64rem + 1.55vw, 2rem)` (16px → 32px)
+
+#### 3. How to Set in globals.css via `revyme_manage_presets`
+```json
+{
+  "action": "set",
+  "tokens": [
+    { "name": "font-step-5", "value": "clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)", "category": "typography" },
+    { "name": "font-step-4", "value": "clamp(1.75rem, 1.39rem + 1.55vw, 2.75rem)", "category": "typography" },
+    { "name": "font-step-0", "value": "clamp(0.9375rem, 0.89rem + 0.19vw, 1.0625rem)", "category": "typography" },
+    { "name": "space-section-y", "value": "clamp(3.5rem, 2.27rem + 5.24vw, 6.875rem)", "category": "spacing" },
+    { "name": "space-gutter", "value": "clamp(1rem, 0.64rem + 1.55vw, 2rem)", "category": "spacing" }
+  ]
+}
+```
+In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` directly!
+
+---
+
+### F. Hover Animations & Interactive States (100% GUI-Parity Standard)
 > **CRITICAL RULE**: NEVER emit raw CSS `:hover` rules in `<style>`. CSS hover was explicitly removed from the builder UI because CSS transforms fight Framer Motion's FLIP projection. Moreover, CSS `:hover` rules do NOT appear in the builder's Inspector, breaking visual editability!
 >
 > You MUST use ONLY the two visual mechanisms supported by the Revyme Builder:
@@ -440,6 +485,8 @@ Always verify that all pages still build cleanly:
 ---
 
 ## 6. References & Deep Dives
+- Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for the complete Utopia fluid typography and spacing scale tables and formulas.
+- Read [references/built-in-arsenal.md](./references/built-in-arsenal.md) for the complete catalog of ~80 pre-built components (Marquee, Carousel, shaders, text effects, cursors).
 - Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.
 - Read [references/motion-choreography.md](./references/motion-choreography.md) for full animation physics, springs, easing presets, and choreography recipes.
 - Read [references/tools-api.md](./references/tools-api.md) for full parameter specifications of all available semantic tools.
