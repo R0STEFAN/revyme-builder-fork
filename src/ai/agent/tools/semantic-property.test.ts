@@ -80,6 +80,54 @@ describe('semantic property tools', () => {
     expect(flushNow).toHaveBeenCalledTimes(1);
   });
 
+  it('set_styles rejects pseudo-classes like :hover with actionable guidance', async () => {
+    const ctx = makeCtx();
+    const result = await setStylesTool.execute(
+      { node_id: 'box', styles: { ':hover': '{ opacity: 0.8 }' } },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text).error;
+    expect(err).toContain('CSS pseudo-class or selector');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('set_styles rejects CSS transitions with Framer Motion guidance', async () => {
+    const ctx = makeCtx();
+    const result = await setStylesTool.execute(
+      { node_id: 'box', styles: { transition: 'all 0.3s ease' } },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text).error;
+    expect(err).toContain('Framer Motion');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('set_styles rejects non-px spacing units like rem', async () => {
+    const ctx = makeCtx();
+    const result = await setStylesTool.execute(
+      { node_id: 'box', styles: { padding: '2rem' } },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text).error;
+    expect(err).toContain('must be in pixels');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('set_styles rejects mixing shorthand and longhand properties', async () => {
+    const ctx = makeCtx();
+    const result = await setStylesTool.execute(
+      { node_id: 'box', styles: { paddingTop: '10px', padding: '20px' } },
+      ctx,
+    );
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text).error;
+    expect(err).toContain('Cannot mix longhand property');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
   it('set_text queues updateText', async () => {
     const ctx = makeCtx();
     await setTextTool.execute({ node_id: 'title', text: 'Hello' }, ctx);

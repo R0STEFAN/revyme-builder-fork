@@ -26,6 +26,8 @@ import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, type OrderWrite } from './flow-placement';
 import { insertFragmentTool, FRAMEWORK_TAGS } from './insert-fragment';
+import { validateStyleInput, validateTagInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { TEXT_TAGS } from '@/shared/constants';
 
 /** Queue the sibling `order` writes a placement needs (see flow-placement.ts). */
 export function queueOrderWrites(ctx: ToolContext, writes: readonly OrderWrite[]): void {
@@ -184,18 +186,6 @@ function resolveCreateId(requested: unknown, sources: Map<string, CanvasNode>): 
   return { id: raw };
 }
 
-function validateComponentTag(tag: string | undefined): string | null {
-  if (tag && /^[A-Z]/.test(tag)) {
-    installBuiltInCodeComponent(projectFS, tag);
-    const inComp = projectFS.readFile(`components/${tag}.tsx`) != null;
-    const inIcons = projectFS.readFile(`icons/${tag}.tsx`) != null;
-    if (!inComp && !inIcons && !FRAMEWORK_TAGS.has(tag)) {
-      return `Component "${tag}" does not exist in components/. Following Revyme's Design-System-First (DS-First) protocol, please create this component first via create_component (revyme_agent_tool) or revyme_add_built_in_component before referencing it.`;
-    }
-  }
-  return null;
-}
-
 export const addNodeTool: AgentTool = {
   name: 'add_node',
   description:
@@ -216,21 +206,30 @@ export const addNodeTool: AgentTool = {
   category: 'semantic',
   async execute(args, ctx) {
     ctx.ensureCheckpoint();
-    const tag = (args.tag as string) ?? 'div';
-    const tagErr = validateComponentTag(tag);
-    if (tagErr) return fail(tagErr);
+    const parentId = args.parent_id as string;
+    const nodesNow = getToolNodes(ctx);
     const { attrs, ignored, idHint } = stripReservedAttrs((args.attrs as Record<string, string>) ?? {});
     // L'id du nœud : le paramètre `id` prime, puis l'attribut HTML `id`
     // (le modèle nomme ses éléments — schéma the reference builder), sinon génération.
-    const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
+    const resolved = resolveCreateId(args.id ?? idHint, nodesNow);
     if ('error' in resolved) return fail(resolved.error);
     const id = resolved.id;
+
+    const parentNode = nodesNow.get(parentId);
+    if (!parentNode && nodesNow.size > 0) {
+      return fail(formatNodeNotFound(parentId, nodesNow.keys()));
+    }
+    const tag = (args.tag as string) ?? 'div';
+    const tagErr = validateTagInput(tag, parentNode, projectFS);
+    if (tagErr) return fail(tagErr);
+    const rawStyles = (args.styles as Record<string, string>) ?? {};
+    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag });
+    if (styleErr) return fail(styleErr);
     // A child of a layout needs a position, a no-shrink flex and its place in
     // the `order` sequence — see flow-placement.ts. Filled in, never overridden.
-    const nodesNow = getToolNodes(ctx);
     const placed = seedFlowChild(
-      (args.styles as Record<string, string>) ?? {},
-      nodesNow.get(args.parent_id as string),
+      rawStyles,
+      parentNode,
       nodesNow,
       typeof args.index === 'number' ? args.index : undefined,
     );
@@ -245,7 +244,7 @@ export const addNodeTool: AgentTool = {
     queueOrderWrites(ctx, placed.siblings);
     queueToolMutation(ctx, {
       type: 'addNode',
-      parentId: args.parent_id as string,
+      parentId,
       node,
       ...(typeof args.index === 'number' ? { index: args.index } : {}),
     });
@@ -272,8 +271,12 @@ export const addCanvasNodeTool: AgentTool = {
   async execute(args, ctx) {
     ctx.ensureCheckpoint();
     const tag = (args.tag as string) ?? 'div';
-    const tagErr = validateComponentTag(tag);
+    const tagErr = validateTagInput(tag, null, projectFS);
     if (tagErr) return fail(tagErr);
+    const rawStyles = (args.styles as Record<string, string>) ?? {};
+    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag });
+    if (styleErr) return fail(styleErr);
+
     const { attrs, ignored, idHint } = stripReservedAttrs((args.attrs as Record<string, string>) ?? {});
     const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
     if ('error' in resolved) return fail(resolved.error);
@@ -281,7 +284,7 @@ export const addCanvasNodeTool: AgentTool = {
     const node = {
       id,
       type: tag,
-      styles: (args.styles as Record<string, string>) ?? {},
+      styles: rawStyles,
       attrs,
       ...(args.name ? { name: args.name as string } : {}),
       ...(args.text != null ? { textContent: args.text as string } : {}),
@@ -517,6 +520,14 @@ export const addComponentInstanceTool: AgentTool = {
     if (!info) return fail(`No component named "${name}" in the project. Call list_components to see what exists. NEXT ACTION: call list_components (names + paths) or get_component (full prop signature) first, then re-issue with a real component name.`);
     const parentId = (args.parent_id as string | undefined) ?? resolveDefaultParentId(ctx);
     if (!parentId) return fail('No parent to insert into: pass parent_id (the data-id of the target element).');
+    const nodesNow = getToolNodes(ctx);
+    const parentNode = nodesNow.get(parentId);
+    if (!parentNode && nodesNow.size > 0) {
+      return fail(formatNodeNotFound(parentId, nodesNow.keys()));
+    }
+    if (parentNode && KNOWN_SLOT_COMPONENTS.has(parentNode.type)) {
+      return fail(`<${parentNode.type}> (data-id="${parentId}") is a slot component. The canvas renders code-component slot items ONLY as connected free-canvas nodes. Create items via revyme_add_canvas_node, and connect them with revyme_connect_slot (slot="children").`);
+    }
     // A master must never render itself, directly or through its import
     // chain — the parser recurses and the page goes blank. Same guard as the
     // library drag and the paste engine (components/component-cycle.ts).
@@ -541,7 +552,6 @@ export const addComponentInstanceTool: AgentTool = {
     // component instance especially needs it: the master's absolute root
     // leaks through the `...style` spread otherwise. In a layout it also needs
     // its `order` slot and a no-shrink flex (flow-placement.ts).
-    const nodesNow = getToolNodes(ctx);
     const placed = seedFlowChild({ position: 'relative' }, nodesNow.get(parentId), nodesNow, typeof args.index === 'number' ? args.index : undefined);
     const node = {
       id,

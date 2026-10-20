@@ -185,6 +185,32 @@ describe('semantic structure tools', () => {
     expect(queueMutation).not.toHaveBeenCalled();
   });
 
+  it('add_node rejects unsupported tags like ul or table', async () => {
+    const ctx = makeCtx();
+    const result = await addNodeTool.execute({ parent_id: 'p1', tag: 'ul' }, ctx);
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content[0] as any).text).error).toContain('is not supported by Revyme visual engine');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('add_node rejects CSS transitions and pseudo-classes in styles', async () => {
+    const ctx = makeCtx();
+    const result = await addNodeTool.execute({ parent_id: 'p1', styles: { transition: 'all 0.2s' } }, ctx);
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content[0] as any).text).error).toContain('Framer Motion');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('add_node rejects adding child inside slot components like Marquee', async () => {
+    const marqueeNode = { id: 'mq1', type: 'Marquee', parentId: 'root' } as unknown as CanvasNode;
+    vi.mocked(getNodesSnapshot).mockReturnValue(new Map([['mq1', marqueeNode]]));
+    const ctx = makeCtx();
+    const result = await addNodeTool.execute({ parent_id: 'mq1', tag: 'div' }, ctx);
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content[0] as any).text).error).toContain('is a slot component');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
   it('add_canvas_node strips reserved attrs too', async () => {
     const ctx = makeCtx();
     const result = await addCanvasNodeTool.execute(
@@ -588,6 +614,17 @@ describe('component instance tools', () => {
     expect(result.isError).toBe(true);
     expect(queueMutation).not.toHaveBeenCalled();
     expect(flushNow).not.toHaveBeenCalled();
+  });
+
+  it('add_component_instance fails if parent is a slot component (e.g. Marquee)', async () => {
+    registryWith({ Hero: HERO_INFO });
+    const marqueeNode = { id: 'mq1', type: 'Marquee', parentId: 'root' } as unknown as CanvasNode;
+    vi.mocked(getNodesSnapshot).mockReturnValue(new Map([['mq1', marqueeNode]]));
+    const ctx = makeCtx();
+    const result = await addComponentInstanceTool.execute({ name: 'Hero', parent_id: 'mq1' }, ctx);
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content[0] as any).text).error).toContain('is a slot component');
+    expect(queueMutation).not.toHaveBeenCalled();
   });
 
   it('set_component_prop queues updateHtmlAttrs with the value', async () => {

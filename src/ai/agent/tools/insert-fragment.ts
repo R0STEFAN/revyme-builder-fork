@@ -17,6 +17,8 @@ import { queueOrderWrites } from './semantic-structure';
 import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
 import { projectFS, installBuiltInCodeComponent } from '@/code/project/project-fs';
+import { validateStyleInput, validateTagInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { TEXT_TAGS } from '@/shared/constants';
 
 export const FRAMEWORK_TAGS = new Set([
   'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
@@ -140,6 +142,9 @@ export const insertFragmentTool: AgentTool = {
     if (!parentNode && nodesNow.size > 0) {
       return fail(formatNodeNotFound(parentId, nodesNow.keys()));
     }
+    if (parentNode && KNOWN_SLOT_COMPONENTS.has(parentNode.type)) {
+      return fail(`<${parentNode.type}> (data-id="${parentId}") is a slot component. The canvas renders code-component slot items ONLY as connected free-canvas nodes. Inline children deploy to the live site but stay invisible on the canvas. Create items via revyme_add_canvas_node, and connect them with revyme_connect_slot (slot="children").`);
+    }
 
     const allocatedIds = new Set<string>();
     const allCreatedIds: string[] = [];
@@ -207,16 +212,10 @@ export const insertFragmentTool: AgentTool = {
       const id = idRes.id;
       allCreatedIds.push(id);
 
+      const tagErr = validateTagInput(input.tag, isRoot ? parentNode : null, projectFS);
+      if (tagErr) return { error: tagErr };
+
       if (input.tag && /^[A-Z]/.test(input.tag)) {
-        const tagName = input.tag;
-        installBuiltInCodeComponent(projectFS, tagName);
-        const inComp = projectFS.readFile(`components/${tagName}.tsx`) != null;
-        const inIcons = projectFS.readFile(`icons/${tagName}.tsx`) != null;
-        if (!inComp && !inIcons && !FRAMEWORK_TAGS.has(tagName)) {
-          return {
-            error: `Component "${tagName}" does not exist in components/. Following Revyme's Design-System-First (DS-First) protocol, please create this component first via create_component (revyme_agent_tool) or revyme_add_built_in_component before referencing it in revyme_insert_fragment.`,
-          };
-        }
         const inputVariant = (input as any).variant;
         if (inputVariant && !attrs['initialVariant']) {
           attrs['initialVariant'] = String(inputVariant);
@@ -226,6 +225,12 @@ export const insertFragmentTool: AgentTool = {
           delete attrs['variant'];
         }
       }
+
+      const styleErr = validateStyleInput(input.styles, {
+        isTextNode: TEXT_TAGS.has(input.tag ?? 'div'),
+        tagName: input.tag,
+      });
+      if (styleErr) return { error: styleErr };
 
       if (input.responsive && typeof input.responsive === 'object') {
         for (const [vp, vpStyles] of Object.entries(input.responsive)) {
