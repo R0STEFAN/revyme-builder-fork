@@ -19,9 +19,16 @@
 // with the editor.
 
 import type { CanvasNode } from '@/code/parsing/parser';
+import type { ToolContext } from '@/ai/agent';
+import { queueToolMutation } from '@/ai/agent/workspace';
 
 export type NodeMap = Map<string, CanvasNode>;
 export interface OrderWrite { id: string; order: string }
+
+/** Queue the sibling `order` writes a placement needs (see flow-placement.ts). */
+export function queueOrderWrites(ctx: ToolContext, writes: readonly OrderWrite[]): void {
+  for (const w of writes) queueToolMutation(ctx, { type: 'updateStyles', nodeId: w.id, styles: { order: w.order } });
+}
 
 const LAYOUT_DISPLAYS = new Set(['flex', 'inline-flex', 'grid', 'inline-grid']);
 

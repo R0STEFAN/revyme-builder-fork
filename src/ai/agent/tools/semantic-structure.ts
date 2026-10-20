@@ -24,15 +24,12 @@ import { queueToolMutation, flushTool, getToolNodes, isBranchedRun, branchFsView
 import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
-import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, type OrderWrite } from './flow-placement';
-import { insertFragmentTool, FRAMEWORK_TAGS } from './insert-fragment';
+import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, queueOrderWrites, type OrderWrite } from './flow-placement';
+import { insertFragmentTool } from './insert-fragment';
 import { validateStyleInput, validateTagInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
 import { TEXT_TAGS } from '@/shared/constants';
 
-/** Queue the sibling `order` writes a placement needs (see flow-placement.ts). */
-export function queueOrderWrites(ctx: ToolContext, writes: readonly OrderWrite[]): void {
-  for (const w of writes) queueToolMutation(ctx, { type: 'updateStyles', nodeId: w.id, styles: { order: w.order } });
-}
+export { queueOrderWrites };
 
 const store = getDefaultStore();
 
