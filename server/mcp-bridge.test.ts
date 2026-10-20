@@ -305,6 +305,56 @@ describe('McpBridge', () => {
       expect(callResult.content[0].text).toContain('frame-123');
     });
 
+    it('lists revyme_insert_section with proper schema in ListTools', async () => {
+      const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const result = await handler({ method: 'tools/list', params: {} });
+      const toolNames = result.tools.map((t: any) => t.name);
+      expect(toolNames).toContain('revyme_insert_section');
+
+      const tool = result.tools.find((t: any) => t.name === 'revyme_insert_section');
+      expect(tool.inputSchema.properties.section).toBeDefined();
+    });
+
+    it('dispatches revyme_insert_section via CallTool to agent.tool with name insert_section', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        node_id: 'section-header-editorial',
+        section: 'header-editorial',
+        name: 'Header — Editorial',
+      });
+
+      const callResult = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_insert_section',
+          arguments: {
+            section: 'header-editorial',
+            parent_id: 'root',
+            index: 0,
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'insert_section',
+        input: {
+          section: 'header-editorial',
+          parent_id: 'root',
+          index: 0,
+        },
+      });
+      expect(callResult.isError).toBeUndefined();
+      expect(callResult.content[0].text).toContain('section-header-editorial');
+    });
+
     it('lists revyme_apply_motion_preset with proper schema in ListTools', async () => {
       const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
       const mcpServer = bridge.createMcpServer() as any;

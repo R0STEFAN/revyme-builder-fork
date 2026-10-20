@@ -418,7 +418,7 @@ export class McpBridge {
           {
             name: 'revyme_insert_fragment',
             description:
-              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURE: 1) Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px"). 2) REPEATED ELEMENTS: For repeated items (project cards, marquee cards, pricing tiers, badges), instantiate them as reusable Design Components (e.g. tag: "ProjectCard", attrs: { title: "..." }) rather than duplicating raw divs! 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
+              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, responsive overrides, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURAL RULES: 1) Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px"). 2) REPEATED ELEMENTS: Instantiate cards/badges as Design Components (tag: "ProjectCard") rather than duplicating raw divs! 3) NAVBAR RESPONSIVE MATRIX: Desktop links group must have display: "flex", mobile hamburger button must have display: "none" on desktop! On tablet (810px) and mobile (375px), desktop links group must have display: "none" AND hamburger button must have display: "flex"! Secondary status badges/pills MUST be hidden on tablet to prevent horizontal overflow! 4) ZERO-IN-FLOW OVERLAY INVARIANT: Fullscreen navigation menus or drawers must NEVER be placed as in-flow <section> blocks (which permanently renders a 750px box on the page!). Drawers must be overlays with position: "fixed", inset: 0, zIndex: 9999, and display: "none" by default!',
             inputSchema: {
               type: 'object',
               properties: {
@@ -452,6 +452,24 @@ export class McpBridge {
                 },
               },
               required: ['parent_id', 'fragment'],
+            },
+          },
+          {
+            name: 'revyme_insert_section',
+            description:
+              'Insert an art-directed, fully-responsive Section blueprint from the Revyme library (e.g. "header-editorial", "header-glass", "hero-editorial", "hero-typewall") into the active page canvas. Drops production-ready typography, container padding, and responsive mobile/tablet behaviors with 100% verified design standards.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                section: {
+                  type: 'string',
+                  enum: ['header-editorial', 'header-glass', 'hero-editorial', 'hero-typewall'],
+                  description: 'Blueprint ID to insert ("header-editorial", "header-glass", "hero-editorial", "hero-typewall")',
+                },
+                parent_id: { type: 'string', description: 'Parent container data-id (default: "root")' },
+                index: { type: 'number', description: '0-based position among siblings (e.g. 0 to place at top of page)' },
+              },
+              required: ['section'],
             },
           },
           {
@@ -615,6 +633,12 @@ export class McpBridge {
           case 'revyme_insert_fragment':
             result = await this.sendToEditor('agent.tool', {
               name: 'insert_fragment',
+              input: args,
+            });
+            break;
+          case 'revyme_insert_section':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'insert_section',
               input: args,
             });
             break;

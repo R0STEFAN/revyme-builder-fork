@@ -171,6 +171,126 @@ Do NOT write design components with raw file edits. Always use the semantic agen
 }
 ```
 
+### Canonical Header & Navbar Design Component with Fullscreen Drawer
+A site navigation bar with an interactive drawer is best modeled as a **Design Component** with `default` and `menu-open` variants:
+
+```tsx
+"use client";
+
+import React, { useState } from "react";
+import { withResponsiveProps } from "@revyme/runtime";
+
+/** @name "Navbar" */
+export const variantConfig = [
+  { name: 'default', label: 'Default (Closed)', x: 0, y: 0, isPrimary: true },
+  { name: 'menu-open', label: 'Menu Open', x: 0, y: 300 }
+];
+
+function Navbar({
+  initialVariant = 'default',
+  studioName = 'STUDIO',
+  style,
+}: {
+  initialVariant?: string;
+  studioName?: string;
+  style?: React.CSSProperties;
+}) {
+  const [variant, setVariant] = useState(initialVariant);
+  const isOpen = variant === 'menu-open';
+
+  return (
+    <>
+      <header
+        data-id="site-header"
+        data-name="Site Header"
+        style={{
+          position: 'sticky',
+          top: 0,
+          width: '100%',
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '20px 48px',
+          backgroundColor: 'var(--color-bg)',
+          borderBottom: '1px solid var(--color-border)',
+          boxSizing: 'border-box',
+          ...style,
+        }}
+      >
+        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span data-id="header-logo" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text)' }}>
+            {studioName}
+          </span>
+          {/* Note: status pills must be hidden on tablet to avoid horizontal overflow */}
+          <span data-id="header-status-pill" style={{ fontSize: '11px', padding: '4px 12px', border: '1px solid var(--color-border)', borderRadius: '100px', color: 'var(--color-text-secondary)' }}>
+            ● AVAILABLE FOR COMMISSIONS
+          </span>
+        </div>
+
+        {/* Desktop links group */}
+        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px' }}>
+          <a data-id="nav-link-1" href="#work" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>01 / WORK</a>
+          <a data-id="nav-link-2" href="#manifesto" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>02 / MANIFESTO</a>
+          <a data-id="nav-link-3" href="#contact" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>03 / CONTACT</a>
+        </div>
+
+        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button data-id="header-inquire-btn" style={{ padding: '8px 18px', backgroundColor: 'var(--color-inverse-bg)', color: 'var(--color-inverse-text)', borderRadius: '6px', fontSize: '12px' }}>
+            INQUIRE [↗]
+          </button>
+          <button
+            data-id="header-hamburger-btn"
+            onClick={() => setVariant(isOpen ? 'default' : 'menu-open')}
+            style={{
+              display: 'none', // NEVER visible on desktop!
+              alignItems: 'center',
+              padding: '8px 16px',
+              backgroundColor: 'var(--color-bg)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '6px',
+              color: 'var(--color-text)',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            {isOpen ? '[✕] CLOSE' : '[≡] MENU'}
+          </button>
+        </div>
+      </header>
+
+      {/* OVERLAY DRAWER - MUST NEVER BE IN-FLOW! */}
+      <div
+        data-id="nav-fullscreen-overlay"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 9999,
+          backgroundColor: 'var(--color-bg)',
+          display: isOpen ? 'flex' : 'none',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '100px 48px 48px 48px',
+          boxSizing: 'border-box',
+          overflowY: 'auto',
+        }}
+      >
+        <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+          <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
+          <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
+          <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+```
+
 ---
 
 ## 3. Code Components

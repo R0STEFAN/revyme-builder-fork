@@ -445,30 +445,263 @@ In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` dir
 
 ---
 
-### G. Responsive Hamburger Navigation & Fullscreen Menu Architecture
+### G. Professional Header, Navbar & Drawer Navigation Architecture
 
-**CRITICAL RULE: Never hide desktop navigation on mobile without providing a working hamburger menu!**
-Hiding navigation links with `display: none` on mobile without a mobile hamburger button leaves mobile users stranded with zero navigation.
+> **CRITICAL POST-MORTEM & FATAL ANTI-PATTERNS**:
+> 1. **The In-Flow Menu Disaster**: NEVER insert a fullscreen menu or drawer as an in-flow `<section>` or `<div>` with `position: relative` or `order` in `app/page.client.tsx`. This renders a 750px tall static black rectangle right in the middle of the webpage! A menu/drawer MUST ALWAYS be an overlay (`position: fixed`, `inset: 0`, `zIndex: 9999`) and MUST be hidden (`display: none` or conditional) when closed.
+> 2. **The Desktop Hamburger Button**: The hamburger button MUST have `display: "none"` on desktop! Never set its default base style to `inline-flex` without hiding it on desktop.
+> 3. **The Tablet Horizontal Overflow Trap**: On tablet viewports (810px - 1199px), a header with Logo + Status Pill (260px) + 4 Nav Links (300px) + Inquire CTA + Hamburger Button requires ~980px. On an 810px screen, it **100% overflows horizontally**. On tablet, you MUST hide the status pill and switch desktop nav links to the hamburger button!
 
-#### 1. Header Bar Structure
-In the fixed/sticky top navigation bar:
-- **Desktop Links Group**:
-  - `styles: { display: "flex", flexDirection: "row", gap: "24px" }`
-  - `responsive: { mobile: { display: "none" } }`
-- **Mobile Hamburger Button**:
-  - `styles: { display: "none", alignItems: "center", padding: "8px 12px" }`
-  - `responsive: { mobile: { display: "flex" } }`
-  - Content: 2-line animated bar icon or "MENU" text.
+#### 1. The 3-Viewport Responsive Navigation Matrix
 
-#### 2. Fullscreen Overlay with Editorial Typography
-When the hamburger menu opens (either via a Design Component variant `open` or overlay):
-- **Large Typography Links**:
-  - `fontSize: "clamp(2rem, 5vw, 3.5rem)"`, uppercase, `fontFamily: "var(--typo-heading-font)"`.
-  - Staggered entrances with Framer Motion.
-  - Number badge: `01 // SELECTED WORK`, `02 // ABOUT`, `03 // CONTACT`.
-  - Kinetic hover slide: `whileHover: { x: 12, color: "var(--color-accent)" }`.
-- **Close Button**:
-  - Clear "CLOSE" / "✕" trigger that returns the state to `default`.
+Every navigation header in Revyme MUST conform to this exact display matrix:
+
+| Element | Desktop ($\ge$ 1200px) | Tablet (810px - 1199px) | Mobile ($\le$ 809px) |
+| :--- | :--- | :--- | :--- |
+| **Logo / Brand Mark** | `display: flex` | `display: flex` | `display: flex` |
+| **Status Pill / Secondary Badges** | `display: flex` | **`display: none !important`** *(Prevents Tablet Overflow!)* | **`display: none !important`** |
+| **Desktop Nav Links Group** (`header-nav-items`) | `display: flex` | **`display: none !important`** *(Switches to Hamburger)* | **`display: none !important`** |
+| **Hamburger Button** (`header-hamburger-btn`) | **`display: none`** *(CRITICAL: NEVER visible on desktop!)* | **`display: flex !important`** | **`display: flex !important`** |
+| **Primary CTA Button** (e.g. "INQUIRE") | `display: flex` | `display: flex` (or compact) | `display: none` (or inside drawer) |
+| **Fullscreen Menu / Drawer Overlay** | `display: none` *(closed)* | `display: none` *(closed)* | `display: none` *(closed)* |
+
+---
+
+#### 2. Pattern A: Dedicated Design Component Navbar (`components/Navbar.tsx`)
+
+Authoring Navbar as a Design Component provides 100% canvas inspectability with interactive variants:
+
+```tsx
+"use client";
+
+import React, { useState } from "react";
+import { withResponsiveProps } from "@revyme/runtime";
+import { motion, AnimatePresence } from "framer-motion";
+
+/** @name "Navbar" */
+export const variantConfig = [
+  { name: 'default', label: 'Default (Closed)', x: 0, y: 0, isPrimary: true },
+  { name: 'menu-open', label: 'Menu Open', x: 0, y: 300 }
+];
+
+function Navbar({
+  initialVariant = 'default',
+  studioName = 'STUDIO',
+  style,
+}: {
+  initialVariant?: string;
+  studioName?: string;
+  style?: React.CSSProperties;
+}) {
+  const [variant, setVariant] = useState(initialVariant);
+  const isOpen = variant === 'menu-open';
+
+  return (
+    <>
+      <header
+        data-id="site-header"
+        data-name="Site Header"
+        style={{
+          position: 'sticky',
+          top: 0,
+          width: '100%',
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '20px 48px',
+          backgroundColor: 'var(--color-bg)',
+          borderBottom: '1px solid var(--color-border)',
+          boxSizing: 'border-box',
+          ...style,
+        }}
+      >
+        {/* Brand */}
+        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span data-id="header-logo" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text)' }}>
+            {studioName}
+          </span>
+          <span data-id="header-status-pill" style={{ fontSize: '11px', padding: '4px 12px', border: '1px solid var(--color-border)', borderRadius: '100px', color: 'var(--color-text-secondary)' }}>
+            ● AVAILABLE FOR COMMISSIONS
+          </span>
+        </div>
+
+        {/* Desktop Links Group */}
+        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px' }}>
+          <a data-id="nav-link-1" href="#work" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>01 / WORK</a>
+          <a data-id="nav-link-2" href="#manifesto" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>02 / MANIFESTO</a>
+          <a data-id="nav-link-3" href="#contact" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>03 / CONTACT</a>
+        </div>
+
+        {/* Actions Wrap: CTA + Hamburger */}
+        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button data-id="header-inquire-btn" style={{ padding: '8px 18px', backgroundColor: 'var(--color-inverse-bg)', color: 'var(--color-inverse-text)', borderRadius: '6px', fontSize: '12px' }}>
+            INQUIRE [↗]
+          </button>
+          <button
+            data-id="header-hamburger-btn"
+            onClick={() => setVariant(isOpen ? 'default' : 'menu-open')}
+            style={{
+              display: 'none', // HIDDEN ON DESKTOP BY DEFAULT!
+              alignItems: 'center',
+              padding: '8px 16px',
+              backgroundColor: 'var(--color-bg)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '6px',
+              color: 'var(--color-text)',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            {isOpen ? '[✕] CLOSE' : '[≡] MENU'}
+          </button>
+        </div>
+      </header>
+
+      {/* Fullscreen Drawer Overlay - NEVER IN-FLOW! */}
+      <div
+        data-id="nav-fullscreen-overlay"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 9999,
+          backgroundColor: 'var(--color-bg)',
+          display: isOpen ? 'flex' : 'none',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '100px 48px 48px 48px',
+          boxSizing: 'border-box',
+          overflowY: 'auto',
+        }}
+      >
+        <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+          <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
+          <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
+          <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
+        </div>
+        <div data-id="drawer-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>NYC — 40.7128° N, 74.0060° W</span>
+          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>KYIV — 50.4501° N, 30.5234° E</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+```
+
+On `app/page.client.tsx`, simply instantiate:
+```tsx
+<Navbar data-id="site-nav-instance" />
+```
+
+---
+
+#### 3. Pattern B: Inserting Responsive Header via `revyme_insert_fragment`
+
+If inserting directly into the page canvas:
+
+```json
+{
+  "parent_id": "root",
+  "index": 0,
+  "fragment": {
+    "tag": "header",
+    "id": "site-header",
+    "name": "Site Header",
+    "styles": {
+      "position": "sticky",
+      "top": "0",
+      "width": "100%",
+      "zIndex": "100",
+      "display": "flex",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "justifyContent": "space-between",
+      "padding": "20px 48px",
+      "backgroundColor": "var(--color-bg)",
+      "borderBottom": "1px solid var(--color-border)"
+    },
+    "responsive": {
+      "tablet": { "padding": "16px 24px" },
+      "mobile": { "padding": "14px 16px" }
+    },
+    "children": [
+      {
+        "tag": "div",
+        "id": "header-brand",
+        "name": "Brand",
+        "styles": { "display": "flex", "alignItems": "center", "gap": "16px" },
+        "children": [
+          { "tag": "span", "id": "header-logo", "text": "sd", "styles": { "fontSize": "24px", "fontWeight": "700", "color": "var(--color-text)" } },
+          {
+            "tag": "span",
+            "id": "header-status-pill",
+            "text": "● AVAILABLE FOR COMMISSIONS",
+            "styles": { "fontSize": "11px", "padding": "4px 12px", "border": "1px solid var(--color-border)", "borderRadius": "100px", "color": "var(--color-text-secondary)" },
+            "responsive": {
+              "tablet": { "display": "none" },
+              "mobile": { "display": "none" }
+            }
+          }
+        ]
+      },
+      {
+        "tag": "div",
+        "id": "header-nav-items",
+        "name": "Desktop Nav Items",
+        "styles": { "display": "flex", "flexDirection": "row", "gap": "32px" },
+        "responsive": {
+          "tablet": { "display": "none" },
+          "mobile": { "display": "none" }
+        },
+        "children": [
+          { "tag": "a", "text": "01 / WORK", "attrs": { "href": "#work" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } },
+          { "tag": "a", "text": "02 / MANIFESTO", "attrs": { "href": "#manifesto" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } },
+          { "tag": "a", "text": "03 / CONTACT", "attrs": { "href": "#contact" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } }
+        ]
+      },
+      {
+        "tag": "div",
+        "id": "header-actions",
+        "name": "Action Items",
+        "styles": { "display": "flex", "alignItems": "center", "gap": "16px" },
+        "children": [
+          {
+            "tag": "button",
+            "id": "header-inquire-btn",
+            "text": "INQUIRE [↗]",
+            "styles": { "padding": "8px 18px", "backgroundColor": "var(--color-inverse-bg)", "color": "var(--color-inverse-text)", "borderRadius": "6px", "fontSize": "12px" }
+          },
+          {
+            "tag": "button",
+            "id": "header-hamburger-btn",
+            "text": "[≡] MENU",
+            "styles": {
+              "display": "none",
+              "alignItems": "center",
+              "padding": "8px 16px",
+              "backgroundColor": "var(--color-bg)",
+              "border": "1px solid var(--color-border)",
+              "borderRadius": "6px",
+              "color": "var(--color-text)",
+              "fontSize": "12px"
+            },
+            "responsive": {
+              "tablet": { "display": "flex" },
+              "mobile": { "display": "flex" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ---
 
