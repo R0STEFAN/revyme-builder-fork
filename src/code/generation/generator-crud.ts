@@ -3347,6 +3347,12 @@ export type AddNodeDef = { id: string; type: string; styles: Record<string, stri
    *  A node with motionProps is emitted as `motion.<tag>` so the props take effect. */
   motionProps?: Record<string, Record<string, string>> };
 
+const fmtMotionVal = (v: string) =>
+  (!isNaN(Number(v)) || /^\[.*\]$/.test(v) || v === 'true' || v === 'false') ? v : `'${v}'`;
+const fmtMotionObj = (obj: Record<string, string>) =>
+  `{ ${Object.entries(obj).filter(([k, v]) => v !== '' && !k.startsWith('_'))
+    .map(([k, v]) => `${k}: ${fmtMotionVal(v)}`).join(', ')} }`;
+
 export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent: string = '      '): string {
   const styleEntries = Object.entries(node.styles)
     .filter(([, v]) => v !== '')
@@ -3359,6 +3365,16 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
   const attrsStr = node.attrs
     ? Object.entries(node.attrs).map(([k, v]) => serializeJSXAttr(k, v)).join('')
     : '';
+
+  let motionPropsAttr = '';
+  if (node.motionProps) {
+    for (const [propName, obj] of Object.entries(node.motionProps)) {
+      if (obj && Object.keys(obj).some(k => !k.startsWith('_') && obj[k] !== '')) {
+        motionPropsAttr += ` ${propName}={${fmtMotionObj(obj)}}`;
+      }
+    }
+  }
+
   let tag = node.type || 'div';
   let layoutAttr = '';
   // Wrap with motion.* (and inject `layout={true}`) when this node lives
@@ -3376,6 +3392,8 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
   if (isComponentFile && !tag.startsWith('motion.') && !isComponentInstanceTag) {
     tag = `motion.${tag}`;
     layoutAttr = ' layout={true}';
+  } else if (motionPropsAttr && /^[a-z]/.test(tag) && !tag.startsWith('motion.')) {
+    tag = `motion.${tag}`;
   }
   // NEVER interpolate textContent raw. A node copied from a responsive-text
   // (`useResponsiveText`) tile carries the hook's stored payload — TipTap
@@ -3397,14 +3415,14 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
     const childrenJSX = node.children
       .map(child => childIndent + buildNodeJSX(child, isComponentFile, childIndent))
       .join('\n');
-    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr} style={{${styleEntries}}}>\n${childrenJSX}\n${indent}</${tag}>`;
+    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>\n${childrenJSX}\n${indent}</${tag}>`;
   }
 
   if (textContent) {
-    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr} style={{${styleEntries}}}>\n${indent}  ${textContent}\n${indent}</${tag}>`;
+    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>\n${indent}  ${textContent}\n${indent}</${tag}>`;
   }
 
-  return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr} style={{${styleEntries}}}></${tag}>`;
+  return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}></${tag}>`;
 }
 
 /**
