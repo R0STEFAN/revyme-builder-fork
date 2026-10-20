@@ -6,8 +6,37 @@
 
 import { TEXT_TAGS } from '@/shared/constants';
 import { installBuiltInCodeComponent } from '@/code/project/project-fs';
-import { FRAMEWORK_TAGS } from '@/ai/agent/tools/insert-fragment';
 import { isAllowedImageSource, extractCssUrl, IMAGE_ATTR_KEYS } from './checks/image-source';
+
+export const FRAMEWORK_TAGS = new Set([
+  'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
+  'Override', 'React', 'Suspense', 'MotionLink',
+]);
+
+export const COMPONENT_INSTANCE_FORBIDDEN_STYLES = new Set([
+  // Fills & background
+  'background', 'backgroundColor', 'backgroundImage', 'fill', 'stroke',
+  'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
+  // Paddings
+  'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingBlock', 'paddingInline',
+  // Radiuses
+  'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius',
+  // Borders
+  'border', 'borderWidth', 'borderColor', 'borderStyle',
+  'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+  'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+  'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
+  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+  'outline', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset',
+  // Shadows
+  'boxShadow',
+  // Typography
+  'color', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
+  'textAlign', 'textTransform', 'textShadow', 'textDecoration', 'fontStyle',
+  'wordBreak', 'whiteSpace',
+  // Layout internals (children flow inside the component master)
+  'gap', 'rowGap', 'columnGap', 'flexDirection', 'justifyContent', 'alignItems', 'alignContent',
+]);
 
 export const KNOWN_SLOT_COMPONENTS = new Set([
   'Marquee',
@@ -113,13 +142,24 @@ const SHORTHAND_FAMILIES: Array<[string, string[]]> = [
   ['overflow', ['overflowX', 'overflowY']],
 ];
 
+export interface ValidateStyleOptions {
+  isTextNode?: boolean;
+  tagName?: string;
+  isComponentMaster?: boolean;
+  isInstance?: boolean;
+  isTopLevel?: boolean;
+  componentFile?: string | null;
+  fs?: { readFile: (p: string) => string | null };
+}
+
 /**
  * Validates style payload before execution.
- * Catches CSS transitions/animations, invalid units, shorthand conflicts, and pseudo-classes.
+ * Catches CSS transitions/animations, invalid units, shorthand conflicts, pseudo-classes,
+ * forbidden component instance visual styles, and improper fixed positioning.
  */
 export function validateStyleInput(
   styles: Record<string, unknown> | undefined,
-  opts?: { isTextNode?: boolean; tagName?: string; isComponentMaster?: boolean; fs?: { readFile: (p: string) => string | null } }
+  opts?: ValidateStyleOptions
 ): string | null {
   if (!styles || typeof styles !== 'object') return null;
 
@@ -136,6 +176,12 @@ export function validateStyleInput(
   for (const key of keys) {
     const val = styles[key];
     const strVal = typeof val === 'string' ? val.trim() : typeof val === 'number' ? String(val) : '';
+
+    // 0. Component instance forbidden visual/internal styles
+    if (opts?.isInstance && COMPONENT_INSTANCE_FORBIDDEN_STYLES.has(key) && strVal !== '') {
+      const tag = opts?.tagName ? `<${opts.tagName}>` : 'component instance';
+      return `Style property "${key}" cannot be applied to ${tag}. In Revyme, component instances on pages only carry placement and outer box styles (margin, width, height, position, left, top, right, bottom, zIndex, alignSelf, opacity, transform). Visual styles (fill/background, padding, border, radius, shadow, typography, layout direction) belong INSIDE the component master (components/*.tsx) or must be passed as component props/variables.`;
+    }
 
     // Check backgroundImage / background for url(...)
     if ((key === 'backgroundImage' || key === 'background') && strVal.includes('url(')) {
@@ -192,9 +238,12 @@ export function validateStyleInput(
       return `Typography property "${key}" cannot be placed on container "<${tag}>". In Revyme, text styles live ON the text element itself (<p>, <span>, <h1>-<h6>, <a>) — never on a parent wrapper.`;
     }
 
-    // 8. position: fixed check (FIXED_DEPTH)
+    // 8. position: fixed check (FIXED_DEPTH & COMPONENT_FIXED_PROHIBITION)
     if (key === 'position' && strVal === 'fixed') {
-      if (opts?.isComponentMaster || (opts?.tagName && opts.tagName !== 'div' && opts.tagName !== 'header')) {
+      if (opts?.isComponentMaster || (opts?.componentFile && opts.componentFile.startsWith('components/'))) {
+        return `position: 'fixed' is forbidden inside components (components/*.tsx). Component roots and inner elements cannot use 'fixed' because components are isolated and rendered inside canvas artboards (where 'fixed' breaks artboard isolation and pins to the browser window). For sticky headers or navigation bars inside components, use position: 'sticky' with top: 0 instead. Alternatively, place the component instance as a direct top-level child of the page root and position it there.`;
+      }
+      if (opts?.isTopLevel === false || (opts?.tagName && opts.tagName !== 'div' && opts.tagName !== 'header')) {
         return `position: 'fixed' is only supported on direct top-level children of the page root. Inside component masters or nested subtrees, use position: 'sticky' with top: 0 to ensure proper canvas rendering across multi-viewport frames.`;
       }
     }

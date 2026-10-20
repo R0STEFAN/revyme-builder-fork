@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { checkFile } from './check-file';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 
 const codesOf = (code: string, kind: 'page' | 'component' = 'page') =>
   checkFile(code, { kind }).map((x) => x.code);

@@ -69,8 +69,55 @@ describe('preflight-validation', () => {
     });
 
     it('rejects position fixed inside component master or nested element', () => {
-      expect(validateStyleInput({ position: 'fixed' }, { isComponentMaster: true })).toContain("position: 'fixed' is only supported on direct top-level children");
+      expect(validateStyleInput({ position: 'fixed' }, { isComponentMaster: true })).toContain("position: 'fixed' is forbidden inside components");
+      expect(validateStyleInput({ position: 'fixed' }, { componentFile: 'components/Header.tsx' })).toContain("position: 'fixed' is forbidden inside components");
       expect(validateStyleInput({ position: 'fixed' }, { tagName: 'span' })).toContain("position: 'fixed' is only supported on direct top-level children");
+      expect(validateStyleInput({ position: 'fixed' }, { isTopLevel: false })).toContain("position: 'fixed' is only supported on direct top-level children");
+    });
+
+    it('rejects internal visual styles on component instances', () => {
+      expect(validateStyleInput({ backgroundColor: '#ff0000' }, { isInstance: true, tagName: 'Card' })).toContain(
+        'Style property "backgroundColor" cannot be applied to <Card>'
+      );
+      expect(validateStyleInput({ padding: '24px' }, { isInstance: true, tagName: 'Navbar' })).toContain(
+        'Style property "padding" cannot be applied to <Navbar>'
+      );
+      expect(validateStyleInput({ borderRadius: '12px' }, { isInstance: true })).toContain(
+        'Style property "borderRadius" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ color: '#ffffff' }, { isInstance: true })).toContain(
+        'Style property "color" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ fontSize: '18px' }, { isInstance: true })).toContain(
+        'Style property "fontSize" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ border: '1px solid red' }, { isInstance: true })).toContain(
+        'Style property "border" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }, { isInstance: true })).toContain(
+        'Style property "boxShadow" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ gap: '16px' }, { isInstance: true })).toContain(
+        'Style property "gap" cannot be applied to component instance'
+      );
+      expect(validateStyleInput({ flexDirection: 'column' }, { isInstance: true })).toContain(
+        'Style property "flexDirection" cannot be applied to component instance'
+      );
+    });
+
+    it('allows placement, sizing and wrapper styles on component instances', () => {
+      expect(validateStyleInput({ margin: '20px', marginTop: '10px' }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ width: '100%', height: '300px' }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ minWidth: '200px', maxWidth: '800px' }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ opacity: 0.8 }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ zIndex: '10' }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ position: 'relative' }, { isInstance: true })).toBeNull();
+      expect(validateStyleInput({ position: 'fixed' }, { isInstance: true, isTopLevel: true })).toBeNull();
+      expect(validateStyleInput({ position: 'fixed' }, { isInstance: true, isTopLevel: false })).toContain(
+        "position: 'fixed' is only supported on direct top-level children"
+      );
+      // Property deletion ('') is allowed
+      expect(validateStyleInput({ padding: '', backgroundColor: '' }, { isInstance: true })).toBeNull();
     });
   });
 

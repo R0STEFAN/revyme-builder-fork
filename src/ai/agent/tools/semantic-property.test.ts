@@ -14,6 +14,9 @@ import type { AgentTool, ToolContext } from '@/ai/agent';
 import { getPresetTokens } from '@/code/project/preset-ops';
 import { setTokenTool } from './semantic-property';
 import { DEFAULT_VIEWPORTS } from '@/code/stores/viewport-store';
+import { setPreferCacheSnapshot, injectNodeIntoCache } from '@/code/stores/store';
+import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { getDefaultStore } from 'jotai';
 /** The default ladder (start model): each breakpoint is named by its START, keyed by its END. */
 const DEFAULT_TABLET = DEFAULT_VIEWPORTS.find((v) => v.id === 'tablet')!;
 const DEFAULT_MOBILE = DEFAULT_VIEWPORTS.find((v) => v.id === 'mobile')!;
@@ -40,6 +43,8 @@ describe('semantic property tools', () => {
     vi.clearAllMocks();
     // Deterministic unbranched routing scope for the assertions below.
     setActiveFilePath('app/page.client.tsx');
+    getDefaultStore().set(activeFilePathAtom, 'app/page.client.tsx');
+    setPreferCacheSnapshot(true);
   });
 
   it('set_styles without viewport queues updateStyles', async () => {
@@ -126,6 +131,108 @@ describe('semantic property tools', () => {
     const err = JSON.parse((result.content[0] as any).text).error;
     expect(err).toContain('Cannot mix longhand property');
     expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects visual styles on a component instance node', async () => {
+    injectNodeIntoCache({
+      id: 'card-inst',
+      type: 'Card',
+      name: 'Card',
+      parentId: 'root',
+      children: [],
+      styles: {},
+      textContent: '',
+      attrs: {},
+      componentFile: 'components/Card.tsx',
+      isComponentInstance: true,
+      hasMixedContent: false,
+      order: 0,
+      isCanvasNode: false,
+      componentInstanceId: null,
+      isComponentRoot: false,
+      motionVariants: null,
+      motionVariantsRef: null,
+      motionProps: null,
+      conditionalStyles: null,
+      responsiveVariantMap: null,
+    });
+
+    const ctx = makeCtx();
+    const bgRes = await setStylesTool.execute({ node_id: 'card-inst', styles: { backgroundColor: '#ff0000' } }, ctx);
+    expect(bgRes.isError).toBe(true);
+    expect(JSON.parse((bgRes.content[0] as any).text).error).toContain('Style property "backgroundColor" cannot be applied to <Card>');
+
+    const padRes = await setStylesTool.execute({ node_id: 'card-inst', styles: { padding: '24px' } }, ctx);
+    expect(padRes.isError).toBe(true);
+    expect(JSON.parse((padRes.content[0] as any).text).error).toContain('Style property "padding" cannot be applied to <Card>');
+
+    // Placement styles are allowed on instances
+    const marginRes = await setStylesTool.execute({ node_id: 'card-inst', styles: { margin: '20px', width: '300px' } }, ctx);
+    expect(marginRes.isError).toBeUndefined();
+    expect(queueMutation).toHaveBeenCalledWith(
+      { type: 'updateStyles', nodeId: 'card-inst', styles: { margin: '20px', width: '300px' } },
+      { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },
+    );
+  });
+
+  it('rejects modifying an element inside an expanded component instance', async () => {
+    injectNodeIntoCache({
+      id: 'card-inner-btn',
+      type: 'button',
+      name: 'Button',
+      parentId: 'card-inst',
+      children: [],
+      styles: {},
+      textContent: '',
+      attrs: {},
+      componentFile: 'components/Card.tsx',
+      componentInstanceId: 'card-inst',
+      hasMixedContent: false,
+      order: 0,
+      isCanvasNode: false,
+      isComponentRoot: false,
+      motionVariants: null,
+      motionVariantsRef: null,
+      motionProps: null,
+      conditionalStyles: null,
+      responsiveVariantMap: null,
+    });
+
+    const ctx = makeCtx();
+    const res = await setStylesTool.execute({ node_id: 'card-inner-btn', styles: { color: 'blue' } }, ctx);
+    expect(res.isError).toBe(true);
+    expect(JSON.parse((res.content[0] as any).text).error).toContain('Cannot set styles directly on node "card-inner-btn" because it is inside an expanded component instance');
+  });
+
+  it('rejects position: fixed inside a component master file', async () => {
+    setActiveFilePath('components/Navbar.tsx');
+    getDefaultStore().set(activeFilePathAtom, 'components/Navbar.tsx');
+    injectNodeIntoCache({
+      id: 'nav-root',
+      type: 'header',
+      name: 'Header',
+      parentId: null,
+      children: [],
+      styles: {},
+      textContent: '',
+      attrs: {},
+      componentFile: null,
+      hasMixedContent: false,
+      order: 0,
+      isCanvasNode: false,
+      componentInstanceId: null,
+      isComponentRoot: true,
+      motionVariants: null,
+      motionVariantsRef: null,
+      motionProps: null,
+      conditionalStyles: null,
+      responsiveVariantMap: null,
+    });
+
+    const ctx = makeCtx();
+    const res = await setStylesTool.execute({ node_id: 'nav-root', styles: { position: 'fixed', top: '0px' } }, ctx);
+    expect(res.isError).toBe(true);
+    expect(JSON.parse((res.content[0] as any).text).error).toContain("position: 'fixed' is forbidden inside components");
   });
 
   it('set_text queues updateText', async () => {

@@ -4536,10 +4536,13 @@ function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): A
                   prop.key.type === 'StringLiteral' ? prop.key.value : null;
       if (!key) continue;
       // Direct: `backgroundColor: item.brand` or nested `item.author.color`
-      const directMemberPath = extractItemMemberPath(prop.value, itemVar);
-      if (directMemberPath) {
-        bindings.push({ styleProp: key, field: directMemberPath });
-        continue;
+      // A ternary (ConditionalExpression) is not a direct style binding (handled by extractVariantStyleBindings if variant-scoped).
+      if (prop.value.type !== 'ConditionalExpression') {
+        const directMemberPath = extractItemMemberPath(prop.value, itemVar);
+        if (directMemberPath) {
+          bindings.push({ styleProp: key, field: directMemberPath });
+          continue;
+        }
       }
       // Template-literal wrapper: `backgroundImage: \`url(${item.photo})\``.
       // Image bindings go through this shape because `background-image` needs

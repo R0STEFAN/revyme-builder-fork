@@ -27,6 +27,7 @@ import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
 import { traverse, TRANSPARENT_TAGS, jsxTagName, jsxAttrs, stringAttr, hasAttr, needsDataId, isAllowedTextExpression, isCodeComponentSource, booleanPropNames } from './checks/shared';
 import type { FileKind, OracleViolation } from './checks/shared';
 import { checkStyleObject, styleValueIncludes } from './checks/style-object';
+import { COMPONENT_INSTANCE_FORBIDDEN_STYLES } from './preflight-validation';
 import { SELECT_ICON_ATTR, parseSelectIconSpec } from '@/editor/tools/InputTool/select-icon';
 import { checkVariantDialect, checkVariantTernaryPrimary } from './checks/variant-dialect';
 import { checkScrollDialect } from './checks/scroll-dialect';
@@ -106,14 +107,7 @@ const ANNOTATION_RE = /@name|@controls|@label|@comment|@canvas|@propMeta|@pageVa
  *  tag — the wrapper carries placement only; these either double-apply or
  *  silently do nothing (the builder's own instance writes redirect them
  *  inside the component). */
-const INSTANCE_INTERNAL_STYLE_PROPS = new Set([
-  'background', 'backgroundColor', 'backgroundImage', 'color',
-  'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
-  'textAlign', 'textTransform', 'textShadow',
-  'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-  'gap', 'rowGap', 'columnGap', 'flexDirection', 'justifyContent', 'alignItems',
-  'border', 'borderRadius', 'boxShadow',
-]);
+const INSTANCE_INTERNAL_STYLE_PROPS = COMPONENT_INSTANCE_FORBIDDEN_STYLES;
 
 /** True when a `<style>` element carries ONLY the EDITOR'S OWN generated CSS:
  *  - `@media (…) { … }` blocks whose every selector is `[data-id="…"]` — the
@@ -943,7 +937,8 @@ export function checkFile(
         // full check.
         if (!isCodeComponent) {
           checkStyleObject(styleAttr.value.expression, dataId, v, {
-            fixedAllowed: kind !== 'page' || parentDataId === 'root' || isOverlay,
+            fixedAllowed: (kind === 'page' && (parentDataId === 'root' || isOverlay)) || (isTemplate && dataId === 'root'),
+            isComponent: kind === 'component',
             // A `display` driven by one of the file's own boolean props is a
             // per-instance toggle the builder resolves when it expands the
             // master — not someone hiding with CSS.

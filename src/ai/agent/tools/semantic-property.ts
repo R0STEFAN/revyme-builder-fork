@@ -10,11 +10,12 @@
 
 import { viewportKeyWidth, viewportForArg } from './viewport-arg';
 import { z } from 'zod';
-import { queueToolMutation, flushTool, getToolTokens, getToolNodes } from '@/ai/agent/workspace';
+import { queueToolMutation, flushTool, getToolTokens, getToolNodes, resolveToolFile } from '@/ai/agent/workspace';
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
-import { validateStyleInput, validateAttributesInput } from '@/code/oracle/preflight-validation';
+import { isComponentFilePath } from '@/code/project/file-path-kind';
+import { validateStyleInput, validateAttributesInput, FRAMEWORK_TAGS } from '@/code/oracle/preflight-validation';
 import { projectFS } from '@/code/project/project-fs';
 import { TEXT_TAGS } from '@/shared/constants';
 
@@ -58,9 +59,30 @@ export const setStylesTool: AgentTool = {
     const nodeId = args.node_id as string;
     const styles = args.styles as Record<string, string>;
     const nodesNow = getToolNodes(ctx);
+    const activeFile = resolveToolFile(ctx);
+    const isCompMaster = isComponentFilePath(activeFile);
     const targetNode = nodesNow.get(nodeId);
+    if (targetNode?.componentInstanceId != null) {
+      return fail(
+        `Cannot set styles directly on node "${nodeId}" because it is inside an expanded component instance. In Revyme, internal styling belongs inside the component master file (${targetNode.componentFile ?? 'components/*.tsx'}). Edit the component master, or apply placement styles to the component instance wrapper.`
+      );
+    }
+    const isInstance = Boolean(
+      targetNode?.isComponentInstance ||
+      (targetNode?.componentFile && !targetNode.isComponentRoot) ||
+      (targetNode?.type && /^[A-Z]/.test(targetNode.type) && !FRAMEWORK_TAGS.has(targetNode.type))
+    );
+    const isTopLevel = targetNode ? (targetNode.parentId === 'root' || !targetNode.parentId) : undefined;
     const isText = targetNode ? TEXT_TAGS.has(targetNode.type) || Boolean(targetNode.textContent) : undefined;
-    const styleErr = validateStyleInput(styles, { isTextNode: isText, tagName: targetNode?.type, fs: projectFS });
+    const styleErr = validateStyleInput(styles, {
+      isTextNode: isText,
+      tagName: targetNode?.type,
+      isComponentMaster: isCompMaster,
+      isInstance,
+      isTopLevel,
+      componentFile: targetNode?.componentFile,
+      fs: projectFS,
+    });
     if (styleErr) return fail(styleErr);
 
     const keyWidth = viewportKeyWidth(args.viewport);

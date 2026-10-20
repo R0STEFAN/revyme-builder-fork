@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import type { AgentTool, AgentToolResult, ToolContext } from '@/ai/agent';
-import { queueToolMutation, flushTool, getToolNodes } from '@/ai/agent/workspace';
+import { queueToolMutation, flushTool, getToolNodes, resolveToolFile } from '@/ai/agent/workspace';
 import { generateNodeId } from '@/shared/id-utils';
 import type { AddNodeDef } from '@/code/generation/generator-crud';
 import { coerceRecord } from './coerce';
@@ -16,13 +16,11 @@ import { seedFlowChild, queueOrderWrites } from './flow-placement';
 import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
 import { projectFS, installBuiltInCodeComponent } from '@/code/project/project-fs';
-import { validateStyleInput, validateTagInput, validateAttributesInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { isComponentFilePath } from '@/code/project/file-path-kind';
+import { validateStyleInput, validateTagInput, validateAttributesInput, KNOWN_SLOT_COMPONENTS, FRAMEWORK_TAGS } from '@/code/oracle/preflight-validation';
 import { TEXT_TAGS } from '@/shared/constants';
 
-export const FRAMEWORK_TAGS = new Set([
-  'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
-  'Override', 'React', 'Suspense', 'MotionLink',
-]);
+export { FRAMEWORK_TAGS };
 
 const recordSchema = z.preprocess(coerceRecord, z.record(z.string(), z.string()));
 
@@ -228,9 +226,17 @@ export const insertFragmentTool: AgentTool = {
       const attrErr = validateAttributesInput(attrs, projectFS);
       if (attrErr) return { error: attrErr };
 
+      const isInstance = Boolean(input.tag && /^[A-Z]/.test(input.tag) && !FRAMEWORK_TAGS.has(input.tag));
+      const targetFile = resolveToolFile(ctx);
+      const isCompMaster = isComponentFilePath(targetFile);
+      const isTopLevel = isRoot && (parentId === 'root' || !parentId);
+
       const styleErr = validateStyleInput(input.styles, {
         isTextNode: TEXT_TAGS.has(input.tag ?? 'div'),
         tagName: input.tag,
+        isInstance,
+        isComponentMaster: isCompMaster,
+        isTopLevel,
         fs: projectFS,
       });
       if (styleErr) return { error: styleErr };
@@ -238,6 +244,15 @@ export const insertFragmentTool: AgentTool = {
       if (input.responsive && typeof input.responsive === 'object') {
         for (const [vp, vpStyles] of Object.entries(input.responsive)) {
           if (vpStyles && typeof vpStyles === 'object' && Object.keys(vpStyles).length > 0) {
+            const respStyleErr = validateStyleInput(vpStyles, {
+              isTextNode: TEXT_TAGS.has(input.tag ?? 'div'),
+              tagName: input.tag,
+              isInstance,
+              isComponentMaster: isCompMaster,
+              isTopLevel,
+              fs: projectFS,
+            });
+            if (respStyleErr) return { error: respStyleErr };
             responsiveWrites.push({
               nodeId: id,
               viewport: vp,

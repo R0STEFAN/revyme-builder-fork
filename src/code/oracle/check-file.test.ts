@@ -1039,6 +1039,54 @@ export default withResponsiveProps(HoverCard);
   });
 });
 
+describe('checkFile — COMPONENT_FIXED_PROHIBITION', () => {
+  it('bounces position: fixed inside component files on both root and inner elements', () => {
+    const compWithFixedRoot = `'use client';
+import React from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function Navbar({ initialVariant = 'default' }: { initialVariant?: string }) {
+  return (
+    <LayoutGroup id="navbar">
+      <motion.header data-id="root" data-name="Navbar" style={{ position: 'fixed', top: '0px', width: '100%', height: '80px' }}>
+        <motion.div data-id="brand" data-name="Brand" style={{ position: 'relative' }} />
+      </motion.header>
+    </LayoutGroup>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+`;
+    const vs = checkFile(compWithFixedRoot, { kind: 'component' });
+    expect(codes(vs)).toContain('COMPONENT_FIXED_PROHIBITION');
+    expect(vs.find((x) => x.code === 'COMPONENT_FIXED_PROHIBITION')?.message).toContain("is forbidden inside components (components/*.tsx)");
+  });
+
+  it('allows position: sticky with top: 0 inside component files', () => {
+    const compWithSticky = `'use client';
+import React from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function Navbar({ initialVariant = 'default' }: { initialVariant?: string }) {
+  return (
+    <LayoutGroup id="navbar">
+      <motion.header data-id="root" data-name="Navbar" style={{ position: 'sticky', top: '0px', width: '100%', height: '80px' }}>
+        <motion.div data-id="brand" data-name="Brand" style={{ position: 'relative' }} />
+      </motion.header>
+    </LayoutGroup>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+`;
+    const vs = checkFile(compWithSticky, { kind: 'component' });
+    expect(codes(vs)).not.toContain('COMPONENT_FIXED_PROHIBITION');
+    expect(codes(vs)).not.toContain('FIXED_DEPTH');
+  });
+});
+
 describe('checkFile — builder overlays are exempt from FIXED_DEPTH (prime rule)', () => {
   it('a data-overlay element with position fixed inside a conditional passes', () => {
     const page = `'use client';

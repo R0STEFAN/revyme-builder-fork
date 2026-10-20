@@ -81,7 +81,7 @@ function checkStyleObject(
   dataId: string | undefined,
   v: OracleViolation[],
   ctx: {
-    fixedAllowed: boolean; builderOwned?: boolean; templateRoot?: boolean;
+    fixedAllowed: boolean; isComponent?: boolean; builderOwned?: boolean; templateRoot?: boolean;
     /** The file's own boolean props, so a TOGGLE-driven `display` is not
      *  mistaken for hiding with CSS (see DISPLAY_TOGGLE_VISIBILITY). */
     booleanProps?: Set<string>;
@@ -239,12 +239,21 @@ function checkStyleObject(
       }
       continue;
     }
-    if (key === 'position' && styleValueIncludes(prop.value, 'fixed') && !ctx.fixedAllowed) {
-      v.push({
-        code: 'FIXED_DEPTH', tier: 2, line, elementId: dataId,
-        message: `position: 'fixed' (line ${line}) only resolves on DIRECT children of the page root in this builder. Move the element to the top level, or use position: 'sticky' on a top-level wrapper.`,
-      });
-      continue;
+    if (key === 'position' && styleValueIncludes(prop.value, 'fixed')) {
+      if (ctx.isComponent) {
+        v.push({
+          code: 'COMPONENT_FIXED_PROHIBITION', tier: 2, line, elementId: dataId,
+          message: `position: 'fixed' (line ${line}) is forbidden inside components (components/*.tsx). In Revyme, component roots and inner elements cannot use 'fixed' because components are isolated and rendered inside canvas artboards (where 'fixed' breaks artboard isolation and pins to the browser window). For sticky headers or navigation bars inside components, use position: 'sticky' with top: 0 instead. Alternatively, place the component instance as a direct top-level child of the page root and position it there.`,
+        });
+        continue;
+      }
+      if (!ctx.fixedAllowed) {
+        v.push({
+          code: 'FIXED_DEPTH', tier: 2, line, elementId: dataId,
+          message: `position: 'fixed' (line ${line}) only resolves on DIRECT children of the page root in this builder. Move the element to the top level, or use position: 'sticky' on a top-level wrapper.`,
+        });
+        continue;
+      }
     }
 
     if (TRANSITION_KEYS.test(key)) {
