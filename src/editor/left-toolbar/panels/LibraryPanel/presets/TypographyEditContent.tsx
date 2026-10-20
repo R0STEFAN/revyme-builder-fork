@@ -148,7 +148,12 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
         />
       </div>
       <FontFamilyControl value={font} onChange={(v) => writeVal('font', v, setFont)} />
-      <TextPropertyControl property="fontWeight" label="Weight" value={weight} onChange={(v) => writeVal('weight', v, setWeight)} />
+      <TextPropertyControl
+        property="fontWeight" label="Weight"
+        value={weight}
+        onChange={(v) => writeVal('weight', v, setWeight)}
+        onChangeLive={(v) => liveVal('weight', v, setWeight)}
+      />
       <div className="flex items-center justify-between w-full">
         <ControlLabel label="Color" property="color" plain />
         <ColorInput value={color || '#000000'} onChange={(v) => writeVal('color', v, setColor)} onChangeLive={(v) => liveVal('color', v, setColor)} />
@@ -204,16 +209,19 @@ export function TypographyEditContent({ group, onUpdate, onDelete, onClose }: Ty
         property="fontSize" label="Size"
         value={responsiveProps.size || (tier !== 'base' ? size : '')}
         onChange={(v) => writeVal(responsiveProps.sizeSuffix, v, responsiveProps.setSize)}
+        onChangeLive={(v) => liveVal(responsiveProps.sizeSuffix, v, responsiveProps.setSize)}
       />
       <TextPropertyControl
         property="letterSpacing" label="Spacing"
         value={responsiveProps.spacing || (tier !== 'base' ? spacing : '')}
         onChange={(v) => writeVal(responsiveProps.spacingSuffix, v, responsiveProps.setSpacing)}
+        onChangeLive={(v) => liveVal(responsiveProps.spacingSuffix, v, responsiveProps.setSpacing)}
       />
       <TextPropertyControl
         property="lineHeight" label="Line Height"
         value={responsiveProps.lineHeight || (tier !== 'base' ? lineHeight : '')}
         onChange={(v) => writeVal(responsiveProps.lineHeightSuffix, v, responsiveProps.setLineHeight)}
+        onChangeLive={(v) => liveVal(responsiveProps.lineHeightSuffix, v, responsiveProps.setLineHeight)}
       />
     </div>
   );

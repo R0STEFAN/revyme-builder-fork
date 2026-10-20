@@ -161,9 +161,10 @@ function parseClamp(raw: string): ClampValues | null {
   if (!m) return null;
   const parse = (s: string) => {
     const t = s.trim();
-    const num = parseFloat(t) || 0;
-    const unit = t.replace(/^-?[\d.]+/, '') || 'px';
-    return { val: String(num), unit };
+    const numMatch = t.match(/^(-?[\d.]+)/);
+    const num = numMatch ? numMatch[1] : '0';
+    const unit = t.replace(/^-?[\d.]+\s*/, '') || 'px';
+    return { val: num, unit };
   };
   const min = parse(m[1]);
   const pref = parse(m[2]);
@@ -172,7 +173,57 @@ function parseClamp(raw: string): ClampValues | null {
 }
 
 function formatClamp(c: ClampValues): string {
-  return `clamp(${c.minVal}${c.minUnit}, ${c.prefVal}${c.prefUnit}, ${c.maxVal}${c.maxUnit})`;
+  const clean = (val: string) => {
+    const m = (val || '').trim().match(/^(-?[\d.]+)/);
+    if (!m) return '0';
+    const parts = m[1].split('.');
+    if (parts.length > 2) {
+      return `${parts[0]}.${parts.slice(1).join('')}`;
+    }
+    return m[1] || '0';
+  };
+  return `clamp(${clean(c.minVal)}${c.minUnit}, ${clean(c.prefVal)}${c.prefUnit}, ${clean(c.maxVal)}${c.maxUnit})`;
+}
+
+function cleanAndExtractUnit(val: string, fallbackUnit: string): { val: string; unit: string } {
+  const trimmed = (val || '').trim();
+  const match = trimmed.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
+  if (!match) return { val: trimmed || '0', unit: fallbackUnit };
+  const rawNum = match[1] || '0';
+  const cleanNum = rawNum.endsWith('.') && rawNum.length > 1 ? rawNum.slice(0, -1) : rawNum;
+  return {
+    val: cleanNum,
+    unit: match[2]?.toLowerCase() || fallbackUnit,
+  };
+}
+
+function resolveClampPx(clamp: ClampValues, vpWidth: number): number {
+  const toPx = (val: string, unit: string): number => {
+    const n = parseFloat(val) || 0;
+    switch (unit) {
+      case 'px': return n;
+      case 'rem':
+      case 'em': return n * 16;
+      case 'vw':
+      case 'svw':
+      case 'dvw':
+      case 'lvw': return (n / 100) * vpWidth;
+      case 'vh':
+      case 'svh':
+      case 'dvh':
+      case 'lvh': {
+        const ratio = vpWidth >= 1024 ? 0.625 : vpWidth >= 500 ? 1.33 : 2.16;
+        return (n / 100) * (vpWidth * ratio);
+      }
+      case '%': return (n / 100) * 16;
+      default: return n;
+    }
+  };
+  const minPx = toPx(clamp.minVal, clamp.minUnit);
+  const prefPx = toPx(clamp.prefVal, clamp.prefUnit);
+  const maxPx = toPx(clamp.maxVal, clamp.maxUnit);
+  const resolved = Math.min(Math.max(prefPx, minPx), maxPx);
+  return Math.round(resolved * 10) / 10;
 }
 
 interface TextPropertyControlProps {
@@ -182,6 +233,8 @@ interface TextPropertyControlProps {
   value?: string;
   /** External onChange (for preset editing mode) */
   onChange?: (value: string) => void;
+  /** External onChangeLive (for preset editing mode) */
+  onChangeLive?: (value: string) => void;
 }
 
 /**
@@ -207,7 +260,7 @@ function useWorkspaceWeightOptions(
   }, [property, familyValue, fonts]);
 }
 
-export function TextPropertyControl({ property, label, value: externalValue, onChange: externalOnChange }: TextPropertyControlProps) {
+export function TextPropertyControl({ property, label, value: externalValue, onChange: externalOnChange, onChangeLive: externalOnChangeLive }: TextPropertyControlProps) {
   const isExternal = externalValue !== undefined && externalOnChange !== undefined;
   // Only call useTextStyles when NOT in external mode (it requires ControlProvider)
   const text = isExternal ? null : useTextStyles(); // eslint-disable-line react-hooks/rules-of-hooks
@@ -301,6 +354,10 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     }
   };
 
+  const setValueLive = isExternal ? (externalOnChangeLive ?? externalOnChange!) : (v: string) => {
+    text!.setLive(property, v);
+  };
+
   // Variable-bound shortcut: when this property is bound to a page-variable
   // / component-prop, swap the slider/input/select for the standard
   // VariableBoundPill — same UX as the StylesTool atoms (Opacity, Fill,
@@ -318,14 +375,28 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
   // expected" crash. Hooks must run in the same order every render.
   const isClamp = value.startsWith('clamp(');
   const [clampState, setClampState] = useState<ClampValues>(
-    (isClamp ? parseClamp(value) : null) || { minVal: '16', minUnit: 'px', prefVal: '4', prefUnit: 'vw', maxVal: '48', maxUnit: 'px' }
+    () => (isClamp ? parseClamp(value) : null) || { minVal: '16', minUnit: 'px', prefVal: '4', prefUnit: 'vw', maxVal: '48', maxUnit: 'px' }
   );
   useEffect(() => {
     if (isClamp) {
       const p = parseClamp(value);
-      if (p) setClampState(p);
+      if (p) {
+        setClampState(prev => {
+          if (
+            prev.minVal === p.minVal && prev.minUnit === p.minUnit &&
+            prev.prefVal === p.prefVal && prev.prefUnit === p.prefUnit &&
+            prev.maxVal === p.maxVal && prev.maxUnit === p.maxUnit
+          ) return prev;
+          return p;
+        });
+      }
     }
   }, [value, isClamp]);
+
+  const activeVpWidth = useAtomValue(interactingViewportRenderWidthAtom) || 1440;
+  const resolvedClampPx = useMemo(() => {
+    return resolveClampPx(clampState, activeVpWidth);
+  }, [clampState, activeVpWidth]);
 
   trace.fn('TextPropertyControl:render', { property, label, value, isMixed, isExternal, controlType: registryDef?.type, isFitMode, isVariableBound });
 
@@ -384,11 +455,69 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     const numValue = isClamp ? 0 : (parseFloat(value) || 0);
     const currentUnit = isFitMode ? 'fit' : isClamp ? 'clamp' : (value.replace(/^-?[\d.]+/, '') || 'px');
 
-    const updateClamp = (patch: Partial<ClampValues>) => {
-      const next = { ...clampState, ...patch };
+    const updateClampLive = (patch: Partial<ClampValues>) => {
+      let next = { ...clampState, ...patch };
+      if (patch.minVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.minVal, next.minUnit);
+        next = { ...next, minVal: parsed.val, minUnit: parsed.unit };
+      }
+      if (patch.prefVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.prefVal, next.prefUnit);
+        next = { ...next, prefVal: parsed.val, prefUnit: parsed.unit };
+      }
+      if (patch.maxVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.maxVal, next.maxUnit);
+        next = { ...next, maxVal: parsed.val, maxUnit: parsed.unit };
+      }
+      setClampState(next);
+      setValueLive(formatClamp(next));
+    };
+
+    const updateClampCommit = (patch: Partial<ClampValues>) => {
+      let next = { ...clampState, ...patch };
+      if (patch.minVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.minVal, next.minUnit);
+        next = { ...next, minVal: parsed.val, minUnit: parsed.unit };
+      }
+      if (patch.prefVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.prefVal, next.prefUnit);
+        next = { ...next, prefVal: parsed.val, prefUnit: parsed.unit };
+      }
+      if (patch.maxVal !== undefined) {
+        const parsed = cleanAndExtractUnit(patch.maxVal, next.maxUnit);
+        next = { ...next, maxVal: parsed.val, maxUnit: parsed.unit };
+      }
       setClampState(next);
       setValue(formatClamp(next));
       trace.action('font-size:clamp-update', { clamp: formatClamp(next) });
+    };
+
+    const liveFontSize = (v: string) => {
+      if (isFitMode && fitTextNode) {
+        liveFitScale(v);
+      } else if (currentUnit !== 'clamp') {
+        const num = parseFloat(v) || 0;
+        setValueLive(`${num}${currentUnit}`);
+      }
+    };
+
+    const commitFontSize = (v: string) => {
+      if (isFitMode && fitTextNode) {
+        commitFitScale(v);
+      } else if (currentUnit !== 'clamp') {
+        const trimmed = (v || '').trim();
+        const match = trimmed.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
+        if (match) {
+          const num = parseFloat(match[1]);
+          const safeNum = Number.isFinite(num) ? num : 0;
+          const typedUnit = match[2]?.toLowerCase();
+          const matchedOpt = typedUnit ? FONT_SIZE_UNITS.find(o => o.value.toLowerCase() === typedUnit || o.label.toLowerCase() === typedUnit) : null;
+          const u = matchedOpt ? matchedOpt.value : currentUnit;
+          setValue(`${safeNum}${u}`);
+        } else {
+          setValue(`${parseFloat(v) || 0}${currentUnit}`);
+        }
+      }
     };
 
     const handleUnitChange = (newUnit: string) => {
@@ -551,26 +680,9 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
             <div className="flex-1 min-w-0">
               <ToolInput
                 value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? '' : String(numValue)}
-                onChange={(v) => {
-                  if (isFitMode && fitTextNode) {
-                    commitFitScale(v);
-                  } else if (currentUnit !== 'clamp') {
-                    const trimmed = (v || '').trim();
-                    const match = trimmed.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
-                    if (match) {
-                      const num = parseFloat(match[1]);
-                      const safeNum = Number.isFinite(num) ? num : 0;
-                      const typedUnit = match[2]?.toLowerCase();
-                      const matchedOpt = typedUnit ? FONT_SIZE_UNITS.find(o => o.value.toLowerCase() === typedUnit || o.label.toLowerCase() === typedUnit) : null;
-                      const u = matchedOpt ? matchedOpt.value : currentUnit;
-                      setValue(`${safeNum}${u}`);
-                    } else {
-                      setValue(`${parseFloat(v) || 0}${currentUnit}`);
-                    }
-                  }
-                }}
-                onChangeLive={isFitMode && fitTextNode ? liveFitScale : undefined}
-                onCommit={isFitMode && fitTextNode ? commitFitScale : undefined}
+                onChange={commitFontSize}
+                onChangeLive={liveFontSize}
+                onCommit={commitFontSize}
                 step={registryDef.step ?? 1}
                 disabled={currentUnit === 'clamp'}
               />
@@ -588,18 +700,40 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
           <div className="flex flex-col gap-1.5 pl-[25%]">
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-[var(--text-secondary)] w-8 shrink-0">Min</span>
-              <ToolInput value={clampState.minVal} onChange={(v) => updateClamp({ minVal: v })} step={1} />
-              <ToolSelect value={clampState.minUnit} onChange={(v) => updateClamp({ minUnit: v })} options={CLAMP_UNITS} />
+              <ToolInput
+                value={clampState.minVal}
+                onChangeLive={(v) => updateClampLive({ minVal: v })}
+                onCommit={(v) => updateClampCommit({ minVal: v })}
+                onChange={(v) => updateClampCommit({ minVal: v })}
+                step={1}
+              />
+              <ToolSelect value={clampState.minUnit} onChange={(v) => updateClampCommit({ minUnit: v })} options={CLAMP_UNITS} />
             </div>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-[var(--text-secondary)] w-8 shrink-0">Pref</span>
-              <ToolInput value={clampState.prefVal} onChange={(v) => updateClamp({ prefVal: v })} step={0.5} />
-              <ToolSelect value={clampState.prefUnit} onChange={(v) => updateClamp({ prefUnit: v })} options={CLAMP_UNITS} />
+              <ToolInput
+                value={clampState.prefVal}
+                onChangeLive={(v) => updateClampLive({ prefVal: v })}
+                onCommit={(v) => updateClampCommit({ prefVal: v })}
+                onChange={(v) => updateClampCommit({ prefVal: v })}
+                step={0.5}
+              />
+              <ToolSelect value={clampState.prefUnit} onChange={(v) => updateClampCommit({ prefUnit: v })} options={CLAMP_UNITS} />
             </div>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-[var(--text-secondary)] w-8 shrink-0">Max</span>
-              <ToolInput value={clampState.maxVal} onChange={(v) => updateClamp({ maxVal: v })} step={1} />
-              <ToolSelect value={clampState.maxUnit} onChange={(v) => updateClamp({ maxUnit: v })} options={CLAMP_UNITS} />
+              <ToolInput
+                value={clampState.maxVal}
+                onChangeLive={(v) => updateClampLive({ maxVal: v })}
+                onCommit={(v) => updateClampCommit({ maxVal: v })}
+                onChange={(v) => updateClampCommit({ maxVal: v })}
+                step={1}
+              />
+              <ToolSelect value={clampState.maxUnit} onChange={(v) => updateClampCommit({ maxUnit: v })} options={CLAMP_UNITS} />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-[var(--text-secondary)] pt-0.5 px-0.5">
+              <span>≈ {resolvedClampPx}px</span>
+              <span className="text-[9px] opacity-70">at {activeVpWidth}px vp</span>
             </div>
           </div>
         )}
@@ -620,10 +754,19 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
             min={registryDef.min ?? 0}
             max={registryDef.max ?? 100}
             step={registryDef.step ?? 1}
-            onChange={(v) => setValue(`${v}${unit}`)}
+            onChange={(v) => setValueLive(`${v}${unit}`)}
+            onCommit={(v) => setValue(`${v}${unit}`)}
           />
           <ToolInput
             value={isMixed ? '' : (property === 'lineHeight' ? value : String(numValue))}
+            onChangeLive={(v) => {
+              if (property === 'lineHeight') setValueLive(v);
+              else setValueLive(`${parseFloat(v) || 0}${unit}`);
+            }}
+            onCommit={(v) => {
+              if (property === 'lineHeight') setValue(v);
+              else setValue(`${parseFloat(v) || 0}${unit}`);
+            }}
             onChange={(v) => {
               if (property === 'lineHeight') setValue(v);
               else setValue(`${parseFloat(v) || 0}${unit}`);

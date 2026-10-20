@@ -31,7 +31,7 @@ const VW_INNER_RE = /([\d.]+)(svw|dvw|lvw|vw|svi|dvi|lvi|vi)\b/gi;
 const VH_INNER_RE = /([\d.]+)(svh|dvh|lvh|vh|svb|dvb|lvb|vb)\b/gi;
 const VMIN_INNER_RE = /([\d.]+)(svmin|dvmin|lvmin|vmin)\b/gi;
 const VMAX_INNER_RE = /([\d.]+)(svmax|dvmax|lvmax|vmax)\b/gi;
-const ANY_VP_UNIT_RE = /[\d.](svw|dvw|lvw|vw|svi|dvi|lvi|vi|svh|dvh|lvh|vh|svb|dvb|lvb|vb|svmin|dvmin|lvmin|vmin|svmax|dvmax|lvmax|vmax)\b/i;
+export const ANY_VP_UNIT_RE = /[\d.](svw|dvw|lvw|vw|svi|dvi|lvi|vi|svh|dvh|lvh|vh|svb|dvb|lvb|vb|svmin|dvmin|lvmin|vmin|svmax|dvmax|lvmax|vmax)\b/i;
 
 /** Simulated viewport height for a given width — the canvas has no real
  *  viewport, so vh resolves via a per-device-class ratio:

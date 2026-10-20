@@ -6,7 +6,7 @@ import type { PatchUpdate } from '../sandbox-api';
 import { clearPatchKeyChain, trackImperativeStyleKeys, setActivePreviewStyles } from '@/canvas/Renderer';
 import { trace } from '@/shared/debug-trace';
 import { applyStrokeAlignment } from '@/canvas/renderer/style-apply';
-import { resolveResponsiveUnits, getResponsiveVpWidth } from '@/shared/responsive-units';
+import { resolveResponsiveUnits, getResponsiveVpWidth, ANY_VP_UNIT_RE } from '@/shared/responsive-units';
 import { coerceCssNumberToPx, toKebab } from '@/shared/css-utils';
 import { findElByNodeId, findAllByNodeId } from '../sandbox-dom-utils';
 import { syncEditorFromLiveSvg as syncShapeEditorFromLiveSvg } from '../shape-edit-host';
@@ -437,6 +437,16 @@ export function setCanvasTokenVar(name: string, value: string): void {
     // O(1) and triggers a repaint on the next frame for every consumer.
     const propName = name.startsWith('--') ? name : `--${name}`;
     contentRoot.style.setProperty(propName, value);
+
+    // Fan out to each viewport tile directly as an inline style so:
+    // 1. It resolves against that tile's simulated width rather than iframe window.
+    // 2. Its inline specificity beats any [data-viewport="..."] stylesheet rule from buildViewportTokensCSS.
+    const tiles = contentRoot.querySelectorAll<HTMLElement>('[data-viewport]');
+    for (const tile of tiles) {
+      const tileW = getResponsiveVpWidth(tile);
+      const resolved = resolveResponsiveUnits(value, tileW);
+      tile.style.setProperty(propName, resolved);
+    }
 }
 
 export function loadFontInIframe(fontUrl: string): void {
@@ -488,6 +498,16 @@ export function setCanvasTokensCSS(tokensCSS: string): void {
       if (p && p.startsWith('--')) toRemove.push(p);
     }
     for (const p of toRemove) contentRoot.style.removeProperty(p);
+
+    const vpTiles = contentRoot.querySelectorAll<HTMLElement>('[data-viewport]');
+    for (const tile of vpTiles) {
+      const tileRemove: string[] = [];
+      for (let i = 0; i < tile.style.length; i++) {
+        const p = tile.style[i];
+        if (p && p.startsWith('--')) tileRemove.push(p);
+      }
+      for (const p of tileRemove) tile.style.removeProperty(p);
+    }
 }
 
 export function setInnerHTML(nodeId: string, vpPrefix: string, html: string): void {
