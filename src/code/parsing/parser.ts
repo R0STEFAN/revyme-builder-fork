@@ -70,10 +70,25 @@ function findSplitTextWrapper(el: any): any | null {
  * `item.img_file.id` -> "img_file.id"). Returns null if not rooted at itemVar.
  */
 export function extractItemMemberPath(expr: any, itemVar: string): string | null {
-  if (!expr || expr.type !== 'MemberExpression') return null;
+  if (!expr) return null;
+  if (expr.type === 'ConditionalExpression') {
+    const alt = extractItemMemberPath(expr.alternate, itemVar);
+    if (alt) return alt;
+    const cons = extractItemMemberPath(expr.consequent, itemVar);
+    if (cons) return cons;
+    return null;
+  }
+  if (expr.type === 'LogicalExpression') {
+    const left = extractItemMemberPath(expr.left, itemVar);
+    if (left) return left;
+    const right = extractItemMemberPath(expr.right, itemVar);
+    if (right) return right;
+    return null;
+  }
+  if (expr.type !== 'MemberExpression' && expr.type !== 'OptionalMemberExpression') return null;
   const parts: string[] = [];
   let curr = expr;
-  while (curr && curr.type === 'MemberExpression') {
+  while (curr && (curr.type === 'MemberExpression' || curr.type === 'OptionalMemberExpression')) {
     if (curr.property?.type === 'Identifier') {
       parts.unshift(curr.property.name);
     } else if (curr.property?.type === 'StringLiteral') {

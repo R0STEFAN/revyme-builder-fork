@@ -124,6 +124,33 @@ export default function SelfHostDashboard() {
     fetchFolders();
   }, []);
 
+  // ─── Bridge listener for auto-navigation from MCP tools ───────────────────
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const bridgeUrl = (import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8082') + '/bridge/events?role=dashboard';
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(bridgeUrl, { withCredentials: true });
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.method === 'navigateToBuilder' || data.method === 'openEditor') {
+            const url = data.params?.url || '/builder';
+            trace.action('dashboard:auto-navigate-builder', { url });
+            window.location.href = url;
+          }
+        } catch {
+          // ignore keepalive/ping comments
+        }
+      };
+    } catch {
+      // ignore
+    }
+    return () => {
+      try { es?.close(); } catch { /* noop */ }
+    };
+  }, []);
+
   // Close folder menu on click outside
   useEffect(() => {
     if (!activeFolderMenuProjectId) return;

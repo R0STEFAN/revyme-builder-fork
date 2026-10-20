@@ -1799,6 +1799,52 @@ export default function Page() {
         property: { type: 'StringLiteral', value: 'img_file.id' },
       };
       expect(extractItemMemberPath(stringBracketExpr, 'item')).toBe('img_file.id');
+
+      // ConditionalExpression (e.g. ternary fallback)
+      const ternaryExpr = {
+        type: 'ConditionalExpression',
+        test: { type: 'BinaryExpression' },
+        consequent: {
+          type: 'MemberExpression',
+          object: {
+            type: 'MemberExpression',
+            object: { type: 'Identifier', name: 'item' },
+            property: { type: 'Identifier', name: 'title' },
+          },
+          property: { type: 'Identifier', name: 'name' },
+        },
+        alternate: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'item' },
+          property: { type: 'Identifier', name: 'title' },
+        },
+      };
+      expect(extractItemMemberPath(ternaryExpr, 'item')).toBe('title');
+
+      // LogicalExpression (e.g. item.title || 'Fallback')
+      const logicalExpr = {
+        type: 'LogicalExpression',
+        operator: '||',
+        left: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'item' },
+          property: { type: 'Identifier', name: 'title' },
+        },
+        right: { type: 'StringLiteral', value: 'Fallback' },
+      };
+      expect(extractItemMemberPath(logicalExpr, 'item')).toBe('title');
+
+      // OptionalMemberExpression (e.g. item.author?.name)
+      const optionalExpr = {
+        type: 'OptionalMemberExpression',
+        object: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: 'item' },
+          property: { type: 'Identifier', name: 'author' },
+        },
+        property: { type: 'Identifier', name: 'name' },
+      };
+      expect(extractItemMemberPath(optionalExpr, 'item')).toBe('author.name');
     });
 
     test('parseJSXToNodes binds nested field on CMS detail page with both dot and bracket syntax', () => {

@@ -646,5 +646,255 @@ describe('McpBridge', () => {
       });
       expect(callResult.content[0].text).toContain('No violations detected');
     });
+
+    it('exposes revyme_manage_cms with expanded data binding and API mode actions', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const cmsTool = listResult.tools.find((t: any) => t.name === 'revyme_manage_cms');
+      expect(cmsTool).toBeDefined();
+      const actions = cmsTool.inputSchema.properties.action.enum;
+      expect(actions).toContain('bind_list');
+      expect(actions).toContain('bind_field');
+      expect(actions).toContain('unbind_field');
+      expect(actions).toContain('bind_prop');
+      expect(actions).toContain('set_list_config');
+      expect(actions).toContain('set_pagination');
+      expect(actions).toContain('get_mode');
+      expect(actions).toContain('set_mode');
+      expect(actions).toContain('configure_api_collection');
+      expect(actions).toContain('set_list_query');
+      expect(actions).toContain('bind_expression');
+      expect(actions).toContain('unbind_expression');
+
+      // Test tools/call dispatch for bind_list
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendToEditorSpy = vi.spyOn(bridge as any, 'sendToEditor').mockResolvedValueOnce({
+        success: true,
+        nodeId: 'card-1',
+        collection: 'posts',
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_manage_cms',
+          arguments: { action: 'bind_list', nodeId: 'card-1', collection: 'posts' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('manageCms', {
+        action: 'bind_list',
+        nodeId: 'card-1',
+        collection: 'posts',
+      });
+      expect(callResult.content[0].text).toContain('card-1');
+    });
+
+    it('exposes revyme_bind_expression and dispatches to manageCms', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const exprTool = listResult.tools.find((t: any) => t.name === 'revyme_bind_expression');
+      expect(exprTool).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendToEditorSpy = vi.spyOn(bridge as any, 'sendToEditor').mockResolvedValueOnce({
+        success: true,
+        nodeId: 'title-node',
+        targetProperty: 'text',
+        expression: 'params.category + " Project"',
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_bind_expression',
+          arguments: { nodeId: 'title-node', targetProperty: 'text', expression: 'params.category + " Project"' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('manageCms', {
+        action: 'bind_expression',
+        nodeId: 'title-node',
+        targetProperty: 'text',
+        expression: 'params.category + " Project"',
+      });
+      expect(callResult.content[0].text).toContain('title-node');
+    });
+
+    it('lists and dispatches revyme_add_component_instance', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const tool = listResult.tools.find((t: any) => t.name === 'revyme_add_component_instance');
+      expect(tool).toBeDefined();
+      expect(tool.inputSchema.properties.name).toBeDefined();
+      expect(tool.inputSchema.properties.parent_id).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValueOnce({
+        id: 'frame-nav-1',
+        name: 'Navbar',
+      });
+
+      const res = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_add_component_instance',
+          arguments: { name: 'Navbar', parent_id: 'root', props: { studioName: 'STUDIO' } },
+        },
+      });
+      expect(sendSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'add_component_instance',
+        input: { name: 'Navbar', parent_id: 'root', props: { studioName: 'STUDIO' } },
+      });
+      expect(res.content[0].text).toContain('frame-nav-1');
+    });
+
+    it('lists and dispatches revyme_set_variant', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const tool = listResult.tools.find((t: any) => t.name === 'revyme_set_variant');
+      expect(tool).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValueOnce({ ok: true });
+
+      await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_set_variant',
+          arguments: { node_id: 'nav-1', variant: 'menu-open', styles: { backgroundColor: '#000' } },
+        },
+      });
+      expect(sendSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'set_variant',
+        input: { node_id: 'nav-1', variant: 'menu-open', styles: { backgroundColor: '#000' } },
+      });
+    });
+
+    it('lists and dispatches revyme_show_variant', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const tool = listResult.tools.find((t: any) => t.name === 'revyme_show_variant');
+      expect(tool).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValueOnce({
+        node_id: 'nav-1',
+        variant: 'menu-open',
+      });
+
+      await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_show_variant',
+          arguments: { node_id: 'nav-1', variant: 'menu-open' },
+        },
+      });
+      expect(sendSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'show_variant',
+        input: { node_id: 'nav-1', variant: 'menu-open' },
+      });
+    });
+
+    it('lists and dispatches revyme_add_connection', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const tool = listResult.tools.find((t: any) => t.name === 'revyme_add_connection');
+      expect(tool).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValueOnce({
+        component: 'Navbar',
+        connections: [{ from: 'default', to: 'menu-open', trigger: 'click' }],
+      });
+
+      await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_add_connection',
+          arguments: {
+            component: 'Navbar',
+            from: 'default',
+            to: 'menu-open',
+            trigger: 'click',
+            source_node: 'hamburger-btn',
+          },
+        },
+      });
+      expect(sendSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'add_connection',
+        input: {
+          component: 'Navbar',
+          from: 'default',
+          to: 'menu-open',
+          trigger: 'click',
+          source_node: 'hamburger-btn',
+        },
+      });
+    });
+
+    it('lists and handles revyme_open_editor', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      const tool = listResult.tools.find((t: any) => t.name === 'revyme_open_editor');
+      expect(tool).toBeDefined();
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      // Call with very short wait_ms so test completes quickly
+      const res = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_open_editor',
+          arguments: { wait_ms: 50 },
+        },
+      });
+      expect(res.content[0].text).toContain('http://localhost:3333/builder');
+    });
+
+    it('handles dashboard client auto-navigation request in sendToEditor', async () => {
+      const { req: dashReq, res: dashRes } = createMockReqRes({ method: 'GET', url: '/bridge/events?role=dashboard' });
+      bridge.handleEventsStream(dashReq, dashRes);
+
+      // Verify dashboard connected
+      expect(bridge.getActiveClientCount()).toBe(1);
+
+      // Now sendToEditor should signal dashboard tab to navigateToBuilder
+      const sendPromise = bridge.sendToEditor('readFile', { path: 'app/page.tsx' }, 500).catch((err) => err);
+
+      // Expect dashboard received navigateToBuilder message
+      expect(dashRes.writtenData.some((chunk: string) => chunk.includes('navigateToBuilder'))).toBe(true);
+
+      // Now connect a canvas client
+      const { req: canvasReq, res: canvasRes } = createMockReqRes({ method: 'GET', url: '/bridge/events?role=canvas' });
+      bridge.handleEventsStream(canvasReq, canvasRes);
+
+      // Resolve result
+      bridge.handleResult(JSON.stringify({ id: 1, result: { code: 'export default function()...' } }), {
+        statusCode: 200,
+        headers: {},
+        setHeader() {},
+        end() {},
+      });
+
+      const res = await sendPromise;
+      expect(res).toEqual({ code: 'export default function()...' });
+
+      dashReq.emit('close');
+      canvasReq.emit('close');
+    });
   });
 });

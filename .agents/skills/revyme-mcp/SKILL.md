@@ -54,7 +54,8 @@ The agent can send requests to the builder in two ways:
    - `revyme_list_files`: Lists all project files.
    - `revyme_submit_files`: Writes complete files. **Use strictly for Code Components (`@controls`) or non-visual logic. DO NOT use to overwrite whole pages when building UI.**
    - `revyme_manage_presets`: Manages design tokens in globals.css (colors, typography, radii).
-   - `revyme_manage_cms`: Manages CMS collections, fields, and items.
+   - `revyme_manage_cms`: Comprehensive CMS engine: manages collections, fields, and items; binds repeater lists (`bind_list`) and fields (`bind_field`, `bind_prop`); configures filters/sorting (`set_list_config`) and pagination (`set_pagination`); connects External API CMS (`set_mode`, `configure_api_collection`, `set_list_query`); binds dynamic expressions (`bind_expression`, `unbind_expression`).
+   - `revyme_bind_expression`: High-level tool to bind dynamic JavaScript formulas/expressions (fx) to text, link href, or image src (auto-injects Next.js `useParams()`).
    - `revyme_agent_tool`: Executes granular semantic builder operations (`create_component`, `set_motion`, `add_node`, etc.).
    - `revyme_agent_manifest`: Lists all available semantic agent tools.
 
@@ -759,10 +760,31 @@ Always apply animations using Revyme's native semantic tools (`set_motion`, `set
 - **Smooth Momentum Scrolling**:
   Enable Lenis physics: `set_smooth_scroll` with `enabled: true, intensity: 14`.
 
-### I. Managing CMS
-- To create a collection: `cms_create_collection` with `name: "Projects"`.
-- To add fields: `cms_add_field` with `collection`, `name`, `type`.
-- To insert data: `cms_add_items`.
+### I. Managing CMS & Connecting Dynamic Data
+Revyme supports three levels of CMS and dynamic data binding:
+
+1. **Built-in Local CMS**:
+   - Create collection: `revyme_manage_cms` with `action: "create_collection"`, `name: "Projects"`.
+   - Add fields: `action: "add_field"`, `collection: "projects"`, `name: "Cover"`, `field: { "type": "image" }`.
+   - Add items: `action: "add_item"`, `collection: "projects"`, `item: { ... }`.
+   - Bind Repeater List: `action: "bind_list"`, `nodeId: "template-row"`, `collection: "projects"`.
+   - Bind Field: `action: "bind_field"`, `nodeId: "title-node"`, `property: "text"`, `fieldId: "title"`.
+   - Bind Design Component Prop: `action: "bind_prop"`, `nodeId: "card-inst"`, `componentName: "ProjectCard"`, `prop: "title"`, `fieldId: "title"`.
+   - Query & Sort: `action: "set_list_config"`, `nodeId: "grid-container"`, `filters: [...]`, `sort: [...]`, `limit: 6`.
+   - Pagination: `action: "set_pagination"`, `nodeId: "grid-container"`, `mode: "loadMore"`, `perPage: 6`.
+
+2. **External API CMS Mode (Directus, Strapi, Baserow, REST)**:
+   - Switch mode: `action: "set_mode"`, `mode: "api"`.
+   - Configure external API endpoint: `action: "configure_api_collection"`, `slug: "articles"`, `apiConfig: { provider: "directus", url: "https://...", headers: { Authorization: "Bearer env:TOKEN" }, itemsKey: "data" }`.
+   - Query config with backend parameters & route expressions: `action: "set_list_query"`, `nodeId: "grid"`, `queryConfig: { isApiMode: true, params: [{ key: "filter[cat][_eq]", value: "params.category", isExpression: true }] }`.
+
+3. **Dynamic Expressions & Formulas (`fx`)**:
+   - Bind formula: `revyme_bind_expression` (or `action: "bind_expression"` in `revyme_manage_cms`):
+     - Text: `{ nodeId: "title", targetProperty: "text", expression: "item.name + ' in ' + item.city" }`
+     - Route Params: `{ nodeId: "title", targetProperty: "text", expression: "params.category + ' тату'" }` *(auto-injects `useParams`)*
+     - Image URL: `{ nodeId: "img", targetProperty: "src", expression: "`https://cdn.example.com/assets/${item.image}`" }`
+     - Link Href: `{ nodeId: "link", targetProperty: "href", expression: "`/${params.lang || 'en'}/projects/${item.slug}`" }`
+   - **Syntax Rule**: Never wrap in `{}`; never pass bare numeric literals (`{42}`) directly as JSX text children (convert to string to satisfy Oracle fidelity).
 
 ---
 
@@ -793,6 +815,7 @@ Always verify that all pages still build cleanly:
 ---
 
 ## 7. References & Deep Dives
+- Read [references/cms-and-expressions-guide.md](./references/cms-and-expressions-guide.md) for the complete guide to Built-in CMS, External API CMS mode (Directus/Strapi/Baserow), and Dynamic Expression Formulas (`fx`).
 - Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for the complete Utopia fluid typography and spacing scale tables and formulas.
 - Read [references/built-in-arsenal.md](./references/built-in-arsenal.md) for the complete catalog of ~80 pre-built components (Marquee, Carousel, shaders, text effects, cursors).
 - Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.

@@ -404,6 +404,286 @@ describe('manageCms — the "make me a blog" flow end-to-end', () => {
   });
 });
 
+// ─── manageCms: Data Binding, API CMS Mode, and fx Expressions ────────────────
+
+describe('manageCms — data binding, API mode, and fx expressions', () => {
+  const CMS_PAGE = `'use client';
+
+/** @canvas { "viewports": [], "positions": {} } */
+
+import React from 'react';
+
+export default function Page() {
+  return (
+    <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%' }}>
+      <div data-id="list-container" style={{ display: 'grid' }}>
+        <div data-id="card-row" style={{ padding: '16px' }}>
+          <h3 data-id="card-title">Default Title</h3>
+          <img data-id="card-img" src="/placeholder.png" alt="" />
+          <a data-id="card-link" href="#">Learn More</a>
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+  beforeEach(async () => {
+    resetProjectFS(new Map([[PAGE_PATH, CMS_PAGE]]));
+    getDefaultStore().set(activeFilePathAtom, PAGE_PATH);
+    await bridgeHandlers.manageCms({ action: 'create_collection', args: { name: 'Projects' } });
+    await bridgeHandlers.manageCms({ action: 'add_field', args: { collection: 'projects', name: 'Title', type: 'text' } });
+    await bridgeHandlers.manageCms({ action: 'add_field', args: { collection: 'projects', name: 'Cover', type: 'image' } });
+  });
+
+  it('bind_list wraps template row in .map and adds import', async () => {
+    const res = await bridgeHandlers.manageCms({
+      action: 'bind_list',
+      nodeId: 'card-row',
+      collection: 'projects',
+    }) as any;
+
+    expect(res.success).toBe(true);
+    const code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain("import projects from '@/cms/projects.json';");
+    expect(code).toContain('{projects.map((item, idx) => (');
+    expect(code).toContain('data-id="card-row" key={idx}');
+  });
+
+  it('bind_field binds text and image src to item field, and unbind_field restores static value', async () => {
+    // First bind the list
+    await bridgeHandlers.manageCms({
+      action: 'bind_list',
+      nodeId: 'card-row',
+      collection: 'projects',
+    });
+
+    // Bind text field
+    const titleRes = await bridgeHandlers.manageCms({
+      action: 'bind_field',
+      nodeId: 'card-title',
+      property: 'text',
+      fieldId: 'title',
+    }) as any;
+    expect(titleRes.success).toBe(true);
+
+    let code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('<h3 data-id="card-title">{item.title}</h3>');
+
+    // Unbind field
+    const unbindRes = await bridgeHandlers.manageCms({
+      action: 'unbind_field',
+      nodeId: 'card-title',
+      property: 'text',
+      staticValue: 'Restored Title',
+    }) as any;
+    expect(unbindRes.success).toBe(true);
+
+    code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('<h3 data-id="card-title">Restored Title</h3>');
+  });
+
+  it('bind_prop feeds a component instance prop from a CMS field', async () => {
+    const pageWithInstance = CMS_PAGE.replace(
+      '<h3 data-id="card-title">Default Title</h3>',
+      '<ProjectCard data-id="card-instance" title="Initial" />',
+    );
+    projectFS.writeFile(PAGE_PATH, pageWithInstance);
+
+    await bridgeHandlers.manageCms({
+      action: 'bind_list',
+      nodeId: 'card-row',
+      collection: 'projects',
+    });
+
+    const res = await bridgeHandlers.manageCms({
+      action: 'bind_prop',
+      nodeId: 'card-instance',
+      componentName: 'ProjectCard',
+      prop: 'title',
+      fieldId: 'title',
+    }) as any;
+
+    expect(res.success).toBe(true);
+    expect(res.expression).toBe('item.title');
+    const code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('title={item.title}');
+  });
+
+  it('set_list_config configures filters, sort, and limits on list container', async () => {
+    // Bind list first so container has a .map()
+    await bridgeHandlers.manageCms({
+      action: 'bind_list',
+      nodeId: 'card-row',
+      collection: 'projects',
+    });
+
+    const res = await bridgeHandlers.manageCms({
+      action: 'set_list_config',
+      nodeId: 'list-container',
+      filters: [{ field: 'category', operator: 'equals', value: 'design' }],
+      sort: [{ field: 'date', direction: 'desc' }],
+      limit: 6,
+    }) as any;
+
+    expect(res.success).toBe(true);
+    expect(res.limit).toBe(6);
+    expect(res.filters).toBe(1);
+  });
+
+  it('set_pagination configures pagination and removes it with mode none', async () => {
+    // Bind list first so container has a .map()
+    await bridgeHandlers.manageCms({
+      action: 'bind_list',
+      nodeId: 'card-row',
+      collection: 'projects',
+    });
+
+    const res = await bridgeHandlers.manageCms({
+      action: 'set_pagination',
+      nodeId: 'list-container',
+      mode: 'loadMore',
+      perPage: 4,
+    }) as any;
+    expect(res.success).toBe(true);
+    expect(res.mode).toBe('loadMore');
+
+    const code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('data-pagination="loadMore:4"');
+
+    const removeRes = await bridgeHandlers.manageCms({
+      action: 'set_pagination',
+      nodeId: 'list-container',
+      mode: 'none',
+    }) as any;
+    expect(removeRes.success).toBe(true);
+    expect(removeRes.mode).toBe('none');
+
+    const cleanCode = projectFS.readFile(PAGE_PATH)!;
+    expect(cleanCode).not.toContain('data-pagination');
+  });
+
+  it('get_mode and set_mode manages local vs api CMS mode', async () => {
+    const initial = await bridgeHandlers.manageCms({ action: 'get_mode' }) as any;
+    expect(initial.mode).toBe('local');
+
+    const setRes = await bridgeHandlers.manageCms({ action: 'set_mode', mode: 'api' }) as any;
+    expect(setRes.success).toBe(true);
+    expect(setRes.mode).toBe('api');
+
+    const updated = await bridgeHandlers.manageCms({ action: 'get_mode' }) as any;
+    expect(updated.mode).toBe('api');
+
+    // Restore to local
+    await bridgeHandlers.manageCms({ action: 'set_mode', mode: 'local' });
+  });
+
+  it('configure_api_collection, get_api_collection, and remove_api_collection manages external API CMS collections', async () => {
+    const configured = await bridgeHandlers.manageCms({
+      action: 'configure_api_collection',
+      slug: 'directus_posts',
+      apiConfig: {
+        name: 'Directus Posts',
+        provider: 'directus',
+        url: 'https://directus.example.com/items/posts',
+        method: 'GET',
+        headers: { Authorization: 'Bearer env:DIRECTUS_TOKEN' },
+        itemsKey: 'data',
+      },
+    }) as any;
+
+    expect(configured.success).toBe(true);
+    expect(configured.slug).toBe('directus_posts');
+
+    const retrieved = await bridgeHandlers.manageCms({
+      action: 'get_api_collection',
+      slug: 'directus_posts',
+    }) as any;
+    expect(retrieved.apiConfig).toBeDefined();
+    expect(retrieved.apiConfig.provider).toBe('directus');
+    expect(retrieved.apiConfig.url).toBe('https://directus.example.com/items/posts');
+
+    const removed = await bridgeHandlers.manageCms({
+      action: 'remove_api_collection',
+      slug: 'directus_posts',
+    }) as any;
+    expect(removed.success).toBe(true);
+
+    const afterRemove = await bridgeHandlers.manageCms({
+      action: 'get_api_collection',
+      slug: 'directus_posts',
+    }) as any;
+    expect(afterRemove.apiConfig).toBeNull();
+  });
+
+  it('set_list_query configures data-query-config on list container', async () => {
+    const res = await bridgeHandlers.manageCms({
+      action: 'set_list_query',
+      nodeId: 'list-container',
+      queryConfig: {
+        isApiMode: true,
+        params: [
+          { key: 'filter[category][_eq]', value: 'params.category', isExpression: true },
+          { key: 'limit', value: '10' },
+        ],
+      },
+    }) as any;
+
+    expect(res.success).toBe(true);
+    const code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('data-query-config={JSON.stringify({"isApiMode":true,"params":[{"key":"filter[category][_eq]","value":"params.category","isExpression":true},{"key":"limit","value":"10"}]})}');
+  });
+
+  it('bind_expression binds dynamic formulas to text, href, and src (and auto-injects useParams)', async () => {
+    // 1. Bind text expression referencing route params
+    const textRes = await bridgeHandlers.manageCms({
+      action: 'bind_expression',
+      nodeId: 'card-title',
+      targetProperty: 'text',
+      expression: 'params.category + " Project"',
+    }) as any;
+    expect(textRes.success).toBe(true);
+
+    let code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('<h3 data-id="card-title">{params.category + " Project"}</h3>');
+    expect(code).toContain("import { useParams } from 'next/navigation';");
+    expect(code).toContain('const params = useParams();');
+
+    // 2. Bind href expression
+    const hrefRes = await bridgeHandlers.manageCms({
+      action: 'bind_expression',
+      nodeId: 'card-link',
+      targetProperty: 'href',
+      expression: '`/projects/${params.category}/detail`',
+    }) as any;
+    expect(hrefRes.success).toBe(true);
+
+    code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('href={`/projects/${params.category}/detail`}');
+
+    // 3. Bind src expression
+    const srcRes = await bridgeHandlers.manageCms({
+      action: 'bind_expression',
+      nodeId: 'card-img',
+      targetProperty: 'src',
+      expression: '`https://cdn.example.com/assets/${params.id}.jpg`',
+    }) as any;
+    expect(srcRes.success).toBe(true);
+
+    code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('src={`https://cdn.example.com/assets/${params.id}.jpg`}');
+
+    // 4. Unbind expressions
+    await bridgeHandlers.manageCms({
+      action: 'unbind_expression',
+      nodeId: 'card-title',
+      targetProperty: 'text',
+      fallbackValue: 'Static Title',
+    });
+    code = projectFS.readFile(PAGE_PATH)!;
+    expect(code).toContain('<h3 data-id="card-title">Static Title</h3>');
+  });
+});
+
 // ─── uploadImage (localize an external image into the user's quota'd storage) ─
 
 describe('uploadImage', () => {

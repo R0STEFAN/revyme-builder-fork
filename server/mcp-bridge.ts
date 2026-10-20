@@ -1,10 +1,30 @@
 import http from 'node:http';
+import { exec } from 'node:child_process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+
+export function openBrowserUrl(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    let cmd = '';
+    if (process.platform === 'win32') {
+      cmd = `start "" "${url}"`;
+    } else if (process.platform === 'darwin') {
+      cmd = `open "${url}"`;
+    } else {
+      cmd = `xdg-open "${url}"`;
+    }
+    exec(cmd, (err) => {
+      if (err) {
+        console.warn(`[Revyme Bridge] Failed to launch browser: ${err.message}`);
+      }
+      resolve();
+    });
+  });
+}
 
 export interface PendingRequest {
   resolve: (value: any) => void;
@@ -19,6 +39,7 @@ export interface McpBridgeOptions {
 
 export class McpBridge {
   private sseClients = new Set<http.ServerResponse>();
+  private clientRoles = new WeakMap<http.ServerResponse, string>();
   private pendingRequests = new Map<string | number, PendingRequest>();
   private reqSeq = 0;
   private httpServer: http.Server | null = null;
@@ -43,7 +64,39 @@ export class McpBridge {
    * Dispatch an RPC method to the connected browser editor via SSE
    */
   public async sendToEditor(method: string, params: any = {}, timeoutMs?: number): Promise<any> {
-    if (this.sseClients.size === 0) {
+    let canvasClients = Array.from(this.sseClients).filter(
+      (c) => this.clientRoles.get(c) !== 'dashboard'
+    );
+    const dashboardClients = Array.from(this.sseClients).filter(
+      (c) => this.clientRoles.get(c) === 'dashboard'
+    );
+
+    // If no canvas tab is connected but a dashboard tab is open, ask it to navigate to /builder
+    if (canvasClients.length === 0 && dashboardClients.length > 0) {
+      console.warn('[Revyme Bridge] Browser tab is on dashboard. Auto-navigating to /builder...');
+      const navPayload = JSON.stringify({
+        id: 0,
+        method: 'navigateToBuilder',
+        params: { url: '/builder' },
+      });
+      for (const dc of dashboardClients) {
+        try {
+          dc.write(`data: ${navPayload}\n\n`);
+        } catch {
+          // ignore
+        }
+      }
+      const navWaitStart = Date.now();
+      while (Date.now() - navWaitStart < 8000) {
+        canvasClients = Array.from(this.sseClients).filter(
+          (c) => this.clientRoles.get(c) !== 'dashboard'
+        );
+        if (canvasClients.length > 0) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+
+    if (canvasClients.length === 0) {
       // If this process has no direct SSE clients connected (e.g. running as stdio MCP server),
       // try forwarding the RPC request to the running bridge HTTP endpoint.
       const endpoints = Array.from(new Set([
@@ -79,7 +132,9 @@ export class McpBridge {
       }
 
       throw new Error(
-        'Revyme editor is not connected. Open http://localhost:3333 in your browser.'
+        'Revyme editor is not connected (0 active canvas browser tabs). ' +
+        'Open http://localhost:3333/builder in your browser (not /dashboard). ' +
+        'Or call the "revyme_open_editor" tool to launch it automatically.'
       );
     }
 
@@ -95,7 +150,7 @@ export class McpBridge {
 
       this.pendingRequests.set(id, { resolve, reject, timer });
 
-      for (const client of this.sseClients) {
+      for (const client of canvasClients) {
         try {
           client.write(`data: ${payload}\n\n`);
         } catch {
@@ -122,8 +177,11 @@ export class McpBridge {
     });
     res.write(': ping\n\n');
 
+    const url = new URL(req.url || '/', 'http://localhost');
+    const role = url.searchParams.get('role') || 'canvas';
+    this.clientRoles.set(res, role);
     this.sseClients.add(res);
-    console.error(`[Revyme Bridge] Editor tab connected via SSE. Active tabs: ${this.sseClients.size}`);
+    console.error(`[Revyme Bridge] Editor tab (${role}) connected via SSE. Active tabs: ${this.sseClients.size}`);
 
     const keepAlive = setInterval(() => {
       try {
@@ -424,7 +482,7 @@ export class McpBridge {
           {
             name: 'revyme_manage_cms',
             description:
-              'Manage CMS collections, fields and data items directly in the project.',
+              'Manage CMS collections, fields, items, list data bindings, external API CMS integration, and dynamic fx expressions. Supports 3 categories of operations: 1) Collection CRUD: list_collections, get_collection, create_collection, rename_collection, delete_collection, add_field, update_field, remove_field, add_item, update_item, remove_item, set_item_translation, create_pages, create_page, create_template. 2) CMS List & Prop Data Binding: bind_list (repeater loop on template row), bind_field (bind text/attr/CSS to item.field), unbind_field, bind_prop (bind component instance prop to item.field), set_list_config (filters, sort, limit, offset), set_pagination (loadMore, infinite, none). 3) External API CMS & Dynamic Expressions: get_mode, set_mode (local | api), configure_api_collection (Directus, Strapi, Baserow, REST), get_api_collection, remove_api_collection, set_list_query (data-query-config with backend parameters and formula expressions), bind_expression (bind dynamic JavaScript formula fx to text, href, or src), unbind_expression.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -437,9 +495,32 @@ export class McpBridge {
                     'rename_collection',
                     'delete_collection',
                     'add_field',
+                    'update_field',
+                    'remove_field',
                     'add_item',
                     'update_item',
                     'remove_item',
+                    'set_item_translation',
+                    'create_pages',
+                    'create_page',
+                    'create_template',
+                    // CMS List & Field Data Binding
+                    'bind_list',
+                    'bind_field',
+                    'unbind_field',
+                    'bind_prop',
+                    'set_list_config',
+                    'set_pagination',
+                    // External API CMS Mode
+                    'get_mode',
+                    'set_mode',
+                    'configure_api_collection',
+                    'get_api_collection',
+                    'remove_api_collection',
+                    'set_list_query',
+                    // Dynamic Expressions (fx)
+                    'bind_expression',
+                    'unbind_expression',
                   ],
                 },
                 collection: { type: 'string', description: 'Collection slug' },
@@ -447,8 +528,46 @@ export class McpBridge {
                 field: { type: 'object', description: 'Field configuration for add_field' },
                 item: { type: 'object', description: 'Item data for add_item' },
                 itemId: { type: 'string', description: 'Item ID for update_item or remove_item' },
+                nodeId: { type: 'string', description: 'data-id of element, template row, or list container' },
+                property: { type: 'string', description: 'Property to bind (text, src, href, alt, or CSS property)' },
+                fieldId: { type: 'string', description: 'Field ID from collection schema to bind' },
+                componentName: { type: 'string', description: 'Component tag name for bind_prop' },
+                prop: { type: 'string', description: 'Prop name on component instance for bind_prop' },
+                targetProperty: { type: 'string', enum: ['text', 'href', 'src'], description: 'Target property for bind_expression / unbind_expression' },
+                expression: { type: 'string', description: 'Dynamic JavaScript expression / formula fx without wrapping {}' },
+                fallbackValue: { type: 'string', description: 'Static fallback value when unbinding expression' },
+                mode: { type: 'string', enum: ['local', 'api'], description: 'CMS mode for set_mode (local | api)' },
+                apiConfig: { type: 'object', description: 'External API configuration for configure_api_collection' },
+                queryConfig: { type: 'object', description: 'Query parameters configuration for set_list_query' },
+                filters: { type: 'array', description: 'Filter rules for set_list_config' },
+                combinator: { type: 'string', enum: ['and', 'or'], description: 'Combinator for filter rules (and | or)' },
+                sort: { type: 'array', description: 'Sort rules for set_list_config' },
+                limit: { type: 'number', description: 'Item limit count for set_list_config' },
+                offset: { type: 'number', description: 'Offset count for set_list_config' },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    mode: { type: 'string', enum: ['loadMore', 'infinite', 'none'] },
+                    perPage: { type: 'number' },
+                  },
+                  description: 'Pagination configuration for set_pagination',
+                },
               },
               required: ['action'],
+            },
+          },
+          {
+            name: 'revyme_bind_expression',
+            description:
+              'Bind a dynamic JavaScript formula / expression (fx) to an element: text content, link href, or image src. Supports item.<field> access, template literals (`https://.../${item.img}`), route params (params.id automatically imports useParams()), and ternary expressions (item.price ? "$" + item.price : "Free"). Formulas must NOT be wrapped in {}.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                nodeId: { type: 'string', description: 'data-id of the element' },
+                targetProperty: { type: 'string', enum: ['text', 'href', 'src'], description: 'Target property to bind (default: text)' },
+                expression: { type: 'string', description: 'Dynamic JavaScript expression formula without wrapping {}' },
+              },
+              required: ['nodeId', 'expression'],
             },
           },
           {
@@ -612,6 +731,145 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_add_component_instance',
+            description:
+              'Place an instance of an existing project component (e.g. Navbar, Hero, ProjectCard, PrimaryButton) into a container on the active canvas. The instance tag is the component name and its props are written as JSX attributes. Only declared props on the master are applied.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Component name as defined in components/ (e.g. "Navbar", "Hero", "ProjectCard")',
+                },
+                parent_id: {
+                  type: 'string',
+                  description: 'data-id of the parent node to insert into (defaults to selected element or root)',
+                },
+                props: {
+                  type: 'object',
+                  description: 'Component props (e.g. { studioName: "ACME", initialVariant: "default" })',
+                },
+                index: {
+                  type: 'number',
+                  description: '0-based position among siblings in parent',
+                },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'revyme_set_variant',
+            description:
+              'Set or update the CSS styles or text content of a COMPONENT INSTANCE\'s variant in its component master. node_id is the instance on the page; variant is the variant name (e.g. "menu-open", "hover", "dark"). Use element to target an inner element inside the master by its data-id.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: {
+                  type: 'string',
+                  description: 'data-id of the component instance node on the page',
+                },
+                variant: {
+                  type: 'string',
+                  description: 'The variant name on the master (e.g. "menu-open", "hover", "dark")',
+                },
+                element: {
+                  type: 'string',
+                  description: 'Optional data-id of an element INSIDE the component master to style (defaults to root)',
+                },
+                styles: {
+                  type: 'object',
+                  description: 'camelCase CSS style properties to write on that variant; pass "" to remove',
+                },
+                text: {
+                  type: 'string',
+                  description: 'New text content for that variant',
+                },
+              },
+              required: ['node_id', 'variant'],
+            },
+          },
+          {
+            name: 'revyme_show_variant',
+            description:
+              'Choose which VARIANT a component INSTANCE displays on the active canvas (initialVariant) — the same write as picking a variant in the inspector. Pass variant="default" to reset. Optional viewport scopes the display to that breakpoint width in px (e.g. 375 for mobile). Use this to preview or edit non-default states like "menu-open" on the canvas.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: {
+                  type: 'string',
+                  description: 'data-id of the component instance node on the page',
+                },
+                variant: {
+                  type: 'string',
+                  description: 'Variant name to display on canvas, e.g. "menu-open" or "default"',
+                },
+                viewport: {
+                  type: 'number',
+                  description: 'Optional breakpoint width in px to scope the choice to (omit for base/desktop)',
+                },
+                inside: {
+                  type: 'string',
+                  description: 'Optional master name when the instance sits inside another component',
+                },
+              },
+              required: ['node_id', 'variant'],
+            },
+          },
+          {
+            name: 'revyme_add_connection',
+            description:
+              'Wire a TRIGGER to switch variants on a design component (e.g. "clicking the hamburger button switches to the menu-open variant"). component is the component name; from -> to are variant names; trigger is click | clickStart | mouseEnter | mouseLeave | inView | afterDelay. source_node is the data-id inside the master that carries the trigger (e.g. "header-hamburger-btn"); omit for root.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                component: {
+                  type: 'string',
+                  description: 'Component name, e.g. "Navbar" or "PricingCard"',
+                },
+                from: {
+                  type: 'string',
+                  description: 'Source variant the trigger fires in (e.g. "default")',
+                },
+                to: {
+                  type: 'string',
+                  description: 'Target variant to switch to (e.g. "menu-open")',
+                },
+                trigger: {
+                  type: 'string',
+                  enum: ['click', 'clickStart', 'mouseEnter', 'mouseLeave', 'inView', 'afterDelay'],
+                  description: 'Trigger event type',
+                },
+                source_node: {
+                  type: 'string',
+                  description: 'Optional data-id inside the master that carries the trigger (e.g. "header-hamburger-btn"); omit for root',
+                },
+                delay: {
+                  type: 'number',
+                  description: 'Optional delay in seconds for afterDelay (0-2)',
+                },
+              },
+              required: ['component', 'from', 'to', 'trigger'],
+            },
+          },
+          {
+            name: 'revyme_open_editor',
+            description:
+              'Open the Revyme builder canvas in the user\'s browser and wait for SSE connection. Use this when the editor is disconnected or the browser is on /dashboard instead of /builder.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                url: {
+                  type: 'string',
+                  description: 'Target editor URL (defaults to "http://localhost:3333/builder")',
+                },
+                wait_ms: {
+                  type: 'number',
+                  description: 'Milliseconds to wait for canvas SSE connection (default 8000)',
+                },
+              },
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -681,6 +939,9 @@ export class McpBridge {
           case 'revyme_manage_cms':
             result = await this.sendToEditor('manageCms', args);
             break;
+          case 'revyme_bind_expression':
+            result = await this.sendToEditor('manageCms', { action: 'bind_expression', ...args });
+            break;
           case 'revyme_insert_fragment':
             result = await this.sendToEditor('agent.tool', {
               name: 'insert_fragment',
@@ -723,6 +984,57 @@ export class McpBridge {
               input: args,
             });
             break;
+          case 'revyme_add_component_instance':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'add_component_instance',
+              input: args,
+            });
+            break;
+          case 'revyme_set_variant':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'set_variant',
+              input: args,
+            });
+            break;
+          case 'revyme_show_variant':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'show_variant',
+              input: args,
+            });
+            break;
+          case 'revyme_add_connection':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'add_connection',
+              input: args,
+            });
+            break;
+          case 'revyme_open_editor': {
+            const targetUrl = (args as any)?.url || 'http://localhost:3333/builder';
+            const waitMs = (args as any)?.wait_ms ?? 8000;
+            await openBrowserUrl(targetUrl);
+            const start = Date.now();
+            let connected = false;
+            while (Date.now() - start < waitMs) {
+              const hasCanvas = Array.from(this.sseClients).some(
+                (c) => this.clientRoles.get(c) !== 'dashboard'
+              );
+              if (hasCanvas) {
+                connected = true;
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 400));
+            }
+            result = {
+              ok: connected,
+              connected,
+              url: targetUrl,
+              activeTabs: this.getActiveClientCount(),
+              message: connected
+                ? 'Revyme builder canvas connected successfully.'
+                : `Opened ${targetUrl}. Waiting for user browser tab to finish loading /builder.`,
+            };
+            break;
+          }
           case 'revyme_agent_manifest':
             result = await this.sendToEditor('agent.manifest', {});
             break;

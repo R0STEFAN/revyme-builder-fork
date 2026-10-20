@@ -46,6 +46,37 @@ import { scanPresetUsage } from '@/code/stores/preset-store';
 import { refreshCanvasTokens } from '@/canvas/node-ops';
 import { queueMutation, flushNow } from '@/code/mutation/mutation-queue';
 import { listCollections, getCollectionSchema, getCollectionData, createBlankCollection } from '@/code/project/cms-ops';
+import {
+  loadCmsProjectConfig,
+  setCmsMode,
+  saveApiCollection,
+  getApiCollection,
+  removeApiCollection,
+  type ApiCollectionConfig,
+} from '@/code/project/cms-api-config';
+import {
+  bindToCmsCollectionInCode,
+  getEnclosingMapIteratorForNode,
+} from '@/code/generation/map-gen';
+import {
+  bindFieldInCode,
+  unbindFieldInCode,
+  updateCollectionListConfigInCode,
+  updateCollectionQueryConfig,
+} from '@/code/generation/cms-gen';
+import {
+  setPaginationInCode,
+  removePaginationInCode,
+} from '@/code/generation/cms-pagination-gen';
+import {
+  bindTextExpressionInCode,
+  bindHrefExpressionInCode,
+  bindSrcExpressionInCode,
+  unbindTextExpressionInCode,
+  unbindHrefExpressionInCode,
+  unbindSrcExpressionInCode,
+} from '@/code/generation/expression-gen';
+import { setInstanceProp, getInstancePropExpr } from '@/editor/tools/ComponentPropsTool/instance-props';
 import { createDefaultTypoTokens, TYPO_SUFFIXES } from '@/editor/tools/typography-utils';
 import { createCmsIndexPageFile, createCmsDetailPageFile } from '@/code/project/cms-page-ops';
 import { executeCmsTool } from '@/ai/cms-agent/cms-tool-executors';
@@ -435,7 +466,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
   async manageCms(params: { action: string; args?: Record<string, unknown>; [key: string]: any }) {
     const { action, args, ...rest } = params;
     const effectiveArgs = (args && typeof args === 'object' && Object.keys(args).length > 0) ? args : rest;
-    const READ_ACTIONS = new Set(['list_collections', 'get_collection']);
+    const READ_ACTIONS = new Set(['list_collections', 'get_collection', 'get_mode', 'get_api_collection']);
     // CMS writes go straight to projectFS (createBlankCollection /
     // executeCmsTool → cms-ops.writeFile), BYPASSING the mutation queue — so
     // the queue's onAfterFlush → triggerAutosave never fires and the collection
@@ -584,7 +615,303 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       };
     }
 
-    throw new Error(`manageCms: unknown action "${action}" — use list_collections | get_collection | create_collection | rename_collection | delete_collection | add_field | update_field | remove_field | add_item | update_item | remove_item | set_item_translation | create_pages | create_page | create_template.`);
+    // Helper to get active file path or explicit path
+    const getTargetFile = () => {
+      const store = getDefaultStore();
+      const p = String(effectiveArgs.path ?? effectiveArgs.filePath ?? store.get(activeFilePathAtom) ?? '');
+      if (!p || projectFS.readFile(p) == null) {
+        throw new Error(`manageCms: file not found "${p}"`);
+      }
+      return p;
+    };
+
+    // ─── bind_list ─────────────────────────────────────────────────────────────
+    if (action === 'bind_list') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const collection = String(effectiveArgs.collection ?? effectiveArgs.collection_slug ?? effectiveArgs.collectionSlug ?? '').trim();
+      if (!nodeId) throw new Error('bind_list requires a nodeId (data-id of template row).');
+      if (!collection) throw new Error('bind_list requires a collection slug.');
+      const known = listCollections();
+      const apiCol = getApiCollection(collection);
+      if (!known.includes(collection) && !apiCol) {
+        const allKnown = [...known, ...Object.keys(loadCmsProjectConfig().apiCollections)];
+        throw new Error(`Collection "${collection}" does not exist — available collections: ${allKnown.join(', ') || 'none'}`);
+      }
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => bindToCmsCollectionInCode(c, nodeId, collection));
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-bind-list', { nodeId, collection, targetPath });
+      return { success: true, nodeId, collection, targetPath };
+    }
+
+    // ─── bind_field ────────────────────────────────────────────────────────────
+    if (action === 'bind_field') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const property = String(effectiveArgs.property ?? 'text').trim();
+      const fieldId = String(effectiveArgs.fieldId ?? effectiveArgs.field_id ?? '').trim();
+      if (!nodeId) throw new Error('bind_field requires a nodeId.');
+      if (!fieldId) throw new Error('bind_field requires a fieldId.');
+
+      const targetPath = getTargetFile();
+      const currentCode = projectFS.readFile(targetPath) ?? '';
+      let itemVar = String(effectiveArgs.itemVar ?? effectiveArgs.item_var ?? '').trim();
+      if (!itemVar) {
+        itemVar = getEnclosingMapIteratorForNode(currentCode, nodeId) ?? 'item';
+      }
+
+      let fieldType = (effectiveArgs.fieldType ?? effectiveArgs.field_type) as string | undefined;
+      if (!fieldType) {
+        for (const slug of listCollections()) {
+          const schema = getCollectionSchema(slug);
+          const f = schema?.fields.find((field) => field.id === fieldId);
+          if (f) {
+            fieldType = f.type;
+            break;
+          }
+        }
+      }
+
+      modifyProjectFile(targetPath, (c) => bindFieldInCode(c, nodeId, property, fieldId, itemVar, fieldType));
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-bind-field', { nodeId, property, fieldId, itemVar, fieldType, targetPath });
+      return { success: true, nodeId, property, fieldId, itemVar, fieldType };
+    }
+
+    // ─── unbind_field ──────────────────────────────────────────────────────────
+    if (action === 'unbind_field') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const property = String(effectiveArgs.property ?? 'text').trim();
+      const staticValue = String(effectiveArgs.staticValue ?? effectiveArgs.static_value ?? effectiveArgs.value ?? '');
+      if (!nodeId) throw new Error('unbind_field requires a nodeId.');
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => unbindFieldInCode(c, nodeId, property, staticValue));
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-unbind-field', { nodeId, property, staticValue, targetPath });
+      return { success: true, nodeId, property, staticValue };
+    }
+
+    // ─── bind_prop ─────────────────────────────────────────────────────────────
+    if (action === 'bind_prop') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      let componentName = String(effectiveArgs.componentName ?? effectiveArgs.component_name ?? '').trim();
+      const prop = String(effectiveArgs.prop ?? '').trim();
+      const fieldId = String(effectiveArgs.fieldId ?? effectiveArgs.field_id ?? '').trim();
+      if (!nodeId) throw new Error('bind_prop requires a nodeId.');
+      if (!prop) throw new Error('bind_prop requires a prop name.');
+      if (!fieldId) throw new Error('bind_prop requires a fieldId.');
+
+      const targetPath = getTargetFile();
+      const currentCode = projectFS.readFile(targetPath) ?? '';
+      let itemVar = String(effectiveArgs.itemVar ?? effectiveArgs.item_var ?? '').trim();
+      if (!itemVar) {
+        itemVar = getEnclosingMapIteratorForNode(currentCode, nodeId) ?? 'item';
+      }
+      if (!componentName) {
+        const escId = nodeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = currentCode.match(new RegExp(`<([A-Z][a-zA-Z0-9_]*)[^>]*data-id=["']${escId}["']`));
+        if (match) componentName = match[1];
+      }
+      if (!componentName) {
+        throw new Error(`bind_prop: could not determine componentName for instance "${nodeId}". Pass componentName explicitly.`);
+      }
+
+      const expression = `${itemVar}.${fieldId}`;
+      let applied = false;
+      modifyProjectFile(targetPath, (c) => {
+        const next = setInstanceProp(c, nodeId, componentName, prop, expression, true);
+        applied = next !== c || getInstancePropExpr(c, nodeId, componentName, prop) === expression;
+        return next;
+      });
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-bind-prop', { nodeId, componentName, prop, fieldId, expression, applied });
+      return { success: true, nodeId, componentName, prop, fieldId, expression };
+    }
+
+    // ─── set_list_config ───────────────────────────────────────────────────────
+    if (action === 'set_list_config') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      if (!nodeId) throw new Error('set_list_config requires a nodeId (list container data-id).');
+
+      const rawFilters = effectiveArgs.filters as Array<{ field: string; operator: any; value?: unknown }> | undefined;
+      const filterGroup = rawFilters && rawFilters.length > 0 ? {
+        combinator: (effectiveArgs.combinator as 'and' | 'or') ?? 'and',
+        filters: rawFilters.map((f) => ({ field: f.field, operator: f.operator, value: f.value ?? null })),
+      } : undefined;
+
+      const sort = effectiveArgs.sort as Array<{ field: string; direction: 'asc' | 'desc' }> | undefined;
+      const limit = typeof effectiveArgs.limit === 'number' && effectiveArgs.limit > 0 ? effectiveArgs.limit : undefined;
+      const offset = typeof effectiveArgs.offset === 'number' && effectiveArgs.offset > 0 ? effectiveArgs.offset : undefined;
+
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => updateCollectionListConfigInCode(c, nodeId, filterGroup, sort && sort.length > 0 ? sort : undefined, limit, offset));
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-set-list-config', { nodeId, filters: rawFilters?.length ?? 0, sort: sort?.length ?? 0, limit, offset });
+      return { success: true, list: nodeId, filters: rawFilters?.length ?? 0, sort: sort ?? [], limit, offset };
+    }
+
+    // ─── set_pagination ────────────────────────────────────────────────────────
+    if (action === 'set_pagination') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const mode = String(effectiveArgs.mode ?? 'none') as 'loadMore' | 'infinite' | 'none';
+      const perPage = Math.max(1, Math.floor(Number(effectiveArgs.perPage ?? effectiveArgs.per_page ?? 6)));
+      if (!nodeId) throw new Error('set_pagination requires a nodeId.');
+
+      const targetPath = getTargetFile();
+      if (mode === 'none') {
+        modifyProjectFile(targetPath, (c) => removePaginationInCode(c, nodeId));
+      } else {
+        modifyProjectFile(targetPath, (c) => setPaginationInCode(c, nodeId, { mode, perPage }));
+      }
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-set-pagination', { nodeId, mode, perPage });
+      return { success: true, list: nodeId, mode, perPage: mode === 'none' ? null : perPage };
+    }
+
+    // ─── get_mode / set_mode ───────────────────────────────────────────────────
+    if (action === 'get_mode') {
+      const config = loadCmsProjectConfig();
+      return { mode: config.mode, apiCollections: Object.keys(config.apiCollections) };
+    }
+
+    if (action === 'set_mode') {
+      const mode = effectiveArgs.mode === 'api' ? 'api' : 'local';
+      setCmsMode(mode);
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-set-mode', { mode });
+      return { success: true, mode };
+    }
+
+    // ─── configure_api_collection ──────────────────────────────────────────────
+    if (action === 'configure_api_collection') {
+      const slug = String(effectiveArgs.slug ?? effectiveArgs.collection ?? '').trim();
+      if (!slug) throw new Error('configure_api_collection requires a slug.');
+      const rawConfig = (effectiveArgs.apiConfig ?? effectiveArgs.api_config ?? effectiveArgs) as any;
+      const config: ApiCollectionConfig = {
+        slug,
+        name: String(rawConfig.name ?? slug),
+        provider: (rawConfig.provider as any) || 'custom_rest',
+        url: String(rawConfig.url || ''),
+        method: rawConfig.method?.toUpperCase() === 'POST' ? 'POST' : 'GET',
+        headers: typeof rawConfig.headers === 'object' && rawConfig.headers !== null ? rawConfig.headers : {},
+        defaultParams: typeof rawConfig.defaultParams === 'object' ? rawConfig.defaultParams : undefined,
+        itemsKey: rawConfig.itemsKey ? String(rawConfig.itemsKey) : undefined,
+        idField: rawConfig.idField ? String(rawConfig.idField) : undefined,
+        slugField: rawConfig.slugField ? String(rawConfig.slugField) : undefined,
+        cacheMaxAge: typeof rawConfig.cacheMaxAge === 'number' ? rawConfig.cacheMaxAge : undefined,
+        revalidateTtl: typeof rawConfig.revalidateTtl === 'number' ? rawConfig.revalidateTtl : undefined,
+        imageOptimization: rawConfig.imageOptimization,
+      };
+      saveApiCollection(slug, config);
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-configure-api-collection', { slug, provider: config.provider, url: config.url });
+      return { success: true, slug, apiConfig: config };
+    }
+
+    if (action === 'get_api_collection') {
+      const slug = String(effectiveArgs.slug ?? effectiveArgs.collection ?? '').trim();
+      if (!slug) throw new Error('get_api_collection requires a slug.');
+      const projectConfig = loadCmsProjectConfig();
+      const apiConfig = projectConfig.apiCollections[slug] ?? null;
+      return { slug, apiConfig, mode: projectConfig.mode };
+    }
+
+    if (action === 'remove_api_collection') {
+      const slug = String(effectiveArgs.slug ?? effectiveArgs.collection ?? '').trim();
+      if (!slug) throw new Error('remove_api_collection requires a slug.');
+      removeApiCollection(slug);
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-remove-api-collection', { slug });
+      return { success: true, slug };
+    }
+
+    // ─── set_list_query ────────────────────────────────────────────────────────
+    if (action === 'set_list_query') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      if (!nodeId) throw new Error('set_list_query requires a nodeId (list container data-id).');
+      const queryConfig = (effectiveArgs.queryConfig ?? effectiveArgs.query_config ?? effectiveArgs) as any;
+      const isApiMode = queryConfig.isApiMode !== false;
+      const params = Array.isArray(queryConfig.params) ? queryConfig.params : [];
+
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => updateCollectionQueryConfig(c, nodeId, { isApiMode, params }));
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-set-list-query', { nodeId, isApiMode, paramsCount: params.length });
+      return { success: true, list: nodeId, queryConfig: { isApiMode, params } };
+    }
+
+    // ─── bind_expression ───────────────────────────────────────────────────────
+    if (action === 'bind_expression') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src';
+      const rawExpression = String(effectiveArgs.expression ?? effectiveArgs.expr ?? '').trim();
+      if (!nodeId) throw new Error('bind_expression requires a nodeId.');
+      if (!rawExpression) throw new Error('bind_expression requires an expression formula.');
+
+      // Strip leading and trailing curly braces if user/agent provided {expr}
+      const expression = rawExpression.replace(/^\{|\}$/g, '').trim();
+
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => {
+        if (targetProperty === 'src') {
+          return bindSrcExpressionInCode(c, nodeId, expression);
+        } else if (targetProperty === 'href') {
+          return bindHrefExpressionInCode(c, nodeId, expression);
+        } else {
+          return bindTextExpressionInCode(c, nodeId, expression);
+        }
+      });
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-bind-expression', { nodeId, targetProperty, expression });
+      return { success: true, nodeId, targetProperty, expression };
+    }
+
+    // ─── unbind_expression ─────────────────────────────────────────────────────
+    if (action === 'unbind_expression') {
+      const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
+      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src';
+      const fallbackValue = effectiveArgs.fallbackValue ?? effectiveArgs.fallback_value;
+      if (!nodeId) throw new Error('unbind_expression requires a nodeId.');
+
+      const targetPath = getTargetFile();
+      modifyProjectFile(targetPath, (c) => {
+        if (targetProperty === 'src') {
+          return unbindSrcExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : '');
+        } else if (targetProperty === 'href') {
+          return unbindHrefExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : '#');
+        } else {
+          return unbindTextExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : 'Text');
+        }
+      });
+      const store = getDefaultStore();
+      store.set(projectVersionAtom, store.get(projectVersionAtom) + 1);
+      await persistIfWrite();
+      trace.action('mcp-bridge:cms-unbind-expression', { nodeId, targetProperty });
+      return { success: true, nodeId, targetProperty };
+    }
+
+    throw new Error(`manageCms: unknown action "${action}" — use list_collections | get_collection | create_collection | rename_collection | delete_collection | add_field | update_field | remove_field | add_item | update_item | remove_item | set_item_translation | create_pages | create_page | create_template | bind_list | bind_field | unbind_field | bind_prop | set_list_config | set_pagination | get_mode | set_mode | configure_api_collection | get_api_collection | remove_api_collection | set_list_query | bind_expression | unbind_expression.`);
   },
 
   async modifyFile(params: { path: string; code: string }) {
