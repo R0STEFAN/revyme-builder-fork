@@ -126,7 +126,7 @@ export const insertFragmentTool: AgentTool = {
     const parentNode = nodesNow.get(parentId);
 
     if (!parentNode && nodesNow.size > 0) {
-      return fail(formatNodeNotFound(parentId, nodesNow));
+      return fail(formatNodeNotFound(parentId, nodesNow.keys()));
     }
 
     const allocatedIds = new Set<string>();

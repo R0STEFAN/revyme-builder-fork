@@ -254,7 +254,7 @@ export type Mutation =
   | { type: 'updateInstancePropBase'; nodeId: string; componentName: string; prop: string; value: string }
   // ─── Structure mutations ────────────────────────────────────────────────
   /** Insert a new element inside a parent. Requires unique id. Index is optional insert position. */
-  | { type: 'addNode'; parentId: string; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[] }; index?: number; insertBeforeId?: string }
+  | { type: 'addNode'; parentId: string; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[]; motionProps?: Record<string, Record<string, string>> }; index?: number; insertBeforeId?: string }
   /** Add a new absolute-positioned element to the canvas root (no parent). */
   | { type: 'addCanvasNode'; node: { id: string; type: string; styles: Record<string, string>; attrs?: Record<string, string>; name?: string; textContent?: string; children?: any[] } }
   /** Replica drag-out of a CMS collection list: COPY the literal `.map()` subtree

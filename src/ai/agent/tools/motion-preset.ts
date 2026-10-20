@@ -70,7 +70,7 @@ export const applyMotionPresetTool: AgentTool = {
     const node = nodesNow.get(nodeId);
 
     if (!node && nodesNow.size > 0) {
-      return fail(formatNodeNotFound(nodeId, nodesNow));
+      return fail(formatNodeNotFound(nodeId, nodesNow.keys()));
     }
 
     const preset = args.preset as MotionPresetName;
@@ -80,11 +80,11 @@ export const applyMotionPresetTool: AgentTool = {
     const spring = { ...PHYSICS_PRESETS[physicsKey] };
 
     if (preset === 'lift-on-hover') {
-      const targets = args.targets ? strings(args.targets) : { y: '-4', scale: '1.02' };
+      const targets = args.targets ? strings(args.targets as Record<string, unknown>) : { y: '-4', scale: '1.02' };
       queueToolMutation(ctx, { type: 'updateMotionProp', nodeId, propName: 'whileHover', props: targets });
       queueToolMutation(ctx, { type: 'updateMotionProp', nodeId, propName: 'transition', props: spring });
     } else if (preset === 'scale-on-hover') {
-      const targets = args.targets ? strings(args.targets) : { scale: '1.03' };
+      const targets = args.targets ? strings(args.targets as Record<string, unknown>) : { scale: '1.03' };
       queueToolMutation(ctx, { type: 'updateMotionProp', nodeId, propName: 'whileHover', props: targets });
       queueToolMutation(ctx, { type: 'updateMotionProp', nodeId, propName: 'transition', props: spring });
     } else if (preset === 'fade-up') {

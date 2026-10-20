@@ -83,10 +83,10 @@ export const manageComponentVariantTool: AgentTool = {
       });
     }
 
-    const parentVariant = (args.parent_variant && String(args.parent_variant).trim()) || 'default';
+    const parentVariant: string = typeof args.parent_variant === 'string' && args.parent_variant.trim() ? args.parent_variant.trim() : 'default';
 
     if (action === 'add_interaction') {
-      const interaction = (args.interaction as 'hover' | 'pressed') || 'hover';
+      const interaction: 'hover' | 'pressed' = args.interaction === 'pressed' ? 'pressed' : 'hover';
       const variantName = `${parentVariant}-${interaction}`;
 
       const existingConfigs = parseVariantConfig(masterCode);
@@ -103,7 +103,7 @@ export const manageComponentVariantTool: AgentTool = {
       const styles = args.styles as Record<string, string> | undefined;
       if (styles && Object.keys(styles).length > 0) {
         modifyProjectFile(info.filePath, (code) => {
-          const targetNodeId = (args.element && String(args.element).trim()) || findVariantRootId(code);
+          const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
           if (!targetNodeId) return code;
           return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
         });
@@ -128,7 +128,7 @@ export const manageComponentVariantTool: AgentTool = {
     }
 
     if (action === 'create') {
-      const variantName = (args.variant && String(args.variant).trim()) || '';
+      const variantName: string = typeof args.variant === 'string' ? args.variant.trim() : '';
       if (!variantName) return fail('Variant name is required for action "create".');
       if (!VARIANT_NAME_RE.test(variantName)) {
         return fail(`Invalid variant name "${variantName}" — use letters, digits, '_' or '-'.`);
@@ -147,7 +147,7 @@ export const manageComponentVariantTool: AgentTool = {
       const styles = args.styles as Record<string, string> | undefined;
       if (styles && Object.keys(styles).length > 0) {
         modifyProjectFile(info.filePath, (code) => {
-          const targetNodeId = (args.element && String(args.element).trim()) || findVariantRootId(code);
+          const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
           if (!targetNodeId) return code;
           return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
         });
@@ -169,7 +169,7 @@ export const manageComponentVariantTool: AgentTool = {
     }
 
     if (action === 'set_styles') {
-      const variantName = (args.variant && String(args.variant).trim()) || '';
+      const variantName: string = typeof args.variant === 'string' ? args.variant.trim() : '';
       if (!variantName) return fail('Variant name is required for action "set_styles".');
 
       const styles = args.styles as Record<string, string> | undefined;
@@ -178,7 +178,7 @@ export const manageComponentVariantTool: AgentTool = {
       }
 
       modifyProjectFile(info.filePath, (code) => {
-        const targetNodeId = (args.element && String(args.element).trim()) || findVariantRootId(code);
+        const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
         if (!targetNodeId) return code;
         return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
       });
