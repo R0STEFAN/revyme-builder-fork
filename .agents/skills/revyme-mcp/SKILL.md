@@ -39,7 +39,10 @@ Before executing any tool calls, ensure that:
 
 The agent can send requests to the builder in two ways:
 1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
-   - `revyme_insert_fragment`: **PRIMARY TOOL for UI generation.** Atomically inserts entire subtrees (sections, cards, grids) with auto-generated IDs and native Framer Motion hovers into the active canvas.
+   - `revyme_insert_fragment`: **PRIMARY TOOL for UI generation.** Atomically inserts entire subtrees (sections, cards, grids) with auto-generated IDs, native Framer Motion hovers, and responsive viewports (`tablet`, `mobile`).
+   - `revyme_list_built_in_components`: Browse Revyme's ~80 built-in code components (Marquee, Carousel, shaders, text effects, cursors, embeds).
+   - `revyme_add_built_in_component`: Install and place a built-in component (e.g. `Marquee`, `Carousel`, `AuroraBackground`) into any container.
+   - `revyme_set_responsive_styles`: Set responsive overrides for `'tablet'` (810px) or `'mobile'` (375px) on any element.
    - `revyme_apply_motion_preset`: Applies calibrated spring animations (`lift-on-hover`, `scale-on-hover`, `fade-up`, `stagger-children`).
    - `revyme_manage_component_variant`: Creates and manages interactive variant states (`default-hover`, etc.) on Design Components.
    - `revyme_get_context`: Reads active page/component AST, tokens, and schemas.
@@ -61,7 +64,29 @@ The agent can send requests to the builder in two ways:
 
 ---
 
-## 3. Design Components vs Code Components (CRITICAL)
+## 3. The Revyme Built-In Arsenal (~80 Ready-Made Components)
+
+Revyme includes a rich library of ~80 pre-built, GPU-optimized components. **NEVER write custom static divs or mock scroll implementations for features that already exist in the builder!**
+Always check [references/built-in-arsenal.md](./references/built-in-arsenal.md) or call `revyme_list_built_in_components`.
+
+- **Marquees & Tickers**: When the user asks for a ticker, client logo wall, or continuous scroll, **DO NOT code a fake `<div>`**. Use `revyme_add_built_in_component` with tag `"Marquee"`:
+  ```json
+  {
+    "tag": "Marquee",
+    "parent_id": "marquee-section",
+    "props": { "speed": 60, "direction": "left", "gap": 32, "pauseOnHover": true, "fadeEdges": true }
+  }
+  ```
+  Also available: `RibbonMarquee` (3D angled ribbon) and `Marquee3D` (isometric depth grid).
+- **Carousels**: Use `Carousel` (touch/drag slider with dots) or `EmblaCarousel` (physics snap carousel).
+- **Cursors (pointer-events: none)**: Use `BlobCursor` (organic fluid blob), `DesignCursor` (Figma coordinates crosshair), or `SplashCursor` (interactive WebGL fluid smoke splashes).
+- **Text Effects**: Use `MorphingText`, `WordRotate`, `SpinningText`, `AnimatedCounter`, `TextPressure`, `MagneticText`, `TypingEffect`, or `GlitchText`.
+- **WebGL2 Shaders & Backgrounds**: Use `AuroraBackground`, `MeshGradient`, `CausticsLight`, `LiquidMetal`, `LiquidChrome`, `GrainGradient`, `GemSmoke`, `Metaballs`, `CyberGrid`, or `MatrixRain`.
+- **Noise & Utilities**: Use `FilmGrain`, `StaticTV`, `Accordion`, `ThemeToggle`, `CopyButton`.
+
+---
+
+## 4. Design Components vs Code Components (CRITICAL)
 
 In Revyme, components in `components/<Name>.tsx` belong to two completely different paradigms. You **MUST** choose correctly based on the requirement:
 
@@ -82,23 +107,22 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
 │ • Has variantConfig     │                           │ • Custom hooks & state  │
 │ • Authored via          │                           │ • Shaders, math, Canvas │
 │   create_component /    │                           │ • Authored via          │
-│   extract_component     │                           │   revyme_submit_files   │
+│   manage_component_var  │                           │   revyme_submit_files   │
 └─────────────────────────┘                           └─────────────────────────┘
 ```
 
 ### A. Design Components (Native Canvas Masters)
 - **What it is**: Reusable visual UI elements (cards, spec rows, buttons, pricing tables, navigation items, testimonial blocks, badges).
 - **Canvas Experience**: Fully interactive and visual! Designers can double-click on the canvas to select inner elements, see all layers in the Layers panel, customize styles with the Style Inspector, reorder elements, and switch visual variants.
+- **Navbars & Headers Rule**: When asked to create a navigation bar or header as a component, **NEVER build it as a closed Code Component with internal React `useState(false)` and `mixBlendMode: 'difference'`**. Instead:
+  1. Build it directly on the page via `revyme_insert_fragment` with responsive desktop / mobile layout, OR
+  2. Create a **Design Component** with visual variant states (`default` vs `mobile-open`) using `revyme_manage_component_variant` or `create_component`!
 - **File Structure**:
   - `/** @name "ComponentName" */`
   - `export const variantConfig = [ { name: 'default', ... }, { name: 'highlight', ... } ];`
   - Typed props with defaults in destructuring: `function ComponentName({ style, tag = "...", initialVariant = 'default' }: Props)`
   - `export default withResponsiveProps(ComponentName);`
   - **NEVER include `/** @controls */`**.
-- **How to Author**:
-  - Always use the semantic tool `create_component` (declarative `{ name, props, variants, layout }` or `{ from: "node_id" }`).
-  - Or use `extract_component` on a live subtree on the page.
-  - Instantiate on pages with `add_component_instance({ name: "SpecItem", parent_id: "...", props: {...} })` or in page JSX `<SpecItem data-id="..." ... />`.
 
 ### B. Code Components (Custom Logic & Shaders)
 - **What it is**: Complex, stateful, or low-level components requiring custom React runtime logic, WebGL shaders, Canvas 2D drawings, complex keyframed scroll math, audio/video players, or third-party libraries.
@@ -107,12 +131,10 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
   - **MUST have `/** @controls { ... } */`** JSDoc annotation.
   - Can use `useState`, `useEffect`, `useRef`, `useCallback`, `requestAnimationFrame`, `window` event listeners.
   - `export default withResponsiveProps(ComponentName);`
-- **How to Author**:
-  - Author source directly to `components/<Name>.tsx` using `revyme_submit_files` or direct file creation.
 
 ---
 
-## 4. Workflows & Best Practices
+## 5. Workflows & Best Practices
 
 ### A. Reading Context Before Editing
 Always query the editor first to understand the current page structure, active `data-id`s, and design tokens:
@@ -128,7 +150,14 @@ Overwriting files via `submit_files`:
 
 **The Golden Recipe to Build Any Page/Section**:
 1. Call `revyme_get_context` to inspect the active page and identify the root container (`parent_id: "root"` or section container ID).
-2. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer):
+2. **Mandatory Section Background**: Every `<section>` MUST explicitly specify `backgroundColor` (e.g. `backgroundColor: "var(--color-bg)"`, `"#09090B"`, or `"#FFFFFF"`). Never leave sections with undefined background, or they will render as transparent blanks on canvas!
+3. **Mandatory Multi-Breakpoint Responsiveness**:
+   Revyme pages are styled across 3 viewports:
+   - **Desktop**: 1200px+ (base `styles`)
+   - **Tablet**: 810px–1199px (`responsive.tablet`)
+   - **Mobile**: <810px (`responsive.mobile`)
+   Pass `responsive` directly in `revyme_insert_fragment` nodes, or call `revyme_set_responsive_styles`:
+4. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer):
    ```json
    {
      "parent_id": "root",
@@ -137,16 +166,26 @@ Overwriting files via `submit_files`:
        "name": "Hero Section",
        "styles": {
          "display": "flex",
-         "flexDirection": "column",
+         "flexDirection": "row",
          "alignItems": "center",
-         "padding": "80px 24px",
-         "backgroundColor": "#0F172A"
+         "justifyContent": "space-between",
+         "padding": "100px 48px",
+         "backgroundColor": "var(--color-bg)",
+         "width": "100%"
+       },
+       "responsive": {
+         "tablet": { "padding": "60px 32px" },
+         "mobile": { "flexDirection": "column", "padding": "40px 16px" }
        },
        "children": [
          {
            "tag": "h1",
            "text": "Build Faster with AI",
-           "styles": { "fontSize": "48px", "fontWeight": "800", "color": "#F8FAFC", "marginBottom": "16px" }
+           "styles": { "fontSize": "56px", "fontWeight": "800", "color": "var(--color-text)", "marginBottom": "16px" },
+           "responsive": {
+             "tablet": { "fontSize": "40px" },
+             "mobile": { "fontSize": "28px" }
+           }
          },
          {
            "tag": "button",
@@ -162,8 +201,10 @@ Overwriting files via `submit_files`:
      }
    }
    ```
-3. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover` or `fade-up`) to add entrance animations to inserted cards.
-4. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
+5. If adding a Marquee, Carousel, or background shader:
+   Call `revyme_add_built_in_component` with tag `"Marquee"` or `"Carousel"` instead of coding static divs!
+6. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover`, `fade-up`, `stagger-children`) to add entrance animations to inserted cards.
+7. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
 
 ### C. Hover Animations & Interactive States (100% GUI-Parity Standard)
 > **CRITICAL RULE**: NEVER emit raw CSS `:hover` rules in `<style>`. CSS hover was explicitly removed from the builder UI because CSS transforms fight Framer Motion's FLIP projection. Moreover, CSS `:hover` rules do NOT appear in the builder's Inspector, breaking visual editability!

@@ -78,6 +78,44 @@ Creates or manipulates interactive variant states on Design Components:
 }
 ```
 
+### `revyme_list_built_in_components`
+Browses Revyme's catalog of ~80 production-ready components:
+```json
+{
+  "query": "marquee"
+}
+```
+Returns list of matching tags (`Marquee`, `RibbonMarquee`, `Marquee3D`, etc.), descriptions, and installation status.
+
+### `revyme_add_built_in_component`
+Installs and places an instance of a built-in component into any container on the active canvas:
+```json
+{
+  "tag": "Marquee",
+  "parent_id": "clients-section",
+  "props": {
+    "speed": 60,
+    "direction": "left",
+    "gap": 32,
+    "pauseOnHover": true,
+    "fadeEdges": true
+  }
+}
+```
+
+### `revyme_set_responsive_styles`
+Sets responsive CSS styles on a node for specific viewports (`"tablet"` for 810px, `"mobile"` for 375px):
+```json
+{
+  "node_id": "hero-headline",
+  "viewport": "mobile",
+  "styles": {
+    "fontSize": "32px",
+    "textAlign": "center"
+  }
+}
+```
+
 ### `revyme_get_context`
 Retrieves full snapshot of the editor state:
 - `activeFilePath`: e.g. `"app/page.client.tsx"`

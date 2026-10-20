@@ -44,9 +44,9 @@ export const setStylesTool: AgentTool = {
     node_id: z.string().describe(NODE_ID_DESCRIBE),
     styles: stylesSchema,
     viewport: z
-      .number()
+      .union([z.number(), z.string()])
       .optional()
-      .describe('breakpoint width in px for a responsive override (e.g. 810 for tablet); omit for base/desktop'),
+      .describe('breakpoint name ("tablet", "mobile") or width in px (810, 375) for responsive override; omit for desktop'),
   },
   category: 'semantic',
   async execute(args, ctx) {

@@ -404,5 +404,109 @@ describe('McpBridge', () => {
       expect(callResult.isError).toBeUndefined();
       expect(callResult.content[0].text).toContain('default-hover');
     });
+
+    it('lists and calls revyme_list_built_in_components', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_list_built_in_components')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        count: 1,
+        components: [{ tag: 'Marquee', label: 'Marquee', comment: 'Continuous strip' }],
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_list_built_in_components',
+          arguments: { query: 'marquee' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'list_built_in_components',
+        input: { query: 'marquee' },
+      });
+      expect(callResult.content[0].text).toContain('Marquee');
+    });
+
+    it('lists and calls revyme_add_built_in_component', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_add_built_in_component')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        node_id: 'marquee-1',
+        tag: 'Marquee',
+        installed: true,
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_add_built_in_component',
+          arguments: {
+            tag: 'Marquee',
+            parent_id: 'marquee-sec',
+            props: { speed: 80, direction: 'left' },
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'add_built_in_component',
+        input: {
+          tag: 'Marquee',
+          parent_id: 'marquee-sec',
+          props: { speed: 80, direction: 'left' },
+        },
+      });
+      expect(callResult.content[0].text).toContain('marquee-1');
+    });
+
+    it('lists and calls revyme_set_responsive_styles', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_set_responsive_styles')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        applied: 1,
+        viewport: 'mobile',
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_set_responsive_styles',
+          arguments: {
+            node_id: 'hero-title',
+            viewport: 'mobile',
+            styles: { fontSize: '32px' },
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'set_styles',
+        input: {
+          node_id: 'hero-title',
+          viewport: 'mobile',
+          styles: { fontSize: '32px' },
+        },
+      });
+      expect(callResult.content[0].text).toContain('applied');
+    });
   });
 });

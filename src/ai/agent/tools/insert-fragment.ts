@@ -14,6 +14,7 @@ import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild } from './flow-placement';
 import { queueOrderWrites } from './semantic-structure';
+import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
 
 const recordSchema = z.preprocess(coerceRecord, z.record(z.string(), z.string()));
@@ -41,6 +42,7 @@ export type FragmentNodeInput = {
   id?: string;
   name?: string;
   styles?: Record<string, string>;
+  responsive?: Record<string, Record<string, string>>;
   attrs?: Record<string, string>;
   text?: string;
   hover?: {
@@ -71,6 +73,10 @@ export const fragmentNodeSchema: z.ZodType<FragmentNodeInput> = z.lazy(() =>
     id: z.string().optional().describe('stable unique data-id: lowercase letters, digits and hyphens only, max 60 chars'),
     name: z.string().optional().describe('display name in the page tree'),
     styles: recordSchema.default({}).describe('camelCase CSS properties, e.g. { display: "flex", padding: "16px" }'),
+    responsive: z
+      .record(z.string(), recordSchema)
+      .optional()
+      .describe('Responsive style overrides per viewport (e.g. { tablet: { padding: "32px" }, mobile: { flexDirection: "column" } })'),
     attrs: recordSchema.default({}).describe('HTML attributes as {name: value} strings — src, href, alt, etc.'),
     text: z.string().optional().describe('plain text content, no HTML'),
     hover: z
@@ -131,6 +137,12 @@ export const insertFragmentTool: AgentTool = {
 
     const allocatedIds = new Set<string>();
     const allCreatedIds: string[] = [];
+    type ResponsiveWrite = {
+      nodeId: string;
+      viewport: string;
+      styles: Record<string, string>;
+    };
+    const responsiveWrites: ResponsiveWrite[] = [];
 
     function resolveId(requested: unknown, fallbackTag: string): { id: string } | { error: string } {
       if (typeof requested === 'string' && requested.trim() !== '') {
@@ -186,9 +198,24 @@ export const insertFragmentTool: AgentTool = {
       const id = idRes.id;
       allCreatedIds.push(id);
 
+      if (input.responsive && typeof input.responsive === 'object') {
+        for (const [vp, vpStyles] of Object.entries(input.responsive)) {
+          if (vpStyles && typeof vpStyles === 'object' && Object.keys(vpStyles).length > 0) {
+            responsiveWrites.push({
+              nodeId: id,
+              viewport: vp,
+              styles: vpStyles,
+            });
+          }
+        }
+      }
+
       const styles = { ...(input.styles ?? {}) };
       if (!styles.position) {
         styles.position = 'relative';
+      }
+      if (input.tag === 'section' && !styles.backgroundColor) {
+        styles.backgroundColor = 'var(--color-bg)';
       }
 
       const motionProps = convertHoverToMotionProps(input.hover);
@@ -237,6 +264,25 @@ export const insertFragmentTool: AgentTool = {
       node: rootDef,
       ...(typeof args.index === 'number' ? { index: args.index } : {}),
     });
+
+    // Queue container style overrides for responsive viewports
+    for (const rw of responsiveWrites) {
+      const keyWidth =
+        viewportKeyWidth(rw.viewport) ??
+        (rw.viewport.toLowerCase() === 'tablet'
+          ? 1199
+          : rw.viewport.toLowerCase() === 'mobile'
+            ? 809
+            : Number(rw.viewport));
+      if (Number.isFinite(keyWidth)) {
+        queueToolMutation(ctx, {
+          type: 'updateContainerStyle',
+          nodeId: rw.nodeId,
+          maxWidth: keyWidth,
+          styles: rw.styles,
+        });
+      }
+    }
 
     flushTool(ctx);
 

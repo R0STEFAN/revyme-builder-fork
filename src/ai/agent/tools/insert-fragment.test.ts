@@ -164,4 +164,49 @@ describe('insertFragmentTool', () => {
     expect(nextCode).toContain('whileHover={{ scale: 1.03, y: -4 }}');
     expect(nextCode).toContain("transition={{ type: 'spring', stiffness: 400, damping: 25 }}");
   });
+
+  it('queues responsive updateContainerStyle mutations and ensures fallback background for sections', async () => {
+    const parentNode = {
+      id: 'root',
+      type: 'div',
+      children: [],
+      styles: { display: 'flex', flexDirection: 'column' },
+    } as unknown as CanvasNode;
+
+    vi.mocked(getNodesSnapshot).mockReturnValue(new Map([['root', parentNode]]));
+
+    const ctx = makeCtx();
+    await insertFragmentTool.execute(
+      {
+        parent_id: 'root',
+        fragment: {
+          tag: 'section',
+          id: 'hero-sec',
+          name: 'Hero',
+          styles: { display: 'flex', flexDirection: 'row', padding: '100px 48px' },
+          responsive: {
+            tablet: { padding: '60px 24px' },
+            mobile: { flexDirection: 'column', padding: '40px 16px' },
+          },
+        },
+      },
+      ctx,
+    );
+
+    const calls = vi.mocked(queueMutation).mock.calls.map((c) => c[0]);
+    const addNodeMut = calls.find((c) => c.type === 'addNode') as AddNodeMutation;
+    expect(addNodeMut).toBeDefined();
+    expect(addNodeMut.node.styles.backgroundColor).toBe('var(--color-bg)');
+
+    const containerStyleMuts = calls.filter((c) => c.type === 'updateContainerStyle');
+    expect(containerStyleMuts.length).toBe(2);
+
+    const tabletMut = containerStyleMuts.find((c: any) => c.maxWidth === 1199);
+    expect(tabletMut).toBeDefined();
+    expect((tabletMut as any).styles).toEqual({ padding: '60px 24px' });
+
+    const mobileMut = containerStyleMuts.find((c: any) => c.maxWidth === 809);
+    expect(mobileMut).toBeDefined();
+    expect((mobileMut as any).styles).toEqual({ flexDirection: 'column', padding: '40px 16px' });
+  });
 });

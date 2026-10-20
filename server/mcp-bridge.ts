@@ -433,6 +433,10 @@ export class McpBridge {
                     name: { type: 'string', description: 'Display name in layers panel' },
                     styles: { type: 'object', description: 'camelCase CSS styles' },
                     attrs: { type: 'object', description: 'HTML attributes' },
+                    responsive: {
+                      type: 'object',
+                      description: 'Responsive style overrides per viewport (e.g. { tablet: { padding: "24px" }, mobile: { flexDirection: "column" } })',
+                    },
                     text: { type: 'string', description: 'Plain text content' },
                     hover: {
                       type: 'object',
@@ -515,6 +519,45 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_list_built_in_components',
+            description:
+              'Browse Revyme\'s rich built-in code component library (~80 production-ready components): animated marquees (Marquee, Marquee3D, RibbonMarquee), carousels (Carousel, EmblaCarousel, HorizontalScroll), cursor hotspots (BlobCursor, DesignCursor, SplashCursor), text effects (WordRotate, MorphingText, TextPressure, AnimatedCounter), GPU shaders & backgrounds (AuroraBackground, MeshGradient, CausticsLight, GrainGradient, LiquidMetal, LiquidChrome, GemSmoke, Metaballs, SmokeRing, CyberGrid, MatrixRain), and embeds. ALWAYS prefer a built-in component over writing from scratch!',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Filter components by keyword, e.g. "marquee", "carousel", "cursor", "shader"' },
+              },
+            },
+          },
+          {
+            name: 'revyme_add_built_in_component',
+            description:
+              'Instantly install and place a Revyme built-in component (Marquee, Carousel, EmblaCarousel, AuroraBackground, BlobCursor, AnimatedCounter, etc.) inside a parent container on the active page canvas. Props are configured dynamically.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                tag: { type: 'string', description: 'Built-in component tag (e.g. "Marquee", "Carousel", "AuroraBackground", "BlobCursor")' },
+                parent_id: { type: 'string', description: 'data-id of the parent container to place the component inside' },
+                props: { type: 'object', description: 'Component props (e.g. { speed: 60, direction: "left", gap: 32 } for Marquee)' },
+              },
+              required: ['tag'],
+            },
+          },
+          {
+            name: 'revyme_set_responsive_styles',
+            description:
+              'Set responsive CSS styles on a node for specific viewports (e.g. "tablet" for 810px, "mobile" for 375px) via container queries. Pass empty string "" for any property to remove it.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the target node' },
+                viewport: { type: 'string', description: 'Viewport name ("tablet", "mobile") or breakpoint width in px (810, 375)' },
+                styles: { type: 'object', description: 'camelCase CSS style properties' },
+              },
+              required: ['node_id', 'viewport', 'styles'],
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -584,6 +627,24 @@ export class McpBridge {
           case 'revyme_manage_component_variant':
             result = await this.sendToEditor('agent.tool', {
               name: 'manage_component_variant',
+              input: args,
+            });
+            break;
+          case 'revyme_list_built_in_components':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'list_built_in_components',
+              input: args,
+            });
+            break;
+          case 'revyme_add_built_in_component':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'add_built_in_component',
+              input: args,
+            });
+            break;
+          case 'revyme_set_responsive_styles':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'set_styles',
               input: args,
             });
             break;
