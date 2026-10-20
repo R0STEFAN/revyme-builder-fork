@@ -836,7 +836,7 @@ const createLayoutNodeSchema: z.ZodTypeAny = z.lazy(() =>
   z.object({
     tag: z.string(),
     text: z.string().optional(),
-    style: z.record(z.string(), z.string()).optional(),
+    style: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
     dataId: z.string().optional(),
     children: z.array(createLayoutNodeSchema).optional(),
   }),

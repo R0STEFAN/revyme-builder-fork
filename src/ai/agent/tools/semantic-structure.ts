@@ -433,6 +433,14 @@ export function filterDeclaredProps(
       dropped.push(k);
       continue;
     }
+    if (k === 'initialVariant') {
+      attrs['initialVariant'] = serializePropValue(v);
+      continue;
+    }
+    if (k === 'variant' && !declared.has('variant')) {
+      attrs['initialVariant'] = serializePropValue(v);
+      continue;
+    }
     if (!declared.has(k)) {
       dropped.push(k);
       continue;
@@ -473,6 +481,7 @@ export const addComponentInstanceTool: AgentTool = {
   inputSchema: {
     name: z.string().describe('component name as shown in the page tree, e.g. Hero'),
     parent_id: z.string().optional().describe(PARENT_ID_DESCRIBE),
+    variant: z.string().optional().describe('variant name to display on canvas, e.g. "secondary" or "asym-b" (sets initialVariant)'),
     props: z
       .record(z.string(), z.unknown())
       .optional()
@@ -497,7 +506,14 @@ export const addComponentInstanceTool: AgentTool = {
     if (isComponentFilePath(targetFile) && wouldCreateComponentCycle(info.filePath, targetFile, (p) => getToolCode(ctx, p) || null)) {
       return fail(`Cannot place ${name} inside ${targetFile}: the component would render itself (${info.filePath} is, or imports, this master). Place it on a page or in another component instead.`);
     }
-    const rawProps = (args.props as Record<string, unknown> | undefined) ?? {};
+    const rawProps = { ...((args.props as Record<string, unknown> | undefined) ?? {}) };
+    if (typeof args.variant === 'string' && args.variant.trim()) {
+      if (info.props.some((p) => p.name === 'variant')) {
+        rawProps.variant = args.variant.trim();
+      } else {
+        rawProps.initialVariant = args.variant.trim();
+      }
+    }
     const { attrs, dropped } = filterDeclaredProps(info, rawProps);
     const missing = missingRequiredProps(info, rawProps);
     const id = generateNodeId('frame');

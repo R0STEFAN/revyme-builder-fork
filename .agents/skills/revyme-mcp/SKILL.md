@@ -125,20 +125,21 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
 ### A. Design Components (Native Canvas Masters)
 - **What it is**: Reusable visual UI elements (cards, spec rows, buttons, pricing tables, navigation items, testimonial blocks, badges).
 - **Canvas Experience**: Fully interactive and visual! Designers can double-click on the canvas to select inner elements, see all layers in the Layers panel, customize styles with the Style Inspector, reorder elements, and switch visual variants.
-- **THE CARDINAL RULE: REPEATED CARDS MUST BE INSTANTIATED AS COMPONENTS, NEVER RAW DIVS!**:
-  - Whenever building a page with repeated UI elements (Project Cards, Marquee Cards, Testimonial Cards, Pricing Tiers, Team Members):
-    1. Define the Design Component master in `components/<Name>.tsx` with typed props (`title`, `image`, `tags`, `category`) and `variantConfig` (`default`, `variant-b`, `default-hover`).
-    2. **ON THE PAGE, YOU MUST INSTANTIATE THE COMPONENT**:
-       - In `revyme_insert_fragment`: use `"tag": "ProjectCard"`, `"name": "Project Card 1"`, and pass props in `"attrs": { "title": "...", "category": "..." }`.
-       - Or in page JSX: `<ProjectCard data-id="card-1" title="..." ... />`.
-    3. **CRITICAL ANTI-PATTERN STRICTLY FORBIDDEN**: Never write a component file and then copy-paste hundreds of lines of duplicate raw `<div>` blocks on the page!
-       - Inlined raw divs prevent the user from editing props in the Inspector.
-       - Inlined raw divs prevent the user from duplicating cards with one click or swapping variants in the panel.
-       - Inlined raw divs BREAK component variant transitions (`default-hover`, etc.).
-       - If the user wants to add a new project card, they should only need to add an instance of `<ProjectCard />`, not duplicate and rewire a massive raw div tree!
+- **THE CARDINAL RULE: BUTTONS, CARDS, AND NAV ITEMS MUST BE DESIGN COMPONENTS, NEVER RAW INLINE ELEMENTS!**:
+  - Whenever building a website, landing page, or section:
+    1. **FIRST, define Design Component masters** in `components/<Name>.tsx` with typed props (`title`, `label`, `image`, `tags`, `category`) and `variantConfig` (`default`, `secondary`, `hover`, `asym-b`, `menu-open`).
+    2. **ON THE PAGE, INSTANTIATE THE COMPONENTS**:
+       - In `revyme_insert_fragment`: use `"tag": "Button"`, `"name": "Primary CTA"`, and pass props/variants in `"attrs": { "label": "Explore Work", "variant": "secondary" }`.
+       - Or via `revyme_add_component_instance`: `{ "name": "ProjectCard", "variant": "hover", "props": { "title": "...", "category": "..." } }`.
+    3. **CRITICAL ANTI-PATTERN STRICTLY FORBIDDEN**: Never inline raw `<button>` tags or copy-paste hundreds of lines of duplicate raw `<div>` blocks on the page!
+       - Inlined raw elements prevent the user from editing props in the Inspector.
+       - Inlined raw elements prevent the user from duplicating cards/buttons with one click or swapping variants in the panel.
+       - Inlined raw elements BREAK component variant transitions (`default-hover`, `menu-open`, etc.).
+       - If the user wants to add a button or card, they should only need to add an instance of `<Button />` or `<ProjectCard />`, not hand-craft raw HTML trees!
 - **Navbars & Headers Rule**: When asked to create a navigation bar or header as a component, **NEVER build it as a closed Code Component with internal React `useState(false)` and `mixBlendMode: 'difference'`**. Instead:
-  1. Build it directly on the page via `revyme_insert_fragment` with responsive desktop / mobile layout, OR
-  2. Create a **Design Component** with visual variant states (`default` vs `mobile-open`) using `revyme_manage_component_variant` or `create_component`!
+  1. Create a **Design Component** with visual variant states (`default` vs `menu-open`) using `create_component` (or `revyme_manage_component_variant`)!
+  2. Wire the toggle button with `revyme_add_connection`: trigger `'click'` from the hamburger button switches from `'default'` to `'menu-open'`.
+  3. Instantiate `<Navbar />` on the page via `revyme_insert_fragment` or `revyme_add_component_instance`.
 - **File Structure**:
   - `/** @name "ComponentName" */`
   - `export const variantConfig = [ { name: 'default', ... }, { name: 'highlight', ... } ];`
@@ -237,103 +238,165 @@ Every page begins with a top-level flex column wrapper:
 
 ---
 
-### D. The Golden Recipe to Build Any Page/Section
+### D. The Mandatory 5-Phase Design-System-First (DS-First) Protocol
 
-1. Call `revyme_get_context` to inspect the active page and verify the root container (`parent_id: "root"`).
-2. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer) using the Section + Container architecture:
-   ```json
-   {
-     "parent_id": "root",
-     "fragment": {
-       "tag": "section",
-       "name": "Hero Section",
-       "styles": {
-         "width": "100%",
-         "backgroundColor": "var(--color-bg)",
-         "paddingTop": "100px",
-         "paddingBottom": "100px",
-         "display": "flex",
-         "flexDirection": "column",
-         "alignItems": "center"
-       },
-       "responsive": {
-         "tablet": { "paddingTop": "60px", "paddingBottom": "60px" },
-         "mobile": { "paddingTop": "40px", "paddingBottom": "40px" }
-       },
-       "children": [
-         {
-           "tag": "div",
-           "name": "Container",
-           "styles": {
-             "width": "100%",
-             "maxWidth": "1200px",
-             "margin": "0 auto",
-             "paddingLeft": "24px",
-             "paddingRight": "24px",
-             "display": "flex",
-             "flexDirection": "column",
-             "alignItems": "center",
-             "textAlign": "center"
-           },
-           "responsive": {
-             "tablet": { "paddingLeft": "20px", "paddingRight": "20px" },
-             "mobile": { "paddingLeft": "16px", "paddingRight": "16px" }
-           },
-           "children": [
-             {
-               "tag": "h1",
-               "text": "Radical Form. Fluid Motion.",
-               "styles": {
-                 "fontSize": "64px",
-                 "fontWeight": "800",
-                 "color": "var(--color-text)",
-                 "lineHeight": "1.1",
-                 "marginBottom": "20px"
-               },
-               "responsive": {
-                 "tablet": { "fontSize": "44px" },
-                 "mobile": { "fontSize": "32px" }
-               }
-             },
-             {
-               "tag": "p",
-               "text": "Crafting digital experiences with precision and kinematic feedback.",
-               "styles": {
-                 "fontSize": "18px",
-                 "color": "var(--color-text-secondary)",
-                 "maxWidth": "640px",
-                 "marginBottom": "36px"
-               },
-               "responsive": {
-                 "mobile": { "fontSize": "16px" }
-               }
-             },
-             {
-               "tag": "button",
-               "name": "CTA Button",
-               "text": "Explore Selected Work",
-               "styles": {
-                 "padding": "14px 28px",
-                 "backgroundColor": "#3B82F6",
-                 "color": "#FFFFFF",
-                 "borderRadius": "8px",
-                 "fontWeight": "600"
-               },
-               "hover": {
-                 "targets": { "scale": 1.04, "y": -2 },
-                 "transition": { "type": "spring", "stiffness": 400, "damping": 25 }
-               }
-             }
-           ]
-         }
-       ]
-     }
-   }
-   ```
-3. If adding a Marquee, Carousel, or background shader:
-   Call `revyme_add_built_in_component` with tag `"Marquee"` or `"Carousel"` instead of coding static divs!
-4. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover`, `fade-up`, `stagger-children`) to add entrance animations to inserted cards.
-5. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
+In Revyme, professional sites are built using **Design-System-First Architecture**. Never jump directly into inlining raw HTML tags (`<button>`, repetitive `<div>` cards) inside page fragments. Always follow the 5 phases in order:
+
+#### Phase 1: Design Tokens & Foundations (`revyme_manage_presets`)
+Establish the global CSS variables in `globals.css` before authoring any components or layouts:
+- Semantic colors: `color-bg`, `color-text`, `color-text-secondary`, `color-border-hairline`, `color-accent`, `color-footer-bg`.
+- Radii and borders: `radius-card`, `radius-pill`, `border-hairline`.
+```json
+{
+  "action": "set",
+  "tokens": [
+    { "name": "color-bg", "value": "#FFFFFF", "category": "color" },
+    { "name": "color-text", "value": "#000000", "category": "color" },
+    { "name": "color-text-secondary", "value": "#525252", "category": "color" },
+    { "name": "color-border-hairline", "value": "rgba(0, 0, 0, 0.10)", "category": "color" }
+  ]
+}
+```
+
+#### Phase 2: Master Design Component Library (`create_component` via `revyme_agent_tool`)
+Author atomic and molecular UI primitives in `components/<Name>.tsx` using `create_component`.
+Every component must declare:
+1. **`props`**: Typed interface with defaults (e.g. `label`, `href`, `title`, `category`, `year`).
+2. **`variants`**: Visual states (`default`, `secondary`, `hover`, `asym-b`, `menu-open`).
+3. **`elements`**: Tree of nodes, each with `position: 'relative'`.
+
+**Example: Creating a Reusable Button Component (`StudioButton`)**:
+```json
+{
+  "name": "create_component",
+  "input": {
+    "name": "StudioButton",
+    "props": [{ "name": "label", "type": "string", "defaultValue": "CLICK HERE" }],
+    "variants": [
+      { "name": "default" },
+      { "name": "secondary" }
+    ],
+    "elements": [
+      {
+        "id": "btn-root",
+        "tag": "div",
+        "styles": { "display": "flex", "position": "relative" },
+        "children": [
+          {
+            "id": "btn-el",
+            "tag": "button",
+            "styles": {
+              "position": "relative",
+              "display": "flex",
+              "alignItems": "center",
+              "justifyContent": "center",
+              "padding": "14px 28px",
+              "backgroundColor": "#000000",
+              "color": "#FFFFFF",
+              "borderRadius": "4px",
+              "cursor": "pointer"
+            },
+            "children": [
+              {
+                "id": "btn-label",
+                "tag": "span",
+                "styles": { "position": "relative", "fontSize": "14px", "fontWeight": "700" },
+                "text": "{label}"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+Follow up with `revyme_set_variant` to style the `secondary` variant (e.g. `backgroundColor: "#FFFFFF"`, `color: "#000000"`, `border: "1px solid rgba(0,0,0,0.15)"`).
+
+#### Phase 3: Page Assembly via Fragment Composition (`revyme_insert_fragment`)
+Now compose full-bleed sections and centered containers. **Insert component instances directly using uppercase tags** (`tag: "StudioButton"`, `tag: "ProjectCard"`):
+```json
+{
+  "parent_id": "root",
+  "fragment": {
+    "tag": "section",
+    "name": "Hero Section",
+    "styles": {
+      "width": "100%",
+      "backgroundColor": "var(--color-bg)",
+      "paddingTop": "120px",
+      "paddingBottom": "90px",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center"
+    },
+    "children": [
+      {
+        "tag": "div",
+        "name": "Container",
+        "styles": {
+          "width": "100%",
+          "maxWidth": "1200px",
+          "margin": "0 auto",
+          "paddingLeft": "24px",
+          "paddingRight": "24px",
+          "display": "flex",
+          "flexDirection": "column",
+          "alignItems": "center",
+          "textAlign": "center"
+        },
+        "children": [
+          {
+            "tag": "h1",
+            "text": "STUDIO DISCIPLINE",
+            "styles": { "fontSize": "clamp(3.5rem, 11vw, 10rem)", "fontWeight": "700", "lineHeight": "0.9" }
+          },
+          {
+            "tag": "div",
+            "name": "Button Row",
+            "styles": { "display": "flex", "gap": "20px", "marginTop": "40px" },
+            "children": [
+              {
+                "tag": "StudioButton",
+                "name": "Primary CTA",
+                "attrs": { "label": "EXPLORE ARCHIVE", "variant": "default" }
+              },
+              {
+                "tag": "StudioButton",
+                "name": "Secondary CTA",
+                "attrs": { "label": "READ MONOGRAPH ↗", "variant": "secondary" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+*Notice how `<StudioButton>` is cleanly instantiated with `label` and `variant`! No raw `<button>` tags cluttering the page!*
+
+#### Phase 4: Interaction Wiring & Variant State (`revyme_add_connection`, `revyme_show_variant`)
+Wire interactive triggers between variants on components:
+- Wire hamburger menu toggle:
+  ```json
+  {
+    "component": "Navbar",
+    "from": "default",
+    "to": "menu-open",
+    "trigger": "click",
+    "source_node": "navbar-hamburger-btn"
+  }
+  ```
+- Change displayed variant on an instance:
+  `revyme_show_variant({ "node_id": "<instance-data-id>", "variant": "asym-b" })`
+
+#### Phase 5: Responsive Verification & Visual Audit (`revyme_audit_design`)
+Run automated linting on viewports to verify contrast and prevent overflow:
+- Call `revyme_audit_design({ "viewport": "desktop" })`
+- Call `revyme_audit_design({ "viewport": "tablet" })`
+- Call `revyme_audit_design({ "viewport": "mobile" })`
+- Fine-tune any element styles per viewport with `revyme_set_responsive_styles`.
 
 ---
 

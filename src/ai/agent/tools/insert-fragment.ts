@@ -16,6 +16,12 @@ import { seedFlowChild } from './flow-placement';
 import { queueOrderWrites } from './semantic-structure';
 import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
+import { projectFS, installBuiltInCodeComponent } from '@/code/project/project-fs';
+
+const FRAMEWORK_TAGS = new Set([
+  'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
+  'Override', 'React', 'Suspense', 'MotionLink',
+]);
 
 const recordSchema = z.preprocess(coerceRecord, z.record(z.string(), z.string()));
 
@@ -166,10 +172,13 @@ export const insertFragmentTool: AgentTool = {
 
     function convertHoverToMotionProps(hover?: FragmentNodeInput['hover']): Record<string, Record<string, string>> | undefined {
       if (!hover) return undefined;
-      const { transition, ...targets } = hover;
+      const rawTargets = (hover as any).targets && typeof (hover as any).targets === 'object'
+        ? { ...(hover as any).targets, transition: hover.transition ?? (hover as any).targets.transition }
+        : hover;
+      const { transition, ...targets } = rawTargets;
       const whileHover: Record<string, string> = {};
       for (const [k, v] of Object.entries(targets)) {
-        if (v !== undefined && v !== null && v !== '') {
+        if (v !== undefined && v !== null && v !== '' && typeof v !== 'object') {
           whileHover[k] = String(v);
         }
       }
@@ -197,6 +206,26 @@ export const insertFragmentTool: AgentTool = {
       if ('error' in idRes) return idRes;
       const id = idRes.id;
       allCreatedIds.push(id);
+
+      if (input.tag && /^[A-Z]/.test(input.tag)) {
+        const tagName = input.tag;
+        installBuiltInCodeComponent(projectFS, tagName);
+        const inComp = projectFS.readFile(`components/${tagName}.tsx`) != null;
+        const inIcons = projectFS.readFile(`icons/${tagName}.tsx`) != null;
+        if (!inComp && !inIcons && !FRAMEWORK_TAGS.has(tagName)) {
+          return {
+            error: `Component "${tagName}" does not exist in components/. Following Revyme's Design-System-First (DS-First) protocol, please create this component first via create_component (revyme_agent_tool) or revyme_add_built_in_component before referencing it in revyme_insert_fragment.`,
+          };
+        }
+        const inputVariant = (input as any).variant;
+        if (inputVariant && !attrs['initialVariant']) {
+          attrs['initialVariant'] = String(inputVariant);
+        }
+        if (attrs['variant'] && !attrs['initialVariant']) {
+          attrs['initialVariant'] = attrs['variant'];
+          delete attrs['variant'];
+        }
+      }
 
       if (input.responsive && typeof input.responsive === 'object') {
         for (const [vp, vpStyles] of Object.entries(input.responsive)) {

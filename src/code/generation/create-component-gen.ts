@@ -401,7 +401,8 @@ function buildLayout(
     }
     const styleEntries: string[] = [];
     const seenKeys = new Set<string>();
-    for (const [k, v] of Object.entries(node.style ?? {})) {
+    for (const [k, rawV] of Object.entries(node.style ?? {})) {
+      const v = typeof rawV === 'number' ? String(rawV) : rawV;
       if (typeof v !== 'string') return { error: `Invalid style value for "${k}" — strings only (literals or "{prop}").` };
       const ref = propRefWhole(v);
       if (ref !== null) {
@@ -413,6 +414,11 @@ function buildLayout(
         styleEntries.push(`${k}: ${JSON.stringify(v)}`);
       }
       seenKeys.add(k);
+    }
+    // Auto-inject position: 'relative' if omitted so the master satisfies Oracle NODE_MISSING_POSITION
+    if (!seenKeys.has('position')) {
+      styleEntries.unshift("position: 'relative'");
+      seenKeys.add('position');
     }
     // Canonical flex/grid dialect (same shape the builder's own insert paths
     // seed, and the FLEX_CHILD_* oracle rules require): flow children of a

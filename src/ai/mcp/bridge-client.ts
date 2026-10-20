@@ -90,7 +90,7 @@ import { hasComponentControls } from '@/code/components/controls-parser';
 import { createVectorSetFromSvgs, looksLikeSvg, MAX_ICONS_PER_SET, MAX_SVG_FILE_BYTES, type PreflightSvg } from '@/code/icons/create-vector-set-from-svgs';
 import { isComponentUrl, importComponentFromUrl } from '@/cloud/components/component-paste';
 
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || (typeof window !== 'undefined' ? '' : 'http://localhost:8082');
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8082';
 
 type BridgeHandler = (params: any) => Promise<unknown>;
 

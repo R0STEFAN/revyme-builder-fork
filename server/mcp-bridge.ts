@@ -11,9 +11,10 @@ import { listProjects } from './storage';
 export function getRecentBuilderUrl(baseOrigin = 'http://localhost:3333'): string {
   try {
     const list = listProjects();
-    if (list && list.length > 0 && list[0]?.id) {
+    const valid = (list || []).filter((p) => !p.id.startsWith('test-') && !p.id.includes('fifo'));
+    if (valid.length > 0 && valid[0]?.id) {
       const prefix = baseOrigin ? `${baseOrigin.replace(/\/+$/, '')}` : '';
-      return `${prefix}/builder/${encodeURIComponent(list[0].id)}`;
+      return `${prefix}/builder/${encodeURIComponent(valid[0].id)}`;
     }
   } catch (err) {
     // If data dir does not exist or storage cannot be read
@@ -590,7 +591,7 @@ export class McpBridge {
           {
             name: 'revyme_insert_fragment',
             description:
-              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, responsive overrides, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURAL RULES: 1) Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px"). 2) REPEATED ELEMENTS: Instantiate cards/badges as Design Components (tag: "ProjectCard") rather than duplicating raw divs! 3) NAVBAR RESPONSIVE MATRIX: Desktop links group must have display: "flex", mobile hamburger button must have display: "none" on desktop! On tablet (810px) and mobile (375px), desktop links group must have display: "none" AND hamburger button must have display: "flex"! Secondary status badges/pills MUST be hidden on tablet to prevent horizontal overflow! 4) ZERO-IN-FLOW OVERLAY INVARIANT: Fullscreen navigation menus or drawers must NEVER be placed as in-flow <section> blocks (which permanently renders a 750px box on the page!). Drawers must be overlays with position: "fixed", inset: 0, zIndex: 9999, and display: "none" by default!',
+              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, responsive overrides, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY DESIGN-SYSTEM-FIRST PROTOCOL: 1) Master Components: Create buttons, cards, navbars, and badges as Design Components FIRST (via create_component in revyme_agent_tool), then place them using uppercase component tags (e.g. tag: "StudioButton", "ProjectCard") with attrs (e.g. attrs: { label: "...", variant: "secondary" })! Never inline raw <div> cards or raw <button> tags when reusable components should exist! 2) Two-Tier Layout: Full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px"). 3) Navbar Responsive Matrix: Desktop links group must have display: "flex", mobile hamburger button display: "none" on desktop; on tablet/mobile, desktop links must be display: "none" and hamburger display: "flex". 4) Zero-In-Flow Overlay: Fullscreen menus/drawers must NEVER be placed as in-flow section blocks; drawers must be position: "fixed", inset: 0, zIndex: 9999, display: "none" by default!',
             inputSchema: {
               type: 'object',
               properties: {
@@ -750,7 +751,7 @@ export class McpBridge {
           {
             name: 'revyme_add_component_instance',
             description:
-              'Place an instance of an existing project component (e.g. Navbar, Hero, ProjectCard, PrimaryButton) into a container on the active canvas. The instance tag is the component name and its props are written as JSX attributes. Only declared props on the master are applied.',
+              'Place an instance of an existing project component (e.g. Navbar, Hero, ProjectCard, PrimaryButton) into a container on the active canvas. The instance tag is the component name and its props are written as JSX attributes. Only declared props on the master are applied. You can specify "variant" directly to set the initialVariant display state.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -761,6 +762,10 @@ export class McpBridge {
                 parent_id: {
                   type: 'string',
                   description: 'data-id of the parent node to insert into (defaults to selected element or root)',
+                },
+                variant: {
+                  type: 'string',
+                  description: 'Optional initial variant name to display on canvas, e.g. "secondary", "asym-b", "menu-open"',
                 },
                 props: {
                   type: 'object',
@@ -1122,14 +1127,14 @@ export class McpBridge {
 
     server.on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
-        console.warn(`[Revyme Bridge] Port ${listenPort} is already in use. MCP bridge remains available through Vite server middleware.`);
+        console.warn(`[Revyme Bridge] Port ${listenPort} is already in use by an active MCP server or IDE daemon. Bridge is running on port ${listenPort}.`);
       } else {
         console.error('[Revyme Bridge] HTTP server error:', err);
       }
     });
 
     server.listen(listenPort, () => {
-      console.log(`[Revyme Bridge] Native MCP bridge listening on http://localhost:${listenPort}`);
+      console.error(`[Revyme Bridge] Native MCP bridge listening on http://localhost:${listenPort}`);
     });
 
     this.httpServer = server;

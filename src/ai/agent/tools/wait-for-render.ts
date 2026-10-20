@@ -120,7 +120,7 @@ export function waitForRender(
       return;
     }
 
-    const attempts = Math.ceil(timeoutMs / intervalMs);
+    const startTime = Date.now();
     let waitedMs = 0;
     let resolved = false;
 
@@ -129,7 +129,7 @@ export function waitForRender(
       const { nodes: snapshot, epoch } = collectEpochSnapshot(getNodesSnapshot(), vpId);
       const withRect = epoch.withRect;
 
-      waitedMs += intervalMs;
+      waitedMs = Date.now() - startTime;
 
       const allFilled = nodeIds
         ? nodeIds.every((id) => {

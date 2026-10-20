@@ -209,4 +209,50 @@ describe('insertFragmentTool', () => {
     expect(mobileMut).toBeDefined();
     expect((mobileMut as any).styles).toEqual({ flexDirection: 'column', padding: '40px 16px' });
   });
+
+  it('rejects unknown component tags and auto-maps variant to initialVariant for known components', async () => {
+    const { projectFS } = await import('@/code/project/project-fs');
+    projectFS.writeFile('components/KnownButton.tsx', 'export default function KnownButton() { return <button />; }');
+
+    const parentNode = {
+      id: 'root',
+      type: 'div',
+      children: [],
+      styles: { display: 'flex' },
+    } as unknown as CanvasNode;
+    vi.mocked(getNodesSnapshot).mockReturnValue(new Map([['root', parentNode]]));
+
+    const ctx = makeCtx();
+
+    // 1. Unknown component fails with actionable DS-First guidance
+    const failRes = await insertFragmentTool.execute(
+      {
+        parent_id: 'root',
+        fragment: {
+          tag: 'UnknownComponent',
+        },
+      },
+      ctx,
+    );
+    expect(failRes.isError).toBe(true);
+    expect((failRes.content[0] as { text: string }).text).toContain('does not exist in components/');
+
+    // 2. Known component succeeds and auto-maps variant to initialVariant
+    const successRes = await insertFragmentTool.execute(
+      {
+        parent_id: 'root',
+        fragment: {
+          tag: 'KnownButton',
+          attrs: { variant: 'secondary', label: 'Test' },
+        },
+      },
+      ctx,
+    );
+    expect(successRes.isError).toBeFalsy();
+    const m = lastMutation() as AddNodeMutation;
+    expect(m.node.type).toBe('KnownButton');
+    expect(m.node.attrs?.initialVariant).toBe('secondary');
+    expect(m.node.attrs?.variant).toBeUndefined();
+    expect(m.node.attrs?.label).toBe('Test');
+  });
 });
