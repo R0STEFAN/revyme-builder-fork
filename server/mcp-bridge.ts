@@ -309,10 +309,46 @@ export class McpBridge {
           {
             name: 'revyme_get_context',
             description:
-              'Get the active editor context: current page/component path, JSX code, pages list, components, presets (design tokens) and CMS collections.',
+              'Get the active editor context: current page/component path, JSX code, compact page node tree (nodeTree with data-ids, names, and hierarchy), pages list, components, presets (design tokens) and CMS collections.',
             inputSchema: {
               type: 'object',
               properties: {},
+            },
+          },
+          {
+            name: 'revyme_inspect_node',
+            description:
+              'Inspect a specific element/node on the active canvas by its data-id. Returns full details: type/tag, name, parentId, children IDs, full CSS styles, attributes, and text content.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the target node to inspect' },
+              },
+              required: ['node_id'],
+            },
+          },
+          {
+            name: 'revyme_search_project',
+            description:
+              'Full-text search across all files in the Revyme project. Quickly finds component usages, data-ids, classes, text strings, or CSS variables without loading every file into context.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search term or keyword to find' },
+                path_prefix: { type: 'string', description: 'Optional path filter, e.g. "components/" or "app/"' },
+              },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'revyme_audit_design',
+            description:
+              'Lints the rendered layout against hard visual and responsive design rules across viewports (sibling overlap >4px, child overflow beyond parent >8px, section viewport overflow, WCAG text contrast below 4.5:1, font sizes below 12px, text truncation). ALWAYS run this after editing layouts or responsive styles to verify perfection.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                viewport: { type: 'string', description: 'Optional viewport ID ("desktop", "tablet", "mobile") or width in px (e.g. 1200, 810, 375)' },
+              },
             },
           },
           {
@@ -614,6 +650,21 @@ export class McpBridge {
         switch (name) {
           case 'revyme_get_context':
             result = await this.sendToEditor('getContext', args);
+            break;
+          case 'revyme_inspect_node':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'get_node',
+              input: args,
+            });
+            break;
+          case 'revyme_search_project':
+            result = await this.sendToEditor('searchProject', args);
+            break;
+          case 'revyme_audit_design':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'audit_design',
+              input: args,
+            });
             break;
           case 'revyme_read_file':
             result = await this.sendToEditor('readFile', args);

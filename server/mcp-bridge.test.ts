@@ -558,5 +558,93 @@ describe('McpBridge', () => {
       });
       expect(callResult.content[0].text).toContain('applied');
     });
+
+    it('lists and calls revyme_inspect_node', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_inspect_node')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        id: 'site-header',
+        type: 'header',
+        name: 'Site Header',
+        styles: { display: 'flex' },
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_inspect_node',
+          arguments: { node_id: 'site-header' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'get_node',
+        input: { node_id: 'site-header' },
+      });
+      expect(callResult.content[0].text).toContain('Site Header');
+    });
+
+    it('lists and calls revyme_search_project', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_search_project')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        query: 'Navbar',
+        matchCount: 1,
+        matches: [{ file: 'components/Navbar.tsx', line: 10, text: 'export default Navbar' }],
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_search_project',
+          arguments: { query: 'Navbar' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('searchProject', { query: 'Navbar' });
+      expect(callResult.content[0].text).toContain('components/Navbar.tsx');
+    });
+
+    it('lists and calls revyme_audit_design', async () => {
+      const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      const listResult = await listHandler({ method: 'tools/list', params: {} });
+      expect(listResult.tools.some((t: any) => t.name === 'revyme_audit_design')).toBe(true);
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        status: 'ready',
+        violations: [],
+        summary: 'No violations detected.',
+      });
+
+      const callResult = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_audit_design',
+          arguments: { viewport: 'tablet' },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'audit_design',
+        input: { viewport: 'tablet' },
+      });
+      expect(callResult.content[0].text).toContain('No violations detected');
+    });
   });
 });

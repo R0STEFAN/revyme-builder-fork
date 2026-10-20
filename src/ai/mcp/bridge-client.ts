@@ -27,7 +27,7 @@ import {
   getPageClientPath,
 } from '@/code/project/active-file-store';
 import { applyTemplate } from '@/code/project/template-ops';
-import { canvasInteractingAtom } from '@/code/stores/store';
+import { canvasInteractingAtom, getNodesSnapshot } from '@/code/stores/store';
 import { isTextEditingAtom } from '@/code/stores/editor-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { withAgentWriteAccessAsync } from '@/code/stores/agent-run-lock-store';
@@ -52,6 +52,7 @@ import { executeCmsTool } from '@/ai/cms-agent/cms-tool-executors';
 import type { PresetToken } from '@/shared/types';
 import { gateTurnFiles, commitTurnFiles, formatBounce, type TurnFile } from '@/code/oracle/gate';
 import { agentToolManifest, agentToolCall, agentRunStart, agentRunEnd, agentRunAbort, agentContext, attributeBridgeCall } from '@/ai/agent/bridge-tools';
+import { projectNodeTree } from '@/ai/agent/tools/read';
 import { creditRead, checkStaleWrites } from './read-tracker';
 import { shareComponent } from '@/cloud/components/component-share';
 import { hasComponentControls } from '@/code/components/controls-parser';
@@ -76,11 +77,21 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       : isLayoutFile(activeFilePath) ? 'template'
       : isIconSetFilePath(activeFilePath) ? 'icon-set'
       : 'page';
+    let nodeTree = '';
+    try {
+      const nodes = getNodesSnapshot();
+      if (nodes && nodes.size > 0) {
+        nodeTree = projectNodeTree(nodes);
+      }
+    } catch {
+      // Non-fatal if canvas nodes snapshot cannot be projected
+    }
     const context = {
       activeFilePath,
       kind,
       surface,
       code: projectFS.readFile(activeFilePath),
+      nodeTree,
       pages: listPageFiles(),
       components: projectFS.listFiles('components/'),
       // Design tokens from app/globals.css — the ONLY var(--…) names a
@@ -135,6 +146,34 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     const files = projectFS.listFiles();
     trace.action('mcp-bridge:list-files', { count: files.length });
     return { files };
+  },
+
+  /** Full-text search across project files for query string, symbols, data-ids, or classes. */
+  async searchProject(params: { query?: string; path_prefix?: string }) {
+    const query = String(params.query ?? '').trim();
+    if (!query) throw new Error('searchProject: query required');
+    const qLower = query.toLowerCase();
+    const files = projectFS.listFiles(params.path_prefix);
+    const matches: Array<{ file: string; line: number; text: string }> = [];
+    for (const file of files) {
+      if (/\.(png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot)$/i.test(file)) continue;
+      const content = projectFS.readFile(file);
+      if (!content || !content.toLowerCase().includes(qLower)) continue;
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes(qLower)) {
+          matches.push({
+            file,
+            line: i + 1,
+            text: lines[i].trim().slice(0, 160),
+          });
+          if (matches.length >= 100) break;
+        }
+      }
+      if (matches.length >= 100) break;
+    }
+    trace.action('mcp-bridge:search-project', { query, matchCount: matches.length });
+    return { query, matchCount: matches.length, matches };
   },
 
   /** Localize an image into the USER's own storage via the SAME quota-enforced

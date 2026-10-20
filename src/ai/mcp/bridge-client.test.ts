@@ -59,13 +59,22 @@ describe('bridgeHandlers', () => {
     await bridgeHandlers.getContext({});
   });
 
-  it('getContext reports the active file, its kind, code, pages and components', async () => {
+  it('getContext reports the active file, its kind, code, pages, components and nodeTree', async () => {
     const ctx = await bridgeHandlers.getContext({}) as any;
     expect(ctx.activeFilePath).toBe(PAGE_PATH);
     expect(ctx.kind).toBe('page');
     expect(ctx.code).toContain('data-id="root"');
     expect(ctx.pages).toContain(PAGE_PATH);
     expect(Array.isArray(ctx.components)).toBe(true);
+    expect(typeof ctx.nodeTree).toBe('string');
+  });
+
+  it('searchProject finds matching lines across project files', async () => {
+    const result = await bridgeHandlers.searchProject({ query: 'export default function Page' }) as any;
+    expect(result.query).toBe('export default function Page');
+    expect(result.matchCount).toBeGreaterThanOrEqual(1);
+    expect(result.matches[0].file).toBe(PAGE_PATH);
+    expect(result.matches[0].text).toContain('export default function Page');
   });
 
   it('getContext reports surface=template on a LayoutClient file', async () => {

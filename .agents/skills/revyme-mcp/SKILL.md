@@ -40,12 +40,16 @@ Before executing any tool calls, ensure that:
 The agent can send requests to the builder in two ways:
 1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
    - `revyme_insert_fragment`: **PRIMARY TOOL for UI generation.** Atomically inserts entire subtrees (sections, cards, grids) with auto-generated IDs, native Framer Motion hovers, and responsive viewports (`tablet`, `mobile`).
+   - `revyme_insert_section`: Inserts an art-directed section blueprint (`header-editorial`, `header-glass`, `hero-editorial`, `hero-typewall`) with verified responsive layout and typography.
    - `revyme_list_built_in_components`: Browse Revyme's ~80 built-in code components (Marquee, Carousel, shaders, text effects, cursors, embeds).
    - `revyme_add_built_in_component`: Install and place a built-in component (e.g. `Marquee`, `Carousel`, `AuroraBackground`) into any container.
    - `revyme_set_responsive_styles`: Set responsive overrides for `'tablet'` (810px) or `'mobile'` (375px) on any element.
    - `revyme_apply_motion_preset`: Applies calibrated spring animations (`lift-on-hover`, `scale-on-hover`, `fade-up`, `stagger-children`).
    - `revyme_manage_component_variant`: Creates and manages interactive variant states (`default-hover`, etc.) on Design Components.
-   - `revyme_get_context`: Reads active page/component AST, tokens, and schemas.
+   - `revyme_get_context`: Reads active page/component AST, tokens, CMS collections, and the compact page `nodeTree` (showing exact hierarchy and data-ids).
+   - `revyme_inspect_node`: Pointed inspection of any node by `data-id` (returns full CSS styles, attributes, children, and text).
+   - `revyme_search_project`: High-speed full-text search across all project files (finds symbols, classes, text, or data-ids without reading files one-by-one).
+   - `revyme_audit_design`: Automated visual linter (checks WCAG text contrast, sibling overlaps, child overflows, and responsive viewport sizing).
    - `revyme_read_file`: Reads source code of any project file.
    - `revyme_list_files`: Lists all project files.
    - `revyme_submit_files`: Writes complete files. **Use strictly for Code Components (`@controls`) or non-visual logic. DO NOT use to overwrite whole pages when building UI.**
@@ -147,10 +151,20 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
 
 ## 5. Workflows & Best Practices
 
-### A. Reading Context Before Editing
+### A. Reading & Inspecting Context Before Editing
 Always query the editor first to understand the current page structure, active `data-id`s, and design tokens:
-- Call `revyme_get_context`
-- Inspect `result.activeFilePath` and `result.code`.
+- **`revyme_get_context`**:
+  - `result.activeFilePath`: path of the file currently open on the canvas (`app/page.client.tsx`, etc.).
+  - `result.nodeTree`: compact, human-readable indented tree of the active canvas (showing exact `data-id`s, tags, names, and abbrev styles). Use this to choose exact `parent_id`s for `revyme_insert_fragment`!
+  - `result.code`: complete raw TSX code.
+  - `result.presets`: available design tokens (`color-*`, `typo-*`, `space-*`).
+  - `result.collections`: CMS collections with fields and schemas.
+- **`revyme_inspect_node`**:
+  - Call with `{ "node_id": "site-header" }` to inspect any node's full unabbreviated styles, responsive overrides, text, and children.
+- **`revyme_search_project`**:
+  - Call with `{ "query": "ProjectCard" }` or `{ "query": "--color-bg" }` to search across all project files instantly without reading files one-by-one.
+- **`revyme_audit_design`**:
+  - Run this after inserting or modifying sections: `{ "viewport": "tablet" }`. It automatically checks for WCAG contrast violations, overlapping siblings (>4px), and child overflow (>8px) beyond parent or viewport boundaries!
 
 ### B. Building UI & Sections (Use `revyme_insert_fragment`, NOT `revyme_submit_files`)
 **CRITICAL**: When building websites, landing pages, or adding sections, **DO NOT overwrite whole files via `revyme_submit_files`**.
