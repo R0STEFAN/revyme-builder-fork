@@ -85,4 +85,26 @@ describe('captureElement', () => {
     crossOriginImg.src = 'https://api.tattoozp.com/assets/59dd35bc-2953-448a-9832-cae3bc2e4357?width=500';
     expect(filter(crossOriginImg)).toBe(false);
   });
+
+  it('temporarily restores display on culled elements (data-culled) during capture and restores display: none afterwards', async () => {
+    const root = document.createElement('div');
+    const target = document.createElement('div');
+    target.setAttribute('data-node-id', 'vp1_node-culled');
+    target.setAttribute('data-culled', 'true');
+    target.style.display = 'none';
+    root.appendChild(target);
+    setContentRoot(root);
+
+    let displayDuringCapture = '';
+    toPngMock.mockImplementationOnce(async (el: HTMLElement) => {
+      displayDuringCapture = el.style.display;
+      return 'data:image/png;base64,ok-uncull';
+    });
+
+    const res = await captureElement('node-culled', 'vp1_', { format: 'png', pixelRatio: 1 });
+    expect(res).toBe('data:image/png;base64,ok-uncull');
+    expect(displayDuringCapture).toBe('');
+    expect(target.style.display).toBe('none');
+  });
 });
+

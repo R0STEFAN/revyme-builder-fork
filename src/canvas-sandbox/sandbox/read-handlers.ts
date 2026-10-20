@@ -167,6 +167,11 @@ export async function captureElement(
       trace.action('canvas-sandbox:captureElement:not-found', { nodeId, vpPrefix });
       return null;
     }
+    const culledEl = (el.getAttribute('data-culled') === 'true' ? el : el.closest('[data-culled]')) as HTMLElement | null;
+    const wasCulled = !!culledEl && culledEl.style.display === 'none';
+    if (wasCulled && culledEl) {
+      culledEl.style.display = '';
+    }
     try {
       const htmlToImage = await import('html-to-image');
       // `html-to-image` clones the node and renders the clone standalone,
@@ -202,11 +207,17 @@ export async function captureElement(
           return true;
         },
       };
-      if (opts.format === 'svg') return await htmlToImage.toSvg(el, base);
-      if (opts.format === 'jpeg') return await htmlToImage.toJpeg(el, { ...base, quality: 0.95 });
-      return await htmlToImage.toPng(el, base);
+      let res: string;
+      if (opts.format === 'svg') res = await htmlToImage.toSvg(el, base);
+      else if (opts.format === 'jpeg') res = await htmlToImage.toJpeg(el, { ...base, quality: 0.95 });
+      else res = await htmlToImage.toPng(el, base);
+      return res;
     } catch (err) {
       trace.warn('canvas-sandbox:captureElement-failed', err);
       return null;
+    } finally {
+      if (wasCulled && culledEl) {
+        culledEl.style.display = 'none';
+      }
     }
 }
