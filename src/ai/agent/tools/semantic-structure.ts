@@ -25,6 +25,7 @@ import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, type OrderWrite } from './flow-placement';
+import { insertFragmentTool } from './insert-fragment';
 
 /** Queue the sibling `order` writes a placement needs (see flow-placement.ts). */
 export function queueOrderWrites(ctx: ToolContext, writes: readonly OrderWrite[]): void {
@@ -592,6 +593,8 @@ export const setComponentPropTool: AgentTool = {
   },
 };
 
+export { insertFragmentTool };
+
 export const STRUCTURE_TOOLS: AgentTool[] = [
   addNodeTool,
   addCanvasNodeTool,
@@ -601,4 +604,5 @@ export const STRUCTURE_TOOLS: AgentTool[] = [
   duplicateNodeTool,
   addComponentInstanceTool,
   setComponentPropTool,
+  insertFragmentTool,
 ];

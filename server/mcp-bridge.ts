@@ -416,6 +416,41 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_insert_fragment',
+            description:
+              'Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                parent_id: { type: 'string', description: 'data-id of the parent node in the page tree' },
+                index: { type: 'number', description: '0-based position among siblings' },
+                fragment: {
+                  type: 'object',
+                  description: 'Tree structure to insert (tag, id, name, styles, attrs, text, hover, children)',
+                  properties: {
+                    tag: { type: 'string', description: 'HTML tag (div, section, h2, p, button, a)' },
+                    id: { type: 'string', description: 'Optional unique kebab-case data-id' },
+                    name: { type: 'string', description: 'Display name in layers panel' },
+                    styles: { type: 'object', description: 'camelCase CSS styles' },
+                    attrs: { type: 'object', description: 'HTML attributes' },
+                    text: { type: 'string', description: 'Plain text content' },
+                    hover: {
+                      type: 'object',
+                      description: 'Framer Motion whileHover target properties and spring transition',
+                    },
+                    children: {
+                      type: 'array',
+                      description: 'Nested children nodes',
+                      items: { type: 'object' },
+                    },
+                  },
+                  required: [],
+                },
+              },
+              required: ['parent_id', 'fragment'],
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -469,6 +504,12 @@ export class McpBridge {
             break;
           case 'revyme_manage_cms':
             result = await this.sendToEditor('manageCms', args);
+            break;
+          case 'revyme_insert_fragment':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'insert_fragment',
+              input: args,
+            });
             break;
           case 'revyme_agent_manifest':
             result = await this.sendToEditor('agent.manifest', {});

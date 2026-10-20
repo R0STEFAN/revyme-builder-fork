@@ -440,8 +440,8 @@ describe('semantic structure tools', () => {
     expect(clone.textContent).not.toBe('<a {x}');
   });
 
-  it('STRUCTURE_TOOLS exports all eight tools with category semantic', () => {
-    expect(STRUCTURE_TOOLS).toHaveLength(8);
+  it('STRUCTURE_TOOLS exports all semantic structure tools with category semantic', () => {
+    expect(STRUCTURE_TOOLS).toHaveLength(9);
     const names = STRUCTURE_TOOLS.map((t) => t.name);
     expect(names).toEqual([
       'add_node',
@@ -452,6 +452,7 @@ describe('semantic structure tools', () => {
       'duplicate_node',
       'add_component_instance',
       'set_component_prop',
+      'insert_fragment',
     ]);
     for (const tool of STRUCTURE_TOOLS) {
       expect(tool.category).toBe('semantic');

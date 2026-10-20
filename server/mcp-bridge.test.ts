@@ -256,5 +256,53 @@ describe('McpBridge', () => {
       const mcpServer = bridge.createMcpServer();
       expect(mcpServer).toBeDefined();
     });
+
+    it('lists revyme_insert_fragment with proper schema in ListTools', async () => {
+      const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const result = await handler({ method: 'tools/list', params: {} });
+      const toolNames = result.tools.map((t: any) => t.name);
+      expect(toolNames).toContain('revyme_insert_fragment');
+
+      const tool = result.tools.find((t: any) => t.name === 'revyme_insert_fragment');
+      expect(tool.inputSchema.properties.parent_id).toBeDefined();
+      expect(tool.inputSchema.properties.fragment).toBeDefined();
+    });
+
+    it('dispatches revyme_insert_fragment via CallTool to agent.tool with name insert_fragment', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        root_id: 'frame-123',
+        count: 1,
+      });
+
+      const callResult = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_insert_fragment',
+          arguments: {
+            parent_id: 'main-container',
+            fragment: { tag: 'div', name: 'Card' },
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'insert_fragment',
+        input: {
+          parent_id: 'main-container',
+          fragment: { tag: 'div', name: 'Card' },
+        },
+      });
+      expect(callResult.isError).toBeUndefined();
+      expect(callResult.content[0].text).toContain('frame-123');
+    });
   });
 });
