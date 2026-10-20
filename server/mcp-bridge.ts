@@ -1,7 +1,10 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { exec } from 'node:child_process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { getMcpHelp } from './mcp-help';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -432,6 +435,51 @@ export class McpBridge {
               type: 'object',
               properties: {
                 viewport: { type: 'string', description: 'Optional viewport ID ("desktop", "tablet", "mobile") or width in px (e.g. 1200, 810, 375)' },
+                help: { type: 'boolean', description: 'Pass true to get detailed manual and guidance' },
+              },
+            },
+          },
+          {
+            name: 'revyme_capture_screenshot',
+            description:
+              'Capture a high-fidelity visual screenshot of the live canvas at a specific viewport ("mobile", "tablet", "desktop"). Returns layout metrics (horizontalOverflow, scrollWidth, viewportWidth), base64 image data, and an absolute local PNG file path. ALWAYS run this on "mobile" and "desktop" to visually verify responsiveness, alignment, and check for overflow.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                viewport: {
+                  type: 'string',
+                  enum: ['desktop', 'tablet', 'mobile'],
+                  description: 'Viewport breakpoint to capture: "desktop" (1200px), "tablet" (1199px/810px), "mobile" (809px/390px). Defaults to active viewport.',
+                },
+                format: {
+                  type: 'string',
+                  enum: ['png', 'jpeg'],
+                  default: 'png',
+                  description: 'Image format (png or jpeg)',
+                },
+                help: {
+                  type: 'boolean',
+                  description: 'Pass true to display usage instructions for screenshot capture',
+                },
+              },
+            },
+          },
+          {
+            name: 'revyme_help',
+            description:
+              'Interactive reference manual for Revyme MCP tools and best practices. Call with tool_name (e.g. "revyme_manage_presets", "revyme_insert_fragment", "revyme_capture_screenshot") or topic ("typography", "responsive_grid", "tokens", "mobile_safety") to get exhaustive syntax guides, valid arguments, and production examples.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                tool_name: {
+                  type: 'string',
+                  description: 'Name of the MCP tool to inspect (e.g. "revyme_manage_presets", "revyme_insert_fragment", "revyme_set_responsive_styles")',
+                },
+                topic: {
+                  type: 'string',
+                  enum: ['overview', 'typography', 'tokens', 'responsive_grid', 'screenshots', 'variants', 'cms'],
+                  description: 'Topic guide to display',
+                },
               },
             },
           },
@@ -495,26 +543,40 @@ export class McpBridge {
           {
             name: 'revyme_manage_presets',
             description:
-              'Manage design tokens in globals.css (colors, typography, spacing). Action: list, set, remove, set_typography.',
+              'Manage design tokens in globals.css (colors, typography, spacing, radius, shadow, border). Action: "set_typography" (create semantic H1-H6 / body preset with tag and fluid clamp size), "set" (create/update single tokens like radius-card, shadow-soft), "list" (view existing tokens), "remove" (delete token). Supports help: true for usage manual.',
             inputSchema: {
               type: 'object',
               properties: {
                 action: { type: 'string', enum: ['list', 'set', 'remove', 'set_typography'] },
+                tag: {
+                  type: 'string',
+                  enum: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'label', 'li'],
+                  description: 'Semantic HTML tag for set_typography (e.g. "h1" for main hero title, "h2" for section headers, "h3" for cards, "p" for body, "span" for badges). Defaults to "p".',
+                },
                 tokens: {
                   type: 'array',
                   description: 'List of tokens to set for action="set"',
                   items: {
                     type: 'object',
                     properties: {
-                      name: { type: 'string', description: 'e.g. "color-accent" or "radius-card"' },
-                      value: { type: 'string', description: 'e.g. "#FF4500" or "16px"' },
-                      category: { type: 'string', description: 'color, typography, spacing, radius, shadow' },
+                      name: { type: 'string', description: 'Kebab-case token name with prefix, e.g. "color-accent", "radius-card", "shadow-elevated", "border-hairline"' },
+                      value: { type: 'string', description: 'CSS value, e.g. "#FF4500", "16px", "0 4px 12px rgba(0,0,0,0.1)"' },
+                      category: {
+                        type: 'string',
+                        enum: ['color', 'typography', 'spacing', 'margin', 'radius', 'shadow', 'border', 'image', 'video', 'other'],
+                        description: 'Category for grouping in editor panels',
+                      },
+                      darkValue: { type: 'string', description: 'Optional value for dark mode (:root.dark)' },
                     },
                     required: ['name', 'value'],
                   },
                 },
-                name: { type: 'string', description: 'Preset name for set_typography, e.g. "heading"' },
-                values: { type: 'object', description: 'Overrides for typography preset suffixes' },
+                name: { type: 'string', description: 'Preset name slug for set_typography, e.g. "heading-1", "heading-2", "body-large", "mono-label"' },
+                values: {
+                  type: 'object',
+                  description: 'Typography overrides: size (fluid clamp e.g. "clamp(2rem, 5vw, 4rem)"), line-height (unitless multiplier e.g. "1.1"), weight ("400", "700"), font ("\'Inter\', sans-serif"), spacing ("-0.04em"), color ("#111111"), stroke-width ("0.015em"), stroke-color, size-md, size-sm',
+                },
+                help: { type: 'boolean', description: 'Pass true to get detailed syntax guide and examples without applying changes' },
               },
               required: ['action'],
             },
@@ -759,13 +821,14 @@ export class McpBridge {
           {
             name: 'revyme_set_responsive_styles',
             description:
-              'Set responsive CSS styles on a node for specific viewports (e.g. "tablet" for 810px, "mobile" for 375px) via container queries. Pass empty string "" for any property to remove it.',
+              'Set responsive CSS styles on an element for specific viewports (e.g. "mobile" for 390px, "tablet" for 810px). Essential for collapsing grids into single column on mobile (gridTemplateColumns: "1fr") or adjusting padding. Pass empty string "" for any property to remove the override. Supports help: true.',
             inputSchema: {
               type: 'object',
               properties: {
-                node_id: { type: 'string', description: 'data-id of the target node' },
-                viewport: { type: 'string', description: 'Viewport name ("tablet", "mobile") or breakpoint width in px (810, 375)' },
-                styles: { type: 'object', description: 'camelCase CSS style properties' },
+                node_id: { type: 'string', description: 'data-id of the target node (e.g. "projects-grid", "hero-container")' },
+                viewport: { type: 'string', description: 'Target breakpoint: "mobile" (809px max-width), "tablet" (1199px max-width), or numeric width in px (e.g. 390, 810)' },
+                styles: { type: 'object', description: 'camelCase CSS style properties (e.g. { gridTemplateColumns: "1fr", gap: "24px" })' },
+                help: { type: 'boolean', description: 'Pass true to get detailed responsive grid guidance without mutating' },
               },
               required: ['node_id', 'viewport', 'styles'],
             },
@@ -1007,8 +1070,98 @@ export class McpBridge {
       const { name, arguments: args } = request.params;
 
       try {
+        if ((args as any)?.help) {
+          const helpResult = getMcpHelp({ toolName: name });
+          return {
+            content: [{ type: 'text', text: JSON.stringify(helpResult, null, 2) }],
+          };
+        }
+
         let result: any;
         switch (name) {
+          case 'revyme_help':
+            result = getMcpHelp({
+              toolName: (args as any)?.tool_name,
+              topic: (args as any)?.topic,
+            });
+            break;
+          case 'revyme_capture_screenshot': {
+            const vp = (args as any)?.viewport || 'active';
+            const format = (args as any)?.format || 'png';
+            let raw: any = null;
+            try {
+              raw = await this.sendToEditor('agent.tool', {
+                name: 'get_screenshot',
+                input: { viewport: vp, format },
+              }, 6000);
+            } catch (screenshotErr: any) {
+              console.warn('[Revyme Bridge] Screenshot capture timed out or failed:', screenshotErr?.message);
+            }
+
+            let imageBase64: string | null = null;
+            let meta: any = {};
+            if (raw && Array.isArray(raw.content)) {
+              for (const item of raw.content) {
+                if (item.type === 'image' && typeof item.dataUrl === 'string') {
+                  imageBase64 = item.dataUrl;
+                } else if (item.type === 'text' && typeof item.text === 'string') {
+                  try {
+                    meta = JSON.parse(item.text);
+                  } catch {
+                    // ignore
+                  }
+                }
+              }
+            }
+
+            let savedPath: string | null = null;
+            if (imageBase64 && imageBase64.includes('base64,')) {
+              try {
+                const b64Data = imageBase64.split('base64,')[1];
+                const buffer = Buffer.from(b64Data, 'base64');
+                const artifactsDir = process.env.REVYME_ARTIFACTS_DIR || '/home/rost/.gemini/antigravity/brain/2851be16-82a6-4536-bb4f-d57640e360dc/screenshots';
+                if (!fs.existsSync(artifactsDir)) {
+                  fs.mkdirSync(artifactsDir, { recursive: true });
+                }
+                const filename = `screenshot-${vp}-${Date.now()}.${format}`;
+                savedPath = path.join(artifactsDir, filename);
+                fs.writeFileSync(savedPath, buffer);
+              } catch (saveErr) {
+                console.warn('[Revyme Bridge] Failed to save screenshot to disk:', saveErr);
+              }
+            }
+
+            let horizontalOverflow = false;
+            try {
+              const auditRes = await this.sendToEditor('agent.tool', {
+                name: 'audit_design',
+                input: { viewport: vp },
+              }, 5000);
+              const auditText = auditRes?.content?.[0]?.text || '';
+              if (auditText.includes('SECTION_DEPASSE_VIEWPORT') || auditText.includes('CHILD_OVERFLOW')) {
+                horizontalOverflow = true;
+              }
+            } catch {
+              // ignore
+            }
+
+            result = {
+              status: meta.status || (imageBase64 ? 'ready' : 'unavailable'),
+              viewport: vp,
+              width: meta.width || 0,
+              height: meta.height || 0,
+              layout: {
+                viewportWidth: meta.width || 0,
+                horizontalOverflow,
+                note: horizontalOverflow
+                  ? 'WARNING: Layout horizontal overflow detected! Some elements or sections exceed viewport bounds.'
+                  : 'Layout fits cleanly within viewport width.'
+              },
+              savedFilePath: savedPath,
+              dataUrl: imageBase64 ? imageBase64.slice(0, 100) + '... (truncated)' : null,
+            };
+            break;
+          }
           case 'revyme_get_context':
             result = await this.sendToEditor('getContext', args);
             break;

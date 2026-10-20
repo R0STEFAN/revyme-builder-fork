@@ -1059,7 +1059,141 @@ Always verify that all pages still build cleanly:
 
 ---
 
-## 7. References & Deep Dives
+## 7. Self-Documenting MCP & Discovery Protocol (Webstudio Standard)
+
+To eliminate guessing and prevent trial-and-error errors, Revyme MCP tools are self-documenting:
+
+### A. The Interactive Reference Manual (`revyme_help`)
+Whenever you are unsure of the syntax, argument names, or best practices for an operation, call `revyme_help`:
+```json
+// Inspect a specific tool:
+revyme_help({ "tool_name": "revyme_manage_presets" })
+revyme_help({ "tool_name": "revyme_set_responsive_styles" })
+revyme_help({ "tool_name": "revyme_capture_screenshot" })
+
+// Or inspect an architectural topic:
+revyme_help({ "topic": "responsive_grid" })
+revyme_help({ "topic": "typography" })
+revyme_help({ "topic": "tokens" })
+```
+
+### B. In-Flight `help: true` Parameter
+Major tools accept `help: true`. When passed, the tool returns its complete usage manual and production examples without performing any mutations:
+```json
+revyme_manage_presets({ "action": "list", "help": true })
+revyme_set_responsive_styles({ "node_id": "test", "viewport": "mobile", "styles": {}, "help": true })
+```
+
+---
+
+## 8. The Complete Typography Presets Matrix (H1–H6 Semantic Tagging)
+
+Typography presets in Revyme represent complete text style families grouped in `globals.css`.
+When creating typography presets via `revyme_manage_presets` with `action: "set_typography"`, you MUST configure the **semantic `tag`** to match the element's role:
+
+| Preset Name | Semantic `tag` | Fluid `size` Scale | Unitless `line-height` | Intended Usage |
+|---|---|---|---|---|
+| `heading-1` | `"h1"` | `clamp(3rem, 8vw, 6.5rem)` | `1.02` to `1.05` | Main Hero Title |
+| `heading-2` | `"h2"` | `clamp(2rem, 4.5vw, 3.5rem)` | `1.1` to `1.15` | Section Headlines |
+| `heading-3` | `"h3"` | `clamp(1.25rem, 2.5vw, 1.75rem)` | `1.2` to `1.3` | Card & Modal Titles |
+| `body` | `"p"` | `clamp(1rem, 1.4vw, 1.25rem)` | `1.5` to `1.6` | Paragraphs & Editorial Copy |
+| `mono-label` | `"span"` | `clamp(11px, 1.2vw, 13px)` | `1.0` | Overlines, Badges, Metadata |
+
+### Authoring Example:
+```json
+{
+  "action": "set_typography",
+  "name": "heading-1",
+  "tag": "h1",
+  "values": {
+    "size": "clamp(3rem, 8vw, 6.5rem)",
+    "line-height": "1.05",
+    "weight": "700",
+    "font": "'Inter', sans-serif",
+    "spacing": "-0.04em",
+    "color": "#000000"
+  }
+}
+```
+
+---
+
+## 9. Design Tokens System: Radius, Borders, Shadows, and Spacing
+
+Revyme supports 7 distinct token categories under `:root` in `globals.css`. Do not hardcode raw values when a token can represent the design intent:
+
+1. **`radius`**:
+   - `radius-card` (e.g. `16px`)
+   - `radius-button` (e.g. `8px`)
+   - `radius-pill` (e.g. `9999px`)
+2. **`border`**:
+   - `border-hairline` (e.g. `1px solid rgba(0, 0, 0, 0.10)`)
+   - `border-focus` (e.g. `2px solid #6366f1`)
+3. **`shadow`**:
+   - `shadow-card` (e.g. `0 4px 20px rgba(0, 0, 0, 0.06)`)
+   - `shadow-elevated` (e.g. `0 12px 32px rgba(0, 0, 0, 0.12)`)
+4. **`spacing`** / **`margin`**:
+   - `space-section-y` (e.g. `clamp(60px, 9vw, 140px)`)
+   - `space-container-x` (e.g. `clamp(20px, 4vw, 48px)`)
+   - `space-gap` (e.g. `32px`)
+5. **`color`**:
+   - `color-brand`, `color-bg`, `color-surface`, `color-text`, `color-text-secondary`, `color-text-muted`.
+
+---
+
+## 10. Responsive-First Mobile Layouts (Intrinsic Grid & Overflow Prevention)
+
+### The Intrinsic Grid Protocol
+Multi-column grids like `gridTemplateColumns: '1fr 1fr'` or `'2fr 1fr 1fr'` **BLOW OUT ON MOBILE** because 390px cannot fit 2 or 3 columns with padding and gap.
+
+**Rule**: Always make grids intrinsically responsive using `repeat(auto-fit, minmax(...))`:
+```tsx
+// 2-column on desktop, smoothly collapses to 1-column on phone:
+style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+  gap: '32px',
+  width: '100%'
+}}
+```
+
+### Multi-Viewport Overrides (`revyme_set_responsive_styles`)
+If explicit device layout adjustments are required, call `revyme_set_responsive_styles`:
+```json
+{
+  "node_id": "projects-grid",
+  "viewport": "mobile",
+  "styles": {
+    "gridTemplateColumns": "1fr",
+    "gap": "24px"
+  }
+}
+```
+
+---
+
+## 11. Visual Verification Loop: Screenshot Capture & Overflow Checks
+
+Never claim that a website is ready without visual verification. Follow the 2-step verification loop:
+
+1. **Capture Visual Screenshot (`revyme_capture_screenshot`)**:
+   ```json
+   revyme_capture_screenshot({ "viewport": "mobile", "format": "png" })
+   ```
+   Inspect the response:
+   - Check `layout.horizontalOverflow`: if `true`, content is spilling out horizontally!
+   - Inspect the saved image file returned in `savedFilePath` using multimodal inspection tools.
+
+2. **Run Hard Linting (`revyme_audit_design`)**:
+   ```json
+   revyme_audit_design({ "viewport": "mobile" })
+   revyme_audit_design({ "viewport": "desktop" })
+   ```
+   Both viewports must achieve zero overlapping or boundary violations.
+
+---
+
+## 12. References & Deep Dives
 - Read [references/cms-and-expressions-guide.md](./references/cms-and-expressions-guide.md) for the complete guide to Built-in CMS, External API CMS mode (Directus/Strapi/Baserow), and Dynamic Expression Formulas (`fx`).
 - Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for the complete Utopia fluid typography and spacing scale tables and formulas.
 - Read [references/built-in-arsenal.md](./references/built-in-arsenal.md) for the complete catalog of ~80 pre-built components (Marquee, Carousel, shaders, text effects, cursors).
