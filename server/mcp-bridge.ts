@@ -451,6 +451,44 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_apply_motion_preset',
+            description:
+              'Apply a calibrated spring animation or interaction preset to an element (lift-on-hover, scale-on-hover, fade-up, fade-in, slide-in-left, slide-in-right, stagger-children). 100% GUI-Parity: hover effects use Framer Motion whileHover and spring physics.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the target element' },
+                preset: {
+                  type: 'string',
+                  enum: [
+                    'lift-on-hover',
+                    'scale-on-hover',
+                    'fade-up',
+                    'fade-in',
+                    'slide-in-left',
+                    'slide-in-right',
+                    'stagger-children',
+                  ],
+                  description: 'Preset name',
+                },
+                physics: {
+                  type: 'string',
+                  enum: ['snappy', 'gentle', 'bouncy', 'slow'],
+                  description: 'Calibrated spring physics curve (snappy, gentle, bouncy, slow)',
+                },
+                stagger: {
+                  type: 'number',
+                  description: 'Stagger delay step in seconds for stagger-children (default 0.08)',
+                },
+                targets: {
+                  type: 'object',
+                  description: 'Optional overrides for whileHover targets',
+                },
+              },
+              required: ['node_id', 'preset'],
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -508,6 +546,12 @@ export class McpBridge {
           case 'revyme_insert_fragment':
             result = await this.sendToEditor('agent.tool', {
               name: 'insert_fragment',
+              input: args,
+            });
+            break;
+          case 'revyme_apply_motion_preset':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'apply_motion_preset',
               input: args,
             });
             break;

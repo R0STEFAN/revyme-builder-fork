@@ -304,5 +304,54 @@ describe('McpBridge', () => {
       expect(callResult.isError).toBeUndefined();
       expect(callResult.content[0].text).toContain('frame-123');
     });
+
+    it('lists revyme_apply_motion_preset with proper schema in ListTools', async () => {
+      const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const result = await handler({ method: 'tools/list', params: {} });
+      const toolNames = result.tools.map((t: any) => t.name);
+      expect(toolNames).toContain('revyme_apply_motion_preset');
+
+      const tool = result.tools.find((t: any) => t.name === 'revyme_apply_motion_preset');
+      expect(tool.inputSchema.properties.node_id).toBeDefined();
+      expect(tool.inputSchema.properties.preset).toBeDefined();
+    });
+
+    it('dispatches revyme_apply_motion_preset via CallTool to agent.tool with name apply_motion_preset', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        node_id: 'card-1',
+        preset: 'lift-on-hover',
+        physics: 'gentle',
+      });
+
+      const callResult = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_apply_motion_preset',
+          arguments: {
+            node_id: 'card-1',
+            preset: 'lift-on-hover',
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'apply_motion_preset',
+        input: {
+          node_id: 'card-1',
+          preset: 'lift-on-hover',
+        },
+      });
+      expect(callResult.isError).toBeUndefined();
+      expect(callResult.content[0].text).toContain('lift-on-hover');
+    });
   });
 });

@@ -244,4 +244,7 @@ export const getMotionTool: AgentTool = {
   },
 };
 
-export const MOTION_MORE_TOOLS: AgentTool[] = [setMotionTool, removeMotionTool, setTextEffectTool, getMotionTool];
+import { applyMotionPresetTool } from './motion-preset';
+
+export { applyMotionPresetTool };
+export const MOTION_MORE_TOOLS: AgentTool[] = [setMotionTool, removeMotionTool, setTextEffectTool, getMotionTool, applyMotionPresetTool];
