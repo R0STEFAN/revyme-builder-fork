@@ -903,7 +903,53 @@ If inserting directly into the page canvas:
 
 ---
 
-### H. Adding Motion & Animations (Choreography & Springs)
+### I. The Free-Canvas Slot Connection Protocol (Marquee, Carousel, & Slot Code Components)
+
+> [!IMPORTANT]
+> **THE CARDINAL RULE OF SLOTS**: In Revyme and Framer, Code Components with `"type": "slot"` (such as `<Marquee>`, `<Carousel>`, `<EmblaCarousel>`, or `<LensBox>`) **NEVER accept inline JSX children**!
+>
+> Inlined children are strictly invisible on the canvas and trigger the Oracle error `SLOT_COMPONENT_INLINE_CHILDREN`, causing the Inspector to report **`0 items`**.
+>
+> **The Mandated Architectural Pattern**:
+> 1. Elements connected to a Marquee or Carousel **MUST BE CREATED ON THE FREE CANVAS** (outside any page viewport) via `revyme_add_canvas_node`.
+> 2. Each free-canvas node carries `data-canvas-node="true"`.
+> 3. Each free-canvas node is connected to the slot using `revyme_connect_slot({ "node_id": marqueeInstanceId, "canvas_node_id": cardId })`.
+> 4. In generated code, Revyme hoists the node to `const cn_<id> = (<MarqueeCard ... data-canvas-node="true" />)` and references `{cn_<id>}` inside the instance:
+>    ```tsx
+>    const cn_card_1 = (<MarqueeCard data-id="card-1" data-canvas-node="true" category="01" title="KINETIC" />);
+>    const cn_card_2 = (<MarqueeCard data-id="card-2" data-canvas-node="true" category="02" title="BRUTALIST" />);
+>    ...
+>    <Marquee data-id="marquee-instance" speed={45}>{cn_card_1}{cn_card_2}</Marquee>
+>    ```
+> 5. This allows designers to visually see, drag, reposition, and edit the cards freely on the canvas outside the page frame, while the live Marquee continuously iterates through the connected `{cn_...}` references!
+
+#### Step-by-Step Slot Connection Workflow:
+```json
+// Step 1: Create card on the free canvas
+{
+  "tool": "revyme_add_canvas_node",
+  "input": {
+    "tag": "MarqueeCard",
+    "id": "marquee-card-1",
+    "name": "Marquee Card 01",
+    "styles": { "position": "relative", "width": "320px", "height": "448px" },
+    "attrs": { "category": "ISSUE 01", "title": "KINETIC MONOGRAPH", "initialVariant": "default" }
+  }
+}
+
+// Step 2: Connect the free-canvas card to the Marquee slot
+{
+  "tool": "revyme_connect_slot",
+  "input": {
+    "node_id": "frame-mvgsaq8o-1",
+    "canvas_node_id": "marquee-card-1"
+  }
+}
+```
+
+---
+
+### J. Adding Motion & Animations (Choreography & Springs)
 Always apply animations using Revyme's native semantic tools (`set_motion`, `set_text_effect`, `set_smooth_scroll`) rather than raw code:
 
 - **Physics-Based Transitions (Springs)**:

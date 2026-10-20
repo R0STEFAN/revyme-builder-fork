@@ -216,8 +216,31 @@ import { wrapInFitSVGInCode, unwrapFitSVGInCode } from '../generation/fit-text-g
 import { removeDanglingConnectionsInCode, healDriftedConnectionHandlersInCode } from '../variants/connection-config';
 import { setSketchAnimInCode, removeSketchAnimInCode } from '../sketch/sketch-anim-gen';
 import { projectFS, projectVersionAtom, installBuiltInCodeComponent } from '../project/project-fs';
+import { ensureDefaultImportInCode } from '../generation/cursor-gen';
 import { clearCanvasStyles } from '@/canvas/node-ops';
 import type { PresetToken } from '@/shared/types';
+
+function ensureComponentImportsForNode(code: string, node: any): string {
+  let next = code;
+  const collectComponentTags = (n: any, tags: Set<string>) => {
+    if (!n) return;
+    const tag = n.type;
+    if (tag && /^[A-Z]/.test(tag) && !tag.startsWith('motion.')) {
+      tags.add(tag);
+    }
+    if (Array.isArray(n.children)) {
+      for (const child of n.children) collectComponentTags(child, tags);
+    }
+  };
+  const tags = new Set<string>();
+  collectComponentTags(node, tags);
+  for (const tag of tags) {
+    if (projectFS.readFile(`components/${tag}.tsx`) != null) {
+      next = ensureDefaultImportInCode(next, tag, `@/components/${tag}`);
+    }
+  }
+  return next;
+}
 
 // ─── Mutation Types ────────────────────────────────────────────────────────
 
@@ -2635,6 +2658,7 @@ function applyMutationCore(code: string, mutation: Mutation): string {
             }
           }
         }
+        next = ensureComponentImportsForNode(next, mutation.node);
         return next;
       }
 
@@ -2666,6 +2690,7 @@ function applyMutationCore(code: string, mutation: Mutation): string {
             }
           }
         }
+        next = ensureComponentImportsForNode(next, mutation.node);
         return next;
       }
 

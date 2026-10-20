@@ -896,6 +896,61 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_add_canvas_node',
+            description:
+              'Create a FREE-CANVAS NODE sitting outside the viewport tree (on the open canvas, e.g. for Marquee or Carousel slots). In Revyme and Framer, elements connected to Marquee/Carousel MUST be created on the free canvas and connected via revyme_connect_slot, NEVER placed as inline JSX children. Returns the created node_id.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                tag: { type: 'string', description: 'HTML tag or Component name (e.g. "div", "MarqueeCard", "ProjectCard")' },
+                id: { type: 'string', description: 'Optional unique data-id (e.g. "marquee-card-1")' },
+                name: { type: 'string', description: 'Display name in layers panel' },
+                styles: { type: 'object', description: 'camelCase CSS styles' },
+                attrs: { type: 'object', description: 'Attributes or component props (e.g. { variant: "asym-b", category: "ISSUE 01", title: "..." })' },
+                text: { type: 'string', description: 'Plain text content' },
+              },
+              required: ['tag'],
+            },
+          },
+          {
+            name: 'revyme_connect_slot',
+            description:
+              'Connect a FREE-CANVAS NODE into a code component\'s slot (e.g. Carousel slides, Marquee items). Slot components (Marquee, Carousel) MUST use connected free-canvas nodes (created with revyme_add_canvas_node) and NEVER inline children in JSX. Hoists node to const cn_<id> = (...) and references {cn_<id>} inside the slot.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the slot code component instance (e.g. Marquee or Carousel)' },
+                canvas_node_id: { type: 'string', description: 'data-id of the free-canvas node to connect' },
+              },
+              required: ['node_id', 'canvas_node_id'],
+            },
+          },
+          {
+            name: 'revyme_get_slots',
+            description:
+              'Inspect a code component\'s slot controls: its label, how many nodes it takes, what is connected, and available free-canvas candidates.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the code component instance (e.g. Marquee)' },
+              },
+              required: ['node_id'],
+            },
+          },
+          {
+            name: 'revyme_disconnect_slot',
+            description:
+              'Take a canvas node out of a code component\'s slot. The node remains on the free canvas.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the code component instance' },
+                canvas_node_id: { type: 'string', description: 'data-id of the free-canvas node to disconnect' },
+              },
+              required: ['node_id', 'canvas_node_id'],
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -1071,6 +1126,30 @@ export class McpBridge {
             };
             break;
           }
+          case 'revyme_add_canvas_node':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'add_canvas_node',
+              input: args,
+            });
+            break;
+          case 'revyme_connect_slot':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'connect_slot',
+              input: args,
+            });
+            break;
+          case 'revyme_get_slots':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'get_slots',
+              input: args,
+            });
+            break;
+          case 'revyme_disconnect_slot':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'disconnect_slot',
+              input: args,
+            });
+            break;
           case 'revyme_agent_manifest':
             result = await this.sendToEditor('agent.manifest', {});
             break;
