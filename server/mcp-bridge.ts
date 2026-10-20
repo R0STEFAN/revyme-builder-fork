@@ -418,7 +418,7 @@ export class McpBridge {
           {
             name: 'revyme_insert_fragment',
             description:
-              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
+              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURE: Every section MUST use the Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px") so all page sections share identical alignment lines! 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
             inputSchema: {
               type: 'object',
               properties: {

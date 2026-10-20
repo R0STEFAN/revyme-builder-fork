@@ -22,29 +22,49 @@ Atomically inserts a nested tree into the active page canvas with automatic keba
   "index": 0,
   "fragment": {
     "tag": "section",
-    "name": "Feature Grid",
+    "name": "Feature Section",
     "styles": {
-      "display": "grid",
-      "gridTemplateColumns": "repeat(3, 1fr)",
-      "gap": "24px",
-      "padding": "60px 24px"
+      "width": "100%",
+      "backgroundColor": "var(--color-bg)",
+      "paddingTop": "80px",
+      "paddingBottom": "80px"
     },
     "children": [
       {
         "tag": "div",
-        "name": "Feature Card",
+        "name": "Container",
         "styles": {
-          "padding": "24px",
-          "backgroundColor": "#1E293B",
-          "borderRadius": "12px"
+          "width": "100%",
+          "maxWidth": "1200px",
+          "margin": "0 auto",
+          "paddingLeft": "24px",
+          "paddingRight": "24px",
+          "display": "grid",
+          "gridTemplateColumns": "repeat(3, 1fr)",
+          "gap": "24px"
         },
-        "hover": {
-          "targets": { "scale": 1.03, "y": -4 },
-          "transition": { "type": "spring", "stiffness": 350, "damping": 25 }
+        "responsive": {
+          "tablet": { "gridTemplateColumns": "repeat(2, 1fr)", "paddingLeft": "20px", "paddingRight": "20px" },
+          "mobile": { "gridTemplateColumns": "1fr", "paddingLeft": "16px", "paddingRight": "16px" }
         },
         "children": [
-          { "tag": "h3", "text": "Ultra Fast", "styles": { "color": "#FFFFFF", "fontSize": "20px" } },
-          { "tag": "p", "text": "Sub-millisecond latency for all requests", "styles": { "color": "#94A3B8" } }
+          {
+            "tag": "div",
+            "name": "Feature Card",
+            "styles": {
+              "padding": "24px",
+              "backgroundColor": "#1E293B",
+              "borderRadius": "12px"
+            },
+            "hover": {
+              "targets": { "scale": 1.03, "y": -4 },
+              "transition": { "type": "spring", "stiffness": 350, "damping": 25 }
+            },
+            "children": [
+              { "tag": "h3", "text": "Ultra Fast", "styles": { "color": "#FFFFFF", "fontSize": "20px" } },
+              { "tag": "p", "text": "Sub-millisecond latency for all requests", "styles": { "color": "#94A3B8" } }
+            ]
+          }
         ]
       }
     ]

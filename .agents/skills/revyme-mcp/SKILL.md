@@ -148,16 +148,67 @@ Overwriting files via `submit_files`:
 - Often wipes out required wrapper boilerplate (`LayoutClient`, route group setup, page root attributes).
 - Fails Oracle checks if IDs are missing or non-kebab-case.
 
-**The Golden Recipe to Build Any Page/Section**:
-1. Call `revyme_get_context` to inspect the active page and identify the root container (`parent_id: "root"` or section container ID).
-2. **Mandatory Section Background**: Every `<section>` MUST explicitly specify `backgroundColor` (e.g. `backgroundColor: "var(--color-bg)"`, `"#09090B"`, or `"#FFFFFF"`). Never leave sections with undefined background, or they will render as transparent blanks on canvas!
-3. **Mandatory Multi-Breakpoint Responsiveness**:
-   Revyme pages are styled across 3 viewports:
-   - **Desktop**: 1200px+ (base `styles`)
-   - **Tablet**: 810px–1199px (`responsive.tablet`)
-   - **Mobile**: <810px (`responsive.mobile`)
-   Pass `responsive` directly in `revyme_insert_fragment` nodes, or call `revyme_set_responsive_styles`:
-4. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer):
+### C. Standard Layout Hierarchy: Page Wrapper → Section → Container
+
+Every professional page in Revyme MUST follow the strict three-tier layout architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Page Root Wrapper (<div data-id="root" data-name="Page">)                │
+│    width: 100%, minHeight: 100vh, flex-col, backgroundColor, overflowX: hidden│
+│                                                                             │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 2. Section (<section data-id="*-sec" data-name="* Section">)            │ │
+│ │    FULL-BLEED: width: 100%, explicit backgroundColor, vertical padding   │ │
+│ │                                                                         │ │
+│ │   ┌─────────────────────────────────────────────────────────────────┐   │ │
+│ │   │ 3. Container (<div data-id="*-container" data-name="Container">)│   │ │
+│ │   │    SHARED MAX-WIDTH: maxWidth: 1200px (or 1280px), width: 100% │   │ │
+│ │   │    CENTERED: margin: 0 auto, padding: 0 24px (responsive: 16px)│   │ │
+│ │   │                                                                 │   │ │
+│ │   │    └── Inner Content (Headlines, Grid, Cards, Buttons, Form)    │   │ │
+│ │   └─────────────────────────────────────────────────────────────────┘   │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 1. Page Root Wrapper (`data-id="root"`)
+Every page begins with a top-level flex column wrapper:
+```tsx
+<div
+  data-id="root"
+  data-name="Page"
+  style={{
+    position: 'relative',
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: 'var(--color-bg)',
+    color: 'var(--color-text)',
+    overflowX: 'hidden'
+  }}
+>
+```
+
+#### 2. Full-Bleed Section (`<section>`)
+- Spans edge-to-edge: `width: "100%"`.
+- **Mandatory Section Background**: MUST have an explicit `backgroundColor` (e.g. `"var(--color-bg)"`, `"#09090B"`, `"#FFFFFF"` or gradient) so sections NEVER render as transparent voids!
+- Handles vertical spacing: `paddingTop: "100px"`, `paddingBottom: "100px"` (tablet: `60px`, mobile: `40px`).
+- Does NOT contain loose text directly — all content goes inside the inner Container!
+
+#### 3. Centered Content Container (`<div name="Container">`)
+- **Shared Max-Width**: Sets the universal layout boundary for the entire website: `maxWidth: "1200px"` (or `"1280px"`). Every section on the page must use the exact same `maxWidth`!
+- **Auto-Centered**: `margin: "0 auto"`, `width: "100%"`.
+- **Horizontal Gutters**: `paddingLeft: "24px"`, `paddingRight: "24px"` (tablet: `20px`, mobile: `16px`).
+- Contains the section's headlines, descriptions, cards, grids, and buttons.
+
+---
+
+### D. The Golden Recipe to Build Any Page/Section
+
+1. Call `revyme_get_context` to inspect the active page and verify the root container (`parent_id: "root"`).
+2. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer) using the Section + Container architecture:
    ```json
    {
      "parent_id": "root",
@@ -165,48 +216,96 @@ Overwriting files via `submit_files`:
        "tag": "section",
        "name": "Hero Section",
        "styles": {
-         "display": "flex",
-         "flexDirection": "row",
-         "alignItems": "center",
-         "justifyContent": "space-between",
-         "padding": "100px 48px",
+         "width": "100%",
          "backgroundColor": "var(--color-bg)",
-         "width": "100%"
+         "paddingTop": "100px",
+         "paddingBottom": "100px",
+         "display": "flex",
+         "flexDirection": "column",
+         "alignItems": "center"
        },
        "responsive": {
-         "tablet": { "padding": "60px 32px" },
-         "mobile": { "flexDirection": "column", "padding": "40px 16px" }
+         "tablet": { "paddingTop": "60px", "paddingBottom": "60px" },
+         "mobile": { "paddingTop": "40px", "paddingBottom": "40px" }
        },
        "children": [
          {
-           "tag": "h1",
-           "text": "Build Faster with AI",
-           "styles": { "fontSize": "56px", "fontWeight": "800", "color": "var(--color-text)", "marginBottom": "16px" },
+           "tag": "div",
+           "name": "Container",
+           "styles": {
+             "width": "100%",
+             "maxWidth": "1200px",
+             "margin": "0 auto",
+             "paddingLeft": "24px",
+             "paddingRight": "24px",
+             "display": "flex",
+             "flexDirection": "column",
+             "alignItems": "center",
+             "textAlign": "center"
+           },
            "responsive": {
-             "tablet": { "fontSize": "40px" },
-             "mobile": { "fontSize": "28px" }
-           }
-         },
-         {
-           "tag": "button",
-           "name": "CTA Button",
-           "text": "Get Started",
-           "styles": { "padding": "12px 24px", "backgroundColor": "#3B82F6", "color": "#FFFFFF", "borderRadius": "8px" },
-           "hover": {
-             "targets": { "scale": 1.05, "y": -2 },
-             "transition": { "type": "spring", "stiffness": 400, "damping": 25 }
-           }
+             "tablet": { "paddingLeft": "20px", "paddingRight": "20px" },
+             "mobile": { "paddingLeft": "16px", "paddingRight": "16px" }
+           },
+           "children": [
+             {
+               "tag": "h1",
+               "text": "Radical Form. Fluid Motion.",
+               "styles": {
+                 "fontSize": "64px",
+                 "fontWeight": "800",
+                 "color": "var(--color-text)",
+                 "lineHeight": "1.1",
+                 "marginBottom": "20px"
+               },
+               "responsive": {
+                 "tablet": { "fontSize": "44px" },
+                 "mobile": { "fontSize": "32px" }
+               }
+             },
+             {
+               "tag": "p",
+               "text": "Crafting digital experiences with precision and kinematic feedback.",
+               "styles": {
+                 "fontSize": "18px",
+                 "color": "var(--color-text-secondary)",
+                 "maxWidth": "640px",
+                 "marginBottom": "36px"
+               },
+               "responsive": {
+                 "mobile": { "fontSize": "16px" }
+               }
+             },
+             {
+               "tag": "button",
+               "name": "CTA Button",
+               "text": "Explore Selected Work",
+               "styles": {
+                 "padding": "14px 28px",
+                 "backgroundColor": "#3B82F6",
+                 "color": "#FFFFFF",
+                 "borderRadius": "8px",
+                 "fontWeight": "600"
+               },
+               "hover": {
+                 "targets": { "scale": 1.04, "y": -2 },
+                 "transition": { "type": "spring", "stiffness": 400, "damping": 25 }
+               }
+             }
+           ]
          }
        ]
      }
    }
    ```
-5. If adding a Marquee, Carousel, or background shader:
+3. If adding a Marquee, Carousel, or background shader:
    Call `revyme_add_built_in_component` with tag `"Marquee"` or `"Carousel"` instead of coding static divs!
-6. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover`, `fade-up`, `stagger-children`) to add entrance animations to inserted cards.
-7. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
+4. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover`, `fade-up`, `stagger-children`) to add entrance animations to inserted cards.
+5. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
 
-### C. Hover Animations & Interactive States (100% GUI-Parity Standard)
+---
+
+### E. Hover Animations & Interactive States (100% GUI-Parity Standard)
 > **CRITICAL RULE**: NEVER emit raw CSS `:hover` rules in `<style>`. CSS hover was explicitly removed from the builder UI because CSS transforms fight Framer Motion's FLIP projection. Moreover, CSS `:hover` rules do NOT appear in the builder's Inspector, breaking visual editability!
 >
 > You MUST use ONLY the two visual mechanisms supported by the Revyme Builder:
