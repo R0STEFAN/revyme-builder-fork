@@ -1236,7 +1236,11 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // The remap safety net only applies when the user is ON a page — an MCP
     // client targeting a page from elsewhere must name an exact existing path.
     const activePagePath = isPageClientFile(activeFilePath) ? activeFilePath : null;
-    const { files: gatedFiles, violations } = gateTurnFiles(files, activePagePath);
+    const typedFiles = files.map((f: any) => ({
+      ...f,
+      kind: f.kind || (f.path.startsWith('components/') ? 'component' : 'page'),
+    }));
+    const { files: gatedFiles, violations } = gateTurnFiles(typedFiles, activePagePath);
 
     if (violations.length > 0) {
       trace.action('mcp-bridge:submit-bounced', { count: violations.length, codes: violations.map((v) => v.code) });

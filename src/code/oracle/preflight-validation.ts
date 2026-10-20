@@ -119,7 +119,7 @@ const SHORTHAND_FAMILIES: Array<[string, string[]]> = [
  */
 export function validateStyleInput(
   styles: Record<string, unknown> | undefined,
-  opts?: { isTextNode?: boolean; tagName?: string; fs?: { readFile: (p: string) => string | null } }
+  opts?: { isTextNode?: boolean; tagName?: string; isComponentMaster?: boolean; fs?: { readFile: (p: string) => string | null } }
 ): string | null {
   if (!styles || typeof styles !== 'object') return null;
 
@@ -191,6 +191,18 @@ export function validateStyleInput(
       const tag = opts.tagName ?? 'container';
       return `Typography property "${key}" cannot be placed on container "<${tag}>". In Revyme, text styles live ON the text element itself (<p>, <span>, <h1>-<h6>, <a>) — never on a parent wrapper.`;
     }
+
+    // 8. position: fixed check (FIXED_DEPTH)
+    if (key === 'position' && strVal === 'fixed') {
+      if (opts?.isComponentMaster || (opts?.tagName && opts.tagName !== 'div' && opts.tagName !== 'header')) {
+        return `position: 'fixed' is only supported on direct top-level children of the page root. Inside component masters or nested subtrees, use position: 'sticky' with top: 0 to ensure proper canvas rendering across multi-viewport frames.`;
+      }
+    }
+
+    // 9. mixBlendMode: 'difference' check
+    if (key === 'mixBlendMode' && strVal === 'difference') {
+      return `mixBlendMode: 'difference' renders invisibly or transparently on the multi-viewport canvas sandbox iframe. Use explicit solid or translucent backgrounds (e.g. rgba(255, 255, 255, 0.85) with backdropFilter: 'blur(16px)') instead.`;
+    }
   }
 
 
@@ -218,6 +230,11 @@ export function validateTagInput(
 ): string | null {
   const t = (tag ?? 'div').trim();
   const base = t.startsWith('motion.') ? t.slice(7) : t;
+
+  // 0. <style> tag prohibition
+  if (base === 'style') {
+    return `<style> tags are forbidden in JSX. In Revyme, write responsive styles via fluid CSS (clamp(), repeat(auto-fit, minmax(...))) or via the multi-viewport engine (revyme_set_responsive_styles). Raw <style> blocks cannot be inspected or visually edited by the builder panels.`;
+  }
 
   // 1. Parent is a slot component
   if (parentNode?.type) {
@@ -283,3 +300,64 @@ export function validateAttributesInput(
   }
   return null;
 }
+
+/**
+ * Validates free-canvas node placement.
+ * Ensures free-canvas nodes are ALWAYS positioned to the LEFT side of the site (x < 0).
+ * The right side (x >= 0) is reserved for responsive viewports (Tablet at 1360px, Mobile at 2330px).
+ */
+export function validateCanvasNodePosition(styles: Record<string, unknown> | undefined): string | null {
+  if (!styles || typeof styles !== 'object') return null;
+  const leftVal = styles.left;
+  if (leftVal !== undefined && leftVal !== null) {
+    const px = typeof leftVal === 'number' ? leftVal : parseFloat(String(leftVal));
+    if (!isNaN(px) && px >= 0) {
+      return `Free-canvas nodes (slot candidates, marquee/carousel items) must ALWAYS be positioned to the LEFT side of the site (negative X coordinates, e.g. left: "-380px", left: "-760px"). The right side is occupied by responsive breakpoints (Tablet at 1360px, Mobile at 2330px). Received left: "${leftVal}".`;
+    }
+  }
+  return null;
+}
+
+export interface ComponentVariantItem {
+  name: string;
+  label?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Validates that variant artboards in component editor do not overlap.
+ */
+export function validateVariantConfig(
+  variants: ComponentVariantItem[] | undefined,
+  defaultWidth = 400,
+  defaultHeight = 300
+): string | null {
+  if (!variants || !Array.isArray(variants) || variants.length <= 1) return null;
+  for (let i = 0; i < variants.length; i++) {
+    for (let j = i + 1; j < variants.length; j++) {
+      const v1 = variants[i];
+      const v2 = variants[j];
+      const x1 = typeof v1.x === 'number' ? v1.x : 0;
+      const y1 = typeof v1.y === 'number' ? v1.y : 0;
+      const w1 = typeof v1.width === 'number' ? v1.width : defaultWidth;
+      const h1 = typeof v1.height === 'number' ? v1.height : defaultHeight;
+
+      const x2 = typeof v2.x === 'number' ? v2.x : 0;
+      const y2 = typeof v2.y === 'number' ? v2.y : 0;
+      const w2 = typeof v2.width === 'number' ? v2.width : defaultWidth;
+      const h2 = typeof v2.height === 'number' ? v2.height : defaultHeight;
+
+      const overlapX = x1 < x2 + w2 + 40 && x1 + w1 + 40 > x2;
+      const overlapY = y1 < y2 + h2 + 40 && y1 + h1 + 40 > y2;
+      if (overlapX && overlapY) {
+        return `Component variants "${v1.name}" (at x:${x1}, y:${y1}) and "${v2.name}" (at x:${x2}, y:${y2}) overlap in the component editor. Position variants with sufficient spacing (at least width + 80px apart horizontally or height + 80px apart vertically).`;
+      }
+    }
+  }
+  return null;
+}
+

@@ -552,6 +552,10 @@ All TSX files submitted or edited undergo strict AST validation in `src/code/ora
 | **8. `ATTR_ORDER_DATA_ID_FIRST`** | Place `data-id` and `data-name` FIRST on every tag, before `style` and motion props | `<div data-id="card-root" data-name="Card" style={{ ... }}>` | Parser attribute scanners read in order; early style tags block ID binding. |
 | **9. `COMPONENT_CHILD_FIXED_WIDTH`** | Never hardcode the component artboard width (e.g. `1200px`) on inner spanning containers | Use `width: '100%'` with optional `maxWidth: '1200px'` | Hardcoded master artboard widths break responsive scaling when the component is placed on mobile/tablet viewports. |
 | **10. `TEXT_EXPRESSION`** | The text editing tool cannot edit computed JavaScript expressions | Write text as clean string literals, or bind expressions via `revyme_bind_expression` (`item.<field>`) | The visual canvas text tool directly binds to string literals; computed expressions cannot be round-tripped. |
+| **11. `FREE_CANVAS_LEFT_PLACEMENT`** | Free-canvas nodes (slot candidates, marquee/carousel cards) MUST ALWAYS be positioned to the LEFT of the site | Use negative X coordinates (`left: '-380px'`, `left: '-760px'`). **NEVER** use positive `left` (e.g. `1350px`) | The right side of the canvas ($x \ge 0$) is reserved for responsive viewports (Tablet at $x=1360$, Mobile at $x=2330$). Placing nodes on the right causes physical overlap and visual breakage with breakpoints! |
+| **12. `VARIANT_CONFIG_NON_OVERLAPPING`** | Variant artboards in component files (`variantConfig`) must NEVER overlap | Offset variants by at least `width + 80px` horizontally (e.g. `x: 0`, `x: 1400`) or `height + 80px` vertically | Overlapping coordinates in `variantConfig` cause the component editor to render variant artboards directly on top of each other, making visual editing impossible. |
+| **13. `FIXED_DEPTH_AND_BLEND_MODE`** | Never put `position: 'fixed'` or `mixBlendMode: 'difference'` inside component masters | Use `position: 'sticky', top: 0` on the root header with explicit background color (e.g. `rgba(255,255,255,0.85)` + `backdropFilter: 'blur(16px)'`) | Inside component masters, `position: 'fixed'` is trapped by Framer Motion's `transform` containing block and becomes invisible or displaced on the canvas. `mixBlendMode: 'difference'` renders as invisible/black on canvas iframe transparent layers. |
+| **14. `RAW_STYLE_TAG_PROHIBITION`** | Raw `<style>` tags with `@media` in JSX are strictly forbidden | Use fluid CSS (`clamp()`, `minmax()`, `repeat(auto-fit, ...)`) or `revyme_set_responsive_styles` | Raw `<style>` blocks bypass the visual inspector and cannot be edited by the builder panels. |
 
 ---
 
@@ -911,17 +915,18 @@ If inserting directly into the page canvas:
 > Inlined children are strictly invisible on the canvas and trigger the Oracle error `SLOT_COMPONENT_INLINE_CHILDREN`, causing the Inspector to report **`0 items`**.
 >
 > **The Mandated Architectural Pattern**:
-> 1. Elements connected to a Marquee or Carousel **MUST BE CREATED ON THE FREE CANVAS** (outside any page viewport) via `revyme_add_canvas_node`.
+> 1. Elements connected to a Marquee or Carousel **MUST BE CREATED ON THE FREE CANVAS TO THE LEFT OF THE SITE** (outside any page viewport, using negative X coordinates, e.g. `left: "-380px"`, `left: "-760px"`, `left: "-1140px"`) via `revyme_add_canvas_node`.
+>    **NEVER** place free-canvas nodes to the right of the site ($x \ge 0$, e.g. `1350px`), because responsive viewports (Tablet at $x=1360$, Mobile at $x=2330$) occupy the right side of the canvas. Placing nodes on the right creates visual collisions, overlaps, and viewport boundary errors!
 > 2. Each free-canvas node carries `data-canvas-node="true"`.
 > 3. Each free-canvas node is connected to the slot using `revyme_connect_slot({ "node_id": marqueeInstanceId, "canvas_node_id": cardId })`.
 > 4. In generated code, Revyme hoists the node to `const cn_<id> = (<MarqueeCard ... data-canvas-node="true" />)` and references `{cn_<id>}` inside the instance:
 >    ```tsx
->    const cn_card_1 = (<MarqueeCard data-id="card-1" data-canvas-node="true" category="01" title="KINETIC" />);
->    const cn_card_2 = (<MarqueeCard data-id="card-2" data-canvas-node="true" category="02" title="BRUTALIST" />);
+>    const cn_card_1 = (<MarqueeCard data-id="card-1" data-canvas-node="true" category="01" title="KINETIC" style={{ position: 'absolute', left: '-380px', top: '150px', width: '320px', height: '448px' }} />);
+>    const cn_card_2 = (<MarqueeCard data-id="card-2" data-canvas-node="true" category="02" title="BRUTALIST" style={{ position: 'absolute', left: '-760px', top: '150px', width: '320px', height: '448px' }} />);
 >    ...
 >    <Marquee data-id="marquee-instance" speed={45}>{cn_card_1}{cn_card_2}</Marquee>
 >    ```
-> 5. This allows designers to visually see, drag, reposition, and edit the cards freely on the canvas outside the page frame, while the live Marquee continuously iterates through the connected `{cn_...}` references!
+> 5. This allows designers to visually see, drag, reposition, and edit the cards freely on the canvas outside the page frame (safely docked on the left), while the live Marquee continuously iterates through the connected `{cn_...}` references!
 
 #### Step-by-Step Slot Connection Workflow:
 ```json

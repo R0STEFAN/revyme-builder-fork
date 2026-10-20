@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { validateStyleInput, validateTagInput, validateAttributesInput } from './preflight-validation';
+import {
+  validateStyleInput,
+  validateTagInput,
+  validateAttributesInput,
+  validateCanvasNodePosition,
+  validateVariantConfig,
+} from './preflight-validation';
 
 describe('preflight-validation', () => {
   describe('validateStyleInput', () => {
@@ -57,6 +63,15 @@ describe('preflight-validation', () => {
     it('allows external backgroundImage urls', () => {
       expect(validateStyleInput({ backgroundImage: "url('https://images.unsplash.com/photo-1')" })).toBeNull();
     });
+
+    it('rejects mixBlendMode difference', () => {
+      expect(validateStyleInput({ mixBlendMode: 'difference' })).toContain("mixBlendMode: 'difference' renders invisibly");
+    });
+
+    it('rejects position fixed inside component master or nested element', () => {
+      expect(validateStyleInput({ position: 'fixed' }, { isComponentMaster: true })).toContain("position: 'fixed' is only supported on direct top-level children");
+      expect(validateStyleInput({ position: 'fixed' }, { tagName: 'span' })).toContain("position: 'fixed' is only supported on direct top-level children");
+    });
   });
 
   describe('validateAttributesInput', () => {
@@ -84,11 +99,45 @@ describe('preflight-validation', () => {
       expect(validateTagInput('iframe')).toContain('is not supported by Revyme visual engine');
     });
 
+    it('rejects style tags', () => {
+      expect(validateTagInput('style')).toContain('<style> tags are forbidden in JSX');
+    });
+
     it('allows valid native tags', () => {
       expect(validateTagInput('div')).toBeNull();
       expect(validateTagInput('section')).toBeNull();
       expect(validateTagInput('h1')).toBeNull();
       expect(validateTagInput('span')).toBeNull();
+    });
+  });
+
+  describe('validateCanvasNodePosition', () => {
+    it('rejects positive X/left coordinates on free-canvas nodes', () => {
+      expect(validateCanvasNodePosition({ left: '1350px' })).toContain('Free-canvas nodes (slot candidates, marquee/carousel items) must ALWAYS be positioned to the LEFT');
+      expect(validateCanvasNodePosition({ left: 400 })).toContain('Free-canvas nodes (slot candidates, marquee/carousel items) must ALWAYS be positioned to the LEFT');
+    });
+
+    it('allows negative X/left coordinates on free-canvas nodes', () => {
+      expect(validateCanvasNodePosition({ left: '-380px' })).toBeNull();
+      expect(validateCanvasNodePosition({ left: -400 })).toBeNull();
+    });
+  });
+
+  describe('validateVariantConfig', () => {
+    it('rejects overlapping component variant artboards', () => {
+      const variants = [
+        { name: 'default', x: 0, y: 0, width: 400, height: 300 },
+        { name: 'hover', x: 100, y: 0, width: 400, height: 300 },
+      ];
+      expect(validateVariantConfig(variants)).toContain('overlap in the component editor');
+    });
+
+    it('allows well-spaced component variant artboards', () => {
+      const variants = [
+        { name: 'default', x: 0, y: 0, width: 400, height: 300 },
+        { name: 'hover', x: 500, y: 0, width: 400, height: 300 },
+      ];
+      expect(validateVariantConfig(variants)).toBeNull();
     });
   });
 });

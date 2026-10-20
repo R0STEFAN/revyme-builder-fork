@@ -26,7 +26,7 @@ import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, queueOrderWrites, type OrderWrite } from './flow-placement';
 import { insertFragmentTool } from './insert-fragment';
-import { validateStyleInput, validateTagInput, validateAttributesInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { validateStyleInput, validateTagInput, validateAttributesInput, validateCanvasNodePosition, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
 import { TEXT_TAGS } from '@/shared/constants';
 
 export { queueOrderWrites };
@@ -276,6 +276,8 @@ export const addCanvasNodeTool: AgentTool = {
     const attrErr = validateAttributesInput(attrs, projectFS);
     if (attrErr) return fail(attrErr);
     const rawStyles = (args.styles as Record<string, string>) ?? {};
+    const posErr = validateCanvasNodePosition(rawStyles);
+    if (posErr) return fail(posErr);
     const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag, fs: projectFS });
     if (styleErr) return fail(styleErr);
     const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
