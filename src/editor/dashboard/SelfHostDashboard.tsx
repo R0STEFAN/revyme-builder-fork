@@ -139,7 +139,9 @@ export default function SelfHostDashboard() {
           if (data.method === 'navigateToBuilder' || data.method === 'openEditor') {
             let url = data.params?.url;
             if (!url || url === '/builder') {
-              const currentList = projectsRef.current;
+              const currentList = (projectsRef.current || []).filter(
+                (p) => !p.id.startsWith('test-') && !p.id.includes('fifo')
+              );
               if (currentList.length > 0 && currentList[0]?.id) {
                 url = `/builder/${encodeURIComponent(currentList[0].id)}`;
               } else {
@@ -256,6 +258,7 @@ export default function SelfHostDashboard() {
       handleOpen(created.id);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create project');
+    } finally {
       setCreating(false);
     }
   };

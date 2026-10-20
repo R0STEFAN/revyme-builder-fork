@@ -145,10 +145,13 @@ export async function createProject(
       });
       if (res.ok) {
         const saved = (await res.json()) as LocalProjectItem;
-        if (window.localStorage) {
-          localStorage.setItem(NAME_PREFIX + id, finalName);
-          localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
-          if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem(NAME_PREFIX + id, finalName);
+            if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
+          } catch {
+            // Ignore localStorage metadata cache errors
+          }
         }
         return saved;
       }
@@ -157,11 +160,15 @@ export async function createProject(
     }
   }
 
-  // 2. Fallback to localStorage
+  // 2. Fallback to localStorage (only when server is unreachable)
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem(NAME_PREFIX + id, finalName);
-    localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
-    if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
+    try {
+      localStorage.setItem(NAME_PREFIX + id, finalName);
+      localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(data));
+      if (folderId) localStorage.setItem(FOLDER_PROJECT_PREFIX + id, folderId);
+    } catch (err: any) {
+      console.warn('[LocalProjects] Failed to save project to localStorage fallback:', err);
+    }
   }
 
   return {
