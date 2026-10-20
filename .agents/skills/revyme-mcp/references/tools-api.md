@@ -14,6 +14,70 @@ The Revyme editor communicates with the MCP server using JSON-RPC over a Server-
 
 ## 2. High-Level MCP Methods
 
+### `revyme_insert_fragment` (PRIMARY for Page Building)
+Atomically inserts a nested tree into the active page canvas with automatic kebab-case `data-id` generation and Framer Motion hover bindings:
+```json
+{
+  "parent_id": "root",
+  "index": 0,
+  "fragment": {
+    "tag": "section",
+    "name": "Feature Grid",
+    "styles": {
+      "display": "grid",
+      "gridTemplateColumns": "repeat(3, 1fr)",
+      "gap": "24px",
+      "padding": "60px 24px"
+    },
+    "children": [
+      {
+        "tag": "div",
+        "name": "Feature Card",
+        "styles": {
+          "padding": "24px",
+          "backgroundColor": "#1E293B",
+          "borderRadius": "12px"
+        },
+        "hover": {
+          "targets": { "scale": 1.03, "y": -4 },
+          "transition": { "type": "spring", "stiffness": 350, "damping": 25 }
+        },
+        "children": [
+          { "tag": "h3", "text": "Ultra Fast", "styles": { "color": "#FFFFFF", "fontSize": "20px" } },
+          { "tag": "p", "text": "Sub-millisecond latency for all requests", "styles": { "color": "#94A3B8" } }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### `revyme_apply_motion_preset`
+Applies calibrated spring animation presets to any node by `node_id`:
+```json
+{
+  "node_id": "feature-card-1",
+  "preset": "lift-on-hover",
+  "physics": "gentle"
+}
+```
+Supported presets: `lift-on-hover`, `scale-on-hover`, `fade-up`, `fade-in`, `slide-in-left`, `slide-in-right`, `stagger-children`.
+Supported physics: `snappy`, `gentle`, `bouncy`, `slow`.
+
+### `revyme_manage_component_variant`
+Creates or manipulates interactive variant states on Design Components:
+```json
+{
+  "component": "PricingCard",
+  "action": "add_interaction",
+  "interaction": "hover",
+  "styles": {
+    "transform": "translateY(-6px)",
+    "borderColor": "#6366F1"
+  }
+}
+```
+
 ### `revyme_get_context`
 Retrieves full snapshot of the editor state:
 - `activeFilePath`: e.g. `"app/page.client.tsx"`
@@ -25,15 +89,15 @@ Retrieves full snapshot of the editor state:
 - `presets`: active CSS design tokens (`color-*`, `typo-*`, etc.)
 - `collections`: CMS schemas and items
 
-### `revyme_submit_files`
-Direct file write with Oracle Gate checking:
+### `revyme_submit_files` (RESTRICTED - Scaffolding & Code Components Only)
+Direct file write with Oracle Gate checking. **DO NOT use to build visual pages or sections — use `revyme_insert_fragment` instead.**
 ```json
 {
   "files": [
     {
-      "path": "app/page.client.tsx",
-      "code": "'use client'; ...",
-      "kind": "page"
+      "path": "components/ShaderCanvas.tsx",
+      "code": "'use client';\n/** @controls { ... } */\n...",
+      "kind": "component"
     }
   ]
 }

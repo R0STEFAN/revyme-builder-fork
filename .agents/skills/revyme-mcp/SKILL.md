@@ -39,12 +39,17 @@ Before executing any tool calls, ensure that:
 
 The agent can send requests to the builder in two ways:
 1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
-   - `revyme_get_context`: Read current page/component AST, tokens, and schemas.
-   - `revyme_submit_files`: Write page files with Oracle gate validation.
-   - `revyme_manage_presets`: Manage design tokens (colors, typography, radii).
-   - `revyme_manage_cms`: Manage CMS collections, fields, and items.
-   - `revyme_agent_tool`: Execute semantic builder operations (`create_component`, `set_motion`, `add_node`, etc.).
-   - `revyme_agent_manifest`: List all available semantic agent tools.
+   - `revyme_insert_fragment`: **PRIMARY TOOL for UI generation.** Atomically inserts entire subtrees (sections, cards, grids) with auto-generated IDs and native Framer Motion hovers into the active canvas.
+   - `revyme_apply_motion_preset`: Applies calibrated spring animations (`lift-on-hover`, `scale-on-hover`, `fade-up`, `stagger-children`).
+   - `revyme_manage_component_variant`: Creates and manages interactive variant states (`default-hover`, etc.) on Design Components.
+   - `revyme_get_context`: Reads active page/component AST, tokens, and schemas.
+   - `revyme_read_file`: Reads source code of any project file.
+   - `revyme_list_files`: Lists all project files.
+   - `revyme_submit_files`: Writes complete files. **Use strictly for Code Components (`@controls`) or non-visual logic. DO NOT use to overwrite whole pages when building UI.**
+   - `revyme_manage_presets`: Manages design tokens in globals.css (colors, typography, radii).
+   - `revyme_manage_cms`: Manages CMS collections, fields, and items.
+   - `revyme_agent_tool`: Executes granular semantic builder operations (`create_component`, `set_motion`, `add_node`, etc.).
+   - `revyme_agent_manifest`: Lists all available semantic agent tools.
 
 2. **Through the Bridge HTTP RPC Endpoint**:
    If running via script or CLI:
@@ -114,15 +119,51 @@ Always query the editor first to understand the current page structure, active `
 - Call `revyme_get_context`
 - Inspect `result.activeFilePath` and `result.code`.
 
-### B. Adding Elements and Layouts
-Use `add_node`:
-- `parent_id`: Target container's `data-id` (e.g. `"root"` or another section/frame).
-- `tag`: Use valid tags: `div`, `section`, `p`, `h1`-`h6`, `span`, `img`, `a`.
-  - **CRITICAL**: Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead.
-- `id`: Always provide a stable, semantic, unique kebab-case ID (e.g., `pricing-card-1`, `faq-item-3`).
-- `styles`: Pass camelCase CSS (`display: 'flex'`, `flexDirection: 'column'`).
-- `text`: Plain text only (no HTML).
-- Place text styles (`fontSize`, `color`, `textAlign`) on the text element itself, not on wrapper frames.
+### B. Building UI & Sections (Use `revyme_insert_fragment`, NOT `revyme_submit_files`)
+**CRITICAL**: When building websites, landing pages, or adding sections, **DO NOT overwrite whole files via `revyme_submit_files`**.
+Overwriting files via `submit_files`:
+- Bypasses incremental AST validation and creates invalid non-GUI state.
+- Often wipes out required wrapper boilerplate (`LayoutClient`, route group setup, page root attributes).
+- Fails Oracle checks if IDs are missing or non-kebab-case.
+
+**The Golden Recipe to Build Any Page/Section**:
+1. Call `revyme_get_context` to inspect the active page and identify the root container (`parent_id: "root"` or section container ID).
+2. Call `revyme_insert_fragment` for each major section (Hero, Features, Pricing, Testimonials, Footer):
+   ```json
+   {
+     "parent_id": "root",
+     "fragment": {
+       "tag": "section",
+       "name": "Hero Section",
+       "styles": {
+         "display": "flex",
+         "flexDirection": "column",
+         "alignItems": "center",
+         "padding": "80px 24px",
+         "backgroundColor": "#0F172A"
+       },
+       "children": [
+         {
+           "tag": "h1",
+           "text": "Build Faster with AI",
+           "styles": { "fontSize": "48px", "fontWeight": "800", "color": "#F8FAFC", "marginBottom": "16px" }
+         },
+         {
+           "tag": "button",
+           "name": "CTA Button",
+           "text": "Get Started",
+           "styles": { "padding": "12px 24px", "backgroundColor": "#3B82F6", "color": "#FFFFFF", "borderRadius": "8px" },
+           "hover": {
+             "targets": { "scale": 1.05, "y": -2 },
+             "transition": { "type": "spring", "stiffness": 400, "damping": 25 }
+           }
+         }
+       ]
+     }
+   }
+   ```
+3. Optionally call `revyme_apply_motion_preset` (e.g. `lift-on-hover` or `fade-up`) to add entrance animations to inserted cards.
+4. Use granular `add_node` only for single, isolated element additions. Never emit `<ul>` or `<li>` tags; build stacked flex column `<div>`s instead. Always place text styles on text elements directly.
 
 ### C. Hover Animations & Interactive States (100% GUI-Parity Standard)
 > **CRITICAL RULE**: NEVER emit raw CSS `:hover` rules in `<style>`. CSS hover was explicitly removed from the builder UI because CSS transforms fight Framer Motion's FLIP projection. Moreover, CSS `:hover` rules do NOT appear in the builder's Inspector, breaking visual editability!

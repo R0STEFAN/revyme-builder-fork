@@ -337,7 +337,7 @@ export class McpBridge {
           {
             name: 'revyme_submit_files',
             description:
-              'Write or update files in the Revyme project with full Oracle gate validation. Every write must be valid Next.js React code.',
+              'Write or update files in the Revyme project with full Oracle gate validation. Every write must be valid Next.js React code. CAUTION: For building UI sections, cards, and page layouts, prefer revyme_insert_fragment which guarantees proper AST insertion, auto-generated data-ids, and native Framer Motion hover support. Use revyme_submit_files ONLY for Code Components (@controls), standalone non-visual logic, or initial empty file scaffolding.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -418,7 +418,7 @@ export class McpBridge {
           {
             name: 'revyme_insert_fragment',
             description:
-              'Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
+              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
             inputSchema: {
               type: 'object',
               properties: {
