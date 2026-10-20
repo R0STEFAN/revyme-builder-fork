@@ -362,7 +362,10 @@ export const addComponentPropTool: AgentTool = {
   },
 };
 
-export const COMPONENT_MORE_TOOLS: AgentTool[] = [showVariantTool, addConnectionTool, removeConnectionTool, renameVariantTool, removeVariantTool, setVariantVisibilityTool, detachInstanceTool, addComponentPropTool];
+import { manageComponentVariantTool } from './manage-component-variant';
+
+export { manageComponentVariantTool };
+export const COMPONENT_MORE_TOOLS: AgentTool[] = [showVariantTool, addConnectionTool, removeConnectionTool, renameVariantTool, removeVariantTool, setVariantVisibilityTool, detachInstanceTool, addComponentPropTool, manageComponentVariantTool];
 
 /** Variants + connections of a master, for get_component. */
 export function describeVariantAxis(code: string): string {

@@ -489,6 +489,32 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_manage_component_variant',
+            description:
+              'Create and manage Design Component variants and interactive states (hover/pressed) with 100% GUI-Parity. Actions: "add_interaction" (creates hover/pressed variant with auto-wired mouseEnter/mouseLeave connections and styles), "create" (creates new custom variant), "set_styles" (updates styles on an existing variant), "list" (lists all variants).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                component: { type: 'string', description: 'PascalCase component name, e.g. "Button" or "Card"' },
+                action: {
+                  type: 'string',
+                  enum: ['add_interaction', 'create', 'set_styles', 'list'],
+                  description: 'Action to perform',
+                },
+                variant: { type: 'string', description: 'Variant name (for create or set_styles)' },
+                interaction: {
+                  type: 'string',
+                  enum: ['hover', 'pressed'],
+                  description: 'Interaction type for add_interaction ("hover" or "pressed", default "hover")',
+                },
+                parent_variant: { type: 'string', description: 'Source variant name to cascade from (default "default")' },
+                styles: { type: 'object', description: 'Optional camelCase CSS styles to apply to the variant' },
+                element: { type: 'string', description: 'data-id of element inside component to style (default: component root)' },
+              },
+              required: ['component', 'action'],
+            },
+          },
+          {
             name: 'revyme_agent_tool',
             description:
               'Call any of the 168 fine-grained semantic agent tools of the editor: set_motion, set_styles, add_node, wrap_in_layout, set_smooth_scroll, cms_create_collection, batch, etc.',
@@ -552,6 +578,12 @@ export class McpBridge {
           case 'revyme_apply_motion_preset':
             result = await this.sendToEditor('agent.tool', {
               name: 'apply_motion_preset',
+              input: args,
+            });
+            break;
+          case 'revyme_manage_component_variant':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'manage_component_variant',
               input: args,
             });
             break;

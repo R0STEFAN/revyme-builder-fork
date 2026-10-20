@@ -353,5 +353,56 @@ describe('McpBridge', () => {
       expect(callResult.isError).toBeUndefined();
       expect(callResult.content[0].text).toContain('lift-on-hover');
     });
+
+    it('lists revyme_manage_component_variant with proper schema in ListTools', async () => {
+      const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const result = await handler({ method: 'tools/list', params: {} });
+      const toolNames = result.tools.map((t: any) => t.name);
+      expect(toolNames).toContain('revyme_manage_component_variant');
+
+      const tool = result.tools.find((t: any) => t.name === 'revyme_manage_component_variant');
+      expect(tool.inputSchema.properties.component).toBeDefined();
+      expect(tool.inputSchema.properties.action).toBeDefined();
+    });
+
+    it('dispatches revyme_manage_component_variant via CallTool to agent.tool with name manage_component_variant', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      expect(handler).toBeDefined();
+
+      const sendToEditorSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        component: 'Button',
+        variant: 'default-hover',
+        interaction: 'hover',
+      });
+
+      const callResult = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_manage_component_variant',
+          arguments: {
+            component: 'Button',
+            action: 'add_interaction',
+            interaction: 'hover',
+          },
+        },
+      });
+
+      expect(sendToEditorSpy).toHaveBeenCalledWith('agent.tool', {
+        name: 'manage_component_variant',
+        input: {
+          component: 'Button',
+          action: 'add_interaction',
+          interaction: 'hover',
+        },
+      });
+      expect(callResult.isError).toBeUndefined();
+      expect(callResult.content[0].text).toContain('default-hover');
+    });
   });
 });
