@@ -90,4 +90,93 @@ describe('ImageSearchModal upload tab in self-hosted / local mode', () => {
     expect(onSelect).toHaveBeenCalledWith('/api/uploads/photo1.jpg');
     expect(onClose).toHaveBeenCalled();
   });
+
+  describe('Link tab', () => {
+    it('opens on Link tab when currentUrl is provided and displays preview', () => {
+      render(
+        <ImageSearchModal
+          isOpen={true}
+          onClose={() => {}}
+          onSelect={() => {}}
+          currentUrl="https://images.unsplash.com/photo-test"
+        />
+      );
+
+      const input = screen.getByPlaceholderText(/https:\/\/images\.unsplash\.com/i) as HTMLInputElement;
+      expect(input.value).toBe('https://images.unsplash.com/photo-test');
+      const previewImg = screen.getByRole('img', { name: /Preview/i }) as HTMLImageElement;
+      expect(previewImg.src).toBe('https://images.unsplash.com/photo-test');
+    });
+
+    it('applies new link on Apply click', () => {
+      const onSelect = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <ImageSearchModal
+          isOpen={true}
+          onClose={onClose}
+          onSelect={onSelect}
+        />
+      );
+
+      // Switch to Link tab
+      const linkTabBtn = screen.getByRole('button', { name: 'Link' });
+      fireEvent.click(linkTabBtn);
+
+      const input = screen.getByPlaceholderText(/https:\/\/images\.unsplash\.com/i);
+      fireEvent.change(input, { target: { value: 'https://example.com/custom.jpg' } });
+
+      const applyBtn = screen.getByRole('button', { name: 'Apply' });
+      fireEvent.click(applyBtn);
+
+      expect(onSelect).toHaveBeenCalledWith('https://example.com/custom.jpg');
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('clears image when URL is empty and Apply is clicked', () => {
+      const onSelect = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <ImageSearchModal
+          isOpen={true}
+          onClose={onClose}
+          onSelect={onSelect}
+          currentUrl="https://example.com/old.jpg"
+        />
+      );
+
+      // Should have clear button ✕
+      const clearBtn = screen.getByRole('button', { name: 'Clear link' });
+      fireEvent.click(clearBtn);
+
+      const input = screen.getByPlaceholderText(/https:\/\/images\.unsplash\.com/i) as HTMLInputElement;
+      expect(input.value).toBe('');
+
+      const applyBtn = screen.getByRole('button', { name: 'Apply' });
+      fireEvent.click(applyBtn);
+
+      expect(onSelect).toHaveBeenCalledWith('');
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('submits on Enter key in link input', () => {
+      const onSelect = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <ImageSearchModal
+          isOpen={true}
+          onClose={onClose}
+          onSelect={onSelect}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+      const input = screen.getByPlaceholderText(/https:\/\/images\.unsplash\.com/i);
+      fireEvent.change(input, { target: { value: 'https://example.com/enter-test.jpg' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      expect(onSelect).toHaveBeenCalledWith('https://example.com/enter-test.jpg');
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
 });

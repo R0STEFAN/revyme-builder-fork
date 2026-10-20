@@ -221,7 +221,7 @@ function VideoToolInner({
       </ToolSection>
 
       <VideoSearchModal isOpen={videoModalOpen} onClose={() => setVideoModalOpen(false)} onSelect={handleVideoSelect} />
-      <ImageSearchModal isOpen={posterModalOpen} onClose={() => setPosterModalOpen(false)} onSelect={handlePosterSelect} />
+      <ImageSearchModal isOpen={posterModalOpen} onClose={() => setPosterModalOpen(false)} currentUrl={poster || undefined} onSelect={handlePosterSelect} />
     </>
   );
 }

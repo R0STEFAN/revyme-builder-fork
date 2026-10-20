@@ -168,6 +168,7 @@ export default function UploadControl({
         <ImageSearchModal
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
+          currentUrl={firstUrl || undefined}
           onSelect={(url) => {
             onChange(url);
             trace.action('upload-control:picked', { url: url.slice(0, 80) });

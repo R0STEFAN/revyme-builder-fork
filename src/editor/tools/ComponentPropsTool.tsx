@@ -37,6 +37,8 @@ import GroupControl from './GroupControl';
 import ImageListControl from './ImageListControl';
 import ObjectListControl from './ObjectListControl';
 import TransitionControl from './TransitionControl';
+import ExpressionBoundPill from '../controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '../ui/ExpressionEditorPopup';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { renderCodeComponentDirect } from '@/canvas/CodeComponentHost';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
@@ -144,6 +146,17 @@ export { setInstanceProp, removeInstanceProp } from './ComponentPropsTool/instan
  * competing Component block with its own name and Edit button below it.
  * IconSetTool renders this tool embedded inside its own section.
  */
+function isImageExpression(val: string): boolean {
+  if (!val) return false;
+  const trimmed = val.trim();
+  if (trimmed.startsWith('`') || trimmed.includes('${')) return true;
+  if (/^(?:https?:\/\/|\/|data:|blob:)/i.test(trimmed)) return false;
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*\.[a-zA-Z0-9_$.]+/.test(trimmed)) return true;
+  if (trimmed.includes('?') || trimmed.includes('||') || trimmed.includes('&&')) return true;
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*\(/.test(trimmed)) return true;
+  return false;
+}
+
 export default function ComponentPropsTool({ embedded = false }: { embedded?: boolean } = {}) {
   const nodes = useAtomValue(nodesAtom);
   const jotaiStore = useStore();
@@ -420,6 +433,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
   // wins the display until the parsed pipeline settles (cleared on a timer;
   // the parsed value has always converged well within it).
   const [pendingProps, setPendingProps] = useState<Record<string, string>>({});
+  const [editingImageExprProp, setEditingImageExprProp] = useState<string | null>(null);
   const pendingPropTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const setPropOptimistic = useCallback((propName: string, value: string) => {
     setPendingProps((p) => ({ ...p, [propName]: value }));
@@ -2058,23 +2072,47 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
             uploadSource={controlDef.uploadSource || 'uploaded'}
           />
         );
-      case 'upload':
+      case 'upload': {
+        const isExpr = isImageExpression(currentValue);
         return (
           <ToolRow key={propName} label={controlDef.label} labelStyle={labelStyle} {...rowLocale}>
-            {wrapPill(<UploadControl
-              value={currentValue}
-              onChange={(v) => handlePropChange(propName, v, String(controlDef.default))}
-              accept={controlDef.accept || 'image/*'}
-              multiple={controlDef.multiple || false}
-              uploadSource={controlDef.uploadSource || 'uploaded'}
-              onBatchComplete={controlDef.multiple ? (count) => {
-                if (controlsMeta?.controls?.totalFrames) {
-                  handlePropChange('totalFrames', String(count), String(controlsMeta.controls.totalFrames.default));
-                }
-              } : undefined}
-            />)}
+            {wrapPill(
+              isExpr ? (
+                <ExpressionBoundPill
+                  expression={currentValue}
+                  onEdit={() => setEditingImageExprProp(propName)}
+                  onClear={() => handlePropChange(propName, String(controlDef.default ?? ''), String(controlDef.default ?? ''))}
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 w-full min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <UploadControl
+                      value={currentValue}
+                      onChange={(v) => handlePropChange(propName, v, String(controlDef.default))}
+                      accept={controlDef.accept || 'image/*'}
+                      multiple={controlDef.multiple || false}
+                      uploadSource={controlDef.uploadSource || 'uploaded'}
+                      onBatchComplete={controlDef.multiple ? (count) => {
+                        if (controlsMeta?.controls?.totalFrames) {
+                          handlePropChange('totalFrames', String(count), String(controlsMeta.controls.totalFrames.default));
+                        }
+                      } : undefined}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingImageExprProp(propName)}
+                    title="Dynamic Expression (Formula)"
+                    className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                  >
+                    fx
+                  </button>
+                </div>
+              )
+            )}
           </ToolRow>
         );
+      }
       case 'slot':
         // Slot — connected canvas nodes render as the component's children.
         return (
@@ -2621,38 +2659,50 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                   <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
                     <div className="flex items-center justify-between w-full">
                       <ControlLabel label={prop.label || prop.name} property={cssProp ?? ''} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} />
-                      {isReplica
-                        // On a replica the binding can live in data-responsive (not the
-                        // node's propBindings), so CmsBoundPill can't read it — show a
-                        // standalone pill; × unbinds THIS viewport→default, rebind via
-                        // the chevron "Set Variable". Reset Override (chevron) → base.
-                        //
-                        // `cmsBoundField` is the field's ID (`title`), which is what the
-                        // JSX carries. Resolve it to the field's display NAME the way
-                        // CmsBoundPill does, or the two pills disagree about the same
-                        // binding — desktop read "Question" while tablet read "title"
-                        // (user report 2026-08-08). The tooltip also has to say which
-                        // binding it is: with no data-responsive entry for this prop the
-                        // replica is simply INHERITING the base one.
-                        ? <CmsFieldPill
-                            field={cmsFieldLabel(cmsBinding?.fields, cmsBoundField)}
-                            title={responsiveOverrides.has(prop.name)
-                              ? `Bound to CMS field "${cmsBoundField}" for this viewport`
-                              : `Inherits the CMS field "${cmsBoundField}" from the base viewport`}
-                            onUnbind={() => {
-                              setPropOptimistic(prop.name, prop.defaultValue ?? '');
-                              unbindPropForViewport(prop.name, prop.defaultValue ?? '');
-                            }}
-                          />
-                        : <CmsBoundPill
-                            property={prop.name}
-                            fallbackValue={prop.defaultValue ?? ''}
-                            // Swap to the static editor in the SAME frame as the
-                            // click; without it the row empties for a few frames
-                            // while the write round-trips and the input visibly
-                            // animates in (user report 2026-08-08).
-                            onUnbound={(fallback) => setPropOptimistic(prop.name, fallback)}
-                          />}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {isReplica
+                          // On a replica the binding can live in data-responsive (not the
+                          // node's propBindings), so CmsBoundPill can't read it — show a
+                          // standalone pill; × unbinds THIS viewport→default, rebind via
+                          // the chevron "Set Variable". Reset Override (chevron) → base.
+                          //
+                          // `cmsBoundField` is the field's ID (`title`), which is what the
+                          // JSX carries. Resolve it to the field's display NAME the way
+                          // CmsBoundPill does, or the two pills disagree about the same
+                          // binding — desktop read "Question" while tablet read "title"
+                          // (user report 2026-08-08). The tooltip also has to say which
+                          // binding it is: with no data-responsive entry for this prop the
+                          // replica is simply INHERITING the base one.
+                          ? <CmsFieldPill
+                              field={cmsFieldLabel(cmsBinding?.fields, cmsBoundField)}
+                              title={responsiveOverrides.has(prop.name)
+                                ? `Bound to CMS field "${cmsBoundField}" for this viewport`
+                                : `Inherits the CMS field "${cmsBoundField}" from the base viewport`}
+                              onUnbind={() => {
+                                setPropOptimistic(prop.name, prop.defaultValue ?? '');
+                                unbindPropForViewport(prop.name, prop.defaultValue ?? '');
+                              }}
+                            />
+                          : <CmsBoundPill
+                              property={prop.name}
+                              fallbackValue={prop.defaultValue ?? ''}
+                              // Swap to the static editor in the SAME frame as the
+                              // click; without it the row empties for a few frames
+                              // while the write round-trips and the input visibly
+                              // animates in (user report 2026-08-08).
+                              onUnbound={(fallback) => setPropOptimistic(prop.name, fallback)}
+                            />}
+                        {prop.varType === 'image' && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingImageExprProp(prop.name)}
+                            title="Dynamic Expression (Formula)"
+                            className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                          >
+                            fx
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </HoistMenuItemProvider>
                 );
@@ -2817,12 +2867,39 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                 );
               }
               if (prop.varType === 'image') {
+                const isExpr = isImageExpression(propValue);
                 return (
                   <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
                     <div className="flex items-center justify-between w-full">
                       <ControlLabel label={prop.label || prop.name} property={cssProp ?? ''} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel={humanizeStylePropName(cssProp) ?? undefined} />
                       <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
-                        <ImagePickerInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} rawUrl={!propValue.startsWith('url(')} />
+                        {isExpr ? (
+                          <ExpressionBoundPill
+                            expression={propValue}
+                            onEdit={() => setEditingImageExprProp(prop.name)}
+                            onClear={() => {
+                              if (!selectedId) return;
+                              expediteStableAtomSync();
+                              modifyProjectFile(activeFile, (c) => removeInstanceProp(c, selectedId, instanceTagName ?? '', prop.name));
+                              const newCode = projectFS.readFile(activeFile);
+                              if (newCode) { setCode(newCode); setVersion(v => v + 1); }
+                            }}
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5 w-full min-w-0">
+                            <div className="flex-1 min-w-0">
+                              <ImagePickerInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} rawUrl={!propValue.startsWith('url(')} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEditingImageExprProp(prop.name)}
+                              title="Dynamic Expression (Formula)"
+                              className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+                            >
+                              fx
+                            </button>
+                          </div>
+                        )}
                       </LocalePropPillOr>
                     </div>
                   </HoistMenuItemProvider>
@@ -3173,6 +3250,34 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
           left rail lists the master's existing props and picking one binds to
           it, while creating a new one hoists the prop up. */}
       {variableModal}
+      {editingImageExprProp && (
+        <ExpressionEditorPopup
+          isOpen={true}
+          onClose={() => setEditingImageExprProp(null)}
+          onApply={(expr) => {
+            const propName = editingImageExprProp;
+            setEditingImageExprProp(null);
+            if (!selectedId || !componentInfo) return;
+            expediteStableAtomSync();
+            trace.action('component-props:set-image-expr', { nodeId: selectedId, propName, expr });
+            modifyProjectFile(activeFile, (code) => setInstanceProp(code, selectedId, instanceTagName ?? '', propName, expr.trim(), true));
+            const newCode = projectFS.readFile(activeFile);
+            if (newCode) { setCode(newCode); setVersion(v => v + 1); }
+          }}
+          initialExpression={(() => {
+            if (!editingImageExprProp) return '';
+            const val = currentValues.get(editingImageExprProp);
+            if (val) return val;
+            const pb = node?.propBindings?.find(b => b.prop === editingImageExprProp);
+            if (pb && cmsBinding) return `${cmsBinding.itemVar || 'item'}.${pb.field}`;
+            return '';
+          })()}
+          targetProperty="src"
+          collectionSlug={cmsBinding?.slug}
+          itemVar={cmsBinding?.itemVar || 'item'}
+          fields={cmsBinding?.fields || []}
+        />
+      )}
     </>
   );
 }

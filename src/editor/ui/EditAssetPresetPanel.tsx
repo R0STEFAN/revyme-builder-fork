@@ -115,6 +115,7 @@ export default function EditAssetPresetPanel({ presetName, type, initialValue, o
         <ImageSearchModal
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
+          currentUrl={url || undefined}
           onSelect={handlePicked}
         />
       ) : (

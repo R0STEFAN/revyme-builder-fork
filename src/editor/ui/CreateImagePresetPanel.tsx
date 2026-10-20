@@ -105,6 +105,7 @@ export default function CreateImagePresetPanel({ initialValue, onCreated }: Prop
       <ImageSearchModal
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        currentUrl={url || undefined}
         onSelect={(picked) => {
           setUrl(picked);
           trace.action('create-image-preset:picked', { urlLength: picked.length });

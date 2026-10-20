@@ -149,6 +149,7 @@ export function AssetValueEditor({ value, type, onChange }: {
         <ImageSearchModal
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
+          currentUrl={url || undefined}
           onSelect={handlePicked}
         />
       ) : (

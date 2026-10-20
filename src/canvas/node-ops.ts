@@ -28,6 +28,7 @@ import { RENDER_RESOLVED_MUTATIONS } from '@/code/mutation/render-resolved-mutat
 import { dragStateOps } from '@/canvas/drag/drag-state-store';
 import { isComponentVariantRootNode } from '@/canvas/variant-root';
 import { injectNodeIntoCache, updateNodeInCache, removeNodeFromCache, moveNodeInCache, isComponentInstanceInCache, getVariantOverriddenKeys, getNodeFromCache } from '@/code/stores/store';
+import { getDefaultStore } from 'jotai';
 import { DEFAULT_VIEWPORT_WIDTH, SVG_SHAPE_TAGS } from '@/shared/constants';
 import { getReplicaContext, svgChildCarrierOrigin, groupChildBoxToMotion, groupChildrenCarryVariantGeometry, compensateGroupChildVariantsForBaseBox } from '@/canvas/drag/replica-context';
 import { motionPropsToCSSTransform } from '@/shared/motion-transform';
@@ -36,8 +37,8 @@ import { extractCanvasGlobals, canvasThemeMode } from './canvas-theme';
 import { getCanvasBridge } from './canvas-bridge';
 import { transformManager } from './transform/TransformManager';
 import { moveChildAndRefitGroup, normalizeGroupOnResize, refitGroupChain } from '@/code/svg/refit-group';
-import { getViewportWidths } from '@/code/stores/viewport-store';
-import type { ScreenCorners } from '@/shared/types';
+import { getViewportWidths, viewportsConfigAtom } from '@/code/stores/viewport-store';
+import { renderWidth, type ScreenCorners } from '@/shared/types';
 import { isGhostNodeId, stripGhostSuffix } from '@/shared/ghost-id';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 // The LEAF path-predicate module — active-file-store would cycle from here.
@@ -458,13 +459,24 @@ function refreshCanvasTokensImmediate(): void {
 
   // Build per-viewport scoped tokens for fluid units (clamp, vw, vh)
   let viewports: ViewportTileTarget[] = [];
-  const root = getContentRoot();
-  if (root) {
-    const els = root.querySelectorAll<HTMLElement>('[data-viewport]:not([data-overlay-portal])');
-    viewports = Array.from(els).map(e => ({
-      id: e.getAttribute('data-viewport') || '',
-      width: parseFloat(e.getAttribute('data-viewport-width') || '') || parseFloat(e.style.width) || 1440,
-    })).filter(v => v.id);
+  try {
+    const configs = getDefaultStore().get(viewportsConfigAtom);
+    if (configs && configs.length > 0) {
+      viewports = configs.map(v => ({
+        id: v.id,
+        width: renderWidth(v),
+      })).filter(v => v.id && v.width > 0);
+    }
+  } catch { /* skip if store not ready */ }
+  if (viewports.length === 0) {
+    const root = getContentRoot();
+    if (root) {
+      const els = root.querySelectorAll<HTMLElement>('[data-viewport]:not([data-overlay-portal])');
+      viewports = Array.from(els).map(e => ({
+        id: e.getAttribute('data-viewport') || '',
+        width: parseFloat(e.getAttribute('data-viewport-width') || '') || parseFloat(e.style.width) || 1440,
+      })).filter(v => v.id);
+    }
   }
   if (viewports.length === 0) {
     const widths = getViewportWidths();

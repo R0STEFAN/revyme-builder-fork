@@ -116,15 +116,22 @@ export default function ImageListControl({ label, value, onChange }: ImageListCo
       <ImageSearchModal
         isOpen={pickerFor !== null}
         onClose={() => setPickerFor(null)}
+        currentUrl={typeof pickerFor === 'number' ? urls[pickerFor] : undefined}
         onSelect={(url) => {
           if (typeof pickerFor === 'number') {
-            const next = [...urls];
-            next[pickerFor] = url;
-            commit(next);
+            if (!url) {
+              remove(pickerFor);
+            } else {
+              const next = [...urls];
+              next[pickerFor] = url;
+              commit(next);
+            }
             trace.action('image-list:replaced', { idx: pickerFor, url: url.slice(0, 80) });
           } else {
-            commit([...urls, url]);
-            trace.action('image-list:picked', { url: url.slice(0, 80) });
+            if (url) {
+              commit([...urls, url]);
+              trace.action('image-list:picked', { url: url.slice(0, 80) });
+            }
           }
           setPickerFor(null);
         }}

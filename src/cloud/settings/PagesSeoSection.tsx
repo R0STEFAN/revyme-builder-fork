@@ -884,6 +884,7 @@ function ImagePickerField({
       <ImageSearchModal
         isOpen={open}
         onClose={() => setOpen(false)}
+        currentUrl={value || undefined}
         onSelect={(url) => {
           onChange(url);
           setOpen(false);

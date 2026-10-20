@@ -31,6 +31,7 @@ interface ImageSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (url: string) => void;
+  currentUrl?: string | null;
 }
 
 interface UnsplashImage {
@@ -59,10 +60,12 @@ interface UploadedMediaItem {
   size?: number;
 }
 
-type Tab = 'unsplash' | 'upload' | 'create' | '3d';
+type Tab = 'unsplash' | 'upload' | 'link' | 'create' | '3d';
 
-export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSearchModalProps) {
-  const [tab, setTab] = useState<Tab>(HAS_UNSPLASH ? 'unsplash' : 'upload');
+export default function ImageSearchModal({ isOpen, onClose, onSelect, currentUrl }: ImageSearchModalProps) {
+  const [tab, setTab] = useState<Tab>(currentUrl ? 'link' : (HAS_UNSPLASH ? 'unsplash' : 'upload'));
+  const [linkUrl, setLinkUrl] = useState(currentUrl || '');
+  const [linkLoadError, setLinkLoadError] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UnsplashImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -151,10 +154,12 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
       setQuery(term);
       setResults([]);
       setUploadError(null);
-      setTab(HAS_UNSPLASH ? 'unsplash' : 'upload');
+      setLinkUrl(currentUrl || '');
+      setLinkLoadError(false);
+      setTab(currentUrl ? 'link' : (HAS_UNSPLASH ? 'unsplash' : 'upload'));
       if (HAS_UNSPLASH) searchUnsplash(term);
     }
-  }, [isOpen, searchUnsplash]);
+  }, [isOpen, currentUrl, searchUnsplash]);
 
   // Load the project's already-uploaded images for the Upload tab (mirrors
   // MediaGalleryPanel.fetchUploads — same endpoint + response shape).
@@ -264,6 +269,12 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
     onClose();
   };
 
+  const handleApplyLink = () => {
+    const clean = linkUrl.trim();
+    trace.action('image-search:apply-link', { url: clean });
+    handleSelect(clean);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -278,7 +289,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
             {/* Tabs */}
-            {([...((HAS_UNSPLASH ? ['unsplash', 'upload', 'create'] : ['upload', 'create']) as Tab[]), ...(isAdmin ? ['3d' as Tab] : [])]).map(t => (
+            {([...((HAS_UNSPLASH ? ['unsplash', 'upload', 'link', 'create'] : ['upload', 'link', 'create']) as Tab[]), ...(isAdmin ? ['3d' as Tab] : [])]).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -288,7 +299,7 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
                     : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                 }`}
               >
-                {t === 'unsplash' ? 'Unsplash' : t === 'upload' ? 'Upload' : t === '3d' ? '3D Assets' : 'Create'}
+                {t === 'unsplash' ? 'Unsplash' : t === 'upload' ? 'Upload' : t === 'link' ? 'Link' : t === '3d' ? '3D Assets' : 'Create'}
               </button>
             ))}
           </div>
@@ -411,6 +422,86 @@ export default function ImageSearchModal({ isOpen, onClose, onSelect }: ImageSea
                 {uploadError}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── Link Tab ─── */}
+        {tab === 'link' && (
+          <div className="space-y-4 max-h-[500px] min-h-[400px] overflow-y-auto scrollbar-hide py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">Image URL</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1 flex items-center">
+                  <input
+                    type="text"
+                    value={linkUrl}
+                    onChange={(e) => {
+                      setLinkUrl(e.target.value);
+                      setLinkLoadError(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyLink();
+                      }
+                    }}
+                    placeholder="https://images.unsplash.com/... or https://example.com/image.jpg"
+                    className="w-full h-[var(--control-height)] px-3 pr-8 text-xs bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] focus:border-[var(--border-focus)] text-[var(--text-primary)] cut-corners cut-border hover:[--cut-border-color:var(--control-border-hover)] focus:[--cut-border-color:var(--border-focus)] focus:outline-none transition-colors"
+                  />
+                  {linkUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkUrl('');
+                        setLinkLoadError(false);
+                      }}
+                      title="Clear link"
+                      aria-label="Clear link"
+                      className="absolute right-2.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyLink}
+                  className="px-4 h-[var(--control-height)] cut-corners bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90 transition-opacity text-xs font-medium cursor-pointer shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Enter an external image URL. To remove the current image, clear the input and click Apply.
+              </p>
+            </div>
+
+            {/* Preview Box */}
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">Preview</span>
+              <div className="w-full max-w-sm h-48 cut-corners cut-border border border-[var(--control-border)] bg-[var(--bg-surface)] overflow-hidden flex items-center justify-center relative">
+                {linkUrl.trim() && !linkLoadError ? (
+                  <img
+                    src={linkUrl.trim()}
+                    alt="Preview"
+                    onError={() => setLinkLoadError(true)}
+                    className="w-full h-full object-contain pointer-events-none"
+                  />
+                ) : linkLoadError ? (
+                  <div className="p-4 text-center text-xs text-red-500 dark:text-red-400">
+                    <p className="font-medium">Failed to load preview</p>
+                    <p className="text-[10px] opacity-80 mt-1">Check that the URL points to a valid image</p>
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-xs text-[var(--text-secondary)]">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <span>No image specified</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

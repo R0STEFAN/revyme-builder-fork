@@ -146,12 +146,17 @@ function ImagePopupBody({ value, onChange }: ImagePopupBodyProps) {
       <ImageSearchModal
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
+        currentUrl={previewUrl}
         onSelect={(url) => {
           trace.action('image-control:pick', { url: url.slice(0, 60) });
-          // Single-quote the URL inside `url('...')`. Both quote styles are
-          // valid CSS, but a double-quoted url() inside a JSX prop value
-          // (which itself wraps in double quotes) ends the attribute early.
-          onChange(`url('${url}')`);
+          if (!url) {
+            onChange('');
+          } else {
+            // Single-quote the URL inside `url('...')`. Both quote styles are
+            // valid CSS, but a double-quoted url() inside a JSX prop value
+            // (which itself wraps in double quotes) ends the attribute early.
+            onChange(`url('${url}')`);
+          }
           setImageModalOpen(false);
         }}
       />

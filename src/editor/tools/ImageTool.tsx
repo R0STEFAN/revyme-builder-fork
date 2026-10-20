@@ -130,12 +130,32 @@ function ImageToolInner({
   const handleImageSelect = useCallback((url: string) => {
     trace.action('image-tool:select-image', { nodeId, url: url.slice(0, 80) });
 
+    if (!url) {
+      queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { src: '' } });
+      getCanvasBridge().setAttribute(nodeId, getViewportPrefix(vpId), 'src', null);
+      if (styles.backgroundImage) {
+        updateStyle('backgroundImage', '');
+      }
+      if (node?.srcExpression) {
+        queueMutation({ type: 'unbindSrcExpression', nodeId });
+      }
+      return;
+    }
+
     queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { src: url } });
 
     // Imperative canvas update for instant feedback — the canvas DOM lives
     // in the sandbox iframe, so the attribute patch goes through the bridge.
     getCanvasBridge().setAttribute(nodeId, getViewportPrefix(vpId), 'src', url);
-  }, [nodeId, vpId]);
+
+    // Mutual exclusivity: clear any backgroundImage and unbind srcExpression
+    if (styles.backgroundImage) {
+      updateStyle('backgroundImage', '');
+    }
+    if (node?.srcExpression) {
+      queueMutation({ type: 'unbindSrcExpression', nodeId });
+    }
+  }, [nodeId, vpId, styles.backgroundImage, node?.srcExpression, updateStyle]);
 
   // ─── Alt text ─────────────────────────────────────────────────────
   const commitAlt = useCallback((value: string) => {
@@ -290,6 +310,7 @@ function ImageToolInner({
       <ImageSearchModal
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
+        currentUrl={src}
         onSelect={handleImageSelect}
       />
 
@@ -301,6 +322,9 @@ function ImageToolInner({
           trace.action('image-tool:bind-src-expression', { nodeId, expression: expr });
           if (isSrcCmsBound) {
             cmsBinding?.unbindField('src', '');
+          }
+          if (styles.backgroundImage) {
+            updateStyle('backgroundImage', '');
           }
           queueMutation({ type: 'bindSrcExpression', nodeId, expression: expr });
         }}

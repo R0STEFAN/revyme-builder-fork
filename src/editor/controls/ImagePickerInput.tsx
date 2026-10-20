@@ -53,6 +53,11 @@ export default function ImagePickerInput({
   const hasImage = url.length > 0;
 
   const handleSelect = useCallback((picked: string) => {
+    if (!picked) {
+      onChange('');
+      trace.action('image-picker-input:clear');
+      return;
+    }
     // If rawUrl is requested (HTML attrs like <img> src), emit bare URL; otherwise CSS-ready url(...)
     onChange(rawUrl ? picked : `url(${picked})`);
     trace.action('image-picker-input:select', { url: picked.slice(0, 80), rawUrl });
@@ -126,6 +131,7 @@ export default function ImagePickerInput({
       <ImageSearchModal
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        currentUrl={url}
         onSelect={(picked) => {
           handleSelect(picked);
           setPickerOpen(false);

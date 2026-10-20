@@ -35,7 +35,7 @@ import { isComponentFileAtom, selectedIdsAtom } from '@/code/stores/store';
 import { forSelectionTargets } from '../../../controls/multi-select-targets';
 import { isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
 import { fillClearStyles, isTransparentColor } from './fill-clear';
-import { getContentRoot, updateNodeStyles } from '@/canvas/node-ops';
+import { getContentRoot, updateNodeStyles, getViewportPrefix } from '@/canvas/node-ops';
 import { activeCodeAtom } from '@/code/project/active-file-store';
 import { getPropType } from '@/code/components/prop-meta';
 import {
@@ -122,6 +122,25 @@ function ImageFillTab({ styles, onUpdate }: { styles: Record<string, string>; on
   const imagePresets = allTokens.filter(t => t.category === 'image');
 
   const bg = styles.backgroundImage || '';
+  const ctx = useControlContextOptional();
+  const legacyCtl = useControlOptional();
+  const node = ctx?.node ?? legacyCtl?.node ?? null;
+  const nodeId = ctx?.nodeId ?? legacyCtl?.nodeId ?? null;
+  const vpId = legacyCtl?.vpId ?? 'desktop';
+
+  const clearConflictingImageAttrs = useCallback(() => {
+    if (!nodeId) return;
+    if (node?.type === 'img' || node?.attrs?.src) {
+      forSelectionTargets(nodeId, (tid) => {
+        queueMutation({ type: 'updateHtmlAttrs', nodeId: tid, attrs: { src: '' } });
+        getCanvasBridge().setAttribute(tid, getViewportPrefix(vpId), 'src', null);
+        if (node?.srcExpression) {
+          queueMutation({ type: 'unbindSrcExpression', nodeId: tid });
+        }
+      });
+    }
+  }, [node, nodeId, vpId]);
+
   // Detect var(--image-name) — i.e. the user has applied an image preset.
   const presetMatch = bg.match(/^var\(\s*--([^)\s,]+)\s*\)$/);
   const activePresetName = presetMatch && imagePresets.some(p => p.name === presetMatch[1])
@@ -231,6 +250,7 @@ function ImageFillTab({ styles, onUpdate }: { styles: Record<string, string>; on
           onUpdate('backgroundSize', styles.backgroundSize || 'cover');
           onUpdate('backgroundPosition', styles.backgroundPosition || 'center');
           onUpdate('backgroundRepeat', styles.backgroundRepeat || 'no-repeat');
+          clearConflictingImageAttrs();
           trace.action('fill:image-preset-applied', { var: varVal });
         }}
         onCreatePreset={handleCreatePreset}
@@ -241,7 +261,13 @@ function ImageFillTab({ styles, onUpdate }: { styles: Record<string, string>; on
       <ImageSearchModal
         isOpen={imageModalOpen}
         onClose={() => setImageModalOpen(false)}
+        currentUrl={previewUrl || undefined}
         onSelect={(url) => {
+          if (!url) {
+            onUpdate('backgroundImage', '');
+            trace.action('fill:image-cleared');
+            return;
+          }
           onUpdate('backgroundColor', '');
           onUpdate('background', '');
           onUpdate('backgroundImage', `url(${url})`);
@@ -251,6 +277,7 @@ function ImageFillTab({ styles, onUpdate }: { styles: Record<string, string>; on
           onUpdate('backgroundSize', styles.backgroundSize || 'cover');
           onUpdate('backgroundPosition', styles.backgroundPosition || 'center');
           onUpdate('backgroundRepeat', styles.backgroundRepeat || 'no-repeat');
+          clearConflictingImageAttrs();
           trace.action('fill:image-selected', { url: url.slice(0, 80) });
         }}
       />
@@ -854,8 +881,13 @@ function LayerEditorPanel({ layer: initialLayer, onChange, onChangeLive }: {
           <ImageSearchModal
             isOpen={imageModalOpen}
             onClose={() => setImageModalOpen(false)}
+            currentUrl={extractUrl(layer.value) || undefined}
             onSelect={(url) => {
-              update({ ...layer, type: 'image', value: `url(${url})` });
+              if (!url) {
+                update({ ...layer, type: 'image', value: '' });
+              } else {
+                update({ ...layer, type: 'image', value: `url(${url})` });
+              }
               trace.action('fill-layer:image-selected', { layerId: layer.id, url: url.slice(0, 80) });
             }}
           />

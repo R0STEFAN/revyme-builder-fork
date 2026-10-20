@@ -333,6 +333,7 @@ function ImageFieldControl({ value, onChange, name }: { value: string; onChange:
       <ImageSearchModal
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        currentUrl={value || undefined}
         onSelect={handleSelect}
       />
     </div>
