@@ -1041,6 +1041,17 @@ Always verify that all pages still build cleanly:
 - Trigger build: `POST http://localhost:3333/api/local-server/local/build` or query `GET http://localhost:3333/api/local-server/local/status`.
 - Ensure all routes (`/`, `/_not-found`, and your new pages) compile with `0 errors` and static prerender succeeds.
 
+### D. Strict Project File Isolation & Image Asset Protocol (MANDATORY RULE)
+1. **ProjectFS Boundary Isolation**:
+   - The MCP bridge and AI agents ONLY have access to the files inside the active project (`app/`, `components/`, `icons/`, `plugins/`, `messages/`, `i18n/`, `_meta/`).
+   - Absolute OS paths (`/home/...`, `/etc/...`, `C:\...`) and directory traversal (`..`) are strictly rejected with `Access denied`.
+   - Never inspect or reference files from other demo projects or the host filesystem.
+2. **Image Asset Protocol**:
+   - **Rule**: Every image referenced in JSX elements, component props (`image`, `src`, `thumbnail`, `avatar`, `poster`), or inline styles (`backgroundImage: url(...)`) MUST BE EITHER:
+     a) **An external high-quality link (URL)**: e.g. Unsplash stock photos (`https://images.unsplash.com/...`), CDN links, or inline data URIs (`data:image/...`).
+     b) **OR uploaded directly into THIS project**: Uploaded via `revyme_upload_image` into this specific project, returning the permanent project URL `/api/uploads/<filename>`.
+   - **STRICTLY FORBIDDEN**: Arbitrary local paths (such as `/images/...` from the global repository or demo projects). Any usage of foreign `/images/...` paths is blocked at preflight and by the Oracle check `INVALID_IMAGE_SOURCE`.
+
 ---
 
 ## 7. References & Deep Dives

@@ -14,7 +14,8 @@ import { queueToolMutation, flushTool, getToolTokens, getToolNodes } from '@/ai/
 import type { AgentTool, AgentToolResult } from '@/ai/agent';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
-import { validateStyleInput } from '@/code/oracle/preflight-validation';
+import { validateStyleInput, validateAttributesInput } from '@/code/oracle/preflight-validation';
+import { projectFS } from '@/code/project/project-fs';
 import { TEXT_TAGS } from '@/shared/constants';
 
 function fail(message: string): AgentToolResult {
@@ -59,7 +60,7 @@ export const setStylesTool: AgentTool = {
     const nodesNow = getToolNodes(ctx);
     const targetNode = nodesNow.get(nodeId);
     const isText = targetNode ? TEXT_TAGS.has(targetNode.type) || Boolean(targetNode.textContent) : undefined;
-    const styleErr = validateStyleInput(styles, { isTextNode: isText, tagName: targetNode?.type });
+    const styleErr = validateStyleInput(styles, { isTextNode: isText, tagName: targetNode?.type, fs: projectFS });
     if (styleErr) return fail(styleErr);
 
     const keyWidth = viewportKeyWidth(args.viewport);
@@ -109,7 +110,10 @@ export const setAttrTool: AgentTool = {
   category: 'semantic',
   async execute(args, ctx) {
     ctx.ensureCheckpoint();
-    queueToolMutation(ctx, { type: 'updateHtmlAttrs', nodeId: args.node_id as string, attrs: args.attrs as Record<string, string> });
+    const attrs = args.attrs as Record<string, string>;
+    const attrErr = validateAttributesInput(attrs, projectFS);
+    if (attrErr) return fail(attrErr);
+    queueToolMutation(ctx, { type: 'updateHtmlAttrs', nodeId: args.node_id as string, attrs });
     flushTool(ctx);
     return ok({});
   },

@@ -26,7 +26,7 @@ import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, queueOrderWrites, type OrderWrite } from './flow-placement';
 import { insertFragmentTool } from './insert-fragment';
-import { validateStyleInput, validateTagInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { validateStyleInput, validateTagInput, validateAttributesInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
 import { TEXT_TAGS } from '@/shared/constants';
 
 export { queueOrderWrites };
@@ -219,8 +219,10 @@ export const addNodeTool: AgentTool = {
     const tag = (args.tag as string) ?? 'div';
     const tagErr = validateTagInput(tag, parentNode, projectFS);
     if (tagErr) return fail(tagErr);
+    const attrErr = validateAttributesInput(attrs, projectFS);
+    if (attrErr) return fail(attrErr);
     const rawStyles = (args.styles as Record<string, string>) ?? {};
-    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag });
+    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag, fs: projectFS });
     if (styleErr) return fail(styleErr);
     // A child of a layout needs a position, a no-shrink flex and its place in
     // the `order` sequence — see flow-placement.ts. Filled in, never overridden.
@@ -270,11 +272,12 @@ export const addCanvasNodeTool: AgentTool = {
     const tag = (args.tag as string) ?? 'div';
     const tagErr = validateTagInput(tag, null, projectFS);
     if (tagErr) return fail(tagErr);
-    const rawStyles = (args.styles as Record<string, string>) ?? {};
-    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag });
-    if (styleErr) return fail(styleErr);
-
     const { attrs, ignored, idHint } = stripReservedAttrs((args.attrs as Record<string, string>) ?? {});
+    const attrErr = validateAttributesInput(attrs, projectFS);
+    if (attrErr) return fail(attrErr);
+    const rawStyles = (args.styles as Record<string, string>) ?? {};
+    const styleErr = validateStyleInput(rawStyles, { isTextNode: TEXT_TAGS.has(tag), tagName: tag, fs: projectFS });
+    if (styleErr) return fail(styleErr);
     const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
     if ('error' in resolved) return fail(resolved.error);
     const id = resolved.id;

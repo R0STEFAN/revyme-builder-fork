@@ -94,6 +94,14 @@ const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:
 
 type BridgeHandler = (params: any) => Promise<unknown>;
 
+export function assertProjectScopedPath(filePath: unknown): void {
+  const p = String(filePath ?? '').trim();
+  if (!p) throw new Error('Path cannot be empty.');
+  if (p.startsWith('/') || p.startsWith('\\') || /^[a-zA-Z]:/.test(p) || p.includes('..') || p.includes('\0')) {
+    throw new Error(`Access denied: Path "${p}" is outside the active project. MCP tools are strictly restricted to files within the active project.`);
+  }
+}
+
 /** Exported for tests — the dispatch table behind the EventSource. */
 export const bridgeHandlers: Record<string, BridgeHandler> = {
   async getContext() {
@@ -181,6 +189,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
 
   /** Full-text search across project files for query string, symbols, data-ids, or classes. */
   async searchProject(params: { query?: string; path_prefix?: string }) {
+    if (params.path_prefix) assertProjectScopedPath(params.path_prefix);
     const query = String(params.query ?? '').trim();
     if (!query) throw new Error('searchProject: query required');
     const qLower = query.toLowerCase();
@@ -925,6 +934,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
   },
 
   async readFile({ path }: { path: string }) {
+    assertProjectScopedPath(path);
     const code = projectFS.readFile(path);
     trace.action('mcp-bridge:read-file', { path, found: code != null });
     if (code == null) throw new Error(`File not found: ${path}`);
@@ -1192,6 +1202,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
 
   async submitFiles({ files }: { files: TurnFile[] }) {
     if (!Array.isArray(files) || files.length === 0) throw new Error('submitFiles: empty batch');
+    for (const f of files) assertProjectScopedPath(f.path);
     const store = getDefaultStore();
     // Editor-state gates: commits force a full re-render (setForceRender +
     // flushNow), which mid-gesture destroys the drag's DOM anchors and

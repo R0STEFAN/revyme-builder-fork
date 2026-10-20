@@ -7,6 +7,7 @@
 import { TEXT_TAGS } from '@/shared/constants';
 import { installBuiltInCodeComponent } from '@/code/project/project-fs';
 import { FRAMEWORK_TAGS } from '@/ai/agent/tools/insert-fragment';
+import { isAllowedImageSource, extractCssUrl, IMAGE_ATTR_KEYS } from './checks/image-source';
 
 export const KNOWN_SLOT_COMPONENTS = new Set([
   'Marquee',
@@ -118,15 +119,31 @@ const SHORTHAND_FAMILIES: Array<[string, string[]]> = [
  */
 export function validateStyleInput(
   styles: Record<string, unknown> | undefined,
-  opts?: { isTextNode?: boolean; tagName?: string }
+  opts?: { isTextNode?: boolean; tagName?: string; fs?: { readFile: (p: string) => string | null } }
 ): string | null {
   if (!styles || typeof styles !== 'object') return null;
+
+  // 1. Background color + Image conflict
+  if (
+    (('backgroundColor' in styles && Boolean(styles.backgroundColor)) || ('background' in styles && Boolean(styles.background))) &&
+    ('backgroundImage' in styles && Boolean(styles.backgroundImage))
+  ) {
+    return `Cannot set both backgroundColor and backgroundImage on the same element. In Revyme, background colors must be part of the fill gradient/layer or standalone.`;
+  }
 
   const keys = Object.keys(styles);
 
   for (const key of keys) {
     const val = styles[key];
     const strVal = typeof val === 'string' ? val.trim() : typeof val === 'number' ? String(val) : '';
+
+    // Check backgroundImage / background for url(...)
+    if ((key === 'backgroundImage' || key === 'background') && strVal.includes('url(')) {
+      const extracted = extractCssUrl(strVal);
+      if (extracted && !isAllowedImageSource(extracted, opts?.fs ? new Set() : undefined)) {
+        return `Invalid ${key} url "${extracted}". In Revyme, image assets must either be an external link (URL: https://...) or uploaded directly into this project via upload (e.g. /api/uploads/...). Arbitrary local filesystem paths outside this project (such as /images/...) are forbidden.`;
+      }
+    }
 
     // 1. Pseudo-classes or CSS selectors inside style keys
     if (key.startsWith(':') || key.startsWith('&') || key.includes(':') || key.startsWith('.')) {
@@ -176,13 +193,6 @@ export function validateStyleInput(
     }
   }
 
-  // 8. Background color + Image conflict
-  if (
-    (('backgroundColor' in styles && Boolean(styles.backgroundColor)) || ('background' in styles && Boolean(styles.background))) &&
-    ('backgroundImage' in styles && Boolean(styles.backgroundImage))
-  ) {
-    return `Cannot set both backgroundColor and backgroundImage on the same element. In Revyme, background colors must be part of the fill gradient/layer or standalone.`;
-  }
 
   // 9. Shorthand / Longhand mix
   for (const [short, longs] of SHORTHAND_FAMILIES) {
@@ -234,5 +244,42 @@ export function validateTagInput(
     }
   }
 
+  return null;
+}
+
+/**
+ * Validates individual image source string.
+ */
+export function validateImageSourceInput(
+  src: string | undefined,
+  propName = 'src',
+  fs?: { readFile: (p: string) => string | null }
+): string | null {
+  if (typeof src !== 'string' || !src.trim()) return null;
+  const projectFiles = fs ? new Set<string>() : undefined;
+  if (!isAllowedImageSource(src, projectFiles)) {
+    return `Invalid image source "${src}" on attribute "${propName}". In Revyme, images must either be an external link (URL: https://...) or uploaded directly into this project via upload (e.g. /api/uploads/...). Arbitrary local filesystem paths outside this project (such as /images/...) are forbidden.`;
+  }
+  return null;
+}
+
+/**
+ * Validates HTML attributes / component props map before execution.
+ * Checks for invalid image paths on src, image, thumbnail, avatar, and poster attributes.
+ */
+export function validateAttributesInput(
+  attrs: Record<string, unknown> | undefined,
+  fs?: { readFile: (p: string) => string | null }
+): string | null {
+  if (!attrs || typeof attrs !== 'object') return null;
+  for (const key of Object.keys(attrs)) {
+    if (IMAGE_ATTR_KEYS.has(key)) {
+      const val = attrs[key];
+      if (typeof val === 'string') {
+        const err = validateImageSourceInput(val, key, fs);
+        if (err) return err;
+      }
+    }
+  }
   return null;
 }

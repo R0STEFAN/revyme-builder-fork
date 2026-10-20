@@ -16,7 +16,7 @@ import { seedFlowChild, queueOrderWrites } from './flow-placement';
 import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
 import { projectFS, installBuiltInCodeComponent } from '@/code/project/project-fs';
-import { validateStyleInput, validateTagInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
+import { validateStyleInput, validateTagInput, validateAttributesInput, KNOWN_SLOT_COMPONENTS } from '@/code/oracle/preflight-validation';
 import { TEXT_TAGS } from '@/shared/constants';
 
 export const FRAMEWORK_TAGS = new Set([
@@ -225,9 +225,13 @@ export const insertFragmentTool: AgentTool = {
         }
       }
 
+      const attrErr = validateAttributesInput(attrs, projectFS);
+      if (attrErr) return { error: attrErr };
+
       const styleErr = validateStyleInput(input.styles, {
         isTextNode: TEXT_TAGS.has(input.tag ?? 'div'),
         tagName: input.tag,
+        fs: projectFS,
       });
       if (styleErr) return { error: styleErr };
 

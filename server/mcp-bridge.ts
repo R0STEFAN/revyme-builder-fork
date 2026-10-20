@@ -8,6 +8,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { listProjects } from './storage';
 
+export function assertProjectScopedPath(filePath: unknown): void {
+  const p = String(filePath ?? '').trim();
+  if (!p) throw new Error('Path cannot be empty.');
+  if (p.startsWith('/') || p.startsWith('\\') || /^[a-zA-Z]:/.test(p) || p.includes('..') || p.includes('\0')) {
+    throw new Error(`Access denied: Path "${p}" is outside the active project. MCP tools are strictly restricted to files within the active project.`);
+  }
+}
+
 export function getRecentBuilderUrl(baseOrigin = 'http://localhost:3333'): string {
   try {
     const list = listProjects();
@@ -468,6 +476,20 @@ export class McpBridge {
                 },
               },
               required: ['files'],
+            },
+          },
+          {
+            name: 'revyme_upload_image',
+            description:
+              'Upload an image asset directly into the active project via base64 data. Returns the project upload URL (/api/uploads/<filename>) that can then be referenced by project elements and components.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dataBase64: { type: 'string', description: 'Base64-encoded image file bytes' },
+                contentType: { type: 'string', description: 'MIME type (e.g. "image/png", "image/jpeg", "image/webp")' },
+                filename: { type: 'string', description: 'Desired filename, e.g. "cover.webp"' },
+              },
+              required: ['dataBase64'],
             },
           },
           {
@@ -997,6 +1019,9 @@ export class McpBridge {
             });
             break;
           case 'revyme_search_project':
+            if ((args as any)?.path_prefix) {
+              assertProjectScopedPath((args as any).path_prefix);
+            }
             result = await this.sendToEditor('searchProject', args);
             break;
           case 'revyme_audit_design':
@@ -1006,13 +1031,22 @@ export class McpBridge {
             });
             break;
           case 'revyme_read_file':
+            assertProjectScopedPath((args as any)?.path);
             result = await this.sendToEditor('readFile', args);
             break;
           case 'revyme_list_files':
             result = await this.sendToEditor('listFiles', args);
             break;
           case 'revyme_submit_files':
+            if (Array.isArray((args as any)?.files)) {
+              for (const f of (args as any).files) {
+                assertProjectScopedPath(f?.path);
+              }
+            }
             result = await this.sendToEditor('submitFiles', args);
+            break;
+          case 'revyme_upload_image':
+            result = await this.sendToEditor('uploadImage', args);
             break;
           case 'revyme_manage_presets':
             result = await this.sendToEditor('managePresets', args);

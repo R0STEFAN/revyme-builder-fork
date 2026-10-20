@@ -162,18 +162,26 @@ describe('semantic property tools', () => {
 
   it('set_attr queues updateHtmlAttrs with attrs passed through as-is', async () => {
     const ctx = makeCtx();
-    await setAttrTool.execute({ node_id: 'img', attrs: { href: '', src: 'x' } }, ctx);
+    await setAttrTool.execute({ node_id: 'img', attrs: { href: '', src: 'https://example.com/pic.png' } }, ctx);
     expect(ctx.ensureCheckpoint).toHaveBeenCalledTimes(1);
     expect(queueMutation).toHaveBeenCalledTimes(1);
     expect(queueMutation).toHaveBeenCalledWith(
       {
         type: 'updateHtmlAttrs',
         nodeId: 'img',
-        attrs: { href: '', src: 'x' },
+        attrs: { href: '', src: 'https://example.com/pic.png' },
       },
       { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },
     );
     expect(flushNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('set_attr rejects foreign host image paths', async () => {
+    const ctx = makeCtx();
+    const res = await setAttrTool.execute({ node_id: 'img', attrs: { src: '/images/hero-3d.png' } }, ctx);
+    expect(res.isError).toBe(true);
+    expect(res.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Invalid image source') });
+    expect(queueMutation).not.toHaveBeenCalled();
   });
 
   it('change_tag queues changeTag', async () => {

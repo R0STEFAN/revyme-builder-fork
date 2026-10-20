@@ -917,5 +917,79 @@ describe('McpBridge', () => {
       dashReq.emit('close');
       canvasReq.emit('close');
     });
+
+    it('rejects path traversal and absolute paths in revyme_read_file and revyme_submit_files', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const handler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+
+      // Rejects absolute path
+      const absRes = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_read_file',
+          arguments: { path: '/etc/passwd' },
+        },
+      });
+      expect(absRes.isError).toBe(true);
+      expect(absRes.content[0].text).toContain('Access denied');
+
+      // Rejects parent traversal
+      const travRes = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_read_file',
+          arguments: { path: '../server/storage.ts' },
+        },
+      });
+      expect(travRes.isError).toBe(true);
+      expect(travRes.content[0].text).toContain('Access denied');
+
+      // Rejects submit_files with external path
+      const subRes = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_submit_files',
+          arguments: {
+            files: [{ path: '/images/hero.png', code: '' }],
+          },
+        },
+      });
+      expect(subRes.isError).toBe(true);
+      expect(subRes.content[0].text).toContain('Access denied');
+    });
+
+    it('lists and dispatches revyme_upload_image', async () => {
+      const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const listHandler = mcpServer._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+      const toolsRes = await listHandler({ method: 'tools/list', params: {} });
+      expect(toolsRes.tools.map((t: any) => t.name)).toContain('revyme_upload_image');
+
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const sendSpy = vi.spyOn(bridge, 'sendToEditor').mockResolvedValue({
+        url: '/api/uploads/123-cover.webp',
+      });
+
+      const callRes = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_upload_image',
+          arguments: {
+            dataBase64: 'aGVsbG8=',
+            contentType: 'image/webp',
+            filename: 'cover.webp',
+          },
+        },
+      });
+
+      expect(sendSpy).toHaveBeenCalledWith('uploadImage', {
+        dataBase64: 'aGVsbG8=',
+        contentType: 'image/webp',
+        filename: 'cover.webp',
+      });
+      expect(callRes.isError).toBeUndefined();
+      expect(callRes.content[0].text).toContain('/api/uploads/123-cover.webp');
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateStyleInput, validateTagInput } from './preflight-validation';
+import { validateStyleInput, validateTagInput, validateAttributesInput } from './preflight-validation';
 
 describe('preflight-validation', () => {
   describe('validateStyleInput', () => {
@@ -48,6 +48,26 @@ describe('preflight-validation', () => {
     it('rejects typography properties on container frames', () => {
       expect(validateStyleInput({ fontSize: '24px' }, { isTextNode: false, tagName: 'div' })).toContain('Typography property "fontSize" cannot be placed on container');
       expect(validateStyleInput({ fontSize: '24px' }, { isTextNode: true, tagName: 'p' })).toBeNull();
+    });
+
+    it('rejects foreign backgroundImage urls', () => {
+      expect(validateStyleInput({ backgroundImage: "url('/images/hero.jpg')" })).toContain('Invalid backgroundImage url');
+    });
+
+    it('allows external backgroundImage urls', () => {
+      expect(validateStyleInput({ backgroundImage: "url('https://images.unsplash.com/photo-1')" })).toBeNull();
+    });
+  });
+
+  describe('validateAttributesInput', () => {
+    it('rejects foreign host image paths on src and image', () => {
+      expect(validateAttributesInput({ src: '/images/hero-3d.png' })).toContain('Invalid image source');
+      expect(validateAttributesInput({ image: '/images/project.webp' })).toContain('Invalid image source');
+    });
+
+    it('allows external URLs and project uploads', () => {
+      expect(validateAttributesInput({ src: 'https://images.unsplash.com/photo' })).toBeNull();
+      expect(validateAttributesInput({ image: '/api/uploads/123-pic.webp' })).toBeNull();
     });
   });
 

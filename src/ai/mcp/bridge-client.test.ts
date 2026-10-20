@@ -210,6 +210,15 @@ describe('bridgeHandlers', () => {
     }) as any;
     expect(out.committed).toBe(true); // created without a read; guard does not fire
   });
+
+  it('rejects path traversal and absolute paths outside the project', async () => {
+    await expect(bridgeHandlers.readFile({ path: '/etc/passwd' })).rejects.toThrow('Access denied');
+    await expect(bridgeHandlers.readFile({ path: '../server.ts' })).rejects.toThrow('Access denied');
+    await expect(bridgeHandlers.searchProject({ query: 'test', path_prefix: '../' })).rejects.toThrow('Access denied');
+    await expect(bridgeHandlers.submitFiles({
+      files: [{ path: '/images/hero.png', kind: 'page', code: '' }],
+    })).rejects.toThrow('Access denied');
+  });
 });
 
 // ─── editor-state gates (race + permission protection) ───────────────────────

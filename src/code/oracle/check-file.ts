@@ -42,6 +42,7 @@ import { checkMotionPropsNeedMotionTag } from './checks/motion-tag';
 import { checkTranslationDialect } from './checks/translation-dialect';
 import { checkMediaBandDialect, checkDuplicateBreakpointStack } from './checks/media-band-dialect';
 import { checkComponentLinks, checkPageLinks } from './checks/link-rules';
+import { checkImageSourceDialect } from './checks/image-source';
 import { checkCmsRowNavMarker, checkCmsCollectionDialect, checkCmsNavDialect, checkModuleScopeItemReferences, checkCmsQueryConfig } from './checks/cms-dialect';
 import { checkCmsLocaleFilter, checkCmsI18nDirectAccess, checkCmsMapResolves, checkCmsStyleBindingsResolve, checkInlineMapUnsupported } from './checks/cms-locale-dialect';
 import { checkResolutionFidelity } from './checks/fidelity';
@@ -1330,6 +1331,9 @@ export function checkFile(
   //    which is cached — not in each page's HTML — so they are exempt. ─────
   checkDuplicateAttributes(code, v);
   if (!isCodeComponent && code.includes(';base64,')) checkInlineDataUris(code, v);
+  if (!isCodeComponent && (/<(?:motion\.)?img[\s/>]/.test(code) || /\b(image|thumbnail|avatar|poster)\s*=\s*['"]/.test(code) || /backgroundImage|background/.test(code))) {
+    checkImageSourceDialect(ast, v);
+  }
   // ── COMPONENT LINKS (design components) — every element is motion.* for the
   //    FLIP/variant system, so a navigating link must be MotionLink =
   //    motion.create(Link): a plain <Link> won't animate, and <motion.a href>/
