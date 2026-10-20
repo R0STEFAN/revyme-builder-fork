@@ -114,6 +114,17 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
 ### A. Design Components (Native Canvas Masters)
 - **What it is**: Reusable visual UI elements (cards, spec rows, buttons, pricing tables, navigation items, testimonial blocks, badges).
 - **Canvas Experience**: Fully interactive and visual! Designers can double-click on the canvas to select inner elements, see all layers in the Layers panel, customize styles with the Style Inspector, reorder elements, and switch visual variants.
+- **THE CARDINAL RULE: REPEATED CARDS MUST BE INSTANTIATED AS COMPONENTS, NEVER RAW DIVS!**:
+  - Whenever building a page with repeated UI elements (Project Cards, Marquee Cards, Testimonial Cards, Pricing Tiers, Team Members):
+    1. Define the Design Component master in `components/<Name>.tsx` with typed props (`title`, `image`, `tags`, `category`) and `variantConfig` (`default`, `variant-b`, `default-hover`).
+    2. **ON THE PAGE, YOU MUST INSTANTIATE THE COMPONENT**:
+       - In `revyme_insert_fragment`: use `"tag": "ProjectCard"`, `"name": "Project Card 1"`, and pass props in `"attrs": { "title": "...", "category": "..." }`.
+       - Or in page JSX: `<ProjectCard data-id="card-1" title="..." ... />`.
+    3. **CRITICAL ANTI-PATTERN STRICTLY FORBIDDEN**: Never write a component file and then copy-paste hundreds of lines of duplicate raw `<div>` blocks on the page!
+       - Inlined raw divs prevent the user from editing props in the Inspector.
+       - Inlined raw divs prevent the user from duplicating cards with one click or swapping variants in the panel.
+       - Inlined raw divs BREAK component variant transitions (`default-hover`, etc.).
+       - If the user wants to add a new project card, they should only need to add an instance of `<ProjectCard />`, not duplicate and rewire a massive raw div tree!
 - **Navbars & Headers Rule**: When asked to create a navigation bar or header as a component, **NEVER build it as a closed Code Component with internal React `useState(false)` and `mixBlendMode: 'difference'`**. Instead:
   1. Build it directly on the page via `revyme_insert_fragment` with responsive desktop / mobile layout, OR
   2. Create a **Design Component** with visual variant states (`default` vs `mobile-open`) using `revyme_manage_component_variant` or `create_component`!
@@ -411,7 +422,57 @@ In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` dir
    >
    ```
 
-### D. Adding Motion & Animations (Choreography & Springs)
+3. **Card Color Reveals & Image Filter Transitions (Grayscale ➔ Full Color)**:
+   - When cards should become colorful on hover (e.g. grayscale to full color):
+     - **NEVER** write `whileHover={{ filter: 'grayscale(1%)' }}` on an outer container — string percentage filters on outer flex containers do NOT cascade to nested images in Framer Motion.
+     - **Inside a Design Component (`components/ProjectCard.tsx`)**:
+       Apply the filter transition directly to the `<img>` or image wrapper based on the variant:
+       ```tsx
+       <img
+         data-id="card-img"
+         src={image}
+         style={{
+           width: '100%',
+           height: '100%',
+           objectFit: 'cover',
+           filter: variant === 'default-hover' ? 'grayscale(0%)' : 'grayscale(100%)',
+           transform: variant === 'default-hover' ? 'scale(1.04)' : 'scale(1)',
+           transition: 'filter 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+         }}
+       />
+       ```
+       When the user hovers over `<ProjectCard />`, the master's variant triggers `default-hover`, bringing the image into vivid full color!
+
+---
+
+### G. Responsive Hamburger Navigation & Fullscreen Menu Architecture
+
+**CRITICAL RULE: Never hide desktop navigation on mobile without providing a working hamburger menu!**
+Hiding navigation links with `display: none` on mobile without a mobile hamburger button leaves mobile users stranded with zero navigation.
+
+#### 1. Header Bar Structure
+In the fixed/sticky top navigation bar:
+- **Desktop Links Group**:
+  - `styles: { display: "flex", flexDirection: "row", gap: "24px" }`
+  - `responsive: { mobile: { display: "none" } }`
+- **Mobile Hamburger Button**:
+  - `styles: { display: "none", alignItems: "center", padding: "8px 12px" }`
+  - `responsive: { mobile: { display: "flex" } }`
+  - Content: 2-line animated bar icon or "MENU" text.
+
+#### 2. Fullscreen Overlay with Editorial Typography
+When the hamburger menu opens (either via a Design Component variant `open` or overlay):
+- **Large Typography Links**:
+  - `fontSize: "clamp(2rem, 5vw, 3.5rem)"`, uppercase, `fontFamily: "var(--typo-heading-font)"`.
+  - Staggered entrances with Framer Motion.
+  - Number badge: `01 // SELECTED WORK`, `02 // ABOUT`, `03 // CONTACT`.
+  - Kinetic hover slide: `whileHover: { x: 12, color: "var(--color-accent)" }`.
+- **Close Button**:
+  - Clear "CLOSE" / "✕" trigger that returns the state to `default`.
+
+---
+
+### H. Adding Motion & Animations (Choreography & Springs)
 Always apply animations using Revyme's native semantic tools (`set_motion`, `set_text_effect`, `set_smooth_scroll`) rather than raw code:
 
 - **Physics-Based Transitions (Springs)**:
@@ -451,14 +512,14 @@ Always apply animations using Revyme's native semantic tools (`set_motion`, `set
 - **Smooth Momentum Scrolling**:
   Enable Lenis physics: `set_smooth_scroll` with `enabled: true, intensity: 14`.
 
-### D. Managing CMS
+### I. Managing CMS
 - To create a collection: `cms_create_collection` with `name: "Projects"`.
 - To add fields: `cms_add_field` with `collection`, `name`, `type`.
 - To insert data: `cms_add_items`.
 
 ---
 
-## 5. Preserving Existing Pages & Safety Rules (CRITICAL)
+## 6. Preserving Existing Pages & Safety Rules (CRITICAL)
 
 When creating new pages, styling elements, or adding features, you must protect the integrity of the user's existing website:
 
@@ -484,7 +545,7 @@ Always verify that all pages still build cleanly:
 
 ---
 
-## 6. References & Deep Dives
+## 7. References & Deep Dives
 - Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for the complete Utopia fluid typography and spacing scale tables and formulas.
 - Read [references/built-in-arsenal.md](./references/built-in-arsenal.md) for the complete catalog of ~80 pre-built components (Marquee, Carousel, shaders, text effects, cursors).
 - Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.

@@ -262,3 +262,49 @@ export default withResponsiveProps(VectorCanvas);
 2. **Does it need custom `useState`, `useEffect`, `useRef`, Canvas 2D/WebGL, or dynamic SVG calculations?**
    $\rightarrow$ **YES**: Must be a **Code Component** with `/** @controls */` written to `components/<Name>.tsx`.
 3. **Never create a Code Component for standard layout structures**: If an element is just HTML/SVG frames, flex layouts, typography, and standard CSS/motion styles, it **MUST be a Design Component**.
+
+---
+
+## 5. Critical Anti-Pattern: The Duplicate Inlining Trap
+
+### What went wrong in past agent executions
+An agent authors `components/ProjectCard.tsx` and `components/MarqueeCard.tsx` with variant configs and props, but then in `app/page.client.tsx` or `insert_fragment`, pastes 400 lines of repeated raw `<div data-id="card-1">...</div>`, `<div data-id="card-2">...</div>`.
+
+**This completely breaks Revyme's visual builder paradigm:**
+1. **No Scalability / Reusability**: When the user wants to add a 4th card, they cannot just drop an instance or pass props. They are forced to copy-paste raw JSX and rewire 20 nested elements manually.
+2. **Variants Break**: Component variants (such as `border-rounded`, `highlight`, or `compact`) cannot be toggled in the canvas inspector because raw divs have no component definition or `variantConfig`.
+3. **Hover Effects Break**: If hover states or image filters (like grayscale-to-color reveals) are written as component variant styles (e.g. `filter: variant === 'default-hover' ? 'grayscale(0%)' : 'grayscale(100%)'`), they **only execute when rendered as component instances**. Inlined raw divs lose all variant-driven interactivity!
+
+### The Correct Instantiation Pattern
+
+Once a component exists in `components/<Name>.tsx`, instantiate it directly in `revyme_insert_fragment`:
+
+```json
+{
+  "page": "app/page.client.tsx",
+  "parentId": "portfolio-grid",
+  "fragment": {
+    "tag": "ProjectCard",
+    "dataId": "proj-card-alpha",
+    "name": "Project Card Alpha",
+    "attrs": {
+      "title": "Quantum Banking App",
+      "category": "Fintech & Mobile UI",
+      "image": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80",
+      "initialVariant": "default"
+    },
+    "style": {
+      "flex": "1 1 340px",
+      "width": "100%",
+      "maxWidth": "420px"
+    }
+  }
+}
+```
+
+### Automatic Import Resolution
+Revyme's `syncImports` automatically inspects JSX tags. Whenever a tag begins with an uppercase letter (`/^[A-Z]/`) and matches a file in `components/<Tag>.tsx`, the builder **automatically injects**:
+```tsx
+import ProjectCard from '@/components/ProjectCard';
+```
+at the top of the file! You do not even need to edit imports manually. Just insert the tag and pass the props in `attrs`.

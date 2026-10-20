@@ -418,7 +418,7 @@ export class McpBridge {
           {
             name: 'revyme_insert_fragment',
             description:
-              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURE: Every section MUST use the Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px") so all page sections share identical alignment lines! 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
+              'PRIMARY UI TOOL: Insert a whole semantic subtree/fragment (nested tree with auto-generated unique data-ids, styles, attributes, text, and Framer Motion hover effects) in a single atomic operation. Use this to construct or append sections, cards, navbars, and layouts into the active page (query parent_id with revyme_get_context). MANDATORY ARCHITECTURE: 1) Two-Tier layout: full-bleed <section> (width: 100%, explicit backgroundColor) containing a centered inner <div name="Container"> (maxWidth: 1200px, width: 100%, margin: "0 auto", padding: "0 24px"). 2) REPEATED ELEMENTS: For repeated items (project cards, marquee cards, pricing tiers, badges), instantiate them as reusable Design Components (e.g. tag: "ProjectCard", attrs: { title: "..." }) rather than duplicating raw divs! 100% GUI-Parity: hover effects compile to Framer Motion whileHover and spring transitions.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -532,7 +532,7 @@ export class McpBridge {
           {
             name: 'revyme_add_built_in_component',
             description:
-              'Instantly install and place a Revyme built-in component (Marquee, Carousel, EmblaCarousel, AuroraBackground, BlobCursor, AnimatedCounter, etc.) inside a parent container on the active page canvas. Props are configured dynamically.',
+              'Instantly install and place a Revyme built-in component (Marquee, Carousel, EmblaCarousel, AuroraBackground, BlobCursor, AnimatedCounter, etc.) inside a parent container on the active page canvas. For Marquee or Carousel, populate items with reusable Design Component instances (e.g. MarqueeCard) with border and hover variants.',
             inputSchema: {
               type: 'object',
               properties: {
