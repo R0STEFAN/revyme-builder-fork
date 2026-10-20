@@ -30,7 +30,8 @@ Add the following configuration to `~/.gemini/config/mcp_config.json` (or your c
 ### Runtime Prerequisites
 Before executing any tool calls, ensure that:
 1. **Editor & Bridge are running**: Run `npm run dev` (starts editor on `http://localhost:3333` and HTTP bridge on `http://localhost:8082`).
-2. **Browser tab is open & connected**: Open `http://localhost:3333` in the browser (the browser tab establishes an active SSE connection to port 8082).
+2. **Builder tab is open & connected**: Open `http://localhost:3333/builder` in your browser (the builder canvas tab establishes an active SSE connection to port 8082).
+   > **Note on `/dashboard`**: Navigating to `http://localhost:3333` redirects to `/dashboard` in standalone mode, which unmounts the canvas. Ensure a project is opened in the builder (`/builder` or `/builder/local`), or call `revyme_open_editor` to open/reconnect automatically.
 3. **MCP Stdio Server**: The AI agent automatically launches `server/mcp-server.ts` via the `mcp_config.json` entry above (or manually via `npm run mcp`).
 
 ---
@@ -41,6 +42,11 @@ The agent can send requests to the builder in two ways:
 1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
    - `revyme_insert_fragment`: **PRIMARY TOOL for UI generation.** Atomically inserts entire subtrees (sections, cards, grids) with auto-generated IDs, native Framer Motion hovers, and responsive viewports (`tablet`, `mobile`).
    - `revyme_insert_section`: Inserts an art-directed section blueprint (`header-editorial`, `header-glass`, `hero-editorial`, `hero-typewall`) with verified responsive layout and typography.
+   - `revyme_add_component_instance`: **PRIMARY TOOL for placing components.** Instantiates a reusable master (Navbar, Hero, ProjectCard, PrimaryButton) into any container with typed props (`studioName`, `title`, `initialVariant`) and position.
+   - `revyme_set_variant`: Sets/updates styles or text for a specific variant state in the component master (e.g. `variant: 'menu-open'`, `styles: { ... }`).
+   - `revyme_show_variant`: **CANVAS DISPLAY TOOL.** Switches which variant an instance actively displays on canvas (`initialVariant`). Use this to preview or inspect non-default states like `'menu-open'` on canvas!
+   - `revyme_add_connection`: **INTERACTION TRIGGER TOOL.** Wires a trigger (`click`, `mouseEnter`, `mouseLeave`, `inView`, `afterDelay`) from an element (`source_node`, e.g. hamburger button) to toggle or switch variants (`from: 'default'`, `to: 'menu-open'`).
+   - `revyme_open_editor`: Opens `http://localhost:3333/builder` in the user's browser and waits for the SSE connection to become active.
    - `revyme_list_built_in_components`: Browse Revyme's ~80 built-in code components (Marquee, Carousel, shaders, text effects, cursors, embeds).
    - `revyme_add_built_in_component`: Install and place a built-in component (e.g. `Marquee`, `Carousel`, `AuroraBackground`) into any container.
    - `revyme_set_responsive_styles`: Set responsive overrides for `'tablet'` (810px) or `'mobile'` (375px) on any element.
@@ -425,17 +431,19 @@ In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` dir
    ```
    In the component JSX:
    ```tsx
-   <div
+   <motion.button
      data-id="btn"
-     onMouseEnter={() => setVariant('default-hover')}
-     onMouseLeave={() => setVariant('default')}
+     onTapStart={() => setVariant('default-hover')}
+     onHoverEnd={() => setVariant('default')}
      style={{
        backgroundColor: variant === 'default-hover' ? '#4f46e5' : '#4338ca',
        transform: variant === 'default-hover' ? 'translateY(-2px)' : 'none',
-       transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
      }}
    >
+     Click Me
+   </motion.button>
    ```
+   *(Note: Motion timing and spring physics are driven automatically by Framer Motion / MotionConfig — NEVER write inline `transition: 'all 0.2s'` in the style object!)*
 
 3. **Card Color Reveals & Image Filter Transitions (Grayscale ➔ Full Color)**:
    - When cards should become colorful on hover (e.g. grayscale to full color):
@@ -452,7 +460,6 @@ In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` dir
            objectFit: 'cover',
            filter: variant === 'default-hover' ? 'grayscale(0%)' : 'grayscale(100%)',
            transform: variant === 'default-hover' ? 'scale(1.04)' : 'scale(1)',
-           transition: 'filter 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
          }}
        />
        ```
@@ -460,7 +467,32 @@ In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` dir
 
 ---
 
-### G. Professional Header, Navbar & Drawer Navigation Architecture
+### G. Revyme Oracle: 216 Rules & Core Invariants for Design Components & Code
+
+All TSX files submitted or edited undergo strict AST validation in `src/code/oracle/`. The builder enforces **216 unique architectural and dialect rules** across 13 functional areas. Violating ANY rule rejects the file save immediately.
+
+> [!IMPORTANT]
+> For the complete categorized directory of all 216 rules with exact descriptions and AST requirements, refer directly to:
+> [`references/oracle-rules.md`](file:///d:/revyme-fork/revyme-builder-fork/.agents/skills/revyme-mcp/references/oracle-rules.md)
+
+#### Top Core Rules (Always Check Before Submitting)
+
+| Oracle Rule | What It Checks | Correct Pattern | Why It Exists |
+| :--- | :--- | :--- | :--- |
+| **1. `COMPONENT_ROOT_POSITION`** | Root of a Design Component master cannot have `position: 'sticky'`, `fixed`, or `relative` with inset offsets | Root has `position: 'relative'` (or omits `position`). If the element should stick to the page top, the **page instance** carries `position: 'sticky'`! | The visual canvas owns artboard coordinates (`variantConfig` x/y + `...style` spread). Fixed/sticky on the master root breaks canvas placement. |
+| **2. `ROOT_STYLE_SPREAD`** | The component root's inline style object MUST end with `...style` | `style={{ position: 'relative', width: '100%', ..., ...style }}` | Instances on the page and canvas overrides depend on spreading `...style` onto the master root. |
+| **3. `ANIMATEPRESENCE_POPLAYOUT_MODE`** | `<AnimatePresence>` must have `mode="popLayout"` | `<AnimatePresence mode="popLayout">`<br/>Child must have `key="unique-id"` and `layout={true}` | Without `popLayout`, exiting elements occupy layout space until animation ends, causing siblings to snap abruptly. |
+| **4. `ANIMATEPRESENCE_CHILD_LAYOUT` & `ANIMATEPRESENCE_KEY`** | Direct conditional children inside `<AnimatePresence>` must have `layout={true}` and `key="<data-id>"` | `<motion.div key="header-mobile-drawer" layout={true} ...>` | Framer Motion requires `layout={true}` and explicit key to interpolate layout geometry smoothly during mount/unmount. |
+| **5. `VARIANT_VISIBILITY_CONDITION`** | Conditional rendering inside components must be an exact inline variant check | `{variant === 'menu-open' && <motion.div ... />}`<br/>*(NEVER `{isOpen && ...}` or variables!)* | The canvas parser statically evaluates visibility conditions to determine `hiddenOnVariants`. Variables return null and render on ALL variants. |
+| **6. `FLEX_CHILD_MISSING_ORDER` & `FLEX_CHILD_SHRINKS`** | Every flow child in a flex/grid container must have sequential string `order` and no shrink | `style={{ order: '0', flex: '0 0 auto', ... }}`<br/>Next sibling: `order: '1'`, `flex: '0 0 auto'` | Revyme's drag-to-reorder engine manipulates CSS `order: String(n)`. Missing orders break drag reordering; shrinking collapses children to 0px. |
+| **7. `CSS_TRANSITION`** | Inline CSS `transition:` strings are forbidden | **DELETE** `transition: 'all 0.3s'`. Use Framer Motion `transition={{ type: 'spring', ... }}` or `export const transitions` | CSS transitions conflict with Framer Motion's FLIP projection and cannot be adjusted in the Inspector Animation panel. |
+| **8. `ATTR_ORDER_DATA_ID_FIRST`** | Place `data-id` and `data-name` FIRST on every tag, before `style` and motion props | `<div data-id="card-root" data-name="Card" style={{ ... }}>` | Parser attribute scanners read in order; early style tags block ID binding. |
+| **9. `COMPONENT_CHILD_FIXED_WIDTH`** | Never hardcode the component artboard width (e.g. `1200px`) on inner spanning containers | Use `width: '100%'` with optional `maxWidth: '1200px'` | Hardcoded master artboard widths break responsive scaling when the component is placed on mobile/tablet viewports. |
+| **10. `TEXT_EXPRESSION`** | The text editing tool cannot edit computed JavaScript expressions | Write text as clean string literals, or bind expressions via `revyme_bind_expression` (`item.<field>`) | The visual canvas text tool directly binds to string literals; computed expressions cannot be round-tripped. |
+
+---
+
+### H. Professional Header, Navbar & Drawer Navigation Architecture
 
 > **CRITICAL POST-MORTEM & FATAL ANTI-PATTERNS**:
 > 1. **The In-Flow Menu Disaster**: NEVER insert a fullscreen menu or drawer as an in-flow `<section>` or `<div>` with `position: relative` or `order` in `app/page.client.tsx`. This renders a 750px tall static black rectangle right in the middle of the webpage! A menu/drawer MUST ALWAYS be an overlay (`position: fixed`, `inset: 0`, `zIndex: 9999`) and MUST be hidden (`display: none` or conditional) when closed.
@@ -484,7 +516,7 @@ Every navigation header in Revyme MUST conform to this exact display matrix:
 
 #### 2. Pattern A: Dedicated Design Component Navbar (`components/Navbar.tsx`)
 
-Authoring Navbar as a Design Component provides 100% canvas inspectability with interactive variants:
+This boilerplate strictly satisfies **all 5 Oracle Rules**, includes native **`variantConnections`** to open/close on click, and provides 100% canvas inspectability:
 
 ```tsx
 "use client";
@@ -499,6 +531,12 @@ export const variantConfig = [
   { name: 'menu-open', label: 'Menu Open', x: 0, y: 300 }
 ];
 
+// Native Revyme connections: clicking hamburger opens menu; clicking close button resets to default
+export const variantConnections = [
+  { from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'header-hamburger-btn' },
+  { from: 'menu-open', to: 'default', trigger: 'click', sourceNode: 'drawer-close-btn' }
+];
+
 function Navbar({
   initialVariant = 'default',
   studioName = 'STUDIO',
@@ -509,31 +547,43 @@ function Navbar({
   style?: React.CSSProperties;
 }) {
   const [variant, setVariant] = useState(initialVariant);
-  const isOpen = variant === 'menu-open';
+  const [prevInitial, setPrevInitial] = useState(initialVariant);
+  if (initialVariant !== prevInitial) {
+    setPrevInitial(initialVariant);
+    setVariant(initialVariant);
+  }
 
   return (
-    <>
+    <motion.div
+      data-id="site-nav-root"
+      data-name="Navbar"
+      style={{
+        position: 'relative', // Rule 1: Never position: fixed/sticky on master root!
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'var(--color-bg)',
+        ...style,
+      }}
+    >
       <header
         data-id="site-header"
-        data-name="Site Header"
+        data-name="Site Header Bar"
         style={{
-          position: 'sticky',
-          top: 0,
           width: '100%',
-          zIndex: 100,
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '20px 48px',
-          backgroundColor: 'var(--color-bg)',
           borderBottom: '1px solid var(--color-border)',
           boxSizing: 'border-box',
-          ...style,
+          order: '0',
+          flex: '0 0 auto', // Rule 4: order + flex: '0 0 auto' on flex children
         }}
       >
         {/* Brand */}
-        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '0', flex: '0 0 auto' }}>
           <span data-id="header-logo" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text)' }}>
             {studioName}
           </span>
@@ -543,20 +593,20 @@ function Navbar({
         </div>
 
         {/* Desktop Links Group */}
-        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px' }}>
+        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px', order: '1', flex: '0 0 auto' }}>
           <a data-id="nav-link-1" href="#work" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>01 / WORK</a>
           <a data-id="nav-link-2" href="#manifesto" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>02 / MANIFESTO</a>
           <a data-id="nav-link-3" href="#contact" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>03 / CONTACT</a>
         </div>
 
         {/* Actions Wrap: CTA + Hamburger */}
-        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '2', flex: '0 0 auto' }}>
           <button data-id="header-inquire-btn" style={{ padding: '8px 18px', backgroundColor: 'var(--color-inverse-bg)', color: 'var(--color-inverse-text)', borderRadius: '6px', fontSize: '12px' }}>
             INQUIRE [↗]
           </button>
-          <button
+          <motion.button
             data-id="header-hamburger-btn"
-            onClick={() => setVariant(isOpen ? 'default' : 'menu-open')}
+            onTap={() => setVariant('menu-open')}
             style={{
               display: 'none', // HIDDEN ON DESKTOP BY DEFAULT!
               alignItems: 'center',
@@ -569,50 +619,120 @@ function Navbar({
               cursor: 'pointer',
             }}
           >
-            {isOpen ? '[✕] CLOSE' : '[≡] MENU'}
-          </button>
+            [≡] MENU
+          </motion.button>
         </div>
       </header>
 
-      {/* Fullscreen Drawer Overlay - NEVER IN-FLOW! */}
-      <div
-        data-id="nav-fullscreen-overlay"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          width: '100vw',
-          height: '100vh',
-          zIndex: 9999,
-          backgroundColor: 'var(--color-bg)',
-          display: isOpen ? 'flex' : 'none',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '100px 48px 48px 48px',
-          boxSizing: 'border-box',
-          overflowY: 'auto',
-        }}
-      >
-        <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-          <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
-          <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
-          <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
-        </div>
-        <div data-id="drawer-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>NYC — 40.7128° N, 74.0060° W</span>
-          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>KYIV — 50.4501° N, 30.5234° E</span>
-        </div>
-      </div>
-    </>
+      {/* Fullscreen Drawer Overlay - Rule 2 (popLayout + key + layout) & Rule 3 (exact variant ===) */}
+      <AnimatePresence mode="popLayout">
+        {variant === 'menu-open' && (
+          <motion.div
+            key="nav-fullscreen-overlay"
+            data-id="nav-fullscreen-overlay"
+            layout={true}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 9999,
+              backgroundColor: 'var(--color-bg)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: '100px 48px 48px 48px',
+              boxSizing: 'border-box',
+              overflowY: 'auto',
+            }}
+          >
+            <div data-id="drawer-top-bar" style={{ display: 'flex', justifyContent: 'flex-end', order: '0', flex: '0 0 auto' }}>
+              <motion.button
+                data-id="drawer-close-btn"
+                onTap={() => setVariant('default')}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'var(--color-inverse-bg)',
+                  color: 'var(--color-inverse-text)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                [✕] CLOSE
+              </motion.button>
+            </div>
+            <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', order: '1', flex: '0 0 auto' }}>
+              <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
+              <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
+              <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
+            </div>
+            <div data-id="drawer-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', order: '2', flex: '0 0 auto' }}>
+              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>NYC — 40.7128° N, 74.0060° W</span>
+              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>KYIV — 50.4501° N, 30.5234° E</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
 export default withResponsiveProps(Navbar);
 ```
 
-On `app/page.client.tsx`, simply instantiate:
-```tsx
-<Navbar data-id="site-nav-instance" />
-```
+#### 3. How to Instantiate and Solve the Canvas Display Paradox
+
+1. **Instantiate on page via `revyme_add_component_instance`**:
+   ```json
+   {
+     "name": "Navbar",
+     "parent_id": "root",
+     "index": 0,
+     "props": { "studioName": "ACME STUDIO" }
+   }
+   ```
+   Or in page JSX:
+   ```tsx
+   <Navbar data-id="site-nav-instance" style={{ position: 'sticky', top: 0, zIndex: 100 }} />
+   ```
+   *(Note: Sticky belongs on the page instance, which satisfies `COMPONENT_ROOT_POSITION`!)*
+
+2. **The Canvas Display Paradox**:
+   - By default, the canvas renders `initialVariant = 'default'`, which means the drawer overlay is hidden (`variant === 'menu-open'` is false).
+   - If an agent wants to preview, audit, or style the opened menu drawer on the canvas:
+     Call `revyme_show_variant`:
+     ```json
+     {
+       "node_id": "site-nav-instance",
+       "variant": "menu-open"
+     }
+     ```
+     The canvas immediately displays the open drawer!
+   - To return to normal view, switch back:
+     ```json
+     {
+       "node_id": "site-nav-instance",
+       "variant": "default"
+     }
+     ```
+
+3. **Wiring Click Interactions via MCP**:
+   To wire a button click to a variant switch dynamically, use `revyme_add_connection`:
+   ```json
+   {
+     "component": "Navbar",
+     "from": "default",
+     "to": "menu-open",
+     "trigger": "click",
+     "source_node": "header-hamburger-btn"
+   }
+   ```
+   This automatically injects the `variantConnections` record and wires `onTap` to `setVariant('menu-open')` on the button!
 
 ---
 

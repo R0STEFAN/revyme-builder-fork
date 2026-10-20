@@ -136,6 +136,89 @@ Sets responsive CSS styles on a node for specific viewports (`"tablet"` for 810p
 }
 ```
 
+### `revyme_add_component_instance` (First-Class Component Tool)
+Places an instance of an existing Design Component (e.g. `Navbar`, `ProjectCard`, `PrimaryButton`) on the active canvas with typed props and positioning:
+```json
+{
+  "name": "Navbar",
+  "parent_id": "root",
+  "index": 0,
+  "props": {
+    "studioName": "ACME DESIGN",
+    "initialVariant": "default"
+  }
+}
+```
+**Parameters**:
+- `name` *(string, required)*: Component name as defined in `components/<Name>.tsx`.
+- `parent_id` *(string, optional)*: data-id of parent container (defaults to page root or selected node).
+- `props` *(object, optional)*: Declared props to pass as JSX attributes.
+- `index` *(number, optional)*: 0-based position among siblings in parent.
+
+### `revyme_set_variant` (Variant Styles & Text Editor)
+Sets or updates CSS styles or text content of a variant state in the component's master file:
+```json
+{
+  "node_id": "site-nav-instance",
+  "variant": "menu-open",
+  "styles": {
+    "backgroundColor": "var(--color-bg)"
+  }
+}
+```
+**Parameters**:
+- `node_id` *(string, required)*: data-id of the component instance on the active page.
+- `variant` *(string, required)*: Variant name on the master (e.g. `'menu-open'`, `'hover'`, `'dark'`).
+- `element` *(string, optional)*: data-id of an element INSIDE the component master to style (defaults to root).
+- `styles` *(object, optional)*: camelCase CSS styles (pass `""` to remove a property).
+- `text` *(string, optional)*: New text content for that variant.
+
+### `revyme_show_variant` (Canvas Variant Preview & Inspection)
+Switches which variant a component instance actively displays on the canvas (`initialVariant`). Use this to preview or edit non-default states like `'menu-open'` on the visual canvas:
+```json
+{
+  "node_id": "site-nav-instance",
+  "variant": "menu-open"
+}
+```
+**Parameters**:
+- `node_id` *(string, required)*: data-id of the component instance on the page.
+- `variant` *(string, required)*: Variant name to show on canvas (pass `'default'` to reset).
+- `viewport` *(number, optional)*: Breakpoint width in px (e.g. `375` for mobile) to scope the display override to.
+- `inside` *(string, optional)*: Master name when the instance sits inside another component.
+
+### `revyme_add_connection` (Interaction & Click Wiring)
+Wires a trigger (`click`, `mouseEnter`, `mouseLeave`, `inView`, `afterDelay`) to switch variants (e.g. clicking hamburger button opens menu):
+```json
+{
+  "component": "Navbar",
+  "from": "default",
+  "to": "menu-open",
+  "trigger": "click",
+  "source_node": "header-hamburger-btn"
+}
+```
+**Parameters**:
+- `component` *(string, required)*: Component name from `list_components` (e.g. `'Navbar'`).
+- `from` *(string, required)*: Source variant name the trigger fires in (e.g. `'default'`).
+- `to` *(string, required)*: Target variant name to switch to (e.g. `'menu-open'`).
+- `trigger` *(string enum, required)*: `'click'` \| `'clickStart'` \| `'mouseEnter'` \| `'mouseLeave'` \| `'inView'` \| `'afterDelay'`.
+- `source_node` *(string, optional)*: data-id inside the master that carries the trigger (e.g. `'header-hamburger-btn'`; omit for component root).
+- `delay` *(number, optional)*: Delay in seconds for `afterDelay` (0-2).
+
+### `revyme_open_editor` (Auto-Navigation & Keep-Alive)
+Opens the Revyme builder canvas in the user's browser and waits up to `wait_ms` for the SSE connection to become active. Automatically resolves the most recently modified project on disk (`/builder/<recentId>`), preventing blank or non-existent projects from opening:
+```json
+{
+  "project_id": "proj-1792479934977-oegfza",
+  "wait_ms": 8000
+}
+```
+**Parameters**:
+- `project_id` *(string, optional)*: Explicit project ID to open. If omitted, automatically resolves the newest project from disk.
+- `url` *(string, optional)*: Direct target URL (overrides `project_id`, e.g. `'http://localhost:3333/builder/proj-...'`).
+- `wait_ms` *(number, optional)*: Milliseconds to wait for canvas SSE connection (defaults to `8000`).
+
 ### `revyme_get_context`
 Retrieves full snapshot of the editor state:
 - `activeFilePath`: e.g. `"app/page.client.tsx"`
@@ -243,13 +326,37 @@ Executed through the internal agent tool dispatcher (`src/ai/agent/bridge-tools.
   }
   ```
 - **`set_variant`**:
-  Switches the active variant of a component instance:
+  Sets or updates the styles or text of a component variant in its master:
   ```json
   {
     "node_id": "pricing-card-1",
-    "variant": "highlight"
+    "variant": "highlight",
+    "element": "card-title",
+    "styles": { "color": "#FFD700" }
   }
   ```
+  *(Parameters: `node_id` [string], `variant` [string], optional `element` [string], optional `styles` [object], optional `text` [string])*
+- **`show_variant`**:
+  Chooses which variant an instance displays on the active canvas (`initialVariant`):
+  ```json
+  {
+    "node_id": "site-nav-instance",
+    "variant": "menu-open"
+  }
+  ```
+  *(Parameters: `node_id` [string], `variant` [string], optional `viewport` [number], optional `inside` [string])*
+- **`add_connection`**:
+  Wires a trigger to switch variants on click or hover:
+  ```json
+  {
+    "component": "Navbar",
+    "from": "default",
+    "to": "menu-open",
+    "trigger": "click",
+    "source_node": "header-hamburger-btn"
+  }
+  ```
+  *(Parameters: `component` [string], `from` [string], `to` [string], `trigger` ['click'|'clickStart'|'mouseEnter'|'mouseLeave'|'inView'|'afterDelay'], optional `source_node` [string], optional `delay` [number])*
 - **`add_variant`**:
   Adds a new visual variant to a Design Component master:
   ```json

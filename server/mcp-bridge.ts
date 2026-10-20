@@ -6,6 +6,21 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { listProjects } from './storage';
+
+export function getRecentBuilderUrl(baseOrigin = 'http://localhost:3333'): string {
+  try {
+    const list = listProjects();
+    if (list && list.length > 0 && list[0]?.id) {
+      const prefix = baseOrigin ? `${baseOrigin.replace(/\/+$/, '')}` : '';
+      return `${prefix}/builder/${encodeURIComponent(list[0].id)}`;
+    }
+  } catch (err) {
+    // If data dir does not exist or storage cannot be read
+  }
+  const prefix = baseOrigin ? `${baseOrigin.replace(/\/+$/, '')}` : '';
+  return prefix ? `${prefix}/dashboard` : '/dashboard';
+}
 
 export function openBrowserUrl(url: string): Promise<void> {
   return new Promise((resolve) => {
@@ -71,13 +86,14 @@ export class McpBridge {
       (c) => this.clientRoles.get(c) === 'dashboard'
     );
 
-    // If no canvas tab is connected but a dashboard tab is open, ask it to navigate to /builder
+    // If no canvas tab is connected but a dashboard tab is open, ask it to navigate to the builder
     if (canvasClients.length === 0 && dashboardClients.length > 0) {
-      console.warn('[Revyme Bridge] Browser tab is on dashboard. Auto-navigating to /builder...');
+      const recentUrl = getRecentBuilderUrl('');
+      console.warn(`[Revyme Bridge] Browser tab is on dashboard. Auto-navigating to ${recentUrl}...`);
       const navPayload = JSON.stringify({
         id: 0,
         method: 'navigateToBuilder',
-        params: { url: '/builder' },
+        params: { url: recentUrl },
       });
       for (const dc of dashboardClients) {
         try {
@@ -131,9 +147,10 @@ export class McpBridge {
         }
       }
 
+      const recentUrl = getRecentBuilderUrl('http://localhost:3333');
       throw new Error(
         'Revyme editor is not connected (0 active canvas browser tabs). ' +
-        'Open http://localhost:3333/builder in your browser (not /dashboard). ' +
+        `Open ${recentUrl} in your browser (not /dashboard). ` +
         'Or call the "revyme_open_editor" tool to launch it automatically.'
       );
     }
@@ -854,13 +871,17 @@ export class McpBridge {
           {
             name: 'revyme_open_editor',
             description:
-              'Open the Revyme builder canvas in the user\'s browser and wait for SSE connection. Use this when the editor is disconnected or the browser is on /dashboard instead of /builder.',
+              'Open the Revyme builder canvas in the user\'s browser and wait for SSE connection. Automatically opens the most recent project (e.g. /builder/<projectId>), or a specified project_id/url. Use this when the editor is disconnected or the browser is on /dashboard instead of /builder.',
             inputSchema: {
               type: 'object',
               properties: {
+                project_id: {
+                  type: 'string',
+                  description: 'Optional ID of the project to open (defaults to the most recently modified project on disk)',
+                },
                 url: {
                   type: 'string',
-                  description: 'Target editor URL (defaults to "http://localhost:3333/builder")',
+                  description: 'Direct target URL to open (overrides project_id, e.g. "http://localhost:3333/builder/proj-...")',
                 },
                 wait_ms: {
                   type: 'number',
@@ -1009,8 +1030,18 @@ export class McpBridge {
             });
             break;
           case 'revyme_open_editor': {
-            const targetUrl = (args as any)?.url || 'http://localhost:3333/builder';
+            const projectId = (args as any)?.project_id;
+            let targetUrl = (args as any)?.url;
             const waitMs = (args as any)?.wait_ms ?? 8000;
+
+            if (!targetUrl) {
+              if (projectId) {
+                targetUrl = `http://localhost:3333/builder/${encodeURIComponent(projectId)}`;
+              } else {
+                targetUrl = getRecentBuilderUrl('http://localhost:3333');
+              }
+            }
+
             await openBrowserUrl(targetUrl);
             const start = Date.now();
             let connected = false;
@@ -1030,8 +1061,8 @@ export class McpBridge {
               url: targetUrl,
               activeTabs: this.getActiveClientCount(),
               message: connected
-                ? 'Revyme builder canvas connected successfully.'
-                : `Opened ${targetUrl}. Waiting for user browser tab to finish loading /builder.`,
+                ? `Revyme builder canvas connected successfully at ${targetUrl}.`
+                : `Opened ${targetUrl}. Waiting for user browser tab to finish loading.`,
             };
             break;
           }

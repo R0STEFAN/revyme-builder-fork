@@ -186,6 +186,12 @@ export const variantConfig = [
   { name: 'menu-open', label: 'Menu Open', x: 0, y: 300 }
 ];
 
+// Native Revyme connections: clicking hamburger opens menu; clicking close button resets to default
+export const variantConnections = [
+  { from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'header-hamburger-btn' },
+  { from: 'menu-open', to: 'default', trigger: 'click', sourceNode: 'drawer-close-btn' }
+];
+
 function Navbar({
   initialVariant = 'default',
   studioName = 'STUDIO',
@@ -196,53 +202,64 @@ function Navbar({
   style?: React.CSSProperties;
 }) {
   const [variant, setVariant] = useState(initialVariant);
-  const isOpen = variant === 'menu-open';
+  const [prevInitial, setPrevInitial] = useState(initialVariant);
+  if (initialVariant !== prevInitial) {
+    setPrevInitial(initialVariant);
+    setVariant(initialVariant);
+  }
 
   return (
-    <>
+    <motion.div
+      data-id="site-nav-root"
+      data-name="Navbar"
+      style={{
+        position: 'relative', // Rule 1: Never position: fixed/sticky on master root! Page instance carries sticky.
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'var(--color-bg)',
+        ...style,
+      }}
+    >
       <header
         data-id="site-header"
-        data-name="Site Header"
+        data-name="Site Header Bar"
         style={{
-          position: 'sticky',
-          top: 0,
           width: '100%',
-          zIndex: 100,
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '20px 48px',
-          backgroundColor: 'var(--color-bg)',
           borderBottom: '1px solid var(--color-border)',
           boxSizing: 'border-box',
-          ...style,
+          order: '0',
+          flex: '0 0 auto', // Rule 4: order + flex: '0 0 auto' on flex children
         }}
       >
-        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '0', flex: '0 0 auto' }}>
           <span data-id="header-logo" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text)' }}>
             {studioName}
           </span>
-          {/* Note: status pills must be hidden on tablet to avoid horizontal overflow */}
           <span data-id="header-status-pill" style={{ fontSize: '11px', padding: '4px 12px', border: '1px solid var(--color-border)', borderRadius: '100px', color: 'var(--color-text-secondary)' }}>
             ● AVAILABLE FOR COMMISSIONS
           </span>
         </div>
 
         {/* Desktop links group */}
-        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px' }}>
+        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px', order: '1', flex: '0 0 auto' }}>
           <a data-id="nav-link-1" href="#work" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>01 / WORK</a>
           <a data-id="nav-link-2" href="#manifesto" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>02 / MANIFESTO</a>
           <a data-id="nav-link-3" href="#contact" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px' }}>03 / CONTACT</a>
         </div>
 
-        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '2', flex: '0 0 auto' }}>
           <button data-id="header-inquire-btn" style={{ padding: '8px 18px', backgroundColor: 'var(--color-inverse-bg)', color: 'var(--color-inverse-text)', borderRadius: '6px', fontSize: '12px' }}>
             INQUIRE [↗]
           </button>
-          <button
+          <motion.button
             data-id="header-hamburger-btn"
-            onClick={() => setVariant(isOpen ? 'default' : 'menu-open')}
+            onTap={() => setVariant('menu-open')}
             style={{
               display: 'none', // NEVER visible on desktop!
               alignItems: 'center',
@@ -255,36 +272,66 @@ function Navbar({
               cursor: 'pointer',
             }}
           >
-            {isOpen ? '[✕] CLOSE' : '[≡] MENU'}
-          </button>
+            [≡] MENU
+          </motion.button>
         </div>
       </header>
 
-      {/* OVERLAY DRAWER - MUST NEVER BE IN-FLOW! */}
-      <div
-        data-id="nav-fullscreen-overlay"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          width: '100vw',
-          height: '100vh',
-          zIndex: 9999,
-          backgroundColor: 'var(--color-bg)',
-          display: isOpen ? 'flex' : 'none',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '100px 48px 48px 48px',
-          boxSizing: 'border-box',
-          overflowY: 'auto',
-        }}
-      >
-        <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-          <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
-          <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
-          <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
-        </div>
-      </div>
-    </>
+      {/* OVERLAY DRAWER - Rule 2 (popLayout + key + layout) & Rule 3 (exact variant ===) */}
+      <AnimatePresence mode="popLayout">
+        {variant === 'menu-open' && (
+          <motion.div
+            key="nav-fullscreen-overlay"
+            data-id="nav-fullscreen-overlay"
+            layout={true}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 9999,
+              backgroundColor: 'var(--color-bg)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: '100px 48px 48px 48px',
+              boxSizing: 'border-box',
+              overflowY: 'auto',
+            }}
+          >
+            <div data-id="drawer-top-bar" style={{ display: 'flex', justifyContent: 'flex-end', order: '0', flex: '0 0 auto' }}>
+              <motion.button
+                data-id="drawer-close-btn"
+                onTap={() => setVariant('default')}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'var(--color-inverse-bg)',
+                  color: 'var(--color-inverse-text)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                [✕] CLOSE
+              </motion.button>
+            </div>
+            <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', order: '1', flex: '0 0 auto' }}>
+              <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
+              <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
+              <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
+            </div>
+            <div data-id="drawer-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', order: '2', flex: '0 0 auto' }}>
+              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>NYC — 40.7128° N, 74.0060° W</span>
+              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>KYIV — 50.4501° N, 30.5234° E</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

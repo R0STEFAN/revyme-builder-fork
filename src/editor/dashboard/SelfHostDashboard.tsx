@@ -96,6 +96,8 @@ export default function SelfHostDashboard() {
   // Hidden file input for project import
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [exportingBundleId, setExportingBundleId] = useState<string | null>(null);
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
 
   const fetchProjects = async () => {
     try {
@@ -135,7 +137,15 @@ export default function SelfHostDashboard() {
         try {
           const data = JSON.parse(e.data);
           if (data.method === 'navigateToBuilder' || data.method === 'openEditor') {
-            const url = data.params?.url || '/builder';
+            let url = data.params?.url;
+            if (!url || url === '/builder') {
+              const currentList = projectsRef.current;
+              if (currentList.length > 0 && currentList[0]?.id) {
+                url = `/builder/${encodeURIComponent(currentList[0].id)}`;
+              } else {
+                url = '/builder';
+              }
+            }
             trace.action('dashboard:auto-navigate-builder', { url });
             window.location.href = url;
           }

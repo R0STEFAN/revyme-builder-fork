@@ -865,6 +865,20 @@ describe('McpBridge', () => {
       expect(res.content[0].text).toContain('http://localhost:3333/builder');
     });
 
+    it('handles revyme_open_editor with explicit project_id', async () => {
+      const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+      const mcpServer = bridge.createMcpServer() as any;
+      const callHandler = mcpServer._requestHandlers.get(CallToolRequestSchema.shape.method.value);
+      const res = await callHandler({
+        method: 'tools/call',
+        params: {
+          name: 'revyme_open_editor',
+          arguments: { project_id: 'test-custom-proj', wait_ms: 50 },
+        },
+      });
+      expect(res.content[0].text).toContain('http://localhost:3333/builder/test-custom-proj');
+    });
+
     it('handles dashboard client auto-navigation request in sendToEditor', async () => {
       const { req: dashReq, res: dashRes } = createMockReqRes({ method: 'GET', url: '/bridge/events?role=dashboard' });
       bridge.handleEventsStream(dashReq, dashRes);
@@ -882,8 +896,15 @@ describe('McpBridge', () => {
       const { req: canvasReq, res: canvasRes } = createMockReqRes({ method: 'GET', url: '/bridge/events?role=canvas' });
       bridge.handleEventsStream(canvasReq, canvasRes);
 
-      // Resolve result
-      bridge.handleResult(JSON.stringify({ id: 1, result: { code: 'export default function()...' } }), {
+      // Wait a tick for the while loop to detect canvas client and send payload
+      await new Promise((r) => setTimeout(r, 300));
+
+      const written = canvasRes.writtenData.find((d: string) => d.includes('readFile'));
+      expect(written).toBeDefined();
+      const payloadId = JSON.parse(written.replace(/^data:\s*/, '').trim()).id;
+
+      // Resolve result with dynamic payloadId
+      bridge.handleResult(JSON.stringify({ id: payloadId, result: { code: 'export default function()...' } }), {
         statusCode: 200,
         headers: {},
         setHeader() {},
