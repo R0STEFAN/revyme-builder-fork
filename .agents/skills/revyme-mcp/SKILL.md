@@ -124,28 +124,75 @@ Use `add_node`:
 - `text`: Plain text only (no HTML).
 - Place text styles (`fontSize`, `color`, `textAlign`) on the text element itself, not on wrapper frames.
 
-### C. Adding Motion & Animations (Choreography & Springs)
-Always apply animations using Revyme's native semantic tools (`set_motion`, `set_text_effect`, `set_smooth_scroll`) rather than raw code. This ensures they are interactive on the canvas and editable in the builder's GUI.
+### C. Hover Animations & Interactive States (100% GUI-Parity Standard)
+> **CRITICAL RULE**: NEVER emit raw CSS `:hover` rules in `<style>`. CSS hover was explicitly removed from the builder UI because CSS transforms fight Framer Motion's FLIP projection. Moreover, CSS `:hover` rules do NOT appear in the builder's Inspector, breaking visual editability!
+>
+> You MUST use ONLY the two visual mechanisms supported by the Revyme Builder:
+
+1. **Framer Motion Hover (For Page Elements — 100% GUI-Editable in Effects Panel)**:
+   For buttons, cards, and links on regular pages, use Framer Motion via `set_motion` or `<motion.tag whileHover={...} />`:
+   - Tool call:
+     ```json
+     {
+       "tool": "set_motion",
+       "input": {
+         "node_id": "cta-btn",
+         "effect": "hover",
+         "targets": { "scale": 1.025, "y": -4 },
+         "transition": { "type": "spring", "stiffness": 350, "damping": 25 }
+       }
+     }
+     ```
+   - In TSX, the builder emits:
+     ```tsx
+     <motion.button
+       data-id="cta-btn"
+       whileHover={{ scale: 1.025, y: -4 }}
+       transition={{ type: "spring", stiffness: 350, damping: 25 }}
+       style={{ ... }}
+     >
+       Get Started
+     </motion.button>
+     ```
+   - When the user selects this element in the builder, it immediately shows as an active **Hover** card under the **Effects** panel with interactive sliders!
+
+2. **Component Variants (For Design Components — Editable in Variants Panel)**:
+   For reusable Design Components in `components/<Name>.tsx`, define native hover via variant states and connections:
+   ```tsx
+   export const variantConfig = [
+     { name: 'default', label: 'Default', x: 0, y: 0 },
+     { name: 'default-hover', label: 'Hover', x: 0, y: 200, interactionType: 'hover', parentVariant: 'default' }
+   ];
+   export const variantConnections = [
+     { from: 'default', to: 'default-hover', trigger: 'mouseEnter' },
+     { from: 'default-hover', to: 'default', trigger: 'mouseLeave' }
+   ];
+   export const transitions = {
+     'default-hover': { transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } }
+   };
+   ```
+   In the component JSX:
+   ```tsx
+   <div
+     data-id="btn"
+     onMouseEnter={() => setVariant('default-hover')}
+     onMouseLeave={() => setVariant('default')}
+     style={{
+       backgroundColor: variant === 'default-hover' ? '#4f46e5' : '#4338ca',
+       transform: variant === 'default-hover' ? 'translateY(-2px)' : 'none',
+       transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+     }}
+   >
+   ```
+
+### D. Adding Motion & Animations (Choreography & Springs)
+Always apply animations using Revyme's native semantic tools (`set_motion`, `set_text_effect`, `set_smooth_scroll`) rather than raw code:
 
 - **Physics-Based Transitions (Springs)**:
   Avoid linear animations. Prefer realistic springs:
   - *Snappy Buttons/Taps*: `transition: { "type": "spring", "stiffness": 400, "damping": 28 }`
   - *Smooth Cards/Popups*: `transition: { "type": "spring", "stiffness": 300, "damping": 24 }`
   - *Gentle Section Entrance*: `transition: { "type": "spring", "stiffness": 240, "damping": 26 }`
-
-- **Interactive Hover & Tap**:
-  Keep hover scale subtle (`1.02` - `1.04`) with slight vertical elevation:
-  ```json
-  {
-    "tool": "set_motion",
-    "input": {
-      "node_id": "card-1",
-      "effect": "hover",
-      "targets": { "scale": 1.025, "y": -6, "boxShadow": "0 20px 25px -5px rgba(0,0,0,0.15)" },
-      "transition": { "type": "spring", "stiffness": 320, "damping": 22 }
-    }
-  }
-  ```
 
 - **Staggered Multi-Card Entrances**:
   When introducing cards or features, stagger them by `0.1s`:
