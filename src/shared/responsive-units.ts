@@ -228,3 +228,74 @@ export function resolveResponsiveStyles(
   }
   return out;
 }
+
+export interface ViewportTileTarget {
+  id: string;
+  width: number;
+  designWidth?: number;
+}
+
+/**
+ * Scopes CSS variables containing viewport units (vw, vh, vmin, vmax, svw, dvw, etc.,
+ * including inside clamp() and calc()) to specific viewports so they resolve against
+ * each tile's simulated width/height rather than the sandbox iframe window.
+ *
+ * For example, if tokensCSS defines:
+ *   [data-content-root] {
+ *     --typo-heading-1-size: clamp(1.65rem, 6.5vw, 6.5rem);
+ *     --space-hero: clamp(2rem, 8vw, 6rem);
+ *   }
+ *
+ * For mobile (width: 390), it emits:
+ *   [data-viewport="mobile"], [data-overlay-portal="mobile"] {
+ *     --typo-heading-1-size: clamp(1.65rem, 25.35px, 6.5rem);
+ *     --space-hero: clamp(2rem, 31.2px, 6rem);
+ *   }
+ *
+ * This ensures that on the canvas (where all viewports share a single iframe),
+ * CSS tokens using fluid clamp() resolve accurately and match preview mode.
+ */
+export function buildViewportTokensCSS(
+  tokensCSS: string,
+  viewports: ViewportTileTarget[],
+): string {
+  if (!tokensCSS || !viewports || viewports.length === 0) return '';
+  if (!ANY_VP_UNIT_RE.test(tokensCSS)) return '';
+
+  // Strip CSS comments first so commented-out declarations don't match
+  const cleanCSS = tokensCSS.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Extract all `--var-name: value` declarations that contain viewport units.
+  // When a token is defined multiple times (e.g. light mode followed by dark mode),
+  // the later declaration wins (mirroring CSS cascade order).
+  const tokenMap = new Map<string, string>();
+  const declRegex = /(--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+);?/g;
+  let match: RegExpExecArray | null;
+  while ((match = declRegex.exec(cleanCSS)) !== null) {
+    const name = match[1].trim();
+    const value = match[2].trim();
+    if (ANY_VP_UNIT_RE.test(value)) {
+      tokenMap.set(name, value);
+    }
+  }
+
+  if (tokenMap.size === 0) return '';
+
+  let out = '';
+  for (const vp of viewports) {
+    const tileW = vp.designWidth && vp.designWidth > 0 ? vp.designWidth : vp.width;
+    if (!Number.isFinite(tileW) || tileW <= 0) continue;
+
+    const decls: string[] = [];
+    for (const [name, rawVal] of tokenMap.entries()) {
+      const resolved = resolveResponsiveUnits(rawVal, tileW);
+      decls.push(`  ${name}: ${resolved};`);
+    }
+
+    if (decls.length > 0) {
+      out += `[data-viewport="${vp.id}"], [data-overlay-portal="${vp.id}"] {\n${decls.join('\n')}\n}\n`;
+    }
+  }
+
+  return out;
+}

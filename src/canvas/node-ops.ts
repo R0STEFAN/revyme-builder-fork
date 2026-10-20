@@ -42,6 +42,7 @@ import { isGhostNodeId, stripGhostSuffix } from '@/shared/ghost-id';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 // The LEAF path-predicate module — active-file-store would cycle from here.
 import { isLayoutFile } from '@/code/project/file-path-kind';
+import { buildViewportTokensCSS, type ViewportTileTarget } from '@/shared/responsive-units';
 
 // ─── Global Context for Style Routing ───────────────────────────────────────
 // Set by ControlProvider / Canvas when the interacting viewport/variant changes.
@@ -453,7 +454,24 @@ function refreshCanvasTokensImmediate(): void {
   // The token blocks for the EDITOR's colour mode (light, or dark with the
   // `:root.dark` values winning), plus @keyframes — scoped to the content
   // root so nothing leaks into the builder UI. See canvas-theme.ts.
-  const tokensCSS = extractCanvasGlobals(rawCSS, canvasThemeMode()).tokensCSS;
+  const rawTokensCSS = extractCanvasGlobals(rawCSS, canvasThemeMode()).tokensCSS;
+
+  // Build per-viewport scoped tokens for fluid units (clamp, vw, vh)
+  let viewports: ViewportTileTarget[] = [];
+  const root = getContentRoot();
+  if (root) {
+    const els = root.querySelectorAll<HTMLElement>('[data-viewport]:not([data-overlay-portal])');
+    viewports = Array.from(els).map(e => ({
+      id: e.getAttribute('data-viewport') || '',
+      width: parseFloat(e.getAttribute('data-viewport-width') || '') || parseFloat(e.style.width) || 1440,
+    })).filter(v => v.id);
+  }
+  if (viewports.length === 0) {
+    const widths = getViewportWidths();
+    viewports = Object.entries(widths).map(([id, width]) => ({ id, width }));
+  }
+  const vpTokensCSS = buildViewportTokensCSS(rawTokensCSS, viewports);
+  const tokensCSS = vpTokensCSS ? `${rawTokensCSS}\n${vpTokensCSS}` : rawTokensCSS;
 
   const current = styleEl.textContent || '';
   const startMarker = '/* canvas-tokens-start */';

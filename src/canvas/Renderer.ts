@@ -16,7 +16,7 @@ import { resolveOverlayConfig } from '@/code/parsing/overlay-parser';
 import { trace, pauseDOMObserver, resumeDOMObserver } from '@/shared/debug-trace';
 import { jsxStyleToHTML, coerceCssNumberToPx, mergeStyleLayers, toKebab } from '@/shared/css-utils';
 import { isSvgTag, isTextTag, WRAPPER_ONLY_STYLE_PROPS, isFitSize, isInlineLevelTag, isCustomDataAttr, isCustomAttr } from '@/shared/constants';
-import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor } from '@/shared/responsive-units';
+import { resolveResponsiveUnits, resolveContainerQueryUnits, canvasFixedAnchor, buildViewportTokensCSS } from '@/shared/responsive-units';
 import { mediaToCanvasContainer } from '@/shared/canvas-band-queries';
 import { hasMotionTransformProp, motionPropsToCSSTransform, foldMotionTransforms, MOTION_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { simpleHash } from '@/shared/hash-utils';
@@ -1072,8 +1072,12 @@ export function renderNodes(
     // @imports were extracted separately above (they MUST appear before any
     // other rule in the stylesheet per CSS spec, otherwise the browser
     // discards them silently and fonts never load).
-    const tokensBlock = tokensCSS
-      ? `/* canvas-tokens-start */\n${tokensCSS}\n/* canvas-tokens-end */\n`
+    const vpTokensCSS = (tokensCSS && viewports && viewports.length > 0)
+      ? buildViewportTokensCSS(tokensCSS, viewports)
+      : '';
+    const fullTokensCSS = vpTokensCSS ? `${tokensCSS}\n${vpTokensCSS}` : tokensCSS;
+    const tokensBlock = fullTokensCSS
+      ? `/* canvas-tokens-start */\n${fullTokensCSS}\n/* canvas-tokens-end */\n`
       : '';
     // Disable all CSS animations and transitions in the canvas — they are for live website only.
     // GSAP/framer-motion animations are controlled separately via timeline preview.
@@ -1374,6 +1378,18 @@ export function renderNodes(
       }
 
       if (rootEl) {
+        // EXISTS — set viewport attributes FIRST so patchElement and any child lookups
+        // resolve responsive units (clamp, vw, vh) against this tile's simulated width.
+        rootEl.setAttribute('data-viewport', vp.id);
+        rootEl.setAttribute('data-viewport-id', vp.id);
+        rootEl.setAttribute('data-viewport-width', String(tileWidth));
+        if (vp.id === viewports[0]?.id || vp.isPrimary) {
+          rootEl.setAttribute('data-viewport-primary', 'true');
+        } else {
+          rootEl.removeAttribute('data-viewport-primary');
+        }
+        if (variantName) rootEl.setAttribute('data-variant', variantName);
+
         // EXISTS — patch in place. Pass `localeOverrides` for ALL locales,
         // not just non-default ones. Once a node migrates to `{t('id')}`,
         // the JSX no longer carries plain text — the override map (loaded
@@ -1384,23 +1400,17 @@ export function renderNodes(
       } else {
         // NEW — create root element
         rootEl = buildNodeElement(rootNode, nodes, onNodeMouseDown, prefix, variantName, undefined, '', localeOverrides, tileWidth);
+        rootEl.setAttribute('data-viewport', vp.id);
+        rootEl.setAttribute('data-viewport-id', vp.id);
+        rootEl.setAttribute('data-viewport-width', String(tileWidth));
+        if (vp.id === viewports[0]?.id || vp.isPrimary) {
+          rootEl.setAttribute('data-viewport-primary', 'true');
+        } else {
+          rootEl.removeAttribute('data-viewport-primary');
+        }
+        if (variantName) rootEl.setAttribute('data-variant', variantName);
         container.appendChild(rootEl);
       }
-
-      // Apply viewport/variant attributes directly on root
-      // These OVERRIDE any inline left/top/width from the node's styles
-      rootEl.setAttribute('data-viewport', vp.id);
-      // canvas-dnd expects `data-viewport-id` for hit-test scoping. Mirror our
-      // existing `data-viewport` value so canvas-dnd can pick the right replica.
-      rootEl.setAttribute('data-viewport-id', vp.id);
-      // Mark the primary viewport so canvas-dnd's onCommit knows which replica
-      // to mirror writes from.
-      if (vp.id === viewports[0]?.id || vp.isPrimary) {
-        rootEl.setAttribute('data-viewport-primary', 'true');
-      } else {
-        rootEl.removeAttribute('data-viewport-primary');
-      }
-      if (variantName) rootEl.setAttribute('data-variant', variantName);
       // `container-type: inline-size` applies SIZE CONTAINMENT on the inline
       // (width) axis — the element is sized as if it had no contents on that
       // axis. That's fine for pages (the root width is the definite vp.width),
@@ -2595,7 +2605,7 @@ export function patchElement(
   // Read from data-viewport-width attribute (set by renderNodes) — reliable source
   // since style.width may be overwritten by code's width:'100%' during patchElement.
   const vpContainer = el.closest('[data-viewport]') as HTMLElement | null;
-  const vpWidthPx = parseFloat(vpContainer?.getAttribute('data-viewport-width') || '') || 1440;
+  const vpWidthPx = parseFloat(vpContainer?.getAttribute('data-viewport-width') || '') || vpWidth || 1440;
 
   // Component roots inside instance wrappers: skip width/height + every
   // wrapper-only prop from inline styles. The root fills the wrapper via

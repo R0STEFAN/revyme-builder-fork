@@ -2,7 +2,7 @@
 // and canvas-tokens marker system (preset live-update regression).
 
 import { describe, test, it, expect, beforeEach } from 'vitest';
-import { shouldUseInnerHTML, setActivePreviewStyles, getActivePreviewStyles, patchElement } from './Renderer';
+import { shouldUseInnerHTML, setActivePreviewStyles, getActivePreviewStyles, patchElement, renderNodes } from './Renderer';
 import { setElStyle, clearElStyle } from './renderer/style-apply';
 import { applyBindingDataToTree } from './renderer/bindings';
 import { collectionBindingSignature, shouldClearEmptiedText } from './Renderer';
@@ -881,5 +881,110 @@ describe('Renderer active preview preservation across renders', () => {
     expect(el.style.transform).toBe('');
     expect(el.style.width).toBe('100px');
     expect(el.style.height).toBe('100px');
+  });
+});
+
+describe('canvas per-viewport clamp and fluid unit tokens', () => {
+  let contentRoot: HTMLDivElement;
+
+  beforeEach(() => {
+    contentRoot = document.createElement('div');
+    contentRoot.setAttribute('data-content-root', 'true');
+    document.body.appendChild(contentRoot);
+
+    return () => {
+      contentRoot.remove();
+    };
+  });
+
+  test('renderNodes generates per-viewport scoped tokens for fluid clamp tokens', () => {
+    const rawTokens = `:root {
+  --color-primary: #123456;
+  --typo-heading-1-size: clamp(1.65rem, 6.5vw, 6.5rem);
+}`;
+    resetProjectFS(new Map([['app/globals.css', rawTokens]]));
+
+    const nodes = new Map<string, any>([
+      ['root', { id: 'root', type: 'div', styles: {}, children: ['h1'] }],
+      ['h1', { id: 'h1', type: 'h1', parentId: 'root', styles: { fontSize: 'var(--typo-heading-1-size)' }, children: [] }],
+    ]);
+
+    const viewports: any[] = [
+      { id: 'desktop', label: 'Desktop', width: 1200, isPrimary: true, order: 0, x: 0, y: 0 },
+      { id: 'mobile', label: 'Mobile', width: 390, isPrimary: false, order: 1, x: 1300, y: 0 },
+    ];
+
+    renderNodes(contentRoot, nodes, null, () => {}, viewports, 'export default function Page() { return <div data-id="root"><h1 data-id="h1">Hello</h1></div>; }');
+
+    const styleEl = contentRoot.querySelector('[data-canvas-styles]') as HTMLStyleElement;
+    expect(styleEl).not.toBeNull();
+    const css = styleEl.textContent!;
+
+    // Must contain base token
+    expect(css).toContain('--color-primary: #123456;');
+    expect(css).toContain('--typo-heading-1-size: clamp(1.65rem, 6.5vw, 6.5rem);');
+
+    // Must contain desktop scoped token (6.5vw * 1200 / 100 = 78px)
+    expect(css).toContain('[data-viewport="desktop"], [data-overlay-portal="desktop"]');
+    expect(css).toContain('--typo-heading-1-size: clamp(1.65rem, 78px, 6.5rem);');
+
+    // Must contain mobile scoped token (6.5vw * 390 / 100 = 25.35px)
+    expect(css).toContain('[data-viewport="mobile"], [data-overlay-portal="mobile"]');
+    expect(css).toContain('--typo-heading-1-size: clamp(1.65rem, 25.35px, 6.5rem);');
+
+    // Root elements on mobile tile must have data-viewport-width set
+    const mobileRoot = contentRoot.querySelector('[data-viewport="mobile"]') as HTMLElement;
+    expect(mobileRoot).not.toBeNull();
+    expect(mobileRoot.getAttribute('data-viewport-width')).toBe('390');
+  });
+
+  test('refreshCanvasTokens generates per-viewport scoped tokens for fluid clamp tokens', async () => {
+    // Setup initial DOM with mobile viewport element
+    const mobileVp = document.createElement('div');
+    mobileVp.setAttribute('data-viewport', 'mobile');
+    mobileVp.setAttribute('data-viewport-width', '390');
+    contentRoot.appendChild(mobileVp);
+
+    const styleEl = document.createElement('style');
+    styleEl.setAttribute('data-canvas-styles', 'true');
+    contentRoot.prepend(styleEl);
+
+    const tokens = `:root {
+  --space-hero: clamp(2rem, 8vw, 6rem);
+}`;
+    resetProjectFS(new Map([['app/globals.css', tokens]]));
+
+    refreshCanvasTokens();
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+    const css = styleEl.textContent!;
+    expect(css).toContain('[data-viewport="mobile"], [data-overlay-portal="mobile"]');
+    // 8vw * 390 / 100 = 31.2px
+    expect(css).toContain('--space-hero: clamp(2rem, 31.2px, 6rem);');
+  });
+
+  test('patchElement resolves fluid clamp expressions against viewport width', () => {
+    const mobileVp = document.createElement('div');
+    mobileVp.setAttribute('data-viewport', 'mobile');
+    mobileVp.setAttribute('data-viewport-width', '390');
+    contentRoot.appendChild(mobileVp);
+
+    const el = document.createElement('h1');
+    mobileVp.appendChild(el);
+
+    const node: any = {
+      id: 'title',
+      type: 'h1',
+      styles: {
+        '--fluid-size': 'clamp(1rem, 5vw, 3rem)',
+      },
+      children: [],
+    };
+    const allNodes = new Map([['title', node]]);
+
+    patchElement(el, node, allNodes, () => {}, '', null, null, undefined, 390);
+
+    // 5vw * 390 / 100 = 19.5px
+    expect(el.style.getPropertyValue('--fluid-size')).toBe('clamp(1rem, 19.5px, 3rem)');
   });
 });

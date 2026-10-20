@@ -8,6 +8,7 @@ import {
   resolveContainerQueryUnits,
   simulatedVpHeight,
   FALLBACK_VP_WIDTH,
+  buildViewportTokensCSS,
 } from './responsive-units';
 
 describe('resolveResponsiveUnits', () => {
@@ -203,5 +204,83 @@ describe('resolveContainerQueryUnits', () => {
     expect(out).toContain('.a { color: blue; }');
     expect(out).toContain('.b { color: green; }');
     expect(out).toContain('font-size: 30px');
+  });
+});
+
+describe('buildViewportTokensCSS', () => {
+  const VIEWPORTS = [
+    { id: 'desktop', width: 1200 },
+    { id: 'tablet', width: 810 },
+    { id: 'mobile', width: 390 },
+  ];
+
+  it('returns empty string when tokensCSS is empty or has no viewport units', () => {
+    expect(buildViewportTokensCSS('', VIEWPORTS)).toBe('');
+    expect(buildViewportTokensCSS(':root { --color: red; --font: Inter; }', VIEWPORTS)).toBe('');
+  });
+
+  it('returns empty string when viewports array is empty', () => {
+    expect(buildViewportTokensCSS(':root { --typo-size: clamp(1rem, 5vw, 3rem); }', [])).toBe('');
+  });
+
+  it('resolves fluid clamp tokens with vw per viewport tile', () => {
+    const css = `[data-content-root] {
+  --color-primary: #111;
+  --typo-heading-1-size: clamp(1.65rem, 6.5vw, 6.5rem);
+  --space-hero: clamp(2rem, 8vw, 6rem);
+}`;
+    const out = buildViewportTokensCSS(css, VIEWPORTS);
+
+    // Desktop: 1200px -> 6.5vw = 78px, 8vw = 96px
+    expect(out).toContain('[data-viewport="desktop"], [data-overlay-portal="desktop"]');
+    expect(out).toContain('--typo-heading-1-size: clamp(1.65rem, 78px, 6.5rem);');
+    expect(out).toContain('--space-hero: clamp(2rem, 96px, 6rem);');
+
+    // Tablet: 810px -> 6.5vw = 52.65px, 8vw = 64.8px
+    expect(out).toContain('[data-viewport="tablet"], [data-overlay-portal="tablet"]');
+    expect(out).toContain('--typo-heading-1-size: clamp(1.65rem, 52.65px, 6.5rem);');
+    expect(out).toContain('--space-hero: clamp(2rem, 64.8px, 6rem);');
+
+    // Mobile: 390px -> 6.5vw = 25.35px, 8vw = 31.2px
+    expect(out).toContain('[data-viewport="mobile"], [data-overlay-portal="mobile"]');
+    expect(out).toContain('--typo-heading-1-size: clamp(1.65rem, 25.35px, 6.5rem);');
+    expect(out).toContain('--space-hero: clamp(2rem, 31.2px, 6rem);');
+
+    // Non-viewport tokens are not included in the per-viewport overrides
+    expect(out).not.toContain('--color-primary');
+  });
+
+  it('respects designWidth when viewport has designWidth', () => {
+    const vps = [{ id: 'mobile', width: 809, designWidth: 390 }];
+    const css = '[data-content-root] { --h1: clamp(1rem, 10vw, 3rem); }';
+    const out = buildViewportTokensCSS(css, vps);
+    expect(out).toContain('--h1: clamp(1rem, 39px, 3rem);');
+  });
+
+  it('handles dark mode overrides when multiple declarations for the same token exist', () => {
+    const css = `[data-content-root] {
+  --font-size: clamp(14px, 2vw, 20px);
+}
+[data-content-root] {
+  --font-size: clamp(16px, 3vw, 24px);
+}`;
+    const out = buildViewportTokensCSS(css, [{ id: 'mobile', width: 390 }]);
+    // Later declaration (3vw = 11.7px) wins
+    expect(out).toContain('--font-size: clamp(16px, 11.7px, 24px);');
+  });
+
+  it('handles multiline clamp declarations and ignores comments', () => {
+    const css = `[data-content-root] {
+  /* Comment with 10vw */
+  --title: clamp(
+    1.5rem,
+    5vw,
+    4rem
+  );
+}`;
+    const out = buildViewportTokensCSS(css, [{ id: 'mobile', width: 390 }]);
+    expect(out).toContain('19.5px');
+    expect(out).not.toContain('5vw');
+    expect(out).not.toContain('10vw'); // from the comment
   });
 });
