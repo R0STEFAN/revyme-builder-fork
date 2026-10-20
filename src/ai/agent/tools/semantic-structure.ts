@@ -18,14 +18,14 @@ import type { CanvasNode } from '@/code/parsing/parser';
 import { trace } from '@/shared/debug-trace';
 import { buildComponentRegistry, STRUCTURAL_PROPS, type ComponentInfo } from '@/code/components/component-registry';
 import { wouldCreateComponentCycle } from '@/code/components/component-cycle';
-import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
+import { projectFS, projectVersionAtom, installBuiltInCodeComponent } from '@/code/project/project-fs';
 import type { AgentTool, AgentToolResult, ToolContext } from '@/ai/agent';
 import { queueToolMutation, flushTool, getToolNodes, isBranchedRun, branchFsView, resolveToolFile, getToolCode } from '@/ai/agent/workspace';
 import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
 import { seedFlowChild, planReorder, isLayoutParent, isOutOfFlow, visualFlowChildren, type OrderWrite } from './flow-placement';
-import { insertFragmentTool } from './insert-fragment';
+import { insertFragmentTool, FRAMEWORK_TAGS } from './insert-fragment';
 
 /** Queue the sibling `order` writes a placement needs (see flow-placement.ts). */
 export function queueOrderWrites(ctx: ToolContext, writes: readonly OrderWrite[]): void {
@@ -184,6 +184,18 @@ function resolveCreateId(requested: unknown, sources: Map<string, CanvasNode>): 
   return { id: raw };
 }
 
+function validateComponentTag(tag: string | undefined): string | null {
+  if (tag && /^[A-Z]/.test(tag)) {
+    installBuiltInCodeComponent(projectFS, tag);
+    const inComp = projectFS.readFile(`components/${tag}.tsx`) != null;
+    const inIcons = projectFS.readFile(`icons/${tag}.tsx`) != null;
+    if (!inComp && !inIcons && !FRAMEWORK_TAGS.has(tag)) {
+      return `Component "${tag}" does not exist in components/. Following Revyme's Design-System-First (DS-First) protocol, please create this component first via create_component (revyme_agent_tool) or revyme_add_built_in_component before referencing it.`;
+    }
+  }
+  return null;
+}
+
 export const addNodeTool: AgentTool = {
   name: 'add_node',
   description:
@@ -204,6 +216,9 @@ export const addNodeTool: AgentTool = {
   category: 'semantic',
   async execute(args, ctx) {
     ctx.ensureCheckpoint();
+    const tag = (args.tag as string) ?? 'div';
+    const tagErr = validateComponentTag(tag);
+    if (tagErr) return fail(tagErr);
     const { attrs, ignored, idHint } = stripReservedAttrs((args.attrs as Record<string, string>) ?? {});
     // L'id du nœud : le paramètre `id` prime, puis l'attribut HTML `id`
     // (le modèle nomme ses éléments — schéma the reference builder), sinon génération.
@@ -221,7 +236,7 @@ export const addNodeTool: AgentTool = {
     );
     const node = {
       id,
-      type: (args.tag as string) ?? 'div',
+      type: tag,
       styles: placed.styles,
       attrs,
       ...(args.name ? { name: args.name as string } : {}),
@@ -256,13 +271,16 @@ export const addCanvasNodeTool: AgentTool = {
   category: 'semantic',
   async execute(args, ctx) {
     ctx.ensureCheckpoint();
+    const tag = (args.tag as string) ?? 'div';
+    const tagErr = validateComponentTag(tag);
+    if (tagErr) return fail(tagErr);
     const { attrs, ignored, idHint } = stripReservedAttrs((args.attrs as Record<string, string>) ?? {});
     const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
     if ('error' in resolved) return fail(resolved.error);
     const id = resolved.id;
     const node = {
       id,
-      type: (args.tag as string) ?? 'div',
+      type: tag,
       styles: (args.styles as Record<string, string>) ?? {},
       attrs,
       ...(args.name ? { name: args.name as string } : {}),

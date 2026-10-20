@@ -18,7 +18,7 @@ import { viewportKeyWidth } from './viewport-arg';
 import { trace } from '@/shared/debug-trace';
 import { projectFS, installBuiltInCodeComponent } from '@/code/project/project-fs';
 
-const FRAMEWORK_TAGS = new Set([
+export const FRAMEWORK_TAGS = new Set([
   'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
   'Override', 'React', 'Suspense', 'MotionLink',
 ]);

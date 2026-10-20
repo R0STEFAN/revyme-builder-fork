@@ -440,6 +440,22 @@ describe('semantic structure tools', () => {
     expect(clone.textContent).not.toBe('<a {x}');
   });
 
+  it('add_node rejects an unknown component tag', async () => {
+    const ctx = makeCtx();
+    const result = await addNodeTool.execute({ parent_id: 'a', tag: 'BogusComponent' }, ctx);
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text);
+    expect(err.error).toContain('Component "BogusComponent" does not exist in components/');
+  });
+
+  it('add_canvas_node rejects an unknown component tag', async () => {
+    const ctx = makeCtx();
+    const result = await addCanvasNodeTool.execute({ tag: 'NonExistentCard' }, ctx);
+    expect(result.isError).toBe(true);
+    const err = JSON.parse((result.content[0] as any).text);
+    expect(err.error).toContain('Component "NonExistentCard" does not exist in components/');
+  });
+
   it('STRUCTURE_TOOLS exports all semantic structure tools with category semantic', () => {
     expect(STRUCTURE_TOOLS).toHaveLength(9);
     const names = STRUCTURE_TOOLS.map((t) => t.name);
