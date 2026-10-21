@@ -10,6 +10,10 @@ try {
     platform: 'node',
     format: 'esm',
     target: 'node22',
+    alias: {
+      '@': path.resolve(__dirname, '../../src'),
+      '@revyme/automation-core': path.resolve(__dirname, '../automation-core/src/index.ts'),
+    },
     external: [
       '@modelcontextprotocol/sdk',
       '@modelcontextprotocol/sdk/*',

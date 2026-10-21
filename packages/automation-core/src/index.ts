@@ -11,3 +11,7 @@ export * from './ingestion/styles';
 export * from './ingestion/lists';
 export * from './ingestion/tree';
 export * from './ingestion/jsx';
+export * from './operations/pages';
+export * from './operations/templates';
+export * from './operations/metadata';
+
