@@ -73,7 +73,36 @@ export function getMcpHelp({ toolName, topic }: { toolName?: string; topic?: str
             'Creating typography presets only as "p" — always specify tag: "h1", "h2", etc. for proper semantic hierarchy.',
             'Hardcoding hex colors and arbitrary pixel fonts instead of design tokens.'
           ],
-          related_tools: ['revyme_get_context', 'revyme_insert_fragment', 'revyme_set_responsive_styles']
+          related_tools: ['revyme_apply_typography_preset', 'revyme_get_context', 'revyme_insert_fragment', 'revyme_set_responsive_styles']
+        };
+
+      case 'revyme_apply_typography_preset':
+        return {
+          title: 'Tool Manual: revyme_apply_typography_preset',
+          summary: 'Apply an established typography preset to a text element (h1, h2, h3, p, span, etc.). Replaces hardcoded styles with var(--typo-<preset>-*) variables and ensures semantic tag alignment.',
+          syntax: 'revyme_apply_typography_preset({ node_id: string, preset: string })',
+          arguments: {
+            node_id: 'data-id of the target text node in the active file',
+            preset: 'Preset slug, e.g. "heading-hero", "heading-section", "heading-card", "body-default", "mono-metadata"'
+          },
+          examples: [
+            {
+              description: 'Apply heading-hero preset to the main page title',
+              call: { node_id: 'h1-hero-title', preset: 'heading-hero' }
+            },
+            {
+              description: 'Apply mono-metadata preset to kicker or archive indicator',
+              call: { node_id: 'span-kicker', preset: 'mono-metadata' }
+            }
+          ],
+          rules: [
+            'Target node must exist in the active file.',
+            'Never leave raw hardcoded typography (font-size, font-weight, color) on key headlines or body text; always bind to a typography preset.'
+          ],
+          anti_patterns: [
+            'Creating typography presets with revyme_manage_presets but never applying them, leaving arbitrary hardcoded inline styles.'
+          ],
+          related_tools: ['revyme_manage_presets', 'revyme_insert_fragment', 'revyme_inspect_node']
         };
 
       case 'revyme_capture_screenshot':

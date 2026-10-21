@@ -582,6 +582,22 @@ export class McpBridge {
             },
           },
           {
+            name: 'revyme_apply_typography_preset',
+            description:
+              'Apply a typography preset to a text element (h1, h2, h3, p, span, etc.). Automatically binds fontFamily, fontWeight, color, fontSize, letterSpacing, lineHeight, textTransform to var(--typo-<preset>-*) tokens and retags the element if needed. Guarantees 100% adherence to design tokens created via revyme_manage_presets.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                node_id: { type: 'string', description: 'data-id of the target text element' },
+                preset: {
+                  type: 'string',
+                  description: 'Preset slug name, e.g. "heading-hero", "heading-section", "heading-card", "body-default", "mono-metadata"',
+                },
+              },
+              required: ['node_id', 'preset'],
+            },
+          },
+          {
             name: 'revyme_manage_cms',
             description:
               'Manage CMS collections, fields, items, list data bindings, external API CMS integration, and dynamic fx expressions. Supports 3 categories of operations: 1) Collection CRUD: list_collections, get_collection, create_collection, rename_collection, delete_collection, add_field, update_field, remove_field, add_item, update_item, remove_item, set_item_translation, create_pages, create_page, create_template. 2) CMS List & Prop Data Binding: bind_list (repeater loop on template row), bind_field (bind text/attr/CSS to item.field), unbind_field, bind_prop (bind component instance prop to item.field), set_list_config (filters, sort, limit, offset), set_pagination (loadMore, infinite, none). 3) External API CMS & Dynamic Expressions: get_mode, set_mode (local | api), configure_api_collection (Directus, Strapi, Baserow, REST), get_api_collection, remove_api_collection, set_list_query (data-query-config with backend parameters and formula expressions), bind_expression (bind dynamic JavaScript formula fx to text, href, or src), unbind_expression.',
@@ -727,6 +743,38 @@ export class McpBridge {
                 index: { type: 'number', description: '0-based position among siblings (e.g. 0 to place at top of page)' },
               },
               required: ['section'],
+            },
+          },
+          {
+            name: 'revyme_create_navbar',
+            description:
+              'Author a complete, 100% Oracle-compliant Navbar Design Component in components/Navbar.tsx with built-in fullscreen overlay drawer, variant connections (default <-> menu-open), MotionLink navigation links, and auto-wired menu toggle button. All text content, badges, metadata, and navigation links are fully customizable.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                logoText: { type: 'string', description: 'Logo or brand name text (default: "Studio")' },
+                badgeText: { type: 'string', description: 'Optional badge or edition pill text (default: "Index")' },
+                edition: { type: 'string', description: 'Alias for badgeText' },
+                metadataText: { type: 'string', description: 'Optional secondary metadata or location text in header (default: "Selected Works")' },
+                location: { type: 'string', description: 'Alias for metadataText' },
+                menuButtonLabel: { type: 'string', description: 'Text label on the menu toggle button (default: "MENU")' },
+                closeButtonLabel: { type: 'string', description: 'Text label on drawer close button (default: "CLOSE")' },
+                drawerFooterLeft: { type: 'string', description: 'Drawer bottom-left metadata or copyright text (default: "<logoText> © 2026")' },
+                drawerFooterRight: { type: 'string', description: 'Drawer bottom-right metadata text (default: "All Rights Reserved")' },
+                links: {
+                  type: 'array',
+                  description: 'Navigation links for the fullscreen drawer',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      label: { type: 'string' },
+                      href: { type: 'string' },
+                    },
+                    required: ['label', 'href'],
+                  },
+                },
+                placeOnPage: { type: 'boolean', description: 'Whether to place <Navbar /> at index 0 on page root (default: true)' },
+              },
             },
           },
           {
@@ -990,7 +1038,11 @@ export class McpBridge {
                 tag: { type: 'string', description: 'HTML tag or Component name (e.g. "div", "MarqueeCard", "ProjectCard")' },
                 id: { type: 'string', description: 'Optional unique data-id (e.g. "marquee-card-1")' },
                 name: { type: 'string', description: 'Display name in layers panel' },
-                styles: { type: 'object', description: 'camelCase CSS styles' },
+                styles: {
+                  type: 'object',
+                  description:
+                    'camelCase CSS styles. IMPORTANT: Always specify position: "absolute", negative left offset (e.g. "-380px", "-760px") to sit cleanly to the left of the artboard on the open canvas, top: "100px", width, and height. Never omit position or use position: "relative" which causes nodes to visually overlap the top-left of the page artboard at (0,0).',
+                },
                 attrs: { type: 'object', description: 'Attributes or component props (e.g. { variant: "asym-b", category: "ISSUE 01", title: "..." })' },
                 text: { type: 'string', description: 'Plain text content' },
               },
@@ -1204,15 +1256,32 @@ export class McpBridge {
           case 'revyme_manage_presets':
             result = await this.sendToEditor('managePresets', args);
             break;
+          case 'revyme_apply_typography_preset':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'apply_typography_preset',
+              input: args,
+            });
+            break;
           case 'revyme_manage_cms':
             result = await this.sendToEditor('manageCms', args);
             break;
           case 'revyme_bind_expression':
             result = await this.sendToEditor('manageCms', { action: 'bind_expression', ...args });
             break;
-          case 'revyme_insert_fragment':
+          case 'revyme_insert_fragment': {
+            const rootTag = (args as any)?.fragment?.tag;
+            if (rootTag === 'header' || rootTag === 'nav') {
+              throw new Error(`Inserting <${rootTag}> as raw inline fragment is prohibited. Navbars must be authored as Design Components in components/Navbar.tsx via revyme_create_navbar or create_component, then placed on the page using <Navbar /> or revyme_add_component_instance.`);
+            }
             result = await this.sendToEditor('agent.tool', {
               name: 'insert_fragment',
+              input: args,
+            });
+            break;
+          }
+          case 'revyme_create_navbar':
+            result = await this.sendToEditor('agent.tool', {
+              name: 'create_navbar',
               input: args,
             });
             break;
@@ -1313,12 +1382,23 @@ export class McpBridge {
             };
             break;
           }
-          case 'revyme_add_canvas_node':
+          case 'revyme_add_canvas_node': {
+            const rawStyles = (args as any)?.styles || {};
+            const safeStyles = {
+              ...rawStyles,
+              position: 'absolute',
+              left:
+                rawStyles.left && String(rawStyles.left).trim().startsWith('-')
+                  ? rawStyles.left
+                  : '-450px',
+              top: rawStyles.top || '100px',
+            };
             result = await this.sendToEditor('agent.tool', {
               name: 'add_canvas_node',
-              input: args,
+              input: { ...args, styles: safeStyles },
             });
             break;
+          }
           case 'revyme_connect_slot':
             result = await this.sendToEditor('agent.tool', {
               name: 'connect_slot',

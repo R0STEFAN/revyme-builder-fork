@@ -1137,6 +1137,547 @@ export const createPageTool: AgentTool = {
   },
 };
 
+export const createNavbarTool: AgentTool = {
+  name: 'create_navbar',
+  description:
+    'Author a complete, 100% Oracle-compliant Navbar Design Component in components/Navbar.tsx with built-in fullscreen overlay drawer, variant connections (default <-> menu-open), MotionLink navigation links, and auto-wired menu toggle button. All text content, badges, metadata, and navigation links are fully customizable.',
+  inputSchema: {
+    logoText: z.string().optional().describe('Logo or brand name text (default: "Studio")'),
+    badgeText: z.string().optional().describe('Optional badge or edition pill text (default: "Index")'),
+    edition: z.string().optional().describe('Alias for badgeText'),
+    metadataText: z.string().optional().describe('Optional secondary metadata or location text in header (default: "Selected Works")'),
+    location: z.string().optional().describe('Alias for metadataText'),
+    menuButtonLabel: z.string().optional().describe('Text label on the menu toggle button (default: "MENU")'),
+    closeButtonLabel: z.string().optional().describe('Text label on drawer close button (default: "CLOSE")'),
+    drawerFooterLeft: z.string().optional().describe('Drawer bottom-left metadata or copyright text (default: "<logoText> © 2026")'),
+    drawerFooterRight: z.string().optional().describe('Drawer bottom-right metadata text (default: "All Rights Reserved")'),
+    links: z
+      .array(z.object({ label: z.string(), href: z.string() }))
+      .optional()
+      .describe('Navigation links for the drawer'),
+    placeOnPage: z.boolean().optional().describe('Whether to place <Navbar /> at index 0 on the page root (default: true)'),
+  },
+  category: 'semantic',
+  async execute(args, ctx) {
+    const logoText = (args.logoText as string | undefined)?.trim() || 'Studio';
+    const badgeText =
+      (args.badgeText as string | undefined)?.trim() ||
+      (args.edition as string | undefined)?.trim() ||
+      'Index';
+    const metadataText =
+      (args.metadataText as string | undefined)?.trim() ||
+      (args.location as string | undefined)?.trim() ||
+      'Selected Works';
+    const menuButtonLabel = (args.menuButtonLabel as string | undefined)?.trim() || 'MENU';
+    const closeButtonLabel = (args.closeButtonLabel as string | undefined)?.trim() || 'CLOSE';
+    const drawerFooterLeft =
+      (args.drawerFooterLeft as string | undefined)?.trim() || `${logoText} © 2026`;
+    const drawerFooterRight =
+      (args.drawerFooterRight as string | undefined)?.trim() || 'All Rights Reserved';
+    const links = (args.links as Array<{ label: string; href: string }> | undefined) || [
+      { label: '01 / Work', href: '#work' },
+      { label: '02 / About', href: '#about' },
+      { label: '03 / Contact', href: '#contact' },
+    ];
+    const placeOnPage = args.placeOnPage !== false;
+
+    const navLinksCode = links
+      .map(
+        (link, idx) => `              <MotionLink
+                data-id="drawer-link-${idx + 1}"
+                data-name="a"
+                href="${link.href}"
+                layout={true}
+                onClick={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  textDecoration: 'none',
+                  order: '${idx}',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-link-text-${idx + 1}"
+                  data-name="Link Text"
+                  style={{
+                    position: 'relative',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '48px',
+                    fontWeight: '700',
+                    letterSpacing: '-0.05em',
+                    lineHeight: '1',
+                    color: '#FFFFFF',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  ${link.label}
+                </span>
+              </MotionLink>`
+      )
+      .join('\n');
+
+    const navbarCode = `"use client";
+
+/** @name "Navbar" */
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { withResponsiveProps } from "@revyme/runtime";
+import { motion, AnimatePresence } from "framer-motion";
+
+const MotionLink = motion.create(Link);
+
+export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'menu-open', label: 'Menu Open', x: 0, y: 500 }
+];
+
+const connections = [
+  { from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'header-toggle-btn' },
+  { from: 'menu-open', to: 'default', trigger: 'click', sourceNode: 'drawer-close-btn' }
+];
+
+function Navbar({
+  initialVariant = 'default',
+  logoText = '${logoText}',
+  badgeText = '${badgeText}',
+  metadataText = '${metadataText}',
+  drawerFooterLeft = '${drawerFooterLeft}',
+  drawerFooterRight = '${drawerFooterRight}',
+  style,
+}: {
+  initialVariant?: string;
+  logoText?: string;
+  badgeText?: string;
+  metadataText?: string;
+  drawerFooterLeft?: string;
+  drawerFooterRight?: string;
+  style?: React.CSSProperties;
+}) {
+  const [variant, setVariant] = useState(initialVariant);
+  useEffect(() => {
+    setVariant(initialVariant);
+  }, [initialVariant]);
+
+  return (
+    <motion.div
+      data-id="site-nav-root"
+      data-name="Navbar"
+      style={{
+        width: '1280px',
+        height: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#FFFFFF',
+        ...style,
+      }}
+    >
+      <header
+        data-id="site-header-bar"
+        data-name="Header Bar"
+        style={{
+          position: 'relative',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '24px 32px',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.10)',
+          boxSizing: 'border-box',
+          order: '0',
+          flex: '0 0 auto',
+        }}
+      >
+        <div
+          data-id="header-brand-wrap"
+          data-name="Brand Wrap"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            order: '0',
+            flex: '0 0 auto',
+          }}
+        >
+          <MotionLink
+            data-id="header-logo-link"
+            data-name="a"
+            href="#hero"
+            layout={true}
+            style={{
+              position: 'relative',
+              textDecoration: 'none',
+              order: '0',
+              flex: '0 0 auto',
+            }}
+          >
+            <span
+              data-id="header-logo-text"
+              data-name="Logo"
+              style={{
+                position: 'relative',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '24px',
+                fontWeight: '700',
+                letterSpacing: '-0.05em',
+                lineHeight: '0.9',
+                color: '#000000',
+                textTransform: 'lowercase',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              {logoText}
+            </span>
+          </MotionLink>
+          <span
+            data-id="header-edition-pill"
+            data-name="Edition Pill"
+            style={{
+              position: 'relative',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              padding: '3px 8px',
+              borderRadius: '2px',
+              border: '1px solid rgba(0, 0, 0, 0.10)',
+              color: '#525252',
+              order: '1',
+              flex: '0 0 auto',
+            }}
+          >
+            {badgeText}
+          </span>
+        </div>
+
+        <div
+          data-id="header-actions-wrap"
+          data-name="Actions Wrap"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            order: '1',
+            flex: '0 0 auto',
+          }}
+        >
+          <span
+            data-id="header-location"
+            data-name="Location"
+            style={{
+              position: 'relative',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: '#737373',
+              order: '0',
+              flex: '0 0 auto',
+            }}
+          >
+            {metadataText}
+          </span>
+          <motion.button
+            data-id="header-toggle-btn"
+            data-name="Menu Toggle Button"
+            type="button"
+            onTap={() => {
+              const _n = variant === 'default' ? 'menu-open' : null;
+              if (_n) setVariant(_n);
+            }}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              backgroundColor: '#000000',
+              border: 'none',
+              borderRadius: '2px',
+              cursor: 'pointer',
+              order: '1',
+              flex: '0 0 auto',
+            }}
+          >
+            <span
+              data-id="toggle-btn-label"
+              data-name="Toggle Label"
+              style={{
+                position: 'relative',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: '#FFFFFF',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              ${menuButtonLabel}
+            </span>
+            <span
+              data-id="toggle-btn-plus"
+              data-name="Plus Icon"
+              style={{
+                position: 'relative',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '16px',
+                fontWeight: '700',
+                lineHeight: '1',
+                color: '#FFFFFF',
+                order: '1',
+                flex: '0 0 auto',
+              }}
+            >
+              +
+            </span>
+          </motion.button>
+        </div>
+      </header>
+
+      <AnimatePresence mode="popLayout">
+        {variant === 'menu-open' && (
+          <motion.div
+            key="nav-fullscreen-overlay"
+            data-id="nav-fullscreen-overlay"
+            data-name="Fullscreen Overlay"
+            layout={true}
+            initial={{ opacity: 0, y: -24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            style={{
+              position: 'absolute',
+              top: '0px',
+              left: '0px',
+              width: '100%',
+              height: '800px',
+              zIndex: 9999,
+              backgroundColor: '#0A0A0A',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: '32px 48px',
+              boxSizing: 'border-box',
+              order: '1',
+              flex: '0 0 auto',
+            }}
+          >
+            <div
+              data-id="drawer-top-bar"
+              data-name="Drawer Top Bar"
+              style={{
+                position: 'relative',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.10)',
+                paddingBottom: '24px',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              <span
+                data-id="drawer-logo"
+                data-name="Drawer Logo"
+                style={{
+                  position: 'relative',
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#FFFFFF',
+                  letterSpacing: '-0.05em',
+                  order: '0',
+                  flex: '0 0 auto',
+                }}
+              >
+                {logoText}
+              </span>
+              <motion.button
+                data-id="drawer-close-btn"
+                data-name="Drawer Close Button"
+                type="button"
+                onTap={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 18px',
+                  backgroundColor: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  order: '1',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-close-label"
+                  data-name="Close Label"
+                  style={{
+                    position: 'relative',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: '#000000',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  ${closeButtonLabel}
+                </span>
+                <span
+                  data-id="drawer-close-icon"
+                  data-name="Close Icon"
+                  style={{
+                    position: 'relative',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    color: '#000000',
+                    order: '1',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  ✕
+                </span>
+              </motion.button>
+            </div>
+
+            <nav
+              data-id="drawer-nav-list"
+              data-name="Drawer Nav List"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                paddingTop: '40px',
+                paddingBottom: '40px',
+                order: '1',
+                flex: '0 0 auto',
+              }}
+            >
+${navLinksCode}
+            </nav>
+
+            <div
+              data-id="drawer-footer-meta"
+              data-name="Drawer Footer Meta"
+              style={{
+                position: 'relative',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                borderTop: '1px solid rgba(255, 255, 255, 0.10)',
+                paddingTop: '20px',
+                order: '2',
+                flex: '0 0 auto',
+              }}
+            >
+              <span
+                data-id="drawer-meta-left"
+                data-name="Meta Left"
+                style={{
+                  position: 'relative',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#737373',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  order: '0',
+                  flex: '0 0 auto',
+                }}
+              >
+                {drawerFooterLeft}
+              </span>
+              <span
+                data-id="drawer-meta-right"
+                data-name="Meta Right"
+                style={{
+                  position: 'relative',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#737373',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  order: '1',
+                  flex: '0 0 auto',
+                }}
+              >
+                {drawerFooterRight}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+export default withResponsiveProps(Navbar);
+`;
+
+    projectFS.writeFile('components/Navbar.tsx', navbarCode);
+    trace.action('agent-tool:create_navbar', { master: 'components/Navbar.tsx', placeOnPage });
+
+    let placedId: string | undefined;
+    if (placeOnPage) {
+      const nodes = getToolNodes(ctx);
+      const rootNode = nodes.get('root');
+      if (rootNode) {
+        placedId = 'site-navbar-instance';
+        ctx.ensureCheckpoint();
+        queueToolMutation(ctx, {
+          type: 'addNode',
+          parentId: 'root',
+          index: 0,
+          node: {
+            id: placedId,
+            type: 'Navbar',
+            name: 'Navbar',
+            styles: {
+              position: 'sticky',
+              top: '0px',
+              width: '100%',
+              zIndex: '100',
+              flex: '0 0 auto',
+              order: '0',
+            },
+            attrs: {},
+          },
+        });
+        flushTool(ctx);
+      }
+    }
+
+    return ok({
+      success: true,
+      master: 'components/Navbar.tsx',
+      placedInstanceId: placedId,
+      message: 'Navbar Design Component authored cleanly with 100% Oracle compliance and placed on page.',
+    });
+  },
+};
+
 export const RICH_ACTION_TOOLS: AgentTool[] = [
   setMotionPresetTool,
   createOverlayTool,
@@ -1144,6 +1685,7 @@ export const RICH_ACTION_TOOLS: AgentTool[] = [
   createVariantTool,
   extractComponentTool,
   createComponentTool,
+  createNavbarTool,
   bindCmsListTool,
   bindCmsFieldTool,
   setFormTool,

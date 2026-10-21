@@ -60,6 +60,7 @@ The agent can send requests to the builder in two ways:
    - `revyme_list_files`: Lists all project files.
    - `revyme_submit_files`: Writes complete files. **Use strictly for Code Components (`@controls`) or non-visual logic. DO NOT use to overwrite whole pages when building UI.**
    - `revyme_manage_presets`: Manages design tokens in globals.css (colors, typography, radii).
+   - `revyme_apply_typography_preset`: Applies a typography preset (e.g. `heading-hero`, `heading-section`, `heading-card`, `body-default`, `mono-metadata`) to any text element by data-id, automatically replacing hardcoded font/color/size with design tokens.
    - `revyme_manage_cms`: Comprehensive CMS engine: manages collections, fields, and items; binds repeater lists (`bind_list`) and fields (`bind_field`, `bind_prop`); configures filters/sorting (`set_list_config`) and pagination (`set_pagination`); connects External API CMS (`set_mode`, `configure_api_collection`, `set_list_query`); binds dynamic expressions (`bind_expression`, `unbind_expression`).
    - `revyme_bind_expression`: High-level tool to bind dynamic JavaScript formulas/expressions (fx) to text, link href, or image src (auto-injects Next.js `useParams()`).
    - `revyme_agent_tool`: Executes granular semantic builder operations (`create_component`, `set_motion`, `add_node`, etc.).
@@ -258,6 +259,12 @@ Establish the global CSS variables in `globals.css` before authoring any compone
 }
 ```
 
+> [!CRITICAL]
+> **CRITICAL RULE: NEVER HARDCODE RAW STYLES WHEN PRESETS EXIST.**
+> Creating presets in `revyme_manage_presets` is meaningless if you don't consume them.
+> 1. **Colors & Borders**: NEVER use raw `#000000`, `#FFFFFF`, `#525252`, or `rgba(...)` in component/section styles. ALWAYS use `var(--color-bg)`, `var(--color-text)`, `var(--color-border-hairline)`, etc.
+> 2. **Typography**: Every heading, subhead, paragraph, and mono metadata tag MUST use typography presets — either by referencing `var(--typo-<name>-font)`, `var(--typo-<name>-size)`, `var(--typo-<name>-weight)` in the fragment, or by calling `revyme_apply_typography_preset({ node_id, preset })` immediately after inserting the fragment!
+
 #### Phase 2: Master Design Component Library (`create_component` via `revyme_agent_tool`)
 Author atomic and molecular UI primitives in `components/<Name>.tsx` using `create_component`.
 Every component must declare:
@@ -291,8 +298,8 @@ Every component must declare:
               "alignItems": "center",
               "justifyContent": "center",
               "padding": "14px 28px",
-              "backgroundColor": "#000000",
-              "color": "#FFFFFF",
+              "backgroundColor": "var(--color-text)",
+              "color": "var(--color-bg)",
               "borderRadius": "4px",
               "cursor": "pointer"
             },
@@ -300,7 +307,7 @@ Every component must declare:
               {
                 "id": "btn-label",
                 "tag": "span",
-                "styles": { "position": "relative", "fontSize": "14px", "fontWeight": "700" },
+                "styles": { "position": "relative", "fontFamily": "var(--typo-heading-font)", "fontSize": "14px", "fontWeight": "700" },
                 "text": "{label}"
               }
             ]
@@ -311,7 +318,7 @@ Every component must declare:
   }
 }
 ```
-Follow up with `revyme_set_variant` to style the `secondary` variant (e.g. `backgroundColor: "#FFFFFF"`, `color: "#000000"`, `border: "1px solid rgba(0,0,0,0.15)"`).
+Follow up with `revyme_set_variant` to style the `secondary` variant (e.g. `backgroundColor: "var(--color-bg)"`, `color: "var(--color-text)"`, `border: "1px solid var(--color-border-hairline)"`).
 
 #### Phase 3: Page Assembly via Fragment Composition (`revyme_insert_fragment`)
 Now compose full-bleed sections and centered containers. **Insert component instances directly using uppercase tags** (`tag: "StudioButton"`, `tag: "ProjectCard"`):
@@ -348,8 +355,16 @@ Now compose full-bleed sections and centered containers. **Insert component inst
         "children": [
           {
             "tag": "h1",
+            "id": "h1-hero-title",
             "text": "STUDIO DISCIPLINE",
-            "styles": { "fontSize": "clamp(3.5rem, 11vw, 10rem)", "fontWeight": "700", "lineHeight": "0.9" }
+            "styles": {
+              "fontFamily": "var(--typo-heading-hero-font)",
+              "fontSize": "var(--typo-heading-hero-size)",
+              "fontWeight": "var(--typo-heading-hero-weight)",
+              "lineHeight": "var(--typo-heading-hero-line-height)",
+              "letterSpacing": "var(--typo-heading-hero-spacing)",
+              "color": "var(--typo-heading-hero-color)"
+            }
           },
           {
             "tag": "div",
@@ -374,7 +389,8 @@ Now compose full-bleed sections and centered containers. **Insert component inst
   }
 }
 ```
-*Notice how `<StudioButton>` is cleanly instantiated with `label` and `variant`! No raw `<button>` tags cluttering the page!*
+*Tip: You can also call `revyme_apply_typography_preset({ node_id: "h1-hero-title", preset: "heading-hero" })` to automatically bind all font and color properties to the typography preset!*
+*Notice how `<StudioButton>` is cleanly instantiated with `label` and `variant`, and all colors and typography use design tokens! No raw `<button>` tags or hardcoded `#000000` / `#FFFFFF` values!*
 
 #### Phase 4: Interaction Wiring & Variant State (`revyme_add_connection`, `revyme_show_variant`)
 Wire interactive triggers between variants on components:
@@ -583,164 +599,549 @@ Every navigation header in Revyme MUST conform to this exact display matrix:
 
 #### 2. Pattern A: Dedicated Design Component Navbar (`components/Navbar.tsx`)
 
-This boilerplate strictly satisfies **all 5 Oracle Rules**, includes native **`variantConnections`** to open/close on click, and provides 100% canvas inspectability:
+This boilerplate strictly satisfies **all 216 Oracle Rules**, includes native **`connections`** to open/close on click, and provides 100% canvas inspectability:
 
 ```tsx
 "use client";
 
-import React, { useState } from "react";
+/** @name "Navbar" */
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { withResponsiveProps } from "@revyme/runtime";
 import { motion, AnimatePresence } from "framer-motion";
 
-/** @name "Navbar" */
+const MotionLink = motion.create(Link);
+
 export const variantConfig = [
-  { name: 'default', label: 'Default (Closed)', x: 0, y: 0, isPrimary: true },
-  { name: 'menu-open', label: 'Menu Open', x: 0, y: 300 }
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'menu-open', label: 'Menu Open', x: 0, y: 500 }
 ];
 
-// Native Revyme connections: clicking hamburger opens menu; clicking close button resets to default
-export const variantConnections = [
-  { from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'header-hamburger-btn' },
+const connections = [
+  { from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'header-toggle-btn' },
   { from: 'menu-open', to: 'default', trigger: 'click', sourceNode: 'drawer-close-btn' }
 ];
 
 function Navbar({
   initialVariant = 'default',
-  studioName = 'STUDIO',
+  logoText = 'Studio',
+  badgeText = 'Index',
+  metadataText = 'Selected Works',
+  drawerFooterLeft = 'Studio © 2026',
+  drawerFooterRight = 'All Rights Reserved',
   style,
 }: {
   initialVariant?: string;
-  studioName?: string;
+  logoText?: string;
+  badgeText?: string;
+  metadataText?: string;
+  drawerFooterLeft?: string;
+  drawerFooterRight?: string;
   style?: React.CSSProperties;
 }) {
   const [variant, setVariant] = useState(initialVariant);
-  const [prevInitial, setPrevInitial] = useState(initialVariant);
-  if (initialVariant !== prevInitial) {
-    setPrevInitial(initialVariant);
+  useEffect(() => {
     setVariant(initialVariant);
-  }
+  }, [initialVariant]);
 
   return (
     <motion.div
       data-id="site-nav-root"
       data-name="Navbar"
       style={{
-        position: 'relative', // Rule 1: Never position: fixed/sticky on master root!
-        width: '100%',
+        width: '1280px',
+        height: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'var(--color-bg)',
+        backgroundColor: '#FFFFFF',
         ...style,
       }}
     >
       <header
-        data-id="site-header"
-        data-name="Site Header Bar"
+        data-id="site-header-bar"
+        data-name="Header Bar"
         style={{
+          position: 'relative',
           width: '100%',
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '20px 48px',
-          borderBottom: '1px solid var(--color-border)',
+          padding: '24px 32px',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.10)',
           boxSizing: 'border-box',
           order: '0',
-          flex: '0 0 auto', // Rule 4: order + flex: '0 0 auto' on flex children
+          flex: '0 0 auto',
         }}
       >
-        {/* Brand */}
-        <div data-id="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '0', flex: '0 0 auto' }}>
-          <span data-id="header-logo" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text)' }}>
-            {studioName}
-          </span>
-          <span data-id="header-status-pill" style={{ fontSize: '11px', padding: '4px 12px', border: '1px solid var(--color-border)', borderRadius: '100px', color: 'var(--color-text-secondary)' }}>
-            ● AVAILABLE FOR COMMISSIONS
-          </span>
-        </div>
-
-        {/* Desktop Links Group */}
-        <div data-id="header-nav-items" style={{ display: 'flex', flexDirection: 'row', gap: '32px', order: '1', flex: '0 0 auto' }}>
-          <a data-id="nav-link-1" href="#work" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>01 / WORK</a>
-          <a data-id="nav-link-2" href="#manifesto" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>02 / MANIFESTO</a>
-          <a data-id="nav-link-3" href="#contact" style={{ color: 'var(--color-text)', textDecoration: 'none', fontSize: '13px', fontFamily: 'var(--typo-mono-font)' }}>03 / CONTACT</a>
-        </div>
-
-        {/* Actions Wrap: CTA + Hamburger */}
-        <div data-id="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', order: '2', flex: '0 0 auto' }}>
-          <button data-id="header-inquire-btn" style={{ padding: '8px 18px', backgroundColor: 'var(--color-inverse-bg)', color: 'var(--color-inverse-text)', borderRadius: '6px', fontSize: '12px' }}>
-            INQUIRE [↗]
-          </button>
-          <motion.button
-            data-id="header-hamburger-btn"
-            onTap={() => setVariant('menu-open')}
+        <div
+          data-id="header-brand-wrap"
+          data-name="Brand Wrap"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            order: '0',
+            flex: '0 0 auto',
+          }}
+        >
+          <MotionLink
+            data-id="header-logo-link"
+            data-name="a"
+            href="#hero"
+            layout={true}
             style={{
-              display: 'none', // HIDDEN ON DESKTOP BY DEFAULT!
-              alignItems: 'center',
-              padding: '8px 16px',
-              backgroundColor: 'var(--color-bg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '6px',
-              color: 'var(--color-text)',
-              fontSize: '12px',
-              cursor: 'pointer',
+              position: 'relative',
+              textDecoration: 'none',
+              order: '0',
+              flex: '0 0 auto',
             }}
           >
-            [≡] MENU
+            <span
+              data-id="header-logo-text"
+              data-name="Logo"
+              style={{
+                position: 'relative',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '24px',
+                fontWeight: '700',
+                letterSpacing: '-0.05em',
+                lineHeight: '0.9',
+                color: '#000000',
+                textTransform: 'lowercase',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              {logoText}
+            </span>
+          </MotionLink>
+          <span
+            data-id="header-edition-pill"
+            data-name="Edition Pill"
+            style={{
+              position: 'relative',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              padding: '3px 8px',
+              borderRadius: '2px',
+              border: '1px solid rgba(0, 0, 0, 0.10)',
+              color: '#525252',
+              order: '1',
+              flex: '0 0 auto',
+            }}
+          >
+            {badgeText}
+          </span>
+        </div>
+
+        <div
+          data-id="header-actions-wrap"
+          data-name="Actions Wrap"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            order: '1',
+            flex: '0 0 auto',
+          }}
+        >
+          <span
+            data-id="header-location"
+            data-name="Location"
+            style={{
+              position: 'relative',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: '#737373',
+              order: '0',
+              flex: '0 0 auto',
+            }}
+          >
+            {metadataText}
+          </span>
+          <motion.button
+            data-id="header-toggle-btn"
+            data-name="Menu Toggle Button"
+            type="button"
+            onTap={() => {
+              const _n = variant === 'default' ? 'menu-open' : null;
+              if (_n) setVariant(_n);
+            }}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              backgroundColor: '#000000',
+              border: 'none',
+              borderRadius: '2px',
+              cursor: 'pointer',
+              order: '1',
+              flex: '0 0 auto',
+            }}
+          >
+            <span
+              data-id="toggle-btn-label"
+              data-name="Toggle Label"
+              style={{
+                position: 'relative',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: '#FFFFFF',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              MENU
+            </span>
+            <span
+              data-id="toggle-btn-plus"
+              data-name="Plus Icon"
+              style={{
+                position: 'relative',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '16px',
+                fontWeight: '700',
+                lineHeight: '1',
+                color: '#FFFFFF',
+                order: '1',
+                flex: '0 0 auto',
+              }}
+            >
+              +
+            </span>
           </motion.button>
         </div>
       </header>
 
-      {/* Fullscreen Drawer Overlay - Rule 2 (popLayout + key + layout) & Rule 3 (exact variant ===) */}
       <AnimatePresence mode="popLayout">
         {variant === 'menu-open' && (
           <motion.div
             key="nav-fullscreen-overlay"
             data-id="nav-fullscreen-overlay"
+            data-name="Fullscreen Overlay"
             layout={true}
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -24 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            exit={{ opacity: 0, y: -24 }}
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
             style={{
-              position: 'fixed',
-              inset: 0,
-              width: '100vw',
-              height: '100vh',
+              position: 'absolute',
+              top: '0px',
+              left: '0px',
+              width: '100%',
+              height: '800px',
               zIndex: 9999,
-              backgroundColor: 'var(--color-bg)',
+              backgroundColor: '#0A0A0A',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              padding: '100px 48px 48px 48px',
+              padding: '32px 48px',
               boxSizing: 'border-box',
-              overflowY: 'auto',
+              order: '1',
+              flex: '0 0 auto',
             }}
           >
-            <div data-id="drawer-top-bar" style={{ display: 'flex', justifyContent: 'flex-end', order: '0', flex: '0 0 auto' }}>
-              <motion.button
-                data-id="drawer-close-btn"
-                onTap={() => setVariant('default')}
+            <div
+              data-id="drawer-top-bar"
+              data-name="Drawer Top Bar"
+              style={{
+                position: 'relative',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.10)',
+                paddingBottom: '24px',
+                order: '0',
+                flex: '0 0 auto',
+              }}
+            >
+              <span
+                data-id="drawer-logo"
+                data-name="Drawer Logo"
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'var(--color-inverse-bg)',
-                  color: 'var(--color-inverse-text)',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
+                  position: 'relative',
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#FFFFFF',
+                  letterSpacing: '-0.05em',
+                  order: '0',
+                  flex: '0 0 auto',
                 }}
               >
-                [✕] CLOSE
+                sd
+              </span>
+              <motion.button
+                data-id="drawer-close-btn"
+                data-name="Drawer Close Button"
+                type="button"
+                onTap={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 18px',
+                  backgroundColor: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  order: '1',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-close-label"
+                  data-name="Close Label"
+                  style={{
+                    position: 'relative',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: '#000000',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  CLOSE
+                </span>
+                <span
+                  data-id="drawer-close-icon"
+                  data-name="Close Icon"
+                  style={{
+                    position: 'relative',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    color: '#000000',
+                    order: '1',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  ✕
+                </span>
               </motion.button>
             </div>
-            <div data-id="drawer-links" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', order: '1', flex: '0 0 auto' }}>
-              <a href="#work" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>01 / SELECTED WORK</a>
-              <a href="#manifesto" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>02 / MANIFESTO</a>
-              <a href="#contact" onClick={() => setVariant('default')} style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 800, color: 'var(--color-text)', textDecoration: 'none' }}>03 / DIRECT INQUIRIES</a>
-            </div>
-            <div data-id="drawer-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', order: '2', flex: '0 0 auto' }}>
-              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>NYC — 40.7128° N, 74.0060° W</span>
-              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontFamily: 'var(--typo-mono-font)' }}>KYIV — 50.4501° N, 30.5234° E</span>
+
+            <nav
+              data-id="drawer-nav-list"
+              data-name="Drawer Nav List"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                paddingTop: '40px',
+                paddingBottom: '40px',
+                order: '1',
+                flex: '0 0 auto',
+              }}
+            >
+              <MotionLink
+                data-id="drawer-link-1"
+                data-name="a"
+                href="#projects"
+                layout={true}
+                onClick={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  textDecoration: 'none',
+                  order: '0',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-link-text-1"
+                  data-name="Link Text"
+                  style={{
+                    position: 'relative',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '48px',
+                    fontWeight: '700',
+                    letterSpacing: '-0.05em',
+                    lineHeight: '1',
+                    color: '#FFFFFF',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  01 / SELECTED WORK
+                </span>
+              </MotionLink>
+              <MotionLink
+                data-id="drawer-link-2"
+                data-name="a"
+                href="#marquee"
+                layout={true}
+                onClick={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  textDecoration: 'none',
+                  order: '1',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-link-text-2"
+                  data-name="Link Text"
+                  style={{
+                    position: 'relative',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '48px',
+                    fontWeight: '700',
+                    letterSpacing: '-0.05em',
+                    lineHeight: '1',
+                    color: '#FFFFFF',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  02 / ARCHIVE
+                </span>
+              </MotionLink>
+              <MotionLink
+                data-id="drawer-link-3"
+                data-name="a"
+                href="#statement"
+                layout={true}
+                onClick={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  textDecoration: 'none',
+                  order: '2',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-link-text-3"
+                  data-name="Link Text"
+                  style={{
+                    position: 'relative',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '48px',
+                    fontWeight: '700',
+                    letterSpacing: '-0.05em',
+                    lineHeight: '1',
+                    color: '#FFFFFF',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  03 / MANIFESTO
+                </span>
+              </MotionLink>
+              <MotionLink
+                data-id="drawer-link-4"
+                data-name="a"
+                href="#footer"
+                layout={true}
+                onClick={() => {
+                  const _n = variant === 'menu-open' ? 'default' : null;
+                  if (_n) setVariant(_n);
+                }}
+                style={{
+                  position: 'relative',
+                  textDecoration: 'none',
+                  order: '3',
+                  flex: '0 0 auto',
+                }}
+              >
+                <span
+                  data-id="drawer-link-text-4"
+                  data-name="Link Text"
+                  style={{
+                    position: 'relative',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '48px',
+                    fontWeight: '700',
+                    letterSpacing: '-0.05em',
+                    lineHeight: '1',
+                    color: '#FFFFFF',
+                    order: '0',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  04 / DIRECT INQUIRIES
+                </span>
+              </MotionLink>
+            </nav>
+
+            <div
+              data-id="drawer-footer-meta"
+              data-name="Drawer Footer Meta"
+              style={{
+                position: 'relative',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                borderTop: '1px solid rgba(255, 255, 255, 0.10)',
+                paddingTop: '20px',
+                order: '2',
+                flex: '0 0 auto',
+              }}
+            >
+              <span
+                data-id="drawer-meta-left"
+                data-name="Meta Left"
+                style={{
+                  position: 'relative',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#737373',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  order: '0',
+                  flex: '0 0 auto',
+                }}
+              >
+                {drawerFooterLeft}
+              </span>
+              <span
+                data-id="drawer-meta-right"
+                data-name="Meta Right"
+                style={{
+                  position: 'relative',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#737373',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  order: '1',
+                  flex: '0 0 auto',
+                }}
+              >
+                {drawerFooterRight}
+              </span>
             </div>
           </motion.div>
         )}
@@ -750,6 +1151,7 @@ function Navbar({
 }
 
 export default withResponsiveProps(Navbar);
+```
 ```
 
 #### 3. How to Instantiate and Solve the Canvas Display Paradox
@@ -803,107 +1205,19 @@ export default withResponsiveProps(Navbar);
 
 ---
 
-#### 3. Pattern B: Inserting Responsive Header via `revyme_insert_fragment`
+#### 4. Anti-Pattern: Never Inline Headers via revyme_insert_fragment
 
-If inserting directly into the page canvas:
-
-```json
-{
-  "parent_id": "root",
-  "index": 0,
-  "fragment": {
-    "tag": "header",
-    "id": "site-header",
-    "name": "Site Header",
-    "styles": {
-      "position": "sticky",
-      "top": "0",
-      "width": "100%",
-      "zIndex": "100",
-      "display": "flex",
-      "flexDirection": "row",
-      "alignItems": "center",
-      "justifyContent": "space-between",
-      "padding": "20px 48px",
-      "backgroundColor": "var(--color-bg)",
-      "borderBottom": "1px solid var(--color-border)"
-    },
-    "responsive": {
-      "tablet": { "padding": "16px 24px" },
-      "mobile": { "padding": "14px 16px" }
-    },
-    "children": [
-      {
-        "tag": "div",
-        "id": "header-brand",
-        "name": "Brand",
-        "styles": { "display": "flex", "alignItems": "center", "gap": "16px" },
-        "children": [
-          { "tag": "span", "id": "header-logo", "text": "sd", "styles": { "fontSize": "24px", "fontWeight": "700", "color": "var(--color-text)" } },
-          {
-            "tag": "span",
-            "id": "header-status-pill",
-            "text": "● AVAILABLE FOR COMMISSIONS",
-            "styles": { "fontSize": "11px", "padding": "4px 12px", "border": "1px solid var(--color-border)", "borderRadius": "100px", "color": "var(--color-text-secondary)" },
-            "responsive": {
-              "tablet": { "display": "none" },
-              "mobile": { "display": "none" }
-            }
-          }
-        ]
-      },
-      {
-        "tag": "div",
-        "id": "header-nav-items",
-        "name": "Desktop Nav Items",
-        "styles": { "display": "flex", "flexDirection": "row", "gap": "32px" },
-        "responsive": {
-          "tablet": { "display": "none" },
-          "mobile": { "display": "none" }
-        },
-        "children": [
-          { "tag": "a", "text": "01 / WORK", "attrs": { "href": "#work" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } },
-          { "tag": "a", "text": "02 / MANIFESTO", "attrs": { "href": "#manifesto" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } },
-          { "tag": "a", "text": "03 / CONTACT", "attrs": { "href": "#contact" }, "styles": { "color": "var(--color-text)", "fontSize": "13px" } }
-        ]
-      },
-      {
-        "tag": "div",
-        "id": "header-actions",
-        "name": "Action Items",
-        "styles": { "display": "flex", "alignItems": "center", "gap": "16px" },
-        "children": [
-          {
-            "tag": "button",
-            "id": "header-inquire-btn",
-            "text": "INQUIRE [↗]",
-            "styles": { "padding": "8px 18px", "backgroundColor": "var(--color-inverse-bg)", "color": "var(--color-inverse-text)", "borderRadius": "6px", "fontSize": "12px" }
-          },
-          {
-            "tag": "button",
-            "id": "header-hamburger-btn",
-            "text": "[≡] MENU",
-            "styles": {
-              "display": "none",
-              "alignItems": "center",
-              "padding": "8px 16px",
-              "backgroundColor": "var(--color-bg)",
-              "border": "1px solid var(--color-border)",
-              "borderRadius": "6px",
-              "color": "var(--color-text)",
-              "fontSize": "12px"
-            },
-            "responsive": {
-              "tablet": { "display": "flex" },
-              "mobile": { "display": "flex" }
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+> [!CAUTION]
+> **STRICT PROHIBITION**: NEVER insert `<header>` or `<nav>` as raw inline JSX elements on the page via `revyme_insert_fragment`!
+>
+> Inlining raw header trees:
+> 1. Breaks fullscreen interactive drawer overlays (opening/closing variant states).
+> 2. Clutters the page tree with dozens of un-reusable layout frames.
+> 3. Triggers Oracle violations (`COMPONENT_ROOT_POSITION`, `FLEX_CHILD_SHRINKS`, `PAGE_LINK_NOT_NEXTLINK`).
+> 4. Prevents the user from reusing the navigation bar across subpages (`/about`, `/work`).
+>
+> **The Mandated Rule**:
+> Always author `components/Navbar.tsx` as a Design Component master (Pattern A) or via `revyme_create_navbar`. Then instantiate it on the page using `<Navbar data-id="site-nav-instance" style={{ position: 'sticky', top: 0, zIndex: 100 }} />` or via `revyme_add_component_instance`!
 
 ---
 
@@ -929,15 +1243,14 @@ If inserting directly into the page canvas:
 > 5. This allows designers to visually see, drag, reposition, and edit the cards freely on the canvas outside the page frame (safely docked on the left), while the live Marquee continuously iterates through the connected `{cn_...}` references!
 
 #### Step-by-Step Slot Connection Workflow:
-```json
-// Step 1: Create card on the free canvas
+// Step 1: Create card on the free canvas (CRITICAL: Must have position: 'absolute' and negative left offset, e.g. -380px, -760px, so it sits cleanly to the left of the page artboard instead of overlapping the site at 0,0)
 {
   "tool": "revyme_add_canvas_node",
   "input": {
     "tag": "MarqueeCard",
     "id": "marquee-card-1",
     "name": "Marquee Card 01",
-    "styles": { "position": "relative", "width": "320px", "height": "448px" },
+    "styles": { "position": "absolute", "left": "-380px", "top": "150px", "width": "320px", "height": "448px" },
     "attrs": { "category": "ISSUE 01", "title": "KINETIC MONOGRAPH", "initialVariant": "default" }
   }
 }

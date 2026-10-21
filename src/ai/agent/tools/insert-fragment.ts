@@ -231,6 +231,12 @@ export const insertFragmentTool: AgentTool = {
       const isCompMaster = isComponentFilePath(targetFile);
       const isTopLevel = isRoot && (parentId === 'root' || !parentId);
 
+      if (isRoot && !isCompMaster && (input.tag === 'header' || input.tag === 'nav')) {
+        return {
+          error: `Inserting <${input.tag}> as raw inline fragment is prohibited. Navbars must be authored as Design Components in components/Navbar.tsx via create_component or revyme_submit_files.`,
+        };
+      }
+
       const styleErr = validateStyleInput(input.styles, {
         isTextNode: TEXT_TAGS.has(input.tag ?? 'div'),
         tagName: input.tag,

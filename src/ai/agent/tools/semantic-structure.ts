@@ -290,7 +290,22 @@ export const addCanvasNodeTool: AgentTool = {
     const targetFile = resolveToolFile(ctx);
     const isCompMaster = isComponentFilePath(targetFile);
     const isInstance = Boolean(tag && /^[A-Z]/.test(tag) && !FRAMEWORK_TAGS.has(tag));
-    const styleErr = validateStyleInput(rawStyles, {
+
+    // Free-canvas nodes must live on the open canvas to the left of the page artboard
+    // (negative X offset, position: 'absolute'). If the caller omits left/top or uses
+    // position: 'relative', calculate an automatic non-overlapping off-canvas position.
+    const allExistingNodes = Array.from(getToolNodes(ctx).values());
+    const existingCanvasCount = allExistingNodes.filter(n => n.isCanvasNode).length;
+    const finalStyles: Record<string, string> = {
+      ...rawStyles,
+      position: 'absolute',
+      left: rawStyles.left && String(rawStyles.left).trim().startsWith('-')
+        ? rawStyles.left
+        : `${-380 * (existingCanvasCount + 1)}px`,
+      top: rawStyles.top ?? '100px',
+    };
+
+    const styleErr = validateStyleInput(finalStyles, {
       isTextNode: TEXT_TAGS.has(tag),
       tagName: tag,
       isComponentMaster: isCompMaster,
@@ -305,7 +320,7 @@ export const addCanvasNodeTool: AgentTool = {
     const node = {
       id,
       type: tag,
-      styles: rawStyles,
+      styles: finalStyles,
       attrs,
       ...(args.name ? { name: args.name as string } : {}),
       ...(args.text != null ? { textContent: args.text as string } : {}),

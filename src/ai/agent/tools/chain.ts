@@ -32,6 +32,7 @@ import {
   createVariantTool,
   setVariantTool,
   createComponentTool,
+  createNavbarTool,
 } from './action-layer-rich';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
@@ -141,6 +142,7 @@ export const chainTool: AgentTool = {
       createVariantTool,
       setVariantTool,
       createComponentTool,
+      createNavbarTool,
     ]);
     const validToolNames = Array.from(toolMap.keys());
     const refIds = new Map<string, string>();
