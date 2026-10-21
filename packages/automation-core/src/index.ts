@@ -40,3 +40,6 @@ export * from './operations/drawing';
 export * from './operations/motion';
 export * from './operations/text-effects';
 export * from './operations/site-effects';
+export * from './operations/variables';
+export * from './operations/expressions';
+export * from './operations/page-interactions';

@@ -380,6 +380,13 @@ export function syncPageVariableHooks(code: string): string {
     // means it appears only as a JSX identifier without a declaration; still
     // counts as referenced.
     else if (matches && matches.length === 1 && !hasUseStateForName(body, v.name)) referenced.add(v.name);
+    else {
+      // Also check if the setter (e.g. setFade, setThemeMode) is referenced in an interaction handler
+      const setter = `set${v.name.charAt(0).toUpperCase()}${v.name.slice(1)}`;
+      const setterMatches = bodyCode.match(new RegExp(`\\b${setter}\\b`, 'g'));
+      if (setterMatches && setterMatches.length > 1) referenced.add(v.name);
+      else if (setterMatches && setterMatches.length === 1 && !hasUseStateForName(body, v.name)) referenced.add(v.name);
+    }
   }
 
   const declaredNames = new Set(declared.map(v => v.name));

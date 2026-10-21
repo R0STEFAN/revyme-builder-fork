@@ -19,7 +19,7 @@
 // `parseTransitionShorthand` / `formatTransitionShorthand` system.
 
 export type SketchAnimTrigger = 'mount' | 'inView' | 'hover' | 'tap';
-export type SketchAnimMode = 'sequential' | 'staggered' | 'simultaneous';
+export type SketchAnimMode = 'sequential' | 'staggered' | 'simultaneous' | 'draw' | 'erase';
 
 /** Reuses the same shape `animation-utils.ts` produces, so the
  *  TransitionPanel can edit it directly. */

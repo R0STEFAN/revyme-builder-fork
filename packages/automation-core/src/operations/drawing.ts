@@ -9,15 +9,19 @@ import {
   listSketchAnimsInCode,
   createDefaultSketchAnim,
 } from '@/code/sketch/sketch-anim-gen';
-import type { SketchAnimConfig } from '@/code/sketch/sketch-anim-config';
+import type {
+  SketchAnimConfig,
+  SketchAnimTrigger,
+  SketchAnimMode,
+} from '@/code/sketch/sketch-anim-config';
 
 // 1. drawing.sketchAnim.set
 export const drawingSketchAnimSetOperation: Operation<
   {
     targetFile: string;
     nodeId: string;
-    trigger?: 'inView' | 'hover' | 'click';
-    mode?: 'draw' | 'erase';
+    trigger?: 'mount' | 'inView' | 'hover' | 'tap' | 'click';
+    mode?: 'sequential' | 'staggered' | 'simultaneous' | 'draw' | 'erase';
     durationScale?: number;
     stagger?: number;
     transition?: {
@@ -44,8 +48,8 @@ export const drawingSketchAnimSetOperation: Operation<
   inputSchema: z.object({
     targetFile: z.string().min(1),
     nodeId: z.string().min(1),
-    trigger: z.enum(['inView', 'hover', 'click']).optional(),
-    mode: z.enum(['draw', 'erase']).optional(),
+    trigger: z.enum(['mount', 'inView', 'hover', 'tap', 'click']).optional(),
+    mode: z.enum(['sequential', 'staggered', 'simultaneous', 'draw', 'erase']).optional(),
     durationScale: z.number().positive().optional(),
     stagger: z.number().nonnegative().optional(),
     transition: z.object({
@@ -65,9 +69,17 @@ export const drawingSketchAnimSetOperation: Operation<
 
     const currentConfig = readSketchAnimFromCode(code, input.nodeId) ?? createDefaultSketchAnim();
 
+    const trigger: SketchAnimTrigger =
+      input.trigger === 'click'
+        ? 'tap'
+        : (input.trigger as SketchAnimTrigger | undefined) ?? currentConfig.trigger;
+
+    const mode: SketchAnimMode =
+      (input.mode as SketchAnimMode | undefined) ?? currentConfig.mode;
+
     const nextConfig: SketchAnimConfig = {
-      trigger: input.trigger ?? currentConfig.trigger,
-      mode: input.mode ?? currentConfig.mode,
+      trigger,
+      mode,
       durationScale: input.durationScale ?? currentConfig.durationScale,
       stagger: input.stagger ?? currentConfig.stagger,
       transition: input.transition
