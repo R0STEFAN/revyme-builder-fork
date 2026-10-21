@@ -37,3 +37,6 @@ export * from './operations/media';
 export * from './operations/vectors';
 export * from './operations/shapes';
 export * from './operations/drawing';
+export * from './operations/motion';
+export * from './operations/text-effects';
+export * from './operations/site-effects';
