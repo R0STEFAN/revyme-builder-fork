@@ -34,3 +34,6 @@ export * from './operations/sections';
 export * from './operations/slots';
 export * from './operations/assets';
 export * from './operations/media';
+export * from './operations/vectors';
+export * from './operations/shapes';
+export * from './operations/drawing';
