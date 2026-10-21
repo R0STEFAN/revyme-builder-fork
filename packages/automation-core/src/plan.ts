@@ -8,9 +8,11 @@ import type {
   Normalization,
   Issue,
   Plan,
+  Receipt,
   Operation,
   OperationContext,
 } from './contracts';
+import { PlanSchema } from './contracts';
 import { calculatePlanHash, prepareOperation } from './session';
 import { defaultRegistry } from './registry';
 
@@ -235,6 +237,57 @@ export const workflowChainOperation: Operation<
   },
 };
 
+// plans.commit operation
+export const plansCommitOperation: Operation<
+  { plan: Plan },
+  { receipt: Receipt }
+> = {
+  name: 'plans.commit',
+  description: 'Commit a previously generated plan atomically via CAS and return durable receipt',
+  category: 'plans',
+  kind: 'mutation',
+  permit: 'write',
+  environment: 'headless',
+  ownerTask: 'T05',
+  inputSchema: z.object({
+    plan: PlanSchema,
+  }),
+  async execute(snapshot, input, context) {
+    if (context.adapters && typeof (context.adapters as any).commitService?.commit === 'function') {
+      const res = await (context.adapters as any).commitService.commit(input.plan);
+      if (!res.ok) {
+        throw new Error(res.error?.message || 'Commit failed');
+      }
+      return { receipt: res.data };
+    }
+    // Headless / in-memory fallback: validate baseRevision and planHash
+    if (input.plan.baseRevision !== snapshot.revision) {
+      throw new Error(`Revision conflict: snapshot is at ${snapshot.revision}, plan has baseRevision ${input.plan.baseRevision}`);
+    }
+    const expectedHash = calculatePlanHash(
+      input.plan.scope,
+      input.plan.baseRevision,
+      input.plan.operationId,
+      input.plan.changes
+    );
+    if (expectedHash !== input.plan.planHash) {
+      throw new Error(`Plan hash mismatch: calculated ${expectedHash}, plan has ${input.plan.planHash}`);
+    }
+    return {
+      receipt: {
+        operationId: input.plan.operationId,
+        projectId: input.plan.scope.projectId,
+        branchId: input.plan.scope.branchId || 'main',
+        revision: snapshot.revision + 1,
+        planHash: input.plan.planHash,
+        changedFiles: input.plan.changes.map((c) => c.path),
+      },
+    };
+  },
+};
+
 // Register workflow operations in defaultRegistry
 defaultRegistry.register(workflowBatchOperation);
 defaultRegistry.register(workflowChainOperation);
+defaultRegistry.register(plansCommitOperation);
+

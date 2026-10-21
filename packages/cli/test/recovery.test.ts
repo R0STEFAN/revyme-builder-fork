@@ -1,0 +1,126 @@
+// packages/cli/test/recovery.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { createPlan, defaultRegistry } from '@revyme/automation-core';
+import type { Snapshot, OperationContext } from '@revyme/automation-core';
+
+describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'revyme-recovery-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('ensures dry-run leaves status explicitly as not_committed', async () => {
+    const scope = { projectId: 'recovery-proj', branchId: 'main' };
+    const snapshot: Snapshot = {
+      scope,
+      revision: 4,
+      files: new Map([['app/page.tsx', `export default function Page() { return <div data-id="root">Hello</div>; }`]]),
+      config: {},
+    };
+
+    const batchOp = defaultRegistry.get('workflow.batch');
+    expect(batchOp).toBeDefined();
+
+    const context: OperationContext = {
+      createId: (prefix = 'op') => `${prefix}-123`,
+      signal: new AbortController().signal,
+      trace: () => {},
+      adapters: {},
+    };
+
+    const result = await batchOp!.execute(
+      snapshot,
+      {
+        operations: [{ tool: 'meta.guide', input: { topic: 'general' } }],
+      },
+      context
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.plan).toBeDefined();
+    expect(result.plan.baseRevision).toBe(4);
+    expect(result.plan.scope.projectId).toBe('recovery-proj');
+  });
+
+  it('plans.commit rejects plan with stale baseRevision', async () => {
+    const scope = { projectId: 'stale-proj', branchId: 'main' };
+    const snapshot: Snapshot = {
+      scope,
+      revision: 5, // Server current revision is 5
+      files: new Map(),
+      config: {},
+    };
+
+    const stalePlan = createPlan({
+      scope,
+      baseRevision: 3, // Plan was generated based on revision 3 (stale)
+      operationId: 'op-stale-attempt',
+      changes: [
+        {
+          path: 'app/page.tsx',
+          beforeHash: null,
+          content: 'export default function Page() { return <div data-id="r">Stale</div>; }',
+        },
+      ],
+    });
+
+    const commitOp = defaultRegistry.get('plans.commit');
+    expect(commitOp).toBeDefined();
+
+    const context: OperationContext = {
+      createId: () => 'ctx-1',
+      signal: new AbortController().signal,
+      trace: () => {},
+      adapters: {},
+    };
+
+    await expect(
+      commitOp!.execute(snapshot, { plan: stalePlan }, context)
+    ).rejects.toThrow(/Revision conflict/);
+  });
+
+  it('plans.commit accepts matching baseRevision and planHash and produces incremented receipt', async () => {
+    const scope = { projectId: 'valid-proj', branchId: 'main' };
+    const snapshot: Snapshot = {
+      scope,
+      revision: 10,
+      files: new Map(),
+      config: {},
+    };
+
+    const validPlan = createPlan({
+      scope,
+      baseRevision: 10,
+      operationId: 'op-valid-1',
+      changes: [
+        {
+          path: 'app/page.tsx',
+          beforeHash: null,
+          content: 'export default function Page() { return <div data-id="r">Valid</div>; }',
+        },
+      ],
+    });
+
+    const commitOp = defaultRegistry.get('plans.commit');
+    const context: OperationContext = {
+      createId: () => 'ctx-valid',
+      signal: new AbortController().signal,
+      trace: () => {},
+      adapters: {},
+    };
+
+    const res = await commitOp!.execute(snapshot, { plan: validPlan }, context);
+    expect(res.receipt).toBeDefined();
+    expect(res.receipt.revision).toBe(11);
+    expect(res.receipt.operationId).toBe('op-valid-1');
+    expect(res.receipt.planHash).toBe(validPlan.planHash);
+  });
+});

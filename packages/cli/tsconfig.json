@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@revyme/automation-core": ["../automation-core/src/index.ts"],
+      "@revyme/automation-core/*": ["../automation-core/src/*"],
+      "@revyme/cli": ["./src/index.ts"],
+      "@revyme/cli/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "test", "bin"]
+}
