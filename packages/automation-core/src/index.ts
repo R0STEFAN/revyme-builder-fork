@@ -43,3 +43,7 @@ export * from './operations/site-effects';
 export * from './operations/variables';
 export * from './operations/expressions';
 export * from './operations/page-interactions';
+export * from './operations/cms-schema';
+export * from './operations/cms-items';
+export * from './operations/cms-bindings';
+export * from './operations/cms-pages';
