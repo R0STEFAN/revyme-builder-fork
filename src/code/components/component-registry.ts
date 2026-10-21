@@ -254,7 +254,7 @@ function variantEqName(test: t.Expression): string | null {
  * Looks for: export default function ComponentName({ prop1 = 'default', prop2 }: Props)
  * Also handles: const ComponentName = (...) => { ... }; export default ComponentName;
  */
-function parseComponentFile(filePath: string, code: string, hash: string): ComponentInfo | null {
+export function parseComponentFile(filePath: string, code: string, hash: string): ComponentInfo | null {
   // Extract component name from file path as fallback
   const fileBaseName = filePath.split('/').pop()?.replace(/\.tsx$/, '') ?? '';
 

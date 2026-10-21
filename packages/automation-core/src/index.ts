@@ -23,3 +23,5 @@ export * from './operations/tokens';
 export * from './operations/presets';
 export * from './operations/typography';
 export * from './operations/fonts';
+export * from './operations/components';
+export * from './operations/component-props';
