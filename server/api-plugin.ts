@@ -126,7 +126,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
   const manager = options?.manager || localServerManager;
   const bridge = options?.bridge || defaultMcpBridge;
   const mcpPort = options?.mcpPort ?? (process.env.REVYME_MCP_PORT ? parseInt(process.env.REVYME_MCP_PORT, 10) : 8082);
-  const autoStartMcpHttp = options?.autoStartMcpHttp ?? true;
+  const autoStartMcpHttp = options?.autoStartMcpHttp ?? false;
 
   const setupMiddlewares = (middlewares: any) => {
     middlewares.use(bridge.middleware());

@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"vite --config vite.sandbox.config.ts\" \"vite --config vite.preview.config.ts\"",
     "inventory": "node scripts/automation-inventory.cjs",
-    "mcp": "tsx server/mcp-server.ts",
     "dev:standalone": "vite",
     "build": "vite build",
     "build:sandbox": "vite build --config vite.sandbox.config.ts",

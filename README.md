@@ -117,20 +117,7 @@ Revyme supports bi-directional control from AI coding agents (Antigravity, Claud
 ```
 
 1. **Start the editor**: `npm run dev` (starts on port `3333`)
-2. **Start the MCP bridge**: `npm run mcp` (listens on `http://localhost:8082` and exposes MCP on `stdio`)
-3. **Connect your agent**:
-   Add to `~/.gemini/config/mcp_config.json` or `claude_desktop_config.json`:
-   ```json
-   {
-     "mcpServers": {
-       "revyme-builder": {
-         "command": "npx",
-         "args": ["tsx", "server/mcp-server.ts"],
-         "cwd": "/path/to/revyme-builder-fork"
-       }
-     }
-   }
-   ```
+2. **Revyme CLI & MCP v2**: Headless automation, CLI and stdio MCP server powered by `@revyme/automation-core` (migrated in `packages/cli` & `packages/automation-core`).
 
 ### Available MCP Tool Capabilities
 
