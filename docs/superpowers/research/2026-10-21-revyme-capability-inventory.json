@@ -1,0 +1,5257 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "method": "Static AST resolution of ALL_TOOLS, Mutation union, public MCP and named bridge methods; lexical SDK/action inventory. Does not prove runtime correctness or complete UI discovery.",
+  "summary": {
+    "registeredAgentTools": 172,
+    "uniqueAgentTools": 172,
+    "mutationTypes": 175,
+    "sdkMethods": 114,
+    "legacyPublicTools": 33,
+    "namedBridgeMethods": 14
+  },
+  "agentTools": [
+    {
+      "legacyName": "get_active_file",
+      "symbol": "getActiveFileTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 443,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T01",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_active_file"
+    },
+    {
+      "legacyName": "get_viewport_width",
+      "symbol": "getViewportWidthTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 453,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_viewport_width"
+    },
+    {
+      "legacyName": "get_selection",
+      "symbol": "getSelectionTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 463,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_selection"
+    },
+    {
+      "legacyName": "get_node_tree",
+      "symbol": "getNodeTreeTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 475,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_node_tree"
+    },
+    {
+      "legacyName": "get_node",
+      "symbol": "getNodeTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 493,
+      "category": "read",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_node"
+    },
+    {
+      "legacyName": "get_layout",
+      "symbol": "getLayoutTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 624,
+      "category": "read",
+      "inputKeys": [
+        "viewport"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_layout"
+    },
+    {
+      "legacyName": "get_visuals",
+      "symbol": "getVisualsTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 653,
+      "category": "read",
+      "inputKeys": [
+        "node_id",
+        "viewport",
+        "props"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_visuals"
+    },
+    {
+      "legacyName": "audit_design",
+      "symbol": "auditDesignTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 733,
+      "category": "read",
+      "inputKeys": [
+        "viewport"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:audit_design"
+    },
+    {
+      "legacyName": "get_composition",
+      "symbol": "getCompositionTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 809,
+      "category": "read",
+      "inputKeys": [
+        "viewport"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_composition"
+    },
+    {
+      "legacyName": "list_pages",
+      "symbol": "listPagesTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 844,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_pages"
+    },
+    {
+      "legacyName": "list_components",
+      "symbol": "listComponentsTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 854,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_components"
+    },
+    {
+      "legacyName": "get_component",
+      "symbol": "getComponentTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 970,
+      "category": "read",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_component"
+    },
+    {
+      "legacyName": "get_design_tokens",
+      "symbol": "getDesignTokensTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 1003,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_design_tokens"
+    },
+    {
+      "legacyName": "list_collections",
+      "symbol": "listCollectionsTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 1014,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_collections"
+    },
+    {
+      "legacyName": "read_source",
+      "symbol": "readSourceTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 1062,
+      "category": "read",
+      "inputKeys": [
+        "path",
+        "from_line",
+        "to_line"
+      ],
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:read_source"
+    },
+    {
+      "legacyName": "turn_diff",
+      "symbol": "turnDiffTool",
+      "file": "src/ai/agent/tools/read.ts",
+      "line": 1099,
+      "category": "read",
+      "inputKeys": [
+        "run_key"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:turn_diff"
+    },
+    {
+      "legacyName": "set_styles",
+      "symbol": "setStylesTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 44,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "styles",
+        "viewport"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_styles"
+    },
+    {
+      "legacyName": "set_text",
+      "symbol": "setTextTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 99,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "text"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_text"
+    },
+    {
+      "legacyName": "set_rich_text",
+      "symbol": "setRichTextTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 113,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "html"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_rich_text"
+    },
+    {
+      "legacyName": "set_attr",
+      "symbol": "setAttrTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 127,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "attrs"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_attr"
+    },
+    {
+      "legacyName": "change_tag",
+      "symbol": "changeTagTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 144,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "tag"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:change_tag"
+    },
+    {
+      "legacyName": "set_token",
+      "symbol": "setTokenTool",
+      "file": "src/ai/agent/tools/semantic-property.ts",
+      "line": 165,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "value"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_token"
+    },
+    {
+      "legacyName": "add_node",
+      "symbol": "addNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 186,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "tag",
+        "styles",
+        "text",
+        "attrs",
+        "name",
+        "index",
+        "id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_node"
+    },
+    {
+      "legacyName": "add_canvas_node",
+      "symbol": "addCanvasNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 266,
+      "category": "semantic",
+      "inputKeys": [
+        "tag",
+        "styles",
+        "text",
+        "attrs",
+        "name",
+        "id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_canvas_node"
+    },
+    {
+      "legacyName": "delete_node",
+      "symbol": "deleteNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 334,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:delete_node"
+    },
+    {
+      "legacyName": "move_node",
+      "symbol": "moveNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 348,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "parent_id",
+        "index",
+        "before_id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:move_node"
+    },
+    {
+      "legacyName": "reorder_node",
+      "symbol": "reorderNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 385,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "parent_id",
+        "index"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:reorder_node"
+    },
+    {
+      "legacyName": "duplicate_node",
+      "symbol": "duplicateNodeTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 413,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "parent_id",
+        "index"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:duplicate_node"
+    },
+    {
+      "legacyName": "add_component_instance",
+      "symbol": "addComponentInstanceTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 534,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "parent_id",
+        "variant",
+        "props",
+        "index"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_component_instance"
+    },
+    {
+      "legacyName": "set_component_prop",
+      "symbol": "setComponentPropTool",
+      "file": "src/ai/agent/tools/semantic-structure.ts",
+      "line": 621,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "component_name",
+        "prop",
+        "value",
+        "variant"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_component_prop"
+    },
+    {
+      "legacyName": "insert_fragment",
+      "symbol": "insertFragmentTool",
+      "file": "src/ai/agent/tools/insert-fragment.ts",
+      "line": 123,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "index",
+        "fragment"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:insert_fragment"
+    },
+    {
+      "legacyName": "set_layout",
+      "symbol": "setLayoutTool",
+      "file": "src/ai/agent/tools/action-layer.ts",
+      "line": 67,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "display",
+        "flexDirection",
+        "alignItems",
+        "justifyContent",
+        "flexWrap",
+        "gap"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_layout"
+    },
+    {
+      "legacyName": "set_size",
+      "symbol": "setSizeTool",
+      "file": "src/ai/agent/tools/action-layer.ts",
+      "line": 117,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "width",
+        "height",
+        "minWidth",
+        "minHeight",
+        "maxWidth",
+        "maxHeight"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_size"
+    },
+    {
+      "legacyName": "set_position",
+      "symbol": "setPositionTool",
+      "file": "src/ai/agent/tools/action-layer.ts",
+      "line": 149,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "mode",
+        "left",
+        "top",
+        "right",
+        "bottom",
+        "pinned"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_position"
+    },
+    {
+      "legacyName": "set_typography",
+      "symbol": "setTypographyTool",
+      "file": "src/ai/agent/tools/action-layer.ts",
+      "line": 200,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "fontSize",
+        "fontWeight",
+        "lineHeight",
+        "letterSpacing",
+        "fontFamily",
+        "textAlign",
+        "color"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_typography"
+    },
+    {
+      "legacyName": "set_motion_preset",
+      "symbol": "setMotionPresetTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 233,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "effect",
+        "scale",
+        "viewport",
+        "transition"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_motion_preset"
+    },
+    {
+      "legacyName": "create_overlay",
+      "symbol": "createOverlayTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 365,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "type",
+        "trigger",
+        "dismiss"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_overlay"
+    },
+    {
+      "legacyName": "set_variant",
+      "symbol": "setVariantTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 411,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "variant",
+        "element",
+        "styles",
+        "text"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_variant"
+    },
+    {
+      "legacyName": "create_variant",
+      "symbol": "createVariantTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 587,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "variant",
+        "source_variant",
+        "interaction",
+        "interaction_parent"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_variant"
+    },
+    {
+      "legacyName": "extract_component",
+      "symbol": "extractComponentTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 723,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "name"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:extract_component"
+    },
+    {
+      "legacyName": "create_component",
+      "symbol": "createComponentTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 845,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "props",
+        "variants",
+        "from",
+        "layout"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_component"
+    },
+    {
+      "legacyName": "create_navbar",
+      "symbol": "createNavbarTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 1140,
+      "category": "semantic",
+      "inputKeys": [
+        "logoText",
+        "badgeText",
+        "edition",
+        "metadataText",
+        "location",
+        "menuButtonLabel",
+        "closeButtonLabel",
+        "drawerFooterLeft",
+        "drawerFooterRight",
+        "links",
+        "placeOnPage"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_navbar"
+    },
+    {
+      "legacyName": "bind_cms_list",
+      "symbol": "bindCmsListTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 953,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "collection_slug"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:bind_cms_list"
+    },
+    {
+      "legacyName": "bind_cms_field",
+      "symbol": "bindCmsFieldTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 974,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "field_id",
+        "property"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:bind_cms_field"
+    },
+    {
+      "legacyName": "set_form",
+      "symbol": "setFormTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 1026,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "states"
+      ],
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_form"
+    },
+    {
+      "legacyName": "create_page",
+      "symbol": "createPageTool",
+      "file": "src/ai/agent/tools/action-layer-rich.ts",
+      "line": 1081,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "dir"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_page"
+    },
+    {
+      "legacyName": "set_page",
+      "symbol": "setPageTool",
+      "file": "src/ai/agent/tools/set-page.ts",
+      "line": 125,
+      "category": "semantic",
+      "inputKeys": [
+        "page"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_page"
+    },
+    {
+      "legacyName": "set_page_variable",
+      "symbol": "setPageVariableTool",
+      "file": "src/ai/agent/tools/set-page-variable.ts",
+      "line": 241,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "type",
+        "value",
+        "description"
+      ],
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_page_variable"
+    },
+    {
+      "legacyName": "bind_variable",
+      "symbol": "bindVariableTool",
+      "file": "src/ai/agent/tools/set-page-variable.ts",
+      "line": 204,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "variable",
+        "bind"
+      ],
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:bind_variable"
+    },
+    {
+      "legacyName": "set_page_interaction",
+      "symbol": "setPageInteractionTool",
+      "file": "src/ai/agent/tools/set-page-interaction.ts",
+      "line": 64,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "trigger",
+        "variable",
+        "value"
+      ],
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_page_interaction"
+    },
+    {
+      "legacyName": "apply_file_edit",
+      "symbol": "applyFileEditTool",
+      "file": "src/ai/agent/tools/whole-file.ts",
+      "line": 30,
+      "category": "wholefile",
+      "inputKeys": [
+        "code",
+        "path",
+        "kind"
+      ],
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:apply_file_edit"
+    },
+    {
+      "legacyName": "batch",
+      "symbol": "batchTool",
+      "file": "src/ai/agent/tools/batch.ts",
+      "line": 258,
+      "category": "meta",
+      "inputKeys": [
+        "operations",
+        "request"
+      ],
+      "ownerTask": "T03",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:batch"
+    },
+    {
+      "legacyName": "chain",
+      "symbol": "chainTool",
+      "file": "src/ai/agent/tools/chain.ts",
+      "line": 114,
+      "category": "meta",
+      "inputKeys": [
+        "steps"
+      ],
+      "ownerTask": "T03",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:chain"
+    },
+    {
+      "legacyName": "verify_effect",
+      "symbol": "verifyEffectTool",
+      "file": "src/ai/agent/tools/verify-effect.ts",
+      "line": 1555,
+      "category": "meta",
+      "inputKeys": [
+        "request",
+        "expected_roles",
+        "expected_count",
+        "key_texts",
+        "expected_mechanism",
+        "node_ids",
+        "checks"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:verify_effect"
+    },
+    {
+      "legacyName": "submit_plan",
+      "symbol": "submitPlanTool",
+      "file": "src/ai/agent/tools/meta.ts",
+      "line": 26,
+      "category": "meta",
+      "inputKeys": [
+        "plan",
+        "steps"
+      ],
+      "ownerTask": "T03",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:submit_plan"
+    },
+    {
+      "legacyName": "get_screenshot",
+      "symbol": "getScreenshotTool",
+      "file": "src/ai/agent/tools/screenshot.ts",
+      "line": 23,
+      "category": "meta",
+      "inputKeys": [],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_screenshot"
+    },
+    {
+      "legacyName": "cms_get_collection",
+      "symbol": "cmsGetCollectionTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 76,
+      "category": "cms",
+      "inputKeys": [
+        "collection"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_get_collection"
+    },
+    {
+      "legacyName": "cms_create_collection",
+      "symbol": "cmsCreateCollectionTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 85,
+      "category": "cms",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_create_collection"
+    },
+    {
+      "legacyName": "cms_rename_collection",
+      "symbol": "cmsRenameCollectionTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 111,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "name"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_rename_collection"
+    },
+    {
+      "legacyName": "cms_delete_collection",
+      "symbol": "cmsDeleteCollectionTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 119,
+      "category": "cms",
+      "inputKeys": [
+        "collection"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_delete_collection"
+    },
+    {
+      "legacyName": "cms_add_field",
+      "symbol": "cmsAddFieldTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 128,
+      "category": "cms",
+      "inputKeys": [
+        "collection"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_add_field"
+    },
+    {
+      "legacyName": "cms_update_field",
+      "symbol": "cmsUpdateFieldTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 142,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "field_id",
+        "name",
+        "type",
+        "required",
+        "options",
+        "reference_collection"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_update_field"
+    },
+    {
+      "legacyName": "cms_remove_field",
+      "symbol": "cmsRemoveFieldTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 163,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "field_id"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_remove_field"
+    },
+    {
+      "legacyName": "cms_add_items",
+      "symbol": "cmsAddItemsTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 174,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "items"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_add_items"
+    },
+    {
+      "legacyName": "cms_update_item",
+      "symbol": "cmsUpdateItemTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 198,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "item_id",
+        "values"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_update_item"
+    },
+    {
+      "legacyName": "cms_remove_item",
+      "symbol": "cmsRemoveItemTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 206,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "item_id"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_remove_item"
+    },
+    {
+      "legacyName": "cms_set_item_translation",
+      "symbol": "cmsSetItemTranslationTool",
+      "file": "src/ai/agent/tools/cms.ts",
+      "line": 214,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "item_id",
+        "locale",
+        "field",
+        "value"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_set_item_translation"
+    },
+    {
+      "legacyName": "load_manual",
+      "symbol": "loadSkillTool",
+      "file": "src/ai/agent/tools/skills.ts",
+      "line": 31,
+      "category": "meta",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T01",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:load_manual"
+    },
+    {
+      "legacyName": "component_example",
+      "symbol": "componentExampleTool",
+      "file": "src/ai/agent/tools/skills.ts",
+      "line": 53,
+      "category": "meta",
+      "inputKeys": [
+        "pattern"
+      ],
+      "ownerTask": "T01",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:component_example"
+    },
+    {
+      "legacyName": "get_dialect",
+      "symbol": "getDialectTool",
+      "file": "src/ai/agent/tools/skills.ts",
+      "line": 74,
+      "category": "meta",
+      "inputKeys": [
+        "kind"
+      ],
+      "ownerTask": "T01",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_dialect"
+    },
+    {
+      "legacyName": "search_images",
+      "symbol": "searchImagesTool",
+      "file": "src/ai/agent/tools/images.ts",
+      "line": 19,
+      "category": "read",
+      "inputKeys": [
+        "query",
+        "count",
+        "orientation",
+        "width"
+      ],
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:search_images"
+    },
+    {
+      "legacyName": "set_link",
+      "symbol": "setLinkTool",
+      "file": "src/ai/agent/tools/links.ts",
+      "line": 33,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "href",
+        "new_tab",
+        "smooth_scroll"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_link"
+    },
+    {
+      "legacyName": "show_variant",
+      "symbol": "showVariantTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 89,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "variant",
+        "viewport",
+        "inside"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:show_variant"
+    },
+    {
+      "legacyName": "add_connection",
+      "symbol": "addConnectionTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 133,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "from",
+        "to",
+        "trigger",
+        "delay",
+        "source_node"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_connection"
+    },
+    {
+      "legacyName": "remove_connection",
+      "symbol": "removeConnectionTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 169,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "from",
+        "to",
+        "trigger",
+        "source_node"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_connection"
+    },
+    {
+      "legacyName": "rename_variant",
+      "symbol": "renameVariantTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 198,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "variant",
+        "label"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:rename_variant"
+    },
+    {
+      "legacyName": "remove_variant",
+      "symbol": "removeVariantTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 216,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "variant"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_variant"
+    },
+    {
+      "legacyName": "set_variant_visibility",
+      "symbol": "setVariantVisibilityTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 239,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "node_id",
+        "hidden_on"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_variant_visibility"
+    },
+    {
+      "legacyName": "detach_instance",
+      "symbol": "detachInstanceTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 276,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:detach_instance"
+    },
+    {
+      "legacyName": "add_component_prop",
+      "symbol": "addComponentPropTool",
+      "file": "src/ai/agent/tools/components-more.ts",
+      "line": 308,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "node_id",
+        "name",
+        "bind",
+        "default",
+        "type"
+      ],
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_component_prop"
+    },
+    {
+      "legacyName": "manage_component_variant",
+      "symbol": "manageComponentVariantTool",
+      "file": "src/ai/agent/tools/manage-component-variant.ts",
+      "line": 34,
+      "category": "semantic",
+      "inputKeys": [
+        "component",
+        "action",
+        "variant",
+        "interaction",
+        "parent_variant",
+        "styles",
+        "element"
+      ],
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:manage_component_variant"
+    },
+    {
+      "legacyName": "create_token",
+      "symbol": "createTokenTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 50,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "value",
+        "category",
+        "label",
+        "dark_value"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_token"
+    },
+    {
+      "legacyName": "remove_token",
+      "symbol": "removeTokenTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 82,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_token"
+    },
+    {
+      "legacyName": "set_dark_token",
+      "symbol": "setDarkTokenTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 103,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "dark_value"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_dark_token"
+    },
+    {
+      "legacyName": "set_typography_preset",
+      "symbol": "setTypographyPresetTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 122,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "tag",
+        "values"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_typography_preset"
+    },
+    {
+      "legacyName": "apply_typography_preset",
+      "symbol": "applyTypographyPresetTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 174,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "preset"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:apply_typography_preset"
+    },
+    {
+      "legacyName": "set_font",
+      "symbol": "setFontTool",
+      "file": "src/ai/agent/tools/tokens.ts",
+      "line": 213,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "family",
+        "fallback"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_font"
+    },
+    {
+      "legacyName": "set_size_units",
+      "symbol": "setSizeUnitsTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 71,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "width",
+        "height",
+        "viewport"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_size_units"
+    },
+    {
+      "legacyName": "set_grid",
+      "symbol": "setGridTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 109,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "columns",
+        "rows",
+        "gap",
+        "align_items",
+        "justify_items"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_grid"
+    },
+    {
+      "legacyName": "set_transform",
+      "symbol": "setTransformTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 140,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "rotate",
+        "scale",
+        "skew_x",
+        "skew_y"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_transform"
+    },
+    {
+      "legacyName": "reorder_on_breakpoint",
+      "symbol": "reorderOnBreakpointTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 174,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "index",
+        "viewport"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:reorder_on_breakpoint"
+    },
+    {
+      "legacyName": "wrap_in_layout",
+      "symbol": "wrapInLayoutTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 201,
+      "category": "semantic",
+      "inputKeys": [
+        "node_ids",
+        "name"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:wrap_in_layout"
+    },
+    {
+      "legacyName": "unfold_children",
+      "symbol": "unfoldChildrenTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 228,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:unfold_children"
+    },
+    {
+      "legacyName": "reset_overrides",
+      "symbol": "resetOverridesTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 251,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "viewport",
+        "properties"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:reset_overrides"
+    },
+    {
+      "legacyName": "pin_to_side",
+      "symbol": "pinToSideTool",
+      "file": "src/ai/agent/tools/layout-more.ts",
+      "line": 287,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "horizontal",
+        "vertical"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:pin_to_side"
+    },
+    {
+      "legacyName": "add_list_search",
+      "symbol": "addListSearchTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 406,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "field",
+        "placeholder"
+      ],
+      "ownerTask": "T17",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_list_search"
+    },
+    {
+      "legacyName": "change_list_source",
+      "symbol": "changeListSourceTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 186,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "collection_slug"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:change_list_source"
+    },
+    {
+      "legacyName": "set_list_config",
+      "symbol": "setListConfigTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 95,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "filters",
+        "combinator",
+        "sort",
+        "limit",
+        "offset",
+        "viewport"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_list_config"
+    },
+    {
+      "legacyName": "set_pagination",
+      "symbol": "setPaginationTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 217,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "mode",
+        "per_page"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_pagination"
+    },
+    {
+      "legacyName": "link_rows_to_pages",
+      "symbol": "linkRowsToPagesTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 237,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:link_rows_to_pages"
+    },
+    {
+      "legacyName": "create_collection_pages",
+      "symbol": "createCollectionPagesTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 265,
+      "category": "semantic",
+      "inputKeys": [
+        "collection",
+        "kind"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_collection_pages"
+    },
+    {
+      "legacyName": "unbind_cms_field",
+      "symbol": "unbindCmsFieldTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 287,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "property",
+        "value"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:unbind_cms_field"
+    },
+    {
+      "legacyName": "cms_reorder_items",
+      "symbol": "cmsReorderItemsTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 302,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "item_ids"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_reorder_items"
+    },
+    {
+      "legacyName": "cms_reorder_fields",
+      "symbol": "cmsReorderFieldsTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 324,
+      "category": "cms",
+      "inputKeys": [
+        "collection",
+        "field_ids"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_reorder_fields"
+    },
+    {
+      "legacyName": "cms_duplicate_collection",
+      "symbol": "cmsDuplicateCollectionTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 345,
+      "category": "cms",
+      "inputKeys": [
+        "collection"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:cms_duplicate_collection"
+    },
+    {
+      "legacyName": "bind_cms_prop",
+      "symbol": "bindCmsPropTool",
+      "file": "src/ai/agent/tools/cms-more.ts",
+      "line": 362,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "component_name",
+        "prop",
+        "field_id"
+      ],
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:bind_cms_prop"
+    },
+    {
+      "legacyName": "get_seo",
+      "symbol": "getSeoTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 259,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_seo"
+    },
+    {
+      "legacyName": "delete_page",
+      "symbol": "deletePageTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 60,
+      "category": "semantic",
+      "inputKeys": [
+        "page"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:delete_page"
+    },
+    {
+      "legacyName": "rename_page",
+      "symbol": "renamePageTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 81,
+      "category": "semantic",
+      "inputKeys": [
+        "page",
+        "new_name"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:rename_page"
+    },
+    {
+      "legacyName": "duplicate_page",
+      "symbol": "duplicatePageTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 111,
+      "category": "semantic",
+      "inputKeys": [
+        "page",
+        "new_name"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:duplicate_page"
+    },
+    {
+      "legacyName": "set_page_metadata",
+      "symbol": "setPageMetadataTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 182,
+      "category": "semantic",
+      "inputKeys": [
+        "page"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_page_metadata"
+    },
+    {
+      "legacyName": "set_site_metadata",
+      "symbol": "setSiteMetadataTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 301,
+      "category": "semantic",
+      "inputKeys": [
+        "favicon",
+        "language",
+        "theme",
+        "custom_code_head",
+        "custom_code_body",
+        "made_in_revyme_badge"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_site_metadata"
+    },
+    {
+      "legacyName": "add_shape",
+      "symbol": "addShapeTool",
+      "file": "src/ai/agent/tools/pages-more.ts",
+      "line": 375,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "shape",
+        "width",
+        "height",
+        "fill",
+        "stroke",
+        "stroke_width",
+        "d",
+        "name",
+        "index"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_shape"
+    },
+    {
+      "legacyName": "set_motion",
+      "symbol": "setMotionTool",
+      "file": "src/ai/agent/tools/motion-more.ts",
+      "line": 76,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "effect",
+        "targets",
+        "from",
+        "to",
+        "once",
+        "transition",
+        "speed",
+        "trigger",
+        "section_id",
+        "direction",
+        "replay"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_motion"
+    },
+    {
+      "legacyName": "remove_motion",
+      "symbol": "removeMotionTool",
+      "file": "src/ai/agent/tools/motion-more.ts",
+      "line": 141,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "effect"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_motion"
+    },
+    {
+      "legacyName": "set_text_effect",
+      "symbol": "setTextEffectTool",
+      "file": "src/ai/agent/tools/motion-more.ts",
+      "line": 161,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "preset",
+        "split",
+        "from",
+        "stagger",
+        "mask",
+        "trigger",
+        "transition"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_text_effect"
+    },
+    {
+      "legacyName": "get_motion",
+      "symbol": "getMotionTool",
+      "file": "src/ai/agent/tools/motion-more.ts",
+      "line": 229,
+      "category": "read",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_motion"
+    },
+    {
+      "legacyName": "apply_motion_preset",
+      "symbol": "applyMotionPresetTool",
+      "file": "src/ai/agent/tools/motion-preset.ts",
+      "line": 52,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "preset",
+        "physics",
+        "stagger",
+        "targets"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:apply_motion_preset"
+    },
+    {
+      "legacyName": "set_locales",
+      "symbol": "setLocalesTool",
+      "file": "src/ai/agent/tools/i18n.ts",
+      "line": 31,
+      "category": "semantic",
+      "inputKeys": [
+        "add",
+        "remove"
+      ],
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_locales"
+    },
+    {
+      "legacyName": "list_texts",
+      "symbol": "listTextsTool",
+      "file": "src/ai/agent/tools/i18n.ts",
+      "line": 63,
+      "category": "read",
+      "inputKeys": [
+        "file_path"
+      ],
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_texts"
+    },
+    {
+      "legacyName": "translate_texts",
+      "symbol": "translateTextsTool",
+      "file": "src/ai/agent/tools/i18n.ts",
+      "line": 86,
+      "category": "semantic",
+      "inputKeys": [
+        "locale",
+        "items"
+      ],
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:translate_texts"
+    },
+    {
+      "legacyName": "add_language_switcher",
+      "symbol": "addLanguageSwitcherTool",
+      "file": "src/ai/agent/tools/i18n.ts",
+      "line": 121,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id"
+      ],
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_language_switcher"
+    },
+    {
+      "legacyName": "list_built_in_components",
+      "symbol": "listBuiltInComponentsTool",
+      "file": "src/ai/agent/tools/built-ins.ts",
+      "line": 30,
+      "category": "read",
+      "inputKeys": [
+        "query"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_built_in_components"
+    },
+    {
+      "legacyName": "add_built_in_component",
+      "symbol": "addBuiltInComponentTool",
+      "file": "src/ai/agent/tools/built-ins.ts",
+      "line": 44,
+      "category": "semantic",
+      "inputKeys": [
+        "tag",
+        "parent_id",
+        "props"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_built_in_component"
+    },
+    {
+      "legacyName": "list_sections",
+      "symbol": "listSectionsTool",
+      "file": "src/ai/agent/tools/built-ins.ts",
+      "line": 73,
+      "category": "read",
+      "inputKeys": [
+        "category"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_sections"
+    },
+    {
+      "legacyName": "insert_section",
+      "symbol": "insertSectionTool",
+      "file": "src/ai/agent/tools/built-ins.ts",
+      "line": 84,
+      "category": "semantic",
+      "inputKeys": [
+        "section",
+        "parent_id",
+        "index"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:insert_section"
+    },
+    {
+      "legacyName": "set_text_on_breakpoint",
+      "symbol": "setTextOnBreakpointTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 48,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "viewport",
+        "text"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_text_on_breakpoint"
+    },
+    {
+      "legacyName": "set_text_fit",
+      "symbol": "setTextFitTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 102,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "fit",
+        "size_pct"
+      ],
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_text_fit"
+    },
+    {
+      "legacyName": "set_pseudo_style",
+      "symbol": "setPseudoStyleTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 179,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "pseudo",
+        "styles"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_pseudo_style"
+    },
+    {
+      "legacyName": "translate_attribute",
+      "symbol": "translateAttributeTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 214,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "attr",
+        "locale",
+        "text"
+      ],
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:translate_attribute"
+    },
+    {
+      "legacyName": "set_form_destination",
+      "symbol": "setFormDestinationTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 326,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "emails",
+        "webhooks",
+        "redirect",
+        "antispam"
+      ],
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_form_destination"
+    },
+    {
+      "legacyName": "add_form_field",
+      "symbol": "addFormFieldTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 261,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "type",
+        "name",
+        "label",
+        "placeholder",
+        "required",
+        "options",
+        "index"
+      ],
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_form_field"
+    },
+    {
+      "legacyName": "add_submit_button",
+      "symbol": "addSubmitButtonTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 372,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "label",
+        "index"
+      ],
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_submit_button"
+    },
+    {
+      "legacyName": "set_background_video",
+      "symbol": "setBackgroundVideoTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 408,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "src",
+        "poster",
+        "object_fit",
+        "loop"
+      ],
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_background_video"
+    },
+    {
+      "legacyName": "check_project",
+      "symbol": "checkProjectTool",
+      "file": "src/ai/agent/tools/forms-text.ts",
+      "line": 443,
+      "category": "read",
+      "inputKeys": [
+        "path"
+      ],
+      "ownerTask": "T24",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:check_project"
+    },
+    {
+      "legacyName": "set_smooth_scroll",
+      "symbol": "setSmoothScrollTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 52,
+      "category": "semantic",
+      "inputKeys": [
+        "enabled",
+        "page",
+        "all_pages",
+        "intensity",
+        "smooth_touch",
+        "orientation",
+        "infinite"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_smooth_scroll"
+    },
+    {
+      "legacyName": "set_page_transition",
+      "symbol": "setPageTransitionTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 100,
+      "category": "semantic",
+      "inputKeys": [
+        "preset",
+        "target",
+        "page",
+        "duration"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_page_transition"
+    },
+    {
+      "legacyName": "set_cursor",
+      "symbol": "setCursorTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 145,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "component",
+        "mode",
+        "side",
+        "offset_x",
+        "offset_y",
+        "variant"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_cursor"
+    },
+    {
+      "legacyName": "set_glide",
+      "symbol": "setGlideTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 203,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "enabled",
+        "duration",
+        "bounce"
+      ],
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_glide"
+    },
+    {
+      "legacyName": "list_templates",
+      "symbol": "listTemplatesTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 235,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_templates"
+    },
+    {
+      "legacyName": "create_template",
+      "symbol": "createTemplateTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 246,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "pages"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_template"
+    },
+    {
+      "legacyName": "assign_template",
+      "symbol": "assignTemplateTool",
+      "file": "src/ai/agent/tools/site-motion.ts",
+      "line": 274,
+      "category": "semantic",
+      "inputKeys": [
+        "page",
+        "template"
+      ],
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:assign_template"
+    },
+    {
+      "legacyName": "list_viewports",
+      "symbol": "listViewportsTool",
+      "file": "src/ai/agent/tools/viewports.ts",
+      "line": 68,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_viewports"
+    },
+    {
+      "legacyName": "add_viewport",
+      "symbol": "addViewportTool",
+      "file": "src/ai/agent/tools/viewports.ts",
+      "line": 80,
+      "category": "semantic",
+      "inputKeys": [
+        "label",
+        "width"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_viewport"
+    },
+    {
+      "legacyName": "set_viewport_width",
+      "symbol": "setViewportWidthTool",
+      "file": "src/ai/agent/tools/viewports.ts",
+      "line": 134,
+      "category": "semantic",
+      "inputKeys": [
+        "viewport",
+        "width"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_viewport_width"
+    },
+    {
+      "legacyName": "remove_viewport",
+      "symbol": "removeViewportTool",
+      "file": "src/ai/agent/tools/viewports.ts",
+      "line": 174,
+      "category": "semantic",
+      "inputKeys": [
+        "viewport"
+      ],
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_viewport"
+    },
+    {
+      "legacyName": "search_icons",
+      "symbol": "searchIconsTool",
+      "file": "src/ai/agent/tools/icons.ts",
+      "line": 51,
+      "category": "read",
+      "inputKeys": [
+        "query",
+        "library",
+        "limit"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:search_icons"
+    },
+    {
+      "legacyName": "add_icon",
+      "symbol": "addIconTool",
+      "file": "src/ai/agent/tools/icons.ts",
+      "line": 85,
+      "category": "semantic",
+      "inputKeys": [
+        "parent_id",
+        "icon",
+        "svg",
+        "name",
+        "size",
+        "color",
+        "index"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_icon"
+    },
+    {
+      "legacyName": "create_icon_set",
+      "symbol": "createIconSetTool",
+      "file": "src/ai/agent/tools/icons.ts",
+      "line": 155,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "icons"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_icon_set"
+    },
+    {
+      "legacyName": "add_icons_to_set",
+      "symbol": "addIconsToSetTool",
+      "file": "src/ai/agent/tools/icons.ts",
+      "line": 221,
+      "category": "semantic",
+      "inputKeys": [
+        "set",
+        "icons"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:add_icons_to_set"
+    },
+    {
+      "legacyName": "remove_icon_from_set",
+      "symbol": "removeIconFromSetTool",
+      "file": "src/ai/agent/tools/icons.ts",
+      "line": 262,
+      "category": "semantic",
+      "inputKeys": [
+        "set",
+        "icon"
+      ],
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:remove_icon_from_set"
+    },
+    {
+      "legacyName": "write_override",
+      "symbol": "writeOverrideTool",
+      "file": "src/ai/agent/tools/overrides.ts",
+      "line": 47,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "code"
+      ],
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:write_override"
+    },
+    {
+      "legacyName": "set_code_overrides",
+      "symbol": "setCodeOverridesTool",
+      "file": "src/ai/agent/tools/overrides.ts",
+      "line": 79,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "overrides"
+      ],
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:set_code_overrides"
+    },
+    {
+      "legacyName": "list_overrides",
+      "symbol": "listOverridesTool",
+      "file": "src/ai/agent/tools/overrides.ts",
+      "line": 109,
+      "category": "read",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_overrides"
+    },
+    {
+      "legacyName": "find_assets",
+      "symbol": "findAssetsTool",
+      "file": "src/ai/agent/tools/assets.ts",
+      "line": 26,
+      "category": "read",
+      "inputKeys": [
+        "query",
+        "material",
+        "color",
+        "subject",
+        "limit"
+      ],
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:find_assets"
+    },
+    {
+      "legacyName": "upload_image",
+      "symbol": "uploadImageTool",
+      "file": "src/ai/agent/tools/assets.ts",
+      "line": 54,
+      "category": "semantic",
+      "inputKeys": [
+        "url",
+        "data_base64",
+        "content_type",
+        "filename"
+      ],
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:upload_image"
+    },
+    {
+      "legacyName": "get_slots",
+      "symbol": "getSlotsTool",
+      "file": "src/ai/agent/tools/slots.ts",
+      "line": 57,
+      "category": "read",
+      "inputKeys": [
+        "node_id"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:get_slots"
+    },
+    {
+      "legacyName": "connect_slot",
+      "symbol": "connectSlotTool",
+      "file": "src/ai/agent/tools/slots.ts",
+      "line": 71,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "canvas_node_id"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:connect_slot"
+    },
+    {
+      "legacyName": "disconnect_slot",
+      "symbol": "disconnectSlotTool",
+      "file": "src/ai/agent/tools/slots.ts",
+      "line": 112,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "canvas_node_id"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:disconnect_slot"
+    },
+    {
+      "legacyName": "reorder_slot",
+      "symbol": "reorderSlotTool",
+      "file": "src/ai/agent/tools/slots.ts",
+      "line": 133,
+      "category": "semantic",
+      "inputKeys": [
+        "node_id",
+        "from_index",
+        "to_index"
+      ],
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:reorder_slot"
+    },
+    {
+      "legacyName": "list_plugins",
+      "symbol": "listPluginsTool",
+      "file": "src/ai/agent/tools/plugins.ts",
+      "line": 50,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_plugins"
+    },
+    {
+      "legacyName": "write_plugin",
+      "symbol": "writePluginTool",
+      "file": "src/ai/agent/tools/plugins.ts",
+      "line": 63,
+      "category": "semantic",
+      "inputKeys": [
+        "name",
+        "code"
+      ],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:write_plugin"
+    },
+    {
+      "legacyName": "launch_plugin",
+      "symbol": "launchPluginTool",
+      "file": "src/ai/agent/tools/plugins.ts",
+      "line": 93,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:launch_plugin"
+    },
+    {
+      "legacyName": "list_branches",
+      "symbol": "listBranchesTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 67,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_branches"
+    },
+    {
+      "legacyName": "create_branch",
+      "symbol": "createBranchTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 79,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:create_branch"
+    },
+    {
+      "legacyName": "switch_branch",
+      "symbol": "switchBranchTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 101,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:switch_branch"
+    },
+    {
+      "legacyName": "review_branch",
+      "symbol": "reviewBranchTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 122,
+      "category": "read",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:review_branch"
+    },
+    {
+      "legacyName": "apply_branch",
+      "symbol": "applyBranchTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 139,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:apply_branch"
+    },
+    {
+      "legacyName": "delete_branch",
+      "symbol": "deleteBranchTool",
+      "file": "src/ai/agent/tools/branches.ts",
+      "line": 164,
+      "category": "semantic",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T21",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:delete_branch"
+    },
+    {
+      "legacyName": "list_skills",
+      "symbol": "listSkillsTool",
+      "file": "src/ai/agent/tools/project-skills.ts",
+      "line": 27,
+      "category": "read",
+      "inputKeys": [],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:list_skills"
+    },
+    {
+      "legacyName": "read_skill",
+      "symbol": "readSkillTool",
+      "file": "src/ai/agent/tools/project-skills.ts",
+      "line": 38,
+      "category": "read",
+      "inputKeys": [
+        "name"
+      ],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:read_skill"
+    },
+    {
+      "legacyName": "save_skill",
+      "symbol": "saveSkillTool",
+      "file": "src/ai/agent/tools/project-skills.ts",
+      "line": 50,
+      "category": "meta",
+      "inputKeys": [
+        "name",
+        "description",
+        "content",
+        "always_apply",
+        "previous_name"
+      ],
+      "ownerTask": "T22",
+      "status": "planned",
+      "acceptanceId": "legacy-tool:save_skill"
+    }
+  ],
+  "mutations": [
+    {
+      "name": "updateStyles",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 250,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateStyles"
+    },
+    {
+      "name": "updateContainerStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 252,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateContainerStyle"
+    },
+    {
+      "name": "clearContainerStyles",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 254,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:clearContainerStyles"
+    },
+    {
+      "name": "stripPositionalTileOverrides",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 259,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:stripPositionalTileOverrides"
+    },
+    {
+      "name": "updateVariantStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 261,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:updateVariantStyle"
+    },
+    {
+      "name": "autoSizeInstanceDim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 262,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:autoSizeInstanceDim"
+    },
+    {
+      "name": "ensureInstanceHugMarker",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 263,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:ensureInstanceHugMarker"
+    },
+    {
+      "name": "setVariantVisibility",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 268,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantVisibility"
+    },
+    {
+      "name": "setConditionalOrder",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 270,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setConditionalOrder"
+    },
+    {
+      "name": "setConditionalStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 273,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setConditionalStyle"
+    },
+    {
+      "name": "updateLocaleStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 275,
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "mutation:updateLocaleStyle"
+    },
+    {
+      "name": "updateLocaleInstanceProp",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 276,
+      "ownerTask": "T18",
+      "status": "planned",
+      "acceptanceId": "mutation:updateLocaleInstanceProp"
+    },
+    {
+      "name": "updateInstancePropBase",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 277,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:updateInstancePropBase"
+    },
+    {
+      "name": "addNode",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 280,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:addNode"
+    },
+    {
+      "name": "addCanvasNode",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 282,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:addCanvasNode"
+    },
+    {
+      "name": "setCodeOverrides",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 286,
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "mutation:setCodeOverrides"
+    },
+    {
+      "name": "duplicateCollectionToCanvas",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 287,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:duplicateCollectionToCanvas"
+    },
+    {
+      "name": "reorder",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 289,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:reorder"
+    },
+    {
+      "name": "move",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 291,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:move"
+    },
+    {
+      "name": "removeNode",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 293,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:removeNode"
+    },
+    {
+      "name": "renameNode",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 295,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:renameNode"
+    },
+    {
+      "name": "convertDivToImage",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 297,
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "mutation:convertDivToImage"
+    },
+    {
+      "name": "updateText",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 300,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateText"
+    },
+    {
+      "name": "updateVariantText",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 303,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:updateVariantText"
+    },
+    {
+      "name": "detachTextVariableForVariant",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 304,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:detachTextVariableForVariant"
+    },
+    {
+      "name": "bindTextVariableForVariant",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 305,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:bindTextVariableForVariant"
+    },
+    {
+      "name": "setFormattedTextBranch",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 307,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setFormattedTextBranch"
+    },
+    {
+      "name": "updateChildrenHTML",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 309,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateChildrenHTML"
+    },
+    {
+      "name": "stripInlineSpanStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 315,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:stripInlineSpanStyle"
+    },
+    {
+      "name": "updateTextOverride",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 322,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateTextOverride"
+    },
+    {
+      "name": "removeTextOverride",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 325,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:removeTextOverride"
+    },
+    {
+      "name": "createVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 335,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createVariable"
+    },
+    {
+      "name": "createConditionalVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 336,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createConditionalVariable"
+    },
+    {
+      "name": "setVariantBorderVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 337,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantBorderVariable"
+    },
+    {
+      "name": "setVariantInlineVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 338,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantInlineVariable"
+    },
+    {
+      "name": "removeVariantStyleVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 341,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:removeVariantStyleVariable"
+    },
+    {
+      "name": "setComponentPropDefault",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 343,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropDefault"
+    },
+    {
+      "name": "setComponentPropDescription",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 344,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropDescription"
+    },
+    {
+      "name": "createTypedVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 345,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createTypedVariable"
+    },
+    {
+      "name": "setChildEventFire",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 346,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setChildEventFire"
+    },
+    {
+      "name": "removeChildEventFire",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 347,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:removeChildEventFire"
+    },
+    {
+      "name": "setComponentPropOptions",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 348,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropOptions"
+    },
+    {
+      "name": "setComponentPropType",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 351,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropType"
+    },
+    {
+      "name": "deleteComponentVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 352,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:deleteComponentVariable"
+    },
+    {
+      "name": "renameComponentVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 353,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:renameComponentVariable"
+    },
+    {
+      "name": "setComponentPropLabel",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 354,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropLabel"
+    },
+    {
+      "name": "setComponentPropVariantOf",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 355,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropVariantOf"
+    },
+    {
+      "name": "setComponentPropNumberMeta",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 356,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:setComponentPropNumberMeta"
+    },
+    {
+      "name": "removeVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 358,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:removeVariable"
+    },
+    {
+      "name": "createTransitionVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 359,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createTransitionVariable"
+    },
+    {
+      "name": "createTextVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 365,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createTextVariable"
+    },
+    {
+      "name": "bindTextVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 367,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:bindTextVariable"
+    },
+    {
+      "name": "removeTextVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 369,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:removeTextVariable"
+    },
+    {
+      "name": "createTextPageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 372,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:createTextPageVariable"
+    },
+    {
+      "name": "removeTextPageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 374,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:removeTextPageVariable"
+    },
+    {
+      "name": "addPageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 377,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:addPageVariable"
+    },
+    {
+      "name": "hoistInstanceProp",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 390,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:hoistInstanceProp"
+    },
+    {
+      "name": "createLinkAttrVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 394,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:createLinkAttrVariable"
+    },
+    {
+      "name": "removeLinkAttrVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 397,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:removeLinkAttrVariable"
+    },
+    {
+      "name": "updatePageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 399,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:updatePageVariable"
+    },
+    {
+      "name": "removePageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 401,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:removePageVariable"
+    },
+    {
+      "name": "bindStylePageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 407,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindStylePageVariable"
+    },
+    {
+      "name": "unbindStylePageVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 413,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindStylePageVariable"
+    },
+    {
+      "name": "bindResponsiveStyleVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 421,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindResponsiveStyleVariable"
+    },
+    {
+      "name": "unbindResponsiveStyleVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 423,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindResponsiveStyleVariable"
+    },
+    {
+      "name": "setResponsiveStyleBase",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 429,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:setResponsiveStyleBase"
+    },
+    {
+      "name": "bindResponsiveTextVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 433,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindResponsiveTextVariable"
+    },
+    {
+      "name": "unbindResponsiveTextVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 434,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindResponsiveTextVariable"
+    },
+    {
+      "name": "setResponsiveTextBase",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 435,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:setResponsiveTextBase"
+    },
+    {
+      "name": "ensureTemplateVarParam",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 441,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:ensureTemplateVarParam"
+    },
+    {
+      "name": "addPageInteraction",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 447,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:addPageInteraction"
+    },
+    {
+      "name": "removePageInteraction",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 452,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:removePageInteraction"
+    },
+    {
+      "name": "addCloseOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 453,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:addCloseOverlay"
+    },
+    {
+      "name": "removeCloseOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 454,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:removeCloseOverlay"
+    },
+    {
+      "name": "setCloseOverlayDelay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 455,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setCloseOverlayDelay"
+    },
+    {
+      "name": "setFormStateMapping",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 457,
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "mutation:setFormStateMapping"
+    },
+    {
+      "name": "setResponsiveAttr",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 459,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:setResponsiveAttr"
+    },
+    {
+      "name": "setResponsiveAttrBase",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 460,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:setResponsiveAttrBase"
+    },
+    {
+      "name": "setVariantAttr",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 462,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantAttr"
+    },
+    {
+      "name": "updateBorderOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 465,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateBorderOverlay"
+    },
+    {
+      "name": "removeBorderOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 467,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:removeBorderOverlay"
+    },
+    {
+      "name": "updateHtmlAttrs",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 469,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateHtmlAttrs"
+    },
+    {
+      "name": "setCmsNavHref",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 471,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:setCmsNavHref"
+    },
+    {
+      "name": "connectSlot",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 474,
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "mutation:connectSlot"
+    },
+    {
+      "name": "disconnectSlot",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 475,
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "mutation:disconnectSlot"
+    },
+    {
+      "name": "reorderSlot",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 476,
+      "ownerTask": "T11",
+      "status": "planned",
+      "acceptanceId": "mutation:reorderSlot"
+    },
+    {
+      "name": "changeTag",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 478,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:changeTag"
+    },
+    {
+      "name": "replaceComponentInstance",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 479,
+      "ownerTask": "T09",
+      "status": "planned",
+      "acceptanceId": "mutation:replaceComponentInstance"
+    },
+    {
+      "name": "convertToMotionLink",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 482,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:convertToMotionLink"
+    },
+    {
+      "name": "syncLinkHandler",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 485,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:syncLinkHandler"
+    },
+    {
+      "name": "updateSvgAttrs",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 487,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:updateSvgAttrs"
+    },
+    {
+      "name": "addSvgChild",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 489,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:addSvgChild"
+    },
+    {
+      "name": "removeSvgChild",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 491,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:removeSvgChild"
+    },
+    {
+      "name": "setVideoFill",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 496,
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "mutation:setVideoFill"
+    },
+    {
+      "name": "removeVideoFill",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 499,
+      "ownerTask": "T12",
+      "status": "planned",
+      "acceptanceId": "mutation:removeVideoFill"
+    },
+    {
+      "name": "replaceSvgInner",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 502,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:replaceSvgInner"
+    },
+    {
+      "name": "setSketchAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 504,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:setSketchAnim"
+    },
+    {
+      "name": "removeSketchAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 506,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:removeSketchAnim"
+    },
+    {
+      "name": "injectSvgDataId",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 508,
+      "ownerTask": "T13",
+      "status": "planned",
+      "acceptanceId": "mutation:injectSvgDataId"
+    },
+    {
+      "name": "updateKeyframes",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 511,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateKeyframes"
+    },
+    {
+      "name": "removeKeyframes",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 513,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeKeyframes"
+    },
+    {
+      "name": "updateCssHover",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 516,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updateCssHover"
+    },
+    {
+      "name": "removeCssHover",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 518,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:removeCssHover"
+    },
+    {
+      "name": "setSmoothScroll",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 520,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:setSmoothScroll"
+    },
+    {
+      "name": "updateMotionProp",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 523,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateMotionProp"
+    },
+    {
+      "name": "removeMotionProp",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 525,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeMotionProp"
+    },
+    {
+      "name": "removeMotionScopeBranch",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 527,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeMotionScopeBranch"
+    },
+    {
+      "name": "updateScrollAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 530,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateScrollAnim"
+    },
+    {
+      "name": "updateScrollDirection",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 531,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateScrollDirection"
+    },
+    {
+      "name": "removeScrollDirection",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 532,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollDirection"
+    },
+    {
+      "name": "updateScrollSpeed",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 533,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateScrollSpeed"
+    },
+    {
+      "name": "removeScrollSpeed",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 534,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollSpeed"
+    },
+    {
+      "name": "updateLoop",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 536,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateLoop"
+    },
+    {
+      "name": "removeLoop",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 537,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeLoop"
+    },
+    {
+      "name": "updateScrollVariant",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 539,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateScrollVariant"
+    },
+    {
+      "name": "removeScrollVariant",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 540,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollVariant"
+    },
+    {
+      "name": "updateInstanceFx",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 541,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateInstanceFx"
+    },
+    {
+      "name": "removeInstanceFx",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 542,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeInstanceFx"
+    },
+    {
+      "name": "updateScrollFx",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 545,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateScrollFx"
+    },
+    {
+      "name": "removeScrollFx",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 546,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollFx"
+    },
+    {
+      "name": "updateGlide",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 550,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateGlide"
+    },
+    {
+      "name": "removeGlide",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 551,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeGlide"
+    },
+    {
+      "name": "removeScrollSpeedScopeBranch",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 553,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollSpeedScopeBranch"
+    },
+    {
+      "name": "removeScrollAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 555,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeScrollAnim"
+    },
+    {
+      "name": "createCollectionList",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 558,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:createCollectionList"
+    },
+    {
+      "name": "bindField",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 560,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:bindField"
+    },
+    {
+      "name": "unbindField",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 562,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindField"
+    },
+    {
+      "name": "bindTextExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 564,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindTextExpression"
+    },
+    {
+      "name": "bindHrefExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 566,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindHrefExpression"
+    },
+    {
+      "name": "bindSrcExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 568,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:bindSrcExpression"
+    },
+    {
+      "name": "unbindTextExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 570,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindTextExpression"
+    },
+    {
+      "name": "unbindHrefExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 572,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindHrefExpression"
+    },
+    {
+      "name": "unbindSrcExpression",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 574,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindSrcExpression"
+    },
+    {
+      "name": "setVariantCmsText",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 578,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantCmsText"
+    },
+    {
+      "name": "setVariantCmsStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 581,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:setVariantCmsStyle"
+    },
+    {
+      "name": "updateCollectionConfig",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 583,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:updateCollectionConfig"
+    },
+    {
+      "name": "setListResponsiveConfig",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 584,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:setListResponsiveConfig"
+    },
+    {
+      "name": "setPagination",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 585,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:setPagination"
+    },
+    {
+      "name": "removePagination",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 586,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:removePagination"
+    },
+    {
+      "name": "updateCollectionQueryConfig",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 587,
+      "ownerTask": "T17",
+      "status": "planned",
+      "acceptanceId": "mutation:updateCollectionQueryConfig"
+    },
+    {
+      "name": "addCollectionSearchField",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 591,
+      "ownerTask": "T17",
+      "status": "planned",
+      "acceptanceId": "mutation:addCollectionSearchField"
+    },
+    {
+      "name": "setSearchInputVariable",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 594,
+      "ownerTask": "T17",
+      "status": "planned",
+      "acceptanceId": "mutation:setSearchInputVariable"
+    },
+    {
+      "name": "setInstanceEventDelay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 595,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:setInstanceEventDelay"
+    },
+    {
+      "name": "bindInstanceEventCloseOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 599,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:bindInstanceEventCloseOverlay"
+    },
+    {
+      "name": "unbindInstanceEvent",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 600,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindInstanceEvent"
+    },
+    {
+      "name": "bindToCmsCollection",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 603,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:bindToCmsCollection"
+    },
+    {
+      "name": "unbindFromCmsCollection",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 604,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindFromCmsCollection"
+    },
+    {
+      "name": "changeCollectionSource",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 605,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:changeCollectionSource"
+    },
+    {
+      "name": "unbindStyleFromMap",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 607,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindStyleFromMap"
+    },
+    {
+      "name": "bindPropToMap",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 610,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:bindPropToMap"
+    },
+    {
+      "name": "unbindPropFromMap",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 612,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:unbindPropFromMap"
+    },
+    {
+      "name": "clearCmsOrphan",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 614,
+      "ownerTask": "T16",
+      "status": "planned",
+      "acceptanceId": "mutation:clearCmsOrphan"
+    },
+    {
+      "name": "clearVarOrphan",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 617,
+      "ownerTask": "T15",
+      "status": "planned",
+      "acceptanceId": "mutation:clearVarOrphan"
+    },
+    {
+      "name": "addPresetToken",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 620,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:addPresetToken"
+    },
+    {
+      "name": "updatePresetToken",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 622,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:updatePresetToken"
+    },
+    {
+      "name": "removePresetToken",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 624,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:removePresetToken"
+    },
+    {
+      "name": "setDarkTokenValue",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 626,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:setDarkTokenValue"
+    },
+    {
+      "name": "createOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 629,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:createOverlay"
+    },
+    {
+      "name": "cloneCanvasOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 631,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:cloneCanvasOverlay"
+    },
+    {
+      "name": "updateOverlayPosition",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 633,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:updateOverlayPosition"
+    },
+    {
+      "name": "updateOverlayConfig",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 635,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:updateOverlayConfig"
+    },
+    {
+      "name": "updateOverlayTrigger",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 637,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:updateOverlayTrigger"
+    },
+    {
+      "name": "removeOverlay",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 639,
+      "ownerTask": "T10",
+      "status": "planned",
+      "acceptanceId": "mutation:removeOverlay"
+    },
+    {
+      "name": "addTextAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 642,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:addTextAnim"
+    },
+    {
+      "name": "updateTextAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 644,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:updateTextAnim"
+    },
+    {
+      "name": "removeTextAnim",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 646,
+      "ownerTask": "T14",
+      "status": "planned",
+      "acceptanceId": "mutation:removeTextAnim"
+    },
+    {
+      "name": "updateMetadata",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 649,
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "mutation:updateMetadata"
+    },
+    {
+      "name": "updateSiteConfig",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 651,
+      "ownerTask": "T06",
+      "status": "planned",
+      "acceptanceId": "mutation:updateSiteConfig"
+    },
+    {
+      "name": "writeFile",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 654,
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "mutation:writeFile"
+    },
+    {
+      "name": "deleteFile",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 656,
+      "ownerTask": "T20",
+      "status": "planned",
+      "acceptanceId": "mutation:deleteFile"
+    },
+    {
+      "name": "wrapFitText",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 659,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:wrapFitText"
+    },
+    {
+      "name": "unwrapFitText",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 661,
+      "ownerTask": "T08",
+      "status": "planned",
+      "acceptanceId": "mutation:unwrapFitText"
+    },
+    {
+      "name": "updatePseudoStyle",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 664,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:updatePseudoStyle"
+    },
+    {
+      "name": "removePseudo",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 666,
+      "ownerTask": "T07",
+      "status": "planned",
+      "acceptanceId": "mutation:removePseudo"
+    },
+    {
+      "name": "updateSelectCaretRule",
+      "file": "src/code/mutation/mutation-queue.ts",
+      "line": 671,
+      "ownerTask": "T19",
+      "status": "planned",
+      "acceptanceId": "mutation:updateSelectCaretRule"
+    }
+  ],
+  "sdkMethods": [
+    {
+      "name": "animations.listKeyframes",
+      "file": "src/plugins/sdk-impl/animations.ts",
+      "line": 12,
+      "ownerTask": "T14",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "animations.listGsap",
+      "file": "src/plugins/sdk-impl/animations.ts",
+      "line": 20,
+      "ownerTask": "T14",
+      "classification": "retired-sdk-compatibility",
+      "status": "planned"
+    },
+    {
+      "name": "assets.addImage",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 83,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.addSvg",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 103,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.uploadImage",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 168,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.fetchImage",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 189,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.uploadImages",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 201,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.uploadFile",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 221,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.uploadFiles",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 233,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.setImage",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 260,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "assets.pickVideo",
+      "file": "src/plugins/sdk-impl/assets.ts",
+      "line": 279,
+      "ownerTask": "T12",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getSelection",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 71,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.setSelection",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 72,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getNode",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 82,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getRect",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 87,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getParent",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 97,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getChildren",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 102,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getNodesWithType",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 109,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.getNodesWithAttribute",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 119,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.setAttributes",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 166,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.removeNode",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 182,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.addNode",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 190,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.cloneNode",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 208,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.setParent",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 226,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "canvas.zoomIntoView",
+      "file": "src/plugins/sdk-impl/canvas.ts",
+      "line": 240,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getCollections",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 105,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getActiveCollection",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 113,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getActiveManagedCollection",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 120,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getManagedCollections",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 131,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.createCollection",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 142,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.createManagedCollection",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 152,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getFields",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 164,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.addFields",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 171,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.removeFields",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 208,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.setFieldOrder",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 222,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.getItems",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 237,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.addItems",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 243,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.removeItems",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 282,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "cms.setItemOrder",
+      "file": "src/plugins/sdk-impl/cms.ts",
+      "line": 292,
+      "ownerTask": "T16",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.list",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 55,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.get",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 70,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.setContent",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 84,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.create",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 94,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.remove",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 117,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.rename",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 124,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "codeFiles.navigateTo",
+      "file": "src/plugins/sdk-impl/code-files.ts",
+      "line": 149,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.list",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 33,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.get",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 37,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.createDesign",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 45,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.addInstance",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 69,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.addDetachedComponentLayers",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 119,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "components.createCode",
+      "file": "src/plugins/sdk-impl/components.ts",
+      "line": 124,
+      "ownerTask": "T09",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "customCode.getCustomCode",
+      "file": "src/plugins/sdk-impl/custom-code.ts",
+      "line": 36,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "customCode.setCustomCode",
+      "file": "src/plugins/sdk-impl/custom-code.ts",
+      "line": 37,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "fonts.getFonts",
+      "file": "src/plugins/sdk-impl/fonts.ts",
+      "line": 29,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "fonts.getFont",
+      "file": "src/plugins/sdk-impl/fonts.ts",
+      "line": 30,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "localization.getLocales",
+      "file": "src/plugins/sdk-impl/localization.ts",
+      "line": 54,
+      "ownerTask": "T18",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "localization.getActiveLocale",
+      "file": "src/plugins/sdk-impl/localization.ts",
+      "line": 58,
+      "ownerTask": "T18",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "localization.getDefaultLocale",
+      "file": "src/plugins/sdk-impl/localization.ts",
+      "line": 66,
+      "ownerTask": "T18",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "localization.getLocalizationGroups",
+      "file": "src/plugins/sdk-impl/localization.ts",
+      "line": 74,
+      "ownerTask": "T18",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "localization.setLocalizationData",
+      "file": "src/plugins/sdk-impl/localization.ts",
+      "line": 120,
+      "ownerTask": "T18",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "mode.current",
+      "file": "src/plugins/sdk-impl/meta.ts",
+      "line": 14,
+      "ownerTask": "T01",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "user.getCurrentUser",
+      "file": "src/plugins/sdk-impl/meta.ts",
+      "line": 19,
+      "ownerTask": "T01",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "project.getProjectInfo",
+      "file": "src/plugins/sdk-impl/meta.ts",
+      "line": 25,
+      "ownerTask": "T01",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "project.getPublishInfo",
+      "file": "src/plugins/sdk-impl/meta.ts",
+      "line": 30,
+      "ownerTask": "T01",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "fetch",
+      "file": "src/plugins/sdk-impl/network.ts",
+      "line": 32,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pages.list",
+      "file": "src/plugins/sdk-impl/pages.ts",
+      "line": 26,
+      "ownerTask": "T06",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pages.getActive",
+      "file": "src/plugins/sdk-impl/pages.ts",
+      "line": 33,
+      "ownerTask": "T06",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pages.create",
+      "file": "src/plugins/sdk-impl/pages.ts",
+      "line": 38,
+      "ownerTask": "T06",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pages.switch",
+      "file": "src/plugins/sdk-impl/pages.ts",
+      "line": 50,
+      "ownerTask": "T06",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "permissions.isAllowedTo",
+      "file": "src/plugins/sdk-impl/permissions.ts",
+      "line": 16,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pluginData.get",
+      "file": "src/plugins/sdk-impl/plugin-data.ts",
+      "line": 31,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pluginData.set",
+      "file": "src/plugins/sdk-impl/plugin-data.ts",
+      "line": 37,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pluginData.delete",
+      "file": "src/plugins/sdk-impl/plugin-data.ts",
+      "line": 46,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "pluginData.keys",
+      "file": "src/plugins/sdk-impl/plugin-data.ts",
+      "line": 53,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.listColorTokens",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 59,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.listTextTokens",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 61,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.addColorToken",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 64,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.addTextToken",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 83,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.createFolder",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 98,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "presets.moveToFolder",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 109,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.getColorStyles",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 122,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.getTextStyles",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 124,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.getColorStyle",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 127,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.getTextStyle",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 134,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.createColorStyle",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 141,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "styles.createTextStyle",
+      "file": "src/plugins/sdk-impl/presets.ts",
+      "line": 157,
+      "ownerTask": "T08",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "redirects.list",
+      "file": "src/plugins/sdk-impl/redirects.ts",
+      "line": 47,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "redirects.add",
+      "file": "src/plugins/sdk-impl/redirects.ts",
+      "line": 48,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "redirects.remove",
+      "file": "src/plugins/sdk-impl/redirects.ts",
+      "line": 70,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "redirects.setOrder",
+      "file": "src/plugins/sdk-impl/redirects.ts",
+      "line": 77,
+      "ownerTask": "T20",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "secrets.request",
+      "file": "src/plugins/sdk-impl/secrets.ts",
+      "line": 56,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "secrets.use",
+      "file": "src/plugins/sdk-impl/secrets.ts",
+      "line": 67,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "secrets.list",
+      "file": "src/plugins/sdk-impl/secrets.ts",
+      "line": 75,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "secrets.revoke",
+      "file": "src/plugins/sdk-impl/secrets.ts",
+      "line": 85,
+      "ownerTask": "T22",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "sketches.list",
+      "file": "src/plugins/sdk-impl/sketches.ts",
+      "line": 11,
+      "ownerTask": "T13",
+      "classification": "retired-sdk-compatibility",
+      "status": "planned"
+    },
+    {
+      "name": "sketches.addVariant",
+      "file": "src/plugins/sdk-impl/sketches.ts",
+      "line": 12,
+      "ownerTask": "T13",
+      "classification": "retired-sdk-compatibility",
+      "status": "planned"
+    },
+    {
+      "name": "text.getText",
+      "file": "src/plugins/sdk-impl/text.ts",
+      "line": 18,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "text.setText",
+      "file": "src/plugins/sdk-impl/text.ts",
+      "line": 25,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "text.addText",
+      "file": "src/plugins/sdk-impl/text.ts",
+      "line": 35,
+      "ownerTask": "T07",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "ui.show",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 22,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.hide",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 23,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.resize",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 24,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.notify",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 44,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.closePlugin",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 52,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.setBackgroundMessage",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 66,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.setCloseWarning",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 77,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.setMenu",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 95,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "ui.showContextMenu",
+      "file": "src/plugins/sdk-impl/ui.ts",
+      "line": 107,
+      "ownerTask": "T22",
+      "classification": "editor-ui-adapter",
+      "status": "planned"
+    },
+    {
+      "name": "variables.list",
+      "file": "src/plugins/sdk-impl/variables.ts",
+      "line": 22,
+      "ownerTask": "T15",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "variables.get",
+      "file": "src/plugins/sdk-impl/variables.ts",
+      "line": 38,
+      "ownerTask": "T15",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "variables.set",
+      "file": "src/plugins/sdk-impl/variables.ts",
+      "line": 45,
+      "ownerTask": "T15",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "vectors.list",
+      "file": "src/plugins/sdk-impl/vectors.ts",
+      "line": 12,
+      "ownerTask": "T13",
+      "classification": "product-capability",
+      "status": "planned"
+    },
+    {
+      "name": "vectors.addVariant",
+      "file": "src/plugins/sdk-impl/vectors.ts",
+      "line": 27,
+      "ownerTask": "T13",
+      "classification": "product-capability",
+      "status": "planned"
+    }
+  ],
+  "legacyPublicTools": [
+    {
+      "legacyName": "revyme_get_context",
+      "file": "server/mcp-bridge.ts",
+      "line": 396,
+      "ownerTask": "T01",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_inspect_node",
+      "file": "server/mcp-bridge.ts",
+      "line": 405,
+      "ownerTask": "T07",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_search_project",
+      "file": "server/mcp-bridge.ts",
+      "line": 417,
+      "ownerTask": "T20",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_audit_design",
+      "file": "server/mcp-bridge.ts",
+      "line": 430,
+      "ownerTask": "T24",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_capture_screenshot",
+      "file": "server/mcp-bridge.ts",
+      "line": 442,
+      "ownerTask": "T24",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_help",
+      "file": "server/mcp-bridge.ts",
+      "line": 467,
+      "ownerTask": "T01",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_read_file",
+      "file": "server/mcp-bridge.ts",
+      "line": 486,
+      "ownerTask": "T20",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_list_files",
+      "file": "server/mcp-bridge.ts",
+      "line": 497,
+      "ownerTask": "T20",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_submit_files",
+      "file": "server/mcp-bridge.ts",
+      "line": 505,
+      "ownerTask": "T20",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_upload_image",
+      "file": "server/mcp-bridge.ts",
+      "line": 529,
+      "ownerTask": "T12",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_manage_presets",
+      "file": "server/mcp-bridge.ts",
+      "line": 543,
+      "ownerTask": "T08",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_apply_typography_preset",
+      "file": "server/mcp-bridge.ts",
+      "line": 584,
+      "ownerTask": "T08",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_manage_cms",
+      "file": "server/mcp-bridge.ts",
+      "line": 600,
+      "ownerTask": "T16",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_bind_expression",
+      "file": "server/mcp-bridge.ts",
+      "line": 677,
+      "ownerTask": "T15",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_insert_fragment",
+      "file": "server/mcp-bridge.ts",
+      "line": 691,
+      "ownerTask": "T07",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_insert_section",
+      "file": "server/mcp-bridge.ts",
+      "line": 730,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_create_navbar",
+      "file": "server/mcp-bridge.ts",
+      "line": 748,
+      "ownerTask": "T10",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_apply_motion_preset",
+      "file": "server/mcp-bridge.ts",
+      "line": 780,
+      "ownerTask": "T14",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_manage_component_variant",
+      "file": "server/mcp-bridge.ts",
+      "line": 818,
+      "ownerTask": "T10",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_list_built_in_components",
+      "file": "server/mcp-bridge.ts",
+      "line": 844,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_add_built_in_component",
+      "file": "server/mcp-bridge.ts",
+      "line": 855,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_set_responsive_styles",
+      "file": "server/mcp-bridge.ts",
+      "line": 869,
+      "ownerTask": "T07",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_add_component_instance",
+      "file": "server/mcp-bridge.ts",
+      "line": 884,
+      "ownerTask": "T09",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_set_variant",
+      "file": "server/mcp-bridge.ts",
+      "line": 915,
+      "ownerTask": "T10",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_show_variant",
+      "file": "server/mcp-bridge.ts",
+      "line": 946,
+      "ownerTask": "T10",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_add_connection",
+      "file": "server/mcp-bridge.ts",
+      "line": 973,
+      "ownerTask": "T10",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_open_editor",
+      "file": "server/mcp-bridge.ts",
+      "line": 1009,
+      "ownerTask": "T24",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_add_canvas_node",
+      "file": "server/mcp-bridge.ts",
+      "line": 1031,
+      "ownerTask": "T07",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_connect_slot",
+      "file": "server/mcp-bridge.ts",
+      "line": 1052,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_get_slots",
+      "file": "server/mcp-bridge.ts",
+      "line": 1065,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_disconnect_slot",
+      "file": "server/mcp-bridge.ts",
+      "line": 1077,
+      "ownerTask": "T11",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_agent_tool",
+      "file": "server/mcp-bridge.ts",
+      "line": 1090,
+      "ownerTask": "T03",
+      "status": "planned"
+    },
+    {
+      "legacyName": "revyme_agent_manifest",
+      "file": "server/mcp-bridge.ts",
+      "line": 1109,
+      "ownerTask": "T01",
+      "status": "planned"
+    }
+  ],
+  "bridgeMethods": [
+    {
+      "name": "getContext",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 107,
+      "ownerTask": "T01",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "listFiles",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 184,
+      "ownerTask": "T20",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "searchProject",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 191,
+      "ownerTask": "T20",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "uploadImage",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 228,
+      "ownerTask": "T12",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "managePresets",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 253,
+      "ownerTask": "T08",
+      "actions": [
+        "list",
+        "remove",
+        "set",
+        "set_typography"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "manageTranslations",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 375,
+      "ownerTask": "T18",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "manageCms",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 475,
+      "ownerTask": "T16",
+      "actions": [
+        "add_field",
+        "add_item",
+        "bind_expression",
+        "bind_field",
+        "bind_list",
+        "bind_prop",
+        "configure_api_collection",
+        "create_collection",
+        "create_page",
+        "create_pages",
+        "create_template",
+        "delete_collection",
+        "get_api_collection",
+        "get_collection",
+        "get_mode",
+        "list_collections",
+        "remove_api_collection",
+        "remove_field",
+        "remove_item",
+        "rename_collection",
+        "set_item_translation",
+        "set_list_config",
+        "set_list_query",
+        "set_mode",
+        "set_pagination",
+        "unbind_expression",
+        "unbind_field",
+        "update_field",
+        "update_item"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "modifyFile",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 926,
+      "ownerTask": "T20",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "readFile",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 936,
+      "ownerTask": "T20",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "publishListing",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 955,
+      "ownerTask": "T22",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "insertMarketplaceComponent",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 1085,
+      "ownerTask": "T22",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "createIconSet",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 1162,
+      "ownerTask": "T13",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "saveDebugTrace",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 1198,
+      "ownerTask": "T24",
+      "actions": [],
+      "status": "planned"
+    },
+    {
+      "name": "submitFiles",
+      "file": "src/ai/mcp/bridge-client.ts",
+      "line": 1203,
+      "ownerTask": "T20",
+      "actions": [],
+      "status": "planned"
+    }
+  ]
+}

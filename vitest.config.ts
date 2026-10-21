@@ -20,6 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': '/src',
+      '@revyme/automation-core': path.resolve(__dirname, 'packages/automation-core/src'),
     },
     // Force a single copy of React / framer-motion / runtime — when a linked
     // package (`@revyme/runtime`) imports `react`, Vite would otherwise
@@ -32,7 +33,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}'],
     exclude: [
       '**/node_modules/**', '**/dist/**',
       ...(HAS_RUNTIME_SRC ? [] : RUNTIME_DEPENDENT_TESTS),

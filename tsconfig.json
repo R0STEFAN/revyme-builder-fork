@@ -11,10 +11,12 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@revyme/automation-core": ["packages/automation-core/src/index.ts"],
+      "@revyme/automation-core/*": ["packages/automation-core/src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "packages/*/src", "packages/*/test"],
   // Both files import `@revyme/runtime`'s SOURCE from a SIBLING repository
   // (`../../../runtime/src`). A standalone checkout of this repo has no such
   // sibling, so `tsc --noEmit` failed with "Cannot find module" in CI. They are

@@ -6,7 +6,8 @@ debug-trace.json
 debug-code.jsx
 debug_output/
 data/
-scripts/
+scripts/*
+!scripts/automation-inventory.cjs
 
 # generated / local
 debug-code-before.jsx
@@ -28,6 +29,8 @@ lessons/
 docs/*
 !docs/readme/
 !docs/*.md
+!docs/automation/
+!docs/superpowers/
 plans/
 todo/
 refactor-plan/
