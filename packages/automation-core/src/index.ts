@@ -19,5 +19,7 @@ export * from './operations/layout';
 export * from './operations/styles';
 export * from './operations/text';
 export * from './operations/viewports';
-
-
+export * from './operations/tokens';
+export * from './operations/presets';
+export * from './operations/typography';
+export * from './operations/fonts';
