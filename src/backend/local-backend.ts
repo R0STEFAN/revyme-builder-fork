@@ -5,6 +5,7 @@ import type { ProjectBackend, ProjectData, ProjectSaveMeta, RevymeUser, Workspac
 import { isKnownProjectFormat } from './types';
 import { trace } from '@/shared/debug-trace';
 import { getProjectId } from './project-id';
+import { getBaseRevision, noteSaved, setLoadedRevision } from './save-revision';
 
 const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
@@ -117,6 +118,7 @@ export class LocalBackend implements ProjectBackend {
       return local.data;
     }
     if (server) {
+      setLoadedRevision(server.revision);
       trace.action('backend:load-project', { id, source: 'server', fileCount: Object.keys(server.data.files).length });
       return server.data;
     }
@@ -179,6 +181,7 @@ export class LocalBackend implements ProjectBackend {
       try {
         let name: string | undefined;
         try { name = localStorage.getItem(NAME_PREFIX + id) || undefined; } catch { /* optional cached name */ }
+        const baseRev = getBaseRevision();
         const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -189,9 +192,21 @@ export class LocalBackend implements ProjectBackend {
             label: meta?.label,
             branchId: meta?.branchId,
             changesSummary: meta?.changesSummary,
+            baseRevision: baseRev ?? undefined,
           }),
         });
+        if (res.status === 409) {
+          const conflictData = await res.json().catch(() => ({}));
+          const conflictErr: any = new Error(conflictData.error || 'Revision conflict: project modified elsewhere');
+          conflictErr.code = 'REVISION_CONFLICT';
+          conflictErr.status = 409;
+          throw conflictErr;
+        }
         if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+        const responseJson = await res.json().catch(() => null);
+        if (responseJson?.project?.revision) {
+          noteSaved(responseJson.project.revision);
+        }
         if (localSaved) {
           try { localStorage.setItem(key, JSON.stringify(serverData)); } catch { /* recovery flag may outlive a successful PUT */ }
         }

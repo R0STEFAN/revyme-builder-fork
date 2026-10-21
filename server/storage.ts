@@ -31,6 +31,7 @@ export interface ProjectRecord {
   data: any;
   folderId?: string | null;
   previewImage?: string | null;
+  revision?: number;
 }
 
 export interface ProjectVersionSummary {
@@ -149,7 +150,8 @@ export function saveProject(
   name?: string,
   customRoot?: string,
   folderId?: string | null,
-  previewImage?: string | null
+  previewImage?: string | null,
+  baseRevision?: number | null
 ): ProjectRecord {
   const { projectsDir } = getDataDirs(customRoot);
   const safeId = sanitizeId(id);
@@ -159,6 +161,7 @@ export function saveProject(
   let existingName = 'Untitled Website';
   let existingFolderId: string | null = null;
   let existingPreviewImage: string | null = null;
+  let existingRevision = 1;
 
   if (fs.existsSync(filePath)) {
     try {
@@ -167,8 +170,20 @@ export function saveProject(
       if (existing.name) existingName = existing.name;
       if (existing.folderId !== undefined) existingFolderId = existing.folderId;
       if (existing.previewImage !== undefined) existingPreviewImage = existing.previewImage;
+      if (typeof existing.revision === 'number') existingRevision = existing.revision;
     } catch {
       // ignore read error on overwrite
+    }
+  }
+
+  if (baseRevision !== undefined && baseRevision !== null) {
+    if (baseRevision !== existingRevision) {
+      const err: any = new Error(
+        `REVISION_CONFLICT: Base revision ${baseRevision} does not match current server revision ${existingRevision}`
+      );
+      err.code = 'REVISION_CONFLICT';
+      err.status = 409;
+      throw err;
     }
   }
 
@@ -177,6 +192,7 @@ export function saveProject(
   const finalPreviewImage = previewImage !== undefined ? previewImage : existingPreviewImage;
   const fileCount = data?.files ? Object.keys(data.files).length : 0;
   const updatedAt = Date.now();
+  const nextRevision = existingRevision + 1;
 
   const record: ProjectRecord = {
     id: safeId,
@@ -187,6 +203,7 @@ export function saveProject(
     data,
     folderId: finalFolderId,
     previewImage: finalPreviewImage,
+    revision: nextRevision,
   };
 
   // Atomic write via temp file

@@ -29,6 +29,7 @@ import {
 } from './storage';
 import { LocalServerManager, localServerManager } from './local-server';
 import { McpBridge, mcpBridge as defaultMcpBridge } from './mcp-bridge';
+import { createAutomationMiddleware } from './automation/api';
 
 
 
@@ -130,6 +131,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
 
   const setupMiddlewares = (middlewares: any) => {
     middlewares.use(bridge.middleware());
+    middlewares.use(createAutomationMiddleware());
     middlewares.use(async (req: any, res: any, next: any) => {
 
       const url = req.url || '';
@@ -826,7 +828,8 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
               name !== undefined ? name : current.name,
               undefined,
               folderId !== undefined ? folderId : current.folderId,
-              previewImage !== undefined ? previewImage : current.previewImage
+              previewImage !== undefined ? previewImage : current.previewImage,
+              body.baseRevision
             );
             const verData = data !== undefined ? data : current.data;
             if (verData && verData.files) {
@@ -839,7 +842,8 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
             }
             return sendJson(res, 200, { success: true, project: saved });
           } catch (err: any) {
-            return sendJson(res, 500, { error: err.message || 'Failed to save project' });
+            const status = err.status === 409 || err.code === 'REVISION_CONFLICT' ? 409 : 500;
+            return sendJson(res, status, { error: err.message || 'Failed to save project', code: err.code });
           }
         }
 
