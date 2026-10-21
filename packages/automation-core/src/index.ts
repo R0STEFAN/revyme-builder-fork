@@ -14,4 +14,10 @@ export * from './ingestion/jsx';
 export * from './operations/pages';
 export * from './operations/templates';
 export * from './operations/metadata';
+export * from './operations/nodes';
+export * from './operations/layout';
+export * from './operations/styles';
+export * from './operations/text';
+export * from './operations/viewports';
+
 
