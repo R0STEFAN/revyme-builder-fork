@@ -237,6 +237,10 @@ export function connectSlotInCode(code: string, componentId: string, canvasNodeI
       && c.expression.type === 'Identifier'
       && c.expression.name === constName);
     if (!already) {
+      if (comp.openingElement.selfClosing) {
+        comp.openingElement.selfClosing = false;
+        comp.closingElement = t.jsxClosingElement(t.cloneNode(comp.openingElement.name, true));
+      }
       comp.children.push(t.jsxExpressionContainer(t.identifier(constName)));
     }
   });
@@ -340,6 +344,33 @@ export function reorderSlotInCode(
   });
   return generate(ast).code;
 }
+
+export function reorderSlotConnectionsInCode(
+  code: string,
+  componentId: string,
+  orderedIds: string[],
+): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+  const constToId = buildConstToIdMap(ast);
+  const idToConst = new Map<string, string>();
+  for (const [k, v] of constToId.entries()) idToConst.set(v, k);
+
+  findFirstElementByDataId(ast, componentId, (_path, comp) => {
+    const slotContainers: t.JSXExpressionContainer[] = [];
+    for (const id of orderedIds) {
+      const cName = idToConst.get(id) ?? slotConstName(id);
+      slotContainers.push(t.jsxExpressionContainer(t.identifier(cName)));
+    }
+    const nonSlotChildren = comp.children.filter(c =>
+      !(c.type === 'JSXExpressionContainer'
+        && c.expression.type === 'Identifier'
+        && (c.expression.name.startsWith('cn_') || constToId.has(c.expression.name))));
+    comp.children = [...slotContainers, ...nonSlotChildren];
+  });
+  return generate(ast).code;
+}
+
 
 /** Map every `const cn_… = (<jsx data-id=…/>)` declaration → its data-id. */
 function buildConstToIdMap(ast: t.File): Map<string, string> {

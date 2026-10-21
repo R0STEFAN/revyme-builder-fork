@@ -29,4 +29,7 @@ export * from './operations/variants';
 export * from './operations/connections';
 export * from './operations/overlays';
 export * from './operations/links';
+export * from './operations/catalog';
+export * from './operations/sections';
+export * from './operations/slots';
 
