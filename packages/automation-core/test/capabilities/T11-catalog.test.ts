@@ -1,6 +1,7 @@
 // packages/automation-core/test/capabilities/T11-catalog.test.ts
 import { describe, it, expect } from 'vitest';
-import type { Snapshot, ExecutionContext, FileChange } from '../../src/contracts';
+import type { Snapshot, FileChange } from '../../src/contracts';
+import { createSnapshot, createOperationContext } from '../../src/session';
 import {
   catalogListOperation,
   catalogGetOperation,
@@ -19,17 +20,10 @@ import {
 } from '../../src/operations/slots';
 
 function createMockSnapshot(files: Record<string, string>): Snapshot {
-  return {
-    projectId: 'test-project',
-    branchId: 'main',
-    revision: 'rev-0',
-    files: new Map(Object.entries(files)),
-  };
+  return createSnapshot({ projectId: 'test-project', branchId: 'main' }, 0, files);
 }
 
-const mockContext: ExecutionContext = {
-  createId: (prefix = 'node') => `${prefix}-${Math.random().toString(36).slice(2, 7)}`,
-};
+const mockContext = createOperationContext();
 
 function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
   for (const c of changes) {

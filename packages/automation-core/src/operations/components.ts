@@ -425,17 +425,19 @@ export const componentsDetachOperation: Operation<
     let inlinedJsx: string | null = null;
     try {
       const ast = parseJSX(masterCode);
-      traverse(ast, {
-        ReturnStatement(path) {
-          if (path.node.argument && !inlinedJsx) {
-            const start = path.node.argument.start;
-            const end = path.node.argument.end;
-            if (typeof start === 'number' && typeof end === 'number') {
-              inlinedJsx = masterCode.slice(start, end).trim();
+      if (ast) {
+        traverse(ast, {
+          ReturnStatement(path) {
+            if (path.node.argument && !inlinedJsx) {
+              const start = path.node.argument.start;
+              const end = path.node.argument.end;
+              if (typeof start === 'number' && typeof end === 'number') {
+                inlinedJsx = masterCode.slice(start, end).trim();
+              }
             }
-          }
-        },
-      });
+          },
+        });
+      }
     } catch {
       // fallback
     }

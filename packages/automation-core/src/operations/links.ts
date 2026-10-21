@@ -65,9 +65,16 @@ export const linksGetOperation: Operation<
     const relAttr = readTagAttr(tagStr, 'rel');
     const prefetchAttr = readTagAttr(tagStr, 'prefetch');
 
-    const url = hrefAttr ? (hrefAttr.kind === 'string' ? hrefAttr.text : hrefAttr.source) : null;
-    const target = targetAttr ? (targetAttr.kind === 'string' ? targetAttr.text : targetAttr.source) : null;
-    const rel = relAttr ? (relAttr.kind === 'string' ? relAttr.text : relAttr.source) : null;
+    const attrToString = (attr: ReturnType<typeof readTagAttr>): string | null => {
+      if (!attr) return null;
+      if (attr.kind === 'string') return attr.text;
+      if (attr.kind === 'expr') return attr.source;
+      return '';
+    };
+
+    const url = attrToString(hrefAttr);
+    const target = attrToString(targetAttr);
+    const rel = attrToString(relAttr);
     const prefetch = prefetchAttr
       ? prefetchAttr.kind === 'expr'
         ? prefetchAttr.source === 'true'

@@ -211,7 +211,12 @@ export const overlaysCloseOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found in project`);
     }
 
-    const trigger = input.trigger ?? 'click';
+    const triggerMap: Record<string, 'click' | 'mouseEnter' | 'mouseLeave'> = {
+      click: 'click',
+      hover: 'mouseEnter',
+      tap: 'click',
+    };
+    const trigger = triggerMap[input.trigger ?? 'click'] ?? 'click';
     let nextCode = addCloseOverlayInCode(
       code,
       input.nodeId,
