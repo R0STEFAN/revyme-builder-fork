@@ -25,3 +25,8 @@ export * from './operations/typography';
 export * from './operations/fonts';
 export * from './operations/components';
 export * from './operations/component-props';
+export * from './operations/variants';
+export * from './operations/connections';
+export * from './operations/overlays';
+export * from './operations/links';
+

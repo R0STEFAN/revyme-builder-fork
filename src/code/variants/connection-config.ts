@@ -217,7 +217,7 @@ export function removeConnection(
  * `initialVariant ===`). Factored out of `removeConnection` so the
  * node-delete path can reuse it without `modifyProjectFile`.
  */
-function rebuildConnections(code: string, connections: Connection[]): string {
+export function rebuildConnections(code: string, connections: Connection[]): string {
   const serialized = serializeConnections(connections);
   let updated = replaceConnectionsInCode(code, serialized);
 
@@ -1047,3 +1047,49 @@ function scanTagEnd(code: string, i: number): number {
   }
   return -1;
 }
+
+export function addConnectionToCode(
+  code: string,
+  from: string,
+  to: string,
+  trigger: ConnectionTrigger,
+  delay?: number,
+  sourceNode?: string,
+): { code: string; connections: Connection[] } {
+  const connections = parseConnections(code);
+  if (connections.some(c =>
+    c.from === from && c.to === to && c.trigger === trigger
+    && (c.sourceNode ?? null) === (sourceNode ?? null)
+  )) {
+    return { code, connections };
+  }
+
+  const newConnection: Connection = { from, to, trigger };
+  if (delay) newConnection.delay = delay;
+  if (sourceNode) newConnection.sourceNode = sourceNode;
+  connections.push(newConnection);
+
+  const serialized = serializeConnections(connections);
+  let updated = replaceConnectionsInCode(code, serialized);
+  updated = generateConnectionCode(updated, connections);
+  return { code: updated, connections };
+}
+
+export function removeConnectionFromCode(
+  code: string,
+  from: string,
+  to: string,
+  match?: { trigger?: ConnectionTrigger; sourceNode?: string | null },
+): { code: string; connections: Connection[] } {
+  const matches = (c: Connection): boolean => {
+    if (c.from !== from || c.to !== to) return false;
+    if (!match) return true;
+    if (match.trigger !== undefined && c.trigger !== match.trigger) return false;
+    if (match.sourceNode !== undefined && (c.sourceNode ?? null) !== match.sourceNode) return false;
+    return true;
+  };
+  const connections = parseConnections(code).filter(c => !matches(c));
+  const updated = rebuildConnections(code, connections);
+  return { code: updated, connections };
+}
+

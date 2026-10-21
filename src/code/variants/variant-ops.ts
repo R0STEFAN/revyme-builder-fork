@@ -927,3 +927,39 @@ export function addVariantToCode(
   updated = cascadeConditionalTernariesForNewVariant(updated, name, effectiveSource);
   return { code: updated, configs };
 }
+
+export function removeVariantFromCode(
+  code: string,
+  variantName: string,
+): { code: string; configs: VariantConfig[] } {
+  const configs = parseVariantConfig(code);
+  const target = configs.find(v => v.name === variantName);
+  if (!target || target.isPrimary) return { code, configs };
+
+  const result = configs.filter(v => v.name !== variantName);
+  let updated = replaceVariantConfigInCode(code, result);
+  updated = removeVariantKeyFromAllObjects(updated, variantName);
+  updated = removeConnectionsForVariantInCode(updated, variantName);
+  updated = removeVariantBranchFromConditionalTernaries(updated, variantName);
+  updated = cascadeVisibilityForRemovedVariant(updated, result.map(v => v.name));
+  updated = ensureRootPerfIsolation(updated);
+  return { code: updated, configs: result };
+}
+
+export function renameVariantInCode(
+  code: string,
+  variantName: string,
+  newLabel: string,
+): { code: string; configs: VariantConfig[] } {
+  const configs = parseVariantConfig(code);
+  const target = configs.find(v => v.name === variantName);
+  if (!target) return { code, configs };
+
+  const trimmed = newLabel.trim();
+  if (!trimmed || trimmed === target.label) return { code, configs };
+
+  target.label = trimmed;
+  const updated = replaceVariantConfigInCode(code, configs);
+  return { code: updated, configs };
+}
+
