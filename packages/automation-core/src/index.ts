@@ -64,3 +64,6 @@ export * from './operations/history';
 export * from './operations/folders';
 export * from './operations/comments';
 export * from './operations/guides';
+export * from './operations/plugins';
+export * from './operations/marketplace';
+export * from './operations/project-skills';
