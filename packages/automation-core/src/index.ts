@@ -67,3 +67,5 @@ export * from './operations/guides';
 export * from './operations/plugins';
 export * from './operations/marketplace';
 export * from './operations/project-skills';
+export * from './operations/export';
+export * from './operations/publish';
