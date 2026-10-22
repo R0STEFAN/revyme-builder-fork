@@ -141,7 +141,10 @@ export function redactUrl(urlStr: string): string {
   try {
     const isAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(urlStr);
     const urlObj = new URL(urlStr, 'http://localhost');
-    const sensitiveParam = /^(key|token|secret|auth|password|apikey|access_token|api_key)$/i;
+    if (urlObj.password) {
+      urlObj.password = '[REDACTED]';
+    }
+    const sensitiveParam = /(?:key|token|secret|auth|password|pwd|api[-_]?key|client[-_]?secret|access[-_]?token)/i;
     for (const [k] of Array.from(urlObj.searchParams.entries())) {
       if (sensitiveParam.test(k)) {
         urlObj.searchParams.set(k, '[REDACTED]');
@@ -157,7 +160,7 @@ export function redactUrl(urlStr: string): string {
 /** Redact sensitive headers (Authorization, Api-Key, Tokens, Cookies) */
 export function redactHeaders(headers: Record<string, string>): Record<string, string> {
   const result: Record<string, string> = {};
-  const sensitiveHeader = /(auth|token|secret|key|cookie)/i;
+  const sensitiveHeader = /(?:authorization|bearer|token|secret|key|cookie|password)/i;
   for (const [k, v] of Object.entries(headers)) {
     if (sensitiveHeader.test(k)) {
       if (/^bearer\s+/i.test(v)) {
@@ -259,10 +262,10 @@ export const cmsApiCollectionGetOperation: Operation<
   }),
   async execute(snapshot, input) {
     const config = readCmsApiConfig(snapshot);
-    const collection = config.apiCollections[input.slug];
-    if (!collection) {
+    if (!Object.prototype.hasOwnProperty.call(config.apiCollections, input.slug)) {
       throw new Error(`Collection "${input.slug}" not found`);
     }
+    const collection = config.apiCollections[input.slug];
     trace.fn('cms-api:collection:get', { slug: input.slug });
     return { collection };
   },
@@ -355,7 +358,7 @@ export const cmsApiCollectionDeleteOperation: Operation<
   }),
   async execute(snapshot, input) {
     const config = readCmsApiConfig(snapshot);
-    if (!config.apiCollections[input.slug]) {
+    if (!Object.prototype.hasOwnProperty.call(config.apiCollections, input.slug)) {
       throw new Error(`Collection "${input.slug}" not found`);
     }
     delete config.apiCollections[input.slug];
@@ -436,10 +439,10 @@ export const cmsApiFetchOperation: Operation<
   }) as any,
   async execute(snapshot, input, context) {
     const config = readCmsApiConfig(snapshot);
-    const collection = config.apiCollections[input.slug];
-    if (!collection) {
+    if (!Object.prototype.hasOwnProperty.call(config.apiCollections, input.slug)) {
       throw new Error(`Collection "${input.slug}" not found`);
     }
+    const collection = config.apiCollections[input.slug];
 
     const resolvedHeaders = resolveEnvHeaders(collection.headers, input.envVars);
     const redactedHeaders = redactHeaders(resolvedHeaders);

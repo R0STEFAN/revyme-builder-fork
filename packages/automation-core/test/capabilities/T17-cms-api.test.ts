@@ -15,6 +15,8 @@ import {
   cmsApiQueryConfigSetOperation,
   cmsApiSearchFieldAddOperation,
   cmsApiSearchFieldSetVariableOperation,
+  redactUrl,
+  redactHeaders,
 } from '../../src/operations/cms-api';
 import { projectFS } from '@/code/project/project-fs';
 import { CMS_API_CONFIG_PATH } from '@/code/project/cms-api-config';
@@ -412,6 +414,110 @@ describe('T17: External API CMS & Dynamic Search', () => {
       expect(fetchResult.url).not.toContain('secret_query_key_777');
     });
 
+    it('redacts basic auth password in URL, compound query parameters, and password headers', () => {
+      // 1. Basic auth password embedded in URL
+      const basicAuthUrl = 'https://admin:supersecretpassword@api.acme.com/items';
+      const redactedBasic = redactUrl(basicAuthUrl);
+      expect(redactedBasic).toBe('https://admin:[REDACTED]@api.acme.com/items');
+      expect(redactedBasic).not.toContain('supersecretpassword');
+
+      // 2. Compound / hyphenated / underscored query parameters
+      const compoundQueryUrl =
+        'https://api.acme.com/items?api-key=secret123&client_secret=secret456&auth_token=secret789&access-token=secret000&public=yes';
+      const redactedQuery = redactUrl(compoundQueryUrl);
+      expect(redactedQuery).toContain('api-key=[REDACTED]');
+      expect(redactedQuery).toContain('client_secret=[REDACTED]');
+      expect(redactedQuery).toContain('auth_token=[REDACTED]');
+      expect(redactedQuery).toContain('access-token=[REDACTED]');
+      expect(redactedQuery).toContain('public=yes');
+      expect(redactedQuery).not.toContain('secret123');
+      expect(redactedQuery).not.toContain('secret456');
+      expect(redactedQuery).not.toContain('secret789');
+      expect(redactedQuery).not.toContain('secret000');
+
+      // 3. Password and sensitive headers
+      const headers = {
+        'x-user-password': 'cleartext_user_password_xyz',
+        'X-App-Password': 'app_secret_password_abc',
+        'X-Custom-Secret': 'custom_secret_123',
+        'Authorization': 'Bearer secret-bearer-token',
+        'Content-Type': 'application/json',
+      };
+      const redacted = redactHeaders(headers);
+      expect(redacted['x-user-password']).toBe('[REDACTED]');
+      expect(redacted['X-App-Password']).toBe('[REDACTED]');
+      expect(redacted['X-Custom-Secret']).toBe('[REDACTED]');
+      expect(redacted['Authorization']).toBe('Bearer [REDACTED]');
+      expect(redacted['Content-Type']).toBe('application/json');
+      expect(redacted['x-user-password']).not.toContain('cleartext_user_password_xyz');
+    });
+
+    it('executes fetch with basic auth in URL, compound query params, and x-user-password header with full redaction', async () => {
+      let snap = createMockSnapshot({});
+      const mutableFiles = new Map<string, string>();
+
+      const setCol = await cmsApiCollectionSetOperation.execute(
+        snap,
+        {
+          slug: 'basic-auth-col',
+          name: 'Basic Auth Collection',
+          provider: 'custom_rest',
+          url: 'https://service-user:pass-phrase-987@api.acme.com/v1/data',
+          headers: {
+            'x-user-password': 'env:USER_PASSWORD_VAL',
+          },
+        },
+        mockContext,
+      );
+      applyChanges(mutableFiles, setCol.changes);
+      snap = createMockSnapshot(Object.fromEntries(mutableFiles));
+
+      let outgoingUrl = '';
+      let outgoingHeaders: Record<string, string> = {};
+
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        outgoingUrl = url;
+        outgoingHeaders = (init?.headers as Record<string, string>) || {};
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [{ id: '1' }] }),
+        };
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const fetchResult = await cmsApiFetchOperation.execute(
+        snap,
+        {
+          slug: 'basic-auth-col',
+          envVars: {
+            USER_PASSWORD_VAL: 'cleartext_user_password_123',
+          },
+          queryParams: {
+            'api-key': 'param_api_key_456',
+            'client_secret': 'oauth_client_secret_789',
+          },
+        },
+        mockContext,
+      );
+
+      // Verify outgoing request had real values
+      expect(outgoingUrl).toContain('service-user:pass-phrase-987@');
+      expect(outgoingUrl).toContain('api-key=param_api_key_456');
+      expect(outgoingUrl).toContain('client_secret=oauth_client_secret_789');
+      expect(outgoingHeaders['x-user-password']).toBe('cleartext_user_password_123');
+
+      // Verify result had all sensitive values redacted
+      expect(fetchResult.url).toContain('https://service-user:[REDACTED]@api.acme.com');
+      expect(fetchResult.url).toContain('api-key=[REDACTED]');
+      expect(fetchResult.url).toContain('client_secret=[REDACTED]');
+      expect(fetchResult.url).not.toContain('pass-phrase-987');
+      expect(fetchResult.url).not.toContain('param_api_key_456');
+      expect(fetchResult.url).not.toContain('oauth_client_secret_789');
+      expect(fetchResult.redactedHeaders['x-user-password']).toBe('[REDACTED]');
+      expect(fetchResult.redactedHeaders['x-user-password']).not.toContain('cleartext_user_password_123');
+    });
+
     it('returns honest failure status on HTTP 401 without returning fake success', async () => {
       let snap = createMockSnapshot({});
       const mutableFiles = new Map<string, string>();
@@ -670,6 +776,35 @@ describe('T17: External API CMS & Dynamic Search', () => {
       await expect(
         cmsApiCollectionDeleteOperation.execute(snap, { slug: 'non-existent' }, mockContext),
       ).rejects.toThrow('Collection "non-existent" not found');
+    });
+
+    it('rejects prototype property slugs like toString and constructor in collection get, delete, and fetch', async () => {
+      const snap = createMockSnapshot({});
+
+      // toString lookup in get
+      await expect(
+        cmsApiCollectionGetOperation.execute(snap, { slug: 'toString' }, mockContext),
+      ).rejects.toThrow('Collection "toString" not found');
+
+      // constructor lookup in get
+      await expect(
+        cmsApiCollectionGetOperation.execute(snap, { slug: 'constructor' }, mockContext),
+      ).rejects.toThrow('Collection "constructor" not found');
+
+      // toString lookup in delete
+      await expect(
+        cmsApiCollectionDeleteOperation.execute(snap, { slug: 'toString' }, mockContext),
+      ).rejects.toThrow('Collection "toString" not found');
+
+      // constructor lookup in delete
+      await expect(
+        cmsApiCollectionDeleteOperation.execute(snap, { slug: 'constructor' }, mockContext),
+      ).rejects.toThrow('Collection "constructor" not found');
+
+      // toString lookup in fetch
+      await expect(
+        cmsApiFetchOperation.execute(snap, { slug: 'toString' }, mockContext),
+      ).rejects.toThrow('Collection "toString" not found');
     });
 
     it('rejects invalid URL in collection.set', async () => {
