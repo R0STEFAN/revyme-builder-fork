@@ -365,7 +365,7 @@ export const foldersMoveItemOperation: Operation<FoldersMoveItemInput, FoldersMo
 
     const { storagePath, idPrefix } = KIND_CONFIG[kind];
     const config = loadFoldersConfigFile(storagePath);
-    const isFolder = itemId.startsWith(idPrefix);
+    const isFolder = itemId.startsWith(idPrefix) || config.folders.some((f) => f.id === itemId);
 
     // Cycle detection for folder move
     if (isFolder) {

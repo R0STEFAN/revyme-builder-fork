@@ -116,6 +116,10 @@ export const commentsCreateOperation: Operation<CommentsCreateInput, CommentsCre
   async execute(snapshot, input, context: OperationContext) {
     syncProjectSnapshotToProjectFS(snapshot);
 
+    if (!input.content || !input.content.trim()) {
+      throw new Error('VALIDATION_ERROR: Comment content must not be empty.');
+    }
+
     const targetFile = input.filePath.trim();
     if (projectFS.readFile(targetFile) === null) {
       throw new Error(`FILE_NOT_FOUND: Target file "${targetFile}" does not exist.`);

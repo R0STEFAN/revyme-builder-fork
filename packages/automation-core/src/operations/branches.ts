@@ -8,6 +8,7 @@ import { toBranchId } from '@/code/stores/branch-store';
 import { describeFileChanges } from '@/code/branching/describe-changes';
 import { applyBranch } from '@/code/branching/apply';
 import { clearHistoryStacks } from '@/code/mutation/history';
+import { clearHistoryState } from './history';
 import { syncProjectSnapshotToProjectFS } from './projects';
 
 // ─── Helper: Persist Meta Branches ───────────────────────────────────────────
@@ -164,6 +165,7 @@ export const branchesCreateOperation: Operation<BranchesCreateInput, BranchesCre
     }
 
     clearHistoryStacks();
+    clearHistoryState();
     persistMetaBranches();
 
     context?.trace?.('branches:create', { branch: id, from: fromBranch });
@@ -212,6 +214,7 @@ export const branchesSwitchOperation: Operation<BranchesSwitchInput, BranchesSwi
     }
 
     clearHistoryStacks();
+    clearHistoryState();
     persistMetaBranches();
 
     context?.trace?.('branches:switch', { branch: targetId });
@@ -456,6 +459,8 @@ export const branchesDeleteOperation: Operation<BranchesDeleteInput, BranchesDel
 
     if (projectFS.getActiveBranchId() === targetId) {
       projectFS.switchBranch(MAIN_BRANCH_ID);
+      clearHistoryStacks();
+      clearHistoryState();
     }
 
     const refusal = projectFS.deleteBranch(targetId);

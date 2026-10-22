@@ -381,6 +381,21 @@ describe('T21: Project Lifecycle, Branches, History, Folders, Comments & Guides'
       expect(projectFS.getActiveBranchId()).toBe('main');
     });
 
+    it('isolates history when switching branches', async () => {
+      const snap = createMockSnapshot({ 'app/page.client.tsx': SAMPLE_PAGE_A });
+      await branchesCreateOperation.execute(snap, { name: 'branch-hist' }, context);
+
+      // Record history on branch-hist
+      recordHistoryStep('app/page.client.tsx', [
+        { path: 'app/page.client.tsx', oldContent: SAMPLE_PAGE_A, newContent: SAMPLE_PAGE_A + '\n// edit' },
+      ]);
+      expect(getHistoryStatus().canUndo).toBe(true);
+
+      // Switch to main — history must be reset
+      await branchesSwitchOperation.execute(snap, { branch: 'main' }, context);
+      expect(getHistoryStatus().canUndo).toBe(false);
+    });
+
     it('rejects switching to non-existent branch', async () => {
       const snap = createMockSnapshot({ 'app/page.client.tsx': SAMPLE_PAGE_A });
       await expect(
@@ -644,6 +659,28 @@ describe('T21: Project Lifecycle, Branches, History, Folders, Comments & Guides'
         ),
       ).rejects.toThrow(/Cycle detected/);
     });
+
+    it('detects cyclic moves for folders with non-prefixed custom IDs', async () => {
+      const snap = createMockSnapshot({ 'app/page.client.tsx': SAMPLE_PAGE_A });
+      projectFS.writeFile(
+        '_meta/component-folders.json',
+        JSON.stringify({
+          folders: [
+            { id: 'custom-parent', name: 'CustomParent', parentId: null, children: ['custom-child'] },
+            { id: 'custom-child', name: 'CustomChild', parentId: 'custom-parent', children: [] },
+          ],
+          rootOrder: ['custom-parent'],
+        }),
+      );
+
+      await expect(
+        foldersMoveItemOperation.execute(
+          snap,
+          { kind: 'components', itemId: 'custom-parent', targetFolderId: 'custom-child' },
+          context,
+        ),
+      ).rejects.toThrow(/Cycle detected/);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -704,6 +741,17 @@ describe('T21: Project Lifecycle, Branches, History, Folders, Comments & Guides'
           context,
         ),
       ).rejects.toThrow(/does not exist/);
+    });
+
+    it('rejects comment creation with empty or whitespace-only content on direct execution', async () => {
+      const snap = createMockSnapshot({ 'app/page.client.tsx': SAMPLE_PAGE_A });
+      await expect(
+        commentsCreateOperation.execute(
+          snap,
+          { filePath: 'app/page.client.tsx', content: '   ' },
+          context,
+        ),
+      ).rejects.toThrow(/VALIDATION_ERROR: Comment content must not be empty/);
     });
 
     it('rejects resolving non-existent comment', async () => {

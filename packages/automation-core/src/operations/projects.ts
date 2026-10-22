@@ -355,6 +355,18 @@ export const projectsBackupRestoreOperation: Operation<ProjectsBackupRestoreInpu
     const changes = syncHelper.collectChanges(targetFiles, cleanOrphan);
 
     // Phase 4: Apply to ProjectFS & Restore Branches
+    const preservedFiles: Record<string, string> = {};
+    if (!cleanOrphan) {
+      for (const path of projectFS.listFiles()) {
+        if (!(path in targetFiles)) {
+          const content = projectFS.readFile(path);
+          if (content !== null) {
+            preservedFiles[path] = content;
+          }
+        }
+      }
+    }
+
     const restoreBranches = input.restoreBranches ?? true;
     const projectDataEnvelope: ProjectData = {
       format: restoreBranches && parsed.branches ? 'revyme-v2' : 'revyme-v1',
@@ -367,13 +379,17 @@ export const projectsBackupRestoreOperation: Operation<ProjectsBackupRestoreInpu
     // Hydrate ProjectFS via envelope (restores branches + runs loadSnapshot heals)
     projectFS.fromEnvelope(projectDataEnvelope);
 
-    // If cleanOrphan is true, remove any files deleted in the restore
+    // If cleanOrphan is true, remove any files deleted in the restore; otherwise restore preserved untracked files
     if (cleanOrphan) {
       const restoredKeys = new Set(Object.keys(targetFiles));
       for (const existingPath of projectFS.listFiles()) {
         if (!restoredKeys.has(existingPath)) {
           projectFS.deleteFile(existingPath);
         }
+      }
+    } else {
+      for (const [path, content] of Object.entries(preservedFiles)) {
+        projectFS.writeFile(path, content);
       }
     }
 
