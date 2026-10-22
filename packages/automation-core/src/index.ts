@@ -69,3 +69,7 @@ export * from './operations/marketplace';
 export * from './operations/project-skills';
 export * from './operations/export';
 export * from './operations/publish';
+export * from './operations/observe';
+export * from './operations/verify';
+export * from './operations/diagnostics';
+
