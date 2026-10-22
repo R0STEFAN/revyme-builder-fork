@@ -253,6 +253,41 @@ export default withResponsiveProps(InteractiveWidget);
       ).rejects.toThrow();
     });
 
+    it('creates component with defaultWidth and defaultHeight inserted after use client directive', async () => {
+      const snap = createMockSnapshot({});
+      const codeWithoutDimensions = `'use client';
+/** @controls {
+  "label": { "type": "text", "label": "Label", "default": "Hello" }
+} */
+import React from 'react';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function SizeWidget(props: { label?: string }) {
+  return <div>{props.label}</div>;
+}
+
+export default withResponsiveProps(SizeWidget);
+`;
+
+      const result = await codeComponentsCreateOperation.execute(
+        snap,
+        {
+          name: 'SizeWidget',
+          code: codeWithoutDimensions,
+          defaultWidth: 500,
+          defaultHeight: 350,
+        },
+        context,
+      );
+
+      expect(result.name).toBe('SizeWidget');
+      const saved = projectFS.readFile('components/SizeWidget.tsx');
+      expect(saved).toBeDefined();
+      expect(saved!.startsWith("'use client';\n")).toBe(true);
+      expect(saved).toContain('/** @defaultWidth 500 */');
+      expect(saved).toContain('/** @defaultHeight 350 */');
+    });
+
     it('rejects component creation without @controls schema annotation', async () => {
       const snap = createMockSnapshot({});
       const noControls = `import React from 'react';\nexport default function NoControls() { return <div>Hello</div>; }`;
@@ -536,6 +571,26 @@ export default withResponsiveProps(Badge);
       ).rejects.toThrow(/PROTECTED_PATH/);
     });
 
+    it('rejects batch submit attempting to modify system directories (_meta/, .git/, node_modules/, .next/)', async () => {
+      const snap = createMockSnapshot({});
+      for (const sysPath of [
+        '_meta/preset-folders.json',
+        '.git/HEAD',
+        'node_modules/some-lib/index.js',
+        '.next/cache/build.json',
+      ]) {
+        await expect(
+          codeFilesSubmitOperation.execute(
+            snap,
+            {
+              files: [{ path: sysPath, code: 'malicious' }],
+            },
+            context,
+          ),
+        ).rejects.toThrow(/PROTECTED_PATH/);
+      }
+    });
+
     it('rejects batch submit when any TSX file fails Oracle gate, writing zero files', async () => {
       const snap = createMockSnapshot({
         'app/page.tsx': SAMPLE_PAGE_JSX,
@@ -736,6 +791,51 @@ export default function HomePage() {
           context,
         ),
       ).rejects.toThrow(/OVERRIDE_FILE_NOT_FOUND/);
+    });
+
+    it('handles ref.file resolution gracefully with or without .tsx extension and prefix', async () => {
+      const snap = createMockSnapshot({
+        'overrides/HoverGlow.tsx': VALID_OVERRIDE_CODE,
+        'app/page.tsx': SAMPLE_PAGE_JSX,
+      });
+
+      // 1. Without extension and without overrides/ prefix
+      const res1 = await overridesSetOperation.execute(
+        snap,
+        {
+          filePath: 'app/page.tsx',
+          nodeId: 'cta-btn',
+          overrides: [{ file: 'HoverGlow', name: 'withHoverGlow' }],
+        },
+        context,
+      );
+      expect(res1.overrides[0].file).toBe('overrides/HoverGlow.tsx');
+      const pageAfter1 = projectFS.readFile('app/page.tsx');
+      expect(pageAfter1).toContain('<Override with={withHoverGlow}>');
+
+      // 2. With extension and without overrides/ prefix
+      const res2 = await overridesSetOperation.execute(
+        snap,
+        {
+          filePath: 'app/page.tsx',
+          nodeId: 'cta-btn',
+          overrides: [{ file: 'HoverGlow.tsx', name: 'withHoverGlow' }],
+        },
+        context,
+      );
+      expect(res2.overrides[0].file).toBe('overrides/HoverGlow.tsx');
+
+      // 3. Without extension and with overrides/ prefix
+      const res3 = await overridesSetOperation.execute(
+        snap,
+        {
+          filePath: 'app/page.tsx',
+          nodeId: 'cta-btn',
+          overrides: [{ file: 'overrides/HoverGlow', name: 'withHoverGlow' }],
+        },
+        context,
+      );
+      expect(res3.overrides[0].file).toBe('overrides/HoverGlow.tsx');
     });
   });
 

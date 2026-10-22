@@ -182,9 +182,21 @@ export const overridesSetOperation: Operation<OverridesSetInput, OverridesSetOut
 
     const normalizedOverrides: CodeOverrideRef[] = [];
     for (const ref of input.overrides) {
-      const normFile = ref.file.startsWith(OVERRIDES_DIR)
-        ? ref.file
-        : `${OVERRIDES_DIR}${ref.file}`;
+      let normFile = ref.file.trim();
+      if (!normFile.startsWith(OVERRIDES_DIR)) {
+        normFile = `${OVERRIDES_DIR}${normFile}`;
+      }
+      if (!normFile.endsWith('.tsx') && !normFile.endsWith('.ts')) {
+        if (projectFS.readFile(normFile) !== null) {
+          // file exists without extension
+        } else if (projectFS.readFile(`${normFile}.tsx`) !== null) {
+          normFile = `${normFile}.tsx`;
+        } else if (projectFS.readFile(`${normFile}.ts`) !== null) {
+          normFile = `${normFile}.ts`;
+        } else {
+          normFile = `${normFile}.tsx`;
+        }
+      }
 
       const overrideContent = projectFS.readFile(normFile);
       if (overrideContent === null) {

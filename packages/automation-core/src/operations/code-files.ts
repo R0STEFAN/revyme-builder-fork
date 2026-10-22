@@ -19,9 +19,13 @@ export const PROTECTED_SYSTEM_FILES = new Set([
 export function isSystemProtectedPath(path: string): boolean {
   return (
     path.startsWith('_meta/') ||
+    path === '_meta' ||
     path.startsWith('.git/') ||
+    path === '.git' ||
     path.startsWith('node_modules/') ||
-    path.startsWith('.next/')
+    path === 'node_modules' ||
+    path.startsWith('.next/') ||
+    path === '.next'
   );
 }
 
@@ -262,7 +266,7 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
     // Phase 1: Path traversal & protected paths checks
     for (const f of input.files) {
       assertValidProjectPath(f.path);
-      if (PROTECTED_SYSTEM_FILES.has(f.path)) {
+      if (PROTECTED_SYSTEM_FILES.has(f.path) || isSystemProtectedPath(f.path)) {
         throw new Error(
           `PROTECTED_PATH: Modifying protected system file "${f.path}" is disallowed.`,
         );

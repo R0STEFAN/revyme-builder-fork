@@ -104,7 +104,8 @@ export const codeComponentsCreateOperation: Operation<
   environment: 'headless',
   ownerTask: 'T20',
   inputSchema: codeComponentsCreateInputSchema,
-  async execute(snapshot, input, _context: OperationContext) {
+  async execute(snapshot, rawInput, _context: OperationContext) {
+    const input = codeComponentsCreateInputSchema.parse(rawInput);
     const sync = syncCodeSnapshotToProjectFS(snapshot);
     const path = `components/${input.name}.tsx`;
 
@@ -112,12 +113,36 @@ export const codeComponentsCreateOperation: Operation<
     if (!finalCode.includes('use client')) {
       finalCode = `'use client';\n` + finalCode;
     }
-    // Ensure default dimensions if not present
+
+    // Ensure default dimensions if not present, placed AFTER 'use client' directive
+    const dimensionComments: string[] = [];
     if (!/@defaultWidth\b/.test(finalCode) && input.defaultWidth) {
-      finalCode = `/** @defaultWidth ${input.defaultWidth} */\n` + finalCode;
+      dimensionComments.push(`/** @defaultWidth ${input.defaultWidth} */`);
     }
     if (!/@defaultHeight\b/.test(finalCode) && input.defaultHeight) {
-      finalCode = `/** @defaultHeight ${input.defaultHeight} */\n` + finalCode;
+      dimensionComments.push(`/** @defaultHeight ${input.defaultHeight} */`);
+    }
+
+    if (dimensionComments.length > 0) {
+      const dimBlock = dimensionComments.join('\n') + '\n';
+      const useClientRegex = /^(\s*['"]use client['"]\s*;?(\r?\n)?)/;
+      const match = finalCode.match(useClientRegex);
+      if (match) {
+        const prefix = match[0].endsWith('\n') ? match[0] : `${match[0]}\n`;
+        finalCode = prefix + dimBlock + finalCode.slice(match[0].length);
+      } else {
+        const idx = finalCode.indexOf('use client');
+        if (idx !== -1) {
+          const nextNl = finalCode.indexOf('\n', idx);
+          if (nextNl !== -1) {
+            finalCode = finalCode.slice(0, nextNl + 1) + dimBlock + finalCode.slice(nextNl + 1);
+          } else {
+            finalCode = finalCode + '\n' + dimBlock;
+          }
+        } else {
+          finalCode = `'use client';\n` + dimBlock + finalCode;
+        }
+      }
     }
 
     // Parse and validate controls metadata
