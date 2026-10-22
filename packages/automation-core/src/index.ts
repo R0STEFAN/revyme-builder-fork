@@ -50,3 +50,6 @@ export * from './operations/cms-pages';
 export * from './operations/cms-api';
 export * from './operations/locales';
 export * from './operations/translations';
+export * from './operations/forms';
+export * from './operations/form-fields';
+export * from './operations/form-states';
