@@ -47,3 +47,4 @@ export * from './operations/cms-schema';
 export * from './operations/cms-items';
 export * from './operations/cms-bindings';
 export * from './operations/cms-pages';
+export * from './operations/cms-api';
