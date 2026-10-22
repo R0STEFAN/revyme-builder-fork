@@ -577,7 +577,7 @@ export default function Broken( {
         },
       };
 
-      const result = await previewBuildOperation.execute(snapshot, {}, adapterContext as any);
+      const result = await previewBuildOperation.execute(snapshot, {}, adapterContext);
       expect(mockPreviewAdapter).toHaveBeenCalledTimes(1);
       expect(result.bundleId).toBe('custom-pvw-123');
       expect(result.previewUrl).toBe('http://localhost:9999/preview/custom');
@@ -705,7 +705,7 @@ export default function Bad() {
       const result = await publishDeployOperation.execute(
         snapshot,
         { target: 'production' },
-        adapterContext as any,
+        adapterContext,
       );
 
       expect(mockDeployAdapter).toHaveBeenCalledTimes(1);

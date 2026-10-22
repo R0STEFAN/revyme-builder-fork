@@ -5,7 +5,7 @@ import type { Operation, FileChange, Snapshot, OperationContext } from '../contr
 import { defaultRegistry } from '../registry';
 import { projectFS } from '@/code/project/project-fs';
 import { checkFile } from '@/code/oracle/check-file';
-import { parseMetadataFromCode } from '@/code/generation/metadata-gen';
+import { parseMetadataFromCode, type SiteMetadata } from '@/code/generation/metadata-gen';
 import { readFormConfig } from '@/editor/tools/FormTool/form-config';
 import { templatePreviewRoute } from '@/preview/template-preview';
 import { parsePageFromPath } from './pages';
@@ -313,7 +313,7 @@ export async function executePreflightChecks(
         message: 'Root layout "app/layout.tsx" is missing',
       });
     } else {
-      let meta: any = {};
+      let meta: Partial<SiteMetadata> = {};
       try {
         meta = parseMetadataFromCode(layoutCode);
       } catch (err) {
@@ -326,23 +326,25 @@ export async function executePreflightChecks(
         });
       }
 
-      const hasTitle = typeof meta.title === 'string' && meta.title.trim().length > 0;
+      const metaTitle = typeof meta.title === 'string' ? meta.title.trim() : '';
+      const hasTitle = metaTitle.length > 0;
       checks.push({
         name: 'seo.title',
         category: 'metadata',
         status: hasTitle ? 'pass' : (strict ? 'fail' : 'warn'),
         path: 'app/layout.tsx',
-        message: hasTitle ? `SEO title configured: "${meta.title}"` : 'Missing or empty SEO title in root layout metadata',
+        message: hasTitle ? `SEO title configured: "${metaTitle}"` : 'Missing or empty SEO title in root layout metadata',
       });
 
-      const hasDescription = typeof meta.description === 'string' && meta.description.trim().length > 0;
+      const metaDescription = typeof meta.description === 'string' ? meta.description.trim() : '';
+      const hasDescription = metaDescription.length > 0;
       checks.push({
         name: 'seo.description',
         category: 'metadata',
         status: hasDescription ? 'pass' : (strict ? 'fail' : 'warn'),
         path: 'app/layout.tsx',
         message: hasDescription
-          ? `SEO description configured (${meta.description.length} chars)`
+          ? `SEO description configured (${metaDescription.length} chars)`
           : 'Missing or empty SEO meta description in root layout metadata',
       });
     }
@@ -645,8 +647,21 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
     const port = input.port || 3000;
 
     // 1. Adapter delegation if configured
-    if (context?.adapters && typeof (context.adapters as any).preview?.build === 'function') {
-      return await (context.adapters as any).preview.build({
+    const previewAdapter = (
+      context?.adapters as
+        | {
+            preview?: {
+              build?: (args: {
+                projectId: string;
+                snapshot: Snapshot;
+                input: PreviewBuildInput;
+              }) => Promise<PreviewBuildOutput>;
+            };
+          }
+        | undefined
+    )?.preview;
+    if (typeof previewAdapter?.build === 'function') {
+      return await previewAdapter.build({
         projectId,
         snapshot,
         input,
@@ -693,12 +708,13 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
         // Syntax and Babel compilation verification
         try {
           parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const parseErr = err as { message?: string; loc?: { line?: number } } | null;
           issues.push({
             file: path,
             path,
-            message: err?.message || 'Syntax parse failed',
-            line: err?.loc?.line,
+            message: parseErr?.message || 'Syntax parse failed',
+            line: parseErr?.loc?.line,
             severity: 'error',
           });
         }
@@ -806,8 +822,27 @@ export const publishDeployOperation: Operation<PublishDeployInput, PublishDeploy
     }
 
     // Phase 2: Adapter Delegation (if hosting adapter provided)
-    if (context?.adapters && typeof (context.adapters as any).hosting?.deploy === 'function') {
-      const adapterRes = await (context.adapters as any).hosting.deploy({
+    const hostingAdapter = (
+      context?.adapters as
+        | {
+            hosting?: {
+              deploy?: (args: {
+                projectId: string;
+                targetEnvironment: 'production' | 'staging';
+                target: 'production' | 'staging';
+                revision: number;
+                snapshot: Snapshot;
+                force: boolean;
+                subdomain?: string;
+                customDomain?: string;
+                message?: string;
+              }) => Promise<PublishDeployOutput>;
+            };
+          }
+        | undefined
+    )?.hosting;
+    if (typeof hostingAdapter?.deploy === 'function') {
+      const adapterRes = await hostingAdapter.deploy({
         projectId,
         targetEnvironment: targetEnv,
         target: targetEnv,
@@ -923,8 +958,20 @@ export const publishStatusOperation: Operation<PublishStatusInput, PublishStatus
   inputSchema: publishStatusInputSchema,
   outputSchema: publishStatusOutputSchema,
   async execute(snapshot, input, context: OperationContext) {
-    if (context?.adapters && typeof (context.adapters as any).hosting?.getStatus === 'function') {
-      return await (context.adapters as any).hosting.getStatus({
+    const hostingAdapter = (
+      context?.adapters as
+        | {
+            hosting?: {
+              getStatus?: (args: {
+                projectId: string;
+                limit?: number;
+              }) => Promise<PublishStatusOutput>;
+            };
+          }
+        | undefined
+    )?.hosting;
+    if (typeof hostingAdapter?.getStatus === 'function') {
+      return await hostingAdapter.getStatus({
         projectId: snapshot.scope?.projectId || 'default-project',
         limit: input.limit,
       });
