@@ -18,7 +18,7 @@ import {
   GITIGNORE,
   type ModuleFetch,
 } from '@/code/project/source-export';
-import { buildZip, type ZipEntry } from '@/shared/zip';
+import { buildZip, sanitizeZipPath, type ZipEntry } from '@/shared/zip';
 import { runPublishPreflight, type PreflightIssue } from '@/code/oracle/publish-preflight';
 import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '@/shared/image-export-constants';
 
@@ -391,7 +391,9 @@ export const exportGenerateInputSchema = z.object({
       'html',
       'html-css',
       'vite',
+      'vite-react',
       'tailwind',
+      'nextjs-tailwind',
     ])
     .optional(),
   projectName: z.string().optional(),
@@ -488,6 +490,10 @@ export const exportGenerateOperation: Operation<ExportGenerateInput, ExportGener
   outputSchema: exportGenerateOutputSchema,
   async execute(snapshot, input, context: OperationContext) {
     const startTime = performance.now();
+    if (input?.format !== undefined && input?.format !== null) {
+      normalizeExportFormat(String(input.format));
+    }
+    exportGenerateInputSchema.parse(input);
     const format = normalizeExportFormat(input.format || 'nextjs');
 
     if (format === 'tailwind') {
@@ -593,7 +599,10 @@ export const exportGenerateOperation: Operation<ExportGenerateInput, ExportGener
 
     const zipEntries: ZipEntry[] = [];
     for (const [path, content] of Object.entries(finalFiles)) {
-      zipEntries.push({ path, data: content });
+      const cleanPath = sanitizeZipPath(path);
+      if (cleanPath) {
+        zipEntries.push({ path: cleanPath, data: content });
+      }
     }
 
     if (input.includeAssets !== false) {
@@ -602,7 +611,8 @@ export const exportGenerateOperation: Operation<ExportGenerateInput, ExportGener
         let found = false;
         for (const cp of candidatePaths) {
           if (rawFiles[cp]) {
-            zipEntries.push({ path: `public/${assetRel}`, data: rawFiles[cp] });
+            const clean = sanitizeZipPath(`public/${assetRel}`);
+            if (clean) zipEntries.push({ path: clean, data: rawFiles[cp] });
             found = true;
             break;
           }
@@ -616,8 +626,10 @@ export const exportGenerateOperation: Operation<ExportGenerateInput, ExportGener
         let found = false;
         for (const cp of candidatePaths) {
           if (rawFiles[cp]) {
-            zipEntries.push({ path: `public/uploads/${uploadName}`, data: rawFiles[cp] });
-            zipEntries.push({ path: `public/api/uploads/${uploadName}`, data: rawFiles[cp] });
+            const cleanUpload = sanitizeZipPath(`public/uploads/${uploadName}`);
+            const cleanApi = sanitizeZipPath(`public/api/uploads/${uploadName}`);
+            if (cleanUpload) zipEntries.push({ path: cleanUpload, data: rawFiles[cp] });
+            if (cleanApi) zipEntries.push({ path: cleanApi, data: rawFiles[cp] });
             found = true;
             break;
           }

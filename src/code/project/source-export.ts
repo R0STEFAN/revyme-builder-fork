@@ -1250,7 +1250,8 @@ export async function localizeUrlImports(
 
 /** Top-level `_` segments are editor-internal (`_meta/`, `_revyme/`). */
 export function isBuilderMetadataPath(path: string): boolean {
-  return (path.split('/', 1)[0] ?? '').startsWith('_');
+  const clean = path.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '');
+  return (clean.split('/', 1)[0] ?? '').startsWith('_');
 }
 
 export function exportSlug(name: string | null | undefined): string {

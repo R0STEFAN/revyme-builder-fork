@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { inflateRawSync } from 'node:zlib';
-import { buildZip, crc32 } from './zip';
+import { buildZip, crc32, sanitizeZipPath } from './zip';
 
 /** Minimal reader: the central directory, then each local entry. */
 function readZip(buf: Uint8Array): Array<{ path: string; text: string; method: number; crcOk: boolean }> {
@@ -59,5 +59,25 @@ describe('buildZip', () => {
 
   it('crc32 matches the reference value', () => {
     expect(crc32(new TextEncoder().encode('The quick brown fox jumps over the lazy dog'))).toBe(0x414fa339);
+  });
+
+  it('sanitizes traversal paths to prevent Zip Slip (CWE-22)', async () => {
+    expect(sanitizeZipPath('../../etc/passwd')).toBe('etc/passwd');
+    expect(sanitizeZipPath('../malicious.sh')).toBe('malicious.sh');
+    expect(sanitizeZipPath('app/../../secret.txt')).toBe('secret.txt');
+    expect(sanitizeZipPath('/absolute/path.txt')).toBe('absolute/path.txt');
+    expect(sanitizeZipPath('nested\\sub\\file.txt')).toBe('nested/sub/file.txt');
+    expect(sanitizeZipPath('C:\\windows\\system32')).toBe('windows/system32');
+    expect(sanitizeZipPath('./foo/./bar.txt')).toBe('foo/bar.txt');
+    expect(sanitizeZipPath('..')).toBe('');
+
+    const zip = await buildZip([
+      { path: '../../etc/passwd', data: 'root:x:0:0' },
+      { path: '/root/boot.ini', data: 'boot' },
+      { path: 'app/../../injected.txt', data: 'injected' },
+    ]);
+    const read = readZip(zip);
+    expect(read.map((e) => e.path)).toEqual(['etc/passwd', 'root/boot.ini', 'injected.txt']);
+    expect(read.some((e) => e.path.includes('..') || e.path.startsWith('/'))).toBe(false);
   });
 });

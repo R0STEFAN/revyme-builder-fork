@@ -181,6 +181,21 @@ describe('T23 Empirical Challenger: Source Export & SSG Stress Test', () => {
       }
     });
 
+    it('rejects invalid parameters like archiveType: "both" with schema validation error', async () => {
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': BASE_LAYOUT_CODE,
+        'app/page.client.tsx': BASE_PAGE_CODE,
+      });
+
+      await expect(
+        exportGenerateOperation.execute(
+          snapshot,
+          { archiveType: 'both' as unknown as 'zip' },
+          context,
+        ),
+      ).rejects.toThrow();
+    });
+
     it('rejects prototype pollution attempts in format names', async () => {
       const protoAttacks = ['__proto__', 'constructor', 'prototype', 'toString', 'valueOf'];
       const snapshot = createMockSnapshot({
@@ -273,7 +288,7 @@ describe('T23 Empirical Challenger: Source Export & SSG Stress Test', () => {
   // Challenge Group 2: Malicious Paths & Path Traversal (Zip Slip / Injection)
   // ───────────────────────────────────────────────────────────────────────────
   describe('2. Path Traversal & Path Injection Resilience', () => {
-    it('empirically audits directory traversal paths in snapshot files', async () => {
+    it('sanitizes directory traversal paths in snapshot files to prevent Zip Slip', async () => {
       const snapshot = createMockSnapshot({
         'app/layout.tsx': BASE_LAYOUT_CODE,
         'app/page.client.tsx': BASE_PAGE_CODE,
@@ -289,10 +304,10 @@ describe('T23 Empirical Challenger: Source Export & SSG Stress Test', () => {
         context,
       );
 
-      // Inspect manifest paths
+      // Inspect manifest paths: no relative traversal entries
       const manifestPaths = result.manifest.map((m) => m.path);
       const traversalEntries = manifestPaths.filter((p) => p.includes('..'));
-      expect(traversalEntries.length).toBeGreaterThan(0);
+      expect(traversalEntries.length).toBe(0);
 
       // Also inspect central directory inside the zip archive
       const zipBuffer = Buffer.from(result.archiveBase64!, 'base64');
@@ -300,8 +315,8 @@ describe('T23 Empirical Challenger: Source Export & SSG Stress Test', () => {
       const zipFilenames = zipInspection.entries.map((e) => e.filename);
       const zipTraversal = zipFilenames.filter((n) => n.includes('..'));
 
-      // If paths containing ".." make it into the zip, unzipping on a client machine is a Zip Slip attack!
-      // Here we document the exact empirical behavior.
+      // Zip Slip mitigation: zero entries containing traversal segments
+      expect(zipTraversal.length).toBe(0);
       expect(result.fileCount).toBeGreaterThan(0);
       expect(zipInspection.hasValidEocd).toBe(true);
 
@@ -309,11 +324,13 @@ describe('T23 Empirical Challenger: Source Export & SSG Stress Test', () => {
       const absoluteEntry = zipFilenames.find((n) => n.startsWith('/'));
       expect(absoluteEntry, 'Zip entry paths must never start with a leading slash').toBeUndefined();
 
-      // Check whether directory traversal entries are sanitized or present
-      // Empirical finding: zipEntries retains relative path traversal segments ("..") from snapshot files!
-      expect(zipTraversal).toContain('../../etc/passwd');
-      expect(zipTraversal).toContain('../malicious.sh');
-      expect(zipTraversal).toContain('app/../../secret.txt');
+      // Verify that traversal paths were sanitized safely within root
+      expect(zipFilenames).toContain('etc/passwd');
+      expect(zipFilenames).toContain('malicious.sh');
+      expect(zipFilenames).toContain('secret.txt');
+      expect(zipFilenames).not.toContain('../../etc/passwd');
+      expect(zipFilenames).not.toContain('../malicious.sh');
+      expect(zipFilenames).not.toContain('app/../../secret.txt');
     });
 
     it('empirically verifies path normalization of Windows-style backslashes in .env detection', () => {
@@ -651,7 +668,7 @@ export default function GoodPage() {
       expect(envExampleContent).not.toContain('super_secret_jwt_signature');
     });
 
-    it('empirically audits leading slash and relative dot evasion on internal metadata paths', async () => {
+    it('hardens against leading slash and relative dot evasion on internal metadata paths', async () => {
       // Testing whether leading slashes or relative segments could bypass isBuilderMetadataPath
       const snapshot = createMockSnapshot({
         'app/layout.tsx': BASE_LAYOUT_CODE,
@@ -668,15 +685,14 @@ export default function GoodPage() {
 
       const files = result.files!;
       // Check whether './_meta/evasion.json' or '/_meta/evasion2.json' bypassed the check
-      const leakedEvasion1 = files['./_meta/evasion.json'] !== undefined;
-      const leakedEvasion2 = files['/_meta/evasion2.json'] !== undefined;
+      const leakedEvasion1 = files['./_meta/evasion.json'] !== undefined || files['_meta/evasion.json'] !== undefined;
+      const leakedEvasion2 = files['/_meta/evasion2.json'] !== undefined || files['_meta/evasion2.json'] !== undefined;
 
-      // Empirical finding: leading './' or '/' bypasses isBuilderMetadataPath because
-      // (path.split('/', 1)[0] ?? '').startsWith('_') expects clean unrooted paths!
-      expect(isBuilderMetadataPath('./_meta/evasion.json')).toBe(false);
-      expect(isBuilderMetadataPath('/_meta/evasion2.json')).toBe(false);
-      expect(leakedEvasion1).toBe(true);
-      expect(leakedEvasion2).toBe(true);
+      // Hardened check: isBuilderMetadataPath recognizes leading './' and '/'
+      expect(isBuilderMetadataPath('./_meta/evasion.json')).toBe(true);
+      expect(isBuilderMetadataPath('/_meta/evasion2.json')).toBe(true);
+      expect(leakedEvasion1).toBe(false);
+      expect(leakedEvasion2).toBe(false);
     });
   });
 });

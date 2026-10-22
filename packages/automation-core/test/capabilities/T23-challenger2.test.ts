@@ -189,6 +189,37 @@ describe('T23 Empirical Challenger: Preflight & Deploy Lifecycle Hardening', () 
       expect(syntaxCheck).toBeDefined();
       expect(syntaxCheck?.status).toBe('fail');
     });
+
+    it('handles non-array JSON and filters invalid redirect entries without throwing', async () => {
+      const nonArraySnapshot = createAdversarialSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT,
+        'app/page.client.tsx': CLEAN_PAGE,
+        [REDIRECTS_FILE]: JSON.stringify({ notAnArray: true }),
+      });
+
+      const resNonArray = await publishPreflightOperation.execute(nonArraySnapshot, {}, context);
+      expect(resNonArray.passed).toBe(false);
+      const syntaxCheck = resNonArray.checks.find((c) => c.name === 'redirects.syntax');
+      expect(syntaxCheck).toBeDefined();
+      expect(syntaxCheck?.status).toBe('fail');
+
+      const mixedEntriesSnapshot = createAdversarialSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT,
+        'app/page.client.tsx': CLEAN_PAGE,
+        [REDIRECTS_FILE]: JSON.stringify([
+          null,
+          123,
+          'invalid-string',
+          { from: 456, to: '/target' },
+          { from: '/valid-from', to: '/valid-to' },
+        ]),
+      });
+
+      const resMixed = await publishPreflightOperation.execute(mixedEntriesSnapshot, {}, context);
+      const cyclesCheck = resMixed.checks.find((c) => c.name === 'redirects.cycles');
+      expect(cyclesCheck?.status).toBe('pass');
+      expect(cyclesCheck?.message).toContain('All 1 redirects validated');
+    });
   });
 
   // ===========================================================================

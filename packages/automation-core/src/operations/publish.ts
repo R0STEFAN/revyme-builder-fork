@@ -501,7 +501,20 @@ export async function executePreflightChecks(
     } else {
       let redirects: Array<{ from: string; to: string }> = [];
       try {
-        redirects = JSON.parse(rawRedirects);
+        const parsed = JSON.parse(rawRedirects);
+        if (Array.isArray(parsed)) {
+          redirects = parsed.filter(
+            (r): r is { from: string; to: string } =>
+              Boolean(r && typeof r === 'object' && typeof r.from === 'string' && typeof r.to === 'string'),
+          );
+        } else {
+          checks.push({
+            name: 'redirects.syntax',
+            category: 'redirects',
+            status: 'fail',
+            message: `Failed to parse ${REDIRECTS_FILE}: expected an array of redirect rules`,
+          });
+        }
       } catch (err) {
         checks.push({
           name: 'redirects.syntax',
@@ -536,7 +549,8 @@ export async function executePreflightChecks(
         });
       }
 
-      if (loopCount === 0) {
+      const syntaxFailed = checks.some((c) => c.name === 'redirects.syntax');
+      if (loopCount === 0 && !syntaxFailed) {
         checks.push({
           name: 'redirects.cycles',
           category: 'redirects',

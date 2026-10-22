@@ -54,15 +54,43 @@ function dosDateTime(d: Date): { time: number; date: number } {
   };
 }
 
+/**
+ * Sanitize an entry path to prevent Zip Slip (CWE-22) directory traversal attacks.
+ * Strips leading slashes, backslashes, drive letters, and resolves relative segments
+ * ('..' and '.') so entries cannot escape the extraction root.
+ */
+export function sanitizeZipPath(rawPath: string): string {
+  if (!rawPath || typeof rawPath !== 'string') return '';
+  const normalized = rawPath.replace(/\\/g, '/').replace(/^[a-zA-Z]:/, '');
+  const parts = normalized.split('/');
+  const stack: string[] = [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed === '.') continue;
+    if (trimmed === '..') {
+      if (stack.length > 0) {
+        stack.pop();
+      }
+      continue;
+    }
+    stack.push(trimmed);
+  }
+  return stack.join('/');
+}
+
 /** The archive's bytes. Paths are forward-slash, unrooted (`app/page.tsx`). */
 export async function buildZip(entries: ZipEntry[], opts: { now?: Date; compress?: boolean } = {}): Promise<Uint8Array<ArrayBuffer>> {
   const { time, date } = dosDateTime(opts.now ?? new Date());
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
+  let entryCount = 0;
 
   for (const e of entries) {
-    const name = encoder.encode(e.path.replace(/^\/+/, ''));
+    const cleanPath = sanitizeZipPath(e.path);
+    if (!cleanPath) continue;
+    entryCount++;
+    const name = encoder.encode(cleanPath);
     const raw = typeof e.data === 'string' ? encoder.encode(e.data) : e.data;
     const crc = crc32(raw);
     const deflated = opts.compress === false ? null : await deflateRaw(raw);
@@ -110,8 +138,8 @@ export async function buildZip(entries: ZipEntry[], opts: { now?: Date; compress
   const cdSize = central.reduce((n, p) => n + p.length, 0);
   const end = new DataView(new ArrayBuffer(22));
   end.setUint32(0, 0x06054b50, true);       // end of central directory
-  end.setUint16(8, entries.length, true);
-  end.setUint16(10, entries.length, true);
+  end.setUint16(8, entryCount, true);
+  end.setUint16(10, entryCount, true);
   end.setUint32(12, cdSize, true);
   end.setUint32(16, offset, true);
 
