@@ -51,7 +51,7 @@ export class EditorPage {
       },
       project,
     );
-    await this._page.goto('/');
+    await this._page.goto('/builder');
     await waitForCanvasReady(this._page);
     // One animation frame so Renderer has painted everything we'll
     // assert against.

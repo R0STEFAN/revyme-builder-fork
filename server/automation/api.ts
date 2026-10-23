@@ -4,6 +4,8 @@ import { URL } from 'node:url';
 import type { Plan } from '../../packages/automation-core/src/contracts';
 import { LocalProjectRepository } from './project-repository';
 import { CommitService } from './commit-service';
+import { PlanSchema } from '../../packages/automation-core/src/contracts';
+import { validatePlan } from '../../packages/automation-core/src/validate';
 
 export function createAutomationMiddleware(options: {
   repository?: LocalProjectRepository;
@@ -74,6 +76,9 @@ export function createAutomationMiddleware(options: {
           revision: snapshot.revision,
           files: Object.fromEntries(snapshot.files),
           config: snapshot.config,
+          branches: snapshot.branches,
+          mainFiles: snapshot.mainFiles,
+          activeBranchId: snapshot.activeBranchId,
         };
         return sendJson(200, {
           ok: true,
@@ -84,24 +89,20 @@ export function createAutomationMiddleware(options: {
 
       // 2. POST /api/automation/plan (validate plan)
       if (method === 'POST' && pathname === '/api/automation/plan') {
-        const plan = (await readBody()) as Plan;
+        const parsed = PlanSchema.safeParse(await readBody());
+        if (!parsed.success) {
+          return sendJson(400, { ok: false, error: { code: 'INVALID_PLAN', message: 'Invalid plan schema', issues: [] },
+            meta: { commitStatus: 'not_committed', revision: 0 } });
+        }
+        const plan = parsed.data;
         const snapshot = await repository.getSnapshot(plan.scope);
         if (!snapshot) {
           return sendJson(404, { ok: false, error: `Project ${plan.scope.projectId} not found` });
         }
-        let validation = { ok: (plan.issues || []).length === 0, issues: plan.issues || [] };
-        if (typeof options.validatePlan === 'function') {
-          validation = options.validatePlan(snapshot, plan);
-        } else {
-          try {
-            const mod = await import('../../packages/automation-core/src/validate');
-            validation = mod.validatePlan(snapshot, plan);
-          } catch {
-            // If validator module is unavailable in this environment, return plan issues
-            validation = { ok: (plan.issues || []).length === 0, issues: plan.issues || [] };
-          }
-        }
-        return sendJson(200, validation);
+        const validation = (options.validatePlan || validatePlan)(snapshot, plan);
+        return sendJson(200, { ok: validation.ok, data: validation,
+          ...(!validation.ok ? { error: { code: 'PLAN_VALIDATION_FAILED', message: 'Plan validation failed', issues: validation.issues } } : {}),
+          meta: { commitStatus: 'not_committed', revision: snapshot.revision } });
       }
 
       // 3. POST /api/automation/commit (durable commit with CAS)
@@ -124,15 +125,15 @@ export function createAutomationMiddleware(options: {
           const receipt = await commitService.status(projectId, operationId);
           return sendJson(200, {
             ok: true,
-            found: Boolean(receipt),
-            receipt,
+            data: { found: Boolean(receipt), receipt, healthy: true, revision: receipt?.revision ?? await repository.getRevision(projectId, branchId) },
+            meta: { commitStatus: receipt ? 'committed' : 'not_committed', revision: receipt?.revision ?? 0, ...(receipt ? { receipt } : {}) },
           });
         }
         const snapshot = await repository.getSnapshot({ projectId, branchId });
         return sendJson(200, {
           ok: true,
-          healthy: true,
-          revision: snapshot?.revision ?? 0,
+          data: { healthy: Boolean(snapshot), revision: snapshot?.revision ?? 0 },
+          meta: { commitStatus: 'not_committed', revision: snapshot?.revision ?? 0 },
         });
       }
 

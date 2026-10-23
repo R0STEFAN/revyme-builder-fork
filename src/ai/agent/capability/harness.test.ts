@@ -1,6 +1,7 @@
 import { test, expect } from 'vitest';
 import { runCase, seedWorld } from './harness';
 import { getViewportWidths, getSortedBreakpointWidths } from '@/code/stores/viewport-store';
+import { FIXTURE_FILES, HOME } from './fixture';
 test('seeding a page synchronizes the breakpoint widths used by responsive tools', () => {
   seedWorld({});
   expect(getViewportWidths()).toEqual({ desktop: 1440, tablet: 768, mobile: 375 });
@@ -14,10 +15,16 @@ test('a wrong EFFECT is caught', async () => {
     expect: (w) => { if (w.node('hero').styles.backgroundColor !== '#222222') throw new Error('not #222222'); } });
   expect(r.ok).toBe(false); expect(r.failures[0]).toMatch(/effect: not #222222/);
 });
-test('an INVALID result is caught by the oracle even when the tool says ok', async () => {
+test('preflight rejects an invalid line height before writing source', async () => {
   const r = await runCase({ id: 'layout/y', domain: 'layout', status: 'supported', feature: 'y', ask: 'y',
     calls: [{ tool: 'set_styles', args: { node_id: 'hero-title', styles: { lineHeight: '24px' } } }], expect: () => {} });
-  expect(r.ok).toBe(false); expect(r.failures.join(' ')).toMatch(/LINE_HEIGHT_FORMAT/);
+  expect(r.ok).toBe(false); expect(r.failures.join(' ')).toMatch(/lineHeight must be a unitless multiplier/);
+});
+test('the harness does not attribute an existing violation to an unrelated edit', async () => {
+  const invalid = FIXTURE_FILES[HOME].replace("lineHeight: '1.1'", "lineHeight: '24px'");
+  const r = await runCase({ id: 'layout/oracle', domain: 'layout', status: 'supported', feature: 'oracle', ask: 'change background',
+    files: { [HOME]: invalid }, calls: [{ tool: 'set_styles', args: { node_id: 'hero', styles: { backgroundColor: '#111111' } } }], expect: () => {} });
+  expect(r.ok).toBe(true);
 });
 test('an unknown tool and a failing call are failures, not crashes', async () => {
   const r = await runCase({ id: 'layout/z', domain: 'layout', status: 'supported', feature: 'z', ask: 'z',

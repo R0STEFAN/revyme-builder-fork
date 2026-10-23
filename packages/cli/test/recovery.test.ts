@@ -5,6 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { createPlan, defaultRegistry } from '@revyme/automation-core';
 import type { Snapshot, OperationContext } from '@revyme/automation-core';
+import { CommitService } from '../../../server/automation/commit-service';
+import { LocalProjectRepository } from '../../../server/automation/project-repository';
 
 describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
   let tmpDir: string;
@@ -16,6 +18,16 @@ describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  function commitService(snapshot: Snapshot) {
+    const projects = path.join(tmpDir, 'projects');
+    fs.mkdirSync(projects, { recursive: true });
+    fs.writeFileSync(path.join(projects, `${snapshot.scope.projectId}.json`), JSON.stringify({
+      id: snapshot.scope.projectId, revision: snapshot.revision,
+      data: { files: Object.fromEntries(snapshot.files), branches: {}, settings: snapshot.config },
+    }));
+    return new CommitService(new LocalProjectRepository(tmpDir));
+  }
 
   it('ensures dry-run leaves status explicitly as not_committed', async () => {
     const scope = { projectId: 'recovery-proj', branchId: 'main' };
@@ -79,7 +91,7 @@ describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
       createId: () => 'ctx-1',
       signal: new AbortController().signal,
       trace: () => {},
-      adapters: {},
+      adapters: { commitService: commitService(snapshot) },
     };
 
     await expect(
@@ -114,7 +126,7 @@ describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
       createId: () => 'ctx-valid',
       signal: new AbortController().signal,
       trace: () => {},
-      adapters: {},
+      adapters: { commitService: commitService(snapshot) },
     };
 
     const res = await commitOp!.execute(snapshot, { plan: validPlan }, context);

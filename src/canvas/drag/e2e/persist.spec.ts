@@ -31,7 +31,7 @@ test('P0.1: local-mode edit survives a reload', async ({ page }) => {
   // has no addInitScript (a reload of the first page would re-run the init
   // script and clobber the saved project with the original seed).
   const page2 = await page.context().newPage();
-  await page2.goto('/');
+  await page2.goto('/builder');
   const sandbox2 = page2.frameLocator('iframe[src*="5174"]');
   await sandbox2.locator('[data-viewport]').first().waitFor({ state: 'attached', timeout: 30_000 });
   const persisted = await page2.evaluate(() => (window as any).__e2e.readFile('app/page.client.tsx'));

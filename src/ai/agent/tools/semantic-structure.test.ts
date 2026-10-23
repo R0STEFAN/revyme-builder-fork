@@ -230,7 +230,7 @@ describe('semantic structure tools', () => {
     const m = lastMutation();
     expect(m).toEqual({
       type: 'addCanvasNode',
-      node: expect.objectContaining({ id: expect.any(String), type: 'div', styles: { position: 'absolute' }, attrs: {}, name: 'abs' }),
+      node: expect.objectContaining({ id: expect.any(String), type: 'div', styles: { position: 'absolute', left: '-380px', top: '100px' }, attrs: {}, name: 'abs' }),
     });
     expect(flushNow).toHaveBeenCalledTimes(1);
     const data = JSON.parse((result.content[0] as any).text);

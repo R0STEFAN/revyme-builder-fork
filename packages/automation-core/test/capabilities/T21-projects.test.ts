@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import type { Snapshot } from '../../src/contracts';
-import { createSnapshot, createOperationContext } from '../../src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
 import { defaultRegistry } from '../../src/registry';
 import {
   projectsDuplicateOperation,
@@ -172,24 +172,17 @@ describe('T21: Project Lifecycle, Branches, History, Folders, Comments & Guides'
   // Group 2: Project Lifecycle (Duplicate, Backup Export & Restore)
   // ───────────────────────────────────────────────────────────────────────────
   describe('2. Project Lifecycle (Duplicate, Backup Export & Restore)', () => {
-    it('duplicates project snapshot into new project record', async () => {
+    it('prepares a scoped duplicate action without claiming an in-memory copy was saved', async () => {
       const snap = createMockSnapshot({
         'app/page.client.tsx': SAMPLE_PAGE_A,
         'app/about/page.client.tsx': SAMPLE_PAGE_B,
       }, 5);
 
-      const res = await projectsDuplicateOperation.execute(
-        snap,
-        { targetName: 'Clone of Project', folderId: 'fld-marketing' },
-        context,
-      );
-
-      expect(res.originalProjectId).toBe('test-project');
-      expect(res.newProjectId).toBeDefined();
-      expect(res.name).toBe('Clone of Project');
-      expect(res.fileCount).toBeGreaterThanOrEqual(2);
-      expect(res.revision).toBe(5);
-      expect(res.folderId).toBe('fld-marketing');
+      const res = await prepareOperation(snap, 'projects.duplicate', { targetName: 'Clone of Project', folderId: 'fld-marketing' }, context);
+      expect(res.ok).toBe(true);
+      expect(res.meta.commitStatus).toBe('not_committed');
+      expect(res.data).toMatchObject({ changes: [], projectAction: { kind: 'project.duplicate', name: 'Clone of Project', folderId: 'fld-marketing' } });
+      expect(projectsDuplicateOperation.outputSchema?.safeParse(res.data).success).toBe(true);
     });
 
     it('rejects project duplication with empty name', async () => {

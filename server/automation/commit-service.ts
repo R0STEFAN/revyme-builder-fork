@@ -6,6 +6,8 @@ import type {
   Issue,
 } from '../../packages/automation-core/src/contracts';
 import { validatePlan } from '../../packages/automation-core/src/validate';
+import { PlanSchema } from '../../packages/automation-core/src/contracts';
+import { calculatePlanHash } from '../../packages/automation-core/src/session';
 import {
   type ProjectRepository,
   ConflictError,
@@ -40,7 +42,20 @@ export class CommitService {
   constructor(private repository: ProjectRepository) {}
 
   async commit(plan: Plan): Promise<Result<Receipt>> {
-    const lockKey = `${plan.scope.projectId}:${plan.scope.branchId || 'main'}`;
+    const parsed = PlanSchema.safeParse(plan);
+    if (!parsed.success) {
+      return { ok: false, error: { code: 'INVALID_PLAN', message: 'Invalid plan schema',
+        issues: parsed.error.issues.map((i) => ({ code: 'INVALID_PLAN', path: i.path.map(String), message: i.message })) },
+        meta: { commitStatus: 'not_committed', revision: 0 } };
+    }
+    plan = parsed.data;
+    if (calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan) !== plan.planHash) {
+      return { ok: false, error: { code: 'PLAN_HASH_MISMATCH', message: 'Plan bytes do not match planHash',
+        issues: [{ code: 'PLAN_HASH_MISMATCH', path: ['planHash'], message: 'Prepare the plan again before committing' }] },
+        meta: { commitStatus: 'not_committed', revision: plan.baseRevision } };
+    }
+    // All branches share the same project record and revision.
+    const lockKey = plan.scope.projectId;
 
     return this.locker.acquire(lockKey, async () => {
       // 0. Check idempotency: if plan with same operationId was already committed

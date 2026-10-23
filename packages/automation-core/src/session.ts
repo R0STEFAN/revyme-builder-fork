@@ -1,5 +1,5 @@
 // packages/automation-core/src/session.ts
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type {
   Scope,
   Snapshot,
@@ -10,10 +10,15 @@ import type {
   Issue,
 } from './contracts';
 import { defaultRegistry } from './registry';
+import { normalizeCandidateChanges } from './ingestion/candidate';
+import { prepareHistory } from './operations/scoped-history';
+import { prepareScopedBranchAction, readScopedBranches } from './operations/scoped-branches';
+import { prepareScopedRestore } from './operations/scoped-restore';
 
 export function createIdFactory(prefix = 'id'): (kind?: string) => string {
   let counter = 1;
-  return (kind?: string) => `${kind || prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
+  const runId = randomUUID();
+  return (kind?: string) => `${kind || prefix}-${runId}-${(counter++).toString(36)}`;
 }
 
 export function createSnapshot(
@@ -51,15 +56,19 @@ export function calculatePlanHash(
   scope: Scope,
   baseRevision: number,
   operationId: string,
-  changes: FileChange[]
+  changes: FileChange[],
+  metadata?: Pick<Plan, 'createdIds' | 'policyVersion' | 'issues' | 'normalizations' | 'projectAction'>
 ): string {
   const hash = createHash('sha256');
-  hash.update(JSON.stringify({ scope, baseRevision, operationId }));
-  for (const change of changes) {
-    hash.update(change.path);
-    hash.update(change.beforeHash ?? 'null');
-    hash.update(change.content ?? 'null');
-  }
+  hash.update(JSON.stringify({ scope: { projectId: scope.projectId, branchId: scope.branchId, filePath: scope.filePath }, baseRevision, operationId }));
+  hash.update(JSON.stringify(changes.map(({ path, beforeHash, content }) => ({ path, beforeHash, content }))));
+  if (metadata) hash.update(JSON.stringify({ createdIds: metadata.createdIds, policyVersion: metadata.policyVersion,
+    issues: metadata.issues.map(({ code, path, message, source }) => ({ code, path, message,
+      source: source ? { file: source.file, line: source.line } : undefined })),
+    normalizations: metadata.normalizations.map(({ rule, target, before, after }) => ({ rule, target, before, after })),
+    projectAction: metadata.projectAction?.kind === 'project.restore' || metadata.projectAction?.kind === 'project.duplicate' ? metadata.projectAction : metadata.projectAction ? { kind: metadata.projectAction.kind, id: metadata.projectAction.id,
+      ...('from' in metadata.projectAction ? { from: metadata.projectAction.from, createdAt: metadata.projectAction.createdAt } : {}),
+      ...('mainChanges' in metadata.projectAction ? { appliedAt: metadata.projectAction.appliedAt, mainChanges: metadata.projectAction.mainChanges.map(({ path, beforeHash, content }) => ({ path, beforeHash, content })) } : {}) } : undefined }));
   return hash.digest('hex');
 }
 
@@ -110,7 +119,34 @@ export async function prepareOperation(
 
   try {
     context.trace('operation:start', { name: operationName, scope: snapshot.scope });
-    const data = await op.execute(snapshot, validation.data, context);
+    const data = op.name === 'projects.duplicate'
+      ? (() => {
+          const args = validation.data as { targetName: string; targetProjectId?: string; folderId?: string | null };
+          const id = args.targetProjectId ?? context.createId('proj');
+          const name = args.targetName.trim();
+          if (!name || !/^[A-Za-z0-9_-]{1,120}$/.test(id) || id === snapshot.scope.projectId) throw new Error('Invalid duplicate project name or id');
+          context.trace('projects:duplicate:prepare', { source: snapshot.scope.projectId, target: id });
+          return { changes: [], createdIds: [id], projectAction: { kind: 'project.duplicate', id, name,
+            ...(args.folderId === undefined ? {} : { folderId: args.folderId }) } };
+        })()
+      : op.name === 'branches.list' || op.name === 'branches.review'
+      ? readScopedBranches(snapshot, op.name, validation.data as { branch?: string }, context)
+      : op.name === 'branches.create' || op.name === 'branches.switch' || op.name === 'branches.delete' || op.name === 'branches.apply'
+      ? prepareScopedBranchAction(snapshot, op.name, validation.data as { name?: string; branch?: string }, context)
+      : op.name === 'projects.backup.restore'
+      ? prepareScopedRestore(snapshot, validation.data as { backupPayload: string; restoreBranches: boolean; cleanOrphanFiles: boolean }, context)
+      : op.name === 'history.undo' || op.name === 'history.redo'
+      ? prepareHistory(snapshot, op.name === 'history.undo' ? 'undo' : 'redo', context)
+      : await op.execute(snapshot, validation.data, context);
+    const candidate = data && typeof data === 'object' ? (data as any).plan ?? data : null;
+    if (candidate && Array.isArray(candidate.changes)) {
+      const normalized = normalizeCandidateChanges(snapshot, candidate.changes);
+      candidate.changes = normalized.changes;
+      candidate.issues = [...(candidate.issues ?? []), ...normalized.issues];
+      candidate.normalizations = [...(candidate.normalizations ?? []), ...normalized.normalizations];
+      if (candidate.planHash) candidate.planHash = calculatePlanHash(candidate.scope, candidate.baseRevision, candidate.operationId, candidate.changes, candidate);
+      context.trace('operation:normalize', { name: operationName, files: normalized.changes.length, issues: normalized.issues.length });
+    }
     context.trace('operation:success', { name: operationName });
     return {
       ok: true,

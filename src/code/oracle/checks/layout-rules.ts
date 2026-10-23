@@ -4,6 +4,7 @@
 // All code moved VERBATIM from check-file.ts (Phase 7.1 god-file split).
 
 import * as t from '@babel/types';
+import { isSafeCmsText } from './cms-safe-text';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, hasAttr, isCodeComponentSource } from './shared';
 import type { OracleViolation } from './shared';
 
@@ -77,7 +78,7 @@ function checkSlotComponentInlineChildren(ast: t.File, v: OracleViolation[]): vo
  * element ternaries (`cond ? <A/> : <B/>`) are conditional render, a separate concern.
  * PAGE only — design COMPONENTS legitimately use variant ternaries (`variant === 'v' ? …`).
  */
-function checkUnresolvableTernary(ast: t.File, v: OracleViolation[]): void {
+function checkUnresolvableTernary(ast: t.File, v: OracleViolation[], isCmsDetail = false): void {
   const isValueTernary = (ce: t.ConditionalExpression): boolean =>
     !t.isJSXElement(ce.consequent) && !t.isJSXFragment(ce.consequent)
     && !t.isJSXElement(ce.alternate) && !t.isJSXFragment(ce.alternate);
@@ -90,7 +91,7 @@ function checkUnresolvableTernary(ast: t.File, v: OracleViolation[]): void {
   traverse(ast, {
     JSXElement(path) {
       for (const child of path.node.children) {
-        if (t.isJSXExpressionContainer(child) && t.isConditionalExpression(child.expression) && isValueTernary(child.expression)) {
+        if (t.isJSXExpressionContainer(child) && t.isConditionalExpression(child.expression) && isValueTernary(child.expression) && !isSafeCmsText(child.expression, path, isCmsDetail)) {
           flag(child.loc?.start.line, 'text content');
         }
       }

@@ -118,12 +118,12 @@ export const COMPONENT_CASES: CapabilityCase[] = [
   {
     id: 'components/responsive-instance-variant', domain: 'components', status: 'supported',
     feature: 'Per-breakpoint instance variant',
-    knownBug: 'show_variant writes data-responsive "_bp":[809,1199,1200] (the DEFAULT ladder) on a page whose @canvas declares 1440/768/375 — the instance switches at the wrong widths on the live site',
     ask: 'on mobile show the hover version of the hero button',
     calls: [{ tool: 'show_variant', args: { node_id: 'hero-cta', variant: 'default-hover', viewport: 375 } }],
     expect: (w) => {
       const code = w.read(HOME) ?? '';
       must(/data-responsive=/.test(w.tag('hero-cta')) && /375/.test(w.tag('hero-cta')) && /default-hover/.test(w.tag('hero-cta')), `no 375 override on the instance: ${w.tag('hero-cta').slice(0, 200)}`);
+      must(/_bp[^\]]*(?:375[^\]]*768[^\]]*1440|1440[^\]]*768[^\]]*375)/.test(w.tag('hero-cta')), 'the responsive ladder does not match the page viewports');
       must(!/initialVariant="default-hover"/.test(w.tag('hero-cta')), 'the base variant changed too');
       must(code.length > 0, 'page missing');
     },

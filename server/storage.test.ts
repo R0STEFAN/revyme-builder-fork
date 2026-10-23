@@ -84,6 +84,47 @@ describe('Self-host storage', () => {
     expect(all.length).toBe(2);
   });
 
+  it('gives a duplicate its own uploaded assets across branches and settings', () => {
+    const upload = saveUpload('clip.mp4', Buffer.from('video data'), TEST_DATA_DIR, 'origin');
+    const sourceCode = `<video src="${upload.url}" />`;
+    saveProject('origin', {
+      files: { 'app/page.tsx': sourceCode, 'content.json': JSON.stringify({ key: upload.filename, url: upload.url }, null, 2) },
+      settings: { poster: upload.url },
+      branches: { draft: { files: { 'app/page.tsx': sourceCode }, baseSnapshot: { 'app/page.tsx': sourceCode } } },
+    }, 'Original', TEST_DATA_DIR);
+    const copy = duplicateProject('origin', 'Copy', TEST_DATA_DIR)!;
+    const copiedUpload = listUploads(undefined, TEST_DATA_DIR, copy.id)[0];
+    expect(copiedUpload).toBeDefined();
+    expect(copiedUpload.key).not.toBe(upload.filename);
+    expect(copy.data.files['app/page.tsx']).toContain(copiedUpload.url);
+    expect(JSON.parse(copy.data.files['content.json'])).toEqual({ key: copiedUpload.key, url: copiedUpload.url });
+    expect(copy.data.settings.poster).toBe(copiedUpload.url);
+    expect(copy.data.branches.draft.files['app/page.tsx']).toContain(copiedUpload.url);
+    expect(copy.data.branches.draft.baseSnapshot['app/page.tsx']).toContain(copiedUpload.url);
+    expect(deleteProject('origin', TEST_DATA_DIR)).toBe(true);
+    expect(fs.readFileSync(getUploadFilePath(copiedUpload.key, TEST_DATA_DIR)!)).toEqual(Buffer.from('video data'));
+    expect(getUploadFilePath(upload.filename, TEST_DATA_DIR)).toBeNull();
+  });
+
+  it('does not create a duplicate when a referenced uploaded asset is missing', () => {
+    const upload = saveUpload('clip.mp4', Buffer.from('video'), TEST_DATA_DIR, 'origin');
+    saveProject('origin', { files: { 'app/page.tsx': `<video src="${upload.url}" /><img src="/api/uploads/missing.png" />` } }, 'Original', TEST_DATA_DIR);
+    expect(() => duplicateProject('origin', 'Copy', TEST_DATA_DIR)).toThrow(/missing uploaded asset/);
+    expect(listProjects(TEST_DATA_DIR).map(project => project.id)).toEqual(['origin']);
+    expect(fs.readdirSync(path.join(TEST_DATA_DIR, 'uploads'))).toEqual([upload.filename]);
+  });
+
+  it('copies the dashboard thumbnail without exposing it as a media upload', () => {
+    saveProject('origin', { files: {} }, 'Original', TEST_DATA_DIR);
+    const source = saveProjectThumbnail('origin', 'data:image/png;base64,aW1hZ2U=', TEST_DATA_DIR)!;
+    const copy = duplicateProject('origin', 'Copy', TEST_DATA_DIR)!;
+    expect(copy.previewImage).not.toBe(source.previewImage);
+    expect(copy.previewImage).toContain(`thumbnail-${copy.id}.png`);
+    expect(listUploads(undefined, TEST_DATA_DIR, copy.id)).toEqual([]);
+    expect(deleteProject('origin', TEST_DATA_DIR)).toBe(true);
+    expect(fs.existsSync(path.join(TEST_DATA_DIR, 'uploads', `thumbnail-${copy.id}.png`))).toBe(true);
+  });
+
   it('deletes a project', () => {
     saveProject('to-delete', { files: {} }, 'Temp Site', TEST_DATA_DIR);
     expect(listProjects(TEST_DATA_DIR).length).toBe(1);

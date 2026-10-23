@@ -1,5 +1,6 @@
 // packages/automation-core/test/capabilities/T03-ingestion.test.ts
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
   IdManager,
   IngestionReporter,
@@ -200,6 +201,8 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
         ])
       );
 
+      const beforeHash = createHash('sha256').update(snapshot.files.get('app/page.tsx')!).digest('hex');
+
       const plan1 = createPlan({
         scope: snapshot.scope,
         baseRevision: 1,
@@ -207,7 +210,7 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
         changes: [
           {
             path: 'app/page.tsx',
-            beforeHash: null,
+            beforeHash,
             content: `export default function Page() { return <div data-id="root">Updated</div>; }`,
           },
         ],
@@ -220,7 +223,7 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
         changes: [
           {
             path: 'app/page.tsx',
-            beforeHash: null,
+            beforeHash,
             content: `export default function Page() { return <div data-id="root">Updated</div>; }`,
           },
         ],

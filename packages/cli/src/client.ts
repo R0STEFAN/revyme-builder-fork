@@ -9,7 +9,30 @@ import type {
 } from '@revyme/automation-core';
 import { defaultRegistry } from '@revyme/automation-core';
 import { prepareOperation } from '@revyme/automation-core';
-import { createPlan } from '@revyme/automation-core';
+import { createPlan, createIdFactory } from '@revyme/automation-core';
+import { createHash } from 'node:crypto';
+
+const HISTORY_PATH = '_meta/history.json';
+
+function addHistory(plan: Plan, snapshot: Snapshot, createId: (kind?: string) => string): Plan {
+  if (!plan.changes.length || plan.changes.some(change => change.path === HISTORY_PATH)) return plan;
+  const raw = snapshot.files.get(HISTORY_PATH);
+  let state: { undoStack: unknown[]; redoStack: unknown[] } = { undoStack: [], redoStack: [] };
+  if (raw !== undefined) {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.undoStack) || !Array.isArray(parsed.redoStack)) throw new Error('INVALID_HISTORY: History journal has invalid stacks');
+    state = parsed;
+  }
+  const diffs = plan.changes.map(change => ({ path: change.path, oldContent: snapshot.files.get(change.path) ?? null, newContent: change.content }))
+    .filter(diff => diff.oldContent !== diff.newContent);
+  if (!diffs.length) return plan;
+  state.undoStack = [...state.undoStack, { id: createId('hist'), timestamp: Date.now(), activeFile: plan.scope.filePath ?? diffs[0].path,
+    branchId: plan.scope.branchId, diffs }].slice(-100);
+  state.redoStack = [];
+  const historyChange = { path: HISTORY_PATH, beforeHash: raw === undefined ? null : createHash('sha256').update(raw).digest('hex'), content: JSON.stringify(state) };
+  return createPlan({ scope: plan.scope, baseRevision: plan.baseRevision, operationId: plan.operationId,
+    changes: [...plan.changes, historyChange], createdIds: plan.createdIds, normalizations: plan.normalizations, issues: plan.issues });
+}
 
 export interface ClientOptions {
   apiUrl: string;
@@ -73,6 +96,9 @@ export class AutomationClient {
         revision: payload.revision ?? 0,
         files: filesMap,
         config: payload.config || {},
+        branches: payload.branches,
+        mainFiles: payload.mainFiles,
+        activeBranchId: payload.activeBranchId,
       };
 
       return {
@@ -207,6 +233,25 @@ export class AutomationClient {
       };
     }
 
+    if (toolName === 'workflow.chain') {
+      const validation = defaultRegistry.validateInput(toolName, input);
+      if (!validation.ok) return { ok: false, error: { code: 'INVALID_INPUT', message: 'Invalid workflow steps', issues: validation.issues }, meta: { commitStatus: 'not_committed', revision: 0 } };
+      const { steps } = validation.data as { steps: Array<{ tool: string; input: Record<string, unknown> }> };
+      if (options?.dryRun) return this.execute(scope, 'workflow.batch', { operations: steps }, options);
+      const receipts: Array<{ stepIndex: number; tool: string; status: 'ok' | 'failed'; result: Result<unknown> }> = [];
+      let meta: Result['meta'] = { commitStatus: 'not_committed', revision: 0 };
+      for (const [stepIndex, step] of steps.entries()) {
+        if (options?.context?.signal?.aborted) return { ok: false, data: { completed: receipts.length, receipts }, error: { code: 'CANCELLED', message: 'Workflow cancelled', issues: [] }, meta };
+        options?.context?.trace?.('workflow:step', { stepIndex, tool: step.tool, scope });
+        const result = await this.execute(scope, step.tool, step.input, options);
+        receipts.push({ stepIndex, tool: step.tool, status: result.ok ? 'ok' : 'failed', result });
+        meta = { ...meta, ...result.meta, revision: Math.max(meta.revision, result.meta.revision),
+          commitStatus: result.meta.commitStatus === 'unknown' ? 'unknown' : meta.commitStatus === 'committed' ? 'committed' : result.meta.commitStatus };
+        if (!result.ok) return { ...result, data: { completed: stepIndex, receipts }, meta };
+      }
+      return { ok: true, data: { completed: receipts.length, receipts }, meta };
+    }
+
     // Read-only meta operations can execute directly in-process without requiring project snapshot
     if (op.category === 'meta') {
       const emptySnapshot: Snapshot = {
@@ -216,7 +261,7 @@ export class AutomationClient {
         config: {},
       };
       const context: OperationContext = {
-        createId: (prefix = 'op') => `${prefix}-${Date.now().toString(36)}`,
+        createId: createIdFactory(),
         signal: new AbortController().signal,
         trace: () => {},
         adapters: {},
@@ -282,10 +327,22 @@ export class AutomationClient {
           },
         };
       }
-      return this.commit((validation.data as any).plan);
+      const plan = (validation.data as any).plan as Plan;
+      if (plan.scope.projectId !== scope.projectId || plan.scope.branchId !== scope.branchId) {
+        return { ok: false, error: { code: 'SCOPE_MISMATCH', message: 'Plan scope does not match the requested project and branch', issues: [] },
+          meta: { commitStatus: 'not_committed', revision: 0 } };
+      }
+      if (options?.dryRun) {
+        const checked = await this.validatePlan(plan);
+        return checked.ok ? { ok: true, data: plan, meta: checked.meta } : checked;
+      }
+      return this.commit(plan);
     }
 
     // Step 1: Fetch latest snapshot
+    if (options?.dryRun && (op.environment === 'service' || op.kind === 'service')) {
+      return { ok: false, error: { code: 'DRY_RUN_UNAVAILABLE', message: 'Service operations require a dedicated preview adapter', issues: [] }, meta: { commitStatus: 'not_committed', revision: 0 } };
+    }
     const snapshotResult = await this.getSnapshot(scope);
     if (!snapshotResult.ok || !snapshotResult.data) {
       return snapshotResult as unknown as Result<Receipt>;
@@ -294,7 +351,7 @@ export class AutomationClient {
 
     // Step 2: Prepare operation plan
     const context: OperationContext = {
-      createId: (prefix = 'op') => `${prefix}-${Date.now().toString(36)}`,
+      createId: createIdFactory(),
       signal: new AbortController().signal,
       trace: () => {},
       adapters: {},
@@ -314,6 +371,9 @@ export class AutomationClient {
     } else if (prepData && typeof prepData === 'object' && prepData.planHash) {
       plan = prepData;
     } else if (prepData && typeof prepData === 'object' && Array.isArray(prepData.changes)) {
+      if (prepData.changes.length === 0 && !(prepData.issues?.length) && !prepData.projectAction) {
+        return { ok: true, data: prep.data, meta: { commitStatus: 'not_committed', revision: snapshot.revision } };
+      }
       const operationId = context.createId('op');
       plan = createPlan({
         scope,
@@ -323,6 +383,7 @@ export class AutomationClient {
         createdIds: prepData.createdIds || (prepData.page?.id ? [prepData.page.id] : []),
         normalizations: prepData.normalizations,
         issues: prepData.issues,
+        projectAction: prepData.projectAction,
       });
     } else {
       // Read-only or metadata output without file changes
@@ -336,8 +397,21 @@ export class AutomationClient {
       };
     }
 
+    if (op.kind === 'mutation' && op.category !== 'history' && plan.changes.length) {
+      try {
+        plan = addHistory(plan, snapshot, context.createId);
+        context.trace('history:record', { operation: op.name, files: plan.changes.length - 1 });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: { code: 'INVALID_HISTORY', message, issues: [{ code: 'INVALID_HISTORY', path: [HISTORY_PATH], message }] },
+          meta: { commitStatus: 'not_committed', revision: snapshot.revision } };
+      }
+    }
+
     // If dry-run requested or operation is a read kind, return prepared plan without committing
     if (options?.dryRun || op.kind === 'read') {
+      const checked = await this.validatePlan(plan);
+      if (!checked.ok) return checked;
       return {
         ok: true,
         data: plan,

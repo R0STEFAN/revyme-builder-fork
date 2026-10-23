@@ -1,5 +1,4 @@
 // packages/automation-core/src/plan.ts
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type {
   Scope,
@@ -11,6 +10,7 @@ import type {
   Receipt,
   Operation,
   OperationContext,
+  ProjectAction,
 } from './contracts';
 import { PlanSchema } from './contracts';
 import { calculatePlanHash, prepareOperation } from './session';
@@ -26,6 +26,7 @@ export function createPlan(options: {
   createdIds?: string[];
   normalizations?: Normalization[];
   issues?: Issue[];
+  projectAction?: ProjectAction;
 }): Plan {
   const scope = { ...options.scope };
   const baseRevision = options.baseRevision;
@@ -35,7 +36,8 @@ export function createPlan(options: {
   const normalizations = options.normalizations ? [...options.normalizations] : [];
   const issues = options.issues ? [...options.issues] : [];
 
-  const planHash = calculatePlanHash(scope, baseRevision, operationId, changes);
+  const planHash = calculatePlanHash(scope, baseRevision, operationId, changes,
+    { createdIds, policyVersion: POLICY_VERSION, issues, normalizations, projectAction: options.projectAction });
 
   return {
     scope,
@@ -47,6 +49,7 @@ export function createPlan(options: {
     planHash,
     issues,
     normalizations,
+    ...(options.projectAction ? { projectAction: options.projectAction } : {}),
   };
 }
 
@@ -88,6 +91,10 @@ export const workflowBatchOperation: Operation<
 
     for (let i = 0; i < input.operations.length; i++) {
       const step = input.operations[i];
+      const operation = defaultRegistry.get(step.tool);
+      if (step.tool === 'workflow.chain' || step.tool === 'plans.commit' || operation?.environment === 'service') {
+        throw new Error(`BATCH_SIDE_EFFECT_FORBIDDEN: ${step.tool} cannot run inside an atomic candidate batch`);
+      }
       const res = await prepareOperation(currentSnapshot, step.tool, step.input, context);
 
       if (!res.ok) {
@@ -103,8 +110,12 @@ export const workflowBatchOperation: Operation<
       }
 
       // Check if step produced file changes
-      if (res.data && typeof res.data === 'object' && 'changes' in (res.data as any)) {
-        const changes = (res.data as any).changes as FileChange[];
+      const candidate = res.data && typeof res.data === 'object' ? (res.data as any).plan ?? res.data : null;
+      if (candidate?.projectAction) throw new Error('BATCH_SIDE_EFFECT_FORBIDDEN: Project actions cannot run in a file batch');
+      if (candidate && 'changes' in candidate) {
+        issues.push(...(candidate.issues ?? []));
+        normalizations.push(...(candidate.normalizations ?? []));
+        const changes = candidate.changes as FileChange[];
         if (Array.isArray(changes)) {
           accumulatedChanges.push(...changes);
           // Update candidate snapshot for subsequent steps
@@ -192,6 +203,10 @@ export const workflowChainOperation: Operation<
 
     for (let i = 0; i < input.steps.length; i++) {
       const step = input.steps[i];
+      const operation = defaultRegistry.get(step.tool);
+      if (operation && operation.kind !== 'read' && operation.kind !== 'observation') {
+        throw new Error('DURABLE_EXECUTOR_REQUIRED: Execute mutation chains through the CLI/MCP client');
+      }
       const res = await prepareOperation(currentSnapshot, step.tool, step.input, context);
 
       if (!res.ok) {
@@ -260,29 +275,7 @@ export const plansCommitOperation: Operation<
       }
       return { receipt: res.data };
     }
-    // Headless / in-memory fallback: validate baseRevision and planHash
-    if (input.plan.baseRevision !== snapshot.revision) {
-      throw new Error(`Revision conflict: snapshot is at ${snapshot.revision}, plan has baseRevision ${input.plan.baseRevision}`);
-    }
-    const expectedHash = calculatePlanHash(
-      input.plan.scope,
-      input.plan.baseRevision,
-      input.plan.operationId,
-      input.plan.changes
-    );
-    if (expectedHash !== input.plan.planHash) {
-      throw new Error(`Plan hash mismatch: calculated ${expectedHash}, plan has ${input.plan.planHash}`);
-    }
-    return {
-      receipt: {
-        operationId: input.plan.operationId,
-        projectId: input.plan.scope.projectId,
-        branchId: input.plan.scope.branchId || 'main',
-        revision: snapshot.revision + 1,
-        planHash: input.plan.planHash,
-        changedFiles: input.plan.changes.map((c) => c.path),
-      },
-    };
+    throw new Error('DURABLE_EXECUTOR_REQUIRED: A commit service is required to commit a plan');
   },
 };
 

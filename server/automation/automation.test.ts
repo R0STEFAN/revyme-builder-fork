@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { LocalProjectRepository, ConflictError } from './project-repository';
 import { CommitService } from './commit-service';
@@ -115,6 +116,7 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
         ],
       });
       await repo.applyPlan(initPlan); // Revision is now 2
+      const previousHash = createHash('sha256').update(initPlan.changes[0].content!).digest('hex');
 
       // Two concurrent plans based on revision 2
       const planA = createPlan({
@@ -124,7 +126,7 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
         changes: [
           {
             path: 'app/page.tsx',
-            beforeHash: null,
+            beforeHash: previousHash,
             content: `export default function Page() { return <div data-id="root">From A</div>; }`,
           },
         ],
@@ -137,7 +139,7 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
         changes: [
           {
             path: 'app/page.tsx',
-            beforeHash: null,
+            beforeHash: previousHash,
             content: `export default function Page() { return <div data-id="root">From B</div>; }`,
           },
         ],
@@ -275,6 +277,7 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
         ],
       });
       await repo.applyPlan(plan); // rev 2
+      const previousHash = createHash('sha256').update(plan.changes[0].content!).digest('hex');
 
       // 2. GET /api/automation/snapshot
       const { req: snapReq, res: snapRes } = createMockReqRes({
@@ -295,7 +298,7 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
         changes: [
           {
             path: 'app/page.tsx',
-            beforeHash: null,
+            beforeHash: previousHash,
             content: `export default function Page() { return <div data-id="root">Hello Next HTTP</div>; }`,
           },
         ],

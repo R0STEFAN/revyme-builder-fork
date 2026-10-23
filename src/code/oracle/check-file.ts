@@ -26,6 +26,8 @@ import { parseCodeComponentDefaultSize, parseComponentControlsMeta, hasComponent
 import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
 import { traverse, TRANSPARENT_TAGS, jsxTagName, jsxAttrs, stringAttr, hasAttr, needsDataId, isAllowedTextExpression, isCodeComponentSource, booleanPropNames } from './checks/shared';
 import type { FileKind, OracleViolation } from './checks/shared';
+import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
+import { isSafeCmsText } from './checks/cms-safe-text';
 import { checkStyleObject, styleValueIncludes } from './checks/style-object';
 import { COMPONENT_INSTANCE_FORBIDDEN_STYLES } from './preflight-validation';
 import { SELECT_ICON_ATTR, parseSelectIconSpec } from '@/editor/tools/InputTool/select-icon';
@@ -203,6 +205,7 @@ export function checkFile(
   // the model is ADDING this turn, never pre-existing builder content. Undefined
   // for direct/standalone checks → those new-node rules stay silent.
   const existingDataIds = opts.existingDataIds;
+  const isCmsDetail = parseCmsPageMeta(code)?.kind === 'detail';
   const v: OracleViolation[] = [];
   // Computed once per file, not per style object: the walk is over the whole AST.
   let fileBooleanProps: Set<string> | undefined;
@@ -937,8 +940,8 @@ export function checkFile(
         // full check.
         if (!isCodeComponent) {
           checkStyleObject(styleAttr.value.expression, dataId, v, {
-            fixedAllowed: (kind === 'page' && (parentDataId === 'root' || isOverlay)) || (isTemplate && dataId === 'root'),
-            isComponent: kind === 'component',
+            fixedAllowed: isOverlay || (kind === 'page' && parentDataId === 'root') || (isTemplate && dataId === 'root'),
+            isComponent: kind === 'component' && !isOverlay,
             // A `display` driven by one of the file's own boolean props is a
             // per-instance toggle the builder resolves when it expands the
             // master — not someone hiding with CSS.
@@ -1145,7 +1148,7 @@ export function checkFile(
         if (!t.isJSXExpressionContainer(child)) continue;
         const expr = child.expression;
         if (t.isJSXEmptyExpression(expr)) continue;
-        if (isAllowedTextExpression(expr)) continue;
+        if (isAllowedTextExpression(expr) || isSafeCmsText(expr, path, isCmsDetail)) continue;
         v.push({
           code: 'TEXT_EXPRESSION', tier: 2, line: child.loc?.start.line, elementId: dataId,
           message: `Text content at line ${child.loc?.start.line} is a computed expression — the text tool cannot edit it. Write the final text as a literal ("$29/mo", not {\`$\${price}/mo\`}). Allowed expressions: {item.field} bindings inside .map(), {propName}, {variant === 'x' ? 'a' : 'b'}, {useResponsiveText(...)}.`,
@@ -1424,7 +1427,7 @@ export function checkFile(
   //    toggle it on a page; state-driven values MUST be page variables switched by
   //    a Set-Variable interaction. (Design components use variant ternaries, which
   //    DO resolve — so this never runs for them.) ─────────────────────────────────
-  if (kind === 'page') checkUnresolvableTernary(ast, v);
+  if (kind === 'page') checkUnresolvableTernary(ast, v, isCmsDetail);
 
   // ── @canvas VIEWPORT CONFIG (pages) — the canvas renders one tile per
   //    viewport entry; a malformed block silently collapses the page to a

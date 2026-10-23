@@ -5,6 +5,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { inflateRawSync } from 'node:zlib';
+import { randomUUID } from 'node:crypto';
 
 const SERVER = `import PageClient from './page.client';\n\nexport const metadata = {};\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
 const HOME = `/** @canvas { "viewports": [{"id":"desktop","label":"Desktop","width":1200,"isPrimary":true,"order":0}], "positions": {"desktop":{"x":0,"y":0}} } */
@@ -34,19 +35,23 @@ function unzip(buf: Buffer): Map<string, string> {
 }
 
 test('standalone: Export → Source code builds the Next.js zip in the browser', async ({ page }) => {
-  await page.addInitScript((files) => {
-    window.localStorage.setItem('revyme-project-local', JSON.stringify({ format: 'revyme-v1', files }));
+  const projectId = `export-e2e-${randomUUID()}`;
+  await page.addInitScript(({ files, projectId }) => {
+    window.localStorage.setItem(`revyme-project-${projectId}`, JSON.stringify({ format: 'revyme-v1', files }));
     window.localStorage.setItem('revyme-onboarding-completed', 'true');
-  }, { 'app/page.tsx': SERVER, 'app/page.client.tsx': HOME });
-  await page.goto('/');
+  }, { files: { 'app/page.tsx': SERVER, 'app/page.client.tsx': HOME }, projectId });
+  // The local root is the project dashboard; open the seeded browser project
+  // directly so this export test does not depend on server-side projects.
+  await page.goto(`/builder/${projectId}`);
   await page.frameLocator('iframe[src*="5174"]').locator('[data-content-root]').first().waitFor({ state: 'attached', timeout: 30_000 });
   await page.waitForFunction(() => !document.querySelector('div[style*="z-index: 100000"]'), null, { timeout: 30_000 });
 
   const exportBtn = page.locator('[data-export-trigger]');
   await expect(exportBtn).toBeEnabled();
   await exportBtn.click();
-  // Only what the browser can build is offered.
-  await expect(page.getByText('Source code', { exact: true })).toBeVisible();
+  // The standalone dropdown offers the supported Next.js source formats.
+  await expect(page.getByRole('button', { name: /Next\.js \(Dynamic\)/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Next\.js \(Hybrid SSG\)/ })).toBeVisible();
   await expect(page.getByText('Vite project', { exact: true })).toHaveCount(0);
   await expect(page.getByText('HTML + CSS', { exact: true })).toHaveCount(0);
 

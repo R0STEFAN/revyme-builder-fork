@@ -19,6 +19,7 @@ export interface HistoryEntry {
   id: string;
   timestamp: number;
   activeFile: string;
+  branchId?: string;
   diffs: HistoryDiff[];
 }
 

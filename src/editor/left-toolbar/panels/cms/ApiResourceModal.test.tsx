@@ -110,9 +110,9 @@ describe('inferSchemaFromItems', () => {
     expect(nestedFilename).toBeDefined();
     expect(nestedFilename?.type).toBe('image');
 
-    const nestedWidth = schema.fields.find(f => f.id === 'img_file.width');
-    expect(nestedWidth).toBeDefined();
-    expect(nestedWidth?.type).toBe('number');
+    // Asset technical metadata is intentionally omitted from editable fields.
+    expect(schema.fields.find(f => f.id === 'img_file.width')).toBeUndefined();
+    expect(schema.fields.find(f => f.id === 'img_file.height')).toBeUndefined();
   });
 });
 

@@ -22,6 +22,16 @@ export function calculateFilesChecksum(files: Record<string, string>): string {
   return hash.digest('hex');
 }
 
+/** Cover branch contents and the active pointer as well as main files. */
+export function calculateBackupEnvelopeChecksum(files: Record<string, string>, branches: unknown, activeBranchId: string): string {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => [k, canonical(v)]));
+    return value;
+  };
+  return createHash('sha256').update(JSON.stringify(canonical({ files, branches: branches ?? {}, activeBranchId }))).digest('hex');
+}
+
 // ─── Helper: Sync Snapshot to ProjectFS ───────────────────────────────────────
 
 export function syncProjectSnapshotToProjectFS(snapshot?: Snapshot): {
@@ -104,12 +114,10 @@ export const projectsDuplicateInputSchema = z.object({
 export type ProjectsDuplicateInput = z.infer<typeof projectsDuplicateInputSchema>;
 
 export const projectsDuplicateOutputSchema = z.object({
-  originalProjectId: z.string(),
-  newProjectId: z.string(),
-  name: z.string(),
-  fileCount: z.number(),
-  revision: z.number(),
-  folderId: z.string().nullable().optional(),
+  changes: z.array(FileChangeSchema),
+  createdIds: z.array(z.string()),
+  projectAction: z.object({ kind: z.literal('project.duplicate'), id: z.string(), name: z.string(),
+    folderId: z.string().nullable().optional() }),
 });
 
 export type ProjectsDuplicateOutput = z.infer<typeof projectsDuplicateOutputSchema>;
@@ -120,62 +128,12 @@ export const projectsDuplicateOperation: Operation<ProjectsDuplicateInput, Proje
   category: 'projects',
   kind: 'mutation',
   permit: 'write',
-  environment: 'service',
+  environment: 'headless',
   ownerTask: 'T21',
   inputSchema: projectsDuplicateInputSchema,
   outputSchema: projectsDuplicateOutputSchema,
-  async execute(snapshot, input, context: OperationContext) {
-    const originalProjectId = snapshot?.scope?.projectId || 'default-project';
-    const targetName = input.targetName.trim();
-    if (!targetName) {
-      throw new Error('VALIDATION_ERROR: Target project name must not be empty');
-    }
-
-    const newProjectId =
-      input.targetProjectId ||
-      (context?.createId ? context.createId('proj') : undefined) ||
-      `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    // 1. Adapter integration (if available)
-    if (context?.adapters && typeof (context.adapters as any).projectStorage?.duplicateProject === 'function') {
-      const duplicated = await (context.adapters as any).projectStorage.duplicateProject(
-        originalProjectId,
-        targetName,
-        input.folderId,
-      );
-      if (!duplicated) {
-        throw new Error(`PROJECT_NOT_FOUND: Source project "${originalProjectId}" could not be duplicated`);
-      }
-      return {
-        originalProjectId,
-        newProjectId: duplicated.id,
-        name: duplicated.name,
-        fileCount: duplicated.fileCount,
-        revision: duplicated.revision ?? (snapshot?.revision ?? 1),
-        folderId: duplicated.folderId ?? null,
-      };
-    }
-
-    // 2. Headless in-memory duplication fallback
-    syncProjectSnapshotToProjectFS(snapshot);
-    const envelope = projectFS.toEnvelope();
-    const filesCount = envelope.files ? Object.keys(envelope.files).length : (snapshot?.files?.size ?? 0);
-
-    context?.trace?.('projects:duplicate', {
-      originalProjectId,
-      newProjectId,
-      targetName,
-      fileCount: filesCount,
-    });
-
-    return {
-      originalProjectId,
-      newProjectId,
-      name: targetName,
-      fileCount: filesCount,
-      revision: snapshot?.revision ?? 1,
-      folderId: input.folderId ?? null,
-    };
+  async execute() {
+    throw new Error('DURABLE_EXECUTOR_REQUIRED: Duplicate projects through the scoped automation executor');
   },
 };
 
@@ -210,25 +168,16 @@ export const projectsBackupExportOperation: Operation<ProjectsBackupExportInput,
   inputSchema: projectsBackupExportInputSchema,
   outputSchema: projectsBackupExportOutputSchema,
   async execute(snapshot, input, context: OperationContext) {
-    syncProjectSnapshotToProjectFS(snapshot);
-    const envelope = projectFS.toEnvelope();
-
-    let files: Record<string, string> = {};
-    if (envelope.files && Object.keys(envelope.files).length > 0) {
-      files = { ...envelope.files };
-    } else if (snapshot?.files) {
-      for (const [k, v] of snapshot.files) {
-        files[k] = v;
-      }
-    }
+    const files = snapshot.mainFiles ? { ...snapshot.mainFiles } : Object.fromEntries(snapshot.files);
 
     const includeBranches = input.includeBranches ?? true;
-    const branches = includeBranches && envelope.branches && Object.keys(envelope.branches).length > 0 ? envelope.branches : undefined;
+    const branches = includeBranches && snapshot.branches && Object.keys(snapshot.branches).length > 0 ? snapshot.branches : undefined;
     const format = branches ? 'revyme-v2' : 'revyme-v1';
     const checksum = calculateFilesChecksum(files);
     const fileCount = Object.keys(files).length;
     const projectId = snapshot?.scope?.projectId || 'default-project';
     const revision = snapshot?.revision ?? 1;
+    const activeBranchId = branches ? snapshot.activeBranchId ?? snapshot.scope.branchId : 'main';
 
     const payloadObject = {
       version: 'revyme-backup-v1',
@@ -239,8 +188,9 @@ export const projectsBackupExportOperation: Operation<ProjectsBackupExportInput,
       format,
       files,
       ...(branches ? { branches } : {}),
-      activeBranchId: envelope.activeBranchId || snapshot?.scope?.branchId || MAIN_BRANCH_ID,
+      activeBranchId,
       checksum,
+      envelopeChecksum: calculateBackupEnvelopeChecksum(files, branches, activeBranchId),
     };
 
     let backupPayload = JSON.stringify(payloadObject, null, 2);

@@ -854,7 +854,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
               undefined,
               folderId !== undefined ? folderId : current.folderId,
               previewImage !== undefined ? previewImage : current.previewImage,
-              body.baseRevision
+              data !== undefined ? body.baseRevision : current.revision
             );
             const verData = data !== undefined ? data : current.data;
             if (verData && verData.files) {

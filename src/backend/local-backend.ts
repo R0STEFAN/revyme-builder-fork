@@ -11,6 +11,7 @@ const STORAGE_PREFIX = 'revyme-project-';
 const NAME_PREFIX = 'revyme:project-name:';
 const UNSYNCED_FIELD = '__revymeUnsynced';
 const REVISION_FIELD = '__revymePersistenceRevision';
+const BASE_REVISION_FIELD = '__revymeBaseRevision';
 const observedRevisions = new Map<string, number>();
 const PROJECT_GET_TIMEOUT_MS = 5_000;
 
@@ -53,11 +54,11 @@ export class LocalBackend implements ProjectBackend {
 
   async loadProject(id: string): Promise<ProjectData | null> {
     let serverError: Error | null = null;
-    const readLocal = (): { data: ProjectData; unsynced: boolean; revision: number | null } | null => {
+    const readLocal = (): { data: ProjectData; unsynced: boolean; revision: number | null; baseRevision: number | null } | null => {
       const raw = localStorage.getItem(STORAGE_PREFIX + id);
       if (!raw) return null;
-      const stored = JSON.parse(raw) as ProjectData & { [UNSYNCED_FIELD]?: boolean; [REVISION_FIELD]?: number };
-      const { [UNSYNCED_FIELD]: unsynced, [REVISION_FIELD]: rawRevision, ...data } = stored;
+      const stored = JSON.parse(raw) as ProjectData & { [UNSYNCED_FIELD]?: boolean; [REVISION_FIELD]?: number; [BASE_REVISION_FIELD]?: number };
+      const { [UNSYNCED_FIELD]: unsynced, [REVISION_FIELD]: rawRevision, [BASE_REVISION_FIELD]: baseRevision, ...data } = stored;
       const fileCount = data?.files ? Object.keys(data.files).length : 0;
       if (fileCount === 0) return null;
       const revision = readRevision(rawRevision);
@@ -65,7 +66,7 @@ export class LocalBackend implements ProjectBackend {
       if (!isKnownProjectFormat(data.format)) {
         trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
       }
-      return { data: data as ProjectData, unsynced: unsynced === true, revision };
+      return { data: data as ProjectData, unsynced: unsynced === true, revision, baseRevision: readRevision(baseRevision) };
     };
 
     // A failed server PUT leaves an older row behind. The local snapshot is
@@ -87,7 +88,7 @@ export class LocalBackend implements ProjectBackend {
             if (json.name && window.localStorage) {
               try { localStorage.setItem(NAME_PREFIX + id, json.name); } catch { /* optional cached name */ }
             }
-            const { [REVISION_FIELD]: rawRevision, [UNSYNCED_FIELD]: _unsynced, ...serverData } = json.data;
+            const { [REVISION_FIELD]: rawRevision, [UNSYNCED_FIELD]: _unsynced, [BASE_REVISION_FIELD]: _base, ...serverData } = json.data;
             const recoveryRevision = readRevision(rawRevision);
             const serverRevision = typeof json.revision === 'number'
               ? json.revision
@@ -117,6 +118,7 @@ export class LocalBackend implements ProjectBackend {
     // wins even if quota prevented clearing the local recovery marker.
     if (local?.unsynced && (!server || server.recoveryRevision === null ||
       (local.revision !== null && server.recoveryRevision < local.revision))) {
+      setLoadedRevision(local.baseRevision);
       trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
       return local.data;
     }
@@ -128,6 +130,7 @@ export class LocalBackend implements ProjectBackend {
 
     // 2. Fall back to localStorage
     if (local) {
+      setLoadedRevision(local.baseRevision);
       trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
       return local.data;
     }
@@ -163,12 +166,13 @@ export class LocalBackend implements ProjectBackend {
     const revision = Math.max(Date.now(), observedRevisions.get(id) ?? 0) + 1;
     observeRevision(id, revision);
     const serverData = { ...data, [REVISION_FIELD]: revision };
+    const baseRev = getBaseRevision();
     let localSaved = false;
     let localError: unknown;
     try {
       // Keep the recovery flag in the same atomic storage write as the
       // snapshot. A second key can fail quota after the data write succeeds.
-      localStorage.setItem(key, JSON.stringify({ ...serverData, [UNSYNCED_FIELD]: true }));
+      localStorage.setItem(key, JSON.stringify({ ...serverData, [UNSYNCED_FIELD]: true, [BASE_REVISION_FIELD]: baseRev }));
       localSaved = true;
       trace.action('backend:save-project', { id, source: 'localStorage', fileCount: Object.keys(data.files).length });
     } catch (err) {
@@ -184,7 +188,6 @@ export class LocalBackend implements ProjectBackend {
       try {
         let name: string | undefined;
         try { name = localStorage.getItem(NAME_PREFIX + id) || undefined; } catch { /* optional cached name */ }
-        const baseRev = getBaseRevision();
         const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -211,7 +214,7 @@ export class LocalBackend implements ProjectBackend {
           noteSaved(responseJson.project.revision);
         }
         if (localSaved) {
-          try { localStorage.setItem(key, JSON.stringify(serverData)); } catch { /* recovery flag may outlive a successful PUT */ }
+          try { localStorage.setItem(key, JSON.stringify({ ...serverData, [BASE_REVISION_FIELD]: getBaseRevision() })); } catch { /* recovery flag may outlive a successful PUT */ }
         }
         trace.action('backend:save-project', { id, source: 'server', fileCount: Object.keys(data.files).length });
         return;

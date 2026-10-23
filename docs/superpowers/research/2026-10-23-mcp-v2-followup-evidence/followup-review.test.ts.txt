@@ -1,0 +1,106 @@
+import { it, expect, vi, afterEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { AutomationClient } from '../../cli/src/client';
+import { startStandaloneServer } from '../../../server/automation/standalone';
+import { LocalProjectRepository } from '../../../server/automation/project-repository';
+import { CommitService } from '../../../server/automation/commit-service';
+import { saveProject, getProject } from '../../../server/storage';
+import { LocalBackend } from '@/backend/local-backend';
+import { resetSaveRevisionForTest } from '@/backend/save-revision';
+import { createPlan } from '../src/plan';
+import { createSnapshot, createOperationContext } from '../src/session';
+import { projectsBackupExportOperation } from '../src/operations/projects';
+const scope = { projectId: 'followup-review', branchId: 'main' };
+const page = `'use client'; export default function Page(){return <div data-id="root" style={{width:'100%',height:'auto'}}/>;}`;
+const dirs: string[] = [];
+function fixture() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'revyme-followup-'));
+  dirs.push(dir);
+  fs.mkdirSync(path.join(dir, 'projects'));
+  const file = path.join(dir, 'projects', scope.projectId + '.json');
+  fs.writeFileSync(file, JSON.stringify({ id:scope.projectId, name:'Review', revision:1,
+    data:{format:'revyme-v1',files:{'app/page.client.tsx':page}}, receipts:{} }));
+  return { dir, file, repo:new LocalProjectRepository(dir) };
+}
+afterEach(() => {
+  vi.unstubAllGlobals(); resetSaveRevisionForTest(); localStorage.clear();
+  for (const dir of dirs.splice(0)) fs.rmSync(dir, {recursive:true, force:true});
+});
+it('Windows: pages.create must commit through HTTP', async () => {
+  const f = fixture(); const server = await startStandaloneServer(0, f.dir);
+  try {
+    const client = new AutomationClient({apiUrl:`http://127.0.0.1:${(server.server.address() as any).port}`});
+    const result = await client.execute(scope, 'pages.create', {slug:'about', title:'About'});
+    console.log('pages.create', JSON.stringify(result));
+    expect(result.ok).toBe(true);
+  } finally { await server.close(); }
+});
+it('recovery reload must not bypass stale-save protection', async () => {
+  const f = fixture(); resetSaveRevisionForTest(); localStorage.clear();
+  vi.stubGlobal('fetch', async (_url: unknown, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      const body = JSON.parse(init.body as string);
+      try { return new Response(JSON.stringify({success:true, project:saveProject(scope.projectId, body.data, 'Review', f.dir, undefined, undefined, body.baseRevision)})); }
+      catch (err:any) { return new Response(JSON.stringify({error:err.message,code:err.code}), {status:409}); }
+    }
+    return new Response(JSON.stringify(getProject(scope.projectId, f.dir)));
+  });
+  const backend = new LocalBackend(); const loaded = (await backend.loadProject(scope.projectId))!;
+  const plan = createPlan({scope, baseRevision:1, operationId:'agent', changes:[{path:'app/page.client.tsx',beforeHash:null,content:page.replace('/>', '>Agent</div>')}]});
+  await f.repo.applyPlan(plan);
+  await expect(backend.saveProject(scope.projectId, loaded)).rejects.toThrow('REVISION_CONFLICT');
+  resetSaveRevisionForTest();
+  const recovered = (await backend.loadProject(scope.projectId))!;
+  let rejected = false;
+  try { await backend.saveProject(scope.projectId, recovered); } catch { rejected = true; }
+  console.log('recovery', JSON.stringify({rejected, disk:JSON.parse(fs.readFileSync(f.file,'utf8'))}));
+  expect(rejected).toBe(true);
+});
+it('workflow.chain must persist successful steps', async () => {
+  const f = fixture(); const server = await startStandaloneServer(0, f.dir);
+  try {
+    const client = new AutomationClient({apiUrl:`http://127.0.0.1:${(server.server.address() as any).port}`});
+    const result = await client.execute(scope, 'workflow.chain', {steps:[{tool:'styles.set',input:{filePath:'app/page.client.tsx',nodeId:'root',styles:{color:'red'}}}]});
+    console.log('chain', JSON.stringify(result));
+    expect(JSON.parse(fs.readFileSync(f.file,'utf8')).revision).toBe(2);
+  } finally { await server.close(); }
+});
+it('dry-run must validate source like commit', async () => {
+  const f = fixture(); const server = await startStandaloneServer(0, f.dir);
+  try {
+    const client = new AutomationClient({apiUrl:`http://127.0.0.1:${(server.server.address() as any).port}`});
+    const input = {filePath:'app/page.client.tsx',nodeId:'root',styles:{padding:'1.5rem'}};
+    const dry = await client.execute(scope,'styles.set',input,{dryRun:true});
+    const committed = await client.execute(scope,'styles.set',input);
+    console.log('dry-run',JSON.stringify({dry,committed}));
+    expect(dry.ok).toBe(committed.ok);
+  } finally { await server.close(); }
+});
+it('commit must reject altered plan bytes with an old hash', async () => {
+  const f = fixture(); const plan = createPlan({scope,baseRevision:1,operationId:'tamper',changes:[{path:'notes.txt',beforeHash:null,content:'reviewed'}]});
+  plan.changes[0].content = 'changed after review';
+  const result = await new CommitService(f.repo).commit(plan);
+  console.log('altered-plan',JSON.stringify(result));
+  expect(result.ok).toBe(false);
+});
+it('deleting a referenced module must fail final dependency validation', async () => {
+  const f = fixture(); const record=JSON.parse(fs.readFileSync(f.file,'utf8'));
+  record.data.files['lib/a.ts'] = "import { b } from './b'; export const a = b;";
+  record.data.files['lib/b.ts'] = 'export const b = 1;';
+  fs.writeFileSync(f.file,JSON.stringify(record));
+  const plan=createPlan({scope,baseRevision:1,operationId:'delete-dependency',changes:[{path:'lib/b.ts',beforeHash:null,content:null}]});
+  const result=await new CommitService(f.repo).commit(plan);
+  console.log('dependency-delete',JSON.stringify(result));
+  expect(result.ok).toBe(false);
+});
+it('project backups must not retain another project source', async () => {
+  const context = createOperationContext();
+  await projectsBackupExportOperation.execute(createSnapshot({projectId:'project-a',branchId:'main'},1,{'only-a.txt':'private A','common.txt':'A'}),{},context);
+  const result = await projectsBackupExportOperation.execute(createSnapshot({projectId:'project-b',branchId:'main'},1,{'only-b.txt':'B','common.txt':'B'}),{},context);
+  const files = JSON.parse(result.backupPayload).files;
+  console.log('cross-project-backup',JSON.stringify(files));
+  expect(files['only-a.txt']).toBeUndefined();
+  expect(files['common.txt']).toBe('B');
+});

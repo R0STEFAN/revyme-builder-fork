@@ -458,7 +458,7 @@ describe('action layer — registration', () => {
     }
   });
 
-  it('RICH_ACTION_TOOLS exports the ten rich primitives with category semantic (P7 adds create_component)', () => {
+  it('RICH_ACTION_TOOLS exports the rich primitives with category semantic', () => {
     expect(RICH_ACTION_TOOLS.map((t) => t.name)).toEqual([
       'set_motion_preset',
       'create_overlay',
@@ -466,6 +466,7 @@ describe('action layer — registration', () => {
       'create_variant',
       'extract_component',
       'create_component',
+      'create_navbar',
       'bind_cms_list',
       'bind_cms_field',
       'set_form',
@@ -520,6 +521,8 @@ describe('action layer — registration', () => {
         // Authoring scoped by master name (P7 Ib-3): no node_id, no
         // component — the declaration carries name/props/from/layout.
         expect(properties.name).toBeTruthy();
+      } else if (tool.name === 'create_navbar') {
+        expect(properties.logoText).toBeTruthy();
       } else {
         expect(properties.node_id).toBeTruthy();
       }

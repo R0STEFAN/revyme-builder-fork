@@ -8,7 +8,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { defaultRegistry } from '@revyme/automation-core';
+import { defaultRegistry, createIdFactory } from '@revyme/automation-core';
 import type { OperationContext, Scope } from '@revyme/automation-core';
 import type { AutomationClient } from './client';
 import type { ProjectConfig } from './config';
@@ -202,7 +202,7 @@ export function createMcpServer(options: McpServerOptions): Server {
     };
 
     const context: OperationContext = {
-      createId: (prefix = 'mcp') => `${prefix}-${Date.now().toString(36)}`,
+      createId: createIdFactory('mcp'),
       signal: extra.signal || new AbortController().signal,
       trace,
       adapters: {},

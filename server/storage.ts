@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
+import type { Receipt } from '../packages/automation-core/src/contracts';
 
 // Disable sharp cache so Windows file locks on thumbnail files are released immediately after processing
 sharp.cache(false);
@@ -33,6 +34,7 @@ export interface ProjectRecord {
   previewImage?: string | null;
   revision?: number;
   receipts?: Record<string, any>;
+  duplicateOrigin?: { sourceProjectId: string; operationId: string; planHash: string; receipt: Receipt };
 }
 
 export interface ProjectVersionSummary {
@@ -137,6 +139,7 @@ export function getProject(id: string, customRoot?: string): ProjectRecord | nul
       previewImage: parsed.previewImage ?? parsed.data?.previewImage ?? null,
       revision: typeof parsed.revision === 'number' ? parsed.revision : 1,
       receipts: parsed.receipts || {},
+      duplicateOrigin: parsed.duplicateOrigin,
     };
   } catch (err) {
     console.error(`[Revyme Storage] Error loading project ${safeId}:`, err);
@@ -166,6 +169,8 @@ export function saveProject(
   let existingPreviewImage: string | null = null;
   let existingRevision = 1;
   let existingReceipts: Record<string, any> = {};
+  let existingDuplicateOrigin: ProjectRecord['duplicateOrigin'];
+  let requiresRevision = false;
 
   if (fs.existsSync(filePath)) {
     try {
@@ -174,14 +179,18 @@ export function saveProject(
       if (existing.name) existingName = existing.name;
       if (existing.folderId !== undefined) existingFolderId = existing.folderId;
       if (existing.previewImage !== undefined) existingPreviewImage = existing.previewImage;
-      if (typeof existing.revision === 'number') existingRevision = existing.revision;
+      if (typeof existing.revision === 'number') {
+        existingRevision = existing.revision;
+        requiresRevision = true;
+      }
       if (existing.receipts) existingReceipts = existing.receipts;
+      existingDuplicateOrigin = existing.duplicateOrigin;
     } catch {
       // ignore read error on overwrite
     }
   }
 
-  if (baseRevision !== undefined && baseRevision !== null) {
+  if (requiresRevision || (baseRevision !== undefined && baseRevision !== null)) {
     if (baseRevision !== existingRevision) {
       const err: any = new Error(
         `REVISION_CONFLICT: Base revision ${baseRevision} does not match current server revision ${existingRevision}`
@@ -210,6 +219,7 @@ export function saveProject(
     previewImage: finalPreviewImage,
     revision: nextRevision,
     receipts: existingReceipts,
+    ...(existingDuplicateOrigin ? { duplicateOrigin: existingDuplicateOrigin } : {}),
   };
 
   // Atomic write via temp file
@@ -352,15 +362,119 @@ export function deleteProjects(
 export function duplicateProject(
   sourceId: string,
   newName?: string,
-  customRoot?: string
+  customRoot?: string,
+  options?: { targetId: string; baseRevision: number; folderId?: string | null; origin: NonNullable<ProjectRecord['duplicateOrigin']> }
 ): ProjectRecord | null {
   const source = getProject(sourceId, customRoot);
   if (!source) return null;
 
-  const newId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const newId = options?.targetId ?? `proj-${crypto.randomUUID()}`;
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(newId) || newId === source.id) throw new Error('Invalid duplicate project id');
+  if (options && source.revision !== options.baseRevision) throw new Error('REVISION_CONFLICT: Source project changed before duplication');
   const duplicateName = newName || `${source.name} (Copy)`;
+  const { uploadsDir, uploadsMetaFile, projectsDir } = getDataDirs(customRoot);
+  const targetPath = path.join(projectsDir, `${newId}.json`);
+  if (fs.existsSync(targetPath)) throw new Error('PROJECT_ALREADY_EXISTS: Duplicate target already exists');
+  const meta = readUploadsMeta(customRoot);
+  const referenced = new Set<string>();
+  const scan = (value: unknown): void => {
+    if (typeof value === 'string') {
+      for (const match of value.matchAll(/\/(?:api\/)?uploads\/(?:thumb\/)?([a-zA-Z0-9_.-]+)/g)) referenced.add(match[1]);
+    } else if (Array.isArray(value)) value.forEach(scan);
+    else if (value && typeof value === 'object') Object.values(value).forEach(scan);
+  };
+  scan(source.data);
+  scan(source.previewImage);
+  for (const [filename, info] of Object.entries(meta)) if (info.projectId === source.id) referenced.add(filename);
 
-  return saveProject(newId, source.data, duplicateName, customRoot, source.folderId ?? null);
+  const remap = new Map<string, string>();
+  const copied: string[] = [];
+  let metadataWritten = false;
+  const writeMetaAtomically = () => {
+    const tmp = `${uploadsMetaFile}.tmp.${crypto.randomUUID()}`;
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(meta, null, 2), { encoding: 'utf8', flag: 'wx' });
+      fs.renameSync(tmp, uploadsMetaFile);
+    } finally {
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+    }
+  };
+  try {
+    for (const filename of referenced) {
+      const info = meta[filename];
+      const from = path.join(uploadsDir, filename);
+      if (!info || !fs.existsSync(from)) throw new Error(`Cannot duplicate missing uploaded asset: ${filename}`);
+      const stableId = options ? crypto.createHash('sha256')
+        .update(JSON.stringify([source.id, newId, options.origin.operationId, options.origin.planHash, filename])).digest('hex').slice(0, 32)
+        : crypto.randomUUID();
+      const target = filename.startsWith(`thumbnail-${source.id}.`)
+        ? `thumbnail-${newId}${path.extname(filename)}`
+        : `copy-${stableId}${path.extname(filename)}`;
+      const to = path.join(uploadsDir, target);
+      try {
+        fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+      } catch (err) {
+        // An interrupted attempt can have copied the same deterministic
+        // asset before publishing the target project. Reuse it only if exact.
+        if (!options || (err as NodeJS.ErrnoException).code !== 'EEXIST' ||
+            !fs.readFileSync(from).equals(fs.readFileSync(to))) throw err;
+      }
+      copied.push(target);
+      remap.set(filename, target);
+      meta[target] = { ...info, key: target, filename: target, projectId: newId, createdAt: new Date().toISOString() };
+    }
+    const rewrite = (value: any, jsonFile = false): any => {
+      if (typeof value === 'string') {
+        if (remap.has(value)) return remap.get(value)!;
+        const rewritten = value.replace(/(\/(?:api\/)?uploads\/(?:thumb\/)?)([a-zA-Z0-9_.-]+)/g,
+          (match, prefix: string, filename: string) => remap.has(filename) ? prefix + remap.get(filename) : match);
+        if (jsonFile) {
+          try {
+            JSON.parse(rewritten);
+            return rewritten.replace(/"(?:\\.|[^"\\])*"/g, token => {
+              const decoded = JSON.parse(token);
+              return remap.has(decoded) ? JSON.stringify(remap.get(decoded)) : token;
+            });
+          } catch { /* retain non-JSON content unchanged apart from URLs */ }
+        }
+        return rewritten;
+      }
+      if (Array.isArray(value)) return value.map(item => rewrite(item));
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewrite(item, key.endsWith('.json'))]));
+      return value;
+    };
+    if (copied.length) {
+      writeMetaAtomically();
+      metadataWritten = true;
+    }
+    const duplicateData = rewrite(source.data);
+    const duplicateFolder = options?.folderId === undefined ? source.folderId ?? null : options.folderId;
+    if (!options) return saveProject(newId, duplicateData, duplicateName, customRoot, duplicateFolder, rewrite(source.previewImage));
+    if (getProject(sourceId, customRoot)?.revision !== options.baseRevision) throw new Error('REVISION_CONFLICT: Source project changed during duplication');
+    const now = Date.now();
+    const record: ProjectRecord = { id: newId, name: duplicateName, fileCount: Object.keys(duplicateData?.files ?? {}).length,
+      createdAt: now, updatedAt: now, data: duplicateData, folderId: duplicateFolder,
+      previewImage: rewrite(source.previewImage), revision: 1, receipts: {}, duplicateOrigin: options.origin };
+    const tmp = path.join(projectsDir, `${newId}.tmp.${crypto.randomUUID()}`);
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(record, null, 2), { encoding: 'utf8', flag: 'wx' });
+      fs.linkSync(tmp, targetPath); // publish without ever overwriting an existing project
+    } finally {
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch { /* published project remains authoritative */ }
+    }
+    return record;
+  } catch (error) {
+    for (const filename of copied) delete meta[filename];
+    let rollbackError: unknown;
+    if (metadataWritten) {
+      try { writeMetaAtomically(); } catch (err) { rollbackError = err; }
+    }
+    for (const filename of copied) {
+      try { fs.unlinkSync(path.join(uploadsDir, filename)); } catch { /* preserve the original error */ }
+    }
+    if (rollbackError) throw new Error(`Project duplication failed: ${String(error)}; metadata rollback failed: ${String(rollbackError)}`);
+    throw error;
+  }
 }
 
 /**
@@ -717,12 +831,19 @@ export async function ensureThumbnail(filename: string, customRoot?: string): Pr
 
   const tmpPath = path.join(thumbnailsDir, `${thumbName}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
   try {
-    await sharp(originalPath, { failOnError: false } as any)
+    // Decode from memory so Sharp does not keep the source file locked while a
+    // project or asset is deleted on Windows.
+    const original = fs.readFileSync(originalPath);
+    await sharp(original, { failOnError: false } as any)
       .rotate()
       .resize(240, 240, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 80 })
       .toFile(tmpPath);
 
+    if (!fs.existsSync(originalPath)) {
+      fs.unlinkSync(tmpPath);
+      return null;
+    }
     fs.renameSync(tmpPath, thumbPath);
     return thumbPath;
   } catch {
@@ -1089,7 +1210,8 @@ export function restoreProjectVersion(
     current?.name,
     customRoot,
     current?.folderId,
-    current?.previewImage
+    current?.previewImage,
+    current?.revision
   );
 
   return { success: true, project: savedProject, version };

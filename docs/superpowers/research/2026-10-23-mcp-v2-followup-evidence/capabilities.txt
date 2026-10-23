@@ -1,0 +1,56 @@
+
+ RUN  v4.1.6 D:/revyme-fork/revyme-builder-fork
+
+stderr | packages/automation-core/test/capabilities/T17-cms-api.test.ts > T17: External API CMS & Dynamic Search > 4. External Fetch Execution & Credential Redaction > returns honest failure status on HTTP 401 without returning fake success
+[cms-api:fetch:error-status] [object Object] { status: 401, url: 'https://api.acme.com/v1/content' }
+
+stderr | packages/automation-core/test/capabilities/T22-extensions.test.ts > T22: Plugins, Marketplace, Project Skills & Service Access > 2. Plugins Lifecycle & Data > plugins.write: rejects non-TSX or malformed plugins
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T23-challenger2.test.ts > T23 Empirical Challenger: Preflight & Deploy Lifecycle Hardening > 3. Missing Layout Metadata & Empty Strings > treats whitespace-only title as empty in both modes
+[metadata-gen:parse-failed] [object Object] {
+  raw: "{\n  title: '   \t  \n ',\n  description: 'Valid description here',\n}"
+}
+
+stderr | packages/automation-core/test/capabilities/T20-challenger1.test.ts > T20 Challenger 1: Adversarial Suite for Code Components, Guarded Files & CAS > 1. Adversarial codeComponents.create > @controls Annotation Validation > rejects code component with malformed JSON in @controls annotation
+[controls-parser:parse-failed] [object Object] { raw: '{ "title": { type: text, unquoted } }' }
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects subtle unclosed JSX tags and invalid nesting
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T22-challenger1.test.ts > T22 Adversarial Challenger Suite: Plugins & Storage > 1. plugins.write Stress Testing > 1.1 Subtle TSX Syntax Errors & Malformed Bodies > rejects unbalanced braces and tokens outside JSX
+[ast-utils:parse] Failed to parse JSX Failed to parse JSX
+
+stderr | packages/automation-core/test/capabilities/T08-design-system.test.ts > T08: Design System — Tokens, Presets, Themes, Typography and Fonts > handles full typography preset lifecycle: creation, responsive tiers, apply, retag, and detach
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-line-height-md not found in CSS Token --typo-display-line-height-md not found in CSS
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-line-height-sm not found in CSS Token --typo-display-line-height-sm not found in CSS
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-spacing-md not found in CSS Token --typo-display-spacing-md not found in CSS
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-spacing-sm not found in CSS Token --typo-display-spacing-sm not found in CSS
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-stroke-width not found in CSS Token --typo-display-stroke-width not found in CSS
+[preset-gen:removePresetTokenFromCSS] Token --typo-display-stroke-color not found in CSS Token --typo-display-stroke-color not found in CSS
+
+stderr | packages/automation-core/test/capabilities/T20-adversarial.test.ts > Adversarial Stress Test: Milestone T20 Integrity & Robustness > Adversarial Code Components > rejects malformed JSON within /** @controls */ annotation
+[controls-parser:parse-failed] [object Object] { raw: '{ "title": { invalid_json_here } }' }
+
+·······················································································································································································································································································································································································································································································································································································································································································
+
+ Test Files  36 passed (36)
+      Tests  663 passed (663)
+   Start at  09:45:55
+   Duration  18.66s (transform 31.77s, setup 0ms, import 109.28s, tests 6.25s, environment 58.95s)
+

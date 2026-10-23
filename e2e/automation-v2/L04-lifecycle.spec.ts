@@ -1,12 +1,11 @@
 // e2e/automation-v2/L04-lifecycle.spec.ts
 /**
- * E2E Acceptance Spec L04: Project Lifecycle, Backup, Branches, Review & Merge
+ * In-process lifecycle coverage. Browser and durable acceptance are separate.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createSnapshot, createOperationContext } from '../../packages/automation-core/src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../packages/automation-core/src/session';
 import {
-  projectsDuplicateOperation,
   projectsBackupExportOperation,
   projectsBackupRestoreOperation,
 } from '../../packages/automation-core/src/operations/projects';
@@ -33,7 +32,7 @@ export default function Page() {
 }
 `;
 
-describe('E2E L04: Project Lifecycle Spec', () => {
+describe('L04 in-process project lifecycle coverage', () => {
   const context = createOperationContext();
 
   beforeEach(() => {
@@ -47,12 +46,10 @@ describe('E2E L04: Project Lifecycle Spec', () => {
     });
 
     // 1. Duplicate
-    const dupRes = await projectsDuplicateOperation.execute(
-      snapshot,
-      { targetName: 'E2E Duplicated Project' },
-      context,
-    );
-    expect(dupRes.newProjectId).toBeDefined();
+    const dupRes = await prepareOperation(snapshot, 'projects.duplicate', { targetName: 'E2E Duplicated Project' }, context);
+    expect(dupRes.ok).toBe(true);
+    expect(dupRes.meta.commitStatus).toBe('not_committed');
+    expect((dupRes.data as { createdIds: string[] }).createdIds).toHaveLength(1);
 
     // 2. Export & Restore
     const exportRes = await projectsBackupExportOperation.execute(

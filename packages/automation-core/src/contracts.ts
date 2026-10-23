@@ -12,6 +12,9 @@ export interface Snapshot {
   revision: number;
   files: ReadonlyMap<string, string>;
   config: Readonly<Record<string, unknown>>;
+  branches?: Readonly<Record<string, unknown>>;
+  mainFiles?: Readonly<Record<string, string>>;
+  activeBranchId?: string;
 }
 
 export interface FileChange {
@@ -34,6 +37,14 @@ export interface Normalization {
   after: string;
 }
 
+export type ProjectAction =
+  | { kind: 'branch.create'; id: string; from: string; createdAt: number }
+  | { kind: 'branch.switch'; id: string }
+  | { kind: 'branch.delete'; id: string }
+  | { kind: 'branch.apply'; id: string; appliedAt: number; mainChanges: FileChange[] }
+  | { kind: 'project.duplicate'; id: string; name: string; folderId?: string | null }
+  | { kind: 'project.restore'; mainChanges: FileChange[]; branches?: Record<string, unknown>; activeBranchId?: string };
+
 export interface Plan {
   scope: Scope;
   baseRevision: number;
@@ -44,6 +55,7 @@ export interface Plan {
   planHash: string;
   issues: Issue[];
   normalizations: Normalization[];
+  projectAction?: ProjectAction;
 }
 
 export interface Receipt {
@@ -53,6 +65,7 @@ export interface Receipt {
   revision: number;
   planHash: string;
   changedFiles: string[];
+  createdIds?: string[];
 }
 
 export type OperationKind = 'read' | 'mutation' | 'observation' | 'service';
@@ -130,6 +143,15 @@ export const PlanSchema = z.object({
   planHash: z.string(),
   issues: z.array(IssueSchema),
   normalizations: z.array(NormalizationSchema),
+  projectAction: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('branch.create'), id: z.string().min(1), from: z.string().min(1), createdAt: z.number().int().nonnegative() }),
+    z.object({ kind: z.literal('branch.switch'), id: z.string().min(1) }),
+    z.object({ kind: z.literal('branch.delete'), id: z.string().min(1) }),
+    z.object({ kind: z.literal('branch.apply'), id: z.string().min(1), appliedAt: z.number().int().nonnegative(), mainChanges: z.array(FileChangeSchema) }),
+    z.object({ kind: z.literal('project.duplicate'), id: z.string().min(1), name: z.string().min(1).max(120), folderId: z.string().nullable().optional() }),
+    z.object({ kind: z.literal('project.restore'), mainChanges: z.array(FileChangeSchema),
+      branches: z.record(z.string(), z.unknown()).optional(), activeBranchId: z.string().optional() }),
+  ]).optional(),
 });
 
 export const ReceiptSchema = z.object({
@@ -139,4 +161,5 @@ export const ReceiptSchema = z.object({
   revision: z.number(),
   planHash: z.string(),
   changedFiles: z.array(z.string()),
+  createdIds: z.array(z.string()).optional(),
 });

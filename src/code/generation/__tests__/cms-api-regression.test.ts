@@ -24,6 +24,8 @@ import { createCmsIndexPageFile } from '@/code/project/cms-page-ops';
 import { serializeJSXAttr } from '@/code/generation/generator-utils';
 import { buildNodeJSX } from '@/code/generation/generator-crud';
 import { renderToString } from 'react-dom/server';
+import { parseExpression } from '@babel/parser';
+import { extractItemMemberPath } from '@/code/parsing/parser';
 
 beforeEach(() => {
   files.clear();
@@ -149,6 +151,13 @@ describe('API CMS regression: codegen and configuration', () => {
     const requireShim = (name: string) => name === 'react' ? React : name === 'next/link' ? ((props: any) => React.createElement('a', props)) : [];
     new Function('module', 'exports', 'require', js)(module, module.exports, requireShim);
     expect(() => renderToString(React.createElement(module.exports.default, { items: [{ slug: 'a', title: 'A', author: { name: 'Name' } }] }))).not.toThrow();
+    const html = renderToString(React.createElement(module.exports.default, {
+      items: [{ slug: 'b', title: { name: { nested: true }, value: 42 }, author: null }],
+    }));
+    expect(html).toContain('42');
+    const match = client.match(/\{(typeof item\.title === 'object'[\s\S]*?String\(item\.title \?\? ''\))\}<\/p>/);
+    expect(match).not.toBeNull();
+    expect(extractItemMemberPath(parseExpression(match![1]), 'item')).toBe('title');
   });
 });
 

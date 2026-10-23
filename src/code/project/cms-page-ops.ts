@@ -113,6 +113,9 @@ function renderFieldJsx(
 ): string | null {
   const id = `field-${field.id}`;
   const access = itemAccess(itemVar, field.id);
+  // Keep the source binding readable by the parser while safely formatting
+  // malformed API values that would otherwise crash React as object children.
+  const safeText = `typeof ${access} === 'object' && ${access} !== null ? (typeof ${access}.name === 'string' ? ${access}.name : typeof ${access}.title === 'string' ? ${access}.title : typeof ${access}.label === 'string' ? ${access}.label : typeof ${access}.value === 'string' || typeof ${access}.value === 'number' ? String(${access}.value) : JSON.stringify(${access})) : String(${access} ?? '')`;
 
   switch (field.type) {
     case 'image':
@@ -143,7 +146,7 @@ function renderFieldJsx(
         fontSize: '${fontSize}', fontWeight: '${weight}', color: '${color}',
         fontFamily: 'Inter, sans-serif',
         margin: 0
-      }}>{typeof ${access} === 'object' && ${access} !== null ? (${access}.name || ${access}.title || ${access}.label || JSON.stringify(${access})) : ${access}}</p>`;
+      }}>{${safeText}}</p>`;
     }
     case 'textarea':
     case 'richtext': {
@@ -157,7 +160,7 @@ function renderFieldJsx(
         fontSize: '${fontSize}', color: '#475569', lineHeight: '${lineHeight}',
         fontFamily: 'Inter, sans-serif',
         margin: 0${maxWidth}
-      }}>{typeof ${access} === 'object' && ${access} !== null ? (${access}.name || ${access}.title || ${access}.label || JSON.stringify(${access})) : ${access}}</p>`;
+      }}>{${safeText}}</p>`;
     }
     case 'number':
     case 'date': {

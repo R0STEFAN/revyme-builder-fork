@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto';
 import type { Snapshot, Plan, Issue } from './contracts';
 import { checkFile } from '@/code/oracle/check-file';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
+import { calculatePlanHash } from './session';
+import { validateBranchAction } from './operations/scoped-branches';
+import { safeProjectPath, validateRestoreAction } from './operations/scoped-restore';
 
 const TRANSPARENT_INLINE_TAGS = new Set([
   'span',
@@ -22,6 +25,43 @@ const TRANSPARENT_INLINE_TAGS = new Set([
 
 export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; issues: Issue[] } {
   const issues: Issue[] = [...plan.issues];
+  if (calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan) !== plan.planHash) {
+    issues.push({ code: 'PLAN_HASH_MISMATCH', path: ['planHash'], message: 'Plan bytes do not match planHash' });
+  }
+  if (plan.scope.projectId !== snapshot.scope.projectId || plan.scope.branchId !== snapshot.scope.branchId) {
+    issues.push({ code: 'SCOPE_MISMATCH', path: ['scope'], message: 'Plan scope does not match snapshot' });
+  }
+  if (plan.projectAction) {
+    const error = plan.projectAction.kind === 'project.restore'
+      ? validateRestoreAction(snapshot, plan.projectAction)
+      : plan.projectAction.kind === 'project.duplicate'
+      ? (!/^[A-Za-z0-9_-]{1,120}$/.test(plan.projectAction.id) || plan.projectAction.id === snapshot.scope.projectId || !plan.projectAction.name.trim() || plan.projectAction.name !== plan.projectAction.name.trim() ? 'Invalid duplicate project name or id.' : null)
+      : validateBranchAction(snapshot, plan.projectAction);
+    if (error || plan.changes.length) issues.push({ code: 'INVALID_PROJECT_ACTION', path: ['projectAction'],
+      message: error ?? 'Project actions cannot be combined with file changes' });
+    if (!error && !plan.changes.length && (plan.projectAction.kind === 'branch.apply' || plan.projectAction.kind === 'project.restore')) {
+      const mainSnapshot: Snapshot = { ...snapshot, scope: { ...snapshot.scope, branchId: 'main' }, files: new Map(Object.entries(snapshot.mainFiles ?? {})) };
+      const mainPlan: Plan = { ...plan, scope: mainSnapshot.scope, changes: plan.projectAction.mainChanges,
+        projectAction: undefined, issues: [], planHash: '' };
+      mainPlan.planHash = calculatePlanHash(mainPlan.scope, mainPlan.baseRevision, mainPlan.operationId, mainPlan.changes, mainPlan);
+      issues.push(...validatePlan(mainSnapshot, mainPlan).issues);
+      if (plan.projectAction.kind === 'project.restore' && plan.projectAction.branches) {
+        for (const [id, value] of Object.entries(plan.projectAction.branches)) {
+          const branch = value as { files: Record<string, string> };
+          const old = (snapshot.branches?.[id] as { files?: Record<string, string> } | undefined)?.files ?? {};
+          const files = new Map(Object.entries(old));
+          const changes = [...new Set([...Object.keys(old), ...Object.keys(branch.files)])].sort()
+            .filter(path => old[path] !== branch.files[path])
+            .map(path => ({ path, beforeHash: Object.prototype.hasOwnProperty.call(old, path) ? createHash('sha256').update(old[path]).digest('hex') : null,
+              content: Object.prototype.hasOwnProperty.call(branch.files, path) ? branch.files[path] : null }));
+          const branchSnapshot: Snapshot = { ...snapshot, scope: { ...snapshot.scope, branchId: id }, files };
+          const branchPlan: Plan = { ...mainPlan, scope: branchSnapshot.scope, changes, planHash: '' };
+          branchPlan.planHash = calculatePlanHash(branchPlan.scope, branchPlan.baseRevision, branchPlan.operationId, changes, branchPlan);
+          issues.push(...validatePlan(branchSnapshot, branchPlan).issues.map(issue => ({ ...issue, path: ['branches', id, ...issue.path] })));
+        }
+      }
+    }
+  }
 
   // 1. Revision freshness check
   if (plan.baseRevision !== snapshot.revision) {
@@ -43,12 +83,24 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
   }
 
   // 3. Validate each changed file
+  const seenPaths = new Set<string>();
   for (const change of plan.changes) {
     const filePath = change.path;
+    if (!safeProjectPath(filePath)) {
+      issues.push({ code: 'INVALID_PATH', path: [filePath], message: `Invalid project file path: ${filePath}` });
+    }
+    if (seenPaths.has(filePath)) {
+      issues.push({ code: 'DUPLICATE_FILE_CHANGE', path: [filePath], message: `Plan contains more than one change for ${filePath}` });
+    }
+    seenPaths.add(filePath);
 
     // Check beforeHash
-    if (change.beforeHash) {
+    {
       const existing = snapshot.files.get(filePath);
+      if (change.beforeHash === null && existing !== undefined) {
+        issues.push({ code: 'BEFORE_HASH_MISMATCH', path: [filePath],
+          message: `File ${filePath} already exists but the plan expects it to be absent` });
+      } else if (change.beforeHash !== null) {
       if (existing === undefined) {
         issues.push({
           code: 'BEFORE_HASH_MISMATCH',
@@ -64,6 +116,7 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
             message: `File ${filePath} beforeHash mismatch: expected ${change.beforeHash}, got ${hash}`,
           });
         }
+      }
       }
     }
 
@@ -112,6 +165,19 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
     }
   }
 
+  // Deletions and renames can break imports in files which were not edited.
+  // Report newly broken dependencies without making legacy diagnostics a save blocker.
+  const changedPaths = new Set(plan.changes.map((change) => change.path));
+  for (const [filePath, content] of projectedFiles) {
+    if (changedPaths.has(filePath) || !/\.(tsx|jsx|ts|js)$/.test(filePath)) continue;
+    const before: Issue[] = [];
+    const after: Issue[] = [];
+    validateSourceCode(filePath, content, new Map(snapshot.files), before, true);
+    validateSourceCode(filePath, content, projectedFiles, after, true);
+    const oldImports = new Set(before.filter((i) => i.code === 'UNRESOLVED_IMPORT').map((i) => i.message));
+    issues.push(...after.filter((i) => i.code === 'UNRESOLVED_IMPORT' && !oldImports.has(i.message)));
+  }
+
   return {
     ok: issues.length === 0,
     issues,
@@ -147,12 +213,12 @@ function validateSourceCode(
     if (!node || typeof node !== 'object') return;
 
     // Check relative and alias imports
-    if (node.type === 'ImportDeclaration') {
+    if (node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
       const specifier = node.moduleSpecifier?.value ?? node.source?.value;
       if (typeof specifier === 'string') {
         let candidatePath: string | null = null;
         if (specifier.startsWith('.')) {
-          candidatePath = path.normalize(path.join(path.dirname(filePath), specifier));
+          candidatePath = path.posix.normalize(path.posix.join(path.posix.dirname(filePath), specifier));
         } else if (specifier.startsWith('@/')) {
           candidatePath = specifier.slice(2);
         }

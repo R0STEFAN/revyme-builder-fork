@@ -605,11 +605,12 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
     it('records versions on disk during project save and supports branch filtering, restore, and delete', async () => {
       const projId = `test-ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       // 1. Create a project
-      await dispatch({
+      const created = await dispatch({
         method: 'POST',
         url: '/api/projects',
         body: { id: projId, name: 'Version Test', data: { files: { 'app/page.tsx': 'v1' } } },
       });
+      expect(created.status).toBe(201);
 
       // 2. Save an update (autosave) on branch main
       const putRes = await dispatch({
@@ -617,6 +618,7 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
         url: `/api/projects/${projId}`,
         body: {
           data: { files: { 'app/page.tsx': 'v2' } },
+          baseRevision: created.body.revision,
           branchId: 'main',
           source: 'autosave',
           label: 'Autosave v2',
@@ -626,16 +628,18 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
       expect(putRes.status).toBe(200);
 
       // 3. Save a manual update on branch feat-a
-      await dispatch({
+      const secondSave = await dispatch({
         method: 'PUT',
         url: `/api/projects/${projId}`,
         body: {
           data: { files: { 'app/page.tsx': 'v3-feat' } },
+          baseRevision: putRes.body.project.revision,
           branchId: 'feat-a',
           source: 'manual',
           label: 'Manual save v3',
         },
       });
+      expect(secondSave.status).toBe(200);
 
       // 4. List all versions
       const listAll = await dispatch({
@@ -696,23 +700,28 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
 
     it('caps saved versions to 100 on disk with FIFO rotation', async () => {
       const projId = `test-fifo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      await dispatch({
+      const created = await dispatch({
         method: 'POST',
         url: '/api/projects',
         body: { id: projId, name: 'FIFO Test', data: { files: { 'app/page.tsx': 'init' } } },
       });
+      expect(created.status).toBe(201);
+      let revision = created.body.revision;
 
       // Save 105 distinct versions
       for (let i = 1; i <= 105; i++) {
-        await dispatch({
+        const save = await dispatch({
           method: 'PUT',
           url: `/api/projects/${projId}`,
           body: {
             data: { files: { 'app/page.tsx': `v-${i}` } },
+            baseRevision: revision,
             source: 'autosave',
             label: `Version ${i}`,
           },
         });
+        expect(save.status).toBe(200);
+        revision = save.body.project.revision;
       }
 
       const listRes = await dispatch({

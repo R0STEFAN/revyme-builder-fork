@@ -24,7 +24,7 @@ const MINMAX_SIZE_KEYS = new Set(['minWidth', 'maxWidth', 'minHeight', 'maxHeigh
 // and multi-unit spacing bred shorthand-mix/codegen bugs. Any other unit
 // shows in the panel as a number the control will rewrite to px on the next
 // edit — "reads as a different value", same class as MINMAX_SIZE_UNIT.
-const SPACING_PX_KEYS = new Set([
+export const SPACING_PX_KEYS = new Set([
   'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
   'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
   'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',

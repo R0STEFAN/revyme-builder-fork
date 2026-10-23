@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T04:30:06.678Z",
+  "generatedAt": "2026-10-23T08:29:34.682Z",
   "summary": {
     "registeredAgentTools": 172,
     "mutationTypes": 175,
@@ -14,7 +14,7 @@
     "leafCmsFields": 8,
     "leafExportFormats": 4,
     "totalCapabilities": 37,
-    "verifiedCapabilities": 37
+    "verifiedCapabilities": 0
   },
   "agentTools": [
     {
@@ -5839,7 +5839,7 @@
         "title": "Discovery, schemas, context, permissions, workflow plan/batch/chain",
         "description": "Canonical tool discovery, focused schemas, operation registry, batch and chain execution, and permission governance.",
         "ownerTask": "T01",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T01-contracts.test.ts"
       },
       {
@@ -5847,7 +5847,7 @@
         "title": "Guarded file operations and multi-file edits",
         "description": "Whole-file read, write, search, listing, diffing, and atomic multi-file submissions.",
         "ownerTask": "T20",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T20-code.test.ts"
       },
       {
@@ -5855,7 +5855,7 @@
         "title": "Project lifecycle, duplication, backup export and restore",
         "description": "Project metadata CRUD, snapshot duplication, checksummed backup archive export and restoration.",
         "ownerTask": "T21",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
@@ -5863,7 +5863,7 @@
         "title": "Pages CRUD, duplication, homepage, slugs, and folders",
         "description": "Page creation, removal, duplication, homepage assignment, slug normalization, and folder grouping.",
         "ownerTask": "T06",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
@@ -5871,7 +5871,7 @@
         "title": "Templates, shared layouts, slots, and route groups",
         "description": "Template creation, layout assignment, children slot injection, and route-group layout scaffolding.",
         "ownerTask": "T06",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
@@ -5879,7 +5879,7 @@
         "title": "Site and page metadata, SEO, social cards, favicon, and canonicals",
         "description": "Metadata updates, OpenGraph social cards, Twitter cards, robots, and canonical URLs.",
         "ownerTask": "T06",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
@@ -5887,7 +5887,7 @@
         "title": "Canvas nodes CRUD, move, reorder, wrap, and duplicate",
         "description": "Canvas node AST manipulation, insertion, removal, hierarchy reparenting, and wrapping.",
         "ownerTask": "T07",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
@@ -5895,7 +5895,7 @@
         "title": "Viewports, responsive breakpoints, overrides, and ladder",
         "description": "Responsive breakpoint overrides, media query generation, viewport inheritance, and ladder validation.",
         "ownerTask": "T07",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
@@ -5903,7 +5903,7 @@
         "title": "Layout, flex, grid, styles controls, and filters",
         "description": "Flexbox, CSS grid, sizing, pins, fills, gradients, borders, shadows, filters, clips, and transforms.",
         "ownerTask": "T07",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
@@ -5911,7 +5911,7 @@
         "title": "Typography, rich text, font families, and text fit",
         "description": "Text editing, inline semantic formatting, font family management, fit text, and responsive typography.",
         "ownerTask": "T08",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T08-design-system.test.ts"
       },
       {
@@ -5919,7 +5919,7 @@
         "title": "Design tokens, color presets, themes, and font loading",
         "description": "Design token dictionary, CSS variable synchronization, color palettes, dark mode, and font imports.",
         "ownerTask": "T08",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T08-design-system.test.ts"
       },
       {
@@ -5927,7 +5927,7 @@
         "title": "Design components CRUD, props, instances, and detachment",
         "description": "Component creation, extraction, instance placement, prop schemas, and inline JSX detachment.",
         "ownerTask": "T09",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T09-components.test.ts"
       },
       {
@@ -5935,7 +5935,7 @@
         "title": "Component variables, hoisting, and typed variable mappings",
         "description": "Component-level variables, prop-to-variable bindings, hoisting, and deletion cascading.",
         "ownerTask": "T09",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T09-components.test.ts"
       },
       {
@@ -5943,7 +5943,7 @@
         "title": "Component variants, hover/active states, and connections",
         "description": "Variant creation, override recording, transition triggers, and interactive state mapping.",
         "ownerTask": "T10",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
@@ -5951,7 +5951,7 @@
         "title": "Overlays, drawers, modals, tooltips, and triggers",
         "description": "Overlay lifecycle, fixed/relative positioning, trigger wiring, and accessibility focus management.",
         "ownerTask": "T10",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
@@ -5959,7 +5959,7 @@
         "title": "Links, routing, anchors, and smooth navigation",
         "description": "Link destinations, Next.js routing, anchor scrolling, external URL attributes, and CMS navigation.",
         "ownerTask": "T10",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
@@ -5967,7 +5967,7 @@
         "title": "Built-in catalog, sections, and slot connections",
         "description": "Built-in element catalog browsing, section blueprints, slot listing, connection, and reordering.",
         "ownerTask": "T11",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T11-catalog.test.ts"
       },
       {
@@ -5975,7 +5975,7 @@
         "title": "Assets, uploads, media fills, and video/audio embeds",
         "description": "Asset indexing, image uploading, media optimization, background video, and audio players.",
         "ownerTask": "T12",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T12-assets.test.ts"
       },
       {
@@ -5983,7 +5983,7 @@
         "title": "Vector icon sets, SVG shapes, and sketch animation",
         "description": "Vector icon set management, SVG element manipulation, viewBox attributes, and path draw animations.",
         "ownerTask": "T13",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T13-vectors.test.ts"
       },
       {
@@ -5991,7 +5991,7 @@
         "title": "Framer Motion presets, hover/scroll physics, and text effects",
         "description": "Motion component transformation, animation presets, spring physics, and split-text animations.",
         "ownerTask": "T14",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T14-motion.test.ts"
       },
       {
@@ -5999,7 +5999,7 @@
         "title": "Site-wide effects, smooth scroll, cursor, and page transitions",
         "description": "Lenis smooth scroll integration, View Transitions API configurations, and custom cursor tracking.",
         "ownerTask": "T14",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T14-motion.test.ts"
       },
       {
@@ -6007,7 +6007,7 @@
         "title": "Page variables, expressions, and dynamic bindings",
         "description": "Page-level state variables, React useState hook synchronization, and JSX expression bindings.",
         "ownerTask": "T15",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T15-bindings.test.ts"
       },
       {
@@ -6015,7 +6015,7 @@
         "title": "CMS schemas, collections, fields, and item records",
         "description": "CMS schema modeling, field additions, item CRUD, slug generation, and static data hydration.",
         "ownerTask": "T16",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T16-cms.test.ts"
       },
       {
@@ -6023,7 +6023,7 @@
         "title": "CMS external API mode, providers, search, and pagination",
         "description": "External API endpoint integration, Strapi/Directus/Baserow providers, search fields, and pagination.",
         "ownerTask": "T17",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T17-cms-api.test.ts"
       },
       {
@@ -6031,7 +6031,7 @@
         "title": "Locales, i18n translations, RTL, and fallback routing",
         "description": "Multi-language management, translation dictionaries, RTL text direction, and localized route wrappers.",
         "ownerTask": "T18",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T18-i18n.test.ts"
       },
       {
@@ -6039,7 +6039,7 @@
         "title": "Forms, field types, endpoints, honeypot, and states",
         "description": "Interactive forms, accessible input types, validation rules, endpoint submission, and state toggles.",
         "ownerTask": "T19",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T19-forms.test.ts"
       },
       {
@@ -6047,7 +6047,7 @@
         "title": "Code components @controls, custom code, and redirects",
         "description": "TypeScript code components with @controls JSDoc, custom head/body scripts, and URL redirects.",
         "ownerTask": "T20",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T20-code.test.ts"
       },
       {
@@ -6055,7 +6055,7 @@
         "title": "Folders, organizing components, pages, and templates",
         "description": "File organization, directory hierarchies, and asset folder structures.",
         "ownerTask": "T21",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
@@ -6063,7 +6063,7 @@
         "title": "Branches, diff review, merge apply, and history rollback",
         "description": "Feature branching, multi-branch switching, review diffing, AST merge healing, and undo/redo stacks.",
         "ownerTask": "T21",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
@@ -6071,7 +6071,7 @@
         "title": "Comments, canvas guides, and selection inspection",
         "description": "Collaborative canvas comments, ruler guide positions, and active node selection tracking.",
         "ownerTask": "T21",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
@@ -6079,7 +6079,7 @@
         "title": "Plugin lifecycle, sandboxed host, and SDK contracts",
         "description": "Third-party plugin manifest verification, sandboxed iframe host, and SDK permission policies.",
         "ownerTask": "T22",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
@@ -6087,7 +6087,7 @@
         "title": "Marketplace integrations and remote component import",
         "description": "Community component browsing, remote bundle import, asset bundling, and package dependencies.",
         "ownerTask": "T22",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
@@ -6095,7 +6095,7 @@
         "title": "Provider integrations and service authentication",
         "description": "Third-party font and media API providers, secure token storage, and fail-closed security.",
         "ownerTask": "T22",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
@@ -6103,7 +6103,7 @@
         "title": "Project export formats (source, SSG, archive)",
         "description": "Next.js source bundle packaging, static HTML/CSS pre-rendering, and ZIP archive generation.",
         "ownerTask": "T23",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T23-release.test.ts"
       },
       {
@@ -6111,7 +6111,7 @@
         "title": "Deployment, publishing, staging, and domain config",
         "description": "Production website publishing, deployment status polling, custom domains, and rollback points.",
         "ownerTask": "T23",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T23-release.test.ts"
       },
       {
@@ -6119,7 +6119,7 @@
         "title": "Visual observation, element layout, audit, and verification",
         "description": "Headless layout measurement, WCAG contrast auditing, AST effect verification, and screenshot capture.",
         "ownerTask": "T24",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/capabilities/T24-verification.test.ts"
       },
       {
@@ -6127,7 +6127,7 @@
         "title": "End-to-end acceptance workflows, landing page, and CLI parity",
         "description": "Full end-to-end acceptance test suites L01–L04, repair loops, and CLI/MCP v2 launch readiness.",
         "ownerTask": "T25",
-        "status": "verified",
+        "status": "mapped_unverified",
         "testSuite": "packages/automation-core/test/acceptance/L01-landing.test.ts"
       }
     ]

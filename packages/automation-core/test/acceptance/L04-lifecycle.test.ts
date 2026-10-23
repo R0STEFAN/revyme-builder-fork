@@ -1,9 +1,8 @@
 // packages/automation-core/test/acceptance/L04-lifecycle.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Snapshot } from '../../src/contracts';
-import { createSnapshot, createOperationContext } from '../../src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
 import {
-  projectsDuplicateOperation,
   projectsBackupExportOperation,
   projectsBackupRestoreOperation,
   calculateFilesChecksum,
@@ -66,7 +65,7 @@ describe('Acceptance Suite L04: Project Lifecycle, Branches, Merge, History & Ro
     clearHistoryState();
   });
 
-  it('executes the full end-to-end lifecycle: duplicate, backup export/restore, branching, review/merge, undo/redo, and failure recovery', async () => {
+  it('exercises lifecycle operations in process, including duplicate preparation', async () => {
     const initialFiles = {
       'app/page.client.tsx': SAMPLE_PAGE_CLIENT,
       'app/layout.tsx': SAMPLE_LAYOUT,
@@ -77,16 +76,14 @@ describe('Acceptance Suite L04: Project Lifecycle, Branches, Merge, History & Ro
     // Phase 1: Project Duplication & Checksummed Backup Lifecycle
     // ─────────────────────────────────────────────────────────────────────────
     // 1a. Duplicate Project
-    const dupRes = await projectsDuplicateOperation.execute(
-      snapshot,
+    const dupRes = await prepareOperation(
+      snapshot, 'projects.duplicate',
       { targetName: 'Production Clone Q4', folderId: 'fld-archive' },
       context,
     );
-    expect(dupRes.originalProjectId).toBe('prod-project');
-    expect(dupRes.newProjectId).toBeDefined();
-    expect(dupRes.name).toBe('Production Clone Q4');
-    expect(dupRes.folderId).toBe('fld-archive');
-    expect(dupRes.fileCount).toBeGreaterThanOrEqual(2);
+    expect(dupRes.ok).toBe(true);
+    expect(dupRes.meta.commitStatus).toBe('not_committed');
+    expect(dupRes.data).toMatchObject({ projectAction: { kind: 'project.duplicate', name: 'Production Clone Q4', folderId: 'fld-archive' } });
 
     // 1b. Backup Export
     const exportRes = await projectsBackupExportOperation.execute(

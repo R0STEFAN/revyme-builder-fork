@@ -449,6 +449,8 @@ export default function BrokenPage() {
       projectFS.writeFile('app/feature.txt', 'Feature One Content');
 
       // Export with branches
+      // Headless export receives the project envelope explicitly, never via the editor singleton.
+      snap.branches = projectFS.toEnvelope().branches;
       const exported = await projectsBackupExportOperation.execute(
         snap,
         { includeBranches: true, compress: false },

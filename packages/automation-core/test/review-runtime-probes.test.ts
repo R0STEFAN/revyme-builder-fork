@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { AutomationClient } from '../../cli/src/client';
 import { startStandaloneServer } from '../../../server/automation/standalone';
 import { LocalProjectRepository } from '../../../server/automation/project-repository';
@@ -27,7 +28,7 @@ function fixture() {
 }
 function planFor(content: string, operationId='review-op') {
   return createPlan({ scope, baseRevision:1, operationId,
-    changes:[{path:'app/page.client.tsx',beforeHash:null,content}] });
+    changes:[{path:'app/page.client.tsx',beforeHash:createHash('sha256').update(page).digest('hex'),content}] });
 }
 
 describe('Regression test suite: verified resolution of review findings R1-R10', () => {
@@ -128,7 +129,9 @@ describe('Regression test suite: verified resolution of review findings R1-R10',
     expect(compChange).toBeDefined();
     expect(compChange?.content).toContain('export default withResponsiveProps(Marquee)');
 
-    const plan = createPlan({ scope, baseRevision: 1, operationId: 'review-built-in', changes: placed.changes });
+    const changes = placed.changes.map(change => ({ ...change, beforeHash: snapshot.files.has(change.path)
+      ? createHash('sha256').update(snapshot.files.get(change.path)!).digest('hex') : null }));
+    const plan = createPlan({ scope, baseRevision: 1, operationId: 'review-built-in', changes });
     expect(validatePlan(snapshot, plan).ok).toBe(true);
   });
 

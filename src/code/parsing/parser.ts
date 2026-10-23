@@ -71,6 +71,12 @@ function findSplitTextWrapper(el: any): any | null {
  */
 export function extractItemMemberPath(expr: any, itemVar: string): string | null {
   if (!expr) return null;
+  // The CMS scaffold safely renders primitives as String(item.field ?? '').
+  if (expr.type === 'CallExpression' && expr.callee?.type === 'Identifier' && expr.callee.name === 'String' && expr.arguments?.length === 1 &&
+      expr.arguments[0]?.type === 'LogicalExpression' && expr.arguments[0].operator === '??' &&
+      expr.arguments[0].right?.type === 'StringLiteral' && expr.arguments[0].right.value === '') {
+    return extractItemMemberPath(expr.arguments[0].left, itemVar);
+  }
   if (expr.type === 'ConditionalExpression') {
     const alt = extractItemMemberPath(expr.alternate, itemVar);
     if (alt) return alt;
