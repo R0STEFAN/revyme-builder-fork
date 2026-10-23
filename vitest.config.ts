@@ -33,9 +33,14 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}'],
+    include: [
+      'src/**/*.test.{ts,tsx}',
+      'server/**/*.test.{ts,tsx}',
+      'packages/**/*.test.{ts,tsx}',
+      'e2e/**/*.spec.ts',
+      'evaluations/**/*.test.ts',
+    ],
     exclude: [
-      '**/node_modules/**', '**/dist/**',
       ...(HAS_RUNTIME_SRC ? [] : RUNTIME_DEPENDENT_TESTS),
     ],
     globals: true,

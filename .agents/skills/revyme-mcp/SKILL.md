@@ -18,8 +18,8 @@ Add the following configuration to `~/.gemini/config/mcp_config.json` (or your c
 {
   "mcpServers": {
     "revyme-builder": {
-      "command": "npx",
-      "args": ["tsx", "server/mcp-server.ts"],
+      "command": "node",
+      "args": ["packages/cli/dist/main.js", "mcp"],
       "cwd": "/path/to/revyme-builder-fork"
     }
   }
@@ -32,7 +32,7 @@ Before executing any tool calls, ensure that:
 1. **Editor & Bridge are running**: Run `npm run dev` (starts editor on `http://localhost:3333` and HTTP bridge on `http://localhost:8082`).
 2. **Builder tab is open & connected**: Open `http://localhost:3333/builder` in your browser (the builder canvas tab establishes an active SSE connection to port 8082).
    > **Note on `/dashboard`**: Navigating to `http://localhost:3333` redirects to `/dashboard` in standalone mode, which unmounts the canvas. Ensure a project is opened in the builder (`/builder` or `/builder/local`), or call `revyme_open_editor` to open/reconnect automatically.
-3. **MCP Stdio Server**: The AI agent automatically launches `server/mcp-server.ts` via the `mcp_config.json` entry above (or manually via `npm run mcp`).
+3. **MCP Stdio Server**: The AI agent automatically launches the Revyme MCP stdio server via the `mcp_config.json` entry above (or manually via `node packages/cli/dist/main.js mcp`).
 
 ---
 

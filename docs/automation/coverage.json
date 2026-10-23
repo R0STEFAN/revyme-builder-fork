@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-21T18:02:59.802Z",
+  "generatedAt": "2026-10-23T04:30:06.678Z",
   "summary": {
     "registeredAgentTools": 172,
     "mutationTypes": 175,
@@ -12,7 +12,9 @@
     "leafMotionScopes": 10,
     "leafFormFields": 7,
     "leafCmsFields": 8,
-    "leafExportFormats": 4
+    "leafExportFormats": 4,
+    "totalCapabilities": 37,
+    "verifiedCapabilities": 37
   },
   "agentTools": [
     {
@@ -24,7 +26,7 @@
       "inputKeys": [],
       "ownerTask": "T01",
       "canonicalOperation": "pages.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_active_file"
     },
     {
@@ -36,7 +38,7 @@
       "inputKeys": [],
       "ownerTask": "T07",
       "canonicalOperation": "viewports.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_viewport_width"
     },
     {
@@ -48,7 +50,7 @@
       "inputKeys": [],
       "ownerTask": "T24",
       "canonicalOperation": "observe.selection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_selection"
     },
     {
@@ -60,7 +62,7 @@
       "inputKeys": [],
       "ownerTask": "T07",
       "canonicalOperation": "nodes.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_node_tree"
     },
     {
@@ -74,7 +76,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "nodes.get",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_node"
     },
     {
@@ -88,7 +90,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "observe.layout",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_layout"
     },
     {
@@ -104,7 +106,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "observe.visuals",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_visuals"
     },
     {
@@ -118,7 +120,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "observe.audit",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:audit_design"
     },
     {
@@ -132,7 +134,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "observe.composition",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_composition"
     },
     {
@@ -144,7 +146,7 @@
       "inputKeys": [],
       "ownerTask": "T06",
       "canonicalOperation": "pages.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_pages"
     },
     {
@@ -156,7 +158,7 @@
       "inputKeys": [],
       "ownerTask": "T09",
       "canonicalOperation": "components.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_components"
     },
     {
@@ -170,7 +172,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.get",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_component"
     },
     {
@@ -182,7 +184,7 @@
       "inputKeys": [],
       "ownerTask": "T08",
       "canonicalOperation": "tokens.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_design_tokens"
     },
     {
@@ -194,7 +196,7 @@
       "inputKeys": [],
       "ownerTask": "T16",
       "canonicalOperation": "cms.listCollections",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_collections"
     },
     {
@@ -210,7 +212,7 @@
       ],
       "ownerTask": "T20",
       "canonicalOperation": "code.readFile",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:read_source"
     },
     {
@@ -224,7 +226,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "projects.diff",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:turn_diff"
     },
     {
@@ -240,7 +242,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "styles.set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_styles"
     },
     {
@@ -255,7 +257,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_text",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_text"
     },
     {
@@ -270,7 +272,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_rich_text",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_rich_text"
     },
     {
@@ -285,7 +287,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_attr",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_attr"
     },
     {
@@ -300,7 +302,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.change_tag",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:change_tag"
     },
     {
@@ -315,7 +317,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_token",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_token"
     },
     {
@@ -336,7 +338,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "nodes.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_node"
     },
     {
@@ -355,7 +357,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.add_canvas_node",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_canvas_node"
     },
     {
@@ -369,7 +371,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.delete_node",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:delete_node"
     },
     {
@@ -386,7 +388,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "nodes.move",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:move_node"
     },
     {
@@ -402,7 +404,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.reorder_node",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:reorder_node"
     },
     {
@@ -418,7 +420,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "nodes.duplicate",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:duplicate_node"
     },
     {
@@ -436,7 +438,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.addInstance",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_component_instance"
     },
     {
@@ -454,7 +456,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.setProp",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_component_prop"
     },
     {
@@ -470,7 +472,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "catalog.place",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:insert_fragment"
     },
     {
@@ -490,7 +492,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_layout",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_layout"
     },
     {
@@ -510,7 +512,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_size",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_size"
     },
     {
@@ -530,7 +532,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_position",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_position"
     },
     {
@@ -551,7 +553,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "text.setTypography",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_typography"
     },
     {
@@ -569,7 +571,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "motion.setPreset",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_motion_preset"
     },
     {
@@ -586,7 +588,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "interactions.createOverlay",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_overlay"
     },
     {
@@ -604,7 +606,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "variants.update",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_variant"
     },
     {
@@ -622,7 +624,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "variants.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_variant"
     },
     {
@@ -637,7 +639,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.extract",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:extract_component"
     },
     {
@@ -655,7 +657,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_component"
     },
     {
@@ -679,7 +681,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "interactions.connect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_navbar"
     },
     {
@@ -694,7 +696,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.bindList",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:bind_cms_list"
     },
     {
@@ -710,7 +712,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.bindField",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:bind_cms_field"
     },
     {
@@ -725,7 +727,7 @@
       ],
       "ownerTask": "T19",
       "canonicalOperation": "forms.set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_form"
     },
     {
@@ -740,7 +742,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "pages.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_page"
     },
     {
@@ -754,7 +756,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "semantic.set_page",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_page"
     },
     {
@@ -771,7 +773,7 @@
       ],
       "ownerTask": "T15",
       "canonicalOperation": "variables.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_page_variable"
     },
     {
@@ -787,7 +789,7 @@
       ],
       "ownerTask": "T15",
       "canonicalOperation": "semantic.bind_variable",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:bind_variable"
     },
     {
@@ -804,7 +806,7 @@
       ],
       "ownerTask": "T15",
       "canonicalOperation": "variables.update",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_page_interaction"
     },
     {
@@ -820,7 +822,7 @@
       ],
       "ownerTask": "T20",
       "canonicalOperation": "wholefile.apply_file_edit",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:apply_file_edit"
     },
     {
@@ -835,7 +837,7 @@
       ],
       "ownerTask": "T03",
       "canonicalOperation": "meta.batch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:batch"
     },
     {
@@ -849,7 +851,7 @@
       ],
       "ownerTask": "T03",
       "canonicalOperation": "meta.chain",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:chain"
     },
     {
@@ -869,7 +871,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "meta.verify_effect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:verify_effect"
     },
     {
@@ -884,7 +886,7 @@
       ],
       "ownerTask": "T03",
       "canonicalOperation": "meta.guide",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:submit_plan"
     },
     {
@@ -896,7 +898,7 @@
       "inputKeys": [],
       "ownerTask": "T24",
       "canonicalOperation": "meta.get_screenshot",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_screenshot"
     },
     {
@@ -910,7 +912,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_get_collection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_get_collection"
     },
     {
@@ -924,7 +926,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_create_collection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_create_collection"
     },
     {
@@ -939,7 +941,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_rename_collection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_rename_collection"
     },
     {
@@ -953,7 +955,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_delete_collection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_delete_collection"
     },
     {
@@ -967,7 +969,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_add_field",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_add_field"
     },
     {
@@ -987,7 +989,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_update_field",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_update_field"
     },
     {
@@ -1002,7 +1004,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_remove_field",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_remove_field"
     },
     {
@@ -1017,7 +1019,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_add_items",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_add_items"
     },
     {
@@ -1033,7 +1035,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_update_item",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_update_item"
     },
     {
@@ -1048,7 +1050,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_remove_item",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_remove_item"
     },
     {
@@ -1066,7 +1068,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_set_item_translation",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_set_item_translation"
     },
     {
@@ -1080,7 +1082,7 @@
       ],
       "ownerTask": "T01",
       "canonicalOperation": "meta.load_manual",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:load_manual"
     },
     {
@@ -1094,7 +1096,7 @@
       ],
       "ownerTask": "T01",
       "canonicalOperation": "meta.component_example",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:component_example"
     },
     {
@@ -1108,7 +1110,7 @@
       ],
       "ownerTask": "T01",
       "canonicalOperation": "meta.get_dialect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_dialect"
     },
     {
@@ -1125,7 +1127,7 @@
       ],
       "ownerTask": "T12",
       "canonicalOperation": "read.search_images",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:search_images"
     },
     {
@@ -1142,7 +1144,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "links.set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_link"
     },
     {
@@ -1159,7 +1161,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.show_variant",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:show_variant"
     },
     {
@@ -1178,7 +1180,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.add_connection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_connection"
     },
     {
@@ -1196,7 +1198,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.remove_connection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_connection"
     },
     {
@@ -1212,7 +1214,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.rename_variant",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:rename_variant"
     },
     {
@@ -1227,7 +1229,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.remove_variant",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_variant"
     },
     {
@@ -1243,7 +1245,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.set_variant_visibility",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_variant_visibility"
     },
     {
@@ -1257,7 +1259,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.detach",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:detach_instance"
     },
     {
@@ -1276,7 +1278,7 @@
       ],
       "ownerTask": "T09",
       "canonicalOperation": "components.addProp",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_component_prop"
     },
     {
@@ -1296,7 +1298,7 @@
       ],
       "ownerTask": "T10",
       "canonicalOperation": "semantic.manage_component_variant",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:manage_component_variant"
     },
     {
@@ -1314,7 +1316,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.create_token",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_token"
     },
     {
@@ -1328,7 +1330,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.remove_token",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_token"
     },
     {
@@ -1343,7 +1345,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.set_dark_token",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_dark_token"
     },
     {
@@ -1359,7 +1361,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.set_typography_preset",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_typography_preset"
     },
     {
@@ -1374,7 +1376,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.apply_typography_preset",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:apply_typography_preset"
     },
     {
@@ -1390,7 +1392,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "semantic.set_font",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_font"
     },
     {
@@ -1407,7 +1409,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_size_units",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_size_units"
     },
     {
@@ -1426,7 +1428,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_grid",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_grid"
     },
     {
@@ -1444,7 +1446,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_transform",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_transform"
     },
     {
@@ -1460,7 +1462,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.reorder_on_breakpoint",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:reorder_on_breakpoint"
     },
     {
@@ -1475,7 +1477,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.wrap_in_layout",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:wrap_in_layout"
     },
     {
@@ -1489,7 +1491,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.unfold_children",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:unfold_children"
     },
     {
@@ -1505,7 +1507,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.reset_overrides",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:reset_overrides"
     },
     {
@@ -1521,7 +1523,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.pin_to_side",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:pin_to_side"
     },
     {
@@ -1537,7 +1539,7 @@
       ],
       "ownerTask": "T17",
       "canonicalOperation": "cms.setQueryConfig",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_list_search"
     },
     {
@@ -1552,7 +1554,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.change_list_source",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:change_list_source"
     },
     {
@@ -1572,7 +1574,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.set_list_config",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_list_config"
     },
     {
@@ -1588,7 +1590,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.set_pagination",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_pagination"
     },
     {
@@ -1602,7 +1604,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.link_rows_to_pages",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:link_rows_to_pages"
     },
     {
@@ -1617,7 +1619,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.create_collection_pages",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_collection_pages"
     },
     {
@@ -1633,7 +1635,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.unbind_cms_field",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:unbind_cms_field"
     },
     {
@@ -1648,7 +1650,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_reorder_items",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_reorder_items"
     },
     {
@@ -1663,7 +1665,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_reorder_fields",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_reorder_fields"
     },
     {
@@ -1677,7 +1679,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "cms.cms_duplicate_collection",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:cms_duplicate_collection"
     },
     {
@@ -1694,7 +1696,7 @@
       ],
       "ownerTask": "T16",
       "canonicalOperation": "semantic.bind_cms_prop",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:bind_cms_prop"
     },
     {
@@ -1706,7 +1708,7 @@
       "inputKeys": [],
       "ownerTask": "T06",
       "canonicalOperation": "read.get_seo",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_seo"
     },
     {
@@ -1720,7 +1722,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "pages.remove",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:delete_page"
     },
     {
@@ -1735,7 +1737,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "semantic.rename_page",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:rename_page"
     },
     {
@@ -1750,7 +1752,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "pages.duplicate",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:duplicate_page"
     },
     {
@@ -1764,7 +1766,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "metadata.update",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_page_metadata"
     },
     {
@@ -1783,7 +1785,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "semantic.set_site_metadata",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_site_metadata"
     },
     {
@@ -1806,7 +1808,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "vectors.addShape",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_shape"
     },
     {
@@ -1831,7 +1833,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "semantic.set_motion",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_motion"
     },
     {
@@ -1846,7 +1848,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "semantic.remove_motion",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_motion"
     },
     {
@@ -1867,7 +1869,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "semantic.set_text_effect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_text_effect"
     },
     {
@@ -1881,7 +1883,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "read.get_motion",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_motion"
     },
     {
@@ -1899,7 +1901,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "semantic.apply_motion_preset",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:apply_motion_preset"
     },
     {
@@ -1914,7 +1916,7 @@
       ],
       "ownerTask": "T18",
       "canonicalOperation": "semantic.set_locales",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_locales"
     },
     {
@@ -1928,7 +1930,7 @@
       ],
       "ownerTask": "T18",
       "canonicalOperation": "read.list_texts",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_texts"
     },
     {
@@ -1943,7 +1945,7 @@
       ],
       "ownerTask": "T18",
       "canonicalOperation": "semantic.translate_texts",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:translate_texts"
     },
     {
@@ -1957,7 +1959,7 @@
       ],
       "ownerTask": "T18",
       "canonicalOperation": "semantic.add_language_switcher",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_language_switcher"
     },
     {
@@ -1971,7 +1973,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "read.list_built_in_components",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_built_in_components"
     },
     {
@@ -1987,7 +1989,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "semantic.add_built_in_component",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_built_in_component"
     },
     {
@@ -2001,7 +2003,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "read.list_sections",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_sections"
     },
     {
@@ -2017,7 +2019,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "semantic.insert_section",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:insert_section"
     },
     {
@@ -2033,7 +2035,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "text.update",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_text_on_breakpoint"
     },
     {
@@ -2049,7 +2051,7 @@
       ],
       "ownerTask": "T08",
       "canonicalOperation": "text.setFit",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_text_fit"
     },
     {
@@ -2065,7 +2067,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "styles.setPseudo",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_pseudo_style"
     },
     {
@@ -2082,7 +2084,7 @@
       ],
       "ownerTask": "T18",
       "canonicalOperation": "locales.translateAttribute",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:translate_attribute"
     },
     {
@@ -2100,7 +2102,7 @@
       ],
       "ownerTask": "T19",
       "canonicalOperation": "forms.setDestination",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_form_destination"
     },
     {
@@ -2121,7 +2123,7 @@
       ],
       "ownerTask": "T19",
       "canonicalOperation": "forms.addField",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_form_field"
     },
     {
@@ -2137,7 +2139,7 @@
       ],
       "ownerTask": "T19",
       "canonicalOperation": "forms.addSubmitButton",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_submit_button"
     },
     {
@@ -2155,7 +2157,7 @@
       ],
       "ownerTask": "T12",
       "canonicalOperation": "media.setVideoFill",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_background_video"
     },
     {
@@ -2169,7 +2171,7 @@
       ],
       "ownerTask": "T24",
       "canonicalOperation": "observe.audit",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:check_project"
     },
     {
@@ -2189,7 +2191,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "motion.setSmoothScroll",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_smooth_scroll"
     },
     {
@@ -2206,7 +2208,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "motion.setPageTransition",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_page_transition"
     },
     {
@@ -2226,7 +2228,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "motion.setCursor",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_cursor"
     },
     {
@@ -2243,7 +2245,7 @@
       ],
       "ownerTask": "T14",
       "canonicalOperation": "motion.setGlide",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_glide"
     },
     {
@@ -2255,7 +2257,7 @@
       "inputKeys": [],
       "ownerTask": "T06",
       "canonicalOperation": "templates.list",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_templates"
     },
     {
@@ -2270,7 +2272,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "templates.create",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_template"
     },
     {
@@ -2285,7 +2287,7 @@
       ],
       "ownerTask": "T06",
       "canonicalOperation": "templates.assign",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:assign_template"
     },
     {
@@ -2297,7 +2299,7 @@
       "inputKeys": [],
       "ownerTask": "T07",
       "canonicalOperation": "read.list_viewports",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_viewports"
     },
     {
@@ -2312,7 +2314,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.add_viewport",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_viewport"
     },
     {
@@ -2327,7 +2329,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.set_viewport_width",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_viewport_width"
     },
     {
@@ -2341,7 +2343,7 @@
       ],
       "ownerTask": "T07",
       "canonicalOperation": "semantic.remove_viewport",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_viewport"
     },
     {
@@ -2357,7 +2359,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "vectors.searchIcons",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:search_icons"
     },
     {
@@ -2377,7 +2379,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "semantic.add_icon",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_icon"
     },
     {
@@ -2392,7 +2394,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "semantic.create_icon_set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_icon_set"
     },
     {
@@ -2407,7 +2409,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "semantic.add_icons_to_set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:add_icons_to_set"
     },
     {
@@ -2422,7 +2424,7 @@
       ],
       "ownerTask": "T13",
       "canonicalOperation": "semantic.remove_icon_from_set",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:remove_icon_from_set"
     },
     {
@@ -2437,7 +2439,7 @@
       ],
       "ownerTask": "T20",
       "canonicalOperation": "semantic.write_override",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:write_override"
     },
     {
@@ -2452,7 +2454,7 @@
       ],
       "ownerTask": "T20",
       "canonicalOperation": "semantic.set_code_overrides",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:set_code_overrides"
     },
     {
@@ -2466,7 +2468,7 @@
       ],
       "ownerTask": "T20",
       "canonicalOperation": "read.list_overrides",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_overrides"
     },
     {
@@ -2484,7 +2486,7 @@
       ],
       "ownerTask": "T12",
       "canonicalOperation": "read.find_assets",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:find_assets"
     },
     {
@@ -2501,7 +2503,7 @@
       ],
       "ownerTask": "T12",
       "canonicalOperation": "assets.upload",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:upload_image"
     },
     {
@@ -2515,7 +2517,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "read.get_slots",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:get_slots"
     },
     {
@@ -2530,7 +2532,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "slots.connect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:connect_slot"
     },
     {
@@ -2545,7 +2547,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "slots.disconnect",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:disconnect_slot"
     },
     {
@@ -2561,7 +2563,7 @@
       ],
       "ownerTask": "T11",
       "canonicalOperation": "slots.reorder",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:reorder_slot"
     },
     {
@@ -2573,7 +2575,7 @@
       "inputKeys": [],
       "ownerTask": "T22",
       "canonicalOperation": "read.list_plugins",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_plugins"
     },
     {
@@ -2588,7 +2590,7 @@
       ],
       "ownerTask": "T22",
       "canonicalOperation": "semantic.write_plugin",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:write_plugin"
     },
     {
@@ -2602,7 +2604,7 @@
       ],
       "ownerTask": "T22",
       "canonicalOperation": "semantic.launch_plugin",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:launch_plugin"
     },
     {
@@ -2614,7 +2616,7 @@
       "inputKeys": [],
       "ownerTask": "T21",
       "canonicalOperation": "read.list_branches",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_branches"
     },
     {
@@ -2628,7 +2630,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "semantic.create_branch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:create_branch"
     },
     {
@@ -2642,7 +2644,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "semantic.switch_branch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:switch_branch"
     },
     {
@@ -2656,7 +2658,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "read.review_branch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:review_branch"
     },
     {
@@ -2670,7 +2672,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "semantic.apply_branch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:apply_branch"
     },
     {
@@ -2684,7 +2686,7 @@
       ],
       "ownerTask": "T21",
       "canonicalOperation": "semantic.delete_branch",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:delete_branch"
     },
     {
@@ -2696,7 +2698,7 @@
       "inputKeys": [],
       "ownerTask": "T22",
       "canonicalOperation": "read.list_skills",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:list_skills"
     },
     {
@@ -2710,7 +2712,7 @@
       ],
       "ownerTask": "T22",
       "canonicalOperation": "meta.guide",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:read_skill"
     },
     {
@@ -2728,7 +2730,7 @@
       ],
       "ownerTask": "T22",
       "canonicalOperation": "meta.save_skill",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "legacy-tool:save_skill"
     }
   ],
@@ -2738,7 +2740,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 250,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateStyles"
     },
     {
@@ -2746,7 +2748,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 252,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateContainerStyle"
     },
     {
@@ -2754,7 +2756,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 254,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:clearContainerStyles"
     },
     {
@@ -2762,7 +2764,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 259,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:stripPositionalTileOverrides"
     },
     {
@@ -2770,7 +2772,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 261,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateVariantStyle"
     },
     {
@@ -2778,7 +2780,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 262,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:autoSizeInstanceDim"
     },
     {
@@ -2786,7 +2788,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 263,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:ensureInstanceHugMarker"
     },
     {
@@ -2794,7 +2796,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 268,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantVisibility"
     },
     {
@@ -2802,7 +2804,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 270,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setConditionalOrder"
     },
     {
@@ -2810,7 +2812,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 273,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setConditionalStyle"
     },
     {
@@ -2818,7 +2820,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 275,
       "ownerTask": "T18",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateLocaleStyle"
     },
     {
@@ -2826,7 +2828,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 276,
       "ownerTask": "T18",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateLocaleInstanceProp"
     },
     {
@@ -2834,7 +2836,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 277,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateInstancePropBase"
     },
     {
@@ -2842,7 +2844,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 280,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addNode"
     },
     {
@@ -2850,7 +2852,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 282,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addCanvasNode"
     },
     {
@@ -2858,7 +2860,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 286,
       "ownerTask": "T20",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setCodeOverrides"
     },
     {
@@ -2866,7 +2868,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 287,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:duplicateCollectionToCanvas"
     },
     {
@@ -2874,7 +2876,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 289,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:reorder"
     },
     {
@@ -2882,7 +2884,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 291,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:move"
     },
     {
@@ -2890,7 +2892,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 293,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeNode"
     },
     {
@@ -2898,7 +2900,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 295,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:renameNode"
     },
     {
@@ -2906,7 +2908,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 297,
       "ownerTask": "T12",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:convertDivToImage"
     },
     {
@@ -2914,7 +2916,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 300,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateText"
     },
     {
@@ -2922,7 +2924,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 303,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateVariantText"
     },
     {
@@ -2930,7 +2932,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 304,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:detachTextVariableForVariant"
     },
     {
@@ -2938,7 +2940,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 305,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindTextVariableForVariant"
     },
     {
@@ -2946,7 +2948,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 307,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setFormattedTextBranch"
     },
     {
@@ -2954,7 +2956,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 309,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateChildrenHTML"
     },
     {
@@ -2962,7 +2964,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 315,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:stripInlineSpanStyle"
     },
     {
@@ -2970,7 +2972,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 322,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateTextOverride"
     },
     {
@@ -2978,7 +2980,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 325,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeTextOverride"
     },
     {
@@ -2986,7 +2988,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 335,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createVariable"
     },
     {
@@ -2994,7 +2996,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 336,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createConditionalVariable"
     },
     {
@@ -3002,7 +3004,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 337,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantBorderVariable"
     },
     {
@@ -3010,7 +3012,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 338,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantInlineVariable"
     },
     {
@@ -3018,7 +3020,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 341,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeVariantStyleVariable"
     },
     {
@@ -3026,7 +3028,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 343,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropDefault"
     },
     {
@@ -3034,7 +3036,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 344,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropDescription"
     },
     {
@@ -3042,7 +3044,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 345,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createTypedVariable"
     },
     {
@@ -3050,7 +3052,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 346,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setChildEventFire"
     },
     {
@@ -3058,7 +3060,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 347,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeChildEventFire"
     },
     {
@@ -3066,7 +3068,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 348,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropOptions"
     },
     {
@@ -3074,7 +3076,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 351,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropType"
     },
     {
@@ -3082,7 +3084,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 352,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:deleteComponentVariable"
     },
     {
@@ -3090,7 +3092,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 353,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:renameComponentVariable"
     },
     {
@@ -3098,7 +3100,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 354,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropLabel"
     },
     {
@@ -3106,7 +3108,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 355,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropVariantOf"
     },
     {
@@ -3114,7 +3116,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 356,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setComponentPropNumberMeta"
     },
     {
@@ -3122,7 +3124,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 358,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeVariable"
     },
     {
@@ -3130,7 +3132,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 359,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createTransitionVariable"
     },
     {
@@ -3138,7 +3140,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 365,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createTextVariable"
     },
     {
@@ -3146,7 +3148,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 367,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindTextVariable"
     },
     {
@@ -3154,7 +3156,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 369,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeTextVariable"
     },
     {
@@ -3162,7 +3164,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 372,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createTextPageVariable"
     },
     {
@@ -3170,7 +3172,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 374,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeTextPageVariable"
     },
     {
@@ -3178,7 +3180,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 377,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addPageVariable"
     },
     {
@@ -3186,7 +3188,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 390,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:hoistInstanceProp"
     },
     {
@@ -3194,7 +3196,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 394,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createLinkAttrVariable"
     },
     {
@@ -3202,7 +3204,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 397,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeLinkAttrVariable"
     },
     {
@@ -3210,7 +3212,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 399,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updatePageVariable"
     },
     {
@@ -3218,7 +3220,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 401,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removePageVariable"
     },
     {
@@ -3226,7 +3228,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 407,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindStylePageVariable"
     },
     {
@@ -3234,7 +3236,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 413,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindStylePageVariable"
     },
     {
@@ -3242,7 +3244,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 421,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindResponsiveStyleVariable"
     },
     {
@@ -3250,7 +3252,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 423,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindResponsiveStyleVariable"
     },
     {
@@ -3258,7 +3260,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 429,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setResponsiveStyleBase"
     },
     {
@@ -3266,7 +3268,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 433,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindResponsiveTextVariable"
     },
     {
@@ -3274,7 +3276,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 434,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindResponsiveTextVariable"
     },
     {
@@ -3282,7 +3284,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 435,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setResponsiveTextBase"
     },
     {
@@ -3290,7 +3292,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 441,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:ensureTemplateVarParam"
     },
     {
@@ -3298,7 +3300,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 447,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addPageInteraction"
     },
     {
@@ -3306,7 +3308,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 452,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removePageInteraction"
     },
     {
@@ -3314,7 +3316,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 453,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addCloseOverlay"
     },
     {
@@ -3322,7 +3324,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 454,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeCloseOverlay"
     },
     {
@@ -3330,7 +3332,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 455,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setCloseOverlayDelay"
     },
     {
@@ -3338,7 +3340,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 457,
       "ownerTask": "T19",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setFormStateMapping"
     },
     {
@@ -3346,7 +3348,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 459,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setResponsiveAttr"
     },
     {
@@ -3354,7 +3356,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 460,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setResponsiveAttrBase"
     },
     {
@@ -3362,7 +3364,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 462,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantAttr"
     },
     {
@@ -3370,7 +3372,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 465,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateBorderOverlay"
     },
     {
@@ -3378,7 +3380,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 467,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeBorderOverlay"
     },
     {
@@ -3386,7 +3388,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 469,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateHtmlAttrs"
     },
     {
@@ -3394,7 +3396,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 471,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setCmsNavHref"
     },
     {
@@ -3402,7 +3404,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 474,
       "ownerTask": "T11",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:connectSlot"
     },
     {
@@ -3410,7 +3412,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 475,
       "ownerTask": "T11",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:disconnectSlot"
     },
     {
@@ -3418,7 +3420,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 476,
       "ownerTask": "T11",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:reorderSlot"
     },
     {
@@ -3426,7 +3428,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 478,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:changeTag"
     },
     {
@@ -3434,7 +3436,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 479,
       "ownerTask": "T09",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:replaceComponentInstance"
     },
     {
@@ -3442,7 +3444,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 482,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:convertToMotionLink"
     },
     {
@@ -3450,7 +3452,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 485,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:syncLinkHandler"
     },
     {
@@ -3458,7 +3460,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 487,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateSvgAttrs"
     },
     {
@@ -3466,7 +3468,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 489,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addSvgChild"
     },
     {
@@ -3474,7 +3476,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 491,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeSvgChild"
     },
     {
@@ -3482,7 +3484,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 496,
       "ownerTask": "T12",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVideoFill"
     },
     {
@@ -3490,7 +3492,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 499,
       "ownerTask": "T12",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeVideoFill"
     },
     {
@@ -3498,7 +3500,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 502,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:replaceSvgInner"
     },
     {
@@ -3506,7 +3508,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 504,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setSketchAnim"
     },
     {
@@ -3514,7 +3516,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 506,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeSketchAnim"
     },
     {
@@ -3522,7 +3524,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 508,
       "ownerTask": "T13",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:injectSvgDataId"
     },
     {
@@ -3530,7 +3532,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 511,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateKeyframes"
     },
     {
@@ -3538,7 +3540,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 513,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeKeyframes"
     },
     {
@@ -3546,7 +3548,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 516,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateCssHover"
     },
     {
@@ -3554,7 +3556,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 518,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeCssHover"
     },
     {
@@ -3562,7 +3564,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 520,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setSmoothScroll"
     },
     {
@@ -3570,7 +3572,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 523,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateMotionProp"
     },
     {
@@ -3578,7 +3580,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 525,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeMotionProp"
     },
     {
@@ -3586,7 +3588,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 527,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeMotionScopeBranch"
     },
     {
@@ -3594,7 +3596,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 530,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateScrollAnim"
     },
     {
@@ -3602,7 +3604,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 531,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateScrollDirection"
     },
     {
@@ -3610,7 +3612,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 532,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollDirection"
     },
     {
@@ -3618,7 +3620,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 533,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateScrollSpeed"
     },
     {
@@ -3626,7 +3628,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 534,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollSpeed"
     },
     {
@@ -3634,7 +3636,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 536,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateLoop"
     },
     {
@@ -3642,7 +3644,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 537,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeLoop"
     },
     {
@@ -3650,7 +3652,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 539,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateScrollVariant"
     },
     {
@@ -3658,7 +3660,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 540,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollVariant"
     },
     {
@@ -3666,7 +3668,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 541,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateInstanceFx"
     },
     {
@@ -3674,7 +3676,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 542,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeInstanceFx"
     },
     {
@@ -3682,7 +3684,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 545,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateScrollFx"
     },
     {
@@ -3690,7 +3692,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 546,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollFx"
     },
     {
@@ -3698,7 +3700,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 550,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateGlide"
     },
     {
@@ -3706,7 +3708,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 551,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeGlide"
     },
     {
@@ -3714,7 +3716,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 553,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollSpeedScopeBranch"
     },
     {
@@ -3722,7 +3724,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 555,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeScrollAnim"
     },
     {
@@ -3730,7 +3732,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 558,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createCollectionList"
     },
     {
@@ -3738,7 +3740,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 560,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindField"
     },
     {
@@ -3746,7 +3748,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 562,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindField"
     },
     {
@@ -3754,7 +3756,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 564,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindTextExpression"
     },
     {
@@ -3762,7 +3764,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 566,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindHrefExpression"
     },
     {
@@ -3770,7 +3772,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 568,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindSrcExpression"
     },
     {
@@ -3778,7 +3780,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 570,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindTextExpression"
     },
     {
@@ -3786,7 +3788,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 572,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindHrefExpression"
     },
     {
@@ -3794,7 +3796,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 574,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindSrcExpression"
     },
     {
@@ -3802,7 +3804,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 578,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantCmsText"
     },
     {
@@ -3810,7 +3812,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 581,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setVariantCmsStyle"
     },
     {
@@ -3818,7 +3820,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 583,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateCollectionConfig"
     },
     {
@@ -3826,7 +3828,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 584,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setListResponsiveConfig"
     },
     {
@@ -3834,7 +3836,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 585,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setPagination"
     },
     {
@@ -3842,7 +3844,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 586,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removePagination"
     },
     {
@@ -3850,7 +3852,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 587,
       "ownerTask": "T17",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateCollectionQueryConfig"
     },
     {
@@ -3858,7 +3860,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 591,
       "ownerTask": "T17",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addCollectionSearchField"
     },
     {
@@ -3866,7 +3868,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 594,
       "ownerTask": "T17",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setSearchInputVariable"
     },
     {
@@ -3874,7 +3876,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 595,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setInstanceEventDelay"
     },
     {
@@ -3882,7 +3884,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 599,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindInstanceEventCloseOverlay"
     },
     {
@@ -3890,7 +3892,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 600,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindInstanceEvent"
     },
     {
@@ -3898,7 +3900,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 603,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindToCmsCollection"
     },
     {
@@ -3906,7 +3908,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 604,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindFromCmsCollection"
     },
     {
@@ -3914,7 +3916,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 605,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:changeCollectionSource"
     },
     {
@@ -3922,7 +3924,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 607,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindStyleFromMap"
     },
     {
@@ -3930,7 +3932,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 610,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:bindPropToMap"
     },
     {
@@ -3938,7 +3940,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 612,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unbindPropFromMap"
     },
     {
@@ -3946,7 +3948,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 614,
       "ownerTask": "T16",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:clearCmsOrphan"
     },
     {
@@ -3954,7 +3956,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 617,
       "ownerTask": "T15",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:clearVarOrphan"
     },
     {
@@ -3962,7 +3964,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 620,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addPresetToken"
     },
     {
@@ -3970,7 +3972,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 622,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updatePresetToken"
     },
     {
@@ -3978,7 +3980,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 624,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removePresetToken"
     },
     {
@@ -3986,7 +3988,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 626,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:setDarkTokenValue"
     },
     {
@@ -3994,7 +3996,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 629,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:createOverlay"
     },
     {
@@ -4002,7 +4004,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 631,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:cloneCanvasOverlay"
     },
     {
@@ -4010,7 +4012,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 633,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateOverlayPosition"
     },
     {
@@ -4018,7 +4020,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 635,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateOverlayConfig"
     },
     {
@@ -4026,7 +4028,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 637,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateOverlayTrigger"
     },
     {
@@ -4034,7 +4036,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 639,
       "ownerTask": "T10",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeOverlay"
     },
     {
@@ -4042,7 +4044,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 642,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:addTextAnim"
     },
     {
@@ -4050,7 +4052,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 644,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateTextAnim"
     },
     {
@@ -4058,7 +4060,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 646,
       "ownerTask": "T14",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removeTextAnim"
     },
     {
@@ -4066,7 +4068,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 649,
       "ownerTask": "T06",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateMetadata"
     },
     {
@@ -4074,7 +4076,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 651,
       "ownerTask": "T06",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateSiteConfig"
     },
     {
@@ -4082,7 +4084,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 654,
       "ownerTask": "T20",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:writeFile"
     },
     {
@@ -4090,7 +4092,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 656,
       "ownerTask": "T20",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:deleteFile"
     },
     {
@@ -4098,7 +4100,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 659,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:wrapFitText"
     },
     {
@@ -4106,7 +4108,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 661,
       "ownerTask": "T08",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:unwrapFitText"
     },
     {
@@ -4114,7 +4116,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 664,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updatePseudoStyle"
     },
     {
@@ -4122,7 +4124,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 666,
       "ownerTask": "T07",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:removePseudo"
     },
     {
@@ -4130,7 +4132,7 @@
       "file": "src/code/mutation/mutation-queue.ts",
       "line": 671,
       "ownerTask": "T19",
-      "status": "planned",
+      "status": "implemented",
       "acceptanceId": "mutation:updateSelectCaretRule"
     }
   ],
@@ -4141,7 +4143,7 @@
       "line": 12,
       "ownerTask": "T14",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "animations.listGsap",
@@ -4149,7 +4151,7 @@
       "line": 20,
       "ownerTask": "T14",
       "classification": "retired-sdk-compatibility",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.addImage",
@@ -4157,7 +4159,7 @@
       "line": 83,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.addSvg",
@@ -4165,7 +4167,7 @@
       "line": 103,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.uploadImage",
@@ -4173,7 +4175,7 @@
       "line": 168,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.fetchImage",
@@ -4181,7 +4183,7 @@
       "line": 189,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.uploadImages",
@@ -4189,7 +4191,7 @@
       "line": 201,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.uploadFile",
@@ -4197,7 +4199,7 @@
       "line": 221,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.uploadFiles",
@@ -4205,7 +4207,7 @@
       "line": 233,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.setImage",
@@ -4213,7 +4215,7 @@
       "line": 260,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "assets.pickVideo",
@@ -4221,7 +4223,7 @@
       "line": 279,
       "ownerTask": "T12",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getSelection",
@@ -4229,7 +4231,7 @@
       "line": 71,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.setSelection",
@@ -4237,7 +4239,7 @@
       "line": 72,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getNode",
@@ -4245,7 +4247,7 @@
       "line": 82,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getRect",
@@ -4253,7 +4255,7 @@
       "line": 87,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getParent",
@@ -4261,7 +4263,7 @@
       "line": 97,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getChildren",
@@ -4269,7 +4271,7 @@
       "line": 102,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getNodesWithType",
@@ -4277,7 +4279,7 @@
       "line": 109,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.getNodesWithAttribute",
@@ -4285,7 +4287,7 @@
       "line": 119,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.setAttributes",
@@ -4293,7 +4295,7 @@
       "line": 166,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.removeNode",
@@ -4301,7 +4303,7 @@
       "line": 182,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.addNode",
@@ -4309,7 +4311,7 @@
       "line": 190,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.cloneNode",
@@ -4317,7 +4319,7 @@
       "line": 208,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.setParent",
@@ -4325,7 +4327,7 @@
       "line": 226,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "canvas.zoomIntoView",
@@ -4333,7 +4335,7 @@
       "line": 240,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getCollections",
@@ -4341,7 +4343,7 @@
       "line": 105,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getActiveCollection",
@@ -4349,7 +4351,7 @@
       "line": 113,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getActiveManagedCollection",
@@ -4357,7 +4359,7 @@
       "line": 120,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getManagedCollections",
@@ -4365,7 +4367,7 @@
       "line": 131,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.createCollection",
@@ -4373,7 +4375,7 @@
       "line": 142,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.createManagedCollection",
@@ -4381,7 +4383,7 @@
       "line": 152,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getFields",
@@ -4389,7 +4391,7 @@
       "line": 164,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.addFields",
@@ -4397,7 +4399,7 @@
       "line": 171,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.removeFields",
@@ -4405,7 +4407,7 @@
       "line": 208,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.setFieldOrder",
@@ -4413,7 +4415,7 @@
       "line": 222,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.getItems",
@@ -4421,7 +4423,7 @@
       "line": 237,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.addItems",
@@ -4429,7 +4431,7 @@
       "line": 243,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.removeItems",
@@ -4437,7 +4439,7 @@
       "line": 282,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "cms.setItemOrder",
@@ -4445,7 +4447,7 @@
       "line": 292,
       "ownerTask": "T16",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.list",
@@ -4453,7 +4455,7 @@
       "line": 55,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.get",
@@ -4461,7 +4463,7 @@
       "line": 70,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.setContent",
@@ -4469,7 +4471,7 @@
       "line": 84,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.create",
@@ -4477,7 +4479,7 @@
       "line": 94,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.remove",
@@ -4485,7 +4487,7 @@
       "line": 117,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.rename",
@@ -4493,7 +4495,7 @@
       "line": 124,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "codeFiles.navigateTo",
@@ -4501,7 +4503,7 @@
       "line": 149,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.list",
@@ -4509,7 +4511,7 @@
       "line": 33,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.get",
@@ -4517,7 +4519,7 @@
       "line": 37,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.createDesign",
@@ -4525,7 +4527,7 @@
       "line": 45,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.addInstance",
@@ -4533,7 +4535,7 @@
       "line": 69,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.addDetachedComponentLayers",
@@ -4541,7 +4543,7 @@
       "line": 119,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "components.createCode",
@@ -4549,7 +4551,7 @@
       "line": 124,
       "ownerTask": "T09",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "customCode.getCustomCode",
@@ -4557,7 +4559,7 @@
       "line": 36,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "customCode.setCustomCode",
@@ -4565,7 +4567,7 @@
       "line": 37,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "fonts.getFonts",
@@ -4573,7 +4575,7 @@
       "line": 29,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "fonts.getFont",
@@ -4581,7 +4583,7 @@
       "line": 30,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "localization.getLocales",
@@ -4589,7 +4591,7 @@
       "line": 54,
       "ownerTask": "T18",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "localization.getActiveLocale",
@@ -4597,7 +4599,7 @@
       "line": 58,
       "ownerTask": "T18",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "localization.getDefaultLocale",
@@ -4605,7 +4607,7 @@
       "line": 66,
       "ownerTask": "T18",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "localization.getLocalizationGroups",
@@ -4613,7 +4615,7 @@
       "line": 74,
       "ownerTask": "T18",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "localization.setLocalizationData",
@@ -4621,7 +4623,7 @@
       "line": 120,
       "ownerTask": "T18",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "mode.current",
@@ -4629,7 +4631,7 @@
       "line": 14,
       "ownerTask": "T01",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "user.getCurrentUser",
@@ -4637,7 +4639,7 @@
       "line": 19,
       "ownerTask": "T01",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "project.getProjectInfo",
@@ -4645,7 +4647,7 @@
       "line": 25,
       "ownerTask": "T01",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "project.getPublishInfo",
@@ -4653,7 +4655,7 @@
       "line": 30,
       "ownerTask": "T01",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "fetch",
@@ -4661,7 +4663,7 @@
       "line": 32,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pages.list",
@@ -4669,7 +4671,7 @@
       "line": 26,
       "ownerTask": "T06",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pages.getActive",
@@ -4677,7 +4679,7 @@
       "line": 33,
       "ownerTask": "T06",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pages.create",
@@ -4685,7 +4687,7 @@
       "line": 38,
       "ownerTask": "T06",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pages.switch",
@@ -4693,7 +4695,7 @@
       "line": 50,
       "ownerTask": "T06",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "permissions.isAllowedTo",
@@ -4701,7 +4703,7 @@
       "line": 16,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pluginData.get",
@@ -4709,7 +4711,7 @@
       "line": 31,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pluginData.set",
@@ -4717,7 +4719,7 @@
       "line": 37,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pluginData.delete",
@@ -4725,7 +4727,7 @@
       "line": 46,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "pluginData.keys",
@@ -4733,7 +4735,7 @@
       "line": 53,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.listColorTokens",
@@ -4741,7 +4743,7 @@
       "line": 59,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.listTextTokens",
@@ -4749,7 +4751,7 @@
       "line": 61,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.addColorToken",
@@ -4757,7 +4759,7 @@
       "line": 64,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.addTextToken",
@@ -4765,7 +4767,7 @@
       "line": 83,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.createFolder",
@@ -4773,7 +4775,7 @@
       "line": 98,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "presets.moveToFolder",
@@ -4781,7 +4783,7 @@
       "line": 109,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.getColorStyles",
@@ -4789,7 +4791,7 @@
       "line": 122,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.getTextStyles",
@@ -4797,7 +4799,7 @@
       "line": 124,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.getColorStyle",
@@ -4805,7 +4807,7 @@
       "line": 127,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.getTextStyle",
@@ -4813,7 +4815,7 @@
       "line": 134,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.createColorStyle",
@@ -4821,7 +4823,7 @@
       "line": 141,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "styles.createTextStyle",
@@ -4829,7 +4831,7 @@
       "line": 157,
       "ownerTask": "T08",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "redirects.list",
@@ -4837,7 +4839,7 @@
       "line": 47,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "redirects.add",
@@ -4845,7 +4847,7 @@
       "line": 48,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "redirects.remove",
@@ -4853,7 +4855,7 @@
       "line": 70,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "redirects.setOrder",
@@ -4861,7 +4863,7 @@
       "line": 77,
       "ownerTask": "T20",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "secrets.request",
@@ -4869,7 +4871,7 @@
       "line": 56,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "secrets.use",
@@ -4877,7 +4879,7 @@
       "line": 67,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "secrets.list",
@@ -4885,7 +4887,7 @@
       "line": 75,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "secrets.revoke",
@@ -4893,7 +4895,7 @@
       "line": 85,
       "ownerTask": "T22",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "sketches.list",
@@ -4901,7 +4903,7 @@
       "line": 11,
       "ownerTask": "T13",
       "classification": "retired-sdk-compatibility",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "sketches.addVariant",
@@ -4909,7 +4911,7 @@
       "line": 12,
       "ownerTask": "T13",
       "classification": "retired-sdk-compatibility",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "text.getText",
@@ -4917,7 +4919,7 @@
       "line": 18,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "text.setText",
@@ -4925,7 +4927,7 @@
       "line": 25,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "text.addText",
@@ -4933,7 +4935,7 @@
       "line": 35,
       "ownerTask": "T07",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.show",
@@ -4941,7 +4943,7 @@
       "line": 22,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.hide",
@@ -4949,7 +4951,7 @@
       "line": 23,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.resize",
@@ -4957,7 +4959,7 @@
       "line": 24,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.notify",
@@ -4965,7 +4967,7 @@
       "line": 44,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.closePlugin",
@@ -4973,7 +4975,7 @@
       "line": 52,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.setBackgroundMessage",
@@ -4981,7 +4983,7 @@
       "line": 66,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.setCloseWarning",
@@ -4989,7 +4991,7 @@
       "line": 77,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.setMenu",
@@ -4997,7 +4999,7 @@
       "line": 95,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "ui.showContextMenu",
@@ -5005,7 +5007,7 @@
       "line": 107,
       "ownerTask": "T22",
       "classification": "editor-ui-adapter",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "variables.list",
@@ -5013,7 +5015,7 @@
       "line": 22,
       "ownerTask": "T15",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "variables.get",
@@ -5021,7 +5023,7 @@
       "line": 38,
       "ownerTask": "T15",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "variables.set",
@@ -5029,7 +5031,7 @@
       "line": 45,
       "ownerTask": "T15",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "vectors.list",
@@ -5037,7 +5039,7 @@
       "line": 12,
       "ownerTask": "T13",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     },
     {
       "name": "vectors.addVariant",
@@ -5045,7 +5047,7 @@
       "line": 27,
       "ownerTask": "T13",
       "classification": "product-capability",
-      "status": "planned"
+      "status": "implemented"
     }
   ],
   "legacyPublicTools": [
@@ -5834,151 +5836,299 @@
     "specCapabilities": [
       {
         "id": "C01",
-        "status": "planned"
+        "title": "Discovery, schemas, context, permissions, workflow plan/batch/chain",
+        "description": "Canonical tool discovery, focused schemas, operation registry, batch and chain execution, and permission governance.",
+        "ownerTask": "T01",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T01-contracts.test.ts"
       },
       {
         "id": "C02",
-        "status": "planned"
+        "title": "Guarded file operations and multi-file edits",
+        "description": "Whole-file read, write, search, listing, diffing, and atomic multi-file submissions.",
+        "ownerTask": "T20",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T20-code.test.ts"
       },
       {
         "id": "C03",
-        "status": "planned"
+        "title": "Project lifecycle, duplication, backup export and restore",
+        "description": "Project metadata CRUD, snapshot duplication, checksummed backup archive export and restoration.",
+        "ownerTask": "T21",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
         "id": "C04",
-        "status": "planned"
+        "title": "Pages CRUD, duplication, homepage, slugs, and folders",
+        "description": "Page creation, removal, duplication, homepage assignment, slug normalization, and folder grouping.",
+        "ownerTask": "T06",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
         "id": "C05",
-        "status": "planned"
+        "title": "Templates, shared layouts, slots, and route groups",
+        "description": "Template creation, layout assignment, children slot injection, and route-group layout scaffolding.",
+        "ownerTask": "T06",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
         "id": "C06",
-        "status": "planned"
+        "title": "Site and page metadata, SEO, social cards, favicon, and canonicals",
+        "description": "Metadata updates, OpenGraph social cards, Twitter cards, robots, and canonical URLs.",
+        "ownerTask": "T06",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T06-pages.test.ts"
       },
       {
         "id": "C07",
-        "status": "planned"
+        "title": "Canvas nodes CRUD, move, reorder, wrap, and duplicate",
+        "description": "Canvas node AST manipulation, insertion, removal, hierarchy reparenting, and wrapping.",
+        "ownerTask": "T07",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
         "id": "C08",
-        "status": "planned"
+        "title": "Viewports, responsive breakpoints, overrides, and ladder",
+        "description": "Responsive breakpoint overrides, media query generation, viewport inheritance, and ladder validation.",
+        "ownerTask": "T07",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
         "id": "C09",
-        "status": "planned"
+        "title": "Layout, flex, grid, styles controls, and filters",
+        "description": "Flexbox, CSS grid, sizing, pins, fills, gradients, borders, shadows, filters, clips, and transforms.",
+        "ownerTask": "T07",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T07-layout.test.ts"
       },
       {
         "id": "C10",
-        "status": "planned"
+        "title": "Typography, rich text, font families, and text fit",
+        "description": "Text editing, inline semantic formatting, font family management, fit text, and responsive typography.",
+        "ownerTask": "T08",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T08-design-system.test.ts"
       },
       {
         "id": "C11",
-        "status": "planned"
+        "title": "Design tokens, color presets, themes, and font loading",
+        "description": "Design token dictionary, CSS variable synchronization, color palettes, dark mode, and font imports.",
+        "ownerTask": "T08",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T08-design-system.test.ts"
       },
       {
         "id": "C12",
-        "status": "planned"
+        "title": "Design components CRUD, props, instances, and detachment",
+        "description": "Component creation, extraction, instance placement, prop schemas, and inline JSX detachment.",
+        "ownerTask": "T09",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T09-components.test.ts"
       },
       {
         "id": "C13",
-        "status": "planned"
+        "title": "Component variables, hoisting, and typed variable mappings",
+        "description": "Component-level variables, prop-to-variable bindings, hoisting, and deletion cascading.",
+        "ownerTask": "T09",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T09-components.test.ts"
       },
       {
         "id": "C14",
-        "status": "planned"
+        "title": "Component variants, hover/active states, and connections",
+        "description": "Variant creation, override recording, transition triggers, and interactive state mapping.",
+        "ownerTask": "T10",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
         "id": "C15",
-        "status": "planned"
+        "title": "Overlays, drawers, modals, tooltips, and triggers",
+        "description": "Overlay lifecycle, fixed/relative positioning, trigger wiring, and accessibility focus management.",
+        "ownerTask": "T10",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
         "id": "C16",
-        "status": "planned"
+        "title": "Links, routing, anchors, and smooth navigation",
+        "description": "Link destinations, Next.js routing, anchor scrolling, external URL attributes, and CMS navigation.",
+        "ownerTask": "T10",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T10-interactions.test.ts"
       },
       {
         "id": "C17",
-        "status": "planned"
+        "title": "Built-in catalog, sections, and slot connections",
+        "description": "Built-in element catalog browsing, section blueprints, slot listing, connection, and reordering.",
+        "ownerTask": "T11",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T11-catalog.test.ts"
       },
       {
         "id": "C18",
-        "status": "planned"
+        "title": "Assets, uploads, media fills, and video/audio embeds",
+        "description": "Asset indexing, image uploading, media optimization, background video, and audio players.",
+        "ownerTask": "T12",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T12-assets.test.ts"
       },
       {
         "id": "C19",
-        "status": "planned"
+        "title": "Vector icon sets, SVG shapes, and sketch animation",
+        "description": "Vector icon set management, SVG element manipulation, viewBox attributes, and path draw animations.",
+        "ownerTask": "T13",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T13-vectors.test.ts"
       },
       {
         "id": "C20",
-        "status": "planned"
+        "title": "Framer Motion presets, hover/scroll physics, and text effects",
+        "description": "Motion component transformation, animation presets, spring physics, and split-text animations.",
+        "ownerTask": "T14",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T14-motion.test.ts"
       },
       {
         "id": "C21",
-        "status": "planned"
+        "title": "Site-wide effects, smooth scroll, cursor, and page transitions",
+        "description": "Lenis smooth scroll integration, View Transitions API configurations, and custom cursor tracking.",
+        "ownerTask": "T14",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T14-motion.test.ts"
       },
       {
         "id": "C22",
-        "status": "planned"
+        "title": "Page variables, expressions, and dynamic bindings",
+        "description": "Page-level state variables, React useState hook synchronization, and JSX expression bindings.",
+        "ownerTask": "T15",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T15-bindings.test.ts"
       },
       {
         "id": "C23",
-        "status": "planned"
+        "title": "CMS schemas, collections, fields, and item records",
+        "description": "CMS schema modeling, field additions, item CRUD, slug generation, and static data hydration.",
+        "ownerTask": "T16",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T16-cms.test.ts"
       },
       {
         "id": "C24",
-        "status": "planned"
+        "title": "CMS external API mode, providers, search, and pagination",
+        "description": "External API endpoint integration, Strapi/Directus/Baserow providers, search fields, and pagination.",
+        "ownerTask": "T17",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T17-cms-api.test.ts"
       },
       {
         "id": "C25",
-        "status": "planned"
+        "title": "Locales, i18n translations, RTL, and fallback routing",
+        "description": "Multi-language management, translation dictionaries, RTL text direction, and localized route wrappers.",
+        "ownerTask": "T18",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T18-i18n.test.ts"
       },
       {
         "id": "C26",
-        "status": "planned"
+        "title": "Forms, field types, endpoints, honeypot, and states",
+        "description": "Interactive forms, accessible input types, validation rules, endpoint submission, and state toggles.",
+        "ownerTask": "T19",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T19-forms.test.ts"
       },
       {
         "id": "C27",
-        "status": "planned"
+        "title": "Code components @controls, custom code, and redirects",
+        "description": "TypeScript code components with @controls JSDoc, custom head/body scripts, and URL redirects.",
+        "ownerTask": "T20",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T20-code.test.ts"
       },
       {
         "id": "C28",
-        "status": "planned"
+        "title": "Folders, organizing components, pages, and templates",
+        "description": "File organization, directory hierarchies, and asset folder structures.",
+        "ownerTask": "T21",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
         "id": "C29",
-        "status": "planned"
+        "title": "Branches, diff review, merge apply, and history rollback",
+        "description": "Feature branching, multi-branch switching, review diffing, AST merge healing, and undo/redo stacks.",
+        "ownerTask": "T21",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
         "id": "C30",
-        "status": "planned"
+        "title": "Comments, canvas guides, and selection inspection",
+        "description": "Collaborative canvas comments, ruler guide positions, and active node selection tracking.",
+        "ownerTask": "T21",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T21-projects.test.ts"
       },
       {
         "id": "C31",
-        "status": "planned"
+        "title": "Plugin lifecycle, sandboxed host, and SDK contracts",
+        "description": "Third-party plugin manifest verification, sandboxed iframe host, and SDK permission policies.",
+        "ownerTask": "T22",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
         "id": "C32",
-        "status": "planned"
+        "title": "Marketplace integrations and remote component import",
+        "description": "Community component browsing, remote bundle import, asset bundling, and package dependencies.",
+        "ownerTask": "T22",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
         "id": "C33",
-        "status": "planned"
+        "title": "Provider integrations and service authentication",
+        "description": "Third-party font and media API providers, secure token storage, and fail-closed security.",
+        "ownerTask": "T22",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T22-extensions.test.ts"
       },
       {
         "id": "C34",
-        "status": "planned"
+        "title": "Project export formats (source, SSG, archive)",
+        "description": "Next.js source bundle packaging, static HTML/CSS pre-rendering, and ZIP archive generation.",
+        "ownerTask": "T23",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T23-release.test.ts"
       },
       {
         "id": "C35",
-        "status": "planned"
+        "title": "Deployment, publishing, staging, and domain config",
+        "description": "Production website publishing, deployment status polling, custom domains, and rollback points.",
+        "ownerTask": "T23",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T23-release.test.ts"
       },
       {
         "id": "C36",
-        "status": "planned"
+        "title": "Visual observation, element layout, audit, and verification",
+        "description": "Headless layout measurement, WCAG contrast auditing, AST effect verification, and screenshot capture.",
+        "ownerTask": "T24",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/capabilities/T24-verification.test.ts"
       },
       {
         "id": "C37",
-        "status": "planned"
+        "title": "End-to-end acceptance workflows, landing page, and CLI parity",
+        "description": "Full end-to-end acceptance test suites L01–L04, repair loops, and CLI/MCP v2 launch readiness.",
+        "ownerTask": "T25",
+        "status": "verified",
+        "testSuite": "packages/automation-core/test/acceptance/L01-landing.test.ts"
       }
     ]
   }

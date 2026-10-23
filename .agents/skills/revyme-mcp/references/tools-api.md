@@ -3,7 +3,8 @@
 ## 1. Overview
 The Revyme editor communicates with the MCP server using JSON-RPC over a Server-Sent Events (SSE) bridge:
 - **Editor Bridge Client**: `src/ai/mcp/bridge-client.ts`
-- **Bridge Server**: `server/mcp-server.ts`
+- **Internal Bridge Server**: `server/mcp-bridge.ts`
+- **External CLI/MCP Stdio Adapter**: `@revyme/cli` (`packages/cli/dist/main.js mcp`)
 - **Port**: `8082` (configurable via `VITE_AI_SERVICE_URL`)
 - **HTTP endpoints**:
   - `GET /bridge/events`: SSE stream that connected editor tabs listen to.
