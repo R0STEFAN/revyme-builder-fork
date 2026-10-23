@@ -33,6 +33,7 @@ docs/*
 !docs/automation/
 !docs/superpowers/
 plans/
+!docs/superpowers/plans/
 todo/
 refactor-plan/
 before-oss-refactor/
