@@ -1,0 +1,28 @@
+Review HEAD: c9018d071efb8e675e61e52f5bcb2b6bc128ce2c
+Base: ca1129c1343349c1ac56f3b86b59a2173d2f08dc
+
+1. ./node_modules/.bin/vitest run packages/automation-core packages/cli server/automation e2e/automation-v2 --reporter=dot --maxWorkers=2
+Exit 0: 50 files, 701 tests passed.
+
+2. ./node_modules/.bin/vitest run server/storage.test.ts server/api-plugin.test.ts server/mcp-bridge.test.ts src/backend/local-backend.test.ts src/backend/save-revision.test.ts src/code/variants/connection-config.test.ts src/code/variants/variant-ops.test.ts src/code/generation/slot-ops.test.ts src/shared/zip.test.ts evaluations/automation-v2 --reporter=dot --maxWorkers=2
+Exit 0: 10 files, 246 tests passed.
+
+3. ./node_modules/.bin/tsc --noEmit
+Exit 0 after removing temporary characterization test.
+
+4. ./node_modules/.bin/tsc -p packages/cli/tsconfig.json --noEmit
+Exit 2. Details: cli-typecheck.txt
+
+5. ./node_modules/.bin/tsc -p packages/automation-core/tsconfig.json --noEmit
+Exit 2. Details: core-typecheck.txt
+
+6. ./node_modules/.bin/vitest run packages/automation-core/test/review-runtime-probes.test.ts --reporter=verbose
+Exit 0: 9 characterization tests demonstrate undesirable behavior (these pass by asserting the bugs).
+Source archived as review-runtime-probes.test.ts.txt, output: runtime-probes.txt.
+Temporary source removed from test directory after running.
+
+7. python3 docs/superpowers/research/2026-10-23-mcp-v2-review-evidence/standalone-pack-probe.py
+Exit 1: missing @babel/parser. Build exists from the official pack test.
+This is a controlled direct-dependency-closure probe, not a registry installation.
+
+Not run: complete root Vitest suite, GUI browser acceptance, exported Next build, configured cloud/hosting acceptance, paid model benchmarks.

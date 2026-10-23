@@ -1,5 +1,5 @@
 // packages/automation-core/test/capabilities/T23-challenger2.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Snapshot } from '../../src/contracts';
 import { createSnapshot, createOperationContext } from '../../src/session';
 import '../../src/index';
@@ -52,7 +52,25 @@ function createAdversarialSnapshot(files: Record<string, string>, revision = 1):
 }
 
 describe('T23 Empirical Challenger: Preflight & Deploy Lifecycle Hardening', () => {
-  const context = createOperationContext();
+  const mockHostingAdapter = {
+    deploy: vi.fn(async (args: any) => ({
+      success: true,
+      deploymentId: `dep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      url: `https://${args.projectId}.${(args.target || args.targetEnvironment) === 'production' ? 'revyme.app' : 'staging.revyme.app'}`,
+      status: 'deployed' as const,
+      timestamp: new Date().toISOString(),
+      targetEnvironment: args.targetEnvironment || args.target,
+      target: args.target || args.targetEnvironment,
+      revision: args.revision,
+      commitHash: calculateSnapshotHash(args.snapshot.files),
+    })),
+  };
+
+  const context = createOperationContext({
+    adapters: {
+      hosting: mockHostingAdapter,
+    },
+  });
 
   beforeEach(() => {
     projectFS.loadSnapshot(

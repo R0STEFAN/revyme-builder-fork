@@ -183,12 +183,20 @@ export class LocalProjectRepository implements ProjectRepository {
 
     if (!record.receipts) record.receipts = {};
     record.receipts[plan.operationId] = receipt;
-    this.receiptsCache.set(`${projectId}:${plan.operationId}`, receipt);
 
     // 5. Durable atomic write via temporary file
     const tmpPath = path.join(this.projectsDir, `${projectId}.tmp.${Date.now()}`);
-    fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf8');
-    fs.renameSync(tmpPath, filePath);
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(record, null, 2), 'utf8');
+      fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+      if (fs.existsSync(tmpPath)) {
+        try { fs.unlinkSync(tmpPath); } catch {}
+      }
+      throw err;
+    }
+
+    this.receiptsCache.set(`${projectId}:${plan.operationId}`, receipt);
 
     return receipt;
   }

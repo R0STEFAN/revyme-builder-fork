@@ -32,6 +32,7 @@ export interface ProjectRecord {
   folderId?: string | null;
   previewImage?: string | null;
   revision?: number;
+  receipts?: Record<string, any>;
 }
 
 export interface ProjectVersionSummary {
@@ -134,6 +135,8 @@ export function getProject(id: string, customRoot?: string): ProjectRecord | nul
       data: parsed.data || null,
       folderId: parsed.folderId ?? null,
       previewImage: parsed.previewImage ?? parsed.data?.previewImage ?? null,
+      revision: typeof parsed.revision === 'number' ? parsed.revision : 1,
+      receipts: parsed.receipts || {},
     };
   } catch (err) {
     console.error(`[Revyme Storage] Error loading project ${safeId}:`, err);
@@ -162,6 +165,7 @@ export function saveProject(
   let existingFolderId: string | null = null;
   let existingPreviewImage: string | null = null;
   let existingRevision = 1;
+  let existingReceipts: Record<string, any> = {};
 
   if (fs.existsSync(filePath)) {
     try {
@@ -171,6 +175,7 @@ export function saveProject(
       if (existing.folderId !== undefined) existingFolderId = existing.folderId;
       if (existing.previewImage !== undefined) existingPreviewImage = existing.previewImage;
       if (typeof existing.revision === 'number') existingRevision = existing.revision;
+      if (existing.receipts) existingReceipts = existing.receipts;
     } catch {
       // ignore read error on overwrite
     }
@@ -204,6 +209,7 @@ export function saveProject(
     folderId: finalFolderId,
     previewImage: finalPreviewImage,
     revision: nextRevision,
+    receipts: existingReceipts,
   };
 
   // Atomic write via temp file
@@ -580,7 +586,7 @@ export function saveUpload(
   buffer: Buffer,
   customRoot?: string,
   projectId = 'local'
-): { filename: string; url: string; size: number; key: string } {
+): { filename: string; url: string; size: number; key: string; thumbnailUrl?: string } {
   const { uploadsDir } = getDataDirs(customRoot);
   const safeBase = path.basename(originalFilename).replace(/[^a-zA-Z0-9._-]/g, '_');
   const ext = path.extname(safeBase) || '.bin';
@@ -711,7 +717,7 @@ export async function ensureThumbnail(filename: string, customRoot?: string): Pr
 
   const tmpPath = path.join(thumbnailsDir, `${thumbName}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
   try {
-    await sharp(originalPath, { failOnError: false })
+    await sharp(originalPath, { failOnError: false } as any)
       .rotate()
       .resize(240, 240, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 80 })

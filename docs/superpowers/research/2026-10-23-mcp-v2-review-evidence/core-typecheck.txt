@@ -1,0 +1,10 @@
+src/backend/autosave.ts(188,17): error TS2339: Property 'hot' does not exist on type 'ImportMeta'.
+src/backend/autosave.ts(189,15): error TS2339: Property 'hot' does not exist on type 'ImportMeta'.
+src/canvas/code-component-runtime.ts(4,27): error TS7016: Could not find a declaration file for module '@babel/standalone'. '/home/rost/Документи/revyme/revyme-builder-fork/node_modules/@babel/standalone/babel.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/babel__standalone` if it exists or add a new declaration (.d.ts) file containing `declare module '@babel/standalone';`
+src/shared/cloud-flag.ts(12,42): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/shared/debug-trace.ts(87,46): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/shared/debug-trace.ts(398,44): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/shared/debug-trace.ts(417,44): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/shared/google-fonts.ts(16,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/shared/hosts.ts(13,16): error TS2339: Property 'env' does not exist on type 'ImportMeta'.

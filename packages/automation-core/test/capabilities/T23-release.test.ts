@@ -82,7 +82,25 @@ function createMockSnapshot(files: Record<string, string>, revision = 1): Snapsh
 }
 
 describe('T23: Release, Export & Publishing Capability Suite', () => {
-  const context = createOperationContext();
+  const mockHostingAdapter = {
+    deploy: vi.fn(async (args: any) => ({
+      success: true,
+      deploymentId: `dep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      url: `https://${args.projectId}.${args.target === 'production' ? 'revyme.app' : 'staging.revyme.app'}`,
+      status: 'deployed' as const,
+      timestamp: new Date().toISOString(),
+      targetEnvironment: args.target,
+      target: args.target,
+      revision: args.revision,
+      commitHash: 'fixture-commit-hash',
+    })),
+  };
+
+  const context = createOperationContext({
+    adapters: {
+      hosting: mockHostingAdapter,
+    },
+  });
 
   beforeEach(() => {
     projectFS.loadSnapshot(
@@ -603,6 +621,22 @@ export default function Bad() {
       await expect(
         publishDeployOperation.execute(snapshot, { target: 'production' }, context),
       ).rejects.toThrow(/PREFLIGHT_FAILED|DEPLOY_PREFLIGHT_BLOCKED/i);
+    });
+
+    it('reports unavailable when no hosting adapter is provided in context', async () => {
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT_CODE,
+        'app/page.client.tsx': CLEAN_PAGE_CODE,
+      });
+      const unconfiguredContext = createOperationContext();
+      const res = await publishDeployOperation.execute(
+        snapshot,
+        { target: 'production', force: true },
+        unconfiguredContext,
+      );
+      expect(res.status).toBe('unavailable');
+      expect(res.success).toBe(false);
+      expect(res.reason).toBe('HOSTING_ADAPTER_UNAVAILABLE');
     });
 
     it('allows deployment with force=true despite preflight warnings', async () => {

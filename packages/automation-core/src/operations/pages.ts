@@ -205,13 +205,13 @@ export default function Page() {
 
     const clientCode = `'use client';
 
-/* @canvas { single: true, height: 'auto' } */
+/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 } ], "positions": { "desktop": { "x": 0, "y": 0 } } } */
 
 import React from 'react';
 
 export default function Page() {
   return (
-    <div data-id="${rootId}" data-name="${pageName}" style={{
+    <div data-id="root" data-name="${pageName}" style={{
       position: 'relative', width: '100%', minHeight: '900px',
       backgroundColor: '#ffffff'
     }}>
@@ -235,10 +235,7 @@ export default function Page() {
 
     // Ensure root layout exists if missing
     if (!snapshot.files.has('app/layout.tsx')) {
-      const layoutCode = `import './globals.css';
-import { Providers } from './providers';
-
-export const metadata = {
+      const layoutCode = `export const metadata = {
   title: 'Revyme Site',
   description: 'Built with Revyme',
 };
@@ -246,9 +243,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

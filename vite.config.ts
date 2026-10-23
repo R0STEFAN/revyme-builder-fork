@@ -455,7 +455,8 @@ export default defineConfig(({ mode }) => {
   },
   resolve: {
     alias: {
-      '@': '/src',
+      '@': path.resolve(__dirname, 'src'),
+      '@revyme/automation-core': path.resolve(__dirname, 'packages/automation-core/src'),
     },
     // `@revyme/runtime` (npm-installed) imports `react`
     // / `framer-motion`. Without `dedupe`, Vite resolves those imports from

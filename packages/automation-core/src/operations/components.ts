@@ -32,6 +32,13 @@ export function ensureComponentImport(code: string, componentName: string): stri
     const insertPos = lastImportMatch.index + lastImportMatch[0].length;
     return code.slice(0, insertPos) + importLine + '\n' + code.slice(insertPos);
   }
+
+  const useClientMatch = code.match(/^\s*['"]use client['"];?\r?\n?/);
+  if (useClientMatch && useClientMatch[0]) {
+    const insertPos = useClientMatch.index! + useClientMatch[0].length;
+    return code.slice(0, insertPos) + '\n' + importLine + '\n' + code.slice(insertPos);
+  }
+
   return importLine + '\n' + code;
 }
 

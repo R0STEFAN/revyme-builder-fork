@@ -1,7 +1,9 @@
-// packages/automation-core/src/validate.ts
 import { parse } from '@babel/parser';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { Snapshot, Plan, Issue } from './contracts';
+import { checkFile } from '@/code/oracle/check-file';
+import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 
 const TRANSPARENT_INLINE_TAGS = new Set([
   'span',
@@ -53,6 +55,15 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
           path: [filePath],
           message: `File ${filePath} expected beforeHash but file does not exist in base snapshot`,
         });
+      } else {
+        const hash = createHash('sha256').update(existing).digest('hex');
+        if (change.beforeHash !== hash) {
+          issues.push({
+            code: 'BEFORE_HASH_MISMATCH',
+            path: [filePath],
+            message: `File ${filePath} beforeHash mismatch: expected ${change.beforeHash}, got ${hash}`,
+          });
+        }
       }
     }
 
@@ -63,7 +74,41 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
 
     // Only validate JSX/TSX syntax and rules for JS/TS/JSX/TSX files
     if (/\.(tsx|jsx|ts|js)$/.test(filePath)) {
-      validateSourceCode(filePath, change.content, projectedFiles, issues);
+      const isLayout = /(^|\/)layout\.(tsx|ts)$/.test(filePath);
+      const isProvider = /(^|\/)providers\.(tsx|ts)$/.test(filePath);
+      const isCodeComp = filePath.startsWith('components/') && isCodeComponentSource(change.content);
+
+      validateSourceCode(filePath, change.content, projectedFiles, issues, isCodeComp || isLayout || isProvider);
+
+      // Run Oracle check for TSX/JSX authoring files (client pages, components, templates)
+      const isServerPageEntry = /(^|\/)page\.(tsx|ts)$/.test(filePath) && !filePath.includes('.client.');
+      if (/\.(tsx|jsx)$/.test(filePath) && !isLayout && !isProvider && !isServerPageEntry) {
+        let kind: 'page' | 'component' | 'code-component' | 'template' = 'page';
+        if (filePath.startsWith('components/')) {
+          kind = isCodeComp ? 'code-component' : 'component';
+        } else if (filePath.includes('template')) {
+          kind = 'template';
+        }
+
+        try {
+          const oracleViolations = checkFile(change.content, { kind, path: filePath })
+            .filter((v) => v.code !== 'CANVAS_CONFIG_MISSING');
+          for (const v of oracleViolations) {
+            issues.push({
+              code: v.code,
+              path: [filePath, ...(v.elementId ? [v.elementId] : [])],
+              message: v.message,
+              source: { file: filePath, line: v.line ?? 1 },
+            });
+          }
+        } catch (err: any) {
+          issues.push({
+            code: 'ORACLE_CHECK_FAILED',
+            path: [filePath],
+            message: err?.message || String(err),
+          });
+        }
+      }
     }
   }
 
@@ -77,7 +122,8 @@ function validateSourceCode(
   filePath: string,
   content: string,
   allFiles: Map<string, string>,
-  issues: Issue[]
+  issues: Issue[],
+  exemptFromDataId = false
 ): void {
   let ast: any;
   try {
@@ -100,21 +146,31 @@ function validateSourceCode(
   function walk(node: any) {
     if (!node || typeof node !== 'object') return;
 
-    // Check relative imports
+    // Check relative and alias imports
     if (node.type === 'ImportDeclaration') {
       const specifier = node.moduleSpecifier?.value ?? node.source?.value;
-      if (typeof specifier === 'string' && specifier.startsWith('.')) {
-        const resolvedBase = path.normalize(path.join(path.dirname(filePath), specifier));
-        // Check extensions: .tsx, .ts, .jsx, .js, /index.tsx, etc.
-        const extensions = ['', '.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts'];
-        const found = extensions.some((ext) => allFiles.has(resolvedBase + ext));
-        if (!found) {
-          issues.push({
-            code: 'UNRESOLVED_IMPORT',
-            path: [filePath],
-            message: `Unresolved relative import "${specifier}" in ${filePath}`,
-            source: { file: filePath, line: node.loc?.start?.line ?? 1 },
-          });
+      if (typeof specifier === 'string') {
+        let candidatePath: string | null = null;
+        if (specifier.startsWith('.')) {
+          candidatePath = path.normalize(path.join(path.dirname(filePath), specifier));
+        } else if (specifier.startsWith('@/')) {
+          candidatePath = specifier.slice(2);
+        }
+
+        if (candidatePath) {
+          // Check extensions: .tsx, .ts, .jsx, .js, /index.tsx, etc.
+          const extensions = ['', '.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts'];
+          const found = extensions.some(
+            (ext) => allFiles.has(candidatePath! + ext) || allFiles.has('src/' + candidatePath! + ext)
+          );
+          if (!found) {
+            issues.push({
+              code: 'UNRESOLVED_IMPORT',
+              path: [filePath],
+              message: `Unresolved import "${specifier}" in ${filePath}`,
+              source: { file: filePath, line: node.loc?.start?.line ?? 1 },
+            });
+          }
         }
       }
     }
@@ -138,7 +194,7 @@ function validateSourceCode(
         }
       }
 
-      if (!dataId && !isInline && tagName) {
+      if (!exemptFromDataId && !dataId && !isInline && tagName) {
         // UpperCase tags can be custom component instances or icons;
         // Standard structural tags (div, section, main, header, footer, button, etc.) require data-id
         const isStandardTag = /^[a-z]/.test(tagName);

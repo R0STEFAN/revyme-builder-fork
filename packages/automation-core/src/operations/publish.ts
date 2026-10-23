@@ -27,7 +27,7 @@ export const deploymentRecordSchema = z.object({
   revision: z.number(),
   commitHash: z.string(),
   url: z.string(),
-  status: z.enum(['deployed', 'failed', 'building', 'queued']),
+  status: z.enum(['deployed', 'failed', 'building', 'queued', 'unavailable']),
   preflightPassed: z.boolean(),
   forced: z.boolean(),
   pageCount: z.number(),
@@ -794,8 +794,10 @@ export const publishDeployOutputSchema = z.object({
   target: z.enum(['production', 'staging']),
   commitHash: z.string(),
   revision: z.number(),
-  url: z.string(),
-  status: z.enum(['deployed', 'failed', 'building', 'queued']),
+  url: z.string().optional(),
+  status: z.enum(['deployed', 'failed', 'building', 'queued', 'unavailable']),
+  reason: z.string().optional(),
+  error: z.string().optional(),
   preflightPassed: z.boolean(),
   forced: z.boolean(),
   pageCount: z.number(),
@@ -867,75 +869,76 @@ export const publishDeployOperation: Operation<PublishDeployInput, PublishDeploy
         customDomain: input.customDomain,
         message: input.message,
       });
-      return {
-        ...adapterRes,
+
+      const sync = syncPublishSnapshotToProjectFS(snapshot);
+      const commitHash = adapterRes.commitHash || calculateSnapshotHash(snapshot.files);
+      let pageCount = 0;
+      for (const p of snapshot.files.keys()) {
+        if (/(^|\/)page(\.client)?\.tsx$/.test(p)) pageCount += 1;
+      }
+
+      const deploymentId =
+        adapterRes.deploymentId ||
+        (context?.createId
+          ? context.createId('dep')
+          : `dep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
+
+      const record: DeploymentRecord = {
+        id: deploymentId,
+        deploymentId,
+        timestamp: adapterRes.timestamp || new Date().toISOString(),
         targetEnvironment: targetEnv,
         target: targetEnv,
+        revision: snapshot.revision ?? 1,
+        commitHash,
+        url: adapterRes.url || '',
+        status: adapterRes.status || 'deployed',
+        preflightPassed: preflight.passed,
+        forced: force,
+        pageCount,
+        message: input.message,
+      };
+
+      const existing = loadDeployments(snapshot);
+      const updated = [...existing, record];
+      saveDeployments(updated, snapshot);
+
+      const changes = [...sync.collectChanges(), ...(adapterRes.changes || [])];
+
+      return {
+        ...adapterRes,
+        deploymentId,
+        targetEnvironment: targetEnv,
+        target: targetEnv,
+        commitHash,
+        revision: snapshot.revision ?? 1,
         preflightPassed: preflight.passed,
         preflightReport: preflight,
         historyFile: DEPLOYMENTS_STORAGE_PATH,
-        changes: adapterRes.changes || [],
+        changes,
+        pageCount,
+        forced: force,
       };
     }
 
-    // Phase 3: Headless Local Staging Fallback (_meta/deployments.json)
-    const sync = syncPublishSnapshotToProjectFS(snapshot);
-    const commitHash = calculateSnapshotHash(snapshot.files);
-    const deploymentId = context?.createId
-      ? context.createId('dep')
-      : `dep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const timestamp = new Date().toISOString();
-
-    const hostPrefix = input.customDomain
-      ? input.customDomain
-      : input.subdomain
-      ? `${input.subdomain}.${targetEnv === 'production' ? 'revyme.app' : 'staging.revyme.app'}`
-      : `${projectId}.${targetEnv === 'production' ? 'revyme.app' : 'staging.revyme.app'}`;
-    const url = `https://${hostPrefix}`;
-
-    let pageCount = 0;
-    for (const p of snapshot.files.keys()) {
-      if (/(^|\/)page(\.client)?\.tsx$/.test(p)) pageCount += 1;
-    }
-
-    const record: DeploymentRecord = {
-      id: deploymentId,
-      deploymentId,
-      timestamp,
-      targetEnvironment: targetEnv,
-      target: targetEnv,
-      revision: snapshot.revision ?? 1,
-      commitHash,
-      url,
-      status: 'deployed',
-      preflightPassed: preflight.passed,
-      forced: force,
-      pageCount,
-      message: input.message,
-    };
-
-    // Load existing deployment records and append chronologically
-    const existing = loadDeployments(snapshot);
-    const updated = [...existing, record];
-    saveDeployments(updated, snapshot);
-
-    const changes = sync.collectChanges();
-
+    // Phase 3: Require hosting adapter for deployment
     return {
-      success: true,
-      deploymentId,
-      timestamp,
+      success: false,
+      deploymentId: '',
+      timestamp: new Date().toISOString(),
       targetEnvironment: targetEnv,
       target: targetEnv,
-      commitHash,
+      commitHash: '',
       revision: snapshot.revision ?? 1,
-      url,
-      status: 'deployed',
+      url: '',
+      status: 'unavailable',
+      reason: 'HOSTING_ADAPTER_UNAVAILABLE',
+      error: 'No hosting adapter configured for deployment. Headless environment requires a configured hosting adapter.',
       preflightPassed: preflight.passed,
       forced: force,
-      pageCount,
+      pageCount: 0,
       message: input.message,
-      changes,
+      changes: [],
       historyFile: DEPLOYMENTS_STORAGE_PATH,
       preflightReport: preflight,
     };

@@ -3,6 +3,7 @@ import http from 'node:http';
 import { createAutomationMiddleware } from './api';
 import { LocalProjectRepository } from './project-repository';
 import { CommitService } from './commit-service';
+import { validatePlan } from '../../packages/automation-core/src/validate';
 
 export function startStandaloneServer(port = 8085, customDataDir?: string): Promise<{
   server: http.Server;
@@ -11,7 +12,7 @@ export function startStandaloneServer(port = 8085, customDataDir?: string): Prom
 }> {
   const repository = new LocalProjectRepository(customDataDir);
   const commitService = new CommitService(repository);
-  const middleware = createAutomationMiddleware({ repository, commitService });
+  const middleware = createAutomationMiddleware({ repository, commitService, validatePlan });
 
   const server = http.createServer((req, res) => {
     middleware(req, res, () => {

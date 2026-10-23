@@ -17,6 +17,7 @@ test-results/
 playwright-report/
 *.log
 .claude/
+.agents/teamwork/
 
 # env — only the example ships
 .env*

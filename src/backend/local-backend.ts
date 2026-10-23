@@ -78,7 +78,7 @@ export class LocalBackend implements ProjectBackend {
     }
 
     // 1. Try server storage first when in browser
-    let server: { data: ProjectData; revision: number | null } | null = null;
+    let server: { data: ProjectData; revision: number | null; recoveryRevision: number | null } | null = null;
     if (typeof window !== 'undefined' && typeof fetch === 'function') {
       try {
         const { res, json } = await fetchProjectRow(id);
@@ -88,12 +88,15 @@ export class LocalBackend implements ProjectBackend {
               try { localStorage.setItem(NAME_PREFIX + id, json.name); } catch { /* optional cached name */ }
             }
             const { [REVISION_FIELD]: rawRevision, [UNSYNCED_FIELD]: _unsynced, ...serverData } = json.data;
-            const revision = readRevision(rawRevision);
-            observeRevision(id, revision);
+            const recoveryRevision = readRevision(rawRevision);
+            const serverRevision = typeof json.revision === 'number'
+              ? json.revision
+              : (recoveryRevision !== null && recoveryRevision < 1_000_000 ? recoveryRevision : null);
+            observeRevision(id, recoveryRevision);
             if (!isKnownProjectFormat(serverData.format)) {
               trace.error('local-backend:unknown-format', { id, format: serverData.format, fileCount: Object.keys(serverData.files).length });
             }
-            server = { data: serverData as ProjectData, revision };
+            server = { data: serverData as ProjectData, revision: serverRevision, recoveryRevision };
           }
         } else if (res.status >= 500) {
           serverError = new Error(`Server returned HTTP ${res.status}`);
@@ -112,8 +115,8 @@ export class LocalBackend implements ProjectBackend {
     // An unsynced local copy beats a legacy server row, or a server row
     // carrying an older revision. An acknowledged equal/newer server revision
     // wins even if quota prevented clearing the local recovery marker.
-    if (local?.unsynced && (!server || server.revision === null ||
-      (local.revision !== null && server.revision < local.revision))) {
+    if (local?.unsynced && (!server || server.recoveryRevision === null ||
+      (local.revision !== null && server.recoveryRevision < local.revision))) {
       trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
       return local.data;
     }

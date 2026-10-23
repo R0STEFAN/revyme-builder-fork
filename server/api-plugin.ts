@@ -29,7 +29,6 @@ import {
 } from './storage';
 import { LocalServerManager, localServerManager } from './local-server';
 import { McpBridge, mcpBridge as defaultMcpBridge } from './mcp-bridge';
-import { createAutomationMiddleware } from './automation/api';
 
 
 
@@ -129,9 +128,35 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
   const mcpPort = options?.mcpPort ?? (process.env.REVYME_MCP_PORT ? parseInt(process.env.REVYME_MCP_PORT, 10) : 8082);
   const autoStartMcpHttp = options?.autoStartMcpHttp ?? false;
 
-  const setupMiddlewares = (middlewares: any) => {
+  const setupMiddlewares = (middlewares: any, server?: any) => {
     middlewares.use(bridge.middleware());
-    middlewares.use(createAutomationMiddleware());
+    let automationMiddleware: ((req: any, res: any, next: any) => void) | null = null;
+    middlewares.use(async (req: any, res: any, next: any) => {
+      const url = req.url || '';
+      if (url.startsWith('/api/automation')) {
+        if (!automationMiddleware) {
+          try {
+            if (server && typeof server.ssrLoadModule === 'function') {
+              const apiModulePath = '/server/automation/api.ts';
+              const apiModule = await server.ssrLoadModule(apiModulePath);
+              automationMiddleware = apiModule.createAutomationMiddleware();
+            } else {
+              res.statusCode = 503;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: false, error: 'Automation middleware requires dev server SSR runner' }));
+              return;
+            }
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: err?.message || String(err) }));
+            return;
+          }
+        }
+        return automationMiddleware(req, res, next);
+      }
+      next();
+    });
     middlewares.use(async (req: any, res: any, next: any) => {
 
       const url = req.url || '';
@@ -970,7 +995,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
   return {
     name: 'revyme-selfhost-api',
     configureServer(server) {
-      setupMiddlewares(server.middlewares);
+      setupMiddlewares(server.middlewares, server);
       if (autoStartMcpHttp) {
         bridge.startHttpServer(mcpPort);
         server.httpServer?.on('close', () => {
@@ -979,7 +1004,7 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
       }
     },
     configurePreviewServer(server) {
-      setupMiddlewares(server.middlewares);
+      setupMiddlewares(server.middlewares, server);
       if (autoStartMcpHttp) {
         bridge.startHttpServer(mcpPort);
         server.httpServer?.on('close', () => {

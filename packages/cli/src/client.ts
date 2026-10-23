@@ -9,6 +9,7 @@ import type {
 } from '@revyme/automation-core';
 import { defaultRegistry } from '@revyme/automation-core';
 import { prepareOperation } from '@revyme/automation-core';
+import { createPlan } from '@revyme/automation-core';
 
 export interface ClientOptions {
   apiUrl: string;
@@ -52,25 +53,35 @@ export class AutomationClient {
         return json;
       }
 
+      const payload =
+        json.data && typeof json.data === 'object' && 'files' in json.data
+          ? json.data
+          : json.snapshot && typeof json.snapshot === 'object'
+          ? json.snapshot
+          : json.data || {};
+
       // Convert serialized files object to Map
       const filesMap = new Map<string, string>();
-      if (json.data?.files && typeof json.data.files === 'object') {
-        for (const [filePath, content] of Object.entries(json.data.files)) {
+      if (payload.files && typeof payload.files === 'object') {
+        for (const [filePath, content] of Object.entries(payload.files)) {
           filesMap.set(filePath, content as string);
         }
       }
 
       const snapshot: Snapshot = {
-        scope: json.data.scope,
-        revision: json.data.revision,
+        scope: payload.scope || scope,
+        revision: payload.revision ?? 0,
         files: filesMap,
-        config: json.data.config || {},
+        config: payload.config || {},
       };
 
       return {
         ok: true,
         data: snapshot,
-        meta: json.meta,
+        meta: json.meta || {
+          commitStatus: 'not_committed',
+          revision: snapshot.revision,
+        },
       };
     } catch (err: any) {
       return {
@@ -131,17 +142,23 @@ export class AutomationClient {
           issues: [{ code: 'SERVER_UNAVAILABLE', path: [], message: String(err) }],
         },
         meta: {
-          commitStatus: 'not_committed',
+          commitStatus: 'unknown',
           revision: 0,
         },
       };
     }
   }
 
-  async getStatus(scope: Scope): Promise<Result<{ revision: number; healthy: boolean }>> {
-    const url = `${this.apiUrl}/api/automation/status?projectId=${encodeURIComponent(
+  async getStatus(
+    scope: Scope,
+    operationId?: string
+  ): Promise<Result<{ revision: number; healthy: boolean; receipt?: Receipt | null; found?: boolean }>> {
+    let url = `${this.apiUrl}/api/automation/status?projectId=${encodeURIComponent(
       scope.projectId
     )}&branchId=${encodeURIComponent(scope.branchId || 'main')}`;
+    if (operationId) {
+      url += `&operationId=${encodeURIComponent(operationId)}`;
+    }
     try {
       const res = await this.fetchWithTimeout(url);
       return await res.json();
@@ -289,8 +306,26 @@ export class AutomationClient {
       return prep as Result<Receipt>;
     }
 
-    // If dry-run requested or operation is a read kind, return prepared plan without committing
-    if (options?.dryRun || op.kind === 'read') {
+    // Convert prepared operation output into a validated Plan if it produced changes
+    let plan: Plan;
+    const prepData = prep.data as any;
+    if (prepData && typeof prepData === 'object' && prepData.plan && prepData.plan.planHash) {
+      plan = prepData.plan;
+    } else if (prepData && typeof prepData === 'object' && prepData.planHash) {
+      plan = prepData;
+    } else if (prepData && typeof prepData === 'object' && Array.isArray(prepData.changes)) {
+      const operationId = context.createId('op');
+      plan = createPlan({
+        scope,
+        baseRevision: snapshot.revision,
+        operationId,
+        changes: prepData.changes,
+        createdIds: prepData.createdIds || (prepData.page?.id ? [prepData.page.id] : []),
+        normalizations: prepData.normalizations,
+        issues: prepData.issues,
+      });
+    } else {
+      // Read-only or metadata output without file changes
       return {
         ok: true,
         data: prep.data,
@@ -301,8 +336,19 @@ export class AutomationClient {
       };
     }
 
-    // If prep produced a plan, commit it atomically via CAS
-    const plan = prep.data as Plan;
+    // If dry-run requested or operation is a read kind, return prepared plan without committing
+    if (options?.dryRun || op.kind === 'read') {
+      return {
+        ok: true,
+        data: plan,
+        meta: {
+          commitStatus: 'not_committed',
+          revision: snapshot.revision,
+        },
+      };
+    }
+
+    // Commit plan atomically via CAS
     return this.commit(plan);
   }
 }

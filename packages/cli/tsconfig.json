@@ -7,13 +7,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
+      "@/*": ["../../src/*"],
       "@revyme/automation-core": ["../automation-core/src/index.ts"],
       "@revyme/automation-core/*": ["../automation-core/src/*"],
       "@revyme/cli": ["./src/index.ts"],
       "@revyme/cli/*": ["./src/*"]
     }
   },
-  "include": ["src", "test", "bin"]
+  "include": ["src", "test", "bin", "../../src/vite-env.d.ts"]
 }

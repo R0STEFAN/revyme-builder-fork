@@ -1,0 +1,575 @@
+packages/automation-core/src/operations/assets.ts(5,28): error TS2307: Cannot find module '@/shared/hash-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(6,43): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(7,28): error TS2307: Cannot find module '@/code/stores/branch-store' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(8,37): error TS2307: Cannot find module '@/code/branching/describe-changes' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(9,29): error TS2307: Cannot find module '@/code/branching/apply' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(10,36): error TS2307: Cannot find module '@/code/mutation/history' or its corresponding type declarations.
+packages/automation-core/src/operations/branches.ts(206,83): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/branches.ts(312,45): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/branches.ts(313,70): error TS7006: Parameter 'p' implicitly has an 'any' type.
+packages/automation-core/src/operations/branches.ts(385,53): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/branches.ts(455,52): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/catalog.ts(5,66): error TS2307: Cannot find module '@/shared/insert-items/element-data' or its corresponding type declarations.
+packages/automation-core/src/operations/catalog.ts(6,31): error TS2307: Cannot find module '@/shared/insert-items/insert-item-lookup' or its corresponding type declarations.
+packages/automation-core/src/operations/catalog.ts(7,48): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/catalog.ts(176,30): error TS7006: Parameter 's' implicitly has an 'any' type.
+packages/automation-core/src/operations/catalog.ts(176,50): error TS7006: Parameter 'i' implicitly has an 'any' type.
+packages/automation-core/src/operations/catalog.ts(230,9): error TS2719: Type '(snapshot: import("/home/rost/\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438/revyme/revyme-builder-fork/packages/automation-core/src/contracts").Snapshot, input: { targetFile: string; parentId: string; itemId: string; ... 4 more ...; textContent?: string | undefined; }, context: import("/home/rost/\u0414\u04...' is not assignable to type '(snapshot: import("/home/rost/\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438/revyme/revyme-builder-fork/packages/automation-core/src/contracts").Snapshot, input: { targetFile: string; parentId: string; itemId: string; ... 4 more ...; textContent?: string | undefined; }, context: import("/home/rost/\u0414\u04...'. Two different types with this name exist, but they are unrelated.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; nodeId: string; tag: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; nodeId: string; tag: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; nodeId: string; tag: string; }' is not assignable to type '{ changes: FileChange[]; nodeId: string; tag: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/catalog.ts(263,36): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+packages/automation-core/src/operations/cms-api.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(19,8): error TS2307: Cannot find module '@/code/project/cms-api-config' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(23,8): error TS2307: Cannot find module '@/code/generation/cms-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(28,8): error TS2307: Cannot find module '@/code/generation/cms-search-field-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(32,8): error TS2307: Cannot find module '@/code/features/page-variables' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(33,39): error TS2307: Cannot find module '@/code/generation/page-variables-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(34,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(35,37): error TS2307: Cannot find module '@/code/project/cms-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(36,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(37,44): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-api.ts(623,45): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-api.ts(626,120): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-api.ts(639,39): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-api.ts(650,59): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-api.ts(660,56): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-api.ts(760,23): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-bindings.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-bindings.ts(11,8): error TS2307: Cannot find module '@/code/generation/cms-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-bindings.ts(12,43): error TS2307: Cannot find module '@/code/generation/map-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-bindings.ts(16,8): error TS2307: Cannot find module '@/code/generation/cms-pagination-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-bindings.ts(17,46): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-items.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-items.ts(14,8): error TS2307: Cannot find module '@/code/project/cms-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-items.ts(15,37): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-items.ts(60,30): error TS7006: Parameter 'i' implicitly has an 'any' type.
+packages/automation-core/src/operations/cms-pages.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-pages.ts(10,8): error TS2307: Cannot find module '@/code/project/cms-page-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-pages.ts(19,8): error TS2307: Cannot find module '@/code/project/cms-seo' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-schema.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-schema.ts(21,8): error TS2307: Cannot find module '@/code/project/cms-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/cms-schema.ts(22,56): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/code-components.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/code-components.ts(11,8): error TS2307: Cannot find module '@/code/components/controls-parser' or its corresponding type declarations.
+packages/automation-core/src/operations/code-components.ts(12,27): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/code-components.ts(41,47): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+packages/automation-core/src/operations/code-components.ts(44,13): error TS2322: Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/code-components.ts(162,39): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/code-files.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/code-files.ts(7,42): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/code-files.ts(8,39): error TS2307: Cannot find module '@/code/oracle/checks/shared' or its corresponding type declarations.
+packages/automation-core/src/operations/code-files.ts(9,30): error TS2307: Cannot find module '@/code/project/active-file-store' or its corresponding type declarations.
+packages/automation-core/src/operations/code-files.ts(72,47): error TS7006: Parameter 'p' implicitly has an 'any' type.
+packages/automation-core/src/operations/code-files.ts(76,29): error TS7006: Parameter 'p' implicitly has an 'any' type.
+packages/automation-core/src/operations/code-files.ts(81,29): error TS7006: Parameter 'p' implicitly has an 'any' type.
+packages/automation-core/src/operations/code-files.ts(315,43): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/comments.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/comments.ts(12,8): error TS2307: Cannot find module '@/code/project/comments-config' or its corresponding type declarations.
+packages/automation-core/src/operations/comments.ts(65,29): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/comments.ts(68,51): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/comments.ts(76,49): error TS7006: Parameter 'm' implicitly has an 'any' type.
+packages/automation-core/src/operations/comments.ts(219,43): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/component-props.ts(9,8): error TS2307: Cannot find module '@/code/features/variable-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/component-props.ts(18,8): error TS2307: Cannot find module '@/code/components/prop-meta' or its corresponding type declarations.
+packages/automation-core/src/operations/component-props.ts(22,8): error TS2307: Cannot find module '@/code/components/instance-prop-overrides' or its corresponding type declarations.
+packages/automation-core/src/operations/component-props.ts(27,8): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/component-props.ts(28,48): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/component-props.ts(81,34): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+packages/automation-core/src/operations/component-props.ts(306,9): error TS2322: Type '(snapshot: Snapshot, input: { componentFile: string; nodeId: string; property: string; propName: string; defaultValue?: string | undefined; propType?: string | undefined; label?: string | undefined; ... 4 more ...; step?: number | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { componentFile: string; nodeId: string; property: string; propName: string; defaultValue?: string | undefined; propType?: string | undefined; label?: string | undefined; ... 4 more ...; step?: number | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; propName: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; propName: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; propName: string; }' is not assignable to type '{ changes: FileChange[]; propName: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/component-props.ts(398,9): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/component-props.ts(490,9): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/components.ts(9,8): error TS2307: Cannot find module '@/code/generation/create-component-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(12,8): error TS2307: Cannot find module '@/code/generation/extract-component-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(15,8): error TS2307: Cannot find module '@/code/generation/replace-component-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(16,56): error TS2307: Cannot find module '@/code/components/component-registry' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(17,36): error TS2307: Cannot find module '@/code/variants/variant-config' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(18,31): error TS2307: Cannot find module '@/code/components/prop-meta' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(19,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(20,36): error TS2307: Cannot find module '@/code/parsing/ast-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(21,33): error TS2307: Cannot find module '@/code/components/instance-prop-overrides' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(22,30): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(23,28): error TS2307: Cannot find module '@/shared/hash-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/components.ts(86,33): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/components.ts(145,33): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/components.ts(430,27): error TS7006: Parameter 'path' implicitly has an 'any' type.
+packages/automation-core/src/operations/connections.ts(11,8): error TS2307: Cannot find module '@/code/variants/connection-config' or its corresponding type declarations.
+packages/automation-core/src/operations/connections.ts(12,36): error TS2307: Cannot find module '@/code/variants/variant-config' or its corresponding type declarations.
+packages/automation-core/src/operations/connections.ts(77,39): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/connections.ts(78,37): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/custom-code.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/diagnostics.ts(5,42): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/drawing.ts(11,8): error TS2307: Cannot find module '@/code/sketch/sketch-anim-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/drawing.ts(16,8): error TS2307: Cannot find module '@/code/sketch/sketch-anim-config' or its corresponding type declarations.
+packages/automation-core/src/operations/drawing.ts(64,9): error TS2719: Type '(snapshot: import("/home/rost/\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438/revyme/revyme-builder-fork/packages/automation-core/src/contracts").Snapshot, input: { targetFile: string; nodeId: string; trigger?: "hover" | ... 4 more ... | undefined; mode?: "sequential" | ... 4 more ... | undefined; durationSca...' is not assignable to type '(snapshot: import("/home/rost/\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0438/revyme/revyme-builder-fork/packages/automation-core/src/contracts").Snapshot, input: { targetFile: string; nodeId: string; trigger?: "hover" | ... 4 more ... | undefined; mode?: "sequential" | ... 4 more ... | undefined; durationSca...'. Two different types with this name exist, but they are unrelated.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; config: SketchAnimConfig; }>' is not assignable to type 'Promise<{ changes: FileChange[]; config: SketchAnimConfig; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; config: SketchAnimConfig; }' is not assignable to type '{ changes: FileChange[]; config: SketchAnimConfig; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/drawing.ts(166,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; removedId: string; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; removedId: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }' is not assignable to type '{ changes: FileChange[]; removedId: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/export.ts(6,43): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/export.ts(20,8): error TS2307: Cannot find module '@/code/project/source-export' or its corresponding type declarations.
+packages/automation-core/src/operations/export.ts(21,58): error TS2307: Cannot find module '@/shared/zip' or its corresponding type declarations.
+packages/automation-core/src/operations/export.ts(22,58): error TS2307: Cannot find module '@/code/oracle/publish-preflight' or its corresponding type declarations.
+packages/automation-core/src/operations/export.ts(23,56): error TS2307: Cannot find module '@/shared/image-export-constants' or its corresponding type declarations.
+packages/automation-core/src/operations/export.ts(536,45): error TS7006: Parameter 'url' implicitly has an 'any' type.
+packages/automation-core/src/operations/export.ts(553,7): error TS2322: Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/expressions.ts(7,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/expressions.ts(15,8): error TS2307: Cannot find module '@/code/generation/expression-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/expressions.ts(16,52): error TS2307: Cannot find module '@/code/parsing/ast-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/expressions.ts(17,26): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/expressions.ts(186,50): error TS7006: Parameter 'path' implicitly has an 'any' type.
+packages/automation-core/src/operations/folders.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/folders.ts(7,75): error TS2307: Cannot find module '@/code/project/page-folders' or its corresponding type declarations.
+packages/automation-core/src/operations/folders.ts(8,70): error TS2307: Cannot find module '@/code/project/comments-config' or its corresponding type declarations.
+packages/automation-core/src/operations/folders.ts(121,14): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(5,46): error TS2307: Cannot find module '@/shared/google-fonts' or its corresponding type declarations.
+packages/automation-core/src/operations/fonts.ts(11,8): error TS2307: Cannot find module '@/code/generation/next-font-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/fonts.ts(16,8): error TS2307: Cannot find module '@/code/project/preset-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/fonts.ts(17,37): error TS2307: Cannot find module '@/code/project/font-preload' or its corresponding type declarations.
+packages/automation-core/src/operations/fonts.ts(56,27): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(61,27): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(65,27): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(65,54): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(74,25): error TS7006: Parameter 'f' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(78,42): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(79,35): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/fonts.ts(286,9): error TS2322: Type '(snapshot: Snapshot) => Promise<{ referencedFamilies: string[]; declarations: { family: unknown; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: Record<string, never>, context: OperationContext) => Promise<{ referencedFamilies: string[]; declarations: { family: string; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }>'.
+  Type 'Promise<{ referencedFamilies: string[]; declarations: { family: unknown; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }>' is not assignable to type 'Promise<{ referencedFamilies: string[]; declarations: { family: string; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }>'.
+    Type '{ referencedFamilies: string[]; declarations: { family: unknown; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }' is not assignable to type '{ referencedFamilies: string[]; declarations: { family: string; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]; }'.
+      Types of property 'declarations' are incompatible.
+        Type '{ family: unknown; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]' is not assignable to type '{ family: string; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }[]'.
+          Type '{ family: unknown; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }' is not assignable to type '{ family: string; isGoogleImport: boolean; isWorkspaceFontFace: boolean; status: "loaded" | "missing"; }'.
+            Types of property 'family' are incompatible.
+              Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/fonts.ts(308,21): error TS18046: 'family' is of type 'unknown'.
+packages/automation-core/src/operations/form-fields.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(6,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(7,84): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(8,39): error TS2307: Cannot find module '@/code/generation/generator-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(12,8): error TS2307: Cannot find module '@/code/generation/generator-styles' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(16,8): error TS2307: Cannot find module '@/code/generation/form-submit-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(23,8): error TS2307: Cannot find module '@/code/generation/form-state-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(24,38): error TS2307: Cannot find module '@/code/generation/form-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/form-fields.ts(27,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(6,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(16,8): error TS2307: Cannot find module '@/code/generation/form-state-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(17,38): error TS2307: Cannot find module '@/code/generation/form-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(19,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/form-states.ts(89,19): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ loading?: string | undefined; success?: string | undefined; error?: string | undefined; disabled?: string | undefined; }'.
+packages/automation-core/src/operations/forms.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(6,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(7,66): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(8,39): error TS2307: Cannot find module '@/code/generation/generator-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(12,8): error TS2307: Cannot find module '@/code/generation/form-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(19,8): error TS2307: Cannot find module '@/editor/tools/FormTool/form-config' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(20,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(21,43): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/forms.ts(51,47): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+packages/automation-core/src/operations/forms.ts(54,13): error TS2322: Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/forms.ts(330,38): error TS7006: Parameter 'd' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/guides.ts(11,8): error TS2307: Cannot find module '@/code/project/ruler-guides-config' or its corresponding type declarations.
+packages/automation-core/src/operations/guides.ts(12,42): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/guides.ts(51,16): error TS7006: Parameter 'g' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(52,13): error TS7006: Parameter 'g' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(53,14): error TS7006: Parameter 'a' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(53,17): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(55,16): error TS7006: Parameter 'g' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(56,13): error TS7006: Parameter 'g' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(57,14): error TS7006: Parameter 'a' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(57,17): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(120,16): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/guides.ts(122,41): error TS7006: Parameter 'i' implicitly has an 'any' type.
+packages/automation-core/src/operations/history.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/layout.ts(5,34): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/layout.ts(6,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/links.ts(5,39): error TS2307: Cannot find module '@/code/generation/generator-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/links.ts(6,43): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/links.ts(7,50): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/links.ts(123,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; url: string; newTab?: boolean | undefined; rel?: string | undefined; prefetch?: boolean | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; url: string; newTab?: boolean | undefined; rel?: string | undefined; prefetch?: boolean | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/links.ts(195,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/locales.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(11,8): error TS2307: Cannot find module '@/code/project/locale-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(12,34): error TS2307: Cannot find module '@/code/project/locale-route-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(13,38): error TS2307: Cannot find module '@/code/project/providers-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(14,29): error TS2307: Cannot find module '@/shared/rtl-text' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(15,43): error TS2307: Cannot find module '@/code/project/default-code-components/LocaleSwitcher' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(17,48): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(18,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(19,50): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/locales.ts(51,47): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+packages/automation-core/src/operations/locales.ts(54,13): error TS2322: Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/locales.ts(105,60): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/locales.ts(158,30): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/locales.ts(231,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/locales.ts(235,45): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/locales.ts(277,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/locales.ts(329,38): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/marketplace.ts(7,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/marketplace.ts(8,27): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/marketplace.ts(277,41): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/marketplace.ts(281,17): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/media.ts(5,39): error TS2307: Cannot find module '@/code/generation/generator-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(6,34): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(7,77): error TS2307: Cannot find module '@/code/generation/generator-video' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(8,43): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(9,50): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(10,33): error TS2307: Cannot find module '@/shared/image-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/media.ts(115,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; src?: string | undefined; alt?: string | undefined; sizes?: string | undefined; loading?: "" | "lazy" | "eager" | undefined; objectFit?: "" | ... 5 more ... | undefined; autoSizes?: boolean | undefined; elementWidth?: number | undefined; }) => Promise...' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; src?: string | undefined; alt?: string | undefined; sizes?: string | undefined; loading?: "" | "lazy" | "eager" | undefined; objectFit?: "" | ... 5 more ... | undefined; autoSizes?: boolean | undefined; elementWidth?: number | undefined; }, context: O...'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/media.ts(191,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; src?: string | undefined; poster?: string | undefined; autoPlay?: boolean | undefined; muted?: boolean | undefined; ... 4 more ...; asBackground?: boolean | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; src?: string | undefined; poster?: string | undefined; autoPlay?: boolean | undefined; muted?: boolean | undefined; ... 4 more ...; asBackground?: boolean | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/media.ts(257,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; asBackground?: boolean | undefined; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; asBackground?: boolean | undefined; }, context: OperationContext) => Promise<{ changes: FileChange[]; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/metadata.ts(12,8): error TS2307: Cannot find module '@/code/generation/metadata-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/motion.ts(8,8): error TS2307: Cannot find module '@/code/generation/generator-motion-props' or its corresponding type declarations.
+packages/automation-core/src/operations/motion.ts(14,8): error TS2307: Cannot find module '@/code/generation/generator-motion-scroll-fx' or its corresponding type declarations.
+packages/automation-core/src/operations/motion.ts(15,50): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/motion.ts(16,30): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/motion.ts(63,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; prop: "transition" | "initial" | "animate" | "whileHover" | "whileTap" | "whileInView" | "exit"; values: Record<string, string>; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; prop: "transition" | "initial" | "animate" | "whileHover" | "whileTap" | "whileInView" | "exit"; values: Record<string, string>; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/motion.ts(165,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; prop?: "transition" | "initial" | "animate" | "whileHover" | "whileTap" | "whileInView" | "exit" | "scrollFx" | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; prop?: "transition" | "initial" | "animate" | "whileHover" | "whileTap" | "whileInView" | "exit" | "scrollFx" | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/motion.ts(219,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; preset: "lift-on-hover" | "scale-on-hover" | "fade-up" | "fade-in" | "slide-in-left" | "slide-in-right"; physics?: "snappy" | ... 3 more ... | undefined; targets?: Record<...> | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; preset: "lift-on-hover" | "scale-on-hover" | "fade-up" | "fade-in" | "slide-in-left" | "slide-in-right"; physics?: "snappy" | ... 3 more ... | undefined; targets?: Record<...> | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; appliedPreset: "lift-on-hover" | "scale-on-hover" | "fade-up" | "fade-in" | "slide-in-left" | "slide-in-right"; }>' is not assignable to type 'Promise<{ changes: FileChange[]; appliedPreset: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; appliedPreset: "lift-on-hover" | "scale-on-hover" | "fade-up" | "fade-in" | "slide-in-left" | "slide-in-right"; }' is not assignable to type '{ changes: FileChange[]; appliedPreset: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/nodes.ts(5,50): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/nodes.ts(13,8): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(5,50): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(6,35): error TS2307: Cannot find module '@/code/project/canvas-config' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(7,39): error TS2307: Cannot find module '@/code/generation/slot-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(12,8): error TS2307: Cannot find module '@/canvas/node-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(13,38): error TS2307: Cannot find module '@/canvas/resize/geometry-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(18,8): error TS2307: Cannot find module '@/ai/agent/tools/observation-epoch' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(26,8): error TS2307: Cannot find module '@/ai/agent/tools/design-audit' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(35,8): error TS2307: Cannot find module '@/ai/agent/tools/composition' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(37,33): error TS2307: Cannot find module '@/code/stores/store' or its corresponding type declarations.
+packages/automation-core/src/operations/observe.ts(1111,82): error TS18046: 'n' is of type 'unknown'.
+packages/automation-core/src/operations/observe.ts(1195,17): error TS7006: Parameter 'cid' implicitly has an 'any' type.
+packages/automation-core/src/operations/observe.ts(1196,20): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/observe.ts(1198,28): error TS7006: Parameter 'child' implicitly has an 'any' type.
+packages/automation-core/src/operations/observe.ts(1198,35): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+packages/automation-core/src/operations/observe.ts(1238,35): error TS7006: Parameter 'r' implicitly has an 'any' type.
+packages/automation-core/src/operations/overlays.ts(9,8): error TS2307: Cannot find module '@/code/generation/overlay-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/overlays.ts(14,8): error TS2307: Cannot find module '@/code/generation/close-overlay-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/overlays.ts(15,58): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/overrides.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/overrides.ts(13,8): error TS2307: Cannot find module '@/code/generation/code-override-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/overrides.ts(14,34): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/overrides.ts(61,51): error TS7006: Parameter 'name' implicitly has an 'any' type.
+packages/automation-core/src/operations/page-interactions.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/page-interactions.ts(11,8): error TS2307: Cannot find module '@/code/features/page-interactions' or its corresponding type declarations.
+packages/automation-core/src/operations/page-interactions.ts(15,8): error TS2307: Cannot find module '@/code/generation/page-interactions-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/page-interactions.ts(16,39): error TS2307: Cannot find module '@/code/generation/page-variables-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/page-interactions.ts(17,35): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/plugins.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/plugins.ts(7,26): error TS2307: Cannot find module '@/code/parsing/ast-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/plugins.ts(8,36): error TS2307: Cannot find module '@/code/components/component-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/plugins.ts(148,50): error TS7006: Parameter 'file' implicitly has an 'any' type.
+packages/automation-core/src/operations/presets.ts(9,8): error TS2307: Cannot find module '@/code/generation/preset-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/presets.ts(10,34): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/presets.ts(11,34): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/presets.ts(138,40): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/presets.ts(141,30): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/project-skills.ts(7,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/project-skills.ts(16,8): error TS2307: Cannot find module '@/code/project/skills-config' or its corresponding type declarations.
+packages/automation-core/src/operations/projects.ts(8,43): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/projects.ts(9,34): error TS2307: Cannot find module '@/backend/types' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(6,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(7,27): error TS2307: Cannot find module '@/code/oracle/check-file' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(8,58): error TS2307: Cannot find module '@/code/generation/metadata-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(9,32): error TS2307: Cannot find module '@/editor/tools/FormTool/form-config' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(10,38): error TS2307: Cannot find module '@/preview/template-preview' or its corresponding type declarations.
+packages/automation-core/src/operations/publish.ts(98,47): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+packages/automation-core/src/operations/publish.ts(101,13): error TS2322: Type 'unknown' is not assignable to type 'string'.
+packages/automation-core/src/operations/publish.ts(273,52): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/publish.ts(278,17): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/redirects.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/sections.ts(9,8): error TS2307: Cannot find module '@/shared/sections-library' or its corresponding type declarations.
+packages/automation-core/src/operations/sections.ts(10,63): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/sections.ts(58,45): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/sections.ts(58,106): error TS7006: Parameter 'b' implicitly has an 'any' type.
+packages/automation-core/src/operations/sections.ts(151,63): error TS7006: Parameter '_' implicitly has an 'any' type.
+packages/automation-core/src/operations/sections.ts(151,66): error TS7006: Parameter 'oldId' implicitly has an 'any' type.
+packages/automation-core/src/operations/shapes.ts(10,8): error TS2307: Cannot find module '@/code/generation/generator-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/shapes.ts(11,50): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/shapes.ts(12,30): error TS2307: Cannot find module '@/code/components/jsx-tag-attrs' or its corresponding type declarations.
+packages/automation-core/src/operations/shapes.ts(108,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; attrs: Record<string, string>; childIndex?: number | undefined; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; attrs: Record<string, string>; childIndex?: number | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/shapes.ts(151,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; childJSX: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; childJSX: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/shapes.ts(194,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; childIndex: number; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; childIndex: number; }, context: OperationContext) => Promise<{ changes: FileChange[]; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/shapes.ts(237,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; innerJSX: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; svgNodeId: string; innerJSX: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/site-effects.ts(14,8): error TS2307: Cannot find module '@/code/project/smooth-scroll-config' or its corresponding type declarations.
+packages/automation-core/src/operations/site-effects.ts(15,44): error TS2307: Cannot find module '@/code/generation/smooth-scroll-layout' or its corresponding type declarations.
+packages/automation-core/src/operations/site-effects.ts(24,8): error TS2307: Cannot find module '@/code/project/page-effects-config' or its corresponding type declarations.
+packages/automation-core/src/operations/site-effects.ts(28,8): error TS2307: Cannot find module '@/code/generation/cursor-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/site-effects.ts(34,8): error TS2307: Cannot find module '@/code/generation/glide-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/site-effects.ts(355,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; component: string; mode?: "replace" | "follow" | undefined; side?: "top" | "left" | "right" | "bottom" | undefined; offsetX?: number | undefined; offsetY?: number | undefined; variant?: string | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; component: string; mode?: "replace" | "follow" | undefined; side?: "top" | "left" | "right" | "bottom" | undefined; offsetX?: number | undefined; offsetY?: number | undefined; variant?: string | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/site-effects.ts(404,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; removedId: string; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; removedId: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }' is not assignable to type '{ changes: FileChange[]; removedId: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/site-effects.ts(451,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; duration?: string | undefined; bounce?: string | undefined; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; duration?: string | undefined; bounce?: string | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }>' is not assignable to type 'Promise<{ changes: FileChange[]; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; }' is not assignable to type '{ changes: FileChange[]; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/site-effects.ts(534,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; removedId: string; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; removedId: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }' is not assignable to type '{ changes: FileChange[]; removedId: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/slots.ts(11,8): error TS2307: Cannot find module '@/code/generation/slot-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/styles.ts(5,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/styles.ts(6,34): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/styles.ts(12,8): error TS2307: Cannot find module '@/code/generation/generator-styles' or its corresponding type declarations.
+packages/automation-core/src/operations/text-effects.ts(11,8): error TS2307: Cannot find module '@/code/generation/text-anim-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/text-effects.ts(109,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; animationType?: "line" | "character" | "word" | "full" | undefined; split?: "chars" | "words" | "lines" | undefined; ... 10 more ...; transition?: { ...; } | undefined; }) => Promise<...>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; animationType?: "line" | "character" | "word" | "full" | undefined; split?: "chars" | "words" | "lines" | undefined; ... 10 more ...; transition?: { ...; } | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; config: TextAnimConfig; }>' is not assignable to type 'Promise<{ changes: FileChange[]; config: TextAnimConfig; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; config: TextAnimConfig; }' is not assignable to type '{ changes: FileChange[]; config: TextAnimConfig; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/text-effects.ts(236,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }) => Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; nodeId: string; }, context: OperationContext) => Promise<{ changes: FileChange[]; removedId: string; }>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }>' is not assignable to type 'Promise<{ changes: FileChange[]; removedId: string; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; removedId: string; }' is not assignable to type '{ changes: FileChange[]; removedId: string; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/text.ts(5,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/text.ts(6,40): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/tokens.ts(10,8): error TS2307: Cannot find module '@/code/generation/preset-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/tokens.ts(15,8): error TS2307: Cannot find module '@/code/project/preset-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/tokens.ts(16,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/tokens.ts(17,34): error TS2307: Cannot find module '@/shared/types' or its corresponding type declarations.
+packages/automation-core/src/operations/tokens.ts(166,31): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/tokens.ts(169,32): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/tokens.ts(208,32): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/tokens.ts(280,53): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/tokens.ts(307,32): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/tokens.ts(494,7): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/translations.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(10,8): error TS2307: Cannot find module '@/code/project/locale-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(17,8): error TS2307: Cannot find module '@/code/project/translation-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(18,41): error TS2307: Cannot find module '@/code/generation/locale-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(19,45): error TS2307: Cannot find module '@/code/generation/responsive-instance-prop-vars-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(20,36): error TS2307: Cannot find module '@/code/generation/i18n-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(21,32): error TS2307: Cannot find module '@/code/project/active-file-store' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(22,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(23,27): error TS2307: Cannot find module '@/shared/constants' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(24,23): error TS2307: Cannot find module '@/shared/debug-trace' or its corresponding type declarations.
+packages/automation-core/src/operations/translations.ts(94,45): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(99,43): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(104,63): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(111,35): error TS7006: Parameter 't' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(114,58): error TS7006: Parameter 'item' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(194,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(253,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(337,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(386,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(442,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(507,31): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/translations.ts(570,73): error TS7006: Parameter 'l' implicitly has an 'any' type.
+packages/automation-core/src/operations/typography.ts(10,8): error TS2307: Cannot find module '@/code/generation/preset-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(11,34): error TS2307: Cannot find module '@/code/generation/generator-crud' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(12,33): error TS2307: Cannot find module '@/code/parsing/parser' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(13,36): error TS2307: Cannot find module '@/code/parsing/ast-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(14,26): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(15,26): error TS2307: Cannot find module '@/shared/google-fonts-catalog.json' or its corresponding type declarations.
+packages/automation-core/src/operations/typography.ts(51,16): error TS7006: Parameter 'path' implicitly has an 'any' type.
+packages/automation-core/src/operations/typography.ts(54,10): error TS7006: Parameter 'a' implicitly has an 'any' type.
+packages/automation-core/src/operations/typography.ts(596,7): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/variables.ts(5,27): error TS2307: Cannot find module '@/code/project/project-fs' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(15,8): error TS2307: Cannot find module '@/code/features/page-variables' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(21,8): error TS2307: Cannot find module '@/code/generation/page-variables-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(25,8): error TS2307: Cannot find module '@/code/generation/responsive-style-vars-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(29,8): error TS2307: Cannot find module '@/code/generation/responsive-text-vars-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(33,8): error TS2307: Cannot find module '@/code/generation/expression-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(34,45): error TS2307: Cannot find module '@/code/features/delete-variable-pipeline' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(35,35): error TS2307: Cannot find module '@/code/generation/generator-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/variables.ts(112,28): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variables.ts(186,42): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variables.ts(192,30): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variables.ts(256,42): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variables.ts(322,29): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variants.ts(8,8): error TS2307: Cannot find module '@/code/variants/variant-config' or its corresponding type declarations.
+packages/automation-core/src/operations/variants.ts(13,8): error TS2307: Cannot find module '@/code/variants/variant-ops' or its corresponding type declarations.
+packages/automation-core/src/operations/variants.ts(14,44): error TS2307: Cannot find module '@/code/generation/variant-visibility-gen' or its corresponding type declarations.
+packages/automation-core/src/operations/variants.ts(182,34): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/automation-core/src/operations/variants.ts(235,42): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(5,28): error TS2307: Cannot find module '@/shared/hash-utils' or its corresponding type declarations.
+packages/automation-core/src/operations/vectors.ts(12,8): error TS2307: Cannot find module '@/code/icons/icon-set-template' or its corresponding type declarations.
+packages/automation-core/src/operations/vectors.ts(17,8): error TS2307: Cannot find module '@/code/icons/icon-set-config' or its corresponding type declarations.
+packages/automation-core/src/operations/vectors.ts(18,52): error TS2307: Cannot find module '@/code/icons/icon-set-registry' or its corresponding type declarations.
+packages/automation-core/src/operations/vectors.ts(211,9): error TS2322: Type '(snapshot: Snapshot, input: { targetFile: string; name: string; svgMarkup: string; id?: string | undefined; width?: number | undefined; height?: number | undefined; }) => Promise<{ ...; }>' is not assignable to type '(snapshot: Snapshot, input: { targetFile: string; name: string; svgMarkup: string; id?: string | undefined; width?: number | undefined; height?: number | undefined; }, context: OperationContext) => Promise<...>'.
+  Type 'Promise<{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; variant: { id: string; name: string; }; }>' is not assignable to type 'Promise<{ changes: FileChange[]; variant: { id: string; name: string; }; }>'.
+    Type '{ changes: { path: string; beforeHash: null; content: string | undefined; }[]; variant: { id: string; name: string; }; }' is not assignable to type '{ changes: FileChange[]; variant: { id: string; name: string; }; }'.
+      Types of property 'changes' are incompatible.
+        Type '{ path: string; beforeHash: null; content: string | undefined; }[]' is not assignable to type 'FileChange[]'.
+          Type '{ path: string; beforeHash: null; content: string | undefined; }' is not assignable to type 'FileChange'.
+            Types of property 'content' are incompatible.
+              Type 'string | undefined' is not assignable to type 'string | null'.
+                Type 'undefined' is not assignable to type 'string | null'.
+packages/automation-core/src/operations/vectors.ts(221,34): error TS7006: Parameter 'max' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(221,39): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(245,28): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(247,14): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(247,57): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(250,27): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(252,16): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(252,56): error TS18048: 'code' is possibly 'undefined'.
+packages/automation-core/src/operations/vectors.ts(305,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(311,41): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(312,68): error TS7006: Parameter 'c' implicitly has an 'any' type.
+packages/automation-core/src/operations/vectors.ts(317,36): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+packages/automation-core/src/operations/verify.ts(9,75): error TS2307: Cannot find module '@/ai/agent/tools/verify-effect' or its corresponding type declarations.
+packages/automation-core/src/operations/viewports.ts(5,43): error TS2307: Cannot find module '@/code/generation/generator-styles' or its corresponding type declarations.

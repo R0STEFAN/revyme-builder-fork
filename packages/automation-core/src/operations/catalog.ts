@@ -6,6 +6,7 @@ import { CATEGORIES, CREATIVE_CATEGORIES, type InsertItem } from '@/shared/inser
 import { getInsertItem } from '@/shared/insert-items/insert-item-lookup';
 import { addNodeInCode, type AddNodeDef } from '@/code/generation/generator-crud';
 import { ensureComponentImport } from './components';
+import { BUILT_IN_COMPONENTS } from '@/code/project/project-fs';
 
 export interface CatalogItemDescriptor {
   id: string;
@@ -258,19 +259,34 @@ export const catalogPlaceOperation: Operation<
 
     code = addNodeInCode(code, input.parentId, def, input.insertIndex);
 
-    // If tag is uppercase (component), ensure import
+    const changes: FileChange[] = [
+      {
+        path: input.targetFile,
+        beforeHash: null,
+        content: code,
+      },
+    ];
+
+    // If tag is uppercase (component), ensure import and install component source if not present
     if (/^[A-Z]/.test(tag)) {
       code = ensureComponentImport(code, tag);
+      changes[0].content = code;
+
+      const compPath = `components/${tag}.tsx`;
+      if (!snapshot.files.has(compPath) && !snapshot.files.has(`src/${compPath}`)) {
+        const builtInEntry = BUILT_IN_COMPONENTS.find(([p]) => p === compPath);
+        if (builtInEntry) {
+          changes.push({
+            path: builtInEntry[0],
+            beforeHash: null,
+            content: builtInEntry[1],
+          });
+        }
+      }
     }
 
     return {
-      changes: [
-        {
-          path: input.targetFile,
-          beforeHash: null,
-          content: code,
-        },
-      ],
+      changes,
       nodeId,
       tag,
     };

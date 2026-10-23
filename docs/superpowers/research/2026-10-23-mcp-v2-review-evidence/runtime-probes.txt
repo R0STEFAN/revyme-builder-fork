@@ -1,0 +1,54 @@
+
+ RUN  v4.1.6 /home/rost/Документи/revyme/revyme-builder-fork
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > real HTTP snapshot is incompatible with AutomationClient
+REVIEW_SNAPSHOT {"ok":false,"error":{"code":"SERVER_UNAVAILABLE","message":"Failed to reach automation server at http://127.0.0.1:36083: Cannot read properties of undefined (reading 'scope')","issues":[{"code":"SERVER_UNAVAILABLE","path":[],"message":"TypeError: Cannot read properties of undefined (reading 'scope')"}]},"meta":{"commitStatus":"not_committed","revision":0}}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > real HTTP snapshot is incompatible with AutomationClient
+REVIEW_MUTATION {"ok":false,"error":"Cannot read properties of undefined (reading 'projectId')"}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > same committed plan is rejected by the commit service on retry
+REVIEW_RETRY {"ok":false,"error":{"code":"REVISION_CONFLICT","message":"Revision conflict: expected base revision 2, got 1","issues":[{"code":"STALE_REVISION","path":["baseRevision"],"message":"Plan base revision 1 does not match snapshot revision 2"}]},"meta":{"commitStatus":"not_committed","revision":2}}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > failed disk replace leaves a successful receipt cached and skips retry write
+REVIEW_FALSE_RECEIPT {"receiptRevision":2,"diskRevision":1}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > an ordinary editor save deletes persisted operation receipts
+REVIEW_RECEIPTS_DROPPED true
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > new validator accepts a source rejected by the actual Oracle
+REVIEW_ORACLE_BYPASS [{"code":"SPACING_UNIT_NOT_PX","message":"padding: '1.5rem' (line 1) — the Padding/Margin/Radius controls are PX-ONLY. '1.5rem' (%, rem/em, vh/vw, calc(), …) shows in the panel as a bare number and gets rewritten to px on the user's next edit — silently changing the value. Write px lengths (e.g. '16px', shorthand '8px 16px' is fine). For a circle use a large px radius ('9999px'), not '50%'."},{"code":"CANVAS_CONFIG_MISSING","message":"The page has no /** @canvas { … } */ block — the canvas reads its viewport tiles from it; without it the page renders a single default tile and responsive overrides have nothing to key on. Add it as the first block after 'use client', e.g.: /** @canvas { \"viewports\": [ { \"id\": \"desktop\", \"label\": \"Desktop\", \"width\": 1200, \"height\": \"auto\", \"isPrimary\": true, \"order\": 0 }, { \"id\": \"tablet\", \"label\": \"Tablet\", \"width\": 810, \"height\": \"auto\", \"isPrimary\": false, \"order\": 1 }, { \"id\": \"mobile\", \"label\": \"Mobile\", \"width\": 390, \"height\": \"auto\", \"isPrimary\": false, \"order\": 2 } ], \"positions\": { \"desktop\": { \"x\": 0, \"y\": 0 }, \"tablet\": { \"x\": 1360, \"y\": 0 }, \"mobile\": { \"x\": 2330, \"y\": 0 } } } */"}]
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > catalog places a component import without installing that component
+REVIEW_MISSING_BUILTIN {"changedFiles":["app/page.client.tsx"],"validator":{"ok":true,"issues":[]}}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > real editor/backend serialization allows the first stale save to overwrite an MCP commit
+REVIEW_GUI_CLOBBER {"baseAfterLoad":null,"diskRevision":3,"agentChangeLost":true}
+
+stderr | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > editor reload confuses local recovery timestamp with server CAS revision
+[local-backend:server-save-error] [object Object] {
+  id: 'review-fixture',
+  error: 'Error: REVISION_CONFLICT: Base revision 1792732778268 does not match current server revision 2'
+}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > editor reload confuses local recovery timestamp with server CAS revision
+REVIEW_GUI_FALSE_CONFLICT {"loadedBase":1792732778268,"diskRevision":2}
+
+stdout | packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > deploy reports a published URL without any hosting adapter or network call
+REVIEW_FAKE_DEPLOY {"status":"deployed","url":"https://review-fixture.revyme.app","networkCalls":0}
+
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > real HTTP snapshot is incompatible with AutomationClient 23ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > same committed plan is rejected by the commit service on retry 3ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > failed disk replace leaves a successful receipt cached and skips retry write 2ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > an ordinary editor save deletes persisted operation receipts 1ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > new validator accepts a source rejected by the actual Oracle 15ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > catalog places a component import without installing that component 6ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > real editor/backend serialization allows the first stale save to overwrite an MCP commit 2ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > editor reload confuses local recovery timestamp with server CAS revision 2ms
+ ✓ packages/automation-core/test/review-runtime-probes.test.ts > Independent review characterization probes > deploy reports a published URL without any hosting adapter or network call 5ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  08:19:34
+   Duration  3.63s (transform 2.11s, setup 0ms, import 3.05s, tests 61ms, environment 423ms)
+

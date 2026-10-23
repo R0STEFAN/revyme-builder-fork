@@ -43,6 +43,41 @@ export class CommitService {
     const lockKey = `${plan.scope.projectId}:${plan.scope.branchId || 'main'}`;
 
     return this.locker.acquire(lockKey, async () => {
+      // 0. Check idempotency: if plan with same operationId was already committed
+      const existingReceipt = await this.repository.getReceipt(plan.scope.projectId, plan.operationId);
+      if (existingReceipt) {
+        if (existingReceipt.planHash === plan.planHash) {
+          return {
+            ok: true,
+            data: existingReceipt,
+            meta: {
+              commitStatus: 'committed',
+              revision: existingReceipt.revision,
+              receipt: existingReceipt,
+            },
+          };
+        } else {
+          return {
+            ok: false,
+            error: {
+              code: 'IDEMPOTENCY_CONFLICT',
+              message: `Operation ${plan.operationId} was already committed with a different plan hash`,
+              issues: [
+                {
+                  code: 'IDEMPOTENCY_CONFLICT',
+                  path: ['operationId'],
+                  message: 'Operation ID collision with different payload',
+                },
+              ],
+            },
+            meta: {
+              commitStatus: 'not_committed',
+              revision: existingReceipt.revision,
+            },
+          };
+        }
+      }
+
       // 1. Fetch current snapshot for validation
       const snapshot = await this.repository.getSnapshot(plan.scope);
       if (!snapshot) {
