@@ -1,7 +1,9 @@
 // packages/automation-core/test/capabilities/T14-motion.test.ts
 import { describe, it, expect } from 'vitest';
 import type { Snapshot, FileChange } from '../../src/contracts';
-import { createSnapshot, createOperationContext } from '../../src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
 import { checkFile } from '@/code/oracle/check-file';
 import {
   motionSetOperation,
@@ -45,6 +47,98 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 }
 
 describe('T14: Complete Motion, Text Effects, and Site Effects', () => {
+  it('mounts the required cursor portal in the root layout when setting a custom cursor', async () => {
+    const snapshot = createMockSnapshot({
+      'app/page.tsx': `export default function Page() { return <main data-id="root"><button data-id="cta">Start</button></main>; }`,
+      'app/layout.tsx': `import React from 'react';\nexport default function RootLayout({ children }: { children: React.ReactNode }) { return <html><body>{children}</body></html>; }`,
+    });
+
+    const result = await siteEffectsCursorSetOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx', nodeId: 'cta', component: 'PointerDot', mode: 'follow',
+    }, mockContext);
+    const layoutChange = result.changes.find((change) => change.path === 'app/layout.tsx');
+
+    expect(layoutChange?.content).toContain(`import { CursorPortal } from '@revyme/runtime';`);
+    expect(layoutChange?.content).toMatch(/<CursorPortal \/>/);
+
+  });
+
+  it('creates a root layout before mounting the cursor portal when none exists', async () => {
+    const snapshot = createMockSnapshot({
+      'app/page.tsx': `export default function Page() { return <main data-id="root"><button data-id="cta">Start</button></main>; }`,
+    });
+
+    const result = await siteEffectsCursorSetOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx', nodeId: 'cta', component: 'PointerDot',
+    }, mockContext);
+    const layoutChange = result.changes.find((change) => change.path === 'app/layout.tsx');
+
+    expect(layoutChange?.content).toContain(`import { CursorPortal } from '@revyme/runtime';`);
+    expect(layoutChange?.content).toMatch(/<body>[\s\S]*<CursorPortal \/>[\s\S]*<\/body>/);
+  });
+
+  it('accepts the generated smooth-scroll controller as builder runtime', async () => {
+    const snapshot = createMockSnapshot({
+      'app/layout.tsx': `import React from 'react';
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html><body>{children}</body></html>;
+}`,
+    });
+    const prepared = await prepareOperation(
+      snapshot,
+      'siteEffects.smoothScroll.set',
+      { route: '/', enabled: true },
+      mockContext,
+    );
+    expect(prepared.ok).toBe(true);
+    const result = prepared.data as { changes: FileChange[] };
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'generated-smooth-scroll-oracle-regression',
+      changes: result.changes,
+    });
+
+    const validation = validatePlan(snapshot, plan);
+    expect(validation.issues).toEqual([]);
+    expect(validation.ok).toBe(true);
+  });
+
+  it('accepts generated page-transition runtime without applying editable-page Oracle rules', async () => {
+    const layoutCode = `'use client';
+import React from 'react';
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return <div data-id="root">{children}</div>;
+}`;
+    const pageCode = `'use client';
+export default function Page() { return <div data-id="root" />; }`;
+    const snapshot = createMockSnapshot({
+      'app/(site-shell)/layout.tsx': 'export default function Layout({ children }) { return children; }',
+      'app/(site-shell)/LayoutClient.tsx': layoutCode,
+      'app/(site-shell)/page.client.tsx': pageCode,
+      'app/(site-shell)/page.tsx': 'export default function Page() { return null; }',
+    });
+    const prepared = await prepareOperation(
+      snapshot,
+      'siteEffects.pageTransition.set',
+      { page: '/', preset: 'crossfade' },
+      mockContext,
+    );
+    expect(prepared.ok).toBe(true);
+    const transition = prepared.data as { changes: FileChange[] };
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'generated-page-transition-oracle-regression',
+      changes: transition.changes,
+    });
+
+    const validation = validatePlan(snapshot, plan);
+
+    expect(validation.issues).toEqual([]);
+    expect(validation.ok).toBe(true);
+  });
+
   it('adds motion to an existing framer-motion import when converting a plain tag', async () => {
     const pageCode = `import { AnimatePresence } from 'framer-motion';
 export default function Page() {
@@ -290,7 +384,12 @@ function Nav({ initialVariant = 'default' }) {
 
     let snapshot = createMockSnapshot({
       'app/layout.tsx': layoutCode,
+      'app/LayoutClient.tsx': `'use client';
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return <main>{children}</main>;
+}`,
       'app/page.tsx': pageCode,
+      'app/page.client.tsx': pageCode,
     });
     const mutableFiles = new Map(snapshot.files);
 
@@ -303,6 +402,7 @@ function Nav({ initialVariant = 'default' }) {
     applyChanges(mutableFiles, scrollSetRes.changes);
     snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
     expect(snapshot.files.has('app/smooth-scroll.ts')).toBe(true);
+    expect(snapshot.files.get('app/smooth-scroll-controller.tsx')).toContain('@smooth-scroll v1');
     expect(snapshot.files.get('app/layout.tsx')).toContain('<SmoothScroll />');
 
     const scrollGet = await siteEffectsSmoothScrollGetOperation.execute(snapshot, { route: '/' }, mockContext);
@@ -319,9 +419,20 @@ function Nav({ initialVariant = 'default' }) {
       { page: '/', preset: 'slide-left', duration: 0.4 },
       mockContext,
     );
+    expect(transSetRes.effect.enter?.offsetX).toBe(100);
+    expect(transSetRes.effect.enter?.opacity).toBe(1);
+    expect(transSetRes.effect.exit).toBeUndefined();
+    expect(transSetRes.effect.enter?.transition.duration).toBe(0.4);
+    expect(transSetRes.changes.map((change) => change.path)).toEqual(expect.arrayContaining([
+      'app/page-effects.ts',
+      'app/page-effects-runtime.ts',
+      'app/page-transitions.tsx',
+      'app/LayoutClient.tsx',
+    ]));
     applyChanges(mutableFiles, transSetRes.changes);
     snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
     expect(snapshot.files.has('app/page-effects.ts')).toBe(true);
+    expect(snapshot.files.get('app/LayoutClient.tsx')).toContain('<PageTransitions>{children}</PageTransitions>');
 
     const transGet = await siteEffectsPageTransitionGetOperation.execute(snapshot, { page: '/' }, mockContext);
     expect(transGet.effect?.preset).toBe('slide-left');
@@ -329,6 +440,44 @@ function Nav({ initialVariant = 'default' }) {
     const transRemove = await siteEffectsPageTransitionRemoveOperation.execute(snapshot, { page: '/' }, mockContext);
     applyChanges(mutableFiles, transRemove.changes);
     snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
+
+    const templatedSnapshot = createMockSnapshot({
+      'app/(site-shell)/layout.tsx': layoutCode,
+      'app/(site-shell)/LayoutClient.tsx': `'use client';
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return <main>{children}</main>;
+}`,
+      'app/(site-shell)/page.client.tsx': pageCode,
+      'app/(site-shell)/page.tsx': pageCode,
+    });
+    const templatedTransition = await siteEffectsPageTransitionSetOperation.execute(
+      templatedSnapshot,
+      { page: '/', preset: 'crossfade', duration: 0.45 },
+      mockContext,
+    );
+    expect(templatedTransition.effect.enter?.opacity).toBe(0);
+    expect(templatedTransition.effect.exit?.opacity).toBe(0);
+    expect(templatedTransition.changes.map((change) => change.path)).toEqual(expect.arrayContaining([
+      'app/(site-shell)/page-effects.ts',
+      'app/(site-shell)/page-effects-runtime.ts',
+      'app/(site-shell)/page-transitions.tsx',
+      'app/(site-shell)/LayoutClient.tsx',
+    ]));
+    const templatedFiles = new Map(templatedSnapshot.files);
+    applyChanges(templatedFiles, templatedTransition.changes);
+    const templatedAfterSet = createMockSnapshot(Object.fromEntries(templatedFiles));
+    const templatedGet = await siteEffectsPageTransitionGetOperation.execute(
+      templatedAfterSet,
+      { page: '/' },
+      mockContext,
+    );
+    expect(templatedGet.effect?.enter?.opacity).toBe(0);
+    const templatedRemove = await siteEffectsPageTransitionRemoveOperation.execute(
+      templatedAfterSet,
+      { page: '/' },
+      mockContext,
+    );
+    expect(templatedRemove.changes[0]?.path).toBe('app/(site-shell)/page-effects.ts');
 
     // 3. Custom Cursor: set, remove
     const cursorSetRes = await siteEffectsCursorSetOperation.execute(

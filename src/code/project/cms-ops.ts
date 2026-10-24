@@ -142,6 +142,8 @@ export function deleteCollection(slug: string): void {
 export interface CmsUsage {
   /** Bound elements: each `.map()` repeater in JSX whose `collectionList.source === slug`. */
   bindings: { filePath: string; nodeId: string }[];
+  /** CMS index page files, including legacy generated routes without an annotation. */
+  indexPages: string[];
   /** Detail page files (`@cmsPage { kind:'detail', collection:'<slug>' }`). */
   detailPages: string[];
   /** Number of items in the collection's data file (for the confirm prompt). */
@@ -160,6 +162,7 @@ export interface CmsUsage {
  */
 export function scanCmsUsage(slug: string): CmsUsage {
   const bindings: { filePath: string; nodeId: string }[] = [];
+  const indexPages: string[] = [];
   const detailPages: string[] = [];
 
   const files = [
@@ -171,10 +174,15 @@ export function scanCmsUsage(slug: string): CmsUsage {
     const code = projectFS.readFile(filePath);
     if (!code) continue;
 
-    // Detail page check — uses the file's @cmsPage annotation, not parsing.
+    // Generated CMS page check — use metadata for new pages and a narrow
+    // source signature for index pages emitted before the annotation existed.
     const meta = parseCmsPageMeta(code);
-    if (meta?.kind === 'detail' && meta.collection === slug) {
+    if (meta?.collection === slug && meta.kind === 'index') {
+      indexPages.push(filePath);
+    } else if (meta?.collection === slug && meta.kind === 'detail') {
       detailPages.push(filePath);
+    } else if (!meta && isLegacyGeneratedCmsIndexPage(code, slug)) {
+      indexPages.push(filePath);
     }
 
     // Bound element scan — parse and walk for collectionList.source === slug.
@@ -197,17 +205,27 @@ export function scanCmsUsage(slug: string): CmsUsage {
   trace.fn('cms-ops:scanCmsUsage', {
     slug,
     bindingCount: bindings.length,
+    indexPageCount: indexPages.length,
     detailPageCount: detailPages.length,
     itemCount,
   });
 
-  return { bindings, detailPages, itemCount };
+  return { bindings, indexPages, detailPages, itemCount };
+}
+
+/** Recognize CMS index routes generated before `@cmsPage` metadata existed. */
+function isLegacyGeneratedCmsIndexPage(code: string, slug: string): boolean {
+  const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const collectionImport = new RegExp(`from\\s+['\"]@/cms/${escapedSlug}\\.json['\"]`);
+  return collectionImport.test(code)
+    && /\.map\(\(item,\s*idx\)\s*=>/.test(code)
+    && code.includes('data-cms-nav="row"');
 }
 
 /**
  * Aggressive cascade delete: removes every `.map()` repeater bound to this
- * collection (the parent JSX node carrying `collectionList`), deletes the
- * detail-page files, then drops the schema + data files.
+ * collection (the parent JSX node carrying `collectionList`), deletes generated
+ * CMS index/detail page pairs, then drops the schema + data files.
  *
  * Caller is expected to have surfaced the scan results to the user via a
  * confirm modal — this function does NOT prompt. There is no undo.
@@ -217,6 +235,7 @@ export function scanCmsUsage(slug: string): CmsUsage {
  */
 export function cascadeDeleteCollection(slug: string): {
   removedBindings: number;
+  removedIndexPages: number;
   removedDetailPages: number;
   removedItems: number;
 } {
@@ -224,6 +243,7 @@ export function cascadeDeleteCollection(slug: string): {
   trace.action('cms-ops:cascadeDeleteCollection:start', {
     slug,
     bindingCount: usage.bindings.length,
+    indexPageCount: usage.indexPages.length,
     detailPageCount: usage.detailPages.length,
     itemCount: usage.itemCount,
   });
@@ -247,9 +267,9 @@ export function cascadeDeleteCollection(slug: string): {
     });
   }
 
-  for (const filePath of usage.detailPages) {
-    // A detail page is a server + client pair — drop BOTH halves so the
-    // server wrapper isn't left importing a deleted client body.
+  for (const filePath of [...usage.indexPages, ...usage.detailPages]) {
+    // A CMS page is a server + client pair — drop BOTH halves so the server
+    // wrapper isn't left importing a deleted client body.
     const base = filePath.replace(/\/page(\.client)?\.tsx$/, '/page');
     for (const half of [`${base}.tsx`, `${base}.client.tsx`]) {
       if (projectFS.exists(half)) projectFS.deleteFile(half);
@@ -263,12 +283,14 @@ export function cascadeDeleteCollection(slug: string): {
   trace.action('cms-ops:cascadeDeleteCollection:done', {
     slug,
     removedBindings: usage.bindings.length,
+    removedIndexPages: usage.indexPages.length,
     removedDetailPages: usage.detailPages.length,
     removedItems: usage.itemCount,
   });
 
   return {
     removedBindings: usage.bindings.length,
+    removedIndexPages: usage.indexPages.length,
     removedDetailPages: usage.detailPages.length,
     removedItems: usage.itemCount,
   };

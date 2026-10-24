@@ -89,6 +89,29 @@ export function updateHtmlAttrsInCode(
   return code.slice(0, tagStart) + tagStr + code.slice(tagEnd + 1);
 }
 
+/** Update attributes on the SVG container itself, not its first geometry child. */
+export function updateSvgContainerAttrsInCode(
+  code: string,
+  nodeId: string,
+  attrs: Record<string, string>,
+): string | null {
+  trace.fn('generator.updateSvgContainerAttrsInCode', { nodeId, attrs });
+  const ast = parseJSX(code);
+  if (!ast) return null;
+
+  let isSvgContainer = false;
+  findFirstElementByDataId(ast, nodeId, (_path, el) => {
+    isSvgContainer = t.isJSXIdentifier(el.openingElement.name)
+      && el.openingElement.name.name === 'svg';
+  });
+  if (!isSvgContainer) {
+    trace.error('generator:updateSvgContainerAttrs-target-not-svg', { nodeId });
+    return null;
+  }
+
+  return updateHtmlAttrsInCode(code, nodeId, attrs);
+}
+
 /**
  * Strip `data-responsive` from a node AND every descendant in its JSX subtree.
  *

@@ -40,6 +40,7 @@ import {
 } from '../../src/operations/cms-pages';
 import { projectFS } from '@/code/project/project-fs';
 import { parseCmsSeoBindings, hasGenerateStaticParams } from '@/code/project/cms-seo';
+import { createCmsIndexPageFile, createCmsDetailPageFile } from '@/code/project/cms-page-ops';
 
 function createMockSnapshot(files: Record<string, string>): Snapshot {
   return createSnapshot({ projectId: 'test-project', branchId: 'main' }, 0, files);
@@ -151,6 +152,34 @@ describe('T16: Local CMS, schema/items/lists/detail pages', () => {
       const listRes = await cmsSchemaListOperation.execute(snap, {}, mockContext);
       expect(listRes.collections).toContain('case-studies');
       expect(listRes.collections).toContain('case-studies-copy');
+    });
+
+    it('returns all dependent CMS route deletions in the cascade plan', async () => {
+      const slug = 'cascade-route-probe';
+      projectFS.writeFile(`cms/${slug}.schema.json`, JSON.stringify({
+        slug,
+        name: 'Cascade Route Probe',
+        fields: [{ id: 'title', name: 'Title', type: 'text' }],
+      }));
+      projectFS.writeFile(`cms/${slug}.json`, '[]');
+      const indexClient = createCmsIndexPageFile(slug);
+      const detailClient = createCmsDetailPageFile(slug);
+      // Simulate an index page created before generated CMS pages carried
+      // metadata; cascade discovery must still recognize its old code shape.
+      const indexCode = projectFS.readFile(indexClient)!;
+      projectFS.writeFile(indexClient, indexCode.replace(/\/\*\* @cmsPage \{[\s\S]*?\*\//, ''));
+      const initialFiles = Object.fromEntries(projectFS.listFiles().map(path => [path, projectFS.readFile(path)!]));
+      const snapshot = createMockSnapshot(initialFiles);
+
+      const result = await cmsSchemaDeleteOperation.execute(snapshot, { slug, cascade: true }, mockContext);
+      const changesByPath = new Map(result.changes.map(change => [change.path, change.content]));
+
+      expect(changesByPath.get(`cms/${slug}.schema.json`)).toBeNull();
+      expect(changesByPath.get(`cms/${slug}.json`)).toBeNull();
+      expect(changesByPath.get(indexClient)).toBeNull();
+      expect(changesByPath.get(indexClient.replace(/\.client\.tsx$/, '.tsx'))).toBeNull();
+      expect(changesByPath.get(detailClient)).toBeNull();
+      expect(changesByPath.get(detailClient.replace(/\.client\.tsx$/, '.tsx'))).toBeNull();
     });
   });
 
@@ -413,6 +442,12 @@ export default function Page() {
         },
         mockContext,
       );
+      const paginatedPage = paginateRes.changes.find((change) => change.path === 'app/page.tsx')?.content ?? '';
+      expect(paginatedPage).toMatch(/import React, \{[^}]*\buseState\b[^}]*\} from 'react'/);
+      expect(paginateRes.changes).toContainEqual(expect.objectContaining({
+        path: 'components/LoadMore.tsx',
+        content: expect.stringContaining('function LoadMore('),
+      }));
       applyChanges(mutableFiles, paginateRes.changes);
       snap = createMockSnapshot(Object.fromEntries(mutableFiles));
 

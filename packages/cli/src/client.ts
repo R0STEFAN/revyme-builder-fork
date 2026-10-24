@@ -11,8 +11,46 @@ import { defaultRegistry } from '@revyme/automation-core';
 import { prepareOperation } from '@revyme/automation-core';
 import { createPlan, createIdFactory } from '@revyme/automation-core';
 import { createHash } from 'node:crypto';
+import { projectFS } from '@/code/project/project-fs';
+import type { ProjectData } from '@/backend/types';
 
 const HISTORY_PATH = '_meta/history.json';
+
+/**
+ * Operations share a ProjectFS-backed implementation with the editor. In a
+ * standalone CLI/MCP process that singleton must be scoped to the requested
+ * project snapshot before any operation runs; otherwise legacy helpers can
+ * read or mutate stale in-process files instead of the requested branch.
+ */
+export function hydrateProjectFSFromSnapshot(snapshot: Snapshot): void {
+  const mainFiles = snapshot.mainFiles
+    ? { ...snapshot.mainFiles }
+    : Object.fromEntries(snapshot.files);
+  const branches = { ...(snapshot.branches ?? {}) } as Record<string, unknown>;
+  const branchId = snapshot.scope.branchId || 'main';
+
+  if (branchId !== 'main' && !branches[branchId]) {
+    branches[branchId] = {
+      files: Object.fromEntries(snapshot.files),
+      baseSnapshot: { ...mainFiles },
+      status: 'dirty',
+      parentId: 'main',
+      order: Object.keys(branches).length + 1,
+      createdAt: Date.now(),
+      lastEditedAt: null,
+    };
+  }
+
+  const envelope = {
+    format: Object.keys(branches).length > 0 ? 'revyme-v2' : 'revyme-v1',
+    files: mainFiles,
+    ...(Object.keys(branches).length > 0 ? { branches } : {}),
+    activeBranchId: branchId,
+    mainBranchId: 'main',
+  } as ProjectData;
+  const refusal = projectFS.fromEnvelope(envelope);
+  if (refusal) throw new Error(`PROJECT_CONTEXT_SYNC_FAILED: ${refusal}`);
+}
 
 function addHistory(plan: Plan, snapshot: Snapshot, createId: (kind?: string) => string): Plan {
   if (!plan.changes.length || plan.changes.some(change => change.path === HISTORY_PATH)) return plan;
@@ -32,6 +70,18 @@ function addHistory(plan: Plan, snapshot: Snapshot, createId: (kind?: string) =>
   const historyChange = { path: HISTORY_PATH, beforeHash: raw === undefined ? null : createHash('sha256').update(raw).digest('hex'), content: JSON.stringify(state) };
   return createPlan({ scope: plan.scope, baseRevision: plan.baseRevision, operationId: plan.operationId,
     changes: [...plan.changes, historyChange], createdIds: plan.createdIds, normalizations: plan.normalizations, issues: plan.issues });
+}
+
+function operationResultSummary(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const {
+    changes: _changes,
+    plan: _plan,
+    issues: _issues,
+    normalizations: _normalizations,
+    ...summary
+  } = value as Record<string, unknown>;
+  return Object.keys(summary).length > 0 ? summary : undefined;
 }
 
 export interface ClientOptions {
@@ -349,6 +399,21 @@ export class AutomationClient {
     }
     const snapshot = snapshotResult.data;
 
+    try {
+      hydrateProjectFSFromSnapshot(snapshot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        error: {
+          code: 'PROJECT_CONTEXT_SYNC_FAILED',
+          message,
+          issues: [{ code: 'PROJECT_CONTEXT_SYNC_FAILED', path: [], message }],
+        },
+        meta: { commitStatus: 'not_committed', revision: snapshot.revision },
+      };
+    }
+
     // Step 2: Prepare operation plan
     const context: OperationContext = {
       createId: createIdFactory(),
@@ -412,9 +477,11 @@ export class AutomationClient {
     if (options?.dryRun || op.kind === 'read') {
       const checked = await this.validatePlan(plan);
       if (!checked.ok) return checked;
+      const operationResult = options?.dryRun ? operationResultSummary(prepData) : undefined;
       return {
         ok: true,
         data: plan,
+        ...(operationResult ? { operationResult } : {}),
         meta: {
           commitStatus: 'not_committed',
           revision: snapshot.revision,
@@ -432,6 +499,7 @@ export class AutomationClient {
     if (!committed.ok && committed.error?.code === 'PLAN_HASH_MISMATCH' && !options?._planHashRetried) {
       return this.execute(scope, toolName, input, { ...options, _planHashRetried: true });
     }
-    return committed;
+    const operationResult = committed.ok ? operationResultSummary(prepData) : undefined;
+    return operationResult ? { ...committed, operationResult } : committed;
   }
 }

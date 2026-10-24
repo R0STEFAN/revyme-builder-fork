@@ -4,6 +4,7 @@ import type { Operation, FileChange } from '../contracts';
 import { defaultRegistry } from '../registry';
 import {
   updateSvgAttrsInCode,
+  updateSvgContainerAttrsInCode,
   addSvgChildInCode,
   removeSvgChildInCode,
   replaceSvgInnerInCode,
@@ -87,13 +88,14 @@ export const shapesUpdateAttrsOperation: Operation<
     nodeId: string;
     attrs: Record<string, string>;
     childIndex?: number;
+    targetElement?: 'svg' | 'shape';
   },
   {
     changes: FileChange[];
   }
 > = {
   name: 'shapes.updateAttrs',
-  description: 'Update SVG attributes (viewBox, fill, stroke, strokeWidth, d, etc.) on an SVG or child shape (empty string removes property)',
+  description: 'Update an SVG container (targetElement: svg) or one of its geometry children (default targetElement: shape; childIndex selects the child). Empty string removes an attribute.',
   category: 'shapes',
   kind: 'mutation',
   permit: 'write',
@@ -104,6 +106,7 @@ export const shapesUpdateAttrsOperation: Operation<
     nodeId: z.string().min(1),
     attrs: z.record(z.string(), z.string()),
     childIndex: z.number().int().nonnegative().optional(),
+    targetElement: z.enum(['svg', 'shape']).optional().describe('Use svg to edit the container attributes such as viewBox; shape (default) edits a geometry child.'),
   }),
   async execute(snapshot, input) {
     let code = snapshot.files.get(input.targetFile);
@@ -111,7 +114,15 @@ export const shapesUpdateAttrsOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found`);
     }
 
-    code = updateSvgAttrsInCode(code, input.nodeId, input.attrs, input.childIndex);
+    if (input.targetElement === 'svg') {
+      const updated = updateSvgContainerAttrsInCode(code, input.nodeId, input.attrs);
+      if (updated === null) {
+        throw new Error(`SVG_CONTAINER_NOT_FOUND: Node "${input.nodeId}" is not an SVG container in "${input.targetFile}"`);
+      }
+      code = updated;
+    } else {
+      code = updateSvgAttrsInCode(code, input.nodeId, input.attrs, input.childIndex);
+    }
 
     return {
       changes: [

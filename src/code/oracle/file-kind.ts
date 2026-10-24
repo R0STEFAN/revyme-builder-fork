@@ -24,5 +24,8 @@ export function oracleFileKind(path: string, code: string): FileKind | null {
  *  the masters a feature installs (Load More / Form Submit / Spinner). */
 export function isBuilderMaterializedFile(code: string): boolean {
   const head = code.slice(0, 600);
-  return /@[a-z-]+-(gen|providers) v\d/.test(head) || /\/\*\* @name "(Load More|Form Submit|Spinner)" \*\//.test(head);
+  return /@[a-z-]+-(gen|providers) v\d/.test(head)
+    || /@smooth-scroll v\d/.test(head)
+    || /@iconSet\b/.test(head)
+    || /\/\*\* @name "(Load More|Form Submit|Spinner)" \*\//.test(head);
 }

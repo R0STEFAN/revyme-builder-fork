@@ -126,6 +126,23 @@ function getTextContent(res: any, index = 0): string {
     );
   });
 
+  it('preserves committed mutation output metadata in the MCP response', async () => {
+    vi.spyOn(autoClient, 'execute').mockResolvedValue({
+      ok: true,
+      data: { operationId: 'create-form', projectId: 'test-default-proj', branchId: 'main', revision: 2, planHash: 'hash', changedFiles: ['app/page.client.tsx'] },
+      operationResult: { formId: 'form-audit-1' },
+      meta: { commitStatus: 'committed', revision: 2 },
+    });
+
+    const res = await client.callTool({
+      name: 'forms.create',
+      arguments: { filePath: 'app/page.client.tsx', parentId: 'root', name: 'Audit Form' },
+    });
+
+    expect(res.isError).toBe(false);
+    expect(JSON.parse(getTextContent(res)).operationResult).toEqual({ formId: 'form-audit-1' });
+  });
+
   it('passes component master paths into the scope used for plan hashing', async () => {
     const execute = vi.spyOn(autoClient, 'execute').mockResolvedValue({
       ok: true,
@@ -330,6 +347,23 @@ function getTextContent(res: any, index = 0): string {
         filePath: 'app/page.client.tsx',
         revision: 7,
         viewport: 'desktop',
+        properties: [
+          'backgroundColor',
+          'borderRadius',
+          'borderWidth',
+          'color',
+          'display',
+          'fontSize',
+          'fontWeight',
+          'height',
+          'lineHeight',
+          'opacity',
+          'overflow',
+          'position',
+          'textAlign',
+          'width',
+          'zIndex',
+        ],
       },
     });
     expect(execute).toHaveBeenCalledTimes(1);

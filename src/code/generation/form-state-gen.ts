@@ -23,7 +23,7 @@
 
 import * as t from '@babel/types';
 import { trace } from '@/shared/debug-trace';
-import { findJSXDataIdIndex, findTagClose, getJsonAttr, stripTagAttrBalanced } from './generator-utils';
+import { findJSXDataIdIndex, findTagClose, getJsonAttr, stripTagAttrBalanced, ensureNamedImport } from './generator-utils';
 import { insertConstIntoEnclosingFn } from './cms-responsive-gen';
 import { parseJSX, findFirstElementByDataId, findAttribute } from '../parsing/ast-utils';
 
@@ -36,6 +36,18 @@ export type FormStateMapping = Partial<Record<FormState, string>>;
 
 /** Mapping a freshly-dropped Submit button starts with (the reference's defaults). */
 export const DEFAULT_FORM_STATE_MAPPING: FormStateMapping = { loading: 'loading', success: 'success' };
+
+function ensureReactNamedImport(code: string, name: string): string {
+  const imports = [...code.matchAll(/^\s*import\s+([^;\n]+?)\s+from\s+['"]react['"]\s*;?/gm)];
+  if (imports.some((m) => new RegExp(`\\{[^}]*\\b${name}\\b[^}]*\\}`).test(m[1]))) return code;
+  return ensureNamedImport(code, 'react', [name]);
+}
+
+function ensureReactDefaultImport(code: string): string {
+  const imports = [...code.matchAll(/^\s*import\s+([^;\n]+?)\s+from\s+['"]react['"]\s*;?/gm)];
+  if (imports.some((m) => /^(?:React|\*\s+as\s+React)\b/.test(m[1].trim()))) return code;
+  return ensureNamedImport(code, 'react', [], { ensureDefault: 'React' });
+}
 
 /** Deterministic, unique-per-form lifecycle state var (`formState<Id>`). */
 export function formStateVar(formId: string): string {
@@ -141,6 +153,7 @@ export function setFormStateMappingInCode(
     // `React.useState` form and an exact-match guard duplicated the const.
     const decl = `const [${stateVar}, ${formStateSetter(stateVar)}] = useState('idle');`;
     if (!hasFormStateDeclaration(next, stateVar)) next = insertConstIntoEnclosingFn(next, nodeId, decl);
+    next = ensureReactNamedImport(next, 'useState');
   } else {
     next = code.slice(0, ltIdx) + tag + code.slice(tagClose);
   }
@@ -163,7 +176,7 @@ export function ensureFormStateHook(code: string, formId: string): string {
   const stateVar = formStateVar(formId);
   if (hasFormStateDeclaration(code, stateVar)) return code;
   const decl = `const [${stateVar}, ${formStateSetter(stateVar)}] = useState('idle');`;
-  return insertConstIntoEnclosingFn(code, formId, decl);
+  return ensureReactNamedImport(insertConstIntoEnclosingFn(code, formId, decl), 'useState');
 }
 
 /** Tag name of a JSX opening element (`form` / `motion.form`). */
@@ -377,7 +390,7 @@ export function healMissingFormStateDeclarations(code: string): string {
     result = result.slice(0, braceAt) + `\n  const [${v}, ${formStateSetter(v)}] = React.useState('idle');` + result.slice(braceAt);
     trace.action('form-state-gen:heal-missing-decl', { stateVar: v });
   }
-  return result;
+  return result === code ? result : ensureReactDefaultImport(result);
 }
 
 /**

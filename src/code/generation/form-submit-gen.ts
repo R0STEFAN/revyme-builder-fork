@@ -35,7 +35,7 @@ export const FORMSUBMIT_COMPONENT_NAME = 'FormSubmit';
 const FORMSUBMIT_COMPONENT_PATH = 'components/FormSubmit.tsx';
 
 /** Bump when the generated master shape changes (drives in-place upgrade). */
-const FORMSUBMIT_GEN_TOKEN = '@formsubmit-gen v3';
+const FORMSUBMIT_GEN_TOKEN = '@formsubmit-gen v4';
 
 /**
  * The deploy-correct multi-variant Form Submit COMPONENT master. A
@@ -50,7 +50,7 @@ export function buildFormSubmitComponentCode(): string {
 /** @name "Form Submit" */
 /* ${FORMSUBMIT_GEN_TOKEN} */
 import React, { useState, useEffect } from 'react';
-import { motion, LayoutGroup } from 'framer-motion';
+import { motion, LayoutGroup, AnimatePresence } from 'framer-motion';
 import { withResponsiveProps } from '@revyme/runtime';
 import ${SPINNER_COMPONENT_NAME} from '@/components/Spinner';
 
@@ -81,56 +81,6 @@ const rootVariants = {
   'error': { backgroundColor: '#ef4444', opacity: 1, pointerEvents: 'none' },
 };
 
-// the reference builder's Motion cannot interpolate \`display\`, so it applies a SHOW value at the
-// START of the transition but a HIDE value only at the END. Under the default
-// spring that left the old label visible for ~300ms after the state changed —
-// long enough that a fast API response painted "Subscribe" and "Thank you" on
-// top of each other before settling (user report 2026-08-10, measured: hide
-// landed between 200ms and 400ms). These four objects only ever carry
-// \`display\`, so switching them instantly is exactly right; the ROOT keeps its
-// default transition so the background still animates between states.
-const INSTANT = { duration: 0 };
-
-const labelVariants = {
-  default: { display: 'block', transition: INSTANT },
-  'default-hover': { display: 'block', transition: INSTANT },
-  'default-pressed': { display: 'block', transition: INSTANT },
-  'loading': { display: 'none', transition: INSTANT },
-  'disabled': { display: 'block', transition: INSTANT },
-  'success': { display: 'none', transition: INSTANT },
-  'error': { display: 'none', transition: INSTANT },
-};
-
-const spinnerWrapVariants = {
-  default: { display: 'none', transition: INSTANT },
-  'default-hover': { display: 'none', transition: INSTANT },
-  'default-pressed': { display: 'none', transition: INSTANT },
-  'loading': { display: 'flex', transition: INSTANT },
-  'disabled': { display: 'none', transition: INSTANT },
-  'success': { display: 'none', transition: INSTANT },
-  'error': { display: 'none', transition: INSTANT },
-};
-
-const successTextVariants = {
-  default: { display: 'none', transition: INSTANT },
-  'default-hover': { display: 'none', transition: INSTANT },
-  'default-pressed': { display: 'none', transition: INSTANT },
-  'loading': { display: 'none', transition: INSTANT },
-  'disabled': { display: 'none', transition: INSTANT },
-  'success': { display: 'block', transition: INSTANT },
-  'error': { display: 'none', transition: INSTANT },
-};
-
-const errorTextVariants = {
-  default: { display: 'none', transition: INSTANT },
-  'default-hover': { display: 'none', transition: INSTANT },
-  'default-pressed': { display: 'none', transition: INSTANT },
-  'loading': { display: 'none', transition: INSTANT },
-  'disabled': { display: 'none', transition: INSTANT },
-  'success': { display: 'none', transition: INSTANT },
-  'error': { display: 'block', transition: INSTANT },
-};
-
 function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant = 'default', ...rest }: { style?: React.CSSProperties; label?: string; initialVariant?: string; [key: string]: any; }) {
   const [variant, setVariant] = useState(initialVariant);
   useEffect(() => { setVariant(initialVariant); }, [initialVariant]);
@@ -142,7 +92,6 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
       onTapStart={() => setVariant(variant === 'default-hover' ? 'default-pressed' : variant)}
       onTap={() => setVariant(variant === 'default-pressed' ? 'default-hover' : variant)}
       style={{
-      position: 'relative',
       width: '200px',
       height: 'min-content',
       padding: '12px 24px',
@@ -155,21 +104,15 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
       alignItems: 'center',
       justifyContent: 'center',
       gap: '8px',
+      backgroundColor: '#3b82f6',
+      opacity: 1,
+      pointerEvents: 'auto',
       ...style
     }}>
-    <motion.div layout={true} data-id="formsubmit-spinner-wrap" data-name="Spinner Slot"
-      variants={spinnerWrapVariants} initial={['default', initialVariant]} animate={['default', variant]} style={{
-        display: 'none',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        flex: '0 0 auto'
-      }}>
-      <${SPINNER_COMPONENT_NAME} data-id="formsubmit-spinner" />
-    </motion.div>
-    <motion.p layout={true} data-id="formsubmit-label" data-name="Text"
-      variants={labelVariants} initial={['default', initialVariant]} animate={['default', variant]} style={{
-        display: 'block',
+    <AnimatePresence mode="popLayout" initial={false}>
+      {variant !== 'loading' && variant !== 'success' && variant !== 'error' && (
+        <motion.p key="formsubmit-label" layout={true} data-id="formsubmit-label" data-name="Text"
+          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.16 }} style={{
         fontSize: '14px',
         whiteSpace: 'nowrap',
         color: '#ffffff',
@@ -181,11 +124,20 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
         flex: '0 0 auto',
         margin: 0
       }}>
-      {label}
-    </motion.p>
-    <motion.p layout={true} data-id="formsubmit-success" data-name="Success Text"
-      variants={successTextVariants} initial={['default', initialVariant]} animate={['default', variant]} style={{
-        display: 'none',
+          {label}
+        </motion.p>
+      )}
+      {variant === 'loading' && (
+        <motion.div key="formsubmit-spinner-wrap" layout={true} data-id="formsubmit-spinner-wrap" data-name="Spinner Slot"
+          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.16 }} style={{
+            alignItems: 'center', justifyContent: 'center', position: 'relative', flex: '0 0 auto'
+          }}>
+          <${SPINNER_COMPONENT_NAME} data-id="formsubmit-spinner" />
+        </motion.div>
+      )}
+      {variant === 'success' && (
+        <motion.p key="formsubmit-success" layout={true} data-id="formsubmit-success" data-name="Success Text"
+          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.16 }} style={{
         fontSize: '14px',
         whiteSpace: 'nowrap',
         color: '#ffffff',
@@ -196,11 +148,12 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
         flex: '0 0 auto',
         margin: 0
       }}>
-      Thank you
-    </motion.p>
-    <motion.p layout={true} data-id="formsubmit-error" data-name="Error Text"
-      variants={errorTextVariants} initial={['default', initialVariant]} animate={['default', variant]} style={{
-        display: 'none',
+          Thank you
+        </motion.p>
+      )}
+      {variant === 'error' && (
+        <motion.p key="formsubmit-error" layout={true} data-id="formsubmit-error" data-name="Error Text"
+          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.16 }} style={{
         fontSize: '14px',
         whiteSpace: 'nowrap',
         color: '#ffffff',
@@ -211,8 +164,10 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
         flex: '0 0 auto',
         margin: 0
       }}>
-      Something went wrong
-    </motion.p>
+          Something went wrong
+        </motion.p>
+      )}
+    </AnimatePresence>
   </motion.button>
     </LayoutGroup>;
 }
@@ -307,9 +262,10 @@ export function ensureFormSubmitComponentFile(): void {
 
 /** Ensure the shared Spinner master exists too (FormSubmit imports it). */
 export function ensureFormSubmitSpinnerFile(): void {
-  if (projectFS.readFile(SPINNER_COMPONENT_PATH) != null) return;
+  const existing = projectFS.readFile(SPINNER_COMPONENT_PATH);
+  if (existing != null && (!existing.includes('data-id="spinner-root"') || existing.includes('@spinner-gen v5'))) return;
   projectFS.writeFile(SPINNER_COMPONENT_PATH, buildSpinnerComponentCode());
-  trace.action('form-submit-gen:ensureSpinnerFile', { path: SPINNER_COMPONENT_PATH });
+  trace.action('form-submit-gen:ensureSpinnerFile', { path: SPINNER_COMPONENT_PATH, upgraded: existing !== null });
 }
 
 const FORMSUBMIT_IMPORT = `import ${FORMSUBMIT_COMPONENT_NAME} from '@/components/FormSubmit';`;

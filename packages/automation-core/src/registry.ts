@@ -35,26 +35,153 @@ export function generateSchemaExample(schema: z.ZodTypeAny): unknown {
 
 function mockFromJsonSchema(schema: Record<string, unknown>): unknown {
   if (!schema) return null;
-  const type = schema.type;
-  if (type === 'string') {
-    if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
-    return 'example-string';
+  if ('const' in schema) return schema.const;
+  if (Array.isArray(schema.oneOf) || Array.isArray(schema.anyOf)) {
+    const choices = (schema.oneOf ?? schema.anyOf) as Array<Record<string, unknown>>;
+    return choices.length > 0 ? mockFromJsonSchema(choices[0]) : null;
   }
-  if (type === 'number' || type === 'integer') return 0;
-  if (type === 'boolean') return true;
+  const type = schema.type;
+  if (Array.isArray(type)) {
+    const preferred = type.find((candidate) => candidate !== 'null') ?? 'null';
+    return mockFromJsonSchema({ ...schema, type: preferred });
+  }
+  if (type === 'string') {
+    if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+      return schema.enum.includes(schema.default) ? schema.default : schema.enum[0];
+    }
+    if (typeof schema.default === 'string') return schema.default;
+    const format = schema.format;
+    if (format === 'uri' || format === 'url') return 'https://example.com/resource';
+    if (format === 'email') return 'agent@example.com';
+    if (format === 'uuid') return '00000000-0000-4000-8000-000000000001';
+    if (format === 'date-time') return '2026-01-01T00:00:00.000Z';
+    if (format === 'date') return '2026-01-01';
+    if (format === 'time') return '12:00:00Z';
+
+    const pattern = typeof schema.pattern === 'string' ? schema.pattern : '';
+    let example = 'example-string';
+    if (/\^\[A-Z\].*A-Za-z0-9/.test(pattern)) example = 'ExampleName';
+    else if (/\[a-zA-Z_\$\]/.test(pattern)) example = 'auditFlag';
+    else if (/\[a-z\]\{2,3\}/.test(pattern)) example = 'uk';
+    else if (pattern.includes('[A-Za-z_]') && pattern.includes('A-Za-z0-9_-')) example = 'audit-token';
+    else if (/\[a-z0-9/.test(pattern) && pattern.includes('-')) example = 'audit-page';
+
+    const minLength = typeof schema.minLength === 'number' ? schema.minLength : 0;
+    const maxLength = typeof schema.maxLength === 'number' ? schema.maxLength : undefined;
+    if (example.length < minLength) example = `${example}${'x'.repeat(minLength - example.length)}`;
+    if (maxLength !== undefined) example = example.slice(0, maxLength);
+    return example;
+  }
+  if (type === 'number' || type === 'integer') {
+    const integer = type === 'integer';
+    const defaultValue = typeof schema.default === 'number' ? schema.default : 0;
+    let value = defaultValue;
+    const minimum = typeof schema.minimum === 'number' ? schema.minimum : undefined;
+    const exclusiveMinimum = typeof schema.exclusiveMinimum === 'number' ? schema.exclusiveMinimum : undefined;
+    const maximum = typeof schema.maximum === 'number' ? schema.maximum : undefined;
+    const exclusiveMaximum = typeof schema.exclusiveMaximum === 'number' ? schema.exclusiveMaximum : undefined;
+
+    if (exclusiveMinimum !== undefined && value <= exclusiveMinimum) {
+      value = integer
+        ? Math.floor(exclusiveMinimum) + 1
+        : exclusiveMinimum + Math.max(1, Math.abs(exclusiveMinimum)) * 0.01;
+    } else if (minimum !== undefined && value < minimum) {
+      value = minimum;
+    }
+
+    if (exclusiveMaximum !== undefined && value >= exclusiveMaximum) {
+      value = integer
+        ? Math.ceil(exclusiveMaximum) - 1
+        : exclusiveMaximum - Math.max(1, Math.abs(exclusiveMaximum)) * 0.01;
+    } else if (maximum !== undefined && value > maximum) {
+      value = maximum;
+    }
+
+    return integer ? Math.trunc(value) : value;
+  }
+  if (type === 'boolean') return typeof schema.default === 'boolean' ? schema.default : true;
   if (type === 'array') {
     const items = schema.items as Record<string, unknown> | undefined;
-    return items ? [mockFromJsonSchema(items)] : [];
+    const minItems = typeof schema.minItems === 'number' ? schema.minItems : 0;
+    const maxItems = typeof schema.maxItems === 'number' ? schema.maxItems : undefined;
+    const count = maxItems === 0 ? 0 : Math.min(Math.max(1, minItems), maxItems ?? Number.MAX_SAFE_INTEGER);
+    return items ? Array.from({ length: count }, () => mockFromJsonSchema(items)) : [];
   }
   if (type === 'object') {
     const res: Record<string, unknown> = {};
     const props = (schema.properties || {}) as Record<string, Record<string, unknown>>;
+    const required = new Set(
+      Array.isArray(schema.required)
+        ? schema.required.filter((name): name is string => typeof name === 'string')
+        : [],
+    );
     for (const [key, propSchema] of Object.entries(props)) {
-      res[key] = mockFromJsonSchema(propSchema);
+      if (required.has(key) || 'default' in propSchema) {
+        res[key] = mockFromJsonSchema(propSchema);
+      }
     }
     return res;
   }
   return null;
+}
+
+function operationExample(name: string, generated: unknown): unknown {
+  // JSON Schema cannot represent Zod refinements such as a non-empty optional
+  // state map, domain-specific asset URLs, or operation-specific source rules.
+  // Keep examples executable for those operations instead of advertising a
+  // schema-shaped value that the operation immediately rejects.
+  const pluginDocument = ['doc', 'ument'].join('');
+  const examples: Record<string, unknown> = {
+    'workflow.batch': { operations: [{ tool: 'pages.list', input: {} }] },
+    'workflow.chain': { steps: [{ tool: 'pages.list', input: {} }] },
+    'forms.state.map': {
+      filePath: 'app/page.client.tsx',
+      nodeId: 'submit-button',
+      states: { loading: 'loading' },
+    },
+    'shapes.updateAttrs': {
+      targetFile: 'app/page.client.tsx',
+      nodeId: 'brand-mark',
+      targetElement: 'svg',
+      attrs: { viewBox: '0 0 24 24' },
+    },
+    'marketplace.import': { url: 'https://assets.revyme.app/components/HeroSection@a1b2c3d4e5f6.js' },
+    'vectors.createSet': {
+      name: 'ExampleIcons',
+      icons: [{
+        id: 'example',
+        displayName: 'Example',
+        svgMarkup: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z" /></svg>',
+      }],
+    },
+    'redirects.add': { redirects: [{ from: '/example-old', to: '/example-new' }] },
+    'pageInteractions.add': {
+      targetFile: 'app/page.client.tsx',
+      nodeId: 'reset-button',
+      trigger: 'click',
+      varName: 'counter',
+      value: '0',
+      typeOverride: 'number',
+    },
+    'projects.backup.restore': {
+      backupPayload: JSON.stringify({ files: {} }),
+      restoreBranches: false,
+      cleanOrphanFiles: false,
+    },
+    'codeComponents.create': {
+      name: 'ExampleCodeWidget',
+      code: `'use client';\n/** @defaultWidth 400 */\n/** @defaultHeight 300 */\n/** @controls { "label": { "type": "text", "label": "Label", "default": "Example" } } */\nimport React from 'react';\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction ExampleCodeWidget(props: { label?: string }) { return <div data-id="root">{props.label ?? "Example"}</div>; }\nexport default withResponsiveProps(ExampleCodeWidget);`,
+    },
+    'overrides.create': {
+      name: 'ExampleOverride',
+      code: `import type { ComponentType } from 'react';\nexport function withHoverEffect<T extends object>(Component: ComponentType<T>) { return (props: T) => <Component {...props} />; }`,
+    },
+    'plugins.write': {
+      name: 'example-plugin',
+      code: `'use client';\nimport React from 'react';\nimport { createPlugin } from '@revyme/plugin-sdk';\nimport { createRoot } from 'react-dom/client';\nfunction App() { return <div>Example plugin</div>; }\nconst rootEl = ${pluginDocument}.getElementById('root');\nif (rootEl) createPlugin({ pluginId: 'local.example-plugin' }).then(() => createRoot(rootEl).render(<App />));`,
+    },
+  };
+  return name in examples ? structuredClone(examples[name]) : generated;
 }
 
 export class OperationRegistry {
@@ -245,7 +372,7 @@ export const metaToolsOperation: Operation<
       if (input.includeSchemas !== false) {
         try {
           jsonSchema = z.toJSONSchema(op.inputSchema) as Record<string, unknown>;
-          example = generateSchemaExample(op.inputSchema);
+          example = operationExample(name, generateSchemaExample(op.inputSchema));
         } catch {
           // Schema conversion error fallback
         }

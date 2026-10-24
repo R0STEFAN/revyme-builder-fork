@@ -2,7 +2,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Snapshot } from '../../src/contracts';
-import { createSnapshot, createOperationContext } from '../../src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
 import { defaultRegistry } from '../../src/registry';
 import '../../src/index';
 import {
@@ -57,6 +59,26 @@ if (rootEl) {
 
 describe('T22: Plugins, Marketplace, Project Skills & Service Access', () => {
   const context = createOperationContext();
+
+  it('validates plugin source without applying canvas-page dialect rules', async () => {
+    const snapshot = createMockSnapshot({});
+    const prepared = await prepareOperation(snapshot, 'plugins.write', {
+      name: 'test-plugin',
+      code: VALID_PLUGIN_SOURCE,
+    }, context);
+    expect(prepared.ok).toBe(true);
+    const result = prepared.data as { changes: Array<{ path: string; content: string | null; beforeHash: string | null }> };
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'generated-plugin-oracle-regression',
+      changes: result.changes,
+    });
+
+    const validation = validatePlan(snapshot, plan);
+    expect(validation.issues).toEqual([]);
+    expect(validation.ok).toBe(true);
+  });
 
   beforeEach(() => {
     projectFS.loadSnapshot(new Map());

@@ -23,8 +23,8 @@ function createBridgeScreenshotService() {
   ).replace(/\/+$/, '');
 
   return {
-    async captureScreenshot({ snapshot, revision, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
-      const filePath = snapshot.scope.filePath || [...snapshot.files.keys()].find((path: string) =>
+    async captureScreenshot({ snapshot, revision, filePath: requestedFilePath, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
+      const filePath = requestedFilePath || snapshot.scope.filePath || [...snapshot.files.keys()].find((path: string) =>
         path.endsWith('/page.client.tsx') || path === 'page.client.tsx'
       );
       if (!filePath) {
@@ -90,12 +90,14 @@ function createBridgeAuditSnapshotService() {
   ).replace(/\/+$/, '');
 
   return {
-    async getSnapshot({ projectId, branchId, filePath, revision, viewport }: {
+    async getSnapshot({ projectId, branchId, filePath, revision, viewport, properties, nodeIds }: {
       projectId: string;
       branchId: string;
       filePath: string;
       revision: number;
       viewport: string;
+      properties?: string[];
+      nodeIds?: string[];
     }) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15_000);
@@ -105,7 +107,15 @@ function createBridgeAuditSnapshotService() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             method: 'observeAuditSnapshot',
-            params: { projectId, branchId, filePath, revision, viewport },
+            params: {
+              projectId,
+              branchId,
+              filePath,
+              revision,
+              viewport,
+              ...(properties ? { properties } : {}),
+              ...(nodeIds ? { nodeIds } : {}),
+            },
           }),
           signal: controller.signal,
         });

@@ -368,6 +368,11 @@ export function createCmsIndexPageFile(slug: string): string {
 
 ${CANVAS_CONFIG_BLOCK}
 
+/** @cmsPage {
+  "collection": "${slug}",
+  "kind": "index"
+} */
+
 import React from 'react';
 import Link from 'next/link';
 import ${varName} from '@/cms/${slug}.json';

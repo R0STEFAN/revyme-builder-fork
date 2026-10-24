@@ -5,7 +5,18 @@
 import _generate from '@babel/generator';
 import { escapeRegExp } from '@/shared/regex-utils';
 
-export const generate = (typeof _generate === 'function' ? _generate : (_generate as any).default) as typeof _generate;
+export function normalizeBabelGenerator(value: unknown): typeof _generate {
+  let candidate = value;
+  for (let depth = 0; depth < 3 && typeof candidate !== 'function'; depth++) {
+    candidate = (candidate as any)?.default;
+  }
+  if (typeof candidate !== 'function') {
+    throw new TypeError('@babel/generator did not resolve to a callable generator');
+  }
+  return candidate as typeof _generate;
+}
+
+export const generate = normalizeBabelGenerator(_generate);
 
 // ─── Responsive media-query gates ──────────────────────────────────────────
 

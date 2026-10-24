@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
-import { normalizeSlug, parsePageFromPath, getPagePaths } from './pages';
+import { normalizeSlug, parsePageFromPath, getPagePaths, preparePageForTemplate } from './pages';
 
 export interface TemplateInfo {
   name: string;
@@ -43,6 +43,23 @@ export function listTemplatesFromSnapshot(snapshot: Snapshot): TemplateInfo[] {
   }
 
   return templates;
+}
+
+function getTemplateComponentImports(snapshot: Snapshot, ...contents: Array<string | undefined>): string[] {
+  const componentNames = new Set<string>();
+  for (const content of contents) {
+    if (!content) continue;
+    for (const match of content.matchAll(/<([A-Z][A-Za-z0-9_]*)\b/g)) {
+      const componentName = match[1];
+      if (snapshot.files.has(`components/${componentName}.tsx`)) {
+        componentNames.add(componentName);
+      }
+    }
+  }
+
+  return [...componentNames].map(
+    (componentName) => `import ${componentName} from '@/components/${componentName}';`
+  );
 }
 
 // 1. templates.list operation
@@ -98,38 +115,38 @@ export const templatesCreateOperation: Operation<
       throw new Error(`TEMPLATE_ALREADY_EXISTS: Template "${cleanName}" already exists`);
     }
 
-    const rootId = context.createId('template-root');
+    const rootId = 'root';
     const headerId = context.createId('header');
-    const mainId = context.createId('main');
     const footerId = context.createId('footer');
+
+    const componentImports = getTemplateComponentImports(snapshot, input.headerContent, input.footerContent);
+    const header = input.headerContent || `<header data-id="${headerId}" data-name="Header" style={{
+        width: '100%', padding: '16px 24px', borderBottom: '1px solid #e5e7eb',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      }}>
+        <div data-id="${context.createId('logo')}">Logo</div>
+      </header>`;
+    const footer = input.footerContent || `<footer data-id="${footerId}" data-name="Footer" style={{
+        width: '100%', padding: '24px', borderTop: '1px solid #e5e7eb'
+      }}>
+        <p data-id="${context.createId('copy')}">© ${cleanName}</p>
+      </footer>`;
 
     const clientCode = `'use client';
 
 /* @canvas { single: true } */
 
 import React from 'react';
+${componentImports.join('\n')}
 
 export default function LayoutClient({ children }: { children: React.ReactNode }) {
   return (
     <div data-id="${rootId}" data-name="Template ${cleanName}" style={{
-      position: 'relative', width: '100%', minHeight: '100vh',
-      display: 'flex', flexDirection: 'column'
+      position: 'relative', width: '100%'
     }}>
-      <header data-id="${headerId}" data-name="Header" style={{
-        width: '100%', padding: '16px 24px', borderBottom: '1px solid #e5e7eb',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-      }}>
-        ${input.headerContent || `<div data-id="${context.createId('logo')}">Logo</div>`}
-      </header>
-      <main data-id="${mainId}" data-name="Content" style={{ flex: '1 0 auto', width: '100%' }}>
-        {children}
-      </main>
-      <footer data-id="${footerId}" data-name="Footer" style={{
-        width: '100%', padding: '24px', borderTop: '1px solid #e5e7eb',
-        textAlign: 'center'
-      }}>
-        ${input.footerContent || `<p data-id="${context.createId('copy')}">© ${cleanName}</p>`}
-      </footer>
+      ${header}
+      {children}
+      ${footer}
     </div>
   );
 }
@@ -260,7 +277,7 @@ export const templatesAssignOperation: Operation<
     pageSlug: z.string(),
     templateName: z.string().nullable(),
   }),
-  async execute(snapshot, input) {
+  async execute(snapshot, input, context) {
     const cleanSlug = normalizeSlug(input.pageSlug);
     const targetTemplate = input.templateName ? input.templateName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase() : null;
 
@@ -305,6 +322,16 @@ export const templatesAssignOperation: Operation<
       };
     }
 
+    const nextClientContent = targetTemplate
+      ? preparePageForTemplate(clientContent, context.createId)
+      : clientContent;
+    if (nextClientContent !== clientContent) {
+      context.trace('templates:assign:page-root-normalized', {
+        pageSlug: cleanSlug,
+        template: targetTemplate,
+      });
+    }
+
     const changes: FileChange[] = [
       {
         path: currentClientPath,
@@ -319,7 +346,7 @@ export const templatesAssignOperation: Operation<
       {
         path: targetClientPath,
         beforeHash: null,
-        content: clientContent,
+        content: nextClientContent,
       },
       {
         path: targetServerPath,

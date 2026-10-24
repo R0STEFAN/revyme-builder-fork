@@ -18,6 +18,8 @@ describe('oracleFileKind', () => {
 
   it('recognises materialized files by their stamp', () => {
     expect(isBuilderMaterializedFile('/** @revyme-providers v3 */')).toBe(true);
+    expect(isBuilderMaterializedFile('/** @smooth-scroll v1 */')).toBe(true);
+    expect(isBuilderMaterializedFile('/** @iconSet */')).toBe(true);
     expect(isBuilderMaterializedFile("'use client';\n/** @name \"Form Submit\" */")).toBe(true);
     expect(isBuilderMaterializedFile("'use client';\n/** @name \"Card\" */")).toBe(false);
   });

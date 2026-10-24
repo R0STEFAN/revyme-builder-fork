@@ -1,5 +1,168 @@
 # MCP v2 issue log
 
+## 2026-10-24 — generated page-transition controller rejected as an editable page
+
+**Status:** fixed and verified through an independently launched MCP stdio
+process; no Codex restart was required.
+
+**Symptom:** a clean dry-run for native crossfade failed with Oracle findings
+such as `MISSING_DATA_ID`, `FORBIDDEN_IMPORT`, `CLASSNAME_STYLING`, and
+`PAGE_ROOT_REQUIRED` in the generated `app/(site-shell)/page-transitions.tsx`.
+
+**Cause:** `validatePlan()` treated this internal runtime controller as a
+canvas-authored page and ran editable-page Oracle rules against it.
+
+**Fix and regression guard:** validation now recognizes only the generated
+route-group/root `page-transitions.tsx` path with its `@rt-v9` marker, exempts
+its runtime markup from canvas `data-id` requirements, and skips the
+editable-page Oracle while retaining source syntax/import validation. A T14
+regression uses the real `prepareOperation()` → `createPlan()` → `validatePlan()`
+path and asserts the generated runtime has no validation issues.
+
+**Verification:** the T14 suite passes (7 tests), automation-core type-check
+passes, and the CLI rebuild succeeds (with the existing esbuild direct-eval
+warning). A standalone MCP child launched from `packages/cli/bin/revyme.mjs`
+dry-ran with no issues, then committed crossfade in both directions at
+revisions 554 and 555. `diagnostics.projectCheck` is clean (25/25 files,
+0 violations). `preview.build` discovers `/`, `/about`, and the internal
+template-preview route, but correctly reports no live preview adapter.
+
+**Independent transport note:** for direct tests, start the MCP child with
+`node packages/cli/bin/revyme.mjs mcp` through an MCP stdio client, setting
+`REVYME_API_URL`, `REVYME_PROJECT_ID`, and `REVYME_BRANCH_ID`. This process can
+be closed and relaunched without restarting Codex. This Builder currently
+listens on IPv6 loopback, so use `http://[::1]:3333`; `127.0.0.1:3333` refuses
+the connection.
+
+## 2026-10-24 — page transitions ignored presets and route-group layouts
+
+**Status:** preset and route-group handling are fixed and covered by T14; the
+follow-up import-interoperability and generated-controller Oracle issues below
+are also fixed and live-tested through independent MCP clients.
+
+**Symptom:** `siteEffects.pageTransition.set({ preset: "crossfade" })` returned
+`opacity: 1` for both sides. It always wrote `app/page-effects.ts`, did not
+scaffold the transition runtime, and did not inject `PageTransitions` into the
+route group's `LayoutClient`, so a template-based site could not animate.
+
+**Cause:** the MCP operation created neutral sides instead of using the same
+preset factories as the editor, and bypassed the editor's route/layout-aware
+scaffolding path.
+
+**Fix and regression guard:** page transition set/get/remove now resolve the
+route's nearest `LayoutClient`; set stores data beside that layout, emits the
+runtime/controller files, injects the controller around `{children}`, and uses
+the canonical preset side configuration. T14 covers a root layout and a
+route-group template, including crossfade values and get/remove behavior.
+
+**Follow-up symptom:** after rebuilding the Builder, MCP dry-run still reported
+that `app/(site-shell)/LayoutClient.tsx` had no editable `{children}` slot,
+although the file visibly contained it. The dry-run was rejected before any
+write (revision 553 remained unchanged).
+
+**Follow-up cause:** `slot-children.ts` imported `@babel/traverse` as a direct
+callable. Vite SSR can expose this CommonJS module as
+`{ default: { default: traverse } }`; the resulting TypeError was swallowed by
+the locator's defensive catch and misreported as a missing slot.
+
+**Follow-up fix and guard:** `slot-children.ts` now uses the shared
+`normalizeBabelTraverse()` helper used by the parser, with tests for the nested
+namespace shape and for locating `{children}` between the template's navbar and
+footer. The focused suite passes (21 tests); the relevant automation suite
+passes (60 tests), the automation-core type-check passes, and a direct Vite SSR
+load now locates the slot. The previous Codex-managed process retained the old
+bundle, but a newly launched independent MCP child loaded the rebuilt bundle;
+the clean dry-run and both direction commits are recorded above.
+
+## 2026-10-24 — preview listed paired server wrappers as extra routes
+
+**Status:** fixed in source, covered by T23 regression tests, and CLI rebuilt.
+The Codex-owned MCP stdio process must restart before live verification because
+it loaded the prior bundle at session start.
+
+**Symptom:** `preview.build` listed both public URLs and ghost paths such as
+`/(site-shell)` and `/(site-shell)/about` for templated pages.
+
+**Cause:** route discovery processed both `page.client.tsx` and its paired
+`page.tsx` wrapper as independent routes. The fallback parser also retained the
+route-group segment when parsing server-only pages.
+
+**Fix and regression guard:** a paired server wrapper is still syntax-checked
+but no longer adds a duplicate route; server-only pages derive their route from
+the client-path shape with route-group segments removed. T23 covers route-group
+pairs plus a server-only nested route.
+
+## 2026-10-24 — pages.create generated invalid root styles for template pages
+
+**Status:** fixed in source, regression-tested, and CLI rebuilt. The active
+Codex-owned MCP stdio process must reload the new bundle before live dry-run
+verification.
+
+**Symptom:** `pages.create({ slug: "about", template: "site-shell" })` dry-run
+failed with `TEMPLATED_PAGE_ROOT_STYLED`; the generated page root had
+`minHeight: '900px'` and `backgroundColor: '#ffffff'`.
+
+**Cause:** the operation used `template` only to choose route-group paths, but
+unconditionally generated the standalone-page root. Template pages share the
+canvas node map with `LayoutClient`, so their root must remain bare and leave
+background, clipping, and viewport sizing to the template shell.
+
+**Fix and regression guard:** `pages.create` now emits the bare root geometry
+for templated pages while preserving the standalone root for ordinary pages.
+The new T06 regression exercises the generated source with the templated-page
+Oracle rule and failed before the fix.
+
+**Verification:** `npx vitest run packages/automation-core/test/capabilities/T06-pages.test.ts packages/cli/test/mcp.test.ts` (23 tests pass),
+`npx tsc --noEmit -p packages/automation-core/tsconfig.json`, and
+`npm run build --workspace=@revyme/cli` all pass. Build emits the existing
+esbuild direct-eval warning from `src/canvas/code-component-runtime.ts`.
+
+## 2026-10-24 — templates.create emitted builder-invalid route shells
+
+**Status:** generator fix and regression test are in source; rebuild the CLI and
+restart the Codex-owned stdio MCP process before live verification.
+
+**Symptom:** `templates.create` dry-run with existing `SiteNavbar` and
+`SiteFooter` instances returned `MINMAX_SIZE_UNIT`, `PAGE_ROOT_REQUIRED`,
+`WOULD_CRASH` for missing component imports, `TEXT_STYLE_ON_FRAME`, and
+`FIXED_DEPTH` for a fixed Navbar nested in a generated `<header>` wrapper.
+
+**Cause:** the template generator used a generated root ID instead of the
+builder-required `data-id="root"`, added unsupported `minHeight: '100vh'`,
+wrapped supplied components in extra semantic frames, added text alignment to
+the footer frame, and did not import referenced project components.
+
+**Fix and regression guard:** `templates.create` now uses the required root ID,
+omits the unsupported min-height, places supplied header/footer JSX directly
+in the shell, and imports matching `components/<Name>.tsx` references. The
+T06 regression checks these requirements. Local focused test:
+`npx vitest run packages/automation-core/test/capabilities/T06-pages.test.ts`
+(8 tests pass).
+
+**Live MCP evidence:** immediately after the source fix, the live MCP dry-run
+still returned the old generated `template-root-*` shell and the original
+Oracle issues at project revision 537. The active stdio child is
+`node packages/cli/bin/revyme.mjs mcp` (PID 60490), launched by Codex before
+the edit; it loads `packages/cli/dist/main.js` when present. This is a stale
+MCP CLI bundle/process, not a Builder Vite issue. Rebuild the CLI, then restart
+Codex to load the new stdio process; do not retry a real template mutation
+until the dry-run reflects this fix.
+
+**Follow-up discovered during assignment:** after restart, the generator fix
+was present, but `templates.create` reported a clean dry-run because
+`validatePlan()` only classified paths containing the word `template` as
+templates. A normal name such as `(site-shell)` was therefore checked as a
+page, skipping the template slot rule. The generated shell also wrapped
+`{children}` in `<main>`, which `TEMPLATE_CHILDREN_WRAPPED` correctly rejects
+when the file is checked as a template.
+
+**Follow-up fix and regression guard:** validation now recognizes only the
+exact `app/(<group>)/LayoutClient.tsx` path as a template (and no longer
+misclassifies pages in a group named `template`). The generator places the one
+`{children}` slot directly under its root. T06 tests cover both path
+classification cases and run the generated shell through the template Oracle.
+Rebuild the CLI and restart Codex once more before the live dry-run/assignment.
+
 ## 2026-10-23 — stale CLI bundle blocks mutations
 
 **Status:** fixed locally; the MCP subprocess must restart before it can use the fix.
@@ -1015,6 +1178,28 @@ longer passes; a real motion target does.
 operation returned `satisfied: true`; static and animated hero cases now pass
 their expected false/true verdicts.
 
+## 2026-10-24 — Builder did not reconcile missed MCP revisions after reconnect
+
+**Status:** fixed locally with regression coverage. A read-only project check and
+`verify.effect` reached revision 511, but the reconnected Builder canvas stayed
+at revision 504; `observe.screenshot` correctly refused with `REVISION_MISMATCH`.
+
+**Cause:** EventSource reconnects automatically, but the editor only received a
+snapshot update when an MCP commit happened while it was connected. Commits
+written while the Builder/MCP process was offline were never replayed, so the
+active canvas remained stale indefinitely.
+
+**Fix:** on bridge reconnect, the editor now reads the durable local project
+revision without changing its current save token. If the server is ahead and
+the editor has no unsaved changes, it uses the existing guarded snapshot sync
+to load the latest project. A refused async replacement restores the prior
+revision token so stale local work remains protected by conflict detection.
+
+**Verification:** regression tests cover stale clean-tab catch-up, revision
+reads without side effects, and reconnect wiring. A live screenshot should be
+retried after Vite HMR reconnects the editor; unsaved/interacting canvases are
+intentionally not replaced.
+
 ## 2026-10-24 — observe.audit misclassified intentional layout as errors
 
 **Status:** fixed locally and regression-tested. Rebuild/reload the
@@ -1052,3 +1237,960 @@ this checkout and was not recreated or changed.
 `data/projects/proj-1791960645579-j02nu7.json` in the existing
 `portfolio-test2` parser, CMS pagination, and source-export tests. The
 remaining 1,033 test files passed; no new regression failures appeared.
+
+## 2026-10-24 — preview.build claimed a URL without starting a server
+
+**Status:** fixed locally with regression coverage; the rebuilt MCP child must
+be reloaded before the live tool response changes.
+
+**Symptom:** `preview.build` returned `status: "ready"` and a URL such as
+`http://localhost:3000/preview/<projectId>` even when no preview service was
+configured or listening. Opening that URL failed with connection refused.
+
+**Cause:** the no-adapter path only parsed project source and discovered routes,
+then manufactured a localhost URL as if it had started a preview server.
+
+**Fix:** the fallback now clearly reports `previewAvailable: false`, an empty
+`previewUrl`, and a warning that only syntax/routes were validated. When a
+preview adapter is configured, availability is derived from its ready result
+and non-empty URL.
+
+**Verification:** T23 regressions cover both the unavailable fallback and an
+adapter-backed live URL; the focused tests pass.
+
+## 2026-10-24 — Oracle required layout FLIP for absolute menu overlays
+
+**Status:** fixed locally with a red/green regression test; the CLI child must
+be rebuilt/reloaded before `codeFiles.submit` accepts the corrected component.
+
+**Symptom:** the SiteNavbar menu overlay is absolutely positioned, but Oracle
+rejected `AnimatePresence mode="sync"` and a child without `layout={true}` as
+though it occupied normal document flow. That prevented removing an
+unnecessary layout animation from the overlay close path.
+
+**Cause:** the checks exempted explicit `data-overlay` nodes but did not inspect
+the child's inline `position`, although the root-shell rule already recognized
+`absolute`/`fixed` children as out of flow.
+
+**Fix:** the shared presence check now treats `data-overlay`, `position:
+'absolute'`, and `position: 'fixed'` as out-of-flow overlays. In-flow gated
+children still require popLayout and layout FLIP.
+
+**Verification:** the new absolute-child test failed on both presence rules
+before the fix and passes after it; existing in-flow regression tests continue
+to pass. The live SiteNavbar close interaction still needs a fresh MCP submit
+and Preview check after the child reloads this bundle.
+
+## 2026-10-24 — templates.assign and pages.update rejected styled page roots
+
+**Status:** fixed, covered by T06 regressions, and verified through live MCP
+commits on the isolated `mcp-live-audit-20261024` branch.
+
+**Symptom:** assigning an ordinary page to a route-group template failed Oracle
+with `TEMPLATED_PAGE_ROOT_STYLED`; the existing page root carried authored
+background/layout styles that the shared template now owns.
+
+**Cause:** both `templates.assign` and `pages.update` moved the existing page
+source into the template route without separating the page-authored root style.
+
+**Fix:** `preparePageForTemplate` normalizes the template-owned root and moves
+the former page style and children into a new editable content wrapper. The
+page's prior appearance remains intact.
+
+**Verification:** T06 passes 13 tests. Live assignment and page update committed
+successfully; Oracle accepted the templated roots and read-back preserved the
+page content/style.
+
+## 2026-10-24 — meta.tools emitted invalid JSON Schema examples
+
+**Status:** fixed with T01 contract tests; live example re-check remains part of
+the 275-operation coverage pass.
+
+**Symptom:** examples for positive integer bounds could be `0`; URI/email/date
+formats, regex-constrained identifiers, optional fields, defaults, and unions
+could also produce arguments rejected by their own operation schemas.
+
+**Cause:** generic example generation ignored several JSON Schema constraints.
+
+**Fix:** example generation now respects bounds/defaults, common formats and
+patterns, optionality, array limits, and union alternatives.
+
+**Verification:** T01 passes 15 tests and `npx tsc --noEmit` passes. Live schema
+discovery succeeded; each repaired example still needs a fresh pass before the
+operation matrix marks it complete.
+
+## 2026-10-24 — headless operations used stale ProjectFS and browser autosave
+
+**Status:** fixed with CLI/backend regressions and a live CMS verification.
+
+**Symptom:** Node-side autosave attempted to access `localStorage`, while
+operations backed by the global ProjectFS could see stale files or the wrong
+branch instead of the current MCP snapshot.
+
+**Cause:** operation code still uses application-level ProjectFS helpers, and
+`triggerAutosave()` assumed a browser environment.
+
+**Fix:** each scoped MCP call hydrates ProjectFS from its current snapshot and
+activates the requested branch before preparing the operation. Autosave now
+skips browser-only work when `window` is absent.
+
+**Verification:** CLI snapshot-context and Node autosave tests pass; the live
+CMS schema dry-run left data unchanged, then create/get succeeded without
+`localStorage` errors.
+
+## 2026-10-24 — pages.duplicate replaced the required root node ID
+
+**Status:** fixed, unit-tested, rebuilt, and live-verified.
+
+**Symptom:** duplicating a page changed `data-id="root"` to a generated ID;
+Oracle rejected the plan with `PAGE_ROOT_REQUIRED`.
+
+**Cause:** the duplicate operation treated the special page root like an
+ordinary node while refreshing IDs.
+
+**Fix:** retain the canonical root ID and regenerate IDs for copied descendants.
+
+**Verification:** the new regression first failed, then T06 passed 13/13.
+`pages.duplicate` committed a templated copy at revision 46; live `codeFiles.read`
+confirmed the root remained `root` and descendant IDs were fresh.
+
+## 2026-10-24 — responsive override had stale breakpoints and no canvas tile
+
+**Status:** fixed, covered by T07, rebuilt, and live-verified.
+
+**Symptom:** on a new page with only its Desktop tile, `viewports.setOverride`
+accepted `tablet` but wrote `@media (max-width: 768px)` without adding a tablet
+tile. Oracle rejected it as `CANVAS_VIEWPORT_BREAKPOINT_MISMATCH`. `viewports.list`
+also reported outdated Tablet 768px and Mobile 375px values.
+
+**Cause:** the MCP operation used stale hard-coded defaults and wrote responsive
+CSS without synchronizing the page's `@canvas` viewport/position metadata.
+
+**Fix:** defaults now follow the Builder's 1200/810/390 ladder. When a requested
+breakpoint is missing, `viewports.setOverride` adds its `@canvas` entry and places
+the tile to the right of existing viewports before Oracle validation.
+
+**Verification:** the new T07 test failed before the fix and the complete T07
+suite passes 12/12. Live `viewports.list` returned 1200/810/390; a tablet override
+committed at revision 64 with a matching 810px tile and position, and read-back
+confirmed both CSS and canvas metadata.
+
+## 2026-10-24 — component extraction/detach corrupted or rejected valid JSX
+
+**Status:** fixed, covered by T09 regressions, TypeScript-checked, and live-verified.
+
+**Symptoms:** extracting a section could leave an extra closing tag because the
+replacement regex stopped at the first nested closing element. Detaching an instance
+could duplicate the page's canonical `data-id="root"`, preserve unresolved default
+props and `...style`, and duplicate child IDs when multiple instances were inlined.
+
+**Cause:** both operations edited markup with regex/string substitution instead of
+using complete JSX source spans and AST-level prop/style handling.
+
+**Fix:** extraction now replaces the exact JSX AST node span. Detach locates the full
+instance node, resolves instance props and destructured defaults, expands the style
+spread with instance styles, assigns the existing instance ID to the inlined component
+root, and regenerates descendant IDs. `components.replace` also prunes a previous
+component import when its last instance is replaced.
+
+**Verification:** the new tests reproduced the duplicate-root/text/style defect before
+the fix. T09 passes 6/6; `npx tsc --noEmit` passes. Live extract → detach → readback
+committed cleanly, and a second live replace → detach round-trip preserved defaults and
+instance styles while removing the obsolete import.
+
+## 2026-10-24 — components.remove counted history as a live usage
+
+**Status:** fixed, regression-tested, TypeScript-checked, and live-verified.
+
+**Symptom:** after detaching an extracted component, `components.remove` still refused
+to delete its master because `_meta/history.json` contains historical source that
+mentions the component. Unused import lines also counted as active usage.
+
+**Cause:** removal searched every project file with substring matching, including
+metadata snapshots and non-code text, rather than current source JSX.
+
+**Fix:** usage checks now inspect actual JSX component instances in `.tsx`/`.jsx`
+sources only. Successful removal prunes stale imports, and `force: true` removes the
+matching current instances before deleting the master; historical snapshots remain
+untouched.
+
+**Verification:** T09 covers historical references, stale imports, live-use refusal,
+and forced cleanup. A non-forced live removal succeeded at revision 109 even though
+the history file retained the old component snapshot.
+
+## 2026-10-24 — components.detach omitted master runtime dependencies
+
+**Status:** fixed, covered by T09, TypeScript-checked, and live-verified.
+
+**Symptom:** detaching an animated component caused Oracle to reject the page with
+`WOULD_CRASH` for identifiers such as `motion` and `rootVariants`.
+
+**Cause:** the operation inlined only the returned JSX, while imports and module-level
+constants remained in the component file that was no longer rendered.
+
+**Fix:** detach now collects identifiers referenced by the inlined JSX, copies the
+needed imports and transitive top-level declarations into the page, and rejects name
+collisions rather than silently generating invalid source.
+
+**Verification:** a T09 regression failed first on missing `motion`/`variants`, then
+passed after the fix. Live detaching the animated audit Button committed at revision
+119; read-back confirmed the dependency import/declaration and no old component import.
+
+## 2026-10-24 — smooth-scroll MCP operation omitted its generated controller
+
+**Status:** fixed, regression-tested, and committed/read back through a fresh
+independent MCP stdio child on the isolated audit branch.
+
+**Symptom:** `siteEffects.smoothScroll.set` mounted `<SmoothScroll />` in the root
+layout and wrote the route config, but its plan omitted
+`app/smooth-scroll-controller.tsx`. The Builder then rejected the plan with
+`UNRESOLVED_IMPORT` for `./smooth-scroll-controller`.
+
+**Cause:** the editor path scaffolded the runtime as a ProjectFS side effect;
+the headless operation only emitted the data map and layout change.
+
+**Fix and regression guard:** the MCP operation now includes the versioned
+controller source whenever missing or stale. T14 validates the complete
+`prepareOperation` → `createPlan` → `validatePlan` path and asserts the runtime
+file is emitted. The same live plan exposed that generated code was wrongly
+sent through the page Oracle; file validation now exempts stamped Builder
+runtimes while still checking parse and relative imports.
+
+**Verification:** T14 passes. Live set committed the config, controller and
+layout import at revision 137; `get` returned enabled/intensity 22; `codeFiles.read`
+confirmed the controller marker. `remove` committed at 138 and `get` returned
+`null`. Project diagnostics reported 0 blocking violations and 1 pre-existing
+drift warning (`CANVAS_VIEWPORT_FIXED_HEIGHT` on `app/page.client.tsx`); no
+missing imports/assets were found.
+
+## 2026-10-24 — plan validator treated generated/code files as canvas pages
+
+**Status:** fixed with regression coverage and live-verified on the isolated
+branch.
+
+**Symptom:** otherwise valid dry-runs for `vectors.createSet`, `overrides.create`,
+and `plugins.write` failed with `MISSING_DATA_ID`, `PAGE_ROOT_REQUIRED`,
+`NO_COMMENTS_IN_GENERATED_CODE`, or `FORBIDDEN_IMPORT`. Smooth-scroll runtime
+hit the same canvas rules.
+
+**Cause:** the generic plan validator ran the page Oracle on generated icon-set
+masters, plugin entrypoints, override HOCs and the smooth-scroll controller.
+Those files have their own shape/runtime contracts and are not editable page
+trees.
+
+**Fix and regression guard:** `isBuilderMaterializedFile` now recognizes
+`@iconSet` and the smooth-scroll runtime stamp; plan validation skips canvas
+data-id/Oracle rules for those Builder-owned files and for `plugins/*.tsx` and
+`overrides/*.tsx`. Their operation-specific source validation and syntax/import
+checks remain in place. Regression tests now pass each generated operation
+through full plan validation (T13, T14, T20, T22).
+
+**Verification:** T13/T14/T20/T22 and file-kind tests pass. Fresh MCP calls
+created an icon set at revision 139, added/removed one variant at 140/141,
+created a code component at 142, an override at 143, and a plugin at 144; list/get
+read-backs succeeded. Plugin code was not launched.
+
+## 2026-10-24 — committed mutations discarded their domain output
+
+**Status:** fixed, regression-tested, and live-verified through a newly launched
+MCP stdio child; no Codex restart was needed.
+
+**Symptom:** the MCP response exposed the durable commit receipt but dropped
+operation-specific output such as the generated `formId`. An agent had to read
+and parse page source before it could pass the ID into the next typed operation.
+
+**Cause:** `AutomationClient.execute()` prepared the operation result to construct
+the plan, then returned only the commit service's receipt after a successful write.
+
+**Fix and regression guard:** `Result` now has a top-level `operationResult` carrying
+the compact domain summary while omitting file changes and plan diagnostics. Dry-runs
+also preserve that summary next to the plan. CLI-client and MCP serialization tests
+cover the field.
+
+**Verification:** both CLI test files pass (20 tests), `npx tsc --noEmit` passes,
+and the CLI rebuild succeeds. A fresh independent MCP create returned its `formId`
+in `operationResult` at revision 167; `forms.delete` then removed the audit form at
+revision 168.
+
+## 2026-10-24 — form lifecycle wiring omitted the React `useState` import
+
+**Status:** fixed, covered by T19 and generator regressions, and live-verified.
+
+**Symptom:** `forms.submitButton.add` could generate a page-level lifecycle state
+hook using `useState` without importing that symbol. Oracle rejected the otherwise
+valid form plan with `WOULD_CRASH` for an undefined identifier.
+
+**Cause:** the form-state generator inserted the declaration and JSX mapping but
+assumed React hooks were already in scope.
+
+**Fix and regression guard:** the generator now ensures a named `useState` import
+for lifecycle hooks and recognizes all existing React imports before editing them,
+so projects with separate default and named React imports do not receive duplicate
+bindings. `T19-forms` asserts the import and Oracle safety; generator tests cover
+pre-existing imports.
+
+**Verification:** form-state and T19 tests pass (55 tests); related vector,
+site-effect, code-component, plugin, contract and file-kind suites pass (127 tests).
+On the live audit branch, submit-button insertion committed with `FormSubmit.tsx`
+and `Spinner.tsx` at revision 159, lifecycle mapping committed at 160, and the
+generated page passed the MCP validator. The test form was subsequently deleted.
+
+## 2026-10-24 — applying listed compound presets doubled the category prefix
+
+**Status:** fixed, covered by T08, type-checked, and live-verified.
+
+**Symptom:** `presets.list({ category: "radius" })` returns the identifier
+`radius-card`, but passing it directly to `presets.apply` produced
+`var(--radius-radius-card)`. The same mismatch affected shadow and color presets.
+
+**Cause:** list results use full token names for simple preset categories, while
+apply always prepended the category prefix. Border presets separately return short
+names, so changing list output alone would not be backward compatible.
+
+**Fix and regression guard:** apply accepts either a short name or a name prefixed
+with its category. T08 asserts the correct generated variables for radius, shadow,
+color, and border presets.
+
+**Verification:** T08 passes (8 tests), `npx tsc --noEmit` passes, and the CLI
+rebuild succeeds. Live apply used the exact `radius-card` returned by `presets.list`,
+generated `var(--radius-card)` at revision 183, and removed the temporary style at 184.
+
+## 2026-10-24 — typography cleanup treated absent optional tokens as errors
+
+**Status:** fixed, regression-tested, and verified through the rebuilt MCP process.
+
+**Symptom:** `typography.remove` emitted `trace.error` messages for expected missing
+tokens such as responsive line-height and stroke values, then reported those absent
+tokens in its `removedTokens` result.
+
+**Cause:** the operation attempted to remove every suffix in `TYPO_SUFFIXES` even
+though presets only write a subset based on their options.
+
+**Fix and regression guard:** removal now parses existing design tokens first, skips
+absent suffixes, and reports only names actually removed. T08 asserts responsive tokens
+are included while missing line-height/stroke tokens are omitted.
+
+**Verification:** T08 passes (8 tests), typecheck passes, and the CLI rebuild succeeds.
+A rebuilt live MCP set/remove cycle deleted the 12 existing tokens at revision 207,
+returned exactly 12 names, and emitted no missing-token errors.
+
+## 2026-10-24 — `codeFiles.submit` applied canvas rules to Next.js server layouts
+
+**Status:** fixed, covered by T20, type-checked, and live-verified.
+
+**Symptom:** a guarded submit/restore of a valid `app/layout.tsx` failed with
+`ORACLE_VIOLATION` for server-only metadata, CSS/provider imports, `<html>/<body>`,
+and the `{children}` slot. That prevented safe MCP-native cleanup of a font transform.
+
+**Cause:** `codeFiles.submit` used `isLayoutFile()` to label both route-group
+`LayoutClient.tsx` and Next.js server `layout.tsx` as editable canvas templates.
+
+**Fix and regression guard:** the submit operation now skips only the canvas Oracle
+for server layout paths. The MCP plan validator continues to check syntax and relative
+imports for those files; the editable `LayoutClient.tsx` path remains Oracle-gated.
+T20 includes a valid server layout fixture.
+
+**Verification:** T20 passes (38 tests), typecheck passes, and the CLI rebuild succeeds.
+An independent MCP process submitted and restored a harmless comment using CAS hashes
+at revisions 218/219; exact read-back matched the original layout.
+
+## 2026-10-24 — Next/font conversion left the Google CSS request in place
+
+**Status:** fixed, covered by T08 and next-font tests, and live-verified.
+
+**Symptom:** `fonts.transformNextFont` inserted `next/font/google` loaders into
+`app/layout.tsx` but left the corresponding `fonts.googleapis.com` `@import` in
+`app/globals.css`, so the same font remained externally loaded.
+
+**Cause:** the MCP operation called the layout-only transformer, while the complete
+source-export helper also strips CSS imports and rewrites quoted font families to the
+generated CSS variable.
+
+**Fix and regression guard:** CSS rewriting is now a shared helper, and the MCP
+operation returns changes for both the layout and globals stylesheet when needed.
+T08 asserts the import is removed and `font-family` uses the generated variable.
+
+**Verification:** T08 and next-font tests pass (17 tests), typecheck passes, and the
+CLI rebuild succeeds. Live conversion changed both files at revision 224; read-back
+confirmed the loader and absence of the CSS request. Two `history.undo` calls at 225/226
+restored the test edits.
+
+## 2026-10-24 — code component example lacked required canvas size annotations
+
+**Status:** fixed and verified through `meta.tools` and live MCP planning.
+
+**Symptom:** `meta.tools` returned a schema-valid `codeComponents.create` example,
+but Oracle rejected it with `CODE_COMPONENT_MISSING_DEFAULT_SIZE`.
+
+**Cause:** generic JSON Schema generation could not infer the operation-specific
+`@defaultWidth` / `@defaultHeight` annotations required by code components.
+
+**Fix and regression guard:** the operation example now includes both annotations;
+T01 checks their presence and schema validity. `codeComponents.create` passed a
+live dry-run and then committed/read back as `McpAuditWidget` at revision 142.
+
+## 2026-10-24 — uploaded public assets failed catalog image validation
+
+**Status:** fixed, regression-tested, and verified through live MCP.
+
+**Symptom:** `assets.upload` returned `/assets/mcp-audit-proof.svg`, but using that
+URL in `catalog.place` failed Oracle with `INVALID_IMAGE_SOURCE`, even though the
+uploaded file existed at `public/assets/mcp-audit-proof.svg` in the same project.
+
+**Cause:** plan validation called the image-source Oracle without the projected
+ProjectFS file set, and URL matching did not map a public URL back to its `public/`
+file path.
+
+**Fix and regression guard:** plan validation now passes projected file paths into
+`checkFile`; the image rule recognizes `/assets/x` when `public/assets/x` exists.
+Direct Oracle and T20 plan-level tests cover the upload-to-image path.
+
+**Verification:** Oracle image-source and T20 code tests pass (48 tests). After
+rebuilding the CLI, the uploaded SVG was placed as a catalog image at revision 246,
+then `media.image.set/get` confirmed the URL and attributes at revision 247.
+
+## 2026-10-24 — overlay removal left malformed React-qualified hooks
+
+**Status:** fixed, regression-tested, and verified through a fresh MCP stdio process.
+
+**Symptom:** creating and then removing an overlay could leave its state declaration
+and a dangling `React.` before `return`, producing invalid TSX. Separately,
+`overlays.update`, `overlays.close`, and `overlays.remove` accepted missing targets as
+successful no-op mutations.
+
+**Cause:** the overlay generator began emitting `React.useState` and
+`React.useEffect/useLayoutEffect`, while cleanup matched only bare hook names. The
+effect remover therefore started at `useLayoutEffect` and left `React.` behind; the
+state remover also missed `React.useState`. Operation handlers did not verify that
+the named overlay/node existed before returning file changes.
+
+**Fix and regression guard:** overlay transforms now match both namespace-qualified
+and imported hooks, including extraction, state healing, and effect placement.
+Update/close/remove validate their overlay and node targets and reject mismatched
+trigger IDs. Unit coverage asserts parseable create/remove round-trips and explicit
+missing-resource errors.
+
+**Verification:** overlay generator and T10 interaction suites pass (170 tests), the
+CLI rebuild succeeds, and live create/update/close/remove cycles committed at
+revisions 273–279. Read-back confirmed config changes, close wiring, and clean source
+after each removal.
+
+## 2026-10-24 — asset usage checks counted archived history as live code
+
+**Status:** fixed, regression-tested, and verified through live MCP.
+
+**Symptom:** after removing the only live image node, `assets.delete` still refused
+the audit SVG because `_meta/history.json` contained earlier page snapshots. After a
+forced cleanup, `assets.audit` reported every archived image URL as a broken reference.
+
+**Cause:** both operations scanned every non-`public/` file, including the Builder's
+undo/redo history. Those snapshots are not rendered source and must not count as live
+asset usage.
+
+**Fix and regression guard:** both checks now skip only `_meta/history.json`; other
+project files remain included. T12 verifies a history-only reference is classified
+as unused, does not appear as broken, and does not block safe deletion.
+
+**Verification:** T12 passes with the overlay suites (174 tests total), the CLI
+rebuild succeeds, and a live upload → audit → delete-without-force cycle completed
+at revisions 290–291. The final asset list and audit were empty with no broken refs.
+
+## 2026-10-24 — empty-project scaffold made every unrelated mutation fail Oracle
+
+**Status:** fixed in the blank-project generator, regression-tested, and live-verified.
+
+**Symptom:** a fresh blank project started with `@canvas` viewport `height: 900` and
+root `height: '900px'`. Oracle correctly rejected every later plan with
+`CANVAS_VIEWPORT_FIXED_HEIGHT`, even when the mutation targeted another page.
+
+**Cause:** `createEmptyProject()` explicitly requested a 900px fixed canvas and
+emitted the same fixed height on its empty root. That scaffold is a normal page, not
+an intentionally fixed-size artboard, so its canvas must grow with content.
+
+**Fix and regression guard:** the empty-project scaffold now uses auto height in both
+viewport metadata and the root element. `empty-project.test.ts` asserts that contract.
+
+**Verification:** the regression failed first (2 assertions), then the focused suite
+passed (11 tests). Live `codeFiles.submit` repaired the task-owned audit branch at
+revision 299; afterward `sections.insert` and `nodes.remove` on the correct `filePath`
+committed at revisions 300–301, with read-back confirming the test section was gone.
+The production project's `main` branch was not modified.
+
+## 2026-10-24 — shapes.updateAttrs could not edit SVG container attributes
+
+**Status:** fixed, regression-tested, and verified through a rebuilt MCP stdio process.
+
+**Symptom:** `shapes.get` read `viewBox` from the SVG wrapper, but
+`shapes.updateAttrs` always targeted its first geometry child. Asking it to update the
+wrapper's `viewBox` left the SVG unchanged and wrote an invalid `view-box` attribute on
+the child path.
+
+**Cause:** the shared generator's default behavior intentionally addresses a shape
+child for geometry/presentation edits, but the MCP input had no way to distinguish that
+from editing the SVG container itself.
+
+**Fix and regression guard:** `shapes.updateAttrs` now accepts optional
+`targetElement: "svg" | "shape"`; the existing default remains `shape`, while `svg`
+updates the exact container and rejects non-SVG targets. The operation description and
+`meta.tools` example now explain the distinction. T13 covers the root update and T01
+checks that the schema example is valid.
+
+**Verification:** T13 and SVG generator suites pass (43 tests), T01 contract tests pass
+(20 tests), and a fresh rebuilt CLI read back `viewBox="0 0 200 200"` and `role="img"`
+on the SVG while the default mode still updated child path attributes. The temporary
+SVG was removed at revision 350.
+
+## 2026-10-24 — sketch animation set was rejected by its own marker comments
+
+**Status:** fixed with a narrow Oracle exception, regression-tested, and live-verified.
+
+**Symptom:** `drawing.sketchAnim.set` generated the requested hook but Oracle rejected
+the page because the hook's `__SKETCH_ANIM_BLOCK_BEGIN__/END__` marker comments violate
+the no-prose-comments rule.
+
+**Cause:** the generator deliberately uses those two markers to find and update/remove
+its hook without rewriting the surrounding page, but the comment rule's exemptions only
+covered responsive text/query helpers.
+
+**Fix and regression guard:** Oracle now allows only the exact begin/end sketch markers
+with a non-empty ID; all other comments, including comments inside the generated block,
+remain prohibited. T13 validates the actual generated hook against Oracle, and the
+existing comment tests still verify ordinary page comments are rejected.
+
+**Verification:** T13 plus Oracle suites pass (164 tests), the CLI rebuild succeeds,
+and live set/get/list/remove committed at revisions 362–363. Read-back showed the
+configured animation, then `null`/empty after removal; the temporary SVG was removed at
+revision 364.
+
+## 2026-10-24 — MCP custom cursor did not mount its required portal
+
+**Status:** fixed, regression-tested, and live-verified.
+
+**Symptom:** `siteEffects.cursor.set` wrote `withCursor(...)` on the target element, but
+did not add `<CursorPortal />` to `app/layout.tsx`. The page-level configuration looked
+valid in the builder, yet the runtime had no portal to render the cursor into.
+
+**Cause:** the editor's local Oracle gate adds the portal as a side effect, but the
+headless MCP operation returned only its page-file change and bypassed that editor path.
+
+**Fix and regression guard:** cursor set now includes an idempotent root-layout update,
+creating a default layout when absent. T14 tests both existing and missing layouts.
+
+**Verification:** T14 passes (10 tests), the CLI rebuild succeeds, and a fresh stdio
+process committed the page and root layout together at revision 387. Read-back confirmed
+the runtime import and portal; cursor removal committed at 388 and removed the page
+attachment while retaining the harmless shared portal for other pages.
+
+## 2026-10-24 — Glide removal relied on editor-only import cleanup
+
+**Status:** fixed, regression-tested, and live-verified.
+
+**Symptom:** live `siteEffects.glide.remove` correctly unwrapped all children but left
+the generated `LayoutGroup` import behind. The normal editor flush prunes that import;
+headless MCP commits do not run that UI-only import synchronizer. Reapplying Glide to
+such a file also preserved the generator's earlier inconsistent comma spacing.
+
+**Fix and regression guard:** the Glide generator now prunes only an unused
+`LayoutGroup` specifier (preserving it if another JSX use remains), and normalizes named
+`framer-motion` imports when adding Glide dependencies. Generator tests cover both the
+cleanup and shared-use cases.
+
+**Verification:** Glide generator and T14 suites pass (39 tests), TypeScript checks
+pass, and a rebuilt MCP process produced one group/five wrappers and then removed the
+metadata, wrappers, and unused import at revisions 395–396. Get after removal returned
+`hasGlide: false`.
+
+## 2026-10-24 — variables.create failed in the bundled MCP runtime
+
+**Status:** fixed, unit-tested, and live-reproduced after rebuild.
+
+**Symptom:** `variables.create` failed in the independent CLI stdio process with
+`generate6 is not a function`; the same capability tests passed under Vitest.
+
+**Cause:** `page-variables-gen.ts` called a raw default import from `@babel/generator`.
+The bundled CLI's Node ESM/CJS interop exposes nested default wrappers, unlike the
+test runner. Shared generator utilities already normalize these wrappers.
+
+**Fix and regression guard:** page-variable generation now resolves its Babel generator
+through the shared `normalizeBabelGenerator` helper. Existing generator and T15
+operation tests cover create/bind/update/remove behavior.
+
+**Verification:** T15 and page-variable generator suites pass (45 tests); after rebuilding
+the CLI, live create/update/bind committed at revisions 404–406 and read-back showed the
+renamed variable and query-param metadata. A later Oracle rejection on a separate
+interaction probe was non-committing; the page was restored byte-for-byte at revision 407.
+
+## 2026-10-24 — cms.list.paginate omitted React hooks and its UI component
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `cms.list.paginate` failed Oracle validation on a normal collection list. The
+generated page referenced `useState` without importing it and imported `@/components/LoadMore`
+even though that component was absent from the project. Infinite-scroll had the same hook
+import gap for `useRef` and `useEffect`.
+
+**Cause:** pagination relied on the editor mutation queue to synchronize React imports and
+create the shared Load More/Spinner component files. Headless MCP plans bypass that UI-only
+path and returned only the edited page.
+
+**Fix and regression guard:** the pagination generator now emits the required React hook
+imports for both local and remote modes. `cms.list.paginate` includes the generated or
+upgraded LoadMore/Spinner component in the same atomic plan. T16 asserts the hook import and
+component file are part of the plan. A remote-pagination regression fixture no longer reads
+a machine-local `portfolio-test2` project JSON; it now reconstructs the route-query case
+synthetically.
+
+**Verification:** T16 and the pagination generator suites pass (53 tests); the CLI rebuild
+succeeded. On the isolated audit branch, local Load More set/read/unpaginate and field
+bind/unbind succeeded at revisions 445–447, and infinite-scroll set/read/unpaginate passed
+at 448–449. The page was restored exactly and the newly created LoadMore component removed
+at revision 450; the pre-existing Spinner file was preserved.
+
+## 2026-10-24 — cms.schema.delete cascade omitted dependent page changes
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** deleting a temporary collection with `cascade: true` failed Oracle validation
+because the index and detail client/server routes still imported the deleted CMS JSON.
+
+**Cause:** `cascadeDeleteCollection()` removed/reworked files in `ProjectFS`, but the
+headless `cms.schema.delete` operation returned only the schema/data deletions. Separately,
+generated index pages had no `@cmsPage` marker, so older index routes could not be included
+in the cascade's file discovery.
+
+**Fix and regression guard:** the operation now returns a snapshot-to-ProjectFS diff for
+every file changed by the cascade, so all route/repeater edits and collection deletions are
+one validated transaction. Generated index pages carry `@cmsPage` metadata; the usage scan
+also recognizes the exact older generated index-page signature. The CMS delete confirmation
+now reports index pages as well as detail pages. T16 covers an unannotated legacy index route
+and asserts all four route files are included as deletions.
+
+**Verification:** CMS operation, page generation, and CMS CRUD suites pass (156 tests); the
+CLI rebuild succeeds (with the pre-existing direct-eval warning). Live cascade committed at
+revision 476, removed both CMS files and all four server/client route files, and read-back
+confirmed both `cms.pages.find` results are `null`, the collection is absent, and `/` plus
+the existing audit pages remain. `diagnostics.projectCheck` reports no broken imports/assets/
+links and no blocking violations.
+
+## 2026-10-24 — generated form helpers drifted from the Oracle dialect
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** after `forms.submitButton.add`, read-only `diagnostics.projectCheck` reported
+19 drift findings across `components/FormSubmit.tsx` and `components/Spinner.tsx`. They were
+not blocking, but meant the generated helpers could not round-trip cleanly through the
+builder's editor. The focused Oracle test initially found 15 violations in FormSubmit.
+
+**Cause:** the generator used `display: none` variant maps instead of editable conditional
+presence, emitted long prose comments plus an unrecognized generated marker, omitted the
+loop metadata for the Spinner's continuous rotation, and gave the root style defaults that
+were absent from the root's inline style. The Spinner also emitted percentage geometry and
+a root positioning style the Oracle could not map to the editor.
+
+**Fix and regression guard:** FormSubmit now uses keyed conditional children inside
+`<AnimatePresence mode="popLayout">`, with layout metadata and editable inline defaults.
+The Spinner generator emits supported pixel geometry and `data-loop`; generator versions
+were advanced to FormSubmit v4 and Spinner v5. Oracle allows only those exact internal
+markers. When the submit helper is ensured, an old generated Spinner is upgraded, while a
+user-authored component is left intact. A new generator test checks both files directly
+with `checkFile`.
+
+**Verification:** focused form, pagination, CMS, and Oracle suites pass (261 tests, 1
+intentionally skipped legacy migration case); `npx tsc --noEmit` and the CLI build pass.
+After rebuilding, an independent child committed `forms.create` and `forms.submitButton.add`
+at revisions 492–493 and source read-back confirmed the v4/v5 helpers. The temporary page
+and FormSubmit master were removed at revisions 494–495. A fresh `diagnostics.projectCheck`
+at revision 496 reports `clean: true`, 24 checked files, zero drift/blocking violations,
+broken imports, missing assets, or broken links. The pre-existing upgraded Spinner remains.
+
+## 2026-10-24 — external CMS search-field helpers were not headless-safe
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptoms:** `cms.api.searchField.add` first failed in the bundled CLI with
+`generate7 is not a function`; after that interop issue was fixed, a valid page with only
+`import React from 'react'` was rejected because the generated page referenced `useState`
+without importing it. A successful `cms.api.searchField.setVariable` then changed the input's
+state name but left the repeater filter on its previous `valueVar`, so typing no longer changed
+the visible results.
+
+**Causes:** the search-field generator used a raw default import from `@babel/generator`, which
+does not resolve to a callable function in the bundled MCP runtime. The generator emitted the
+page-state hook but relied on the editor mutation queue to synchronize React imports. The
+rebind operation changed the input but did not update `valueSource: "searchField"` filters that
+referenced the old variable.
+
+**Fix and regression guards:** the generator now resolves Babel through
+`normalizeBabelGenerator` and ensures `react`'s `useState` import in its output. The rebind
+operation also ensures the hook import and updates matching search-field filter `valueVar`s
+on the affected collection lists. T17 now asserts the named import on a default-only React
+page and that a rebind changes both the input and parsed list filter.
+
+**Verification:** CMS search generator and T17 suites pass (38 tests); `npx tsc --noEmit` and
+the CLI rebuild pass. After rebuild, a live `cms.api.searchField.add` and `.setVariable` cycle
+committed at revisions 528–529. `codeFiles.read` confirmed the input and collection filter
+both use `queryFilter`, with the generated React `useState` import present. The test routes
+were removed at revisions 530–531, and `diagnostics.projectCheck` reports clean with zero
+drift/blocking violations or broken imports/assets/links.
+
+## 2026-10-24 — select caret writes were missing Oracle-required icon metadata
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `forms.selectCaret.set` wrote a `select[data-id="…"]` CSS rule, but a live
+call on a select without `data-select-icon` failed plan validation with
+`SELECT_ICON_MARKER_MISMATCH`. Clearing only the rule would conversely leave a stale marker.
+
+**Cause:** the operation exposed only `cssBody`, while the editor's native select-icon
+control writes a paired JSON marker containing the Iconify icon name and color. The Oracle
+correctly requires the rule and marker to stay in sync.
+
+**Fix and regression guard:** the operation now accepts optional `icon` and `color` together,
+writes the JSON marker with the CSS rule, requires metadata when no valid marker exists, and
+removes both the rule and marker when `cssBody` is `null`. T19 checks the serialized pair,
+Oracle acceptance, and paired removal.
+
+**Verification:** T19 form tests and T18 localization tests pass (48 tests), and
+`npx tsc --noEmit` passes. After rebuilding, the independent MCP committed the live select
+caret at revision 562; read-back showed both the CSS rule and marker, and
+`diagnostics.projectCheck` was clean. Clearing the caret committed at revision 563.
+
+## 2026-10-24 — honeypot generation conflicted with the Oracle visibility dialect
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `forms.honeypot.add` generated a hidden `_hp` input using `display: none`, then
+the Oracle rejected its own generated plan with `DISPLAY_TOGGLE_VISIBILITY`.
+
+**Cause:** generated form code used a visibility mechanism reserved by the editor's
+variant/viewport-aware model. A honeypot still needs to be invisible, but it is not a
+variant-controlled canvas node.
+
+**Fix and regression guard:** honeypots are now positioned off-canvas in a 1px clipped box,
+with zero opacity, pointer events disabled, `tabIndex=-1`, `autoComplete="off"`, and
+`aria-hidden="true"`. T19 asserts the supported style and absence of the Oracle violation.
+
+**Verification:** the focused regression test passes; T18/T19 pass together (48 tests), and
+`npx tsc --noEmit` passes. After the CLI rebuild, live `forms.honeypot.add` committed at
+revision 567; read-back confirmed the off-canvas input and `diagnostics.projectCheck` was
+clean (25 files, zero violations).
+
+## 2026-10-24 — locale removal preserves the next-intl message catalog
+
+**Status:** confirmed intentional behavior and clarified in tests and tool guidance; no
+deletion fix was made.
+
+`locales.add` creates `messages/{code}.json` only when it is absent. `locales.remove`
+removes the locale configuration, legacy `i18n/{code}.json` overrides, and generated route
+wrappers, but leaves the modern message catalog intact. A live add/update/default-switch/
+route-sync/remove cycle (revisions 537–553) confirmed this behavior. Preserving the catalog
+allows the locale to be re-added without losing translations; T18 now guards that lifecycle
+and the MCP skill tells agents not to treat the file as stale cleanup.
+
+## 2026-10-24 — generated ruler metadata was rejected by the general Oracle
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `guides.set` generated the builder's `@rulerGuides` JSDoc annotation, but
+`validatePlan()` rejected it with `NO_COMMENTS_IN_GENERATED_CODE`. The operation's local
+Oracle pass already filtered this marker, so local validation and plan validation disagreed.
+
+**Cause:** the general Oracle rejected all comments in generated JSX, without recognizing
+the builder's structured ruler metadata.
+
+**Fix and regression guard:** the Oracle now permits only a valid JSON array under the exact
+`@rulerGuides` tag, with each entry requiring a string ID, horizontal/vertical type, and finite
+numeric position. Malformed marker payloads and other comments remain rejected. A regression
+test exercises the valid annotation case.
+
+**Verification:** Oracle and T21 project/adversarial suites pass; `npx tsc --noEmit` and the
+CLI build pass. A fresh independent MCP child committed `guides.set` at revisions 580 and 581,
+`guides.get` read back `[120, 480]` horizontal and `[80]` vertical, empty arrays removed the
+temporary metadata, and `diagnostics.projectCheck` passed cleanly (25 files, zero violations).
+
+## 2026-10-24 — screenshot bridge reported an empty zero-height capture as ready
+
+**Status:** fixed, regression-tested, and live-verified through an independent MCP child.
+
+**Symptom:** a live `observe.screenshot` call returned `available: true`, `status: ready`,
+`data:,`, and a `1108×0` rectangle. Empty canvas output was presented as a screenshot.
+
+**Cause:** the bridge checked only for a truthy return from `captureElement`; browser canvas
+returns the truthy string `data:,` for an empty canvas. It also trusted zero/non-finite bounds.
+
+**Fix and regression guards:** screenshot capture now rejects non-positive/non-finite bounds
+before invoking the iframe and validates the expected PNG/JPEG base64 data URL before reporting
+success. Invalid cases return an explicit unavailable reason and add a trace error. Bridge tests
+cover both the reproduced zero-height/empty-canvas case and malformed capture data.
+
+**Verification:** screenshot bridge tests pass. After the Builder HMR update, the live call
+returned `INVALID_CAPTURE_DIMENSIONS` with `available: false` for the same zero-height node;
+after opening the audit fixture in the test project's canvas, a later fresh MCP call captured a
+valid PNG for `audit-heading` (ready, 120×3.7 CSS px, 2,858-byte data URL). The operation no
+longer reports a false success.
+
+## 2026-10-24 — screenshot adapter ignored the requested page path
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** requesting a screenshot for the rendered `/mcp-audit` page was sent to the bridge
+as `app/page.client.tsx`, producing `ACTIVE_FILE_MISMATCH` even though the requested page was
+open in the Builder.
+
+**Cause:** `observe.screenshot` accepted `filePath`/`targetFile` but did not include the resolved
+page path in its adapter request, and the CLI adapter always preferred `snapshot.scope.filePath`
+or the first page file.
+
+**Fix and regression guard:** the operation resolves the requested page against the snapshot
+and passes its canonical path. The CLI adapter now prefers that explicit path over its fallback.
+T24 asserts that `targetFile` is forwarded to the adapter.
+
+**Verification:** the new T24 case failed before the fix and passes after it; T24 plus bridge
+client suites pass (112 tests), and `npx tsc --noEmit` passes. A rebuilt live MCP process
+captured `audit-heading` from the explicitly requested audit page as a valid PNG (ready,
+120×3.7 CSS px, 2,858-byte data URL), confirming the bridge no longer falls back to the home page.
+
+## 2026-10-24 — visual audit counted an intentionally hidden honeypot as a visible control
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `observe.audit` reported an off-canvas, `aria-hidden="true"`, zero-opacity form
+honeypot as overflowing and as an undersized touch target.
+
+**Cause:** the audit considered every measured `input` interactive even when its source markup
+and styles explicitly made it unavailable to users and assistive technology.
+
+**Fix and regression guard:** the design audit now filters only nodes that are both marked
+`aria-hidden="true"` and CSS-hidden or explicitly positioned off-canvas. Visible `aria-hidden`
+decorative content remains eligible for visual checks. T24 verifies the hidden honeypot creates
+no design or touch-target finding; the existing small-visible-button test still passes.
+
+**Verification:** focused T24 and bridge tests pass (112 tests), and `npx tsc --noEmit` passes.
+After rebuilding, the live MCP audit page no longer reports the honeypot; it retains two findings
+for intentionally undersized visible controls in the test fixture.
+
+## 2026-10-24 — standalone MCP observation tools read the wrong canvas cache
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** with the intended Builder page open, `observe.selection`, `observe.layout`, and
+`observe.visuals` returned `pending` and null measurements, while `observe.audit` and
+`observe.screenshot` could read the same live canvas.
+
+**Cause:** the standalone CLI process has no copy of the editor's Jotai selection or canvas
+measurement caches. Only audit and screenshot had a bridge adapter, so the three operations
+read their own empty process-local caches and mistook absence of local data for an unrendered
+page.
+
+**Fix and regression guards:** all three operations now request a revision-scoped snapshot from
+the connected Builder bridge, use its selection, rectangles, and rendered styles, and preserve
+the bridge's pending/unavailable status rather than returning a false local result. The bridge
+accepts requested computed-style properties and includes selected IDs in its snapshot. T24 adds
+one adapter regression per operation; the bridge test verifies selection and requested-style
+round-trip.
+
+**Verification:** three targeted T24 regressions and the bridge snapshot regression pass; the
+complete T24 + bridge-client suites pass (115 tests), `npx tsc --noEmit` passes, and a fresh
+rebuilt MCP process returns ready, measured data for selection, layout, and visuals on the open
+`mcp-audit` page.
+
+## 2026-10-24 — viewport-space observations failed to undo the canvas camera zoom
+
+**Status:** fixed, regression-tested, and live-verified through the active Builder bridge.
+
+**Symptom:** at 10% canvas zoom, `observe.layout` and `observe.visuals` reported a 120px width
+for a node whose rendered CSS width was 1200px. The measurement was valid screen geometry but
+in the wrong coordinate space for the configured viewport.
+
+**Cause:** the coordinate conversion fell back to an optional `getCurrentTransform` method that
+the production bridge does not expose. Its fallback therefore used scale 1 instead of reading
+the editor's `transformManager` camera state.
+
+**Fix and regression guard:** when a bridge has no transform getter, `getRectInViewportSpace`
+now uses the editor camera transform. A regression test fails on the old path and verifies that
+screen coordinates at 10% zoom convert back to the expected 1200×400 viewport-space rectangle.
+
+**Verification:** the new regression and the full design-audit, T24, and bridge-client suites
+pass (174 tests); live MCP now reports the 1200px CSS width at 10% canvas zoom rather than 120px.
+
+## 2026-10-24 — computed-style observations returned uncached defaults as ready
+
+**Status:** fixed, regression-tested, and live-verified through a rebuilt independent MCP
+stdio process.
+
+**Symptom:** `observe.visuals` returned `ready` but blank computed typography/color fields for a
+rendered heading. The MCP snapshot had current rectangles, but its requested computed styles had
+never been loaded into the synchronous bridge cache.
+
+**Cause:** the observation bridge settled rects and then immediately read its sync style cache.
+The iframe provides an async computed-style read, but observation never prefetched the requested
+properties. `RENDERED_STYLE_PROPS` from the audit were affected by the same cold-cache issue.
+
+**Fix and regression guard:** before constructing the snapshot, the bridge now asynchronously
+prefetches the default rendered-style fields plus requested fields, limited to the requested
+node IDs for selection/layout/visuals and chunked for full-page audits. It rechecks page scope
+and revision after the iframe reads. Failed prefetches prevent a false `ready` verdict. The bridge
+test verifies selection data and style-property round-trip.
+
+**Verification:** focused design-audit, T24, and bridge-client suites pass (174 tests), and
+`npx tsc --noEmit` passes. A fresh MCP `observe.visuals` returned rendered `fontSize: 32px`,
+`fontWeight: 700`, system font family, colors and extra requested properties. `observe.audit`
+still returns a ready audit with no honeypot finding; visible fixture controls retain their
+expected warnings/errors.
+
+## 2026-10-24 — screenshot dimensions included the canvas zoom factor
+
+**Status:** fixed, regression-tested, and live-verified through the active Builder bridge.
+
+**Symptom:** at 10% canvas zoom, `observe.screenshot` returned width/height `120×3.7`, while
+the returned PNG's actual pixel dimensions were `1200×37` and the element's CSS box was
+`1200×37`.
+
+**Cause:** capture dimensions came from the parent-screen rect, which is scaled by the editor's
+camera. The image itself is captured inside the iframe and keeps the page's configured CSS size.
+
+**Fix and regression guard:** screenshot dimension checks and metadata now use
+`getRectInViewportSpace`, falling back to the screen rect only when no viewport measurement
+exists. T23's bridge test distinguishes the screen rect from the expected viewport rect and
+asserts the screenshot metadata uses the latter.
+
+**Verification:** focused screenshot tests pass; a live PNG had actual IHDR dimensions
+`1200×37`, and `observe.screenshot` reported `1200×37` at 10% canvas zoom.
+
+## 2026-10-24 — Codex-managed MCP child remained stale and did not reconnect after termination
+
+**Status:** workaround documented; no Builder/Oracle source defect reproduced. Integrated-wrapper
+reconnect remains a Codex host lifecycle limitation.
+
+**Symptom:** the Codex-registered MCP wrapper reported a drift violation for a generated
+`@spinner-gen v5` marker even though the current Oracle source explicitly allowlists it. A fresh
+independent stdio child against the same project revision reported `clean=true` and zero drift.
+After the exact stale MCP child was terminated, the registered wrapper returned `Transport closed`
+and the Codex host did not automatically start a replacement.
+
+**Cause:** the long-lived registered child had loaded an older CLI/Oracle build. Its process
+lifecycle is owned by the Codex host, which did not reconnect the wrapper after external
+termination. The freshly launched CLI child loads the current build and returns the correct
+diagnostics, so changing the Oracle allowlist would have hidden a transport/process-staleness
+problem.
+
+**Resolution and guard:** routine verification now uses a fresh independent MCP SDK stdio child
+after rebuilding the CLI. Compare any integrated-wrapper discrepancy against current source,
+project revision, and a fresh child; do not signal an app-managed process to refresh it. If the
+integrated wrapper itself is required, restore it through the host's reconnect/reload lifecycle.
+This workflow is documented in `.agents/skills/revyme-mcp/SKILL.md` A3.
+
+**Verification:** on the same branch revision, the fresh child reported zero drift; a later fresh
+check reported `clean=true` across 29 files and zero blocking/drift violations. The exact
+temporary coverage branch was deleted, `main` restored as active, and the Builder/API process
+was left untouched.

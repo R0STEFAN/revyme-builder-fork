@@ -7,12 +7,22 @@ import {
   updateOverlayConfigInCode,
   removeOverlayInCode,
 } from '@/code/generation/overlay-gen';
+import { findJSXDataIdIndex } from '@/code/generation/generator-utils';
+import { parseOverlayCalls, parseOverlayTriggerCalls } from '@/code/parsing/overlay-parser';
 import {
   addCloseOverlayInCode,
   removeCloseOverlayInCode,
   setCloseOverlayDelayInCode,
 } from '@/code/generation/close-overlay-gen';
 import type { OverlayConfig, OverlayTriggerConfig } from '@/shared/types';
+
+function requireOverlay(code: string, targetFile: string, overlayId: string) {
+  const overlay = parseOverlayCalls(code).find((candidate) => candidate.overlayId === overlayId);
+  if (!overlay) {
+    throw new Error(`OVERLAY_NOT_FOUND: Overlay "${overlayId}" not found in "${targetFile}"`);
+  }
+  return overlay;
+}
 
 // 1. overlays.create
 export const overlaysCreateOperation: Operation<
@@ -159,6 +169,8 @@ export const overlaysUpdateOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found in project`);
     }
 
+    requireOverlay(code, input.targetFile, input.overlayId);
+
     const nextCode = updateOverlayConfigInCode(
       code,
       input.overlayId,
@@ -209,6 +221,11 @@ export const overlaysCloseOperation: Operation<
     const code = snapshot.files.get(input.targetFile);
     if (!code) {
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found in project`);
+    }
+
+    requireOverlay(code, input.targetFile, input.overlayId);
+    if (findJSXDataIdIndex(code, input.nodeId) < 0) {
+      throw new Error(`NODE_NOT_FOUND: Element with data-id "${input.nodeId}" not found in "${input.targetFile}"`);
     }
 
     const triggerMap: Record<string, 'click' | 'mouseEnter' | 'mouseLeave'> = {
@@ -273,6 +290,13 @@ export const overlaysRemoveOperation: Operation<
     const code = snapshot.files.get(input.targetFile);
     if (!code) {
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found in project`);
+    }
+
+    const overlay = requireOverlay(code, input.targetFile, input.overlayId);
+    const trigger = parseOverlayTriggerCalls(code).find((candidate) => candidate.config.targetId === input.overlayId);
+    const actualTriggerId = overlay.config.triggerId || trigger?.triggerId;
+    if (actualTriggerId && actualTriggerId !== input.triggerId) {
+      throw new Error(`TRIGGER_MISMATCH: Overlay "${input.overlayId}" is bound to "${actualTriggerId}", not "${input.triggerId}"`);
     }
 
     const nextCode = removeOverlayInCode(code, input.overlayId, input.triggerId);

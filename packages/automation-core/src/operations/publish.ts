@@ -623,6 +623,7 @@ export const previewBuildOutputSchema = z.object({
   status: z.enum(['ready', 'building', 'failed']),
   bundleId: z.string(),
   previewUrl: z.string(),
+  previewAvailable: z.boolean(),
   buildDurationMs: z.number().int().nonnegative(),
   durationMs: z.number().int().nonnegative(),
   pageRoutes: z.record(z.string(), z.string()),
@@ -647,7 +648,7 @@ export type PreviewBuildOutput = z.infer<typeof previewBuildOutputSchema>;
 
 export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOutput> = {
   name: 'preview.build',
-  description: 'Compile and validate preview bundle readiness across all project pages, routes, and templates',
+  description: 'Validate project syntax and routes; reports whether a live preview server is available',
   category: 'publish',
   kind: 'read',
   permit: 'read',
@@ -658,7 +659,6 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
   async execute(snapshot, input, context: OperationContext) {
     const startTime = performance.now();
     const projectId = input.projectId || snapshot.scope?.projectId || 'default-project';
-    const port = input.port || 3000;
 
     // 1. Adapter delegation if configured
     const previewAdapter = (
@@ -669,17 +669,21 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
                 projectId: string;
                 snapshot: Snapshot;
                 input: PreviewBuildInput;
-              }) => Promise<PreviewBuildOutput>;
+              }) => Promise<Omit<PreviewBuildOutput, 'previewAvailable'> & { previewAvailable?: boolean }>;
             };
           }
         | undefined
     )?.preview;
     if (typeof previewAdapter?.build === 'function') {
-      return await previewAdapter.build({
+      const result = await previewAdapter.build({
         projectId,
         snapshot,
         input,
       });
+      return {
+        ...result,
+        previewAvailable: result.previewAvailable ?? (result.status === 'ready' && Boolean(result.previewUrl)),
+      };
     }
 
     // 2. Discover routes and validate compilation readiness
@@ -696,28 +700,36 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
         if (c !== null) fileEntries.push([p, c]);
       }
     }
+    const filePaths = new Set(fileEntries.map(([path]) => path));
 
     for (const [path, code] of fileEntries) {
       const isClientPage = path.endsWith('page.client.tsx');
       const isServerPage = path.endsWith('page.tsx') && !path.includes('__template_preview');
 
       if (isClientPage || isServerPage) {
-        let route = '/';
-        const parsed = parsePageFromPath(path);
-        if (parsed) {
-          route = parsed.route;
-        } else {
-          const m = path.match(/^app\/(.+)\/page(?:\.client)?\.tsx$/);
-          if (m) route = `/${m[1]}`;
-        }
+        const clientPath = isServerPage ? path.replace(/page\.tsx$/, 'page.client.tsx') : path;
+        const hasClientPair = isServerPage && filePaths.has(clientPath);
 
-        pageRoutes[route] = path;
-        routesMap[route] = {
-          path,
-          route,
-          kind: route.includes('[') ? 'cms' : 'page',
-          isDynamic: route.includes('['),
-        };
+        // The editable client file is the canonical route entry. Its paired
+        // server wrapper is still syntax-checked below, but must not create a
+        // second route (or leak a route-group name into the public URL).
+        if (!hasClientPair) {
+          const parsed = parsePageFromPath(clientPath);
+          const routeSegments = clientPath
+            .replace(/^app\//, '')
+            .replace(/(?:\/)?page\.client\.tsx$/, '')
+            .split('/')
+            .filter((segment) => segment && !/^\(.+\)$/.test(segment));
+          const route = parsed?.route ?? (routeSegments.length ? `/${routeSegments.join('/')}` : '/');
+
+          pageRoutes[route] = path;
+          routesMap[route] = {
+            path,
+            route,
+            kind: route.includes('[') ? 'cms' : 'page',
+            isDynamic: route.includes('['),
+          };
+        }
 
         // Syntax and Babel compilation verification
         try {
@@ -751,15 +763,22 @@ export const previewBuildOperation: Operation<PreviewBuildInput, PreviewBuildOut
     }
 
     const durationMs = Math.round(performance.now() - startTime);
-    const status = issues.length > 0 ? 'failed' : 'ready';
+    // This fallback only parses and validates source; it never starts a server.
+    // Keep route readiness distinct from live preview availability.
+    issues.push({
+      message: 'No preview adapter configured; source syntax and routes were checked, but no server was started and no live preview URL is available.',
+      severity: 'warn',
+    });
+    const status = issues.some((issue) => issue.severity === 'error') ? 'failed' : 'ready';
     const bundleId = `pvw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const previewUrl = `http://localhost:${port}/preview/${projectId}`;
+    const previewUrl = '';
     const routesCount = Object.keys(pageRoutes).length;
 
     return {
       status,
       bundleId,
       previewUrl,
+      previewAvailable: false,
       buildDurationMs: durationMs,
       durationMs,
       pageRoutes,

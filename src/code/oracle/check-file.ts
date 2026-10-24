@@ -105,6 +105,30 @@ const IMPORT_ALLOWLIST = [
  *  prime-rule find 2026-06-10: a builder-written page bounced NO_COMMENTS). */
 const ANNOTATION_RE = /@name|@controls|@label|@comment|@canvas|@propMeta|@pageVariables|@cmsPage|@useResponsiveText|@responsiveList-(begin|end)/;
 
+/** A page may carry the builder's exact, JSON-backed ruler metadata. */
+function isRulerGuidesAnnotation(raw: string): boolean {
+  const body = raw
+    .split('\n')
+    .map((line) => line.replace(/^\s*\* ?/, ''))
+    .join('\n')
+    .trim();
+  const match = body.match(/^@rulerGuides\s+(\[[\s\S]*\])$/);
+  if (!match) return false;
+  try {
+    const guides: unknown = JSON.parse(match[1]);
+    return Array.isArray(guides) && guides.every((guide) =>
+      guide !== null
+      && typeof guide === 'object'
+      && typeof (guide as { id?: unknown }).id === 'string'
+      && ((guide as { type?: unknown }).type === 'horizontal' || (guide as { type?: unknown }).type === 'vertical')
+      && typeof (guide as { position?: unknown }).position === 'number'
+      && Number.isFinite((guide as { position: number }).position),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Internal paint/typography props that never belong on a component INSTANCE
  *  tag — the wrapper carries placement only; these either double-apply or
  *  silently do nothing (the builder's own instance writes redirect them
@@ -193,7 +217,7 @@ function isEditorMediaStyleBlock(el: t.JSXElement): boolean {
 
 export function checkFile(
   code: string,
-  opts: { kind: FileKind; path?: string; existingDataIds?: Set<string>; isTemplated?: boolean },
+  opts: { kind: FileKind; path?: string; existingDataIds?: Set<string>; isTemplated?: boolean; projectFiles?: Set<string> },
 ): OracleViolation[] {
   // A template (LayoutClient.tsx — Next.js layout semantics) is page dialect
   // plus one extra invariant: the {children} slot. Normalize to 'page' for
@@ -269,6 +293,18 @@ export function checkFile(
     if (listHook && listHook.index !== undefined) exemptRanges.push([listHook.index, listHook.index + listHook[0].length]);
     for (const c of ast.comments ?? []) {
       if (ANNOTATION_RE.test(c.value)) continue;
+      // Ruler positions are project-persistent editor metadata, not prose.
+      // Allow only the valid JSON dialect emitted by ruler-guides-config;
+      // malformed annotations and ordinary comments remain rejected.
+      if (isRulerGuidesAnnotation(c.value)) continue;
+      // Sketch draw hooks are editable page source. Their generator relies on
+      // these two exact comments to replace/remove one hook without reformatting
+      // the rest of the component; allow only the markers, never prose inside
+      // the fenced block.
+      if (/^__SKETCH_ANIM_BLOCK_(?:BEGIN|END)__\s+\S+$/.test(c.value.trim())) continue;
+      // Exact internal generator markers are also required by idempotent
+      // migrations of these shared editable component masters.
+      if (/^@(formsubmit-gen v4|spinner-gen v5)$/.test(c.value.trim())) continue;
       const cs = c.start ?? -1;
       if (exemptRanges.some(([s, e]) => cs >= s && cs < e)) continue;
       v.push({
@@ -1330,7 +1366,7 @@ export function checkFile(
   checkDuplicateAttributes(code, v);
   if (!isCodeComponent && code.includes(';base64,')) checkInlineDataUris(code, v);
   if (!isCodeComponent && (/<(?:motion\.)?img[\s/>]/.test(code) || /\b(image|thumbnail|avatar|poster)\s*=\s*['"]/.test(code) || /backgroundImage|background/.test(code))) {
-    checkImageSourceDialect(ast, v);
+    checkImageSourceDialect(ast, v, opts.projectFiles);
   }
   // ── COMPONENT LINKS (design components) — every element is motion.* for the
   //    FLIP/variant system, so a navigating link must be MotionLink =

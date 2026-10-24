@@ -17,8 +17,9 @@
 // JSX-identifier shape but their declaration site is the function body.
 
 import * as t from '@babel/types';
-import generate from '@babel/generator';
+import _generate from '@babel/generator';
 import { parseJSX, findFirstElementByDataId, findAttribute, traverse } from '../parsing/ast-utils';
+import { normalizeBabelGenerator } from './generator-utils';
 import {
   parsePageVariables,
   isConditionalDisplayProperty,
@@ -27,6 +28,12 @@ import {
   type PageVariableType,
 } from '../features/page-variables';
 import { trace } from '@/shared/debug-trace';
+
+// The CLI and the Builder load Babel packages through different ESM/CJS
+// interop layers. Normalize nested default wrappers here just like the shared
+// generator helpers; a raw default import can otherwise fail only in the
+// bundled headless MCP process (`generateN is not a function`).
+const generate = normalizeBabelGenerator(_generate);
 
 /**
  * Build the JSX value expression for a binding. Most variables go in as a

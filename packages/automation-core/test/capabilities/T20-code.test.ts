@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Snapshot, FileChange } from '../../src/contracts';
 import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
 import { defaultRegistry } from '../../src/registry';
 import {
   codeComponentsCreateOperation,
@@ -58,6 +60,51 @@ function createMockSnapshot(files: Record<string, string>): Snapshot {
 
 describe('T20: Code Components, Overrides, Guarded Files, Global Code & Redirects', () => {
   const context = createOperationContext();
+
+  it('validates override helpers without treating their JSX as a canvas page', async () => {
+    const snapshot = createMockSnapshot({});
+    const prepared = await prepareOperation(snapshot, 'overrides.create', {
+      name: 'ExampleOverride',
+      code: `import type { ComponentType } from 'react';\nexport function withHoverEffect<T extends object>(Component: ComponentType<T>) { return (props: T) => <Component {...props} />; }`,
+    }, context);
+    expect(prepared.ok).toBe(true);
+    const result = prepared.data as { changes: FileChange[] };
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'generated-override-oracle-regression',
+      changes: result.changes,
+    });
+
+    const validation = validatePlan(snapshot, plan);
+    expect(validation.issues).toEqual([]);
+    expect(validation.ok).toBe(true);
+  });
+
+  it('accepts public asset URLs when the backing file exists in ProjectFS', () => {
+    const original = SAMPLE_PAGE_JSX;
+    const updated = original.replace(
+      '<h1 data-id="title" style={{ fontSize: \'32px\' }}>Welcome</h1>',
+      '<img data-id="uploaded-image" src="/assets/audit.svg" alt="Audit" />',
+    );
+    const snapshot = createMockSnapshot({
+      'app/page.client.tsx': original,
+      'public/assets/audit.svg': '<svg />',
+    });
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'uploaded-public-asset-image-regression',
+      changes: [{
+        path: 'app/page.client.tsx',
+        beforeHash: sha256(original),
+        content: updated,
+      }],
+    });
+
+    const validation = validatePlan(snapshot, plan);
+    expect(validation.issues.filter((issue) => issue.code === 'INVALID_IMAGE_SOURCE')).toEqual([]);
+  });
 
   beforeEach(() => {
     for (const f of projectFS.listFiles()) {
@@ -547,6 +594,27 @@ export default withResponsiveProps(Badge);
       expect(projectFS.readFile('components/Card.tsx')).toBe(updatedContent);
       expect(projectFS.readFile('components/Badge.tsx')).toBe(newFileContent);
       expect(projectFS.readFile('components/OldToRemove.tsx')).toBeNull();
+    });
+
+    it('does not run the canvas Oracle on a Next.js server layout submission', async () => {
+      const layout = `import './globals.css';
+export const metadata = { title: 'Audit layout' };
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html lang="en"><body>{children}</body></html>;
+}`;
+      const snap = createMockSnapshot({
+        'app/layout.tsx': layout,
+        'app/globals.css': ':root {}',
+      });
+
+      const result = await codeFilesSubmitOperation.execute(
+        snap,
+        { files: [{ path: 'app/layout.tsx', code: layout, kind: 'template' }] },
+        context,
+      );
+
+      expect(result.committed).toBe(true);
+      expect(projectFS.readFile('app/layout.tsx')).toBe(layout);
     });
 
     it('rejects batch submit with CAS conflict when baseHash does not match, writing zero files', async () => {

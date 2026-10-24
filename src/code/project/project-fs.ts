@@ -2252,14 +2252,14 @@ export const DEFAULT_PROVIDERS = buildProvidersSource({
 
 // ─── Empty starter ─────────────────────────────────────────────────────────
 // Used by File → New project (and the no-files-on-load branch in
-// ProjectLoader). One desktop viewport at 1440×900, single empty white
+// ProjectLoader). One desktop viewport at 1440px with auto height, single empty white
 // root div. Runtime utilities (`withResponsiveProps`, `withCursor`,
 // `CursorPortal`) are no longer seeded as projectFS files — they come
 // from `@revyme/runtime` (npm package). See `revyme-open/runtime/`.
 // Deliberately bare — "blank canvas" instead of the demo content
 // `createDefaultProject()` ships.
 
-const EMPTY_CANVAS_BLOCK = defaultCanvasBlock({ single: true, height: 900 });
+const EMPTY_CANVAS_BLOCK = defaultCanvasBlock({ single: true, height: 'auto' });
 
 // Pages ship as a PAIR: the server wrapper (owns SEO `metadata`) and
 // the client body (canvas-editable). Next.js's App Router only reads
@@ -2285,7 +2285,7 @@ import React from 'react';
 export default function Page() {
   return (
 <div data-id="root" data-name="Page" style={{
-  position: 'relative', width: '100%', height: '900px',
+  position: 'relative', width: '100%', height: 'auto',
   backgroundColor: '#ffffff'
 }}>
 </div>

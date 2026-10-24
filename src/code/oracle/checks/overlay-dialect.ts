@@ -99,7 +99,7 @@ function checkOverlayDialect(code: string, ast: t.File, v: OracleViolation[]): v
     const varName = overlayStateVarName(o.id);
     const setVar = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
     const missing: string[] = [];
-    if (!new RegExp(`const \\[${varName},\\s*${setVar}\\] = useState\\(false\\)`).test(code)) {
+    if (!new RegExp(`const \\[${varName},\\s*${setVar}\\] = (?:React\\.)?useState\\(false\\)`).test(code)) {
       missing.push(`the state: const [${varName}, ${setVar}] = useState(false);`);
     }
     // The conditional wrapper may be `{x && ( … )}` OR `{x && <Element … />}`
@@ -114,8 +114,8 @@ function checkOverlayDialect(code: string, ast: t.File, v: OracleViolation[]): v
     // component masters — see overlay-gen ensureMasterOverlayScope).
     const refsOverlay = code.includes(`[data-id="${o.id}"]`) || code.includes(`ovFind('${o.id}')`);
     const effectPresent = isFixed
-      ? (refsOverlay && /useEffect\(/.test(code) && code.includes('prevOverflow'))
-      : (refsOverlay && /useLayoutEffect\(/.test(code) && code.includes('getBoundingClientRect'));
+      ? (refsOverlay && /(?:React\.)?useEffect\(/.test(code) && code.includes('prevOverflow'))
+      : (refsOverlay && /(?:React\.)?useLayoutEffect\(/.test(code) && code.includes('getBoundingClientRect'));
     if (!effectPresent) {
       const effect = isFixed ? buildFixedOverlayRuntimeEffect(o.id) : buildRelativeOverlayPosEffect(o.id);
       missing.push(`the runtime effect (paste verbatim above the return):\n${effect}`);

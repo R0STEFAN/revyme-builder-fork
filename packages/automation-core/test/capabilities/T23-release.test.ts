@@ -520,7 +520,25 @@ export default function AssetPage() {
   // Group 5: Preview Build Generation & Routes Map
   // ───────────────────────────────────────────────────────────────────────────
   describe('5. Preview Build Generation & Routes Map (preview.build)', () => {
-    it('generates preview server descriptor with full routesMap', async () => {
+    it('does not claim a live preview exists when no preview adapter is configured', async () => {
+      const snapshot = createMockSnapshot({
+        'app/page.client.tsx': CLEAN_PAGE_CODE,
+      });
+
+      const result = await previewBuildOperation.execute(snapshot, { port: 5175 }, context);
+
+      expect(result.status).toBe('ready');
+      expect(result.previewAvailable).toBe(false);
+      expect(result.previewUrl).toBe('');
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'warn',
+          message: expect.stringContaining('No preview adapter configured'),
+        }),
+      ]));
+    });
+
+    it('validates full routesMap without inventing an unavailable preview server', async () => {
       const snapshot = createMockSnapshot({
         'app/layout.tsx': CLEAN_LAYOUT_CODE,
         'app/page.client.tsx': CLEAN_PAGE_CODE,
@@ -535,7 +553,8 @@ export default function AssetPage() {
       );
 
       expect(result.status).toBe('ready');
-      expect(result.previewUrl).toContain('5175');
+      expect(result.previewAvailable).toBe(false);
+      expect(result.previewUrl).toBe('');
       expect(result.readyCount).toBeGreaterThanOrEqual(2);
       expect(result.routesCount).toBeGreaterThanOrEqual(2);
 
@@ -548,6 +567,36 @@ export default function AssetPage() {
 
       expect(result.routesMap['/__template_preview/marketing']).toBeDefined();
       expect(result.routesMap['/__template_preview/marketing']?.kind).toBe('template');
+    });
+
+    it('maps route-group client/server page pairs to public routes only once', async () => {
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT_CODE,
+        'app/(site-shell)/LayoutClient.tsx': MARKETING_LAYOUT_CLIENT,
+        'app/(site-shell)/page.client.tsx': CLEAN_PAGE_CODE,
+        'app/(site-shell)/page.tsx': CLEAN_PAGE_CODE,
+        'app/(site-shell)/about/page.client.tsx': ABOUT_PAGE_CODE,
+        'app/(site-shell)/about/page.tsx': ABOUT_PAGE_CODE,
+      });
+
+      const result = await previewBuildOperation.execute(snapshot, { port: 5175 }, context);
+
+      expect(result.routesMap['/']?.path).toBe('app/(site-shell)/page.client.tsx');
+      expect(result.routesMap['/about']?.path).toBe('app/(site-shell)/about/page.client.tsx');
+      expect(result.routesMap['/(site-shell)']).toBeUndefined();
+      expect(result.routesMap['/(site-shell)/about']).toBeUndefined();
+      expect(result.routesMap['/__template_preview/site-shell']?.kind).toBe('template');
+    });
+
+    it('still includes server-only pages without route-group segments', async () => {
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT_CODE,
+        'app/legal/privacy/page.tsx': CLEAN_PAGE_CODE,
+      });
+
+      const result = await previewBuildOperation.execute(snapshot, { port: 5175 }, context);
+
+      expect(result.routesMap['/legal/privacy']?.path).toBe('app/legal/privacy/page.tsx');
     });
 
     it('reports failure status when pages have critical parse errors', async () => {
@@ -578,6 +627,7 @@ export default function Broken( {
         status: 'ready',
         bundleId: 'custom-pvw-123',
         previewUrl: 'http://localhost:9999/preview/custom',
+        previewAvailable: true,
         buildDurationMs: 42,
         durationMs: 42,
         pageRoutes: { '/': 'app/page.client.tsx' },
@@ -599,6 +649,7 @@ export default function Broken( {
       expect(mockPreviewAdapter).toHaveBeenCalledTimes(1);
       expect(result.bundleId).toBe('custom-pvw-123');
       expect(result.previewUrl).toBe('http://localhost:9999/preview/custom');
+      expect(result.previewAvailable).toBe(true);
     });
   });
 

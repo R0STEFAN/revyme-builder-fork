@@ -5,7 +5,10 @@
 // former per-file copies relied on.
 
 import { describe, it, expect } from 'vitest';
+import babelGenerator from '@babel/generator';
+import { parse } from '@babel/parser';
 import {
+  normalizeBabelGenerator,
   findMatchingCloseTagIndex,
   findStyleObjectEnd,
   insertBeforeRenderReturn,
@@ -19,6 +22,14 @@ import {
   stripJsonAttr,
   scanGates,
 } from './generator-utils';
+
+describe('normalizeBabelGenerator', () => {
+  it('resolves nested CommonJS-to-ESM default wrappers', () => {
+    const generate = normalizeBabelGenerator({ default: { default: babelGenerator } });
+    const ast = parse('const answer = 42;');
+    expect(generate(ast).code).toContain('const answer = 42;');
+  });
+});
 
 describe('findMatchingCloseTagIndex', () => {
   it('balances same-name nested opens/closes', () => {

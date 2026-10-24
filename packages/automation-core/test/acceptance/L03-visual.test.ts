@@ -37,15 +37,24 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 
 const INITIAL_LAYOUT = `'use client';
 import React from 'react';
+import LayoutClient from './LayoutClient';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body data-id="body-root">
-        <main data-id="main-content">{children}</main>
+        <LayoutClient>{children}</LayoutClient>
       </body>
     </html>
   );
+}
+`;
+
+const INITIAL_LAYOUT_CLIENT = `'use client';
+import React from 'react';
+
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return <main data-id="main-content">{children}</main>;
 }
 `;
 
@@ -136,7 +145,9 @@ describe('Acceptance Suite L03: Visual Effects, Motion Presets, Shapes, & Code C
       1,
       {
         'app/layout.tsx': INITIAL_LAYOUT,
+        'app/LayoutClient.tsx': INITIAL_LAYOUT_CLIENT,
         'app/page.tsx': INITIAL_PAGE,
+        'app/page.client.tsx': INITIAL_PAGE,
       },
     );
     const mutableFiles = new Map(snapshot.files);

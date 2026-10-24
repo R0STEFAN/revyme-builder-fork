@@ -13,11 +13,17 @@
 // flush so the var name stays consistent.
 
 import * as t from '@babel/types';
-import generate from '@babel/generator';
+import _generate from '@babel/generator';
 import { parseJSX, findFirstElementByDataId } from '../parsing/ast-utils';
 import { addPageVariableInCode } from '../features/page-variables';
 import { syncPageVariableHooks } from './page-variables-gen';
+import { ensureNamedImport, normalizeBabelGenerator } from './generator-utils';
 import { trace } from '@/shared/debug-trace';
+
+// The bundled headless MCP runtime can expose @babel/generator through nested
+// CommonJS default wrappers. Normalize it just like page-variables-gen so a
+// valid search-field operation does not silently fall back to the old source.
+const generate = normalizeBabelGenerator(_generate);
 
 /** Placeholder text for a fresh Search Field. ASCII dots (not the `…` glyph): a
  *  JSX string attribute does NOT process escapes, and babel's generator escapes
@@ -286,6 +292,7 @@ export function addSearchFieldInCode(
 
   // 3. Emit the useState for the new variable (now referenced by the input).
   out = syncPageVariableHooks(out);
+  out = ensureNamedImport(out, 'react', ['useState'], { ensureDefault: 'React' });
   trace.action('cms-search-field:added', { listNodeId, varName, frameId });
   return out;
 }

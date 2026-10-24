@@ -1,7 +1,12 @@
 import { parse } from '@babel/parser';
-import traverse, { type NodePath } from '@babel/traverse';
+import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
+import { normalizeBabelTraverse } from '../parsing/ast-utils';
 import { getDataId, isTransparentGroup } from './jsx-child-slots';
+
+// The automation server loads this module through Vite SSR, which may wrap the
+// CommonJS Babel traverse export in one or two `default` properties.
+const traverse = normalizeBabelTraverse(_traverse);
 
 export interface ContentSlotInfo {
   start: number;

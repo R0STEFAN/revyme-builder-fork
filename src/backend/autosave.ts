@@ -225,6 +225,14 @@ export function setAutosaveHeld(held: boolean): void {
 }
 
 export function triggerAutosave(opts?: { force?: boolean }): void {
+  // Shared ProjectFS helpers are also imported by the standalone automation
+  // CLI. That process prepares proposed file changes but has no browser storage
+  // or autosave lifecycle; persisting here would target a nonexistent local
+  // project and can race the MCP plan/commit boundary.
+  if (typeof window === 'undefined') {
+    trace.action('autosave:skipped-non-browser');
+    return;
+  }
   if (_disposed) { trace.action('autosave:skipped-disposed-generation'); return; }
   if (isHeld) {
     // Remember that something wants saving, but don't schedule — the

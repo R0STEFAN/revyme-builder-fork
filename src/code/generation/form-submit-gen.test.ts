@@ -6,6 +6,8 @@ import {
   FORMSUBMIT_COMPONENT_NAME,
 } from './form-submit-gen';
 import { formStateVar, parseFormStateMapping } from './form-state-gen';
+import { buildSpinnerComponentCode } from './cms-pagination-gen';
+import { checkFile } from '@/code/oracle/check-file';
 
 const parses = (code: string) =>
   expect(() => transform(code, { presets: ['react', 'typescript'], filename: 'f.tsx' })).not.toThrow();
@@ -28,6 +30,13 @@ export default function Page() {
 
 describe('form-submit-gen: buildFormSubmitComponentCode', () => {
   const code = buildFormSubmitComponentCode();
+
+  it('emits FormSubmit and Spinner masters that remain editable under the Oracle', () => {
+    const formViolations = checkFile(code, { kind: 'component', path: 'components/FormSubmit.tsx' });
+    const spinnerViolations = checkFile(buildSpinnerComponentCode(), { kind: 'component', path: 'components/Spinner.tsx' });
+    expect(formViolations.map(v => v.code)).toEqual([]);
+    expect(spinnerViolations.map(v => v.code)).toEqual([]);
+  });
 
   it('emits a parseable design-component master', () => {
     parses(code);
@@ -152,21 +161,25 @@ describe('form-submit-gen: convertSubmitButtonInCode', () => {
 import { upgradeFormSubmitDisplayTransitions, migrateFormSubmitDisplayTransitions } from './form-submit-gen';
 import { projectFS } from '@/code/project/project-fs';
 
-describe('display variants switch instantly', () => {
+describe('FormSubmit state transitions', () => {
   const master = buildFormSubmitComponentCode();
 
-  it('every display-only variant entry carries a zero-duration transition', () => {
-    for (const obj of ['labelVariants', 'spinnerWrapVariants', 'successTextVariants', 'errorTextVariants']) {
-      const block = master.match(new RegExp(`const ${obj} = \\{[\\s\\S]*?\\n\\};`))![0];
-      const entries = block.match(/\{[^{}]*display[^{}]*\}/g) ?? [];
-      expect(entries.length, `${obj} should have one entry per variant`).toBe(7);
-      for (const e of entries) expect(e, `${obj}: ${e}`).toMatch(/transition:/);
+  it('uses keyed AnimatePresence children instead of display toggles', () => {
+    expect(master).toContain('<AnimatePresence mode="popLayout" initial={false}>');
+    expect(master).toContain("variant === 'loading' && (");
+    expect(master).toContain("variant === 'success' && (");
+    expect(master).toContain("variant === 'error' && (");
+    expect(master).not.toContain("display: 'none'");
+    for (const id of ['formsubmit-label', 'formsubmit-spinner-wrap', 'formsubmit-success', 'formsubmit-error']) {
+      expect(master).toContain(`key="${id}"`);
     }
   });
 
-  it('the ROOT keeps its default transition — the background still animates', () => {
+  it('keeps the root transition and default values mirrored for the editor', () => {
     const root = master.match(/const rootVariants = \{[\s\S]*?\n\};/)![0];
     expect(root).not.toMatch(/transition:/);
+    expect(master).toContain("backgroundColor: '#3b82f6'");
+    expect(master).toContain('opacity: 1');
   });
 });
 

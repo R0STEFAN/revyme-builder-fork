@@ -37,6 +37,7 @@ import {
   type AuditNode,
 } from './design-audit';
 import { getRectInViewportSpace } from '@/canvas/node-ops';
+import { transformManager } from '@/canvas/transform/TransformManager';
 import * as bridgeMod from '@/canvas/canvas-bridge';
 import type { CanvasNode } from '@/code/parsing/parser';
 
@@ -496,6 +497,22 @@ describe('getRectInViewportSpace — de-zoom & iframe offset (P2.2)', () => {
 
     const r375 = getRectInViewportSpace('sec375', 'desktop');
     expect(Math.round(r375!.width)).toBe(375);
+  });
+
+  it('uses the editor camera transform when the production bridge has no transform getter', () => {
+    const mockBridge = {
+      getRect: vi.fn(() => domRect(60, 20, 120, 40)),
+      getIframeOffset: () => ({ x: 0, y: 0 }),
+    };
+    vi.spyOn(bridgeMod, 'getCanvasBridge').mockReturnValue(mockBridge as unknown as ReturnType<typeof bridgeMod.getCanvasBridge>);
+    vi.spyOn(transformManager, 'getTransform').mockReturnValue({ x: 0, y: 0, scale: 0.1 });
+
+    expect(getRectInViewportSpace('node', 'desktop')).toEqual({
+      x: 600,
+      y: 200,
+      width: 1200,
+      height: 400,
+    });
   });
 
   it('is zoom-invariant: same viewport rects at scale 1.0 and 1.128 produce same audit results', () => {

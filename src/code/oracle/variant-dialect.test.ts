@@ -252,6 +252,16 @@ export default withResponsiveProps(Nav);
     expect(codes(checkFile(nav("height: 'auto',", bad), { kind: 'component' }))).toContain('ANIMATEPRESENCE_POPLAYOUT_MODE');
   });
 
+  it('does not require popLayout or layout for an absolutely positioned child', () => {
+    const absolutePanel = GOOD_PANEL
+      .replace('<AnimatePresence mode="popLayout">', '<AnimatePresence>')
+      .replace('layout={true} key="panel"', 'key="panel"')
+      .replace("position: 'relative'", "position: 'absolute'");
+    const found = codes(checkFile(nav("height: '64px',", absolutePanel), { kind: 'component' }));
+    expect(found).not.toContain('ANIMATEPRESENCE_POPLAYOUT_MODE');
+    expect(found).not.toContain('ANIMATEPRESENCE_CHILD_LAYOUT');
+  });
+
   it('flags a fixed-height root when a variant reveals in-flow content', () => {
     const vs = checkFile(nav("height: '64px',", GOOD_PANEL), { kind: 'component' });
     const hit = vs.find((x) => x.code === 'VARIANT_REVEAL_ROOT_SHELL');

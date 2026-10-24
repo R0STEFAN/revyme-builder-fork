@@ -6,6 +6,7 @@ import { DEFAULT_FONTS, type FontItem } from '@/shared/google-fonts';
 import {
   extractGoogleFontsFromCSS,
   transformLayoutWithNextFonts,
+  transformCssForNextFonts,
   getSupportedWeightsForFont,
   type GoogleFontSpec,
 } from '@/code/generation/next-font-gen';
@@ -367,6 +368,7 @@ export const fontsTransformNextFontOperation: Operation<
     }
 
     const transformedCode = transformLayoutWithNextFonts(layoutCode, googleFonts);
+    const transformedCss = transformCssForNextFonts(globalsCss, googleFonts);
 
     return {
       changes: [
@@ -375,6 +377,9 @@ export const fontsTransformNextFontOperation: Operation<
           beforeHash: null,
           content: transformedCode,
         },
+        ...(transformedCss !== globalsCss
+          ? [{ path: globalsFile, beforeHash: null, content: transformedCss }]
+          : []),
       ],
       transformedFonts: googleFonts,
     };

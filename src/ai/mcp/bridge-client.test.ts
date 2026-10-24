@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDefaultStore } from 'jotai';
-import { bridgeHandlers, runBridgeRequest, startMcpBridge, stopMcpBridge } from './bridge-client';
+import { bridgeHandlers, reconcileProjectSnapshotOnReconnect, runBridgeRequest, startMcpBridge, stopMcpBridge } from './bridge-client';
 import { lockBranch, unlockBranch } from '@/code/stores/agent-run-lock-store';
 import { agentRunEnd } from '@/ai/agent/bridge-tools';
 import { backend } from '@/backend';
@@ -9,7 +9,7 @@ import { getBaseRevision, setLoadedRevision } from '@/backend/save-revision';
 import { projectFS, resetProjectFS } from '@/code/project/project-fs';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { projectVersionAtom } from '@/code/project/project-fs';
-import { codeAtom } from '@/code/stores/store';
+import { codeAtom, selectedIdsAtom } from '@/code/stores/store';
 import { resetReadTracker } from './read-tracker';
 import * as renderWait from '@/ai/agent/tools/wait-for-render';
 import * as canvasBridge from '@/canvas/canvas-bridge';
@@ -137,6 +137,38 @@ describe('bridgeHandlers', () => {
     }
   });
 
+  it('reconciles a clean stale project snapshot when the MCP bridge reconnects', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const refreshedPage = PAGE.replace('data-name="Page"', 'data-name="Reconnected snapshot"');
+    const getProjectRevision = vi.spyOn(backend, 'getProjectRevision').mockResolvedValue(11);
+    const loadProject = vi.spyOn(backend, 'loadProject').mockImplementation(async () => {
+      setLoadedRevision(11);
+      return {
+        format: 'revyme-v1',
+        files: { [PAGE_PATH]: refreshedPage },
+      };
+    });
+    const projectVersionBefore = getDefaultStore().get(projectVersionAtom);
+
+    try {
+      const result = await reconcileProjectSnapshotOnReconnect();
+
+      expect(result).toMatchObject({ applied: true, revision: 11 });
+      expect(loadProject).toHaveBeenCalledWith('project-refresh-test');
+      expect(projectFS.readFile(PAGE_PATH)).toContain('Reconnected snapshot');
+      expect(getDefaultStore().get(codeAtom)).toContain('Reconnected snapshot');
+      expect(getDefaultStore().get(projectVersionAtom)).toBe(projectVersionBefore + 1);
+      expect(getBaseRevision()).toBe(11);
+    } finally {
+      getProjectRevision.mockRestore();
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+    }
+  });
+
   it('refuses an external snapshot while local edits are unsaved', async () => {
     const previousPath = window.location.pathname;
     window.history.pushState({}, '', '/builder/project-refresh-test');
@@ -233,7 +265,8 @@ describe('bridgeHandlers', () => {
     });
     const capture = vi.fn().mockResolvedValue(dataUrl);
     vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({ captureElement: capture } as any);
-    vi.spyOn(nodeOps, 'findNodeRect').mockReturnValue({ x: 0, y: 0, width: 1280, height: 720 } as DOMRect);
+    vi.spyOn(nodeOps, 'findNodeRect').mockReturnValue({ x: 0, y: 0, width: 853.333, height: 480 } as DOMRect);
+    const viewportRect = vi.spyOn(nodeOps, 'getRectInViewportSpace').mockReturnValue({ x: 0, y: 0, width: 1280, height: 720 });
     vi.spyOn(nodeOps, 'getViewportPrefix').mockReturnValue('');
 
     const result = await bridgeHandlers.captureScreenshot({
@@ -254,6 +287,7 @@ describe('bridgeHandlers', () => {
       intervalMs: 100,
     });
     expect(capture).toHaveBeenCalledWith('root', '', { format: 'png', pixelRatio: 1.5, backgroundColor: undefined });
+    expect(viewportRect).toHaveBeenCalledWith('root', 'desktop');
     expect(result).toMatchObject({
       available: true,
       status: 'ready',
@@ -263,6 +297,77 @@ describe('bridgeHandlers', () => {
       height: 720,
       waitedMs: 18,
     });
+  });
+
+  it('does not report an empty zero-height canvas capture as a ready screenshot', async () => {
+    setLoadedRevision(7);
+    const waitSpy = vi.spyOn(renderWait, 'waitForRender').mockResolvedValue({
+      ready: true,
+      status: 'ready',
+      waitedMs: 0,
+      withRect: 1,
+      epoch: { renderSeq: 2, projectVersionAtFill: 1, projectVersionNow: 1, stale: false },
+      coverage: { withRect: 1, total: 1 },
+      unmeasured: [],
+      unmeasuredTotal: 0,
+    });
+    const capture = vi.fn().mockResolvedValue('data:,');
+    vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({ captureElement: capture } as any);
+    vi.spyOn(nodeOps, 'findNodeRect').mockReturnValue({ x: 0, y: 0, width: 1108, height: 0 } as DOMRect);
+    vi.spyOn(nodeOps, 'getRectInViewportSpace').mockReturnValue({ x: 0, y: 0, width: 1108, height: 0 });
+    vi.spyOn(nodeOps, 'getViewportPrefix').mockReturnValue('');
+
+    const result = await bridgeHandlers.captureScreenshot({
+      branchId: 'main',
+      filePath: PAGE_PATH,
+      revision: 7,
+      viewport: 'desktop',
+      nodeId: 'root',
+      format: 'png',
+      pixelRatio: 1,
+    }) as any;
+
+    expect(result).toMatchObject({
+      available: false,
+      status: 'unavailable',
+      reason: 'INVALID_CAPTURE_DIMENSIONS',
+      width: 1108,
+      height: 0,
+      canvasRevision: 7,
+    });
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed screenshot data URLs even when the element has bounds', async () => {
+    setLoadedRevision(7);
+    vi.spyOn(renderWait, 'waitForRender').mockResolvedValue({
+      ready: true,
+      status: 'ready',
+      waitedMs: 0,
+      withRect: 1,
+      epoch: { renderSeq: 2, projectVersionAtFill: 1, projectVersionNow: 1, stale: false },
+      coverage: { withRect: 1, total: 1 },
+      unmeasured: [],
+      unmeasuredTotal: 0,
+    });
+    const capture = vi.fn().mockResolvedValue('data:,');
+    vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({ captureElement: capture } as any);
+    vi.spyOn(nodeOps, 'findNodeRect').mockReturnValue({ x: 0, y: 0, width: 320, height: 180 } as DOMRect);
+    vi.spyOn(nodeOps, 'getRectInViewportSpace').mockReturnValue({ x: 0, y: 0, width: 320, height: 180 });
+    vi.spyOn(nodeOps, 'getViewportPrefix').mockReturnValue('');
+
+    const result = await bridgeHandlers.captureScreenshot({
+      branchId: 'main',
+      filePath: PAGE_PATH,
+      revision: 7,
+      viewport: 'desktop',
+      nodeId: 'root',
+      format: 'png',
+      pixelRatio: 1,
+    }) as any;
+
+    expect(result).toMatchObject({ available: false, status: 'unavailable', reason: 'INVALID_CAPTURE_DATA' });
+    expect(capture).toHaveBeenCalledOnce();
   });
 
   it('does not report a screenshot ready when the canvas is behind the requested project revision', async () => {
@@ -302,13 +407,16 @@ describe('bridgeHandlers', () => {
     window.history.pushState({}, '', '/builder/audit-snapshot-project');
     setLoadedRevision(7);
     getDefaultStore().set(saveStatusAtom, 'saved');
+    getDefaultStore().set(selectedIdsAtom, ['root']);
     const version = getDefaultStore().get(projectVersionAtom);
     const rect = { x: 0, y: 0, width: 1200, height: 900 } as DOMRect;
     const settle = vi.spyOn(renderWait, 'settleObservation').mockResolvedValue(undefined);
     vi.spyOn(nodeOps, 'getRectInViewportSpace').mockReturnValue(rect);
     vi.spyOn(nodeOps, 'findNodeComputedStyles').mockReturnValue({ display: 'block' });
+    const prefetchComputedStyles = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({
       getCacheEpoch: () => ({ renderSeq: 9, projectVersion: version }),
+      prefetchComputedStyles,
     } as any);
 
     try {
@@ -318,6 +426,7 @@ describe('bridgeHandlers', () => {
         filePath: PAGE_PATH,
         revision: 7,
         viewport: 'desktop',
+        properties: ['fontFamily', 'fontSize'],
       }) as any;
 
       expect(settle).toHaveBeenCalledWith({
@@ -328,6 +437,17 @@ describe('bridgeHandlers', () => {
       });
       expect(result.status).toBe('ready');
       expect(result.revision).toBe(7);
+      expect(result.selectedIds).toEqual(['root']);
+      expect(nodeOps.findNodeComputedStyles).toHaveBeenCalledWith(
+        'root',
+        'desktop',
+        expect.arrayContaining(['display', 'fontFamily', 'fontSize']),
+      );
+      expect(prefetchComputedStyles).toHaveBeenCalledWith(
+        'root',
+        '',
+        expect.arrayContaining(['display', 'fontFamily', 'fontSize']),
+      );
       expect(result.nodes).toEqual([
         expect.objectContaining({ id: 'root', rect: { x: 0, y: 0, width: 1200, height: 900 }, computed: { display: 'block' } }),
       ]);
@@ -509,6 +629,34 @@ describe('MCP bridge EventSource project routing', () => {
       expect(openedUrls).toEqual(['http://127.0.0.1:8082/bridge/events?websiteId=local']);
     } finally {
       stopMcpBridge();
+      window.history.pushState({}, '', previousPath);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('checks the durable project revision whenever the bridge reconnects', async () => {
+    const previousPath = window.location.pathname;
+    const connectedSource: { current: FakeEventSource | null } = { current: null };
+    class FakeEventSource {
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      constructor(_url: string) { connectedSource.current = this; }
+      close() {}
+    }
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const getProjectRevision = vi.spyOn(backend, 'getProjectRevision').mockResolvedValue(10);
+    vi.stubGlobal('EventSource', FakeEventSource);
+
+    try {
+      startMcpBridge();
+      connectedSource.current?.onopen?.(new Event('open'));
+      await vi.waitFor(() => expect(getProjectRevision).toHaveBeenCalledWith('project-refresh-test'));
+    } finally {
+      stopMcpBridge();
+      getProjectRevision.mockRestore();
       window.history.pushState({}, '', previousPath);
       vi.unstubAllGlobals();
     }

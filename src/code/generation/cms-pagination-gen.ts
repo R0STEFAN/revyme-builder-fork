@@ -268,7 +268,7 @@ export function buildSpinnerComponentCode(): string {
   return `'use client';
 
 /** @name "Spinner" */
-/* @spinner-gen v4 */
+/* @spinner-gen v5 */
 import React from 'react';
 import { motion, LayoutGroup } from 'framer-motion';
 import { withResponsiveProps } from '@revyme/runtime';
@@ -278,7 +278,6 @@ const variantConfig = [{ name: 'default', label: 'Spinner', x: 0, y: 0, isPrimar
 function ${SPINNER_COMPONENT_NAME}({ style, initialVariant = 'default', ...rest }: { style?: React.CSSProperties; initialVariant?: string; [key: string]: any; }) {
   return <LayoutGroup>
     <motion.div layout={true} data-id="spinner-root" {...rest} data-name="Spinner" style={{
-      position: 'relative',
       width: '20px',
       height: '20px',
       flex: '0 0 auto',
@@ -286,16 +285,16 @@ function ${SPINNER_COMPONENT_NAME}({ style, initialVariant = 'default', ...rest 
       maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))',
       ...style
     }}>
-    <motion.div data-id="spinner-conic" data-name="Conic" animate={{ rotate: 360 }} transition={{ repeat: Infinity, ease: 'linear', duration: 1 }} style={{
+    <motion.div data-id="spinner-conic" data-name="Conic" data-loop='{"props":{"rotate":"360"},"transition":{"duration":"1","repeat":"Infinity","ease":"linear"}}' animate={{ rotate: 360 }} transition={{ repeat: Infinity, ease: 'linear', duration: 1 }} style={{
         position: 'relative',
         width: '100%',
         height: '100%',
-        borderRadius: '50%',
+        borderRadius: '9999px',
         background: 'conic-gradient(rgba(153, 153, 153, 0) 18deg, #999999 342deg)'
       }}>
       <motion.div layout={true} data-id="spinner-round" data-name="Round" style={{
           position: 'absolute',
-          top: 0,
+          top: '0px',
           left: '50%',
           transform: 'translateX(-50%)',
           width: '2px',
@@ -339,7 +338,7 @@ export function ensureSpinnerComponentFile(): void {
   // VISUAL to 20px. Bump the version token whenever the shape changes.
   const isOldAutoGen = existing != null
     && existing.includes('data-id="spinner-root"')
-    && !existing.includes('@spinner-gen v4');
+    && !existing.includes('@spinner-gen v5');
   if (existing != null && !isOldAutoGen) return;
   projectFS.writeFile(SPINNER_COMPONENT_PATH, buildSpinnerComponentCode());
   trace.action('cms-pagination:ensureSpinnerComponentFile', { path: SPINNER_COMPONENT_PATH, upgraded: isOldAutoGen });
@@ -599,6 +598,7 @@ export function setPaginationInCode(
 
     if (mode === 'loadMore') result = ensureLoadMoreImport(result);
     if (mode === 'infinite') result = ensureSpinnerImport(result);
+    result = ensureNamedImport(result, 'react', ['useState', 'useRef', 'useEffect', 'useCallback']);
 
     trace.action('cms-pagination:set:remote:done', { parentId, mode, perPage, itemsVar });
     return result;
@@ -670,6 +670,9 @@ export function setPaginationInCode(
   // undefined identifier and validation blocks every later edit.
   if (mode === 'loadMore') result = ensureLoadMoreImport(result);
   if (mode === 'infinite') result = ensureSpinnerImport(result);
+  result = ensureNamedImport(result, 'react', mode === 'loadMore'
+    ? ['useState']
+    : ['useState', 'useRef', 'useEffect']);
 
   trace.action('cms-pagination:set:done', { parentId, mode, perPage, stateVar });
   return result;

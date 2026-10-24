@@ -111,14 +111,15 @@ describe('buildSpinnerComponentCode — the infinite-scroll Spinner master', () 
     // hover hit-area). The LOOP rotation lives on the Conic instead.
     expect(code).toContain('<motion.div layout={true} data-id="spinner-root"');
     expect(code).not.toMatch(/data-id="spinner-root"[^>]*animate=/);
-    expect(code).toContain('data-name="Conic" animate={{ rotate: 360 }}');
+    expect(code).toContain('data-name="Conic" data-loop=');
+    expect(code).toContain('animate={{ rotate: 360 }}');
     expect(code).toContain('repeat: Infinity');
     expect(code).toContain('<motion.div layout={true} data-id="spinner-round"');
     // The Conic must fill the root IN-FLOW (relative + 100%) — NOT absolute/inset,
     // which escaped its 20px box on canvas (its hit-area swallowed list hovers).
     expect(code).not.toContain("inset: 0");
     expect(code).toMatch(/data-id="spinner-conic"[\s\S]*?position: 'relative'/);
-    expect(code).toContain('@spinner-gen v4');
+    expect(code).toContain('@spinner-gen v5');
     // radial mask turns the filled disc into a ring (no external asset).
     expect(code).toContain('radial-gradient(farthest-side');
     expect(code).toContain(`export default withResponsiveProps(${SPINNER_COMPONENT_NAME})`);
@@ -536,19 +537,32 @@ export default function Page() {
     parses(out);
   });
 
-  it('correctly cleans and re-applies remote pagination on portfolio-test2 gallery page', () => {
-    const fs = require('fs');
-    const json = JSON.parse(fs.readFileSync('data/projects/proj-1791960645579-j02nu7.json', 'utf8'));
-    const file = json.data.files['app/(main)/gallery/[category]/[place]/page.client.tsx'];
+  it('cleans and re-applies remote pagination with route query params', () => {
+    const id = 'frame-mv7ra9vc-5';
+    const queryConfig = {
+      source: 'tattoos',
+      params: [
+        { key: 'filter[categories_m2m][categories_id][slug][_eq]', value: 'params.category', isExpression: true },
+        { key: 'filter[placements_m2m][placements_id][slug][_eq]', value: 'params.place', isExpression: true },
+      ],
+    };
+    const page = `import React from 'react';
+import tattoos from '@/cms/tattoos.json';
+export default function Page() {
+  return <div data-id="root">
+    <div data-id="${id}" data-query-config='{"source":"tattoos","params":[{"key":"filter[categories_m2m][categories_id][slug][_eq]","value":"params.category","isExpression":true},{"key":"filter[placements_m2m][placements_id][slug][_eq]","value":"params.place","isExpression":true}]}'>{tattoos.map((item, idx) => <article data-id="tattoo-row" key={idx}>{item.title}</article>)}</div>
+  </div>;
+}`;
+    const file = setPaginationInCode(page, id, { mode: 'loadMore', perPage: 3, isRemote: true, queryConfig });
 
-    const cleaned = removePaginationInCode(file, 'frame-mv7ra9vc-5');
+    const cleaned = removePaginationInCode(file, id);
     expect(cleaned).not.toContain('itemsFrameMv7ra9vc5');
     expect(cleaned).not.toContain('loadMoreFrameMv7ra9vc5');
     expect(cleaned).not.toContain('data-pagination');
     expect(cleaned).toContain('{tattoos.map(');
     parses(cleaned);
 
-    const regenerated = setPaginationInCode(cleaned, 'frame-mv7ra9vc-5', { mode: 'loadMore', perPage: 3 });
+    const regenerated = setPaginationInCode(cleaned, id, { mode: 'loadMore', perPage: 3 });
     expect(regenerated).toContain('const params = useParams();');
     expect(regenerated.indexOf('const params = useParams();')).toBeLessThan(regenerated.indexOf('const [itemsFrameMv7ra9vc5, setItemsFrameMv7ra9vc5]'));
     expect(regenerated.indexOf('const [itemsFrameMv7ra9vc5, setItemsFrameMv7ra9vc5]')).toBeLessThan(regenerated.indexOf('const loadMoreFrameMv7ra9vc5'));

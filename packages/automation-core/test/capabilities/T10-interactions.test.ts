@@ -162,6 +162,42 @@ export default withResponsiveProps(Navbar);
     ).rejects.toThrow(/CANNOT_REMOVE_PRIMARY/);
   });
 
+  it('rejects overlay mutations that target missing overlays or nodes', async () => {
+    const pageCode = `export default function Page() {
+  return <div data-id="root"><button data-id="trigger">Open</button></div>;
+}`;
+    let snapshot = createMockSnapshot({ 'app/page.tsx': pageCode });
+    const createRes = await overlaysCreateOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx',
+      triggerId: 'trigger',
+      overlayId: 'known-overlay',
+    }, mockContext);
+    const files = new Map(snapshot.files);
+    applyChanges(files, createRes.changes);
+    snapshot = { ...snapshot, files };
+
+    await expect(overlaysUpdateOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx',
+      overlayId: 'missing-overlay',
+      patch: { side: 'top' },
+    }, mockContext)).rejects.toThrow(/OVERLAY_NOT_FOUND/);
+    await expect(overlaysCloseOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx',
+      nodeId: 'missing-node',
+      overlayId: 'known-overlay',
+    }, mockContext)).rejects.toThrow(/NODE_NOT_FOUND/);
+    await expect(overlaysCloseOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx',
+      nodeId: 'trigger',
+      overlayId: 'missing-overlay',
+    }, mockContext)).rejects.toThrow(/OVERLAY_NOT_FOUND/);
+    await expect(overlaysRemoveOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx',
+      overlayId: 'missing-overlay',
+      triggerId: 'trigger',
+    }, mockContext)).rejects.toThrow(/OVERLAY_NOT_FOUND/);
+  });
+
   it('creates a hover interaction state with metadata and working enter/leave transitions', async () => {
     const componentCode = `"use client";
 import { withResponsiveProps } from "@revyme/runtime";
@@ -432,6 +468,7 @@ function Navbar() { return <button data-id="real-button">Open</button>; }
     expect(code).toContain('modal-overlay');
     expect(code).toContain('data-overlay=');
     expect(code).toContain('data-overlay-trigger=');
+    expect(checkFile(code, { kind: 'page' }).filter((issue) => issue.code === 'WOULD_CRASH')).toEqual([]);
 
     // 2. Update overlay config
     const updateRes = await overlaysUpdateOperation.execute(
@@ -485,6 +522,9 @@ function Navbar() { return <button data-id="real-button">Open</button>; }
 
     code = snapshot.files.get('app/page.tsx')!;
     expect(code).not.toContain('data-id="modal-overlay"');
+    expect(code).not.toContain('modalOverlayOpen');
+    expect(code).not.toMatch(/React\.\s*return/);
+    expect(checkFile(code, { kind: 'page' }).filter((issue) => issue.code === 'WOULD_CRASH')).toEqual([]);
   });
 
   it('configures, reads, and clears navigation links following Invariant 3', async () => {

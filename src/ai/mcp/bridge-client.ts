@@ -27,7 +27,7 @@ import {
   getPageClientPath,
 } from '@/code/project/active-file-store';
 import { applyTemplate } from '@/code/project/template-ops';
-import { canvasInteractingAtom, codeAtom, getNodesSnapshot } from '@/code/stores/store';
+import { canvasInteractingAtom, codeAtom, getNodesSnapshot, selectedIdsAtom } from '@/code/stores/store';
 import { isTextEditingAtom } from '@/code/stores/editor-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { withAgentWriteAccessAsync } from '@/code/stores/agent-run-lock-store';
@@ -44,9 +44,10 @@ import { checkFile } from '@/code/oracle/check-file';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { settleObservation, waitForRender } from '@/ai/agent/tools/wait-for-render';
 import { collectEpochSnapshot, observationStatusWithEpoch } from '@/ai/agent/tools/observation-epoch';
+import { RENDERED_STYLE_PROPS } from '@/ai/agent/tools/design-audit';
 import { getViewportWidths } from '@/code/stores/viewport-store';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
-import { findNodeRect, getViewportPrefix } from '@/canvas/node-ops';
+import { findNodeRect, getRectInViewportSpace, getViewportPrefix } from '@/canvas/node-ops';
 import { getI18nConfig, addLocale } from '@/code/project/locale-ops';
 import { listTranslatableTexts, readTranslationText, commitTranslationText, ensureIntlScaffold } from '@/code/project/translation-ops';
 import { scanPresetUsage } from '@/code/stores/preset-store';
@@ -164,8 +165,10 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       });
     }
 
+    const originalBaseRevision = baseRevision;
     const data = await backend.loadProject(projectId);
     if (!data?.files || Object.keys(data.files).length === 0) {
+      setLoadedRevision(originalBaseRevision);
       return { applied: false, reason: 'PROJECT_SNAPSHOT_UNAVAILABLE' };
     }
 
@@ -176,6 +179,10 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     const latestQueuedMutations = hasQueuedMutations();
     const latestQueueProcessing = isMutationQueueProcessing();
     if (latestSaveStatus !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || latestQueuedMutations || latestQueueProcessing) {
+      // loadProject may advance the backend revision token. Since the snapshot
+      // was not applied, keep this tab based on the revision of its still-live
+      // ProjectFS so the next save cannot silently overwrite newer server work.
+      setLoadedRevision(originalBaseRevision);
       return {
         applied: false,
         reason: 'LOCAL_CHANGES_PENDING',
@@ -188,6 +195,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     }
     const loadedRevision = getBaseRevision();
     if (loadedRevision !== null && loadedRevision < params.revision) {
+      setLoadedRevision(originalBaseRevision);
       return { applied: false, reason: 'SNAPSHOT_BEHIND_COMMIT', loadedRevision };
     }
 
@@ -272,9 +280,32 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       };
     }
 
-    const rect = findNodeRect(nodeId, viewport);
+    // Report CSS dimensions in the configured viewport coordinate space, not
+    // the camera-zoomed parent-screen space used by selection overlays.
+    const rect = getRectInViewportSpace(nodeId, viewport) ?? findNodeRect(nodeId, viewport);
     if (!rect) {
       return { available: false, status: 'pending', reason: 'NODE_RECT_UNAVAILABLE', note: `No rendered bounds are cached for node "${nodeId}".`, waitedMs: wait.waitedMs, canvasRevision };
+    }
+    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
+      trace.error('mcp-bridge:capture-screenshot-invalid-dimensions', {
+        projectId,
+        branchId,
+        filePath,
+        viewport,
+        nodeId,
+        width: rect.width,
+        height: rect.height,
+      });
+      return {
+        available: false,
+        status: 'unavailable',
+        reason: 'INVALID_CAPTURE_DIMENSIONS',
+        note: 'The requested canvas node has non-positive or invalid rendered dimensions.',
+        width: rect.width,
+        height: rect.height,
+        waitedMs: wait.waitedMs,
+        canvasRevision,
+      };
     }
 
     const bridge = getCanvasBridge();
@@ -288,6 +319,30 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     });
     if (!dataUrl) {
       return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_EMPTY', note: 'The iframe could not capture the requested node.', waitedMs: wait.waitedMs, width: rect.width, height: rect.height, canvasRevision };
+    }
+    const expectedPrefix = `data:image/${format === 'jpeg' ? 'jpeg' : 'png'};base64,`;
+    const encodedImage = dataUrl.startsWith(expectedPrefix) ? dataUrl.slice(expectedPrefix.length) : '';
+    const validBase64 = encodedImage.length > 0 && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encodedImage);
+    if (!validBase64) {
+      trace.error('mcp-bridge:capture-screenshot-invalid-data', {
+        projectId,
+        branchId,
+        filePath,
+        viewport,
+        nodeId,
+        format,
+        dataUrlPrefix: dataUrl.slice(0, 48),
+      });
+      return {
+        available: false,
+        status: 'unavailable',
+        reason: 'INVALID_CAPTURE_DATA',
+        note: `The canvas returned an invalid ${format.toUpperCase()} data URL.`,
+        width: rect.width,
+        height: rect.height,
+        waitedMs: wait.waitedMs,
+        canvasRevision,
+      };
     }
     trace.action('mcp-bridge:capture-screenshot', { projectId, branchId, filePath, viewport, nodeId, format, bytes: dataUrl.length });
     return {
@@ -308,6 +363,8 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     filePath: string;
     revision: number;
     viewport: string;
+    properties?: string[];
+    nodeIds?: string[];
   }) {
     const store = getDefaultStore();
     const projectId = getProjectId();
@@ -360,23 +417,64 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       return pending('CANVAS_CHANGED_DURING_AUDIT', 'The page changed while measurements were collected; retry after it is saved.');
     }
 
-    const snapshot = collectEpochSnapshot(getNodesSnapshot(), params.viewport);
+    const currentNodes = getNodesSnapshot();
+    const requestedStyleProps = params.properties ?? [];
+    let computedStyleFailures = 0;
+    if (requestedStyleProps.length > 0) {
+      const styleProps = Array.from(new Set([...RENDERED_STYLE_PROPS, ...requestedStyleProps]));
+      const requestedNodeIds = params.nodeIds
+        ? params.nodeIds.filter((id) => currentNodes.has(id))
+        : [...currentNodes.keys()];
+      const bridge = getCanvasBridge() as unknown as {
+        prefetchComputedStyles?: (nodeId: string, vpPrefix: string, properties: string[]) => Promise<void>;
+      };
+      if (typeof bridge.prefetchComputedStyles === 'function') {
+        const vpPrefix = getViewportPrefix(params.viewport);
+        for (let offset = 0; offset < requestedNodeIds.length; offset += 24) {
+          const batch = requestedNodeIds.slice(offset, offset + 24);
+          const settled = await Promise.allSettled(
+            batch.map((id) => bridge.prefetchComputedStyles!(id, vpPrefix, styleProps)),
+          );
+          computedStyleFailures += settled.filter((result) => result.status === 'rejected').length;
+        }
+      } else {
+        computedStyleFailures = requestedNodeIds.length;
+      }
+    }
+
+    // Style prefetch crosses the iframe asynchronously. Recheck the scope and
+    // revision after it settles so no snapshot can mix measurements from two pages.
+    if (getProjectId() !== params.projectId || projectFS.getActiveBranchId() !== params.branchId || store.get(activeFilePathAtom) !== params.filePath) {
+      return unavailable('CANVAS_SCOPE_CHANGED', 'The active project, branch, or page changed while styles were collected.');
+    }
+    if (getBaseRevision() !== params.revision || store.get(saveStatusAtom) !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || hasQueuedMutations() || isMutationQueueProcessing()) {
+      return pending('CANVAS_CHANGED_DURING_AUDIT', 'The page changed while styles were collected; retry after it is saved.');
+    }
+
+    const snapshot = collectEpochSnapshot(getNodesSnapshot(), params.viewport, requestedStyleProps);
     const verdict = observationStatusWithEpoch({ id: params.viewport, width }, snapshot.epoch);
+    const status = computedStyleFailures > 0 && verdict.status === 'ready' ? 'pending' : verdict.status;
+    const reason = computedStyleFailures > 0
+      ? `COMPUTED_STYLES_INCOMPLETE: ${computedStyleFailures} nodes could not be prefetched.`
+      : verdict.reason;
     trace.action('mcp-bridge:observe-audit-snapshot', {
       projectId: params.projectId,
       branchId: params.branchId,
       filePath: params.filePath,
       revision: params.revision,
       viewport: params.viewport,
-      status: verdict.status,
+      status,
+      computedStyleFailures,
+      selectedCount: store.get(selectedIdsAtom)?.length ?? 0,
       withRect: snapshot.epoch.withRect,
       total: snapshot.epoch.total,
       stale: snapshot.epoch.stale,
     });
     return {
-      status: verdict.status,
-      reason: verdict.reason,
+      status,
+      reason,
       revision: params.revision,
+      selectedIds: store.get(selectedIdsAtom) ?? [],
       nodes: snapshot.nodes,
       epoch: snapshot.epoch,
     };
@@ -1593,6 +1691,59 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
   'agent.abort': async () => agentRunAbort(),
 };
 
+/**
+ * EventSource reconnects after the Builder or MCP server restarts, but commits
+ * made while it was disconnected have no pending event to replay. Compare the
+ * durable revision on reconnect and reuse the normal guarded snapshot path to
+ * catch up a clean editor without discarding unsaved canvas work.
+ */
+export async function reconcileProjectSnapshotOnReconnect(): Promise<any> {
+  const projectId = getProjectId();
+  const branchId = projectFS.getActiveBranchId();
+  const baseRevision = getBaseRevision();
+  if (!projectId || baseRevision === null || !backend.getProjectRevision) {
+    return { applied: false, reason: 'REVISION_UNAVAILABLE', baseRevision };
+  }
+
+  const store = getDefaultStore();
+  const canReplaceSnapshot = () =>
+    store.get(saveStatusAtom) === 'saved' &&
+    !store.get(canvasInteractingAtom) &&
+    !store.get(isTextEditingAtom) &&
+    !hasQueuedMutations() &&
+    !isMutationQueueProcessing();
+
+  if (!canReplaceSnapshot()) {
+    return { applied: false, reason: 'LOCAL_CHANGES_PENDING', baseRevision };
+  }
+
+  const serverRevision = await backend.getProjectRevision(projectId);
+  if (serverRevision === null || serverRevision <= baseRevision) {
+    return { applied: false, reason: serverRevision === null ? 'REVISION_UNAVAILABLE' : 'ALREADY_CURRENT', baseRevision, serverRevision };
+  }
+
+  if (!canReplaceSnapshot() || projectFS.getActiveBranchId() !== branchId) {
+    return { applied: false, reason: 'LOCAL_CHANGES_PENDING', baseRevision, serverRevision };
+  }
+
+  const result = await bridgeHandlers.projectSnapshotChanged({
+    projectId,
+    branchId,
+    baseRevision,
+    revision: serverRevision,
+    changedFiles: [],
+  });
+  trace.action('mcp-bridge:reconnect-snapshot-reconciled', {
+    projectId,
+    branchId,
+    baseRevision,
+    serverRevision,
+    applied: (result as any)?.applied === true,
+    reason: (result as any)?.reason,
+  });
+  return result;
+}
+
 let source: EventSource | null = null;
 
 /**
@@ -1696,6 +1847,9 @@ export function startMcpBridge(): void {
   source.onopen = () => {
     console.log('[MCP Bridge] Connected to bridge server successfully');
     trace.action('mcp-bridge:connected', {});
+    void reconcileProjectSnapshotOnReconnect().catch((err) => {
+      trace.error('mcp-bridge:reconnect-snapshot-failed', err);
+    });
   };
   source.onmessage = (e) => {
     console.log('[MCP Bridge] Message received:', e.data);

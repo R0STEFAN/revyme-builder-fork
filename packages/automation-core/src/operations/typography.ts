@@ -611,8 +611,10 @@ export const typographyRemoveOperation: Operation<
     }
 
     const removedTokens: string[] = [];
+    const existingTokens = new Set(parsePresetTokens(css).map((token) => token.name));
     for (const suffix of TYPO_SUFFIXES) {
       const tokenName = `typo-${cleanName}-${suffix}`;
+      if (!existingTokens.has(tokenName)) continue;
       css = removePresetTokenFromCSS(css, tokenName);
       removedTokens.push(tokenName);
     }

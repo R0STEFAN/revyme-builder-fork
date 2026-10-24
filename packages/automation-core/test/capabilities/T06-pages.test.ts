@@ -2,6 +2,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { defaultRegistry } from '../../src/registry';
 import type { Snapshot, OperationContext, FileChange } from '../../src/contracts';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
+import { checkFile } from '../../../../src/code/oracle/check-file';
 import '../../src/operations/pages';
 import '../../src/operations/templates';
 import '../../src/operations/metadata';
@@ -86,6 +89,22 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
     ).rejects.toThrow(/PAGE_ALREADY_EXISTS|ROUTE_COLLISION/);
   });
 
+  it('creates template pages with a bare root that does not collide with the layout root', async () => {
+    const createOp = defaultRegistry.get('pages.create')!;
+    const res = await createOp.execute(
+      snapshot,
+      { slug: 'about', title: 'About Us', template: 'site-shell' },
+      context
+    );
+    const clientCode = res.changes.find((change: FileChange) => change.path.endsWith('page.client.tsx'))!.content!;
+
+    expect(clientCode).toContain("data-id=\"root\"");
+    expect(clientCode).not.toContain("minHeight: '900px'");
+    expect(clientCode).not.toContain("backgroundColor: '#ffffff'");
+    expect(checkFile(clientCode, { kind: 'page', path: res.page.clientPath, isTemplated: true })
+      .map((issue) => issue.code)).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
+  });
+
   it('creates a shared template with exactly one {children} slot', async () => {
     const createTemplateOp = defaultRegistry.get('templates.create')!;
 
@@ -114,6 +133,61 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
     // Verify layout re-exports LayoutClient wrapping children
     const layoutCode = files.get('app/(marketing)/layout.tsx')!;
     expect(layoutCode).toContain('<LayoutClient>{children}</LayoutClient>');
+  });
+
+  it('creates builder-valid templates with imported component slots and the required root id', async () => {
+    const createTemplateOp = defaultRegistry.get('templates.create')!;
+    files.set('components/SiteNavbar.tsx', 'export default function SiteNavbar() { return <nav />; }');
+    files.set('components/SiteFooter.tsx', 'export default function SiteFooter() { return <footer />; }');
+
+    const res = await createTemplateOp.execute(
+      snapshot,
+      {
+        name: 'site-shell',
+        headerContent: '<SiteNavbar data-id="template-navbar" data-name="Site Navbar" />',
+        footerContent: '<SiteFooter data-id="template-footer" data-name="Site Footer" />',
+      },
+      context
+    );
+
+    const clientCode = res.changes.find((change: FileChange) => change.path.endsWith('LayoutClient.tsx'))!.content!;
+    expect(clientCode).toContain('import SiteNavbar from \'@/components/SiteNavbar\';');
+    expect(clientCode).toContain('import SiteFooter from \'@/components/SiteFooter\';');
+    expect(clientCode).toContain('<div data-id="root"');
+    expect(clientCode).not.toContain("minHeight: '100vh'");
+    expect(clientCode).toContain('<SiteNavbar data-id="template-navbar"');
+    expect(clientCode).toContain('<SiteFooter data-id="template-footer"');
+    expect(clientCode).not.toContain('textAlign: \'center\'');
+    expect(clientCode.match(/\{children\}/g)).toHaveLength(1);
+    expect(checkFile(clientCode, { kind: 'template', path: res.template.clientPath }).map((issue) => issue.code))
+      .toEqual([]);
+  });
+
+  it('validates LayoutClient as a template rather than a styled templated page', () => {
+    const layoutCode = `'use client';\n\n/* @canvas { single: true } */\n\nimport React from 'react';\n\nexport default function LayoutClient({ children }: { children: React.ReactNode }) {\n  return <div data-id="root" data-name="Template site-shell" style={{ position: 'relative', width: '100%', backgroundColor: '#FFFFFF', overflowX: 'hidden' }}>\n    {children}\n  </div>;\n}`;
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'layout-kind-regression',
+      changes: [{ path: 'app/(site-shell)/LayoutClient.tsx', beforeHash: null, content: layoutCode }],
+    });
+
+    const result = validatePlan(snapshot, plan);
+    expect(result.issues.map((issue) => issue.code)).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
+    expect(result.issues.map((issue) => issue.code)).not.toContain('TEMPLATE_CHILDREN_WRAPPED');
+  });
+
+  it('does not mistake a page inside a route group named template for LayoutClient', () => {
+    const pageCode = `'use client';\n\n/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */\n\nimport React from 'react';\n\nexport default function Page() {\n  return <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%', backgroundColor: '#FFFFFF' }} />;\n}`;
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'route-group-kind-regression',
+      changes: [{ path: 'app/(template)/about/page.client.tsx', beforeHash: null, content: pageCode }],
+    });
+
+    const result = validatePlan(snapshot, plan);
+    expect(result.issues.map((issue) => issue.code)).toContain('TEMPLATED_PAGE_ROOT_STYLED');
   });
 
   it('assigns and unassigns a page to a template', async () => {
@@ -156,11 +230,73 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
     expect(files.has('app/(docs)/features/page.client.tsx')).toBe(false);
   });
 
+  it('keeps pages.assign output valid when moving a styled default page into a template', async () => {
+    const createPageOp = defaultRegistry.get('pages.create')!;
+    const createTemplateOp = defaultRegistry.get('templates.create')!;
+    const assignOp = defaultRegistry.get('templates.assign')!;
+
+    const pageRes = await createPageOp.execute(snapshot, {
+      slug: 'styled-page',
+      title: 'Styled Page',
+      content: '<section data-id="section-1">Content</section>',
+    }, context);
+    applyChanges(pageRes.changes);
+    const templateRes = await createTemplateOp.execute(snapshot, { name: 'site-shell' }, context);
+    applyChanges(templateRes.changes);
+
+    const assignRes = await assignOp.execute(snapshot, {
+      pageSlug: 'styled-page',
+      templateName: 'site-shell',
+    }, context);
+    const movedPage = assignRes.changes.find((change: FileChange) => change.path.endsWith('page.client.tsx') && change.content);
+    expect(checkFile(movedPage!.content!, {
+      kind: 'page',
+      path: movedPage!.path,
+      isTemplated: true,
+    }).map((issue) => issue.code)).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
+    expect(movedPage?.content).toContain('data-id="section-1"');
+    expect(movedPage?.content).toContain('data-name="Styled Page Content"');
+    expect(movedPage?.content).toContain("backgroundColor: '#ffffff'");
+  });
+
+  it('keeps pages.update output valid when assigning a styled page to a template', async () => {
+    const createPageOp = defaultRegistry.get('pages.create')!;
+    const createTemplateOp = defaultRegistry.get('templates.create')!;
+    const updateOp = defaultRegistry.get('pages.update')!;
+
+    const pageRes = await createPageOp.execute(snapshot, {
+      slug: 'updated-page',
+      title: 'Updated Page',
+      content: '<section data-id="section-2">Content</section>',
+    }, context);
+    applyChanges(pageRes.changes);
+    const templateRes = await createTemplateOp.execute(snapshot, { name: 'site-shell' }, context);
+    applyChanges(templateRes.changes);
+
+    const updateRes = await updateOp.execute(snapshot, {
+      slug: 'updated-page',
+      template: 'site-shell',
+    }, context);
+    const movedPage = updateRes.changes.find((change: FileChange) => change.path.endsWith('page.client.tsx') && change.content);
+    expect(checkFile(movedPage!.content!, {
+      kind: 'page',
+      path: movedPage!.path,
+      isTemplated: true,
+    }).map((issue) => issue.code)).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
+    expect(movedPage?.content).toContain('data-id="section-2"');
+    expect(movedPage?.content).toContain('data-name="Updated Page Content"');
+    expect(movedPage?.content).toContain("backgroundColor: '#ffffff'");
+  });
+
   it('duplicates an existing page with new IDs and paths', async () => {
     const createPageOp = defaultRegistry.get('pages.create')!;
     const duplicatePageOp = defaultRegistry.get('pages.duplicate')!;
 
-    const p1 = await createPageOp.execute(snapshot, { slug: 'blog', title: 'Blog' }, context);
+    const p1 = await createPageOp.execute(snapshot, {
+      slug: 'blog',
+      title: 'Blog',
+      content: '<section data-id="section-1"><p data-id="text-1">Article list</p></section>',
+    }, context);
     applyChanges(p1.changes);
 
     const dupRes = await duplicatePageOp.execute(
@@ -178,6 +314,12 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
 
     const clientCode = files.get('app/blog-archive/page.client.tsx')!;
     expect(clientCode).toContain('data-name="Blog Archive"');
+    expect(clientCode).toContain('data-id="root"');
+    expect(clientCode).toContain('data-id="node-');
+    expect(clientCode).not.toContain('data-id="section-1"');
+    expect(clientCode).not.toContain('data-id="text-1"');
+    expect(checkFile(clientCode, { kind: 'page', path: 'app/blog-archive/page.client.tsx' })
+      .map((issue) => issue.code)).not.toContain('PAGE_ROOT_REQUIRED');
   });
 
   it('removes a non-homepage page and refuses removing homepage', async () => {

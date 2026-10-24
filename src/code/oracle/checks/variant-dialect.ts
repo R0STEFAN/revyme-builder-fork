@@ -54,6 +54,12 @@ function readStyleLiteral(attrs: t.JSXAttribute[], key: string): string | null {
   return null;
 }
 
+/** Whether a presence child floats above layout instead of reserving a slot. */
+function isOutOfFlowOverlay(attrs: t.JSXAttribute[]): boolean {
+  return attrs.some((a) => a.name.name === 'data-overlay')
+    || ['absolute', 'fixed'].includes(readStyleLiteral(attrs, 'position') ?? '');
+}
+
 /** Does a gate condition compare the live `variant`/`initialVariant`? */
 function mentionsVariant(e: t.Node): boolean {
   if (t.isBinaryExpression(e)) return t.isIdentifier(e.left) && (e.left.name === 'variant' || e.left.name === 'initialVariant');
@@ -397,7 +403,7 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
         const apHasGatedChild = path.node.children.some((c) =>
           t.isJSXExpressionContainer(c) && t.isLogicalExpression(c.expression)
           && t.isJSXElement(c.expression.right)
-          && !jsxAttrs((c.expression.right as t.JSXElement).openingElement).some((a) => a.name.name === 'data-overlay'));
+          && !isOutOfFlowOverlay(jsxAttrs((c.expression.right as t.JSXElement).openingElement)));
         if (apHasGatedChild && stringAttr(jsxAttrs(path.node.openingElement), 'mode') !== 'popLayout') {
           v.push({
             code: 'ANIMATEPRESENCE_POPLAYOUT_MODE', tier: 2, line: path.node.openingElement.loc?.start.line,
@@ -418,12 +424,13 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
           }
 
           const isOverlayChild = elAttrs.some((a) => a.name.name === 'data-overlay');
+          const isOutOfFlowChild = isOutOfFlowOverlay(elAttrs);
           const isVariantGate = child.expression.operator === '&&' && mentionsVariant(child.expression.left);
 
           // ANIMATEPRESENCE_CHILD_LAYOUT — a gated child without `layout` can't
           // FLIP its siblings when it mounts/unmounts: the reveal pops and the
           // row/column snaps into place (the header distortion, 2026-07-30).
-          if (!isOverlayChild && !elAttrs.some((a) => a.name.name === 'layout')) {
+          if (!isOutOfFlowChild && !elAttrs.some((a) => a.name.name === 'layout')) {
             v.push({
               code: 'ANIMATEPRESENCE_CHILD_LAYOUT', tier: 2, line: el.openingElement.loc?.start.line,
               elementId: stringAttr(elAttrs, 'data-id'),
@@ -432,10 +439,7 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
           }
 
           // Track in-flow variant reveals for the root column-shell check below.
-          if (!isOverlayChild && isVariantGate) {
-            const pos = readStyleLiteral(elAttrs, 'position');
-            if (pos !== 'absolute' && pos !== 'fixed') sawInFlowVariantReveal = true;
-          }
+          if (!isOutOfFlowChild && isVariantGate) sawInFlowVariantReveal = true;
 
           // VARIANT_VISIBILITY_CONDITION — a per-variant show/hide wrapper must
           // gate on a condition the canvas can statically resolve. parser.ts's

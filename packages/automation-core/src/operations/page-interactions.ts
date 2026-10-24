@@ -73,7 +73,7 @@ export const pageInteractionsAddOperation: Operation<
   }
 > = {
   name: 'pageInteractions.add',
-  description: 'Attach or update a Set Variable interaction on a node',
+  description: 'Attach or update a Set Variable interaction. Oracle accepts numeric resets and empty-string clears; non-empty string literals are rejected as hidden content/state. Use component variants/connections or CMS for content switching.',
   category: 'page-interactions',
   kind: 'mutation',
   permit: 'write',
@@ -84,7 +84,7 @@ export const pageInteractionsAddOperation: Operation<
     nodeId: z.string().min(1),
     trigger: interactionTriggerSchema,
     varName: z.string().min(1),
-    value: z.string(),
+    value: z.string().describe("Setter argument as source text. Use numeric literals such as '0' for resets or '' to clear; non-empty text/color string literals are rejected by HANDLER_CONTENT_STATE."),
     typeOverride: pageVariableTypeSchema.optional(),
   }),
   async execute(snapshot, input) {

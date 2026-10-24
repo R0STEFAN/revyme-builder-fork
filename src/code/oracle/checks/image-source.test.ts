@@ -28,6 +28,16 @@ describe('image-source rule', () => {
     expect(isAllowedImageSource('/images/hero.png', projectFiles)).toBe(false);
   });
 
+  it('accepts the public URL for an uploaded public/assets file', () => {
+    const projectFiles = new Set(['public/assets/mcp-audit-proof.svg']);
+    expect(isAllowedImageSource('/assets/mcp-audit-proof.svg', projectFiles)).toBe(true);
+
+    const ast = parseJSX('<img data-id="audit-image" src="/assets/mcp-audit-proof.svg" />');
+    const violations: OracleViolation[] = [];
+    checkImageSourceDialect(ast!, violations, projectFiles);
+    expect(violations).toHaveLength(0);
+  });
+
   it('flags JSX <img> tags with foreign local paths', () => {
     const ast = parseJSX('<img data-id="img-1" src="/images/hero-3d-object.png" alt="Hero" />');
     const v: OracleViolation[] = [];

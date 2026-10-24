@@ -1,6 +1,6 @@
 // packages/automation-core/src/operations/site-effects.ts
 import { z } from 'zod';
-import type { Operation, FileChange } from '../contracts';
+import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
 import {
   parseSmoothScroll,
@@ -14,18 +14,33 @@ import {
 } from '@/code/project/smooth-scroll-config';
 import { ensureSmoothScrollInLayout } from '@/code/generation/smooth-scroll-layout';
 import {
+  SMOOTH_SCROLL_CONTROLLER_PATH,
+  SMOOTH_SCROLL_CONTROLLER_SOURCE,
+  SMOOTH_SCROLL_MARKER,
+} from '@/code/generation/smooth-scroll-gen';
+import {
   parsePageEffects,
   serializePageEffects,
-  createDefaultSide,
   upsertEffectInMap,
   removeEffectFromMap,
   listEffectsForPage,
   type PageEffect,
 } from '@/code/project/page-effects-config';
+import { parsePageFromPath } from './pages';
+import {
+  PAGE_EFFECTS_RUNTIME_SOURCE,
+  PAGE_TRANSITIONS_SOURCE,
+  injectPageTransitionsInCode,
+  pageEffectsDataPath,
+  pageTransitionsPath,
+} from '@/code/generation/page-transitions-gen';
+import { applyPreset } from '@/code/generation/view-transition-css';
 import {
   addComponentCursorInCode,
+  ensureCursorPortalInLayout,
   removeComponentCursorInCode,
 } from '@/code/generation/cursor-gen';
+import { ensureLayoutFile } from '@/code/generation/metadata-gen';
 import {
   getGlide,
   setGlideInCode,
@@ -92,6 +107,18 @@ export const siteEffectsSmoothScrollSetOperation: Operation<
         content: newScrollCode,
       },
     ];
+
+    // The editor's ProjectFS path scaffolds the controller as a side effect.
+    // Headless MCP operations must include the same generated runtime in their
+    // plan, otherwise app/layout.tsx imports a file that never reaches storage.
+    const existingController = snapshot.files.get(SMOOTH_SCROLL_CONTROLLER_PATH);
+    if (!existingController?.includes(SMOOTH_SCROLL_MARKER)) {
+      changes.push({
+        path: SMOOTH_SCROLL_CONTROLLER_PATH,
+        beforeHash: null,
+        content: SMOOTH_SCROLL_CONTROLLER_SOURCE,
+      });
+    }
 
     // If layout exists, mount <SmoothScroll /> into layout if missing
     const layoutPath = 'app/layout.tsx';
@@ -187,16 +214,80 @@ export const siteEffectsSmoothScrollRemoveOperation: Operation<
 // ─── 2. Page Transitions ──────────────────────────────────────────────────────
 
 function createPageEffect(preset: string, target = 'all', duration = 0.4): PageEffect {
-  const enter = createDefaultSide();
-  const exit = createDefaultSide();
-  enter.transition.duration = duration;
-  exit.transition.duration = duration;
-  return {
-    preset,
-    target,
-    enter,
-    exit,
-  };
+  const sides = applyPreset(preset);
+  if (sides.enter) sides.enter.transition.duration = duration;
+  if (sides.exit) sides.exit.transition.duration = duration;
+  return { preset, target, ...sides };
+}
+
+function normalizeRoute(route: string): string {
+  const trimmed = route.trim();
+  if (!trimmed || trimmed === '/') return '/';
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
+}
+
+function findPagePathForRoute(snapshot: Snapshot, route: string): string | null {
+  const target = normalizeRoute(route);
+  for (const path of snapshot.files.keys()) {
+    if (!path.endsWith('page.client.tsx')) continue;
+    const parsed = parsePageFromPath(path);
+    if (parsed && normalizeRoute(parsed.route) === target) return path;
+  }
+  return null;
+}
+
+function findLayoutClientForRoute(snapshot: Snapshot, route: string): string | null {
+  const pagePath = findPagePathForRoute(snapshot, route);
+  if (!pagePath) return null;
+
+  let directory = pagePath.slice(0, pagePath.lastIndexOf('/'));
+  while (directory === 'app' || directory.startsWith('app/')) {
+    const hasLayout = snapshot.files.has(`${directory}/layout.tsx`) || snapshot.files.has(`${directory}/layout.jsx`);
+    if (hasLayout) {
+      const layoutClient = `${directory}/LayoutClient.tsx`;
+      return snapshot.files.has(layoutClient) ? layoutClient : null;
+    }
+    if (directory === 'app') break;
+    directory = directory.slice(0, directory.lastIndexOf('/'));
+  }
+  return null;
+}
+
+function getPageEffectsPath(snapshot: Snapshot, route: string): string | null {
+  const layoutClient = findLayoutClientForRoute(snapshot, route);
+  return layoutClient ? pageEffectsDataPath(layoutClient) : null;
+}
+
+function addChangedFile(snapshot: Snapshot, path: string, content: string, changes: FileChange[]): void {
+  if (snapshot.files.get(path) === content) return;
+  changes.push({ path, beforeHash: null, content });
+}
+
+function createPageTransitionScaffoldChanges(
+  snapshot: Snapshot,
+  layoutClientPath: string,
+  changes: FileChange[],
+): void {
+  const dataPath = pageEffectsDataPath(layoutClientPath);
+  const runtimePath = dataPath.replace(/page-effects\.ts$/, 'page-effects-runtime.ts');
+  const transitionsPath = pageTransitionsPath(layoutClientPath);
+  const layoutCode = snapshot.files.get(layoutClientPath);
+  if (layoutCode == null) throw new Error(`Layout client not found: ${layoutClientPath}`);
+
+  const injectedLayout = injectPageTransitionsInCode(layoutCode);
+  if (!injectedLayout.includes('<PageTransitions>')) {
+    throw new Error(`Layout client ${layoutClientPath} has no editable children slot for page transitions`);
+  }
+  addChangedFile(snapshot, layoutClientPath, injectedLayout, changes);
+
+  const currentRuntime = snapshot.files.get(runtimePath);
+  if (!currentRuntime || !currentRuntime.includes('@rt-v7')) {
+    addChangedFile(snapshot, runtimePath, PAGE_EFFECTS_RUNTIME_SOURCE, changes);
+  }
+  const currentTransitions = snapshot.files.get(transitionsPath);
+  if (!currentTransitions || !currentTransitions.includes('@rt-v9')) {
+    addChangedFile(snapshot, transitionsPath, PAGE_TRANSITIONS_SOURCE, changes);
+  }
 }
 
 export const siteEffectsPageTransitionSetOperation: Operation<
@@ -226,22 +317,23 @@ export const siteEffectsPageTransitionSetOperation: Operation<
   }),
   async execute(snapshot, input) {
     const page = input.page ?? '/';
-    const filePath = 'app/page-effects.ts';
+    const layoutClientPath = findLayoutClientForRoute(snapshot, page);
+    if (!layoutClientPath) {
+      throw new Error(`No matching page with a LayoutClient was found for route "${page}"`);
+    }
+    const filePath = pageEffectsDataPath(layoutClientPath);
     const existingCode = snapshot.files.get(filePath) ?? '';
     const map = parsePageEffects(existingCode);
 
     const effect = createPageEffect(input.preset ?? 'crossfade', input.target ?? 'all', input.duration ?? 0.4);
-    const nextMap = upsertEffectInMap(map, page, effect);
+    const nextMap = upsertEffectInMap(map, normalizeRoute(page), effect);
     const newCode = serializePageEffects(nextMap);
+    const changes: FileChange[] = [];
+    createPageTransitionScaffoldChanges(snapshot, layoutClientPath, changes);
+    addChangedFile(snapshot, filePath, newCode, changes);
 
     return {
-      changes: [
-        {
-          path: filePath,
-          beforeHash: null,
-          content: newCode,
-        },
-      ],
+      changes,
       effect,
     };
   },
@@ -266,10 +358,13 @@ export const siteEffectsPageTransitionGetOperation: Operation<
     page: z.string().optional().default('/'),
   }),
   async execute(snapshot, input) {
-    const code = snapshot.files.get('app/page-effects.ts');
+    const route = normalizeRoute(input.page ?? '/');
+    const filePath = getPageEffectsPath(snapshot, route);
+    if (!filePath) return { effect: null };
+    const code = snapshot.files.get(filePath);
     if (!code) return { effect: null };
     const map = parsePageEffects(code);
-    const effects = listEffectsForPage(map, input.page ?? '/');
+    const effects = listEffectsForPage(map, route);
     return { effect: effects[0] ?? map.__default ?? null };
   },
 };
@@ -296,8 +391,9 @@ export const siteEffectsPageTransitionRemoveOperation: Operation<
     target: z.string().optional().default('all'),
   }),
   async execute(snapshot, input) {
-    const page = input.page ?? '/';
-    const filePath = 'app/page-effects.ts';
+    const page = normalizeRoute(input.page ?? '/');
+    const filePath = getPageEffectsPath(snapshot, page);
+    if (!filePath) return { changes: [], removedPage: page };
     const code = snapshot.files.get(filePath);
     if (!code) return { changes: [], removedPage: page };
 
@@ -368,14 +464,22 @@ export const siteEffectsCursorSetOperation: Operation<
       variant: input.variant,
     });
 
+    const layoutPath = 'app/layout.tsx';
+    const currentLayout = snapshot.files.get(layoutPath);
+    const layout = ensureCursorPortalInLayout(currentLayout ?? ensureLayoutFile());
+    const changes: FileChange[] = [
+      {
+        path: input.targetFile,
+        beforeHash: null,
+        content: code,
+      },
+    ];
+    if (layout !== currentLayout) {
+      changes.push({ path: layoutPath, beforeHash: null, content: layout });
+    }
+
     return {
-      changes: [
-        {
-          path: input.targetFile,
-          beforeHash: null,
-          content: code,
-        },
-      ],
+      changes,
     };
   },
 };

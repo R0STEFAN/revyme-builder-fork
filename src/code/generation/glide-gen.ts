@@ -186,9 +186,14 @@ export function getGlide(code: string, nodeId: string): GlideSpec | null {
 function ensureGlideImports(code: string): string {
   for (const name of ['motion', 'LayoutGroup']) {
     if (!new RegExp(`\\b${name}\\b`).test(code)) continue;
-    if (new RegExp(`import[^;]*\\b${name}\\b[^;]*from\\s*['"]framer-motion['"]`).test(code)) continue;
-    if (/import\s*\{[^}]*\}\s*from\s*['"]framer-motion['"]/.test(code)) {
-      code = code.replace(/(import\s*\{)([^}]*)(\}\s*from\s*['"]framer-motion['"])/, (_m, a, b, c) => `${a}${b}, ${name}${c}`);
+    const namedImport = code.match(/import\s*\{([^}]*)\}\s*from\s*(['"])framer-motion\2/);
+    if (namedImport) {
+      const names = namedImport[1].split(',').map((part) => part.trim()).filter(Boolean);
+      if (!names.includes(name)) names.push(name);
+      const normalized = `import { ${names.join(', ')} } from ${namedImport[2]}framer-motion${namedImport[2]}`;
+      code = code.replace(namedImport[0], normalized);
+    } else if (new RegExp(`import[^;]*\\b${name}\\b[^;]*from\\s*['"]framer-motion['"]`).test(code)) {
+      continue;
     } else {
       const importLine = `import { ${name} } from 'framer-motion';`;
       code = insertAfterLastImportLine(code, importLine) ?? (importLine + '\n' + code);
@@ -425,7 +430,29 @@ function removeGlide(code: string, nodeId: string): string {
     code = code.slice(0, region.start) + inner + code.slice(region.end);
   }
   code = cleanNodeTag(code, nodeId);
+  code = pruneUnusedLayoutGroupImport(code);
   trace.action('glide:remove', { nodeId });
+  return code;
+}
+
+/** Remove only the named import Glide owns, and only when no JSX use remains. */
+function pruneUnusedLayoutGroupImport(code: string): string {
+  const imports = [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*(['"])framer-motion\2;?/g)];
+  for (const match of imports.reverse()) {
+    const declaration = match[0];
+    const start = match.index!;
+    const specifiers = match[1].split(',').map((part) => part.trim()).filter(Boolean);
+    if (!specifiers.includes('LayoutGroup')) continue;
+
+    const withoutDeclaration = code.slice(0, start) + code.slice(start + declaration.length);
+    if (/\bLayoutGroup\b/.test(withoutDeclaration)) continue;
+
+    const remaining = specifiers.filter((specifier) => specifier !== 'LayoutGroup');
+    const replacement = remaining.length
+      ? `import { ${remaining.join(', ')} } from ${match[2]}framer-motion${match[2]};`
+      : '';
+    code = code.slice(0, start) + replacement + code.slice(start + declaration.length);
+  }
   return code;
 }
 

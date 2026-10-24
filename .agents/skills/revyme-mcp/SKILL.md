@@ -9,6 +9,8 @@ description: >-
 
 This skill guides the AI agent on how to interact with the **Revyme Website Builder** running in the browser via its local **MCP Bridge Server**.
 
+> **MCP v2 source of truth:** use the live `mcp__revyme_v2` tool schemas provided by the current session. The legacy `revyme_*` tool names and JSON examples below are historical and are not executable MCP v2 calls. Prefer the typed dot-named operations such as `pages.list`, `pages.create`, `templates.create`, and `siteEffects.pageTransition.set`; do not guess from old examples when an operation schema is available.
+
 ## 1. MCP Configuration & Prerequisites
 
 ### Client Configuration (`mcp_config.json`)
@@ -36,7 +38,88 @@ Before executing any tool calls, ensure that:
 
 ---
 
-## 2. Communication Methods
+## 2. MCP v2 Operations
+
+Use the currently registered `mcp__revyme_v2` tools and their live schemas. In Codex the
+wrappers look like `mcp__revyme_v2__pages_list`; an MCP SDK client calls the corresponding
+dot-name such as `pages.list`.
+
+- Discover operations with `meta.index`; inspect exact arguments and examples with
+  `meta.tools({ includeSchemas: true, names: [...] })`. Use `meta.guide` for the workflow.
+- Pass the intended `projectId` and `branchId` on scoped calls when available. Browser
+  selection is not a reliable project/branch selector. For deterministic CLI runs, set
+  `REVYME_PROJECT_ID` and `REVYME_BRANCH_ID` and still pass explicit IDs in test calls.
+  When switching projects in a shared client or shell, always change both IDs together: a stale
+  `REVYME_BRANCH_ID` from another project can make a healthy project look missing if that branch
+  does not exist there.
+- Read source through `pages.list`, `codeFiles.list/read/search`, and domain reads such as
+  `nodes.get`, `styles.get`, `components.get`, or `cms.schema.list`; mutate through the
+  matching typed operations. Use `dryRun: true` where supported, then verify commit receipts
+  and read changed source back.
+- A successful mutation returns its durable commit receipt in `data` and its compact,
+  operation-specific output in top-level `operationResult` (for example, a created `formId`
+  or `nodeId`). Use those returned IDs for the next call instead of scraping generated
+  source; dry-runs preserve the same summary alongside the proposed plan.
+- Use the exact preset names returned by `presets.list`; `presets.apply` accepts both
+  category-prefixed names (such as `radius-card`) and short names (such as `card`).
+- Distinguish Next.js server `layout.tsx` wrappers from editable route-group
+  `LayoutClient.tsx` templates. The server wrapper may contain metadata, CSS imports,
+  and `<html>/<body>`; do not apply canvas-page expectations to it. `fonts.transformNextFont`
+  moves Google font loading into `next/font/google`, removes the matching CSS `@import`,
+  and rewrites quoted font families to the generated CSS variable.
+- Source operations run headlessly against the selected project snapshot and do not need an
+  editor tab to infer context. `observe.*` and rendered-browser checks may need the local
+  HTTP bridge and an active Builder tab; trust the operation's reported availability/status.
+- Responsive defaults are Desktop 1200px, Tablet 810px, and Mobile 390px. `viewports.list`
+  reports these defaults, not the actual tile set of every page; inspect that page's
+  `/** @canvas */` block with `codeFiles.read`. Apply a rule with
+  `viewports.setOverride({ filePath, nodeId, viewport, styles })`; a missing requested
+  default viewport is added to that page's canvas config and positioned after existing tiles.
+- Use `variants.*`, `connections.*`, `motion.*`, `textEffects.*`, or `siteEffects.*` for
+  animation. Raw CSS `transition` is rejected by the Oracle because the builder cannot edit
+  it; do not replace a failed native animation call with untracked CSS.
+- For page state, pair `variables.*` with `variables.bind` and `pageInteractions.*`. The
+  `HANDLER_CONTENT_STATE` Oracle intentionally allows numeric reset literals (for example
+  `'0'`) and empty-string clears only; non-empty text/color literals in setters are rejected
+  because hidden content/state machines cannot round-trip through the editor. Use design
+  component variants/connections or CMS for content switching. For `expressions.bind` href,
+  target a Next.js `<Link>` or configured `<MotionLink>`, never a raw navigating `<a>`; use
+  the operation-specific schema and Oracle diagnostics for supported expression shapes.
+- If a valid MCP call fails, diagnose the server operation, add a regression test, record the
+  exact symptom/cause/fix in `MCP_V2_ISSUES.md`, then verify through a fresh independent MCP
+  stdio child after rebuilding. Do not hide a server defect with direct file writes or an
+  alternate mutation path.
+- For a broad MCP audit, inventory the live registry (not the legacy examples in this file),
+  track each operation in a per-tool matrix, and distinguish committed/read-back success,
+  successful dry-run, expected negative path, and safety exclusion. A schema-valid `meta.tools`
+  example may still depend on a real target node, route, collection, or file; use a compatible
+  fixture before claiming execution success. Do not count `NODE_NOT_FOUND` or similar missing
+  resource responses as a passing mutation test.
+- The plan validator must apply canvas data-id/Oracle dialect only to editable pages, templates,
+  and design components. Keep generated/materialized runtimes, icon-set masters, code overrides,
+  and plugin entrypoints on their own validation path: retain syntax, relative-import, and
+  operation-specific checks, but do not require page-root markup or canvas IDs in code that is
+  not rendered as an editable page. When a generated MCP operation emits an import, include its
+  runtime file in the same plan so validation sees a resolvable projected source tree.
+- Generated helper components must also round-trip through the Oracle, not just the page that
+  imports them. In particular, `forms.submitButton.add` must include its generated/upgraded
+  `components/FormSubmit.tsx` and `components/Spinner.tsx` in the same validated plan. Use
+  keyed conditional children inside `<AnimatePresence mode="popLayout">` for submit states;
+  do not model hidden states with `display: none`. Continuous Spinner rotation needs the
+  builder's `data-loop` marker. After the form operation, read back the helper sources and run
+  `diagnostics.projectCheck`; non-blocking drift warnings still mean the generated code is not
+  fully editor-compatible. Preserve user-authored helper components rather than overwriting
+  them during generated-component upgrades.
+- `cms.api.searchField.add` and `.setVariable` must keep the field, React state hook/import, and
+  the repeater's `valueSource: "searchField"` filter on the same variable. After rebinding,
+  inspect the parsed filter as well as the input's `data-search-field`/`value`/`onChange`; a
+  visible text field alone does not prove the search still filters results. Headless operations
+  must add the React `useState` import themselves rather than depending on the canvas mutation
+  queue's later import synchronization.
+
+---
+
+### Historical MCP v1 names (not executable in the current MCP v2 registry)
 
 The agent can send requests to the builder in two ways:
 1. **Through MCP Tools directly** (Antigravity / Claude loaded tools):
@@ -416,48 +499,20 @@ Run automated linting on viewports to verify contrast and prevent overflow:
 
 ---
 
-### E. Utopia Fluid Typography & Spacing Standard (utopia.fyi)
+### E. Responsive dimensions and fluid text
 
-Revyme adopts the **Utopia fluid responsive methodology** (from [utopia.fyi](https://utopia.fyi)).
-Instead of rigid breakpoints where text and padding snap abruptly, Utopia interpolates dimensions smoothly between **Mobile (375px)** and **Desktop (1200px)** via pure CSS `clamp()`.
+The Builder's editable style dialect accepts `clamp()` for font size in typography
+presets only. Do not use `clamp()` in raw element styles, spacing/radius presets, or any
+other CSS property: the Oracle rejects or the Builder cannot round-trip those values.
 
-#### 1. Why Fluid clamp() Outperforms Rigid Media Queries
-- **Continuous Scaling**: Between 375px and 1200px (and beyond), font sizes and section paddings scale fluidly with viewport width.
-- **Zero Breakpoint Snapping**: No sudden jumps where text awkwardly overflows or breaks onto three lines.
-- **Zero Media Query Bloat**: A single declaration `fontSize: "clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)"` looks perfect on Mobile (36px), Tablet (46px), and Desktop (58px)!
-
-#### 2. Utopia Fluid Scale Reference
-Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for full mathematical tables. Key values:
-
-- **Typography Steps**:
-  - `Hero Display`: `clamp(2.75rem, 2.02rem + 3.1vw, 4.75rem)` (44px → 76px)
-  - `H1 / Headline`: `clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)` (36px → 58px)
-  - `H2 / Section Title`: `clamp(1.75rem, 1.39rem + 1.55vw, 2.75rem)` (28px → 44px)
-  - `H3 / Card Title`: `clamp(1.5rem, 1.27rem + 0.97vw, 2.125rem)` (24px → 34px)
-  - `H4 / Subtitle`: `clamp(1.25rem, 1.11rem + 0.58vw, 1.625rem)` (20px → 26px)
-  - `Body Base`: `clamp(0.9375rem, 0.89rem + 0.19vw, 1.0625rem)` (15px → 17px)
-  - `Small Caption`: `clamp(0.8125rem, 0.78rem + 0.12vw, 0.875rem)` (13px → 14px)
-
-- **Spacing Steps**:
-  - `Section Y Padding`: `clamp(3.5rem, 2.27rem + 5.24vw, 6.875rem)` (56px → 110px)
-  - `Container Gutter`: `clamp(1rem, 0.64rem + 1.55vw, 2rem)` (16px → 32px)
-  - `Card Padding`: `clamp(1.25rem, 0.89rem + 1.55vw, 2.25rem)` (20px → 36px)
-  - `Grid Gap`: `clamp(1rem, 0.64rem + 1.55vw, 2rem)` (16px → 32px)
-
-#### 3. How to Set in globals.css via `revyme_manage_presets`
-```json
-{
-  "action": "set",
-  "tokens": [
-    { "name": "font-step-5", "value": "clamp(2.25rem, 1.75rem + 2.13vw, 3.625rem)", "category": "typography" },
-    { "name": "font-step-4", "value": "clamp(1.75rem, 1.39rem + 1.55vw, 2.75rem)", "category": "typography" },
-    { "name": "font-step-0", "value": "clamp(0.9375rem, 0.89rem + 0.19vw, 1.0625rem)", "category": "typography" },
-    { "name": "space-section-y", "value": "clamp(3.5rem, 2.27rem + 5.24vw, 6.875rem)", "category": "spacing" },
-    { "name": "space-gutter", "value": "clamp(1rem, 0.64rem + 1.55vw, 2rem)", "category": "spacing" }
-  ]
-}
-```
-In element styles, reference via `var(--font-step-5)` or inline `clamp(...)` directly!
+- For responsive text, create or use a complete typography preset and keep its fluid
+  `font-size` there; all other text properties belong to that same preset.
+- For responsive padding, margin, and radius, use their preset editors and set explicit
+  pixel values at Desktop, Tablet, and Mobile breakpoints.
+- For responsive element-level styles outside those presets, use `viewports.setOverride`
+  with pixel values and verify the page has the matching viewport tile.
+- Do not add standalone `space-*` clamp tokens or inline `clamp()` declarations. Use the
+  Utopia reference only as a guide for choosing the text preset's fluid font-size values.
 
 ---
 
@@ -571,7 +626,7 @@ All TSX files submitted or edited undergo strict AST validation in `src/code/ora
 | **11. `FREE_CANVAS_LEFT_PLACEMENT`** | Free-canvas nodes (slot candidates, marquee/carousel cards) MUST ALWAYS be positioned to the LEFT of the site | Use negative X coordinates (`left: '-380px'`, `left: '-760px'`). **NEVER** use positive `left` (e.g. `1350px`) | The right side of the canvas ($x \ge 0$) is reserved for responsive viewports (Tablet at $x=1360$, Mobile at $x=2330$). Placing nodes on the right causes physical overlap and visual breakage with breakpoints! |
 | **12. `VARIANT_CONFIG_NON_OVERLAPPING`** | Variant artboards in component files (`variantConfig`) must NEVER overlap | Offset variants by at least `width + 80px` horizontally (e.g. `x: 0`, `x: 1400`) or `height + 80px` vertically | Overlapping coordinates in `variantConfig` cause the component editor to render variant artboards directly on top of each other, making visual editing impossible. |
 | **13. `FIXED_DEPTH_AND_BLEND_MODE`** | Never put `position: 'fixed'` or `mixBlendMode: 'difference'` inside component masters | Use `position: 'sticky', top: 0` on the root header with explicit background color (e.g. `rgba(255,255,255,0.85)` + `backdropFilter: 'blur(16px)'`) | Inside component masters, `position: 'fixed'` is trapped by Framer Motion's `transform` containing block and becomes invisible or displaced on the canvas. `mixBlendMode: 'difference'` renders as invisible/black on canvas iframe transparent layers. |
-| **14. `RAW_STYLE_TAG_PROHIBITION`** | Raw `<style>` tags with `@media` in JSX are strictly forbidden | Use fluid CSS (`clamp()`, `minmax()`, `repeat(auto-fit, ...)`) or `revyme_set_responsive_styles` | Raw `<style>` blocks bypass the visual inspector and cannot be edited by the builder panels. |
+| **14. `RAW_STYLE_TAG_PROHIBITION`** | Raw `<style>` tags with `@media` in JSX are strictly forbidden | Use responsive dimension presets or `viewports.setOverride` with pixel values; fluid `clamp()` is allowed only in typography preset font-size | Raw `<style>` blocks bypass the visual inspector and cannot be edited by the builder panels. |
 
 ---
 
@@ -1349,6 +1404,69 @@ When creating new pages, styling elements, or adding features, you must protect 
   - If the user is currently viewing the Home page on canvas, running `add_node` without navigating to the target page will add nodes to the Home page!
   - When authoring a separate page, use `revyme_submit_files` with the explicit file path.
 
+### A2. Shared Route Templates (MCP v2)
+When the user asks to share a header/footer across routes, use route templates rather than duplicating those instances on each page:
+
+1. Inspect the exact page routes and component names with `pages.list`, `templates.list`, and `components.get` (plus `codeFiles.read` when source details are needed). Preserve existing component masters.
+2. Preview `templates.create` with `dryRun: true`, passing the existing header/footer as direct JSX component instances in `headerContent` and `footerContent`. Give each instance stable `data-id` and `data-name` values. Do not wrap a Navbar that renders its own `<header>` in another `<header>`, or a Footer that renders its own `<footer>` in another `<footer>`.
+3. The generated `LayoutClient` must have the exact outer `<div data-id="root" data-name="…" style={{ position: 'relative', width: '100%' }}>`; do not add unsupported viewport units such as `minHeight: '100vh'`. Component tags included in template content must be imported from their existing `components/<Name>.tsx` files. Put `{children}` exactly once as a **direct child** of this root—never wrap it in `<main>` or another layout element.
+4. After the dry-run is Oracle-clean, create the template with `templates.create`. Before assigning a page, ensure its `data-id="root"` carries only root geometry; move shared background/clipping to the template root and clear those properties from the page root with `nodes.update`. Then assign the homepage using `templates.assign` with `pageSlug: ""`, and remove the old header/footer instances from the moved homepage with `nodes.remove` using their exact IDs and the new `app/(<template>)/page.client.tsx` path.
+5. Create additional pages through `pages.create` with the same `template` name. Keep page content in the page body only; do not re-add shared shell components.
+6. For a native route crossfade, use `siteEffects.pageTransition.set` for each direction (`page: "/", target: "/about"` and the reverse), with `preset: "crossfade"`. The operation must use the selected route's nearest `LayoutClient`, scaffold the runtime files beside it, and wrap its `{children}` slot; for a route-group template, these files belong under `app/(<template>)/`, not blindly in `app/`. `crossfade` must store opacity `0` on both enter and exit sides. If `siteEffects.pageTransition.get` returns identity opacity `1`, treat it as a failed transition and diagnose the MCP operation. Do not hand-write View Transition CSS or a custom transition component.
+7. Verify with `pages.list`, `templates.list`, `siteEffects.pageTransition.get`, `diagnostics.projectCheck`, and `preview.build`; inspect rendered desktop and mobile output where observation tools are available. A page pair (`page.client.tsx` + `page.tsx`) is one public route: the server wrapper must not appear as a duplicate route or expose a route-group name. `preview.build` may report an internal `/__template_preview/<name>` route and may have no live URL when no preview adapter is configured; do not report that as a live preview.
+
+### A3. Test and restart an independent MCP v2 process
+When a rebuilt CLI needs live verification, launch it as a child of an MCP SDK client instead of restarting Codex. Keep the Builder API running; the stdio MCP child is separate and can be closed/recreated on demand.
+
+```js
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const transport = new StdioClientTransport({
+  command: process.execPath,
+  args: ['packages/cli/bin/revyme.mjs', 'mcp'],
+  cwd: process.cwd(), // repository root
+  env: {
+    ...process.env,
+    REVYME_API_URL: 'http://[::1]:3333', // use the Builder's actual API origin
+    REVYME_PROJECT_ID: '<project-id>',
+    REVYME_BRANCH_ID: 'main',
+    REVYME_MCP_BRIDGE_URL: 'http://127.0.0.1:8082', // needed by browser/observe tools
+  },
+});
+const client = new Client({ name: 'independent-revyme-test', version: '1.0.0' });
+await client.connect(transport);
+const result = await client.callTool({ name: 'pages.list', arguments: {} });
+// Restart only this MCP process: close this client, then create/connect a fresh one.
+await client.close();
+```
+
+Rebuild with `npm run build --workspace=@revyme/cli` before launching the child after CLI source changes; `packages/cli/bin/revyme.mjs` loads the built `dist/main.js` when present. Set `REVYME_API_URL` to the Builder API origin actually in use (this local Builder listens on IPv6 loopback at port 3333; `127.0.0.1:3333` is not reachable here). Screenshot/observe operations also need the HTTP bridge on port 8082 and an active Builder tab. Restart `npm run dev` only when the Builder/API source or its process changed—not merely to reload a CLI MCP child. A Codex restart is only needed if specifically testing Codex's own configured MCP connection, not for routine operation checks.
+
+If the Codex-registered MCP wrapper disagrees with a fresh CLI child (for example, stale Oracle output), compare both against the current source and project revision before changing code. Do not signal an app-managed MCP child just to refresh it: the Codex host may not respawn it, and the registered wrapper can become `Transport closed`. Continue routine work with a fresh independent child; restoring the integrated wrapper requires the host's own reconnect/reload lifecycle. Record this as a transport lifecycle issue, not a Builder or Oracle defect, unless fresh children reproduce it.
+
+If a dry-run returns stale output that contradicts the current source, first rebuild `packages/cli`, then start a fresh independent MCP child as above. Record the failing operation and exact Oracle issue in `MCP_V2_ISSUES.md` before continuing. When code loaded through MCP's Vite SSR path traverses Babel ASTs, use the shared `normalizeBabelTraverse()` helper from `src/code/parsing/ast-utils.ts`; direct `@babel/traverse` imports may be nested under `default.default`, and catching that TypeError can mask it as “no editable JSX slot.”
+
+### A4. Localization and form operations must preserve their full dialect
+- `guides.set` writes a JSON-backed `@rulerGuides` JSDoc annotation. This exact metadata comment is Oracle-allowed, but arbitrary generated comments remain prohibited; read back with `guides.get` and clear with empty `horizontal`/`vertical` arrays when the guides are temporary.
+- `locales.remove` removes the locale from `i18n/config.json`, prunes its route wrappers, and deletes the legacy `i18n/{code}.json` overrides. It intentionally preserves `messages/{code}.json` so translations survive a remove/re-add cycle; do not treat that file as an orphan or delete it as cleanup.
+- `translations.set` writes the requested locale message and seeds the default-locale message before changing JSX to `t(key)`. Localized HTML attributes use their own message key; localized component props are locale-gated expressions. Read back both JSX and message files, not only the operation receipt.
+- A `forms.selectCaret.set` write must stay paired with the select's `data-select-icon` JSON marker. For a select without a marker, pass `icon` and `color` together with `cssBody`; when clearing the caret, pass `cssBody: null` so both the CSS rule and marker are removed. CSS-only writes are valid only when the select already carries the marker.
+- Honeypot inputs must be hidden off-canvas with a tiny clipped box, `tabIndex=-1`, `autoComplete="off"`, and `aria-hidden="true"`; the Oracle rejects `display: none` even for generated helpers.
+
+### A5. Screenshot and visual-audit results must be tied to the requested page
+- In a standalone MCP process, the editor's selection and canvas caches are not local to the
+  CLI. `observe.selection`, `observe.layout`, and `observe.visuals` must use the connected
+  Builder snapshot adapter, scoped to the exact project, branch, page, saved revision, and
+  viewport. Preserve its `pending`/`unavailable` status; do not claim a clean or measured result
+  from empty CLI-local caches. `observe.composition` reads source structure and does not require
+  rendered canvas measurements. Layout rects are in unzoomed viewport coordinates; the bridge
+  must invert the editor's camera transform before reporting bounds. For visual/layout/audit
+  results, prefetch requested computed styles from the iframe before using the synchronous style
+  cache, and do not report `ready` if that read failed.
+- `observe.screenshot` accepts `filePath` or `targetFile`; pass the exact target page through to the screenshot adapter. The active Builder tab must match the requested project, branch, page, and revision. A mismatched page, unrendered node, invalid dimensions, or malformed image data is `unavailable`/`pending`, never a valid screenshot. Report width/height in unzoomed viewport CSS pixels, not camera-scaled parent-screen pixels.
+- The design audit ignores elements that are explicitly `aria-hidden="true"` and are also CSS-hidden or positioned off-canvas. Do not treat its findings about those internal helper elements as user-visible layout failures.
+
 ### B. Preserve Shared Component Masters & CMS
 - Components in `components/` (e.g. `PortalHero.tsx`, `ThrowableDeck.tsx`, `SuFeSe.tsx` Navbar, `WeVuXi.tsx` Footer) and collections in `cms/` are shared across multiple pages and templates.
 - **Do not delete, gut, or break shared components** when working on a new subpage. Reuse them or build new dedicated components.
@@ -1446,9 +1564,8 @@ Revyme supports 7 distinct token categories under `:root` in `globals.css`. Do n
    - `shadow-card` (e.g. `0 4px 20px rgba(0, 0, 0, 0.06)`)
    - `shadow-elevated` (e.g. `0 12px 32px rgba(0, 0, 0, 0.12)`)
 4. **`spacing`** / **`margin`**:
-   - `space-section-y` (e.g. `clamp(60px, 9vw, 140px)`)
-   - `space-container-x` (e.g. `clamp(20px, 4vw, 48px)`)
-   - `space-gap` (e.g. `32px`)
+   - Store spacing values in pixels (e.g. `space-section-y: 112px`, `space-container-x: 32px`).
+   - Set Desktop, Tablet, and Mobile values in the responsive Padding/Margin preset editors; use pixel values at each breakpoint.
 5. **`color`**:
    - `color-brand`, `color-bg`, `color-surface`, `color-text`, `color-text-secondary`, `color-text-muted`.
 
@@ -1470,11 +1587,15 @@ style={{
 }}
 ```
 
-### Multi-Viewport Overrides (`revyme_set_responsive_styles`)
-If explicit device layout adjustments are required, call `revyme_set_responsive_styles`:
+### Multi-Viewport Overrides (`viewports.setOverride`)
+For explicit device layout changes, first read the target page's `@canvas` viewport config
+with `codeFiles.read`, then call `viewports.setOverride` with the exact `filePath`, `nodeId`,
+viewport ID or width, and styles. The operation adds a missing standard viewport tile to the
+page config before Oracle validation; use the live `meta.tools` schema for current arguments.
 ```json
 {
-  "node_id": "projects-grid",
+  "filePath": "app/page.client.tsx",
+  "nodeId": "projects-grid",
   "viewport": "mobile",
   "styles": {
     "gridTemplateColumns": "1fr",
@@ -1508,7 +1629,7 @@ Never claim that a website is ready without visual verification. Follow the 2-st
 
 ## 12. References & Deep Dives
 - Read [references/cms-and-expressions-guide.md](./references/cms-and-expressions-guide.md) for the complete guide to Built-in CMS, External API CMS mode (Directus/Strapi/Baserow), and Dynamic Expression Formulas (`fx`).
-- Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for the complete Utopia fluid typography and spacing scale tables and formulas.
+- Read [references/utopia-fluid-design.md](./references/utopia-fluid-design.md) for Utopia typography guidance. `clamp()` is allowed only for the `size` field of a typography preset; spacing and radius stay in pixels.
 - Read [references/built-in-arsenal.md](./references/built-in-arsenal.md) for the complete catalog of ~80 pre-built components (Marquee, Carousel, shaders, text effects, cursors).
 - Read [references/components-guide.md](./references/components-guide.md) for the complete guide on Design Components vs Code Components, templates, and authoring workflows.
 - Read [references/motion-choreography.md](./references/motion-choreography.md) for full animation physics, springs, easing presets, and choreography recipes.

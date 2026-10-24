@@ -94,6 +94,8 @@ export interface Operation<I = unknown, O = unknown> {
 export interface Result<T = unknown> {
   ok: boolean;
   data?: T;
+  /** Domain output from a committed mutation, excluding its file-change payload. */
+  operationResult?: unknown;
   error?: {
     code: string;
     message: string;

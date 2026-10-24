@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   defaultRegistry,
   OperationRegistry,
+  generateSchemaExample,
   metaIndexOperation,
   metaToolsOperation,
   metaGuideOperation,
@@ -17,6 +18,7 @@ import {
 import { runCase, createSeedFiles } from '../fixture';
 import { loadCoverageReport, verifyBaselineCompleteness } from '../coverage';
 import { z } from 'zod';
+import '../../src/index';
 
 describe('T01: Operation Contracts, Registry, Coverage and Fixture', () => {
   describe('Coverage and Baseline Completeness', () => {
@@ -132,6 +134,70 @@ describe('T01: Operation Contracts, Registry, Coverage and Fixture', () => {
       expect(tool.name).toBe('meta.index');
       expect(tool.inputSchema).toBeDefined();
       expect(tool.example).toBeDefined();
+    });
+
+    it('generates example values that satisfy positive numeric bounds', () => {
+      const example = generateSchemaExample(z.object({
+        count: z.number().int().positive(),
+        offset: z.number().int().min(3),
+      })) as { count: number; offset: number };
+
+      expect(example.count).toBeGreaterThan(0);
+      expect(Number.isInteger(example.count)).toBe(true);
+      expect(example.offset).toBeGreaterThanOrEqual(3);
+    });
+
+    it('generates schema-conforming examples for formats, common patterns, and optional fields', () => {
+      const example = generateSchemaExample(z.object({
+        componentName: z.string().regex(/^[A-Z][A-Za-z0-9]*$/),
+        variableName: z.string().regex(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/),
+        tokenName: z.string().regex(/^(--)?[A-Za-z_][A-Za-z0-9_-]*$/),
+        locale: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/),
+        website: z.string().url(),
+        targetFile: z.string().default('app/globals.css'),
+        enabled: z.boolean().default(false),
+        email: z.string().email().optional(),
+      })) as Record<string, unknown>;
+
+      expect(example.componentName).toMatch(/^[A-Z][A-Za-z0-9]*$/);
+      expect(example.variableName).toMatch(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/);
+      expect(example.tokenName).toMatch(/^(--)?[A-Za-z_][A-Za-z0-9_-]*$/);
+      expect(example.locale).toMatch(/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/);
+      expect(() => new URL(example.website as string)).not.toThrow();
+      expect(example.targetFile).toBe('app/globals.css');
+      expect(example.enabled).toBe(false);
+      expect(example.email).toBeUndefined();
+    });
+
+    it('provides schema-valid examples for operations with domain refinements', async () => {
+      const names = [
+        'workflow.batch',
+        'workflow.chain',
+        'forms.state.map',
+        'marketplace.import',
+        'vectors.createSet',
+        'redirects.add',
+        'projects.backup.restore',
+        'codeComponents.create',
+        'overrides.create',
+        'plugins.write',
+        'shapes.updateAttrs',
+        'pageInteractions.add',
+      ];
+      const result = await metaToolsOperation.execute(snapshot, { names }, context);
+      expect(result.tools).toHaveLength(names.length);
+      for (const tool of result.tools) {
+        const operation = defaultRegistry.get(tool.name)!;
+        expect(operation.inputSchema.safeParse(tool.example).success, tool.name).toBe(true);
+      }
+      const codeComponent = result.tools.find((tool) => tool.name === 'codeComponents.create');
+      const codeComponentCode = (codeComponent?.example as { code?: string } | undefined)?.code;
+      expect(codeComponentCode).toContain('@defaultWidth 400');
+      expect(codeComponentCode).toContain('@defaultHeight 300');
+      const interaction = result.tools.find((tool) => tool.name === 'pageInteractions.add');
+      expect(interaction?.example).toMatchObject({ value: '0', typeOverride: 'number' });
+      expect(interaction?.description).toContain('non-empty string literals');
+      expect((interaction?.inputSchema as any).properties.value.description).toContain("'' to clear");
     });
 
     it('meta.tools returns near match suggestions for unknown tools', async () => {

@@ -496,8 +496,10 @@ export function buildViewportTile(
 export function collectLayoutSnapshot(
   nodes: Map<string, CanvasNode>,
   vpId: string,
+  additionalStyleProps: string[] = [],
 ): AuditNode[] {
   const snap: AuditNode[] = [];
+  const styleProps = Array.from(new Set([...RENDERED_STYLE_PROPS, ...additionalStyleProps]));
   let withRect = 0;
   for (const node of nodes.values()) {
     let rect: LayoutRect | null = null;
@@ -513,7 +515,7 @@ export function collectLayoutSnapshot(
         rect = vpRect;
         withRect++;
       }
-      computed = findNodeComputedStyles(node.id, vpId, RENDERED_STYLE_PROPS);
+      computed = findNodeComputedStyles(node.id, vpId, styleProps);
     } catch {
       /* bridge unavailable — keep the node with rect:null */
     }

@@ -69,8 +69,8 @@ const canvasNodes = <>
   it('missing state/effect bounces with the exact snippets', () => {
     const gen = createOverlayInCode(BASE, 'menu-btn', 'overlay-menu-btn-1', relCfg, trgCfg);
     const bad = gen
-      .replace(/ {2}const \[overlayMenuBtn_1Open, setOverlayMenuBtn_1Open\] = useState\(false\);\n/, '')
-      .replace(/ {2}useLayoutEffect\(\(\) => \{[\s\S]*?\}, \[overlayMenuBtn_1Open\]\);\n/, '');
+      .replace(/ {2}const \[overlayMenuBtn_1Open, setOverlayMenuBtn_1Open\] = (?:React\.)?useState\(false\);\n/, '')
+      .replace(/ {2}(?:React\.)?useLayoutEffect\(\(\) => \{[\s\S]*?\}, \[overlayMenuBtn_1Open\]\);\n/, '');
     const out = checkFile(bad, { kind: 'page' });
     const hit = out.find((x) => x.code === 'OVERLAY_MISSING_WIRING');
     expect(hit).toBeTruthy();

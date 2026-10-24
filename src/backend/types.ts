@@ -99,6 +99,9 @@ export interface ProjectBackend {
   /** Load a project by ID. Returns null if not found or wrong format. */
   loadProject(id: string): Promise<ProjectData | null>;
 
+  /** Read the durable project revision without changing the editor's loaded revision. */
+  getProjectRevision?(id: string): Promise<number | null>;
+
   /** Save the full project snapshot. */
   saveProject(id: string, data: ProjectData, meta?: ProjectSaveMeta): Promise<void>;
 

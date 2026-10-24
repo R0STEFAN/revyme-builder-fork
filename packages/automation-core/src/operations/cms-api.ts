@@ -31,6 +31,7 @@ import {
   addPageVariableInCode,
 } from '@/code/features/page-variables';
 import { syncPageVariableHooks } from '@/code/generation/page-variables-gen';
+import { ensureNamedImport } from '@/code/generation/generator-utils';
 import { parseJSXToNodes } from '@/code/parsing/parser';
 import { getCollectionSchema } from '@/code/project/cms-ops';
 import { trace } from '@/shared/debug-trace';
@@ -755,6 +756,9 @@ export const cmsApiSearchFieldSetVariableOperation: Operation<
       throw new Error(`Target file "${input.filePath}" not found`);
     }
 
+    const nodesBeforeRebind = parseJSXToNodes(code);
+    const previousVar = nodesBeforeRebind.get(input.inputId)?.attrs?.['data-search-field'];
+
     if (input.createVar) {
       const vars = parsePageVariables(code)?.variables ?? [];
       if (!vars.some((v) => v.name === input.varName)) {
@@ -763,7 +767,33 @@ export const cmsApiSearchFieldSetVariableOperation: Operation<
     }
 
     code = setSearchInputVariableInCode(code, input.inputId, input.varName);
+    if (previousVar && previousVar !== input.varName) {
+      for (const node of nodesBeforeRebind.values()) {
+        const list = node.collectionList;
+        const group = list?.filterGroup;
+        if (!list || !group?.filters?.some((filter) => filter.valueSource === 'searchField' && filter.valueVar === previousVar)) {
+          continue;
+        }
+        const nextGroup = {
+          ...group,
+          filters: group.filters.map((filter) =>
+            filter.valueSource === 'searchField' && filter.valueVar === previousVar
+              ? { ...filter, valueVar: input.varName }
+              : filter,
+          ),
+        };
+        code = updateCollectionListConfigInCode(
+          code,
+          node.id,
+          nextGroup,
+          list.sort,
+          list.limit ?? undefined,
+          list.offset ?? undefined,
+        );
+      }
+    }
     code = syncPageVariableHooks(code);
+    code = ensureNamedImport(code, 'react', ['useState'], { ensureDefault: 'React' });
 
     projectFS.writeFile(input.filePath, code);
     trace.action('cms-api:searchField:setVariable', { inputId: input.inputId, varName: input.varName });

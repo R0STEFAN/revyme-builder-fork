@@ -117,6 +117,27 @@ describe('T12: Assets, Media, and Fills Operations', () => {
     expect(snapshot.files.has('public/assets/hero.png')).toBe(false);
   });
 
+  it('does not treat archived history snapshots as live asset references', async () => {
+    const snapshot = createMockSnapshot({
+      'app/page.client.tsx': 'export default function Page() { return <div data-id="root" />; }',
+      'public/assets/audit-history-only.svg': '<svg />',
+      '_meta/history.json': JSON.stringify({
+        undoStack: [{ diffs: [{ path: 'app/page.client.tsx', oldContent: '<img src="/assets/audit-history-only.svg" />' }] }],
+      }),
+    });
+
+    const audit = await assetsAuditOperation.execute(snapshot, {}, mockContext);
+    expect(audit.unusedAssets).toContain('/assets/audit-history-only.svg');
+    expect(audit.brokenReferences).toEqual([]);
+
+    const deletion = await assetsDeleteOperation.execute(
+      snapshot,
+      { path: 'public/assets/audit-history-only.svg', force: false },
+      mockContext,
+    );
+    expect(deletion.deletedPath).toBe('public/assets/audit-history-only.svg');
+  });
+
   it('configures image attributes, responsive autoSizes and Invariant 3 removal', async () => {
     const pageCode = `export default function Page() {
   return (

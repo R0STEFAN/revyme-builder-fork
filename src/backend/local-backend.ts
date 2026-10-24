@@ -53,6 +53,17 @@ export class LocalBackend implements ProjectBackend {
     return { id: 'local', name: 'Local User', email: 'local@dev' };
   }
 
+  async getProjectRevision(id: string): Promise<number | null> {
+    try {
+      const { res, json } = await fetchProjectRow(id);
+      if (!res.ok) return null;
+      return readRevision(json?.revision) ?? readRevision(json?.data?.[REVISION_FIELD]);
+    } catch (err) {
+      trace.error('backend:read-project-revision', { id, error: String(err) });
+      return null;
+    }
+  }
+
   async loadProject(id: string): Promise<ProjectData | null> {
     let serverError: Error | null = null;
     const readLocal = (): { raw: string; data: ProjectData; unsynced: boolean; revision: number | null; baseRevision: number | null } | null => {

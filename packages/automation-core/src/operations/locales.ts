@@ -211,7 +211,7 @@ export const localesRemoveOperation: Operation<
   { code: string; changes: FileChange[] }
 > = {
   name: 'locales.remove',
-  description: 'Remove a configured locale, delete its overrides file, prune orphan route wrappers, and regenerate providers',
+  description: 'Remove a configured locale, delete its legacy overrides, prune route wrappers, and preserve its messages catalog for reactivation',
   category: 'localization',
   kind: 'mutation',
   permit: 'write',
@@ -239,6 +239,9 @@ export const localesRemoveOperation: Operation<
     if (projectFS.exists(overridesPath)) {
       projectFS.deleteFile(overridesPath);
     }
+
+    // Keep messages/{code}.json: it is the live translation catalog, and
+    // removing a locale from config should not discard work if it is re-added.
 
     // Regenerate providers.tsx without the removed locale
     projectFS.writeFile('app/providers.tsx', buildProvidersSource(config));

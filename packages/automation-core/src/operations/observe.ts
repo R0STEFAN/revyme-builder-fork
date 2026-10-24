@@ -19,6 +19,7 @@ import {
   type ObservationStatus,
 } from '@/ai/agent/tools/observation-epoch';
 import {
+  RENDERED_STYLE_PROPS,
   collectLayoutSnapshot,
   runDesignAudit,
   buildViewportTile,
@@ -87,6 +88,80 @@ export function resolveTargetViewport(code: string, raw?: unknown): { id: string
   return { id: 'desktop', width: widths['desktop'] ?? 1200 };
 }
 
+type ConnectedCanvasSnapshot = {
+  status: 'ready' | 'pending' | 'unavailable';
+  reason?: string;
+  selectedIds?: string[];
+  nodes?: AuditNode[];
+  epoch?: ObservationEpoch;
+};
+
+/** Ask the Builder tab for rendered data when the MCP process is headless. */
+async function getConnectedCanvasSnapshot(
+  snapshot: Snapshot,
+  context: OperationContext,
+  filePath: string,
+  viewport: string,
+  properties: string[],
+  nodeIds?: string[],
+): Promise<ConnectedCanvasSnapshot | null> {
+  const service = context.adapters?.auditSnapshotService as {
+    getSnapshot?: (args: {
+      projectId: string;
+      branchId: string;
+      filePath: string;
+      revision: number;
+      viewport: string;
+      properties?: string[];
+      nodeIds?: string[];
+    }) => Promise<Omit<ConnectedCanvasSnapshot, 'status'> & { status: ObservationStatus }>;
+  } | undefined;
+  if (typeof service?.getSnapshot !== 'function') return null;
+
+  try {
+    const result = await service.getSnapshot({
+      projectId: snapshot.scope.projectId,
+      branchId: snapshot.scope.branchId,
+      filePath,
+      revision: snapshot.revision,
+      viewport,
+      properties,
+      ...(nodeIds ? { nodeIds } : {}),
+    });
+    const normalized: ConnectedCanvasSnapshot = {
+      ...result,
+      status: result.status === 'error' ? 'unavailable' : result.status,
+    };
+    context.trace('observe.canvas-snapshot', {
+      filePath,
+      viewport,
+      status: normalized.status,
+      nodes: normalized.nodes?.length ?? 0,
+      withRect: normalized.epoch?.withRect ?? 0,
+      total: normalized.epoch?.total ?? 0,
+    });
+    return normalized;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    context.trace('observe.canvas-snapshot.error', { filePath, viewport, reason });
+    return { status: 'unavailable', reason: `CANVAS_SNAPSHOT_FAILED: ${reason}` };
+  }
+}
+
+function epochSummary(epoch?: ObservationEpoch) {
+  return epoch ? {
+    renderSeq: epoch.renderSeq,
+    projectVersionAtFill: epoch.projectVersionAtFill,
+    projectVersionNow: epoch.projectVersionNow,
+    stale: epoch.stale,
+  } : {
+    renderSeq: null,
+    projectVersionAtFill: null,
+    projectVersionNow: null,
+    stale: false,
+  };
+}
+
 export const layoutRectSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -153,13 +228,31 @@ export const observeSelectionOperation: Operation<
   inputSchema: observeSelectionInputSchema,
   outputSchema: observeSelectionOutputSchema,
   async execute(snapshot: Snapshot, input: ObserveSelectionInput, context: OperationContext) {
-    const { code } = getTargetPageFile(snapshot, input.filePath);
+    const { path: filePath, code } = getTargetPageFile(snapshot, input.filePath);
     const vp = resolveTargetViewport(code, input.viewport ?? input.vpId);
 
+    if (vp.width === null) {
+      return {
+        selectedIds: input.nodeIds ?? [],
+        primaryId: input.nodeIds?.[0] ?? null,
+        count: input.nodeIds?.length ?? 0,
+        isMultiSelect: (input.nodeIds?.length ?? 0) > 1,
+        viewport: vp,
+        bounds: null,
+        nodeRects: {},
+        nodes: [],
+        status: 'unavailable' as const,
+        reason: `Unknown viewport "${vp.id}" - no width match`,
+      };
+    }
+
+    const connected = await getConnectedCanvasSnapshot(snapshot, context, filePath, vp.id, []);
     // Identify target selection IDs
     let selectedIds: string[] = [];
     if (input.nodeIds && input.nodeIds.length > 0) {
       selectedIds = [...input.nodeIds];
+    } else if (connected?.selectedIds) {
+      selectedIds = [...connected.selectedIds];
     } else if (context.adapters && typeof (context.adapters.selectionProvider as any)?.getSelectedIds === 'function') {
       selectedIds = (context.adapters.selectionProvider as any).getSelectedIds();
     } else {
@@ -169,21 +262,6 @@ export const observeSelectionOperation: Operation<
       } catch {
         selectedIds = [];
       }
-    }
-
-    if (vp.width === null) {
-      return {
-        selectedIds,
-        primaryId: selectedIds[0] ?? null,
-        count: selectedIds.length,
-        isMultiSelect: selectedIds.length > 1,
-        viewport: vp,
-        bounds: null,
-        nodeRects: {},
-        nodes: [],
-        status: 'unavailable',
-        reason: `Unknown viewport "${vp.id}" - no width match`,
-      };
     }
 
     if (selectedIds.length === 0) {
@@ -196,11 +274,14 @@ export const observeSelectionOperation: Operation<
         bounds: null,
         nodeRects: {},
         nodes: [],
-        status: 'empty',
-        reason: 'No nodes currently selected',
+        status: connected && connected.status !== 'ready' ? connected.status : 'empty',
+        reason: connected?.status !== 'ready' && connected?.reason
+          ? connected.reason
+          : 'No nodes currently selected',
         note: 'No nodes currently selected',
       };
     }
+    const connectedNodes = new Map((connected?.nodes ?? []).map((node) => [node.id, node]));
 
     let nodeMap = new Map<string, CanvasNode>();
     try {
@@ -222,7 +303,9 @@ export const observeSelectionOperation: Operation<
 
       let rect: LayoutRect | null = null;
       try {
-        const measured = getRectInViewportSpace(id, vp.id) ?? findNodeRect(id, vp.id);
+        const measured = connected
+          ? connectedNodes.get(id)?.rect
+          : getRectInViewportSpace(id, vp.id) ?? findNodeRect(id, vp.id);
         if (measured) {
           rect = {
             x: measured.x,
@@ -254,10 +337,12 @@ export const observeSelectionOperation: Operation<
     let status: 'ready' | 'pending' | 'unavailable' = 'ready';
     let reason = 'Selection measured successfully';
 
-    if (hasUnmeasured || validRects.length === 0) {
+    if (hasUnmeasured || validRects.length === 0 || (connected && connected.status !== 'ready')) {
       bounds = null;
-      status = 'pending';
-      reason = 'Selected nodes are pending render measurement';
+      status = connected?.status === 'unavailable' ? 'unavailable' : 'pending';
+      reason = connected?.status !== 'ready' && connected?.reason
+        ? connected.reason
+        : 'Selected nodes are pending render measurement';
     } else {
       let minX = Infinity;
       let minY = Infinity;
@@ -484,8 +569,8 @@ export const observeLayoutOperation: Operation<
   ownerTask: 'T24',
   inputSchema: observeLayoutInputSchema,
   outputSchema: observeLayoutOutputSchema,
-  async execute(snapshot: Snapshot, input: ObserveLayoutInput, _context: OperationContext) {
-    const { code } = getTargetPageFile(snapshot, input.filePath);
+  async execute(snapshot: Snapshot, input: ObserveLayoutInput, context: OperationContext) {
+    const { path: filePath, code } = getTargetPageFile(snapshot, input.filePath);
     const vp = resolveTargetViewport(code, input.viewport ?? input.vpId);
 
     if (vp.width === null) {
@@ -544,6 +629,16 @@ export const observeLayoutOperation: Operation<
       targetNodes = Array.from(nodeMap.values());
     }
 
+    const connected = await getConnectedCanvasSnapshot(
+      snapshot,
+      context,
+      filePath,
+      vp.id,
+      LAYOUT_PROPS,
+      targetNodes.map((node) => node.id),
+    );
+    const connectedNodes = new Map((connected?.nodes ?? []).map((node) => [node.id, node]));
+
     const resultNodes: NodeLayoutItem[] = [];
     const unmeasured: string[] = [];
     let measuredCount = 0;
@@ -552,7 +647,9 @@ export const observeLayoutOperation: Operation<
     const rectCache = new Map<string, LayoutRect | null>();
     for (const n of targetNodes) {
       try {
-        const r = getRectInViewportSpace(n.id, vp.id) ?? findNodeRect(n.id, vp.id);
+        const r = connected
+          ? connectedNodes.get(n.id)?.rect
+          : getRectInViewportSpace(n.id, vp.id) ?? findNodeRect(n.id, vp.id);
         rectCache.set(n.id, r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null);
       } catch {
         rectCache.set(n.id, null);
@@ -569,7 +666,9 @@ export const observeLayoutOperation: Operation<
 
       let computed: Record<string, string> = {};
       try {
-        computed = findNodeComputedStyles(node.id, vp.id, LAYOUT_PROPS);
+        computed = connected
+          ? connectedNodes.get(node.id)?.computed ?? {}
+          : findNodeComputedStyles(node.id, vp.id, LAYOUT_PROPS);
       } catch {
         // Fallback
       }
@@ -583,12 +682,9 @@ export const observeLayoutOperation: Operation<
       let overflowsParent = false;
       if (rect && node.parentId) {
         const parentRect = rectCache.get(node.parentId) ?? (
-          findNodeRect(node.parentId, vp.id) ? {
-            x: findNodeRect(node.parentId, vp.id)!.x,
-            y: findNodeRect(node.parentId, vp.id)!.y,
-            width: findNodeRect(node.parentId, vp.id)!.width,
-            height: findNodeRect(node.parentId, vp.id)!.height,
-          } : null
+          (connected
+            ? connectedNodes.get(node.parentId)?.rect
+            : findNodeRect(node.parentId, vp.id)) ?? null
         );
         if (parentRect) {
           const delta = Math.max(
@@ -652,10 +748,14 @@ export const observeLayoutOperation: Operation<
 
     const total = targetNodes.length;
     const isReady = total > 0 && unmeasured.length === 0;
-    const status = isReady ? 'ready' : (measuredCount === 0 ? 'pending' : 'pending');
-    const reason = isReady
-      ? 'Layout measured successfully'
-      : `Canvas mid-render: ${unmeasured.length} nodes have not been measured yet`;
+    const status = connected?.status === 'unavailable'
+      ? 'unavailable'
+      : isReady && (!connected || connected.status === 'ready') ? 'ready' : 'pending';
+    const reason = connected?.status !== 'ready' && connected?.reason
+      ? connected.reason
+      : isReady
+        ? 'Layout measured successfully'
+        : `Canvas mid-render: ${unmeasured.length} nodes have not been measured yet`;
 
     return {
       viewport: vp.id,
@@ -669,15 +769,10 @@ export const observeLayoutOperation: Operation<
       nodes: resultNodes,
       status,
       reason,
-      epoch: {
-        renderSeq: null,
-        projectVersionAtFill: null,
-        projectVersionNow: null,
-        stale: false,
-      },
+      epoch: epochSummary(connected?.epoch),
       coverage: {
-        withRect: measuredCount,
-        total,
+        withRect: connected?.epoch?.withRect ?? measuredCount,
+        total: connected?.epoch?.total ?? total,
       },
     };
   },
@@ -811,8 +906,8 @@ export const observeVisualsOperation: Operation<
   ownerTask: 'T24',
   inputSchema: observeVisualsInputSchema,
   outputSchema: observeVisualsOutputSchema,
-  async execute(snapshot: Snapshot, input: ObserveVisualsInput, _context: OperationContext) {
-    const { code } = getTargetPageFile(snapshot, input.filePath);
+  async execute(snapshot: Snapshot, input: ObserveVisualsInput, context: OperationContext) {
+    const { path: filePath, code } = getTargetPageFile(snapshot, input.filePath);
     const vp = resolveTargetViewport(code, input.viewport ?? input.vpId);
 
     if (vp.width === null) {
@@ -846,9 +941,24 @@ export const observeVisualsOperation: Operation<
       };
     }
 
+    const extraProps = input.properties ?? input.props ?? [];
+    const propsToQuery = Array.from(new Set([...VISUAL_STYLE_PROPS, ...extraProps]));
+
+    const connected = await getConnectedCanvasSnapshot(
+      snapshot,
+      context,
+      filePath,
+      vp.id,
+      propsToQuery,
+      [input.nodeId],
+    );
+    const connectedNode = connected?.nodes?.find((node) => node.id === input.nodeId);
+
     let rect: LayoutRect | null = null;
     try {
-      const measured = getRectInViewportSpace(input.nodeId, vp.id) ?? findNodeRect(input.nodeId, vp.id);
+      const measured = connected
+        ? connectedNode?.rect
+        : getRectInViewportSpace(input.nodeId, vp.id) ?? findNodeRect(input.nodeId, vp.id);
       if (measured) {
         rect = { x: measured.x, y: measured.y, width: measured.width, height: measured.height };
       }
@@ -856,12 +966,9 @@ export const observeVisualsOperation: Operation<
       rect = null;
     }
 
-    const extraProps = input.properties ?? input.props ?? [];
-    const propsToQuery = Array.from(new Set([...VISUAL_STYLE_PROPS, ...extraProps]));
-
     let computed: Record<string, string> = {};
     try {
-      computed = findNodeComputedStyles(input.nodeId, vp.id, propsToQuery);
+      computed = connected ? connectedNode?.computed ?? {} : findNodeComputedStyles(input.nodeId, vp.id, propsToQuery);
     } catch {
       computed = {};
     }
@@ -931,8 +1038,12 @@ export const observeVisualsOperation: Operation<
       if (computed[p]) custom[p] = computed[p];
     }
 
-    const status = rect ? 'ready' : 'pending';
-    const reason = rect ? 'Visual styles queried successfully' : 'Node rect is not cached yet - canvas mid-render';
+    const status = connected?.status === 'unavailable'
+      ? 'unavailable'
+      : rect && (!connected || connected.status === 'ready') ? 'ready' : 'pending';
+    const reason = connected?.status !== 'ready' && connected?.reason
+      ? connected.reason
+      : rect ? 'Visual styles queried successfully' : 'Node rect is not cached yet - canvas mid-render';
 
     return {
       nodeId: input.nodeId,
@@ -979,12 +1090,7 @@ export const observeVisualsOperation: Operation<
       rawStyles: computed,
       status,
       reason,
-      epoch: {
-        renderSeq: null,
-        projectVersionAtFill: null,
-        projectVersionNow: null,
-        stale: false,
-      },
+      epoch: epochSummary(connected?.epoch),
     };
   },
 };
@@ -1372,7 +1478,7 @@ export const observeAuditOperation: Operation<
   ownerTask: 'T24',
   inputSchema: observeAuditInputSchema,
   outputSchema: observeAuditOutputSchema,
-  async execute(snapshot: Snapshot, input: ObserveAuditInput, _context: OperationContext) {
+  async execute(snapshot: Snapshot, input: ObserveAuditInput, context: OperationContext) {
     const { path: filePath, code } = getTargetPageFile(snapshot, input.filePath ?? input.targetFile);
     const vp = resolveTargetViewport(code, input.viewport ?? input.vpId);
 
@@ -1397,13 +1503,15 @@ export const observeAuditOperation: Operation<
 
     const nodeMap = parseJSXToNodes(code);
     let epochSnap: ReturnType<typeof collectEpochSnapshot>;
-    const auditSnapshotService = _context.adapters?.auditSnapshotService as {
+    const auditSnapshotService = context.adapters?.auditSnapshotService as {
       getSnapshot?: (args: {
         projectId: string;
         branchId: string;
         filePath: string;
         revision: number;
         viewport: string;
+        properties?: string[];
+        nodeIds?: string[];
       }) => Promise<{
         status: ObservationStatus;
         reason?: string;
@@ -1421,6 +1529,7 @@ export const observeAuditOperation: Operation<
           filePath,
           revision: snapshot.revision,
           viewport: vp.id,
+          properties: RENDERED_STYLE_PROPS,
         });
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
@@ -1509,7 +1618,23 @@ export const observeAuditOperation: Operation<
     } else {
       epochSnap = collectEpochSnapshot(nodeMap, vp.id);
     }
-    const auditNodes = epochSnap.nodes;
+    const auditNodes = epochSnap.nodes.filter((auditNode) => {
+      const node = nodeMap.get(auditNode.id);
+      if (node?.attrs?.['aria-hidden'] !== 'true') return true;
+      const styles = node.styles ?? {};
+      const opacity = auditNode.computed.opacity || styles.opacity || '';
+      const position = auditNode.computed.position || styles.position || '';
+      const isCssHidden = styles.display === 'none' || styles.visibility === 'hidden' || opacity === '0';
+      const isOffCanvas = position === 'absolute' && ['left', 'top', 'right', 'bottom'].some((property) => {
+        const offset = Number.parseFloat(styles[property] ?? '');
+        return Number.isFinite(offset) && offset <= -1000;
+      });
+      return !(isCssHidden || isOffCanvas);
+    });
+    const ignoredHiddenCount = epochSnap.nodes.length - auditNodes.length;
+    if (ignoredHiddenCount > 0) {
+      context.trace('observe:audit:ignore-intentionally-hidden', { count: ignoredHiddenCount });
+    }
 
     // Check if snapshot is mid-render / has unmeasured nodes
     if (epochSnap.epoch.withRect === 0 && auditNodes.length > 0) {
@@ -1678,11 +1803,11 @@ export const screenshotResultItemSchema = z.object({
   status: z.enum(['ready', 'pending', 'unavailable']),
   dataUrl: z.string().optional().describe('Base64 data URL when capture is successful'),
   bytes: z.number().nonnegative().optional(),
-  width: z.number().nonnegative().optional(),
-  height: z.number().nonnegative().optional(),
+  width: z.number().nonnegative().optional().describe('Rendered CSS width in configured viewport space'),
+  height: z.number().nonnegative().optional().describe('Rendered CSS height in configured viewport space'),
   dimensions: z.object({
-    width: z.number().nonnegative(),
-    height: z.number().nonnegative(),
+    width: z.number().nonnegative().describe('Rendered CSS width in configured viewport space'),
+    height: z.number().nonnegative().describe('Rendered CSS height in configured viewport space'),
   }).optional(),
   waitedMs: z.number().nonnegative(),
   canvasRevision: z.number().nullable().optional(),
@@ -1715,6 +1840,7 @@ export const observeScreenshotOperation: Operation<
   inputSchema: observeScreenshotInputSchema,
   outputSchema: observeScreenshotOutputSchema,
   async execute(snapshot: Snapshot, input: ObserveScreenshotInput, context: OperationContext) {
+    const targetPage = getTargetPageFile(snapshot, input.filePath ?? input.targetFile);
     const targetVps = input.viewports && input.viewports.length > 0
       ? input.viewports
       : [input.viewport ?? 'desktop'];
@@ -1734,6 +1860,7 @@ export const observeScreenshotOperation: Operation<
           const res = await screenshotService.captureScreenshot({
             snapshot,
             revision: snapshot.revision,
+            filePath: targetPage.path,
             viewport: vpId,
             nodeId,
             format,

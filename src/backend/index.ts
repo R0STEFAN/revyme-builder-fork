@@ -4,8 +4,9 @@
 import { LocalBackend } from './local-backend';
 import { CLOUD_ENABLED } from '@/shared/cloud-flag';
 import { RevymeBackend } from './revyme-backend';
+import type { ProjectBackend } from './types';
 export type { ProjectBackend, ProjectData, RevymeUser } from './types';
 
-export const backend = CLOUD_ENABLED
+export const backend: ProjectBackend = CLOUD_ENABLED
   ? new RevymeBackend()
   : new LocalBackend();

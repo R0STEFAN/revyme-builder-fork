@@ -1,8 +1,86 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AutomationClient } from '../src/client';
+import { hydrateProjectFSFromSnapshot } from '../src/client';
 import { PlanSchema, validatePlan, type Result, type Snapshot } from '@revyme/automation-core';
+import { projectFS } from '../../../src/code/project/project-fs';
+import type { ProjectData } from '../../../src/backend/types';
+
+describe('AutomationClient ProjectFS scope', () => {
+  it('hydrates the requested branch and its main shared files before operation execution', () => {
+    const previous = projectFS.toEnvelope();
+    try {
+      const snapshot: Snapshot = {
+        scope: { projectId: 'scope-test', branchId: 'audit' },
+        revision: 12,
+        files: new Map([
+          ['app/page.client.tsx', 'branch page'],
+          ['_meta/branches.json', 'shared branch metadata'],
+        ]),
+        mainFiles: {
+          'app/page.client.tsx': 'main page',
+          'app/layout.tsx': 'main shared layout',
+          '_meta/branches.json': 'shared branch metadata',
+        },
+        branches: {
+          audit: {
+            files: { 'app/page.client.tsx': 'branch page' },
+            baseSnapshot: { 'app/page.client.tsx': 'main page' },
+            status: 'dirty',
+            parentId: 'main',
+            order: 1,
+            createdAt: 1,
+            lastEditedAt: 2,
+          },
+        },
+        activeBranchId: 'main',
+        config: {},
+      };
+
+      hydrateProjectFSFromSnapshot(snapshot);
+
+      expect(projectFS.getActiveBranchId()).toBe('audit');
+      expect(projectFS.readFile('app/page.client.tsx')).toBe('branch page');
+      expect(projectFS.readFile('_meta/branches.json')).toBe('shared branch metadata');
+      expect(projectFS.readFile('app/layout.tsx')).toBeNull();
+    } finally {
+      projectFS.fromEnvelope(previous as ProjectData);
+    }
+  });
+});
 
 describe('AutomationClient plan retry', () => {
+  it('returns mutation output metadata alongside the commit receipt', async () => {
+    const scope = { projectId: 'retry-project', branchId: 'main', filePath: 'app/page.client.tsx' };
+    const snapshot: Snapshot = {
+      scope,
+      revision: 7,
+      files: new Map([['app/page.client.tsx', `export default function Page() { return <div data-id="root" style={{ position: 'relative', width: '100%', height: 'auto' }} />; }`]]),
+      config: {},
+    };
+    const client = new AutomationClient({ apiUrl: 'http://localhost:3000' });
+    vi.spyOn(client, 'getSnapshot').mockResolvedValue({
+      ok: true,
+      data: snapshot,
+      meta: { commitStatus: 'not_committed', revision: 7 },
+    });
+    vi.spyOn(client, 'commit').mockResolvedValue({
+      ok: true,
+      data: { operationId: 'created-node', projectId: scope.projectId, branchId: scope.branchId, revision: 8, planHash: 'hash', changedFiles: ['app/page.client.tsx'] },
+      meta: { commitStatus: 'committed', revision: 8 },
+    });
+
+    const result = await client.execute(scope, 'nodes.create', {
+      filePath: 'app/page.client.tsx',
+      parentId: 'root',
+      id: 'new-card',
+      type: 'div',
+      name: 'New card',
+    });
+
+    expect(result.ok).toBe(true);
+    expect((result as any).operationResult).toEqual({ nodeId: 'new-card' });
+  });
+
   it('keeps a history-enriched typography removal plan hash-valid', async () => {
     const scope = { projectId: 'retry-project', branchId: 'main' };
     const globals = `:root {

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalBackend } from './local-backend';
 import { PROJECT_FORMAT } from './types';
-import { getBaseRevision } from './save-revision';
+import { getBaseRevision, setLoadedRevision } from './save-revision';
 
 class MemStorage implements Storage {
   private store = new Map<string, string>();
@@ -58,6 +58,14 @@ describe('LocalBackend', () => {
     };
     await backend.saveProject('local', data);
     expect(await backend.loadProject('local')).toEqual(data);
+  });
+
+  it('reads a durable project revision without advancing the editor revision', async () => {
+    setLoadedRevision(239);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ revision: 274 }), { status: 200 })));
+
+    await expect(backend.getProjectRevision('local')).resolves.toBe(274);
+    expect(getBaseRevision()).toBe(239);
   });
 
   it('rejects when storage quota and server PUT both fail', async () => {

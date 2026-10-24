@@ -17,6 +17,7 @@ import { verifyEffectOperation } from '../../src/operations/verify';
 import { diagnosticsProjectCheckOperation } from '../../src/operations/diagnostics';
 import { projectFS, MAIN_BRANCH_ID } from '@/code/project/project-fs';
 import { setActiveBridge, resetActiveBridge, type CanvasBridge } from '@/canvas/canvas-bridge';
+import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 
 // ─── Test Page Fixtures ──────────────────────────────────────────────────────
 
@@ -338,6 +339,27 @@ describe('T24: Headless Observation, Verification & Diagnostics Capability Suite
       expect(result.bounds).toBeNull();
       expect(result.nodes.find((n) => n.id === 'unrendered-node-xyz')?.status).toBe('unmeasured');
     });
+
+    it('uses the connected canvas snapshot for selected IDs and rendered bounds', async () => {
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOCK_PAGE_CODE }, 7);
+      const getSnapshot = vi.fn().mockResolvedValue({
+        status: 'ready',
+        selectedIds: ['cta-btn'],
+        nodes: [{
+          id: 'cta-btn', parentId: 'header', children: [], text: 'Get Started',
+          rect: { x: 1056, y: 16, width: 120, height: 48 }, computed: {},
+        }],
+        epoch: { renderSeq: 4, projectVersionAtFill: 3, projectVersionNow: 3, stale: false, withRect: 1, total: 1, unmeasured: [], unmeasuredTotal: 0 },
+      });
+      const adapterContext = { ...context, adapters: { auditSnapshotService: { getSnapshot } } };
+
+      const result = await observeSelectionOperation.execute(snapshot, {}, adapterContext as any);
+
+      expect(getSnapshot).toHaveBeenCalledWith(expect.objectContaining({ filePath: 'app/page.client.tsx', revision: 7 }));
+      expect(result.selectedIds).toEqual(['cta-btn']);
+      expect(result.bounds).toEqual({ x: 1056, y: 16, width: 120, height: 48 });
+      expect(result.status).toBe('ready');
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -356,6 +378,28 @@ describe('T24: Headless Observation, Verification & Diagnostics Capability Suite
       expect(node.display).toBe('flex');
       expect(node.justifyContent).toBe('space-between');
       expect(node.padding?.top).toBe(24);
+    });
+
+    it('uses the connected canvas snapshot for rendered layout measurements', async () => {
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOCK_PAGE_CODE }, 7);
+      const getSnapshot = vi.fn().mockResolvedValue({
+        status: 'ready',
+        nodes: [{
+          id: 'header', parentId: 'root', children: ['title', 'cta-btn'], text: '',
+          rect: { x: 0, y: 0, width: 1200, height: 80 },
+          computed: { display: 'flex', position: 'relative', justifyContent: 'space-between', padding: '24px', flexDirection: 'row', gap: '0px' },
+        }],
+        epoch: { renderSeq: 4, projectVersionAtFill: 3, projectVersionNow: 3, stale: false, withRect: 1, total: 1, unmeasured: [], unmeasuredTotal: 0 },
+      });
+      const adapterContext = { ...context, adapters: { auditSnapshotService: { getSnapshot } } };
+
+      const result = await observeLayoutOperation.execute(snapshot, { nodeId: 'header' }, adapterContext as any);
+
+      expect(getSnapshot).toHaveBeenCalledWith(expect.objectContaining({ filePath: 'app/page.client.tsx', revision: 7 }));
+      expect(result.status).toBe('ready');
+      expect(result.nodes[0]?.rect).toEqual({ x: 0, y: 0, width: 1200, height: 80 });
+      expect(result.nodes[0]?.justifyContent).toBe('space-between');
+      expect(result.nodes[0]?.padding?.top).toBe(24);
     });
 
     it('measures all nodes in viewport when nodeId is omitted', async () => {
@@ -422,6 +466,28 @@ export default function OverflowPage() {
       expect(result.typography.fontSize).toBe('32px');
       expect(result.typography.fontSizePx).toBe(32);
       expect(result.typography.fontWeight).toBe('700');
+    });
+
+    it('uses the connected canvas snapshot for rendered styles and rects', async () => {
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOCK_PAGE_CODE }, 7);
+      const getSnapshot = vi.fn().mockResolvedValue({
+        status: 'ready',
+        nodes: [{
+          id: 'title', parentId: 'header', children: [], text: 'Revyme Studio',
+          rect: { x: 24, y: 20, width: 300, height: 40 },
+          computed: { fontSize: '32px', fontWeight: '700', color: '#111827', backgroundColor: '#ffffff', lineHeight: '38px', textAlign: 'left' },
+        }],
+        epoch: { renderSeq: 4, projectVersionAtFill: 3, projectVersionNow: 3, stale: false, withRect: 1, total: 1, unmeasured: [], unmeasuredTotal: 0 },
+      });
+      const adapterContext = { ...context, adapters: { auditSnapshotService: { getSnapshot } } };
+
+      const result = await observeVisualsOperation.execute(snapshot, { nodeId: 'title' }, adapterContext as any);
+
+      expect(getSnapshot).toHaveBeenCalledWith(expect.objectContaining({ filePath: 'app/page.client.tsx', revision: 7 }));
+      expect(result.status).toBe('ready');
+      expect(result.rect).toEqual({ x: 24, y: 20, width: 300, height: 40 });
+      expect(result.typography.fontSize).toBe('32px');
+      expect(result.colors.color).toBe('#111827');
     });
 
     it('evaluates high-contrast text and returns passing WCAG AA/AAA verdicts', async () => {
@@ -562,6 +628,7 @@ export default function Page() {
         filePath: 'app/page.client.tsx',
         revision: 7,
         viewport: 'desktop',
+        properties: expect.arrayContaining(['display', 'fontSize', 'color']),
       });
       expect(result.status).toBe('ready');
       expect(result.checked).toBe(2);
@@ -588,6 +655,30 @@ export default function Page() {
       expect(result.clean).toBe(false);
     });
 
+    it('ignores intentionally hidden aria-hidden honeypot fields in visual findings', async () => {
+      const page = `'use client';
+export default function Page() {
+  return (
+    <div data-id="root" style={{ width: '1200px', height: '400px' }}>
+      <form data-id="audit-form" style={{ position: 'relative', width: '600px', height: '200px' }}>
+        <input data-id="audit-honeypot" aria-hidden="true" tabIndex={-1} autoComplete="off"
+          style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} />
+      </form>
+    </div>
+  );
+}`;
+      bridge.setNode('root', '', { x: 0, y: 0, width: 1200, height: 400 }, { display: 'block' });
+      bridge.setNode('audit-form', '', { x: 0, y: 0, width: 600, height: 200 }, { position: 'relative', display: 'block' });
+      bridge.setNode('audit-honeypot', '', { x: -9999, y: 0, width: 1, height: 1 }, { position: 'absolute', opacity: '0', pointerEvents: 'none' });
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': page });
+
+      const result = await observeAuditOperation.execute(snapshot, {}, context);
+
+      expect(result.findings.some((finding) => finding.message.includes('audit-honeypot'))).toBe(false);
+      expect(result.stats.touchTargetsChecked).toBe(0);
+      expect(result.passed).toBe(true);
+    });
+
     it('passes clean audit with zero violations on properly designed page', async () => {
       const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOCK_PAGE_CODE });
       const result = await observeAuditOperation.execute(snapshot, {}, context);
@@ -606,7 +697,7 @@ export default function Page() { return <div data-id="root">Page</div>; }`;
 
       const result = await observeAuditOperation.execute(snapshot, { viewport: 'mobile' }, context);
 
-      expect(result.viewportWidth).toBe(375);
+      expect(result.viewportWidth).toBe(DEFAULT_BREAKPOINT_STARTS.mobile);
       expect(result.status).not.toBe('unavailable');
       expect(result.summary).not.toContain('Unknown viewport');
     });
@@ -693,6 +784,27 @@ export default function Page() {
       expect(result.primary.status).toBe('ready');
       expect(result.primary.canvasRevision).toBe(42);
       expect(result.primary.dataUrl).toContain('data:image/png;base64,');
+    });
+
+    it('forwards the explicitly selected page file to the screenshot adapter', async () => {
+      const mockCapture = vi.fn().mockResolvedValue({
+        available: false,
+        status: 'unavailable',
+        reason: 'ACTIVE_FILE_MISMATCH',
+      });
+      const adapterContext: any = {
+        ...context,
+        adapters: { screenshotService: { captureScreenshot: mockCapture } },
+      };
+      const targetFile = 'app/(audit)/mcp-audit/page.client.tsx';
+      const snapshot = createMockSnapshot({
+        'app/page.client.tsx': MOCK_PAGE_CODE,
+        [targetFile]: MOCK_PAGE_CODE,
+      });
+
+      await observeScreenshotOperation.execute(snapshot, { targetFile, viewport: 'desktop' }, adapterContext);
+
+      expect(mockCapture).toHaveBeenCalledWith(expect.objectContaining({ filePath: targetFile }));
     });
   });
 

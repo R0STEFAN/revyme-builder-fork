@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { updateContainerQueryStyle } from '@/code/generation/generator-styles';
-import { parseCanvasConfig } from '@/code/project/canvas-config';
+import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
+import { DEFAULT_BREAKPOINT_STARTS, VIEWPORT_GAP } from '@/shared/constants';
 
 export interface ViewportDefinition {
   id: string;
@@ -14,8 +15,8 @@ export interface ViewportDefinition {
 
 export const DEFAULT_VIEWPORTS: ViewportDefinition[] = [
   { id: 'desktop', name: 'Desktop', width: 1200, isPrimary: true },
-  { id: 'tablet', name: 'Tablet', width: 768 },
-  { id: 'mobile', name: 'Mobile', width: 375 },
+  { id: 'tablet', name: 'Tablet', width: DEFAULT_BREAKPOINT_STARTS.tablet },
+  { id: 'mobile', name: 'Mobile', width: DEFAULT_BREAKPOINT_STARTS.mobile },
 ];
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
@@ -88,24 +89,78 @@ export const viewportsSetOverrideOperation: Operation<
     if (typeof input.viewport === 'number') {
       width = input.viewport;
     } else {
+      const requestedName = input.viewport.trim().toLowerCase();
       const configured = parseCanvasConfig(code)?.viewports.find(
-        (viewport) => viewport.id === input.viewport || viewport.label === input.viewport,
+        (viewport) => viewport.id.toLowerCase() === requestedName || viewport.label.toLowerCase() === requestedName,
       );
       if (configured) {
         width = configured.width;
-      } else if (input.viewport === 'mobile') {
-        width = 375;
-      } else if (input.viewport === 'tablet') {
-        width = 768;
-      } else if (input.viewport === 'desktop') {
-        width = 1200;
       } else {
+        const normalized = DEFAULT_VIEWPORTS.find((viewport) =>
+          viewport.id === requestedName || viewport.name.toLowerCase() === requestedName,
+        );
         const parsed = parseInt(input.viewport, 10);
-        width = isNaN(parsed) ? 768 : parsed;
+        width = normalized?.width ?? (Number.isFinite(parsed) ? parsed : DEFAULT_BREAKPOINT_STARTS.tablet);
       }
     }
 
-    const nextCode = updateContainerQueryStyle(code, input.nodeId, width, input.styles);
+    let nextCode = updateContainerQueryStyle(code, input.nodeId, width, input.styles);
+    const canvas = parseCanvasConfig(code);
+    if (canvas) {
+      const requestedName = typeof input.viewport === 'string' ? input.viewport.trim().toLowerCase() : '';
+      const hasViewport = canvas.viewports.some((viewport) =>
+        viewport.id.toLowerCase() === requestedName ||
+        viewport.label.toLowerCase() === requestedName ||
+        viewport.width === width ||
+        viewport.designWidth === width,
+      );
+
+      if (!hasViewport) {
+        let viewports = canvas.viewports;
+        let positions = { ...canvas.positions };
+        if (viewports.length === 0) {
+          const desktop = DEFAULT_VIEWPORTS[0];
+          viewports = [{
+            id: desktop.id,
+            label: desktop.name,
+            width: desktop.width,
+            isPrimary: true,
+            order: 0,
+            x: 0,
+            y: 0,
+          }];
+          positions[desktop.id] = { x: 0, y: 0 };
+        }
+
+        const preset = typeof input.viewport === 'string'
+          ? DEFAULT_VIEWPORTS.find((viewport) =>
+            viewport.id === requestedName || viewport.name.toLowerCase() === requestedName,
+          )
+          : DEFAULT_VIEWPORTS.find((viewport) => viewport.width === width);
+        let id = preset?.id ?? `bp-${width}`;
+        for (let suffix = 2; viewports.some((viewport) => viewport.id === id); suffix++) {
+          id = `${preset?.id ?? `bp-${width}`}-${suffix}`;
+        }
+        const label = preset?.name ?? `${width}px`;
+        const rightmost = viewports.reduce((right, viewport) => {
+          const position = positions[viewport.id] ?? { x: 0, y: 0 };
+          const renderedWidth = viewport.designWidth ?? viewport.width;
+          return Math.max(right, position.x + renderedWidth);
+        }, 0);
+        const addedViewport = {
+          id,
+          label,
+          width,
+          isPrimary: false,
+          order: Math.max(-1, ...viewports.map((viewport) => viewport.order ?? 0)) + 1,
+          x: rightmost + VIEWPORT_GAP,
+          y: 0,
+        };
+        viewports = [...viewports, addedViewport];
+        positions = { ...positions, [id]: { x: addedViewport.x, y: addedViewport.y } };
+        nextCode = updateCanvasConfigInCode(nextCode, { viewports, positions });
+      }
+    }
 
     return {
       nodeId: input.nodeId,

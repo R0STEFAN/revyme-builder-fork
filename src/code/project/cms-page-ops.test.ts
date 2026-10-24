@@ -72,6 +72,7 @@ describe('createCmsIndexPageFile', () => {
     const client = fsStore.get('app/blog/page.client.tsx')!;
     expect(client.startsWith("'use client'")).toBe(true);
     expect(client).toContain('@canvas');
+    expect(parseCmsPageMeta(client)).toEqual({ collection: 'blog', kind: 'index' });
     expect(client).toContain("from '@/cms/blog.json'");
   });
 

@@ -530,9 +530,12 @@ describe('T19: Forms, Inputs, Validation & Destinations', () => {
       expect(res.formId).toBe(formId);
       const updatedCode = projectFS.readFile('app/contact/page.client.tsx')!;
       expect(updatedCode).toContain('name="_hp"');
-      expect(updatedCode).toContain("display: 'none'");
+      expect(updatedCode).not.toContain("display: 'none'");
+      expect(updatedCode).toContain("width: '1px'");
+      expect(updatedCode).toContain("left: '-9999px'");
       expect(updatedCode).toContain('tabIndex="-1"');
       expect(updatedCode).toContain('autoComplete="off"');
+      expect(checkFile(updatedCode, { kind: 'page' }).filter((v) => v.code === 'DISPLAY_TOGGLE_VISIBILITY')).toEqual([]);
     });
 
     it('removes a form field wrapper, label, and control cleanly', async () => {
@@ -649,6 +652,8 @@ describe('T19: Forms, Inputs, Validation & Destinations', () => {
           filePath: 'app/contact/page.client.tsx',
           nodeId: selectId,
           cssBody: customCaretCSS,
+          icon: 'lucide:chevron-down',
+          color: '#ABABAB',
         },
         context,
       );
@@ -658,6 +663,8 @@ describe('T19: Forms, Inputs, Validation & Destinations', () => {
       expect(updatedCode).toContain(`<style>`);
       expect(updatedCode).toContain(`select[data-id="${selectId}"]`);
       expect(updatedCode).toContain('background-position: right 14px center');
+      expect(updatedCode).toContain(`data-select-icon='{"icon":"lucide:chevron-down","color":"#ABABAB"}'`);
+      expect(checkFile(updatedCode, { kind: 'page' }).filter((v) => v.code === 'SELECT_ICON_MARKER_MISMATCH')).toEqual([]);
 
       // 2. Remove custom caret CSS with null
       await formsSelectCaretSetOperation.execute(
@@ -672,6 +679,7 @@ describe('T19: Forms, Inputs, Validation & Destinations', () => {
 
       updatedCode = projectFS.readFile('app/contact/page.client.tsx')!;
       expect(updatedCode).not.toContain(`select[data-id="${selectId}"]`);
+      expect(updatedCode).not.toContain('data-select-icon=');
     });
   });
 
@@ -714,6 +722,8 @@ describe('T19: Forms, Inputs, Validation & Destinations', () => {
       expect(updatedCode).toContain('label="Send Message"');
       expect(updatedCode).toContain('data-form-state=');
       expect(updatedCode).toContain('initialVariant=');
+      expect(updatedCode).toMatch(/import[^;\n]*\buseState\b[^;\n]*from\s+['"]react['"]/);
+      expect(checkFile(updatedCode, { kind: 'page' }).filter((v) => v.code === 'WOULD_CRASH' && /undefined identifier: useState/.test(v.message))).toEqual([]);
 
       // Verify default state mapping
       const stateGet = await formsStateGetOperation.execute(

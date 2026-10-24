@@ -14,8 +14,8 @@
 //     block body and leave the existing calls in place.
 
 import * as t from '@babel/types';
-import generate from '@babel/generator';
 import { parseJSX, findFirstElementByDataId, findAttribute } from '../parsing/ast-utils';
+import { generate } from './generator-utils';
 import {
   setterName,
   varNameFromSetter,

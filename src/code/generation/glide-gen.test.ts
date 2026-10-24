@@ -75,6 +75,33 @@ describe('glide-gen — remove (round-trip)', () => {
     expect(removed).toContain('<FAQItem data-id="faq-1" question="A?" answer="A."');
     expect(removed).toContain('<FAQItem data-id="faq-2" question="B?" answer="B."');
   });
+
+  test('removing Glide also prunes its generated LayoutGroup import but keeps existing motion imports', () => {
+    const code = `import { motion, AnimatePresence } from 'framer-motion';\n${FAQ_LIST}`;
+    const added = setGlideInCode(code, 'faq-list', SPEC);
+    expect(added).toContain(`import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';`);
+
+    const removed = setGlideInCode(added, 'faq-list', null);
+    expect(removed).toContain(`import { motion, AnimatePresence } from 'framer-motion';`);
+    expect(removed).not.toMatch(/import\s*\{[^}]*\bLayoutGroup\b[^}]*\}\s*from\s*['"]framer-motion['"]/);
+  });
+
+  test('keeps LayoutGroup import when another group remains outside the removed Glide', () => {
+    const code = `import { LayoutGroup } from 'framer-motion';
+export default function Page() {
+  return <main data-id="root"><section data-id="faq-list"><p data-id="answer">Answer</p></section><LayoutGroup><span data-id="other">Elsewhere</span></LayoutGroup></main>;
+}`;
+    const added = setGlideInCode(code, 'faq-list', SPEC);
+    const removed = setGlideInCode(added, 'faq-list', null);
+    expect(removed).toMatch(/import\s*\{[^}]*\bLayoutGroup\b[^}]*\}\s*from\s*['"]framer-motion['"]/);
+    expect(removed).toContain('<LayoutGroup><span data-id="other">Elsewhere</span></LayoutGroup>');
+  });
+
+  test('normalizes spacing on an existing framer-motion named import when reapplying Glide', () => {
+    const code = `import { motion, AnimatePresence , LayoutGroup} from 'framer-motion';\n${FAQ_LIST}`;
+    const added = setGlideInCode(code, 'faq-list', SPEC);
+    expect(added).toContain(`import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';`);
+  });
 });
 
 describe('glide-gen — update transition', () => {

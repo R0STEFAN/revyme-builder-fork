@@ -298,20 +298,21 @@ export const cmsSchemaDeleteOperation: Operation<
     cascade: z.boolean().optional().default(false),
   }),
   async execute(snapshot, input) {
-    const changes: FileChange[] = [];
-    const schemaPath = `cms/${input.slug}.schema.json`;
-    const dataPath = `cms/${input.slug}.json`;
-
     if (input.cascade) {
       cascadeDeleteCollection(input.slug);
     } else {
       deleteCollection(input.slug);
     }
 
-    changes.push(
-      { path: schemaPath, beforeHash: null, content: null },
-      { path: dataPath, beforeHash: null, content: null },
-    );
+    // Cascade helpers operate on ProjectFS, but the MCP transaction only
+    // commits files returned in this plan. Diff the active snapshot against
+    // that final ProjectFS state so removed route pairs and edited repeaters
+    // are validated and committed together with the collection files.
+    const changes: FileChange[] = [];
+    for (const [path, before] of snapshot.files) {
+      const after = projectFS.readFile(path);
+      if (after !== before) changes.push({ path, beforeHash: null, content: after });
+    }
 
     return { changes };
   },

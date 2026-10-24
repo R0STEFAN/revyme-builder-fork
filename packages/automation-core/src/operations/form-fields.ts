@@ -504,7 +504,7 @@ export const formsFieldRemoveOperation: Operation<
 // ─── 3. forms.selectCaret.set ────────────────────────────────────────────────
 
 export const formsSelectCaretSetOperation: Operation<
-  { filePath: string; nodeId: string; cssBody: string | null },
+  { filePath: string; nodeId: string; cssBody: string | null; icon?: string; color?: string },
   { nodeId: string; changes: FileChange[] }
 > = {
   name: 'forms.selectCaret.set',
@@ -518,6 +518,10 @@ export const formsSelectCaretSetOperation: Operation<
     filePath: z.string().min(1),
     nodeId: z.string().min(1),
     cssBody: z.string().nullable(),
+    icon: z.string().min(1).optional(),
+    color: z.string().regex(/^#[\da-f]{6}$/i, 'Select icon color must be a 6-digit hex color').optional(),
+  }).refine((input) => (input.icon === undefined) === (input.color === undefined), {
+    message: 'Select icon and color must be provided together',
   }),
   async execute(snapshot, input) {
     const sync = syncFormsSnapshotToProjectFS(snapshot);
@@ -531,7 +535,20 @@ export const formsSelectCaretSetOperation: Operation<
       throw new Error(`NODE_NOT_FOUND: Node with id "${input.nodeId}" not found in "${input.filePath}"`);
     }
 
-    code = updateSelectCaretRuleInCode(code, input.nodeId, input.cssBody);
+    if (input.cssBody === null) {
+      code = updateSelectCaretRuleInCode(code, input.nodeId, null);
+      code = updateHtmlAttrsInCode(code, input.nodeId, { 'data-select-icon': '' });
+    } else {
+      const existingIcon = nodes.get(input.nodeId)?.attrs?.['data-select-icon'];
+      if (input.icon && input.color) {
+        code = updateHtmlAttrsInCode(code, input.nodeId, {
+          'data-select-icon': JSON.stringify({ icon: input.icon, color: input.color }),
+        });
+      } else if (!existingIcon) {
+        throw new Error('SELECT_ICON_METADATA_REQUIRED: Provide icon and color when setting a caret on a select without data-select-icon metadata');
+      }
+      code = updateSelectCaretRuleInCode(code, input.nodeId, input.cssBody);
+    }
     projectFS.writeFile(input.filePath, code);
 
     trace.action('forms.selectCaret.set:updated', { nodeId: input.nodeId, removed: input.cssBody === null });

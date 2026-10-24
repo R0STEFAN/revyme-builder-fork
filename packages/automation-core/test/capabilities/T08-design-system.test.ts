@@ -307,6 +307,41 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
     expect(pageCode).toMatch(/borderColor:\s*['"]var\(--border-subtle-color\)['"]/);
   });
 
+  it('accepts the category-prefixed preset names returned by presets.list', async () => {
+    const snapshot = createMockSnapshot({
+      'app/globals.css': `:root {
+  --radius-card: 16px;
+  --shadow-card: 0 1px 3px rgba(0,0,0,.1);
+  --color-brand: #6366f1;
+  --border-subtle-width: 1px;
+  --border-subtle-style: solid;
+  --border-subtle-color: #ddd;
+}`,
+      'app/page.tsx': `export default function Page() { return <div data-id="card-root" />; }`,
+    });
+
+    const cases = [
+      { category: 'radius' as const, name: 'radius-card', expected: { borderRadius: 'var(--radius-card)' } },
+      { category: 'shadow' as const, name: 'shadow-card', expected: { boxShadow: 'var(--shadow-card)' } },
+      { category: 'color' as const, name: 'color-brand', expected: { backgroundColor: 'var(--color-brand)' } },
+      { category: 'border' as const, name: 'border-subtle', expected: {
+        borderWidth: 'var(--border-subtle-width)',
+        borderStyle: 'var(--border-subtle-style)',
+        borderColor: 'var(--border-subtle-color)',
+      } },
+    ];
+
+    for (const item of cases) {
+      const result = await presetsApplyOperation.execute(snapshot, {
+        category: item.category,
+        name: item.name,
+        targetFile: 'app/page.tsx',
+        nodeId: 'card-root',
+      }, mockContext);
+      expect(result.appliedStyles).toEqual(item.expected);
+    }
+  });
+
   it('handles full typography preset lifecycle: creation, responsive tiers, apply, retag, and detach', async () => {
     const initialFiles = {
       'app/globals.css': `:root {
@@ -428,6 +463,9 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
     snapshot = { ...snapshot, files: mutableFiles };
 
     expect(snapshot.files.get('app/globals.css')).not.toContain('--typo-display-font');
+    expect(removeRes.removedTokens).toContain('typo-display-size-md');
+    expect(removeRes.removedTokens).not.toContain('typo-display-line-height-md');
+    expect(removeRes.removedTokens).not.toContain('typo-display-stroke-width');
   });
 
   it('lists only compound typography presets and ignores unsupported one-property tokens', async () => {
@@ -455,7 +493,7 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
 
   it('supports Google font catalog, verified weight imports, workspace font-face, and layout Next.js font codegen', async () => {
     const initialFiles = {
-      'app/globals.css': `:root {\n  --color-bg: #fff;\n}\n`,
+      'app/globals.css': `:root {\n  --color-bg: #fff;\n}\nbody { font-family: 'Playfair Display', serif; }\n`,
       'app/layout.tsx': `export const metadata = { title: 'Test App' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -544,6 +582,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     expect(layoutCode).toContain("const playfairDisplay = Playfair_Display({");
     expect(layoutCode).toContain("variable: '--font-playfair-display'");
     expect(layoutCode).toContain("${playfairDisplay.variable}");
+    expect(transformRes.changes.map((change) => change.path)).toContain('app/globals.css');
+    expect(snapshot.files.get('app/globals.css')).not.toContain('fonts.googleapis.com/css2?family=Playfair+Display');
+    expect(snapshot.files.get('app/globals.css')).toContain("font-family: var(--font-playfair-display), 'Playfair Display', serif;");
 
     // 6. Remove workspace custom font
     const wsRemoveRes = await fontsWorkspaceRemoveOperation.execute(

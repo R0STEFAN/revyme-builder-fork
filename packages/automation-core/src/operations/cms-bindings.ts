@@ -13,6 +13,8 @@ import { bindToCmsCollectionInCode } from '@/code/generation/map-gen';
 import {
   setPaginationInCode,
   removePaginationInCode,
+  ensureLoadMoreComponentFile,
+  ensureSpinnerComponentFile,
 } from '@/code/generation/cms-pagination-gen';
 import type { FilterGroup, SortConfig } from '@/shared/types';
 
@@ -170,14 +172,23 @@ export const cmsListPaginateOperation: Operation<
       perPage: input.perPage ?? 6,
     });
 
+    const scaffoldPath = input.mode === 'loadMore' ? 'components/LoadMore.tsx' : 'components/Spinner.tsx';
+    if (input.mode === 'loadMore') ensureLoadMoreComponentFile();
+    else ensureSpinnerComponentFile();
+    const scaffoldCode = projectFS.readFile(scaffoldPath);
+    const changes: FileChange[] = [
+      {
+        path: input.targetFile,
+        beforeHash: null,
+        content: code,
+      },
+    ];
+    if (scaffoldCode !== null && scaffoldCode !== snapshot.files.get(scaffoldPath)) {
+      changes.push({ path: scaffoldPath, beforeHash: null, content: scaffoldCode });
+    }
+
     return {
-      changes: [
-        {
-          path: input.targetFile,
-          beforeHash: null,
-          content: code,
-        },
-      ],
+      changes,
     };
   },
 };

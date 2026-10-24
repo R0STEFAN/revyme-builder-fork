@@ -116,7 +116,7 @@ describe('createEmptyProject', () => {
       expect(page).toContain("from 'react'");
     });
 
-    it('declares only a Desktop viewport in @canvas with height 900', () => {
+    it('declares only a Desktop viewport in @canvas with auto height', () => {
       const match = page.match(/\/\*\*\s*@canvas\s*([\s\S]*?)\*\//);
       expect(match).not.toBeNull();
       const config = JSON.parse(match![1]);
@@ -127,14 +127,14 @@ describe('createEmptyProject', () => {
         width: DEFAULT_BREAKPOINT_STARTS.desktop,
         isPrimary: true,
         order: 0,
-        height: 900,
+        height: 'auto',
       });
       expect(Object.keys(config.positions)).toEqual(['desktop']);
     });
 
     it('renders a single root <div> with no children', () => {
       expect(page).toContain('data-id="root"');
-      expect(page).toContain("height: '900px'");
+      expect(page).toContain("height: 'auto'");
       expect(page).toContain("backgroundColor: '#ffffff'");
       const rootBodyMatch = page.match(/<div data-id="root"[\s\S]*?>([\s\S]*?)<\/div>/);
       expect(rootBodyMatch).not.toBeNull();

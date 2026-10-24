@@ -259,6 +259,21 @@ export function transformLayoutWithNextFonts(layoutCode: string, fonts: GoogleFo
   return updated;
 }
 
+/** Remove Google Fonts CSS requests and route quoted family names through the
+ * generated next/font CSS variables. Shared by the source exporter and MCP tool. */
+export function transformCssForNextFonts(css: string, fonts: GoogleFontSpec[]): string {
+  if (!css || fonts.length === 0) return css;
+  let cleaned = css.replace(/@import\s+(?:url\(['"]?https:\/\/fonts\.googleapis\.com\/[^'")]+['"]?\)|['"]https:\/\/fonts\.googleapis\.com\/[^'"]+['"]);?\s*\n?/g, '');
+
+  for (const font of fonts) {
+    const escaped = font.family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const familyPattern = new RegExp(`(['"])${escaped}\\1`, 'g');
+    cleaned = cleaned.replace(familyPattern, (match) => `var(${font.variable}), ${match}`);
+  }
+
+  return cleaned;
+}
+
 /**
  * Transforms all project files for next/font/google support:
  * 1. Scans CSS files for Google Fonts.
@@ -295,16 +310,7 @@ export function transformSiteFilesForNextFonts(files: Record<string, string>): R
   // Strip @import from CSS files and wire variables
   for (const [path, content] of Object.entries(result)) {
     if (path.endsWith('.css')) {
-      let cleaned = content.replace(/@import\s+(?:url\(['"]?https:\/\/fonts\.googleapis\.com\/[^'")]+['"]?\)|['"]https:\/\/fonts\.googleapis\.com\/[^'"]+['"]);?\s*\n?/g, '');
-
-      // Replace font-family: 'Comfortaa', ... with font-family: var(--font-comfortaa), 'Comfortaa', ...
-      for (const font of allFonts) {
-        const escaped = font.family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const fontFamRegex = new RegExp(`(['"])${escaped}\\1`, 'g');
-        cleaned = cleaned.replace(fontFamRegex, (match) => `var(${font.variable}), ${match}`);
-      }
-
-      result[path] = cleaned;
+      result[path] = transformCssForNextFonts(content, allFonts);
     }
   }
 

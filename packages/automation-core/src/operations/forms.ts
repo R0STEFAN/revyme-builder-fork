@@ -418,8 +418,11 @@ export const formsHoneypotAddOperation: Operation<
       type: 'input',
       name: 'Honeypot',
       styles: {
-        display: 'none',
         position: 'absolute',
+        left: '-9999px',
+        width: '1px',
+        height: '1px',
+        overflow: 'hidden',
         opacity: '0',
         pointerEvents: 'none',
       },

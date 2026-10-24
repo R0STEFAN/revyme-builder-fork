@@ -13,8 +13,8 @@
 // Works identically for `relative` and `fixed` overlays (same state setter).
 
 import * as t from '@babel/types';
-import generate from '@babel/generator';
 import { parseJSX, findFirstElementByDataId, findAttribute } from '../parsing/ast-utils';
+import { generate } from './generator-utils';
 import { parseOverlayCalls } from '../parsing/overlay-parser';
 import { stateVarName } from './overlay-gen';
 import { addPageInteractionInCode, removePageInteractionInCode } from './page-interactions-gen';

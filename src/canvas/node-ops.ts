@@ -3177,7 +3177,9 @@ export function getRectInViewportSpace(
   let current = { x: 0, y: 0, scale: 1 };
   let iframeOffset = { x: 0, y: 0 };
   try {
-    if (typeof bridge.getCurrentTransform === 'function') current = bridge.getCurrentTransform();
+    current = typeof bridge.getCurrentTransform === 'function'
+      ? bridge.getCurrentTransform()
+      : getActiveTransform();
     if (typeof bridge.getIframeOffset === 'function') iframeOffset = bridge.getIframeOffset();
   } catch {
     // bridge is NullBridge or missing getters — fall back to raw parent rect

@@ -2,6 +2,127 @@
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
+import * as t from '@babel/types';
+import { parseJSX, traverse } from '@/code/parsing/ast-utils';
+import { generate } from '@/code/generation/generator-utils';
+
+const TEMPLATE_PAGE_ROOT_STYLE = {
+  position: 'relative',
+  width: '100%',
+  height: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+} as const;
+
+function isCanonicalTemplateRootStyle(attribute: t.JSXAttribute): boolean {
+  if (!t.isJSXExpressionContainer(attribute.value) || !t.isObjectExpression(attribute.value.expression)) {
+    return false;
+  }
+
+  const values = new Map<string, string>();
+  for (const property of attribute.value.expression.properties) {
+    if (!t.isObjectProperty(property)) return false;
+    const key = t.isIdentifier(property.key) ? property.key.name
+      : t.isStringLiteral(property.key) ? property.key.value
+      : null;
+    if (!key || !t.isStringLiteral(property.value)) return false;
+    values.set(key, property.value.value);
+  }
+
+  const expected = Object.entries(TEMPLATE_PAGE_ROOT_STYLE);
+  return values.size === expected.length && expected.every(([key, value]) => values.get(key) === value);
+}
+
+/**
+ * Move an existing page-root style onto an editable inner wrapper before the
+ * page joins a route-group template. The template owns the outer root; keeping
+ * the former style on a new child preserves the page's authored presentation.
+ */
+export function preparePageForTemplate(
+  code: string,
+  createId: (prefix?: string) => string,
+): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let changed = false;
+  traverse(ast, {
+    JSXElement(path) {
+      const opening = path.node.openingElement;
+      const rootId = opening.attributes.find((attribute) =>
+        t.isJSXAttribute(attribute) &&
+        t.isJSXIdentifier(attribute.name, { name: 'data-id' }) &&
+        t.isStringLiteral(attribute.value, { value: 'root' }),
+      );
+      if (!rootId) return;
+
+      const styleAttribute = opening.attributes.find((attribute): attribute is t.JSXAttribute =>
+        t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'style' }),
+      );
+      if (styleAttribute && isCanonicalTemplateRootStyle(styleAttribute)) {
+        path.stop();
+        return;
+      }
+
+      const canonicalStyle = t.jsxAttribute(
+        t.jsxIdentifier('style'),
+        t.jsxExpressionContainer(t.objectExpression(
+          Object.entries(TEMPLATE_PAGE_ROOT_STYLE).map(([key, value]) =>
+            t.objectProperty(t.identifier(key), t.stringLiteral(value)),
+          ),
+        )),
+      );
+
+      if (styleAttribute) {
+        const pageNameAttribute = opening.attributes.find((attribute) =>
+          t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'data-name' }),
+        );
+        const pageName = pageNameAttribute && t.isJSXAttribute(pageNameAttribute) && t.isStringLiteral(pageNameAttribute.value)
+          ? pageNameAttribute.value.value
+          : 'Page';
+        const wrapper = t.jsxElement(
+          t.jsxOpeningElement(t.jsxIdentifier('div'), [
+            t.jsxAttribute(t.jsxIdentifier('data-id'), t.stringLiteral(createId('page-content'))),
+            t.jsxAttribute(t.jsxIdentifier('data-name'), t.stringLiteral(`${pageName} Content`)),
+            t.cloneNode(styleAttribute, true),
+          ]),
+          t.jsxClosingElement(t.jsxIdentifier('div')),
+          path.node.children,
+        );
+        path.node.children = [wrapper];
+        const styleIndex = opening.attributes.indexOf(styleAttribute);
+        opening.attributes.splice(styleIndex, 1, canonicalStyle);
+      } else {
+        opening.attributes.push(canonicalStyle);
+      }
+
+      changed = true;
+      path.stop();
+    },
+  });
+
+  return changed ? generate(ast, { retainLines: true }, code).code : code;
+}
+
+function regeneratePageNodeIds(code: string, createId: (prefix?: string) => string): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let changed = false;
+  traverse(ast, {
+    JSXOpeningElement(path) {
+      for (const attribute of path.node.attributes) {
+        if (!t.isJSXAttribute(attribute) || !t.isJSXIdentifier(attribute.name, { name: 'data-id' })) continue;
+        if (!t.isStringLiteral(attribute.value) || attribute.value.value === 'root') continue;
+        attribute.value.value = createId('node');
+        changed = true;
+      }
+    },
+  });
+
+  return changed ? generate(ast, { retainLines: true }, code).code : code;
+}
 
 export interface PageInfo {
   slug: string;
@@ -191,6 +312,12 @@ export const pagesCreateOperation: Operation<
     const changes: FileChange[] = [];
     const rootId = context.createId('root');
     const pageName = input.title || (cleanSlug ? cleanSlug.replace(/-/g, ' ') : 'Home');
+    // A templated page shares the canvas node map with LayoutClient, so both
+    // roots use data-id="root". Keep the page root bare; the shared template
+    // owns background, clipping, padding, and viewport sizing.
+    const rootStyle = input.template
+      ? "position: 'relative', width: '100%', height: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center'"
+      : "position: 'relative', width: '100%', minHeight: '900px', backgroundColor: '#ffffff'";
 
     const serverCode = `import PageClient from './page.client';
 
@@ -211,10 +338,7 @@ import React from 'react';
 
 export default function Page() {
   return (
-    <div data-id="root" data-name="${pageName}" style={{
-      position: 'relative', width: '100%', minHeight: '900px',
-      backgroundColor: '#ffffff'
-    }}>
+    <div data-id="root" data-name="${pageName}" style={{ ${rootStyle} }}>
       ${input.content ? input.content : ''}
     </div>
   );
@@ -299,7 +423,7 @@ export const pagesUpdateOperation: Operation<
     title: z.string().optional(),
     template: z.string().nullable().optional(),
   }),
-  async execute(snapshot, input) {
+  async execute(snapshot, input, context) {
     const existing = findPageInSnapshot(snapshot, input.slug);
     if (!existing) {
       throw new Error(`PAGE_NOT_FOUND: Page "${input.slug}" not found`);
@@ -331,6 +455,16 @@ export const pagesUpdateOperation: Operation<
 
     const pathChanged =
       nextClientPath !== existing.page.clientPath || nextServerPath !== existing.page.serverPath;
+    const clientContent = targetTemplate
+      ? preparePageForTemplate(existing.clientContent, context.createId)
+      : existing.clientContent;
+
+    if (clientContent !== existing.clientContent) {
+      context.trace('pages:update:template-root-normalized', {
+        slug: targetSlug,
+        template: targetTemplate,
+      });
+    }
 
     if (pathChanged) {
       // Check collision
@@ -354,7 +488,7 @@ export const pagesUpdateOperation: Operation<
       changes.push({
         path: nextClientPath,
         beforeHash: null,
-        content: existing.clientContent,
+        content: clientContent,
       });
       changes.push({
         path: nextServerPath,
@@ -420,14 +554,10 @@ export const pagesDuplicateOperation: Operation<
       throw new Error(`PAGE_ALREADY_EXISTS: Target page "${clientPath}" already exists`);
     }
 
-    const newRootId = context.createId('root');
     const newTitle = input.title || `${existing.page.title || 'Page'} (Copy)`;
 
-    // Replace root ID and name in client content
-    let newClientContent = existing.clientContent.replace(
-      /data-id="[^"]*"/,
-      `data-id="${newRootId}"`
-    );
+    // Keep the required page root ID, but give copied descendants fresh IDs.
+    let newClientContent = regeneratePageNodeIds(existing.clientContent, context.createId);
     newClientContent = newClientContent.replace(
       /data-name="[^"]*"/,
       `data-name="${newTitle}"`

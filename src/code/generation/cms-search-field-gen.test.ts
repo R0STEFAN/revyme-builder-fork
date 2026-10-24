@@ -179,4 +179,10 @@ export default function Page() {
     expect(synced).toMatch(/import React,?\s*\{[^}]*\buseState\b[^}]*\}\s*from ['"]react['"]/);
     expect(validateGeneratedCode(synced)).toBeNull();
   });
+
+  it('returns an Oracle-safe import set before a headless MCP plan is validated', () => {
+    const created = addSearchFieldInCode(PAGE_NO_HOOK, 'list', 'searchTitle', FRAME, 'Title', SEARCH_FIELD_PLACEHOLDER, false);
+    expect(created).toMatch(/import React,?\s*\{[^}]*\buseState\b[^}]*\}\s*from ['"]react['"]/);
+    expect(validateGeneratedCode(created)).toBeNull();
+  });
 });

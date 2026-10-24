@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { Snapshot, Plan, Issue } from './contracts';
 import { checkFile } from '@/code/oracle/check-file';
+import { isBuilderMaterializedFile } from '@/code/oracle/file-kind';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { calculatePlanHash } from './session';
 import { validateBranchAction } from './operations/scoped-branches';
@@ -131,23 +132,42 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
     // Only validate JSX/TSX syntax and rules for JS/TS/JSX/TSX files
     if (/\.(tsx|jsx|ts|js)$/.test(filePath)) {
       const isLayout = /(^|\/)layout\.(tsx|ts)$/.test(filePath);
+      const isTemplateClient = /^app\/\([^)]+\)\/LayoutClient\.tsx$/.test(filePath);
       const isProvider = /(^|\/)providers\.(tsx|ts)$/.test(filePath);
       const isCodeComp = filePath.startsWith('components/') && isCodeComponentSource(change.content);
-
-      validateSourceCode(filePath, change.content, projectedFiles, issues, isCodeComp || isLayout || isProvider);
+      const isBuilderMaterialized = isBuilderMaterializedFile(change.content);
+      const isPluginSource = /^plugins\/.+\.tsx$/.test(filePath);
+      const isOverrideSource = /^overrides\/.+\.tsx?$/.test(filePath);
+      // This generated controller is an internal App Router helper, not an
+      // editable page. Its runtime DOM/animation code must not be interpreted
+      // as canvas-authored JSX by the page dialect Oracle.
+      const isGeneratedPageTransitionsRuntime =
+        /^app\/(?:\([^)]+\)\/)?page-transitions\.tsx$/.test(filePath) &&
+        change.content.includes('@rt-v9');
+      validateSourceCode(
+        filePath,
+        change.content,
+        projectedFiles,
+        issues,
+        isCodeComp || isLayout || isProvider || isGeneratedPageTransitionsRuntime || isBuilderMaterialized || isPluginSource || isOverrideSource,
+      );
 
       // Run Oracle check for TSX/JSX authoring files (client pages, components, templates)
       const isServerPageEntry = /(^|\/)page\.(tsx|ts)$/.test(filePath) && !filePath.includes('.client.');
-      if (/\.(tsx|jsx)$/.test(filePath) && !isLayout && !isProvider && !isServerPageEntry) {
+      if (/\.(tsx|jsx)$/.test(filePath) && !isLayout && !isProvider && !isServerPageEntry && !isGeneratedPageTransitionsRuntime && !isBuilderMaterialized && !isPluginSource && !isOverrideSource) {
         let kind: 'page' | 'component' | 'code-component' | 'template' = 'page';
         if (filePath.startsWith('components/')) {
           kind = isCodeComp ? 'code-component' : 'component';
-        } else if (filePath.includes('template')) {
+        } else if (isTemplateClient) {
           kind = 'template';
         }
 
         try {
-          const oracleViolations = checkFile(change.content, { kind, path: filePath })
+          const oracleViolations = checkFile(change.content, {
+            kind,
+            path: filePath,
+            projectFiles: new Set(projectedFiles.keys()),
+          })
             .filter((v) => v.code !== 'CANVAS_CONFIG_MISSING');
           for (const v of oracleViolations) {
             issues.push({

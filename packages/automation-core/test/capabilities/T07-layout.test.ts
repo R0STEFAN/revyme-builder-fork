@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { defaultRegistry } from '../../src/registry';
 import type { Snapshot, OperationContext, FileChange } from '../../src/contracts';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { parseCanvasConfig } from '@/code/project/canvas-config';
+import { checkFile } from '@/code/oracle/check-file';
 import '../../src/operations/nodes';
 import '../../src/operations/layout';
 import '../../src/operations/styles';
@@ -295,7 +297,7 @@ export default function Page() {
     expect(codeWithHover).toContain('[data-id="title-1"]:hover');
     expect(codeWithHover).toContain('color: #ef4444');
 
-    // 2. Set mobile responsive override (width 375)
+    // 2. Set mobile responsive override (width 390)
     const mobileRes = await vpOverrideOp.execute(
       snapshot,
       {
@@ -311,7 +313,7 @@ export default function Page() {
     applyChanges(mobileRes.changes);
 
     const codeWithMobile = files.get('app/page.client.tsx')!;
-    expect(codeWithMobile).toMatch(/@media\s*\(max-width:\s*375px\)/);
+    expect(codeWithMobile).toMatch(/@media\s*\(max-width:\s*390px\)/);
     expect(codeWithMobile).toContain('grid-template-columns: 1fr');
   });
 
@@ -330,6 +332,34 @@ export default function Page() {
 
     expect(result.changes[0].content).toContain('@media (max-width: 390px)');
     expect(result.changes[0].content).not.toContain('@media (max-width: 375px)');
+  });
+
+  it('adds a canvas viewport when applying an override to an undeclared breakpoint', async () => {
+    const code = INITIAL_PAGE_CODE.replace(
+      '/* @canvas { single: true, height: \'auto\' } */',
+      `/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1200, "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */`,
+    );
+    files.set('app/page.client.tsx', code);
+
+    const vpOverrideOp = defaultRegistry.get('viewports.setOverride')!;
+    const result = await vpOverrideOp.execute(snapshot, {
+      nodeId: 'main-1',
+      viewport: 'tablet',
+      styles: { gridTemplateColumns: '1fr' },
+    }, context);
+    const updated = result.changes[0].content!;
+    const config = parseCanvasConfig(updated)!;
+
+    expect(updated).toContain('@media (max-width: 810px)');
+    expect(config.viewports).toContainEqual(expect.objectContaining({
+      id: 'tablet',
+      label: 'Tablet',
+      width: 810,
+      isPrimary: false,
+    }));
+    expect(config.positions.tablet.x).toBeGreaterThan(config.positions.desktop.x);
+    expect(checkFile(updated, { kind: 'page', path: 'app/page.client.tsx' })
+      .map((issue) => issue.code)).not.toContain('CANVAS_VIEWPORT_BREAKPOINT_MISMATCH');
   });
 
   it('writes component hover styling into the requested motion variant, not an unsupported style tag', async () => {

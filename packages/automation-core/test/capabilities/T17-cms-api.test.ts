@@ -731,6 +731,31 @@ describe('T17: External API CMS & Dynamic Search', () => {
       expect(reboundCode).toContain('value={queryFilter}');
       expect(reboundCode).toContain('setQueryFilter(e.target.value)');
       expect(reboundCode).toContain('const [queryFilter, setQueryFilter] = useState');
+      expect(parseJSXToNodes(reboundCode).get('article-list')?.collectionList?.filterGroup?.filters[0]?.valueVar).toBe('queryFilter');
+    });
+
+    it('adds the React hook import when rebinding creates a variable on a page with only a default React import', async () => {
+      const code = `'use client';
+import React from 'react';
+export default function Page() {
+  return <div data-id="root"><input data-id="search-input" data-search-field="oldSearch" value={""} /></div>;
+}`;
+      const snap = createMockSnapshot({ 'app/rebind/page.tsx': code });
+      const result = await cmsApiSearchFieldSetVariableOperation.execute(
+        snap,
+        {
+          filePath: 'app/rebind/page.tsx',
+          inputId: 'search-input',
+          varName: 'searchTerm',
+          createVar: true,
+        },
+        mockContext,
+      );
+      const updated = result.changes[0].content!;
+
+      expect(updated).toMatch(/import React,\s*\{\s*useState\s*\}\s*from ['"]react['"]/);
+      expect(updated).toContain('const [searchTerm, setSearchTerm] = useState');
+      expect(updated).toContain('value={searchTerm}');
     });
   });
 

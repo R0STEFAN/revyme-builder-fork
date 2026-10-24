@@ -12,6 +12,8 @@ export interface ProjectAsset {
   mimeType: string;
 }
 
+const HISTORY_FILE_PATH = '_meta/history.json';
+
 function guessMimeType(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase();
   switch (ext) {
@@ -160,7 +162,7 @@ export const assetsDeleteOperation: Operation<
     if (!input.force) {
       // Check references in code
       for (const [filePath, content] of snapshot.files.entries()) {
-        if (filePath === input.path) continue;
+        if (filePath === input.path || filePath === HISTORY_FILE_PATH) continue;
         if (content.includes(url) || content.includes(input.path)) {
           throw new Error(`ASSET_IN_USE: Asset "${input.path}" is currently referenced in "${filePath}". Pass force=true to delete anyway.`);
         }
@@ -213,7 +215,7 @@ export const assetsAuditOperation: Operation<
     const assetUrlRegex = /(?:\/assets\/[a-zA-Z0-9._-]+|\/images\/[a-zA-Z0-9._-]+)/g;
 
     for (const [filePath, content] of snapshot.files.entries()) {
-      if (filePath.startsWith('public/')) continue;
+      if (filePath.startsWith('public/') || filePath === HISTORY_FILE_PATH) continue;
       const matches = content.match(assetUrlRegex);
       if (matches) {
         for (const url of matches) {

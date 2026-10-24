@@ -67,8 +67,9 @@ export interface EpochSnapshot {
 export function collectEpochSnapshot(
   nodes: Map<string, CanvasNode>,
   vpId: string,
+  additionalStyleProps: string[] = [],
 ): EpochSnapshot {
-  const snap = collectLayoutSnapshot(nodes, vpId);
+  const snap = collectLayoutSnapshot(nodes, vpId, additionalStyleProps);
   let cacheEpoch: CacheEpoch | null = null;
   try {
     cacheEpoch = getCanvasBridge().getCacheEpoch?.() ?? null;

@@ -292,6 +292,12 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
     // Phase 3: Oracle Verification Gate for TSX / TS files
     for (const f of input.files) {
       if (f.code !== null && (f.path.endsWith('.tsx') || f.path.endsWith('.ts'))) {
+        // Next.js server layouts are structural wrappers, not editable canvas
+        // templates. The full MCP plan validator still checks their syntax and
+        // relative imports; the canvas Oracle would reject valid metadata/CSS
+        // imports and the required <html>/<body> structure.
+        if (/(^|\/)layout\.(tsx|ts)$/.test(f.path)) continue;
+
         let kind: FileKind = 'page';
         if (f.kind === 'template' || isLayoutFile(f.path)) {
           kind = 'template';

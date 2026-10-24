@@ -1,6 +1,7 @@
 // packages/automation-core/test/capabilities/T09-components.test.ts
 import { describe, it, expect } from 'vitest';
 import type { Snapshot, OperationContext, FileChange } from '../../src/contracts';
+import { checkFile } from '@/code/oracle/check-file';
 import {
   componentsListOperation,
   componentsGetOperation,
@@ -302,9 +303,92 @@ export default withResponsiveProps(Button);
     snapshot = { ...snapshot, files: mutableFiles };
 
     pageCode = snapshot.files.get('app/page.tsx')!;
-    expect(pageCode).toContain('<button data-id="btn-inner"');
+    expect(pageCode).toContain('<button data-id="banner-box"');
+    expect(pageCode).toContain('"Click Me"');
     expect(pageCode).not.toContain('<Button');
     expect(pageCode).not.toContain("import Button from '@/components/Button';");
+    expect(pageCode).not.toContain("import Banner from '@/components/Banner';");
+  });
+
+  it('detaches component defaults and instance styles without duplicate page-root IDs', async () => {
+    const snapshot = createMockSnapshot({
+      'components/Badge.tsx': `"use client";
+import { withResponsiveProps } from "@revyme/runtime";
+function Badge({ style, label = "Default badge" }: { style?: React.CSSProperties; label?: string }) {
+  return <div data-id="badge-root" style={{ ...style }}><span data-id="root">{label}</span></div>;
+}
+export default withResponsiveProps(Badge);
+`,
+      'app/page.client.tsx': `"use client";
+/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1200, "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */
+import React from 'react';
+import Badge from '@/components/Badge';
+export default function Page() {
+  return <div data-id="root" style={{ position: 'relative', width: '100%', height: 'auto', display: 'flex', flexDirection: 'column' }}><Badge data-id="badge-instance" label="Live label" style={{ marginTop: '12px' }} /></div>;
+}
+`,
+    });
+
+    const result = await componentsDetachOperation.execute(snapshot, {
+      targetFile: 'app/page.client.tsx',
+      nodeId: 'badge-instance',
+    }, mockContext);
+    const updated = result.changes[0].content!;
+    const issueCodes = checkFile(updated, { kind: 'page', path: 'app/page.client.tsx' })
+      .map((issue) => issue.code);
+
+    expect(updated).toContain('data-id="badge-instance"');
+    expect(updated).toContain('"Live label"');
+    expect(updated).toContain("marginTop: '12px'");
+    expect(updated.match(/data-id="root"/g)).toHaveLength(1);
+    expect(updated).not.toContain('...style');
+    expect(issueCodes).not.toContain('DUPLICATE_DATA_ID');
+    expect(issueCodes).not.toContain('RESOLVE_TEXT_EMPTY');
+    expect(issueCodes).not.toContain('RESOLVE_STYLE_DROPPED');
+    expect(issueCodes).not.toContain('WOULD_CRASH');
+  });
+
+  it('carries used imports and module constants into a detached instance', async () => {
+    const snapshot = createMockSnapshot({
+      'components/Animated.tsx': `import { motion } from 'framer-motion';
+const variants = { default: { opacity: 1 } };
+function Animated({ label = "Animated" }: { label?: string }) {
+  return <motion.button data-id="animated-root" variants={variants}>{label}</motion.button>;
+}
+export default Animated;
+`,
+      'app/page.client.tsx': `import React from 'react';
+export default function Page() { return <div data-id="root"><Animated data-id="animated-instance" /></div>; }
+`,
+    });
+
+    const result = await componentsDetachOperation.execute(snapshot, {
+      targetFile: 'app/page.client.tsx',
+      nodeId: 'animated-instance',
+    }, mockContext);
+    const updated = result.changes[0].content!;
+    const issueCodes = checkFile(updated, { kind: 'page', path: 'app/page.client.tsx' }).map((issue) => issue.code);
+
+    expect(updated).toContain('import { motion } from "framer-motion";');
+    expect(updated).toContain('const variants =');
+    expect(updated).toContain('variants={variants}');
+    expect(updated).not.toContain('<Animated');
+    expect(issueCodes).not.toContain('WOULD_CRASH');
+  });
+
+  it('does not treat archived history snapshots as live component usages', async () => {
+    const snapshot = createMockSnapshot({
+      'components/OldCard.tsx': 'export default function OldCard() { return <div data-id="old-card-root" />; }',
+      'app/page.client.tsx': "import OldCard from '@/components/OldCard';\nexport default function Page() { return <div data-id=\"root\" />; }",
+      '_meta/history.json': JSON.stringify({
+        content: "import OldCard from '@/components/OldCard'; return <OldCard data-id=\"old-card-instance\" />;",
+      }),
+    });
+
+    const result = await componentsRemoveOperation.execute(snapshot, { name: 'OldCard', force: false }, mockContext);
+    expect(result.changes).toContainEqual(expect.objectContaining({ path: 'components/OldCard.tsx', content: null }));
+    expect(result.changes.find((change) => change.path === 'app/page.client.tsx')?.content).not.toContain('OldCard');
+    expect(result.changes.some((change) => change.path === '_meta/history.json')).toBe(false);
   });
 
   it('manages component variable creation, renaming, and removal across project', async () => {
@@ -428,5 +512,7 @@ export default function Page() {
     snapshot = { ...snapshot, files: mutableFiles };
 
     expect(snapshot.files.has('components/Card.tsx')).toBe(false);
+    expect(snapshot.files.get('app/page.tsx')).not.toContain('<Card');
+    expect(snapshot.files.get('app/page.tsx')).not.toContain("import Card from '@/components/Card';");
   });
 });

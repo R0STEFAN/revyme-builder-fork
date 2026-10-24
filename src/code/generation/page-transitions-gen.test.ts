@@ -26,6 +26,27 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
 }
 `;
 
+const TEMPLATE_LAYOUT_CLIENT = `'use client';
+
+/* @canvas { single: true } */
+
+import React from 'react';
+import SiteNavbar from '@/components/SiteNavbar';
+import SiteFooter from '@/components/SiteFooter';
+
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return (
+    <div data-id="root" data-name="Template site-shell" style={{
+      position: 'relative', width: '100%', backgroundColor: '#FFFFFF', overflowX: 'hidden'
+    }}>
+      <SiteNavbar data-id="template-navbar" data-name="Site Navigation" logoText="IMPCT.DIGITAL" menuTitle="Сайти та ШІ для бізнесу" menuLabel="+ МЕНЮ" contactLabel="Обговорити проєкт ↗" style={{ position: "fixed", top: "0px", left: "0px", right: "0px", zIndex: "100" }} />
+      {children}
+      <SiteFooter data-id="template-footer" data-name="Site Footer" email="HELLO@IMPCT.DIGITAL" about="Незалежна студія цифрових продуктів і ШІ-рішень для бізнесу." brand="IMPCT.DIGITAL" style={{ position: "relative", width: "100%" }} />
+    </div>
+  );
+}
+`;
+
 describe('page-transitions-gen: injectPageTransitionsInCode', () => {
   it('wraps {children} + adds the import', () => {
     const out = injectPageTransitionsInCode(LAYOUT_CLIENT);
@@ -36,6 +57,14 @@ describe('page-transitions-gen: injectPageTransitionsInCode', () => {
   it('is idempotent', () => {
     const once = injectPageTransitionsInCode(LAYOUT_CLIENT);
     expect(injectPageTransitionsInCode(once)).toBe(once);
+  });
+  it('injects into a template shell with imported components before and after the slot', () => {
+    const out = injectPageTransitionsInCode(TEMPLATE_LAYOUT_CLIENT);
+    expect(out).toContain('<SiteNavbar');
+    expect(out).toContain('<PageTransitions>{children}</PageTransitions>');
+    expect(out).toContain('<SiteFooter');
+    expect(out).toContain("import { PageTransitions } from './page-transitions';");
+    parsesTsx(out);
   });
   it('no-op when there is no {children}', () => {
     const noKids = `export default function L() { return <div/>; }`;

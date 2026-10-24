@@ -292,6 +292,9 @@ describe('T18: Localization, Locale Routes, Direction & Translations', () => {
 
       expect(mutableFiles.has('app/es/page.tsx')).toBe(false);
       expect(mutableFiles.has('i18n/es.json')).toBe(false);
+      // Keep the modern next-intl catalog so removing and re-adding a locale
+      // does not silently discard completed translations.
+      expect(mutableFiles.has('messages/es.json')).toBe(true);
 
       const listRes = await localesGetOperation.execute(snap, {}, mockContext);
       expect(listRes.locales.some((l) => l.code === 'es')).toBe(false);

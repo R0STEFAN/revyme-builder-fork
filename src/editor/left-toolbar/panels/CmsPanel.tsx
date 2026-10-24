@@ -167,10 +167,11 @@ function CollectionListView({
     trace.action('cms-panel:confirm-delete-collection', {
       slug,
       bindingCount: usage.bindings.length,
+      indexPageCount: usage.indexPages.length,
       detailPageCount: usage.detailPages.length,
       itemCount: usage.itemCount,
     });
-    if (usage.bindings.length === 0 && usage.detailPages.length === 0) {
+    if (usage.bindings.length === 0 && usage.indexPages.length === 0 && usage.detailPages.length === 0) {
       // Fast path — nothing depends on this collection. Skip the heavy scan
       // pipeline; just drop the data + schema files.
       deleteCollection(slug);
@@ -426,7 +427,7 @@ function DeleteCollectionModal({
 }) {
   if (!pending) return null;
   const { schemaName, usage } = pending;
-  const hasCascade = usage.bindings.length > 0 || usage.detailPages.length > 0;
+  const hasCascade = usage.bindings.length > 0 || usage.indexPages.length > 0 || usage.detailPages.length > 0;
 
   // Group bindings by file for a cleaner list ("home page · 2 blocks").
   const bindingsByFile = new Map<string, number>();
@@ -453,12 +454,16 @@ function DeleteCollectionModal({
             <span className="font-mono text-[var(--text-primary)]">{usage.bindings.length}</span>
           </div>
           <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-[var(--text-secondary)]">Index pages</span>
+            <span className="font-mono text-[var(--text-primary)]">{usage.indexPages.length}</span>
+          </div>
+          <div className="flex items-center justify-between px-3 py-2">
             <span className="text-[var(--text-secondary)]">Detail pages</span>
             <span className="font-mono text-[var(--text-primary)]">{usage.detailPages.length}</span>
           </div>
         </div>
 
-        {(bindingsByFile.size > 0 || usage.detailPages.length > 0) && (
+        {(bindingsByFile.size > 0 || usage.indexPages.length > 0 || usage.detailPages.length > 0) && (
           <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
             {[...bindingsByFile.entries()].map(([filePath, count]) => (
               <div key={`b-${filePath}`} className="flex items-center justify-between px-2 py-1 rounded bg-[var(--bg-elevated)]">
@@ -466,6 +471,12 @@ function DeleteCollectionModal({
                 <span className="text-[10px] font-mono text-[var(--text-disabled)] shrink-0 ml-2">
                   {count} block{count === 1 ? '' : 's'}
                 </span>
+              </div>
+            ))}
+            {usage.indexPages.map(filePath => (
+              <div key={`i-${filePath}`} className="flex items-center justify-between px-2 py-1 rounded bg-[var(--bg-elevated)]">
+                <span className="truncate text-[10px] text-[var(--text-secondary)]" title={filePath}>{filePath}</span>
+                <span className="text-[10px] font-mono text-[var(--text-disabled)] shrink-0 ml-2">index page</span>
               </div>
             ))}
             {usage.detailPages.map(filePath => (

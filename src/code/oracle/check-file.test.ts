@@ -1352,6 +1352,21 @@ export default function Page() {
 }`;
     expect(has(checkFile(page, { kind: 'page' }))).toBe(false);
   });
+  it('allows only a valid @rulerGuides metadata annotation on an editable page', () => {
+    const page = `'use client';
+/** @rulerGuides [
+  { "id": "guide-h-1", "type": "horizontal", "position": 120 }
+] */
+export default function Page() {
+  return <div data-id="root" data-name="Root" style={{ position: 'relative', width: '100%', height: 'auto' }}>Page</div>;
+}`;
+    expect(has(checkFile(page, { kind: 'page' }))).toBe(false);
+
+    const malformed = page.replace('"position": 120', '"position": "near top"');
+    expect(has(checkFile(malformed, { kind: 'page' }))).toBe(true);
+    const prose = page.replace('position": 120', 'position": 120 } — keep near the top');
+    expect(has(checkFile(prose, { kind: 'page' }))).toBe(true);
+  });
 });
 
 describe('CANVAS_FILL_FEEDBACK — fill canvas must be absolute', () => {

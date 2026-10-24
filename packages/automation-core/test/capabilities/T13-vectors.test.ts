@@ -2,6 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Snapshot, FileChange } from '../../src/contracts';
 import { createSnapshot, createOperationContext } from '../../src/session';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
+import { checkFile } from '@/code/oracle/check-file';
 import {
   vectorsListOperation,
   vectorsCreateSetOperation,
@@ -41,6 +44,24 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 }
 
 describe('T13: Vectors, SVG Shapes, Path, and Active Drawing', () => {
+  it('accepts a generated icon set without requiring canvas data-ids on SVG internals', async () => {
+    const snapshot = createMockSnapshot({});
+    const result = await vectorsCreateSetOperation.execute(snapshot, {
+      name: 'OracleIcons',
+      icons: [{ id: 'mark', displayName: 'Mark', svgMarkup: '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z" /></svg>' }],
+    }, mockContext);
+    const plan = createPlan({
+      scope: snapshot.scope,
+      baseRevision: snapshot.revision,
+      operationId: 'generated-icon-set-oracle-regression',
+      changes: result.changes,
+    });
+
+    const validation = validatePlan(snapshot, plan);
+    expect(validation.issues).toEqual([]);
+    expect(validation.ok).toBe(true);
+  });
+
   it('manages vector icon set lifecycle: createSet, list, addVariant, and removeVariant with single variant guard', async () => {
     let snapshot = createMockSnapshot({});
     const mutableFiles = new Map(snapshot.files);
@@ -161,6 +182,20 @@ describe('T13: Vectors, SVG Shapes, Path, and Active Drawing', () => {
     );
     expect(getRes.viewBox).toBe('0 0 100 100');
 
+    const updateSvgRes = await shapesUpdateAttrsOperation.execute(
+      snapshot,
+      {
+        targetFile: 'app/page.tsx',
+        nodeId: 'svg-shape',
+        targetElement: 'svg',
+        attrs: { viewBox: '0 0 200 200' },
+      },
+      mockContext,
+    );
+    applyChanges(mutableFiles, updateSvgRes.changes);
+    snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
+    expect(snapshot.files.get('app/page.tsx')).toContain('viewBox="0 0 200 200"');
+
     // 2. shapes.updateAttrs on the inner shape element
     const updateRes = await shapesUpdateAttrsOperation.execute(
       snapshot,
@@ -266,6 +301,7 @@ describe('T13: Vectors, SVG Shapes, Path, and Active Drawing', () => {
     applyChanges(mutableFiles, setRes.changes);
     snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
     let code = snapshot.files.get('app/page.tsx')!;
+    expect(checkFile(code, { kind: 'page' }).filter((issue) => issue.code === 'NO_COMMENTS_IN_GENERATED_CODE')).toEqual([]);
     expect(code).toContain('playSketchDraw');
     expect(code).toContain('useEffect');
     expect(code).toContain('sketch-svg');

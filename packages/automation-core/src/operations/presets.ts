@@ -266,7 +266,11 @@ export const presetsApplyOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found in project`);
     }
 
-    const cleanName = input.name.replace(/^--/, '').trim();
+    const rawName = input.name.replace(/^--/, '').trim();
+    const categoryPrefix = `${input.category}-`;
+    const cleanName = rawName.startsWith(categoryPrefix)
+      ? rawName.slice(categoryPrefix.length)
+      : rawName;
     const stylePatch: Record<string, string> = {};
 
     if (input.category === 'border') {

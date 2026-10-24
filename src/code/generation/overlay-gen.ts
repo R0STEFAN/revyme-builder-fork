@@ -158,6 +158,12 @@ export function stateVarName(overlayId: string): string {
   return `${nodeIdToVarName(overlayId)}Open`;
 }
 
+function ensureReactDefaultImport(code: string): string {
+  const imports = [...code.matchAll(/^\s*import\s+([^;\n]+?)\s+from\s+['"]react['"]\s*;?/gm)];
+  if (imports.some((match) => /^(?:React|\*\s+as\s+React)\b/.test(match[1].trim()))) return code;
+  return ensureNamedImport(code, 'react', [], { ensureDefault: 'React' });
+}
+
 // Default appear transitions for a fixed overlay (mirrors OverlayTool's defaults).
 const DEFAULT_ENTER_TRANSITION: Record<string, string> = { type: 'tween', duration: '0.3', ease: 'easeIn' };
 const DEFAULT_EXIT_TRANSITION: Record<string, string> = { type: 'tween', duration: '0.3', ease: 'easeOut' };
@@ -282,7 +288,7 @@ function findStateInsertPos(code: string): number {
 
     if (trimmed.startsWith('return ') || trimmed.startsWith('return(')) break;
 
-    if (trimmed.startsWith('useLayoutEffect') || trimmed.startsWith('useEffect')) {
+    if (/^(?:React\.)?use(?:Layout)?Effect\b/.test(trimmed)) {
       // Skip the whole hook block: brace-match its body, then step past `);`.
       let depth = 0;
       let i = offset;
@@ -416,8 +422,8 @@ function findLitJs(id: string, scoped: boolean): string {
   return scoped ? `ovFind('${id}')` : `document.querySelector('[data-id="${id}"]')`;
 }
 
-const MASTER_SCOPE_DECL = `  const ovRootRef = useRef(null);
-  const ovGrace = useRef({});
+const MASTER_SCOPE_DECL = `  const ovRootRef = React.useRef(null);
+  const ovGrace = React.useRef({});
   const ovFind = (id) => { const r = ovRootRef.current; if (!r) return document.querySelector('[data-id="' + id + '"]'); if (r.getAttribute('data-mroot') === id || r.getAttribute('data-id') === id) return r; return r.querySelector('[data-id="' + id + '"]'); };
 `;
 
@@ -433,14 +439,13 @@ export function ensureMasterOverlayScope(code: string): string {
     const statePos = findStateInsertPos(result);
     if (statePos < 0) return code;
     result = result.slice(0, statePos) + MASTER_SCOPE_DECL + result.slice(statePos);
-    result = ensureNamedImport(result, 'react', ['useRef']);
   }
   if (!/ref=\{ovRootRef\}/.test(result)) {
     // Before `{...rest}` wherever it sits in the root tag (not only when it
     // directly follows `data-id`).
     result = insertAtRootRestSpread(result, 'ref={ovRootRef}', true);
   }
-  return result;
+  return ensureReactDefaultImport(result);
 }
 
 /** Strip overlay click/hover handlers (onClick / onMouseEnter / onMouseLeave)
@@ -505,7 +510,7 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolea
   const setVarName = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
   const esc = escapeRegExp(overlayId);
   void esc;
-  return `  useEffect(() => {
+  return `  React.useEffect(() => {
     if (!${varName}) return;
     const overlay = ${findLitJs(overlayId, isScoped)};
     if (!overlay) return;
@@ -558,7 +563,7 @@ export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolea
 export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false): string {
   const varName = stateVarName(overlayId);
   const setter = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
-  return `  useLayoutEffect(() => {
+  return `  React.useLayoutEffect(() => {
     if (!${varName}) return;
     const position = () => {
       const overlay = ${findLitJs(overlayId, scoped)};
@@ -846,7 +851,7 @@ export function createOverlayInCode(
   // tag and the layer row read "div".
   const overlayContent = `\n${indent}<AnimatePresence>{${varName} && (\n${indent}  <motion.div key="${overlayId}" data-id="${overlayId}" data-name="Overlay" data-overlay='${JSON.stringify(overlayConfig)}' ${appearAttrs}${hoverMirror} ${formatStyleAttr(elementStyles, indent)}>${innerJsx}</motion.div>\n${indent})}</AnimatePresence>`;
 
-  const stateDecl = `  const [${varName}, ${setVarName}] = useState(false);\n`;
+  const stateDecl = `  const [${varName}, ${setVarName}] = React.useState(false);\n`;
 
   // --- Step 3: Apply changes bottom-to-top (so positions don't shift) ---
   trace.action('overlay-gen:create:positions', { tagStart, tagClosePos, elementEndPos, statePos, selfClosing: result[tagClosePos - 1] === '/' });
@@ -917,6 +922,9 @@ export function createOverlayInCode(
   }
   // Master: instance-scoped lookups need the root ref + finder (idempotent).
   if (scoped) result = ensureMasterOverlayScope(result);
+
+  result = ensureReactDefaultImport(result);
+  result = ensureNamedImport(result, 'framer-motion', ['motion', 'AnimatePresence']);
 
   trace.action('overlay-gen:create:done', { triggerId, overlayId, type: overlayConfig.type });
   return result;
@@ -1632,6 +1640,15 @@ export function updateOverlayTriggerInCode(
 /**
  * Remove an overlay and its trigger config.
  */
+/** Find the owning React effect call, including namespace-qualified hooks. */
+function findOverlayEffectCallStart(code: string, beforeIndex: number): number {
+  let start = -1;
+  for (const match of code.slice(0, beforeIndex).matchAll(/(?:React[.])?(?:useLayoutEffect|useEffect) *[(]/g)) {
+    if (match.index !== undefined) start = match.index;
+  }
+  return start;
+}
+
 /** Remove a single overlay's runtime effect by its UNIQUE dependency array
  *  `, [<var>]);`, walking back to the owning `use(Layout)?Effect(`. Scoped to ONE
  *  effect so deleting overlay X can never swallow overlay Y's effect. */
@@ -1639,10 +1656,7 @@ function removeOverlayEffectBlock(code: string, varName: string): string {
   const dep = `, [${varName}]);`;
   const depIdx = code.indexOf(dep);
   if (depIdx < 0) return code;
-  const before = code.slice(0, depIdx);
-  // 'useLayoutEffect(' is NOT a substring of 'useEffect(' search and vice-versa,
-  // so the nearest of either before the dep is this effect's opener.
-  const start = Math.max(before.lastIndexOf('useLayoutEffect('), before.lastIndexOf('useEffect('));
+  const start = findOverlayEffectCallStart(code, depIdx);
   if (start < 0) return code;
   let s = start;
   while (s > 0 && /[ \t]/.test(code[s - 1])) s--;   // trim leading indent
@@ -1660,8 +1674,7 @@ function removeOverlayEffectBlock(code: string, varName: string): string {
 function overlayEffectLineStart(code: string, varName: string): number {
   const depIdx = code.indexOf(`, [${varName}]);`);
   if (depIdx < 0) return -1;
-  const before = code.slice(0, depIdx);
-  const start = Math.max(before.lastIndexOf('useLayoutEffect('), before.lastIndexOf('useEffect('));
+  const start = findOverlayEffectCallStart(code, depIdx);
   if (start < 0) return -1;
   return code.lastIndexOf('\n', start) + 1;
 }
@@ -1687,7 +1700,7 @@ function insertOverlayStateDecl(code: string, varName: string, decl: string): st
  *  a `useRef`) sits below `statePos` — an effect placed there would read the state
  *  in its deps before it exists. */
 function insertOverlayEffectAfterState(code: string, varName: string, effect: string, statePos: number): string {
-  const m = new RegExp(`const\\s*\\[\\s*${escapeRegExp(varName)}\\s*,[^\\]]*\\]\\s*=\\s*useState\\([^;]*\\);[^\\n]*\\n`).exec(code);
+  const m = new RegExp(`const\\s*\\[\\s*${escapeRegExp(varName)}\\s*,[^\\]]*\\]\\s*=\\s*(?:React[.])?useState\\([^;]*\\);[^\\n]*\\n`).exec(code);
   const afterState = m ? m.index + m[0].length : -1;
   const pos = Math.max(statePos, afterState);
   if (pos < 0) return code;
@@ -1705,9 +1718,9 @@ function insertOverlayEffectAfterState(code: string, varName: string, effect: st
 export function healMisorderedOverlayStateInCode(code: string): string {
   let result = code;
   let moved = 0;
-  const vars = [...code.matchAll(/const\s*\[\s*(\w+Open)\s*,\s*set\w+\s*\]\s*=\s*useState\(false\);/g)].map(m => m[1]);
+  const vars = [...code.matchAll(/const\s*\[\s*(\w+Open)\s*,\s*set\w+\s*\]\s*=\s*(?:React[.])?useState\(false\);/g)].map(m => m[1]);
   for (const varName of new Set(vars)) {
-    const lineRe = new RegExp(`(^|\\n)([ \\t]*const\\s*\\[\\s*${escapeRegExp(varName)}\\s*,\\s*set\\w+\\s*\\]\\s*=\\s*useState\\(false\\);[ \\t]*\\n?)`);
+    const lineRe = new RegExp(`(^|\\n)([ \\t]*const\\s*\\[\\s*${escapeRegExp(varName)}\\s*,\\s*set\\w+\\s*\\]\\s*=\\s*(?:React[.])?useState\\(false\\);[ \\t]*\\n?)`);
     const dm = lineRe.exec(result);
     if (!dm) continue;
     const declStart = dm.index + dm[1].length;
@@ -1772,7 +1785,7 @@ export function removeOverlayInCode(code: string, overlayId: string, triggerId: 
   );
 
   // 2. Remove useState declaration
-  const statePattern = new RegExp(`\\s*const\\s*\\[${esc},\\s*\\w+\\]\\s*=\\s*useState\\(false\\);?\\n?`);
+  const statePattern = new RegExp(`\\s*const\\s*\\[${esc},\\s*\\w+\\]\\s*=\\s*(?:React[.])?useState\\(false\\);?\\n?`);
   result = result.replace(statePattern, '\n');
 
   // 2b. Remove THIS overlay's runtime effect — relative `useLayoutEffect`
@@ -1967,7 +1980,7 @@ export function transferDescendantOverlaysToMasterInCode(
       if (!cc.includes(`const [${varName},`)) {
         const statePos = findStateInsertPos(cc);
         if (statePos >= 0) {
-          const stateDecl = `  const [${varName}, ${setVarName}] = useState(false);\n`;
+          const stateDecl = `  const [${varName}, ${setVarName}] = React.useState(false);\n`;
           const effect = ov.config.type === 'fixed'
             ? buildFixedOverlayRuntimeEffect(overlayId, true)
             : buildRelativeOverlayPosEffect(overlayId, true);
@@ -2010,8 +2023,7 @@ export function healMissingOverlayEffectsInCode(code: string): string {
     if (hasEffect) {
       // Check if existing effect is outdated (missing onOverlayClick)
       const depIdx = result.indexOf(dep);
-      const before = result.slice(0, depIdx);
-      const start = Math.max(before.lastIndexOf('useLayoutEffect('), before.lastIndexOf('useEffect('));
+      const start = findOverlayEffectCallStart(result, depIdx);
       if (start >= 0) {
         const effectBody = result.slice(start, depIdx);
         if (effectBody.includes('onOverlayClick')) {
@@ -2025,7 +2037,7 @@ export function healMissingOverlayEffectsInCode(code: string): string {
     }
 
     // Insert the regenerated effect right after this overlay's useState line.
-    const stateRe = new RegExp(`const \\[${escapeRegExp(varName)},\\s*set\\w+\\] = useState\\(false\\);?\\s*`);
+    const stateRe = new RegExp(`const \\[${escapeRegExp(varName)},\\s*set\\w+\\] = (?:React\\.)?useState\\(false\\);?\\s*`);
     const m = stateRe.exec(result);
     if (!m) continue;
     const pos = m.index + m[0].length;
@@ -2246,7 +2258,7 @@ export function extractOverlayToCanvasInCode(
   // 3. Remove the conditional block + useState + positioner effect (NOT the
   //    trigger attr — keep data-overlay-trigger; drop only the onClick/handlers).
   let result = removeOverlayConditionalBlock(code, overlayId, varName);
-  result = result.replace(new RegExp(`\\s*const\\s*\\[${esc},\\s*\\w+\\]\\s*=\\s*useState\\(false\\);?\\n?`), '\n');
+  result = result.replace(new RegExp(`\\s*const\\s*\\[${esc},\\s*\\w+\\]\\s*=\\s*(?:React[.])?useState\\(false\\);?\\n?`), '\n');
   // SCOPED effect removal — anchor on this overlay's UNIQUE `, [<var>]);` dep array and
   // walk back to its own effect opener (`removeOverlayEffectBlock`), NOT a lazy
   // `useLayoutEffect(() => {…[data-id="X"]…}` regex. The old regex anchored on the FIRST
@@ -2403,7 +2415,7 @@ export function rehydrateOverlayFromCanvasInCode(code: string, triggerId: string
   const varName = stateVarName(overlayId);
   const indent = '      ';
   const overlayContent = `\n${indent}<AnimatePresence>{${varName} && (\n${indent}  ${markup.replace(/\n/g, `\n${indent}  `)}\n${indent})}</AnimatePresence>`;
-  const stateDecl = `  const [${varName}, set${varName.charAt(0).toUpperCase() + varName.slice(1)}] = useState(false);\n`;
+  const stateDecl = `  const [${varName}, set${varName.charAt(0).toUpperCase() + varName.slice(1)}] = React.useState(false);\n`;
 
   // 5a. Conditional overlay block as last child of root (fallback = right after
   //     the trigger element — both are AFTER tClose, so 5b stays valid).
@@ -2424,6 +2436,9 @@ export function rehydrateOverlayFromCanvasInCode(code: string, triggerId: string
   if (statePos >= 0) {
     result = result.slice(0, statePos) + stateDecl + buildRelativeOverlayPosEffect(overlayId) + result.slice(statePos);
   }
+
+  result = ensureReactDefaultImport(result);
+  result = ensureNamedImport(result, 'framer-motion', ['motion', 'AnimatePresence']);
 
   trace.action('overlay-gen:rehydrate:done', { triggerId, overlayId });
   return result;
@@ -2455,8 +2470,8 @@ export function healDanglingOverlayState(code: string): string {
   // it.)
   let removed = 0;
   const seenState = new Set<string>();
-  result = result.replace(
-    /\n?[ \t]*const\s*\[\s*(\w+Open)\s*,\s*set\w+\s*\]\s*=\s*useState\(false\);/g,
+    result = result.replace(
+    /\n?[ \t]*const\s*\[\s*(\w+Open)\s*,\s*set\w+\s*\]\s*=\s*(?:React\.)?useState\(false\);/g,
     (full, v: string) => {
       if (seenState.has(v)) { removed++; return ''; }
       seenState.add(v);
@@ -2479,12 +2494,13 @@ export function healDanglingOverlayState(code: string): string {
       continue;
     }
     const before = result;
-    result = insertOverlayStateDecl(result, varName, `  const [${varName}, ${setter}] = useState(false);\n`);
+    result = insertOverlayStateDecl(result, varName, `  const [${varName}, ${setter}] = React.useState(false);\n`);
     if (result !== before) added++;
   }
   // Pages already written with the state BELOW its effect (the pre-2026-10-06
   // re-declaration position) render in the editor and crash the live site.
   result = healMisorderedOverlayStateInCode(result);
+  if (added) result = ensureReactDefaultImport(result);
   if (added || removed || droppedEffects) trace.action('overlay-gen:healDanglingState', { added, removed, droppedEffects });
   return result;
 }

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { parseJSX, findFirstElementByDataId, findAttribute, getAttributeValue } from './ast-utils';
+import { parseJSX, findFirstElementByDataId, findAttribute, getAttributeValue, normalizeBabelTraverse } from './ast-utils';
+import babelTraverse from '@babel/traverse';
+
+describe('normalizeBabelTraverse', () => {
+  it('unwraps a Vite SSR double-default CommonJS namespace', () => {
+    expect(normalizeBabelTraverse({ default: { default: babelTraverse } })).toBe(babelTraverse);
+  });
+});
 
 describe('parseJSX', () => {
   it('parses valid JSX', () => {
