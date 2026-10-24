@@ -258,6 +258,7 @@ describe('bridgeHandlers', () => {
       available: true,
       status: 'ready',
       dataUrl,
+      canvasRevision: 7,
       width: 1280,
       height: 720,
       waitedMs: 18,
@@ -287,6 +288,7 @@ describe('bridgeHandlers', () => {
         available: false,
         status: 'unavailable',
         reason: 'REVISION_MISMATCH',
+        canvasRevision: 7,
         note: 'The active canvas is saved at revision 7, not 8.',
       });
       expect(capture).not.toHaveBeenCalled();

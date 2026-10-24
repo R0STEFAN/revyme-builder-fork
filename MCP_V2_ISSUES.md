@@ -934,10 +934,9 @@ no Builder editor tab is attached.
 
 ## 2026-10-24 — Screenshot bridge reported a stale canvas as ready
 
-**Status:** revision validation fixed locally and regression-tested. The CLI
-bundle has been rebuilt, but the running Codex-managed MCP child predates the
-build and still returns `REVISION_REQUIRED`. Reload the Revyme MCP child before
-using screenshot results as visual verification.
+**Status:** revision validation fixed locally and regression-tested. After the
+user restarted Codex and the Builder dev server reloaded, the live MCP screenshot
+returned `available: true` / `status: ready` for the current project.
 
 **Symptom:** `observe.screenshot` returned `available: true` / `status: ready`
 while the capture showed only the first FAQ row and the old placeholder. The
@@ -960,6 +959,40 @@ reaching `CANVAS_CAPTURE_EMPTY` instead of rejecting the revision; after the
 fix, 115 targeted bridge/CLI/verification tests pass. The CLI bundle and main
 Builder app both build, and `npx tsc --noEmit` passes. The full-suite result is
 tracked below.
+
+## 2026-10-24 — Screenshot RPC could select a stale tab in a multi-tab project
+
+**Status:** fixed in the Builder bridge and regression-tested. A live MCP
+`observe.screenshot` returned a ready image after the Builder server reloaded.
+
+**Symptom:** with multiple Builder tabs open for one project, screenshot
+capture could time out or return a stale-canvas refusal even when another tab
+had the requested revision.
+
+**Cause:** `captureScreenshot` used `sendToEditor()`, which broadcast one
+request ID to every matching tab and settled on the first reply. A stale tab's
+`REVISION_MISMATCH` could therefore win over a valid capture from a current tab.
+
+**Fix:** screenshot RPC now sends independent requests per editor, includes the
+tab's `canvasRevision` in every capture result, and prefers a ready result whose
+revision exactly matches the requested snapshot. If none match, the bridge
+returns an honest non-ready result instead of presenting a stale image as
+current.
+
+**Verification:** the stale-first server regression fails against the old
+shared-ID behavior and passes with independent IDs; browser bridge success and
+revision-mismatch cases and automation-core propagation are covered. All 123
+focused tests pass, `npx tsc --noEmit` passes, and both the Builder and CLI
+builds succeed. The separate live layout-audit gap remains: 194/216 nodes are
+measured; 22 marquee slot-source/component nodes are intentionally not on the
+rendered canvas and remain documented under the `CANVAS_MID_RENDER` audit entry.
+
+**Operational note:** during verification, the Vite dev-server process exited
+with code 143 and ports 3333/8082 were no longer listening, which caused one
+`SERVER_UNAVAILABLE` audit response. Restarting `npm run dev` restored both
+listeners; the subsequent audit reached the canvas and reported only the
+documented 22-node marquee measurement gap. The reason for the external
+SIGTERM is not established, so it is not attributed to the screenshot fix.
 
 ## 2026-10-24 — observe.audit misclassified intentional layout as errors
 

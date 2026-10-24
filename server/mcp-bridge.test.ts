@@ -208,6 +208,58 @@ describe('McpBridge', () => {
       current.res.emit('close');
     });
 
+    it('chooses the screenshot from the tab matching the requested revision', async () => {
+      const stale = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      const current = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      bridge.handleEventsStream(stale.req, stale.res);
+      bridge.handleEventsStream(current.req, current.res);
+      const { res } = createMockReqRes({ method: 'POST', url: '/rpc' });
+
+      const rpcPromise = bridge.handleRpc(JSON.stringify({
+        method: 'captureScreenshot',
+        params: {
+          projectId: 'target-site',
+          branchId: 'main',
+          filePath: 'app/page.client.tsx',
+          revision: 12,
+          viewport: 'desktop',
+          nodeId: 'root',
+          format: 'png',
+        },
+      }), res);
+      const staleRequest = JSON.parse(stale.res.writtenData[1].slice('data: '.length));
+      const currentRequest = JSON.parse(current.res.writtenData[1].slice('data: '.length));
+      expect(staleRequest.id).not.toBe(currentRequest.id);
+
+      const resultResponse = () => ({ statusCode: 200, headers: {}, setHeader() {}, end() {} });
+      bridge.handleResult(JSON.stringify({ id: staleRequest.id, result: {
+        available: false,
+        status: 'unavailable',
+        reason: 'REVISION_MISMATCH',
+        canvasRevision: 11,
+      } }), resultResponse());
+      bridge.handleResult(JSON.stringify({ id: currentRequest.id, result: {
+        available: true,
+        status: 'ready',
+        dataUrl: 'data:image/png;base64,current',
+        canvasRevision: 12,
+      } }), resultResponse());
+
+      await rpcPromise;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.writtenData.join(''))).toMatchObject({
+        ok: true,
+        result: {
+          available: true,
+          status: 'ready',
+          dataUrl: 'data:image/png;base64,current',
+          canvasRevision: 12,
+        },
+      });
+      stale.res.emit('close');
+      current.res.emit('close');
+    });
+
     it('does not fall back to a different project tab for project-scoped RPC', async () => {
       const other = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=other-site' });
       bridge.handleEventsStream(other.req, other.res);

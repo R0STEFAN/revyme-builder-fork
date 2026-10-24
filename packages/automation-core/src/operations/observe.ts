@@ -1685,6 +1685,7 @@ export const screenshotResultItemSchema = z.object({
     height: z.number().nonnegative(),
   }).optional(),
   waitedMs: z.number().nonnegative(),
+  canvasRevision: z.number().nullable().optional(),
   reason: z.string().optional(),
   note: z.string().optional(),
 });
@@ -1751,6 +1752,7 @@ export const observeScreenshotOperation: Operation<
             height: res.height ?? res.dimensions?.height ?? 800,
             dimensions: res.dimensions ?? (res.width && res.height ? { width: res.width, height: res.height } : undefined),
             waitedMs: res.waitedMs ?? 0,
+            canvasRevision: res.canvasRevision,
             reason: res.reason,
             note: res.note,
           });

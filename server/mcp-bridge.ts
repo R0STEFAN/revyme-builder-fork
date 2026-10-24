@@ -241,6 +241,25 @@ export class McpBridge {
     ).result;
   }
 
+  private async sendScreenshotToEditor(params: any): Promise<any> {
+    const results = await this.sendToEditors('captureScreenshot', params);
+    const successes = results.filter((result): result is { ok: true; result: any } => result.ok);
+    if (successes.length === 0) {
+      const errors = results.map((result) => result.ok ? '' : result.error).filter(Boolean);
+      throw new Error(errors.join('; ') || 'No editor returned a screenshot');
+    }
+
+    // A project can be open in several tabs at different saved revisions. Keep
+    // screenshot routing aligned with the requested ProjectFS snapshot instead
+    // of accepting whichever tab happened to answer first.
+    const matchingRevision = successes.filter((result) => result.result?.canvasRevision === params?.revision);
+    return (
+      matchingRevision.find((result) => result.result?.available === true && result.result?.status === 'ready') ||
+      matchingRevision[0] ||
+      successes[0]
+    ).result;
+  }
+
   private sendToClient(client: http.ServerResponse, method: string, params: any, timeoutMs?: number): Promise<any> {
     const id = ++this.reqSeq;
     const payload = JSON.stringify({ id, method, params });
@@ -363,7 +382,9 @@ export class McpBridge {
       const rpcParams = params || {};
       const result = method === 'observeAuditSnapshot'
         ? await this.sendAuditSnapshotToEditor(rpcParams)
-        : await this.sendToEditor(method, rpcParams);
+        : method === 'captureScreenshot'
+          ? await this.sendScreenshotToEditor(rpcParams)
+          : await this.sendToEditor(method, rpcParams);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ ok: true, result }));

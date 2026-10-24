@@ -670,6 +670,7 @@ export default function Page() {
       const mockCapture = vi.fn().mockResolvedValue({
         available: true,
         status: 'ready',
+        canvasRevision: 42,
         dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         width: 1200,
         height: 800,
@@ -690,6 +691,7 @@ export default function Page() {
       expect(mockCapture).toHaveBeenCalled();
       expect(result.available).toBe(true);
       expect(result.primary.status).toBe('ready');
+      expect(result.primary.canvasRevision).toBe(42);
       expect(result.primary.dataUrl).toContain('data:image/png;base64,');
     });
   });

@@ -222,32 +222,32 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     pixelRatio?: number;
     backgroundColor?: string;
   }) {
+    const canvasRevision = getBaseRevision();
     const projectId = getProjectId();
     if (params.projectId && params.projectId !== projectId) {
-      return { available: false, status: 'unavailable', reason: 'PROJECT_MISMATCH', note: 'The active builder tab belongs to a different project.', waitedMs: 0 };
+      return { available: false, status: 'unavailable', reason: 'PROJECT_MISMATCH', note: 'The active builder tab belongs to a different project.', waitedMs: 0, canvasRevision };
     }
 
     const branchId = projectFS.getActiveBranchId();
     if (params.branchId && params.branchId !== branchId) {
-      return { available: false, status: 'unavailable', reason: 'BRANCH_MISMATCH', note: `The canvas displays branch "${branchId}", not "${params.branchId}".`, waitedMs: 0 };
+      return { available: false, status: 'unavailable', reason: 'BRANCH_MISMATCH', note: `The canvas displays branch "${branchId}", not "${params.branchId}".`, waitedMs: 0, canvasRevision };
     }
 
     const activeFilePath = getDefaultStore().get(activeFilePathAtom);
     const filePath = params.filePath || activeFilePath;
     if (filePath !== activeFilePath) {
-      return { available: false, status: 'unavailable', reason: 'ACTIVE_FILE_MISMATCH', note: `The canvas displays "${activeFilePath}", not "${filePath}".`, waitedMs: 0 };
+      return { available: false, status: 'unavailable', reason: 'ACTIVE_FILE_MISMATCH', note: `The canvas displays "${activeFilePath}", not "${filePath}".`, waitedMs: 0, canvasRevision };
     }
 
     if (typeof params.revision !== 'number') {
-      return { available: false, status: 'unavailable', reason: 'REVISION_REQUIRED', note: 'Screenshot requests must include the project revision being observed.', waitedMs: 0 };
+      return { available: false, status: 'unavailable', reason: 'REVISION_REQUIRED', note: 'Screenshot requests must include the project revision being observed.', waitedMs: 0, canvasRevision };
     }
-    const baseRevision = getBaseRevision();
-    if (baseRevision !== params.revision) {
-      return { available: false, status: 'unavailable', reason: 'REVISION_MISMATCH', note: `The active canvas is saved at revision ${baseRevision ?? 'unknown'}, not ${params.revision}.`, waitedMs: 0 };
+    if (canvasRevision !== params.revision) {
+      return { available: false, status: 'unavailable', reason: 'REVISION_MISMATCH', note: `The active canvas is saved at revision ${canvasRevision ?? 'unknown'}, not ${params.revision}.`, waitedMs: 0, canvasRevision };
     }
 
     if (params.format === 'webp') {
-      return { available: false, status: 'unavailable', reason: 'UNSUPPORTED_FORMAT', note: 'The canvas capture bridge currently supports PNG and JPEG.', waitedMs: 0 };
+      return { available: false, status: 'unavailable', reason: 'UNSUPPORTED_FORMAT', note: 'The canvas capture bridge currently supports PNG and JPEG.', waitedMs: 0, canvasRevision };
     }
 
     const viewport = params.viewport || 'desktop';
@@ -268,17 +268,18 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
         reason: wait.status === 'pending' ? 'CANVAS_RENDER_PENDING' : 'CANVAS_RENDER_UNAVAILABLE',
         note: wait.status === 'pending' ? 'The requested canvas node has not finished rendering yet.' : `No rendered canvas is available for viewport "${viewport}".`,
         waitedMs: wait.waitedMs,
+        canvasRevision,
       };
     }
 
     const rect = findNodeRect(nodeId, viewport);
     if (!rect) {
-      return { available: false, status: 'pending', reason: 'NODE_RECT_UNAVAILABLE', note: `No rendered bounds are cached for node "${nodeId}".`, waitedMs: wait.waitedMs };
+      return { available: false, status: 'pending', reason: 'NODE_RECT_UNAVAILABLE', note: `No rendered bounds are cached for node "${nodeId}".`, waitedMs: wait.waitedMs, canvasRevision };
     }
 
     const bridge = getCanvasBridge();
     if (typeof bridge.captureElement !== 'function') {
-      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_UNAVAILABLE', note: 'The active canvas bridge does not expose iframe capture.', waitedMs: wait.waitedMs };
+      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_UNAVAILABLE', note: 'The active canvas bridge does not expose iframe capture.', waitedMs: wait.waitedMs, canvasRevision };
     }
     const dataUrl = await bridge.captureElement(nodeId, getViewportPrefix(viewport), {
       format,
@@ -286,7 +287,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       backgroundColor: params.backgroundColor || (format === 'jpeg' ? '#ffffff' : undefined),
     });
     if (!dataUrl) {
-      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_EMPTY', note: 'The iframe could not capture the requested node.', waitedMs: wait.waitedMs, width: rect.width, height: rect.height };
+      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_EMPTY', note: 'The iframe could not capture the requested node.', waitedMs: wait.waitedMs, width: rect.width, height: rect.height, canvasRevision };
     }
     trace.action('mcp-bridge:capture-screenshot', { projectId, branchId, filePath, viewport, nodeId, format, bytes: dataUrl.length });
     return {
@@ -297,6 +298,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
       width: rect.width,
       height: rect.height,
       waitedMs: wait.waitedMs,
+      canvasRevision,
     };
   },
 
