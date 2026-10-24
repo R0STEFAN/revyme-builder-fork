@@ -7,6 +7,8 @@
 import { TEXT_TAGS } from '@/shared/constants';
 import { installBuiltInCodeComponent } from '@/code/project/project-fs';
 import { isAllowedImageSource, extractCssUrl, IMAGE_ATTR_KEYS } from './checks/image-source';
+import type { PresetToken } from '@/shared/types';
+import { dimensionStyleValueError } from '@/shared/dimension-presets';
 
 export const FRAMEWORK_TAGS = new Set([
   'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
@@ -82,6 +84,9 @@ export const SPACING_PX_KEYS = new Set([
   'borderTopRightRadius',
   'borderBottomLeftRadius',
   'borderBottomRightRadius',
+  'gap',
+  'rowGap',
+  'columnGap',
 ]);
 
 export const MINMAX_SIZE_KEYS = new Set(['minWidth', 'maxWidth', 'minHeight', 'maxHeight']);
@@ -150,6 +155,7 @@ export interface ValidateStyleOptions {
   isTopLevel?: boolean;
   componentFile?: string | null;
   fs?: { readFile: (p: string) => string | null };
+  presetTokens?: PresetToken[];
 }
 
 /**
@@ -210,11 +216,17 @@ export function validateStyleInput(
     }
 
     // 4. Spacing px-only validation
-    if (SPACING_PX_KEYS.has(key) && strVal !== '' && strVal !== 'auto') {
-      if (strVal !== '0' && strVal !== '0px') {
-        if (/rem|em|%|vh|vw|calc/i.test(strVal)) {
-          return `Property "${key}" value "${strVal}" must be in pixels (e.g. "24px"). Percentages, rem, and em are not supported in spacing properties.`;
-        }
+    if (SPACING_PX_KEYS.has(key) && strVal !== '') {
+      // Existing callers without project metadata may still pass through a
+      // token reference; every agent/MCP authoring path supplies the current
+      // tokens and gets category/fallback validation here.
+      if (strVal.includes('var(') && !opts?.presetTokens) continue;
+      const dimensionError = dimensionStyleValueError(key, strVal, opts?.presetTokens ?? []);
+      if (dimensionError) {
+        const isTokenError = /token|category|fallback/i.test(dimensionError);
+        return isTokenError
+          ? `Property "${key}" has an invalid dimension preset reference: ${dimensionError}`
+          : `Property "${key}" value "${strVal}" must be in pixels (e.g. "24px"): ${dimensionError}`;
       }
     }
 

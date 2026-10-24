@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import type { AgentTool, AgentToolResult, ToolContext } from '@/ai/agent';
-import { queueToolMutation, flushTool, getToolNodes, resolveToolFile } from '@/ai/agent/workspace';
+import { queueToolMutation, flushTool, getToolNodes, getToolTokens, resolveToolFile } from '@/ai/agent/workspace';
 import { generateNodeId } from '@/shared/id-utils';
 import type { AddNodeDef } from '@/code/generation/generator-crud';
 import { coerceRecord } from './coerce';
@@ -244,6 +244,7 @@ export const insertFragmentTool: AgentTool = {
         isComponentMaster: isCompMaster,
         isTopLevel,
         fs: projectFS,
+        presetTokens: getToolTokens(ctx),
       });
       if (styleErr) return { error: styleErr };
 
@@ -257,6 +258,7 @@ export const insertFragmentTool: AgentTool = {
               isComponentMaster: isCompMaster,
               isTopLevel,
               fs: projectFS,
+              presetTokens: getToolTokens(ctx),
             });
             if (respStyleErr) return { error: respStyleErr };
             responsiveWrites.push({

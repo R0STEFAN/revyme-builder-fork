@@ -82,6 +82,7 @@ export const setStylesTool: AgentTool = {
       isTopLevel,
       componentFile: targetNode?.componentFile,
       fs: projectFS,
+      presetTokens: getToolTokens(ctx),
     });
     if (styleErr) return fail(styleErr);
 

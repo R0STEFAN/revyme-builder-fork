@@ -4,6 +4,11 @@ import type { PresetToken } from '@/shared/types';
 export type DimensionPresetCategory = 'spacing' | 'margin' | 'radius';
 export type DimensionPresetTier = 'base' | 'md' | 'sm';
 
+export interface DimensionPresetTokenWriteValidation {
+  category: DimensionPresetCategory | null;
+  error: string | null;
+}
+
 export interface DimensionPresetGroup {
   /** Token slug without the category prefix or responsive tier suffix. */
   name: string;
@@ -79,6 +84,36 @@ export function dimensionCategoryFromToken(name: string): DimensionPresetCategor
   if (name.startsWith('margin-')) return 'margin';
   if (name.startsWith('radius-')) return 'radius';
   return null;
+}
+
+/** Shared guard for MCP/agent preset writes. The category prefix is canonical;
+ *  an existing or explicitly supplied dimensional category can also identify
+ *  legacy token names, but may never contradict the prefix. */
+export function validateDimensionPresetTokenWrite(
+  name: string,
+  value: string,
+  suppliedCategory?: PresetToken['category'],
+  existingTokens: PresetToken[] = [],
+): DimensionPresetTokenWriteValidation {
+  const prefixCategory = dimensionCategoryFromToken(name);
+  const existingCategory = existingTokens.find((token) => token.name === name)?.category;
+  const existingDimensionCategory = existingCategory === 'spacing' || existingCategory === 'margin' || existingCategory === 'radius'
+    ? existingCategory
+    : null;
+  const suppliedDimensionCategory = suppliedCategory === 'spacing' || suppliedCategory === 'margin' || suppliedCategory === 'radius'
+    ? suppliedCategory
+    : null;
+  const category = prefixCategory ?? existingDimensionCategory ?? suppliedDimensionCategory;
+  if (!category) return { category: null, error: null };
+
+  if (existingDimensionCategory && existingDimensionCategory !== category) {
+    return { category, error: `Existing token category "${existingDimensionCategory}" conflicts with the "${category}" name prefix.` };
+  }
+  if (suppliedCategory && suppliedCategory !== category) {
+    return { category, error: `Token name/category conflict: "${name}" belongs to "${category}", not "${suppliedCategory}".` };
+  }
+  const error = dimensionPresetValueError(category, value);
+  return { category, error };
 }
 
 export function groupDimensionTokens(
@@ -183,6 +218,8 @@ export function dimensionStyleValueError(
       if (!compatibleToken(baseToken, category)) return 'Responsive dimension tokens must fall back to an existing compatible base token.';
       if (referencedToken && !compatibleToken(referencedToken, category)) return 'Dimension token category does not match this property.';
       if (!dimensionCategoryFromToken(parsed.name) || dimensionCategoryFromToken(parsed.name) !== category) return 'Dimension token category does not match this property.';
+      if (!validPropertyShape(property, baseToken.value)) return 'This property does not support a multi-value dimension token.';
+      if (referencedToken && !validPropertyShape(property, referencedToken.value)) return 'This property does not support a multi-value dimension token.';
       return null;
     }
 

@@ -18,6 +18,8 @@ import { parseCanvasConfig } from '@/code/project/canvas-config';
 import { parseVariantConfig } from '@/code/variants/variant-config';
 import { isPageClientFile } from '@/code/project/active-file-store';
 import type { OracleViolation } from '@/code/oracle/check-file';
+import type { PresetToken } from '@/shared/types';
+import { dimensionCategoryForProperty, dimensionCategoryFromToken, dimensionStyleValueError } from '@/shared/dimension-presets';
 
 const traverse = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
 
@@ -221,12 +223,57 @@ export function checkPreservation(oldCode: string, newCode: string): OracleViola
 // getPresetTokens()); a custom property DECLARED in the same file (the
 // border-overlay variable pattern: '--cardBorder': cardBorder inline) is legal.
 
-export function checkTokenRefs(code: string, knownTokens: Set<string>): OracleViolation[] {
+function stringStyleValues(node: t.Node): string[] {
+  if (t.isStringLiteral(node)) return [node.value];
+  if (t.isTemplateLiteral(node) && node.expressions.length === 0) return [node.quasis.map((part) => part.value.cooked ?? part.value.raw).join('')];
+  if (t.isConditionalExpression(node)) return [...stringStyleValues(node.consequent), ...stringStyleValues(node.alternate)];
+  return [];
+}
+
+function dimensionStyleValues(code: string): Array<{ property: string; value: string }> {
+  const result: Array<{ property: string; value: string }> = [];
+  try {
+    const ast = parse(code, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
+    traverse(ast, {
+      JSXAttribute(path) {
+        if (!t.isJSXIdentifier(path.node.name, { name: 'style' })) return;
+        if (!t.isJSXExpressionContainer(path.node.value) || !t.isObjectExpression(path.node.value.expression)) return;
+        for (const prop of path.node.value.expression.properties) {
+          if (!t.isObjectProperty(prop)) continue;
+          const key = t.isIdentifier(prop.key) ? prop.key.name : t.isStringLiteral(prop.key) ? prop.key.value : null;
+          if (!key || !dimensionCategoryForProperty(key)) continue;
+          for (const value of stringStyleValues(prop.value)) result.push({ property: key, value });
+        }
+      },
+    });
+  } catch {
+    // Syntax is reported by checkFile; this stateful guard should not duplicate it.
+  }
+  return result;
+}
+
+function validOptionalTierFallback(tokenName: string, fallbackName: string, known: Set<string>): boolean {
+  const suffix = tokenName.endsWith('-md') ? '-md' : tokenName.endsWith('-sm') ? '-sm' : null;
+  const category = dimensionCategoryFromToken(tokenName);
+  if (!suffix || !category) return false;
+  const baseName = tokenName.slice(0, -suffix.length);
+  return fallbackName === baseName && dimensionCategoryFromToken(baseName) === category && known.has(baseName);
+}
+
+export function checkTokenRefs(code: string, presetTokens: PresetToken[] | Set<string>): OracleViolation[] {
   const v: OracleViolation[] = [];
+  const hasPresetMetadata = Array.isArray(presetTokens);
+  const tokens = Array.isArray(presetTokens) ? presetTokens : [];
+  const knownTokens = Array.isArray(presetTokens) ? new Set(tokens.map((token) => token.name)) : presetTokens;
+  const tokenByName = new Map(tokens.map((token) => [token.name, token]));
   const seen = new Set<string>();
+  const optionalFallbackIndexes = new Set<number>();
+  for (const match of code.matchAll(/var\(\s*--([a-zA-Z0-9_-]+)\s*,\s*var\(\s*--([a-zA-Z0-9_-]+)\s*\)\s*\)/g)) {
+    if (validOptionalTierFallback(match[1], match[2], knownTokens) && match.index !== undefined) optionalFallbackIndexes.add(match.index);
+  }
   for (const m of code.matchAll(/var\(\s*--([a-zA-Z0-9_-]+)/g)) {
     const name = m[1];
-    if (seen.has(name) || knownTokens.has(name)) continue;
+    if (seen.has(name) || knownTokens.has(name) || optionalFallbackIndexes.has(m.index ?? -1)) continue;
     if (new RegExp(`['"]?--${escapeRe(name)}['"]?\\s*:`).test(code)) continue;
     seen.add(name);
     const available = [...knownTokens].slice(0, 12).join(', ');
@@ -235,6 +282,38 @@ export function checkTokenRefs(code: string, knownTokens: Set<string>): OracleVi
       message: `var(--${name}) references a design token that does not exist in app/globals.css — it renders as UNSET. Use only the tokens listed in the project context${available ? ` (${available}${knownTokens.size > 12 ? ', …' : ''})` : ' (the project has none yet)'}, declare the custom property in this file, or create the preset FIRST via revyme_manage_presets and then resubmit.`,
     });
   }
+  for (const { property, value } of hasPresetMetadata ? dimensionStyleValues(code) : []) {
+    if (!value.includes('var(')) continue;
+    const category = dimensionCategoryForProperty(property)!;
+    const refs = [...value.matchAll(/var\(\s*--([a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+    const isFileLocalCustomValue = refs.length > 0 && refs.every((name) => {
+      if (dimensionCategoryFromToken(name) || tokenByName.has(name)) return false;
+      return new RegExp(`[\'"]?--${escapeRe(name)}[\'"]?\\s*:`).test(code);
+    });
+    if (isFileLocalCustomValue) continue;
+    const error = dimensionStyleValueError(property, value, tokens);
+    if (!error) continue;
+    const incompatibleRef = refs.some((name) => {
+      const prefixCategory = dimensionCategoryFromToken(name);
+      const token = tokenByName.get(name);
+      return (prefixCategory !== null && prefixCategory !== category)
+        || (!!token && (token.category !== category || (prefixCategory !== null && prefixCategory !== token.category)));
+    });
+    const violationCode = /fallback|matching base/i.test(error)
+      ? 'DIMENSION_TOKEN_FALLBACK_MISMATCH'
+      : incompatibleRef
+        ? 'DIMENSION_TOKEN_CATEGORY_MISMATCH'
+        : /multi-value|many dimension values/i.test(error)
+          ? 'DIMENSION_TOKEN_VALUE_SHAPE'
+          : 'DIMENSION_TOKEN_INVALID_REFERENCE';
+    trace.error('turn-guards:dimension-token-invalid', { property, tokenNames: refs, code: violationCode, reason: error });
+    v.push({
+      code: violationCode,
+      tier: 2,
+      message: `Style property "${property}" cannot use ${value}: ${error}`,
+    });
+  }
+
   if (v.length > 0) trace.action('turn-guards:unknown-tokens', { names: [...seen] });
   return v;
 }

@@ -86,7 +86,7 @@ export function gateTurnFiles(
   };
 
   // Known design tokens (app/globals.css) — var(--x) refs are checked per file.
-  const knownTokens = new Set(getPresetTokens().map((t) => t.name));
+  const presetTokens = getPresetTokens();
 
   const violations: OracleViolation[] = files.flatMap((f) => {
     const tag = (vs: OracleViolation[]) =>
@@ -171,7 +171,7 @@ export function gateTurnFiles(
       }
       vs = kept;
     }
-    if (f.code.includes('var(')) vs.push(...checkTokenRefs(f.code, knownTokens));
+    if (f.code.includes('var(')) vs.push(...checkTokenRefs(f.code, presetTokens));
 
     // CODE COMPONENT COMPILE GATE — checkFile validates dialect/syntax, but a code
     // code component can still fail to COMPILE/RENDER at runtime (undefined

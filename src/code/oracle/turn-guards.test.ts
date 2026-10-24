@@ -200,9 +200,35 @@ describe('checkTokenRefs — var(--x) must resolve', () => {
     expect(checkTokenRefs(code, new Set())).toEqual([]);
   });
 
+  it('keeps file-local custom dimension properties legal', () => {
+    const code = `<div data-id="a" style={{ '--localPadding': '16px', padding: 'var(--localPadding)' }} />`;
+    expect(checkTokenRefs(code, [])).toEqual([]);
+  });
+
   it('dedupes repeated refs to the same unknown token', () => {
     const code = `<div data-id="a" style={{ color: 'var(--nope)', backgroundColor: 'var(--nope)' }} />`;
     expect(checkTokenRefs(code, KNOWN)).toHaveLength(1);
+  });
+
+  it('validates dimension token categories and optional responsive fallbacks', () => {
+    const tokens = [
+      { name: 'space-card', value: '16px', category: 'spacing' as const },
+      { name: 'radius-card', value: '12px', category: 'radius' as const },
+      { name: 'margin-page', value: '0 auto', category: 'margin' as const },
+    ];
+    const valid = `<div data-id="a" style={{ padding: 'var(--space-card)', gap: 'var(--space-card-md, var(--space-card))', borderRadius: 'var(--radius-card)', margin: 'var(--margin-page)' }} />`;
+    expect(checkTokenRefs(valid, tokens)).toEqual([]);
+
+    const crossCategory = `<div data-id="a" style={{ padding: 'var(--radius-card)' }} />`;
+    expect(checkTokenRefs(crossCategory, tokens).map((violation) => violation.code))
+      .toContain('DIMENSION_TOKEN_CATEGORY_MISMATCH');
+
+    const unknownTier = `<div data-id="a" style={{ padding: 'var(--space-missing-md, var(--space-missing))' }} />`;
+    expect(checkTokenRefs(unknownTier, tokens).map((violation) => violation.code)).toContain('UNKNOWN_TOKEN');
+
+    const wrongFallback = `<div data-id="a" style={{ padding: 'var(--space-card-md, var(--radius-card))' }} />`;
+    expect(checkTokenRefs(wrongFallback, tokens).map((violation) => violation.code))
+      .toContain('DIMENSION_TOKEN_FALLBACK_MISMATCH');
   });
 });
 

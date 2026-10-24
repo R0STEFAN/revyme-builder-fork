@@ -68,6 +68,13 @@ describe('checkFile — tier 2 dialect', () => {
     expect(checkFile(CLEAN_COMPONENT, { kind: 'component' })).toEqual([]);
   });
 
+  it('treats Gap, Row Gap, and Column Gap as pixel-only spacing properties', () => {
+    for (const property of ['gap', 'rowGap', 'columnGap']) {
+      const code = CLEAN_COMPONENT.replace("gap: '16px'", `${property}: 'clamp(8px, 2vw, 24px)'`);
+      expect(codes(checkFile(code, { kind: 'component' })), property).toContain('SPACING_UNIT_NOT_PX');
+    }
+  });
+
   it('batches every violation of the sinner file in ONE report', () => {
     const vs = checkFile(SINNER, { kind: 'component' });
     const cs = codes(vs);

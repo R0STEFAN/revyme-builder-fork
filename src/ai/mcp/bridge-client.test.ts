@@ -595,6 +595,29 @@ describe('managePresets', () => {
       .rejects.toThrow('empty value');
   });
 
+  it('rejects invalid dimension values before queuing a preset mutation', async () => {
+    const queue = vi.spyOn(mutationQueue, 'queueMutation');
+    const flush = vi.spyOn(mutationQueue, 'flushNow');
+    await expect(bridgeHandlers.managePresets({
+      action: 'set', tokens: [{ name: 'space-card', value: 'clamp(8px, 2vw, 24px)' }],
+    })).rejects.toThrow('pixels');
+    expect(queue).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+    expect(projectFS.readFile('app/globals.css')).not.toContain('--space-card');
+    queue.mockRestore();
+    flush.mockRestore();
+  });
+
+  it('infers Margin category and allows auto, while rejecting category-prefix conflicts', async () => {
+    const out = await bridgeHandlers.managePresets({
+      action: 'set', tokens: [{ name: 'margin-center', value: '0 auto' }],
+    }) as any;
+    expect(out.tokens).toContainEqual(expect.objectContaining({ name: 'margin-center', category: 'margin', value: '0 auto' }));
+    await expect(bridgeHandlers.managePresets({
+      action: 'set', tokens: [{ name: 'space-card', value: '16px', category: 'radius' }],
+    })).rejects.toThrow('category');
+  });
+
   it('refuses to remove a token still used by an element', async () => {
     projectFS.writeFile(PAGE_PATH, PAGE.replace(
       "width: '100%' }}",

@@ -88,6 +88,7 @@ import { createDefaultTypoTokens, TYPO_SUFFIXES } from '@/editor/tools/typograph
 import { createCmsIndexPageFile, createCmsDetailPageFile } from '@/code/project/cms-page-ops';
 import { executeCmsTool } from '@/ai/cms-agent/cms-tool-executors';
 import type { PresetToken } from '@/shared/types';
+import { validateDimensionPresetTokenWrite } from '@/shared/dimension-presets';
 import { gateTurnFiles, commitTurnFiles, formatBounce, type TurnFile } from '@/code/oracle/gate';
 import { agentToolManifest, agentToolCall, agentRunStart, agentRunEnd, agentRunAbort, agentContext, attributeBridgeCall } from '@/ai/agent/bridge-tools';
 import { projectNodeTree } from '@/ai/agent/tools/read';
@@ -533,29 +534,42 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     }
 
     if (isViewerMode()) throw new Error('This editor session is view-only — preset writes are disabled.');
-    const existing = new Set(getPresetTokens().map((t) => t.name));
+    const existingTokens = getPresetTokens();
+    const existingByName = new Map(existingTokens.map((token) => [token.name, token]));
+    const existing = new Set(existingByName.keys());
 
     if (action === 'set') {
       if (!params.tokens?.length) throw new Error('managePresets set: tokens[] required');
-      const written: string[] = [];
-      for (const t of params.tokens) {
+      const normalizedTokens = params.tokens.map((t) => {
         const name = t.name.replace(/^--/, '').trim();
         if (!/^[a-z][a-z0-9-]*$/.test(name)) {
           throw new Error(`Invalid token name "${t.name}" — kebab-case only (e.g. "color-brand-red"). Prefix with the category for clean grouping: color-/typo-/space-/radius-/shadow-/border-.`);
         }
         if (!t.value?.trim()) throw new Error(`Token "${name}" has an empty value.`);
-        if (existing.has(name)) {
-          queueMutation({ type: 'updatePresetToken', name, value: t.value.trim() });
+        const value = t.value.trim();
+        const validation = validateDimensionPresetTokenWrite(name, value, t.category, existingTokens);
+        if (validation.error) {
+          trace.error('mcp-bridge:presets-set:reject-dimension', { category: validation.category, tokenName: name, reason: validation.error });
+          throw new Error(`Invalid ${validation.category} preset token "${name}": ${validation.error}`);
+        }
+        const category = t.category ?? existingByName.get(name)?.category ?? validation.category ?? 'other';
+        return { ...t, name, value, category };
+      });
+
+      const written: string[] = [];
+      for (const t of normalizedTokens) {
+        if (existing.has(t.name)) {
+          queueMutation({ type: 'updatePresetToken', name: t.name, value: t.value });
         } else {
           queueMutation({
             type: 'addPresetToken',
-            token: { name, value: t.value.trim(), category: t.category ?? 'other', label: t.label },
+            token: { name: t.name, value: t.value, category: t.category, label: t.label },
           });
         }
         if (t.darkValue?.trim()) {
-          queueMutation({ type: 'setDarkTokenValue', tokenName: name, darkValue: t.darkValue.trim() });
+          queueMutation({ type: 'setDarkTokenValue', tokenName: t.name, darkValue: t.darkValue.trim() });
         }
-        written.push(name);
+        written.push(t.name);
       }
       flushNow();
       refreshCanvasTokens();

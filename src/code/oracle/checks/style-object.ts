@@ -4,6 +4,7 @@
 import * as t from '@babel/types';
 import type { OracleViolation } from './shared';
 import { objHasKey } from './node-dimensions';
+import { dimensionStyleValueError } from '@/shared/dimension-presets';
 
 // ─── style object rules ───────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ export const SPACING_PX_KEYS = new Set([
   'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
   'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
   'borderBottomLeftRadius', 'borderBottomRightRadius',
+  'gap', 'rowGap', 'columnGap',
 ]);
 
 // Shorthand ⟷ longhand families that must never share one style object. React
@@ -230,7 +232,7 @@ function checkStyleObject(
       continue;
     }
     if (SPACING_PX_KEYS.has(key)) {
-      const bad = badSpacingUnit(prop.value, key.startsWith('margin'));
+      const bad = badSpacingUnit(prop.value, key);
       if (bad) {
         v.push({
           code: 'SPACING_UNIT_NOT_PX', tier: 2, line, elementId: dataId,
@@ -387,27 +389,20 @@ function badMinMaxSizeUnit(val: t.ObjectProperty['value']): string | null {
   return null;
 }
 
-/** For a padding/margin/radius value, return the first offending token (any
- *  non-px length: %, rem/em, viewport units, calc(), keywords) or null when
- *  every whitespace-separated token in every branch is px / bare-0 / '' —
- *  plus 'auto', for margins only (the '0 auto' centering idiom). Recurses
- *  ternary branches (responsive + per-variant values); non-string values
- *  (variable bindings, expressions) are skipped like every value rule here. */
-function badSpacingUnit(val: t.ObjectProperty['value'], isMargin: boolean): string | null {
+/** For a dimension value, return the invalid value or null. Shared validation
+ *  keeps the Oracle's px, shorthand-shape, and Margin-auto rules aligned with
+ *  the editor and MCP. Canonical var() references are deferred to checkTokenRefs,
+ *  which has the project's token metadata. */
+function badSpacingUnit(val: t.ObjectProperty['value'], property: string): string | null {
   if (t.isStringLiteral(val)) {
     const s = val.value.trim();
     if (s === '') return null;
-    for (const token of s.split(/\s+/)) {
-      if (token === '0') continue;
-      if (/^-?\d*\.?\d+px$/.test(token)) continue;
-      if (isMargin && token === 'auto') continue;
-      return token;
-    }
-    return null;
+    if (/^var\(\s*--[a-zA-Z0-9_-]+\s*(?:,\s*var\(\s*--[a-zA-Z0-9_-]+\s*\)\s*)?\)$/.test(s)) return null;
+    return dimensionStyleValueError(property, s, []) ? s : null;
   }
   if (t.isConditionalExpression(val)) {
-    return badSpacingUnit(val.consequent as t.ObjectProperty['value'], isMargin)
-      || badSpacingUnit(val.alternate as t.ObjectProperty['value'], isMargin);
+    return badSpacingUnit(val.consequent as t.ObjectProperty['value'], property)
+      || badSpacingUnit(val.alternate as t.ObjectProperty['value'], property);
   }
   return null;
 }

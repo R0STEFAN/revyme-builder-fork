@@ -120,6 +120,7 @@ describe('dimension preset validation', () => {
       token('space-card', '16px'),
       token('space-card-md', '8px'),
       token('space-triple', '8px 12px 16px'),
+      token('space-triple-md', '8px 12px 16px'),
       token('margin-page', 'auto', 'margin'),
       token('radius-card', '12px', 'radius'),
     ];
@@ -136,6 +137,7 @@ describe('dimension preset validation', () => {
     expect(dimensionStyleValueError('margin', 'var(--space-card)', tokens)).not.toBeNull();
     expect(dimensionStyleValueError('borderRadius', 'var(--margin-page)', tokens)).not.toBeNull();
     expect(dimensionStyleValueError('gap', 'var(--space-triple)', tokens)).not.toBeNull();
+    expect(dimensionStyleValueError('gap', 'var(--space-triple-md, var(--space-triple))', tokens)).not.toBeNull();
     expect(dimensionStyleValueError('padding', 'var(--space-card-md, var(--space-other))', tokens)).not.toBeNull();
     expect(dimensionStyleValueError('padding', 'var(--space-unknown-md, var(--space-unknown))', tokens)).not.toBeNull();
   });

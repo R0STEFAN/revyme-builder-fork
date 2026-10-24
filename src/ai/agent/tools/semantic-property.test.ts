@@ -41,6 +41,7 @@ function makeCtx(): ToolContext {
 describe('semantic property tools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getPresetTokens).mockReturnValue([]);
     // Deterministic unbranched routing scope for the assertions below.
     setActiveFilePath('app/page.client.tsx');
     getDefaultStore().set(activeFilePathAtom, 'app/page.client.tsx');
@@ -118,6 +119,30 @@ describe('semantic property tools', () => {
     expect(result.isError).toBe(true);
     const err = JSON.parse((result.content[0] as any).text).error;
     expect(err).toContain('must be in pixels');
+    expect(queueMutation).not.toHaveBeenCalled();
+  });
+
+  it('set_styles validates responsive dimension token category and base fallback before queuing', async () => {
+    vi.mocked(getPresetTokens).mockReturnValue([
+      { name: 'space-card', value: '16px', category: 'spacing' },
+      { name: 'radius-card', value: '12px', category: 'radius' },
+    ]);
+    const ctx = makeCtx();
+    const valid = await setStylesTool.execute({
+      node_id: 'box', styles: { padding: 'var(--space-card-md, var(--space-card))' },
+    }, ctx);
+    expect(valid.isError).toBeUndefined();
+    expect(queueMutation).toHaveBeenCalledWith(
+      { type: 'updateStyles', nodeId: 'box', styles: { padding: 'var(--space-card-md, var(--space-card))' } },
+      { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },
+    );
+
+    vi.mocked(queueMutation).mockClear();
+    const invalid = await setStylesTool.execute({
+      node_id: 'box', styles: { padding: 'var(--radius-card)' },
+    }, ctx);
+    expect(invalid.isError).toBe(true);
+    expect(JSON.parse((invalid.content[0] as any).text).error).toContain('category does not match');
     expect(queueMutation).not.toHaveBeenCalled();
   });
 

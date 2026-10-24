@@ -314,6 +314,17 @@ describe('getPresetMenuItems — responsive dimension groups', () => {
     expect(removeDimensionPreset).toHaveBeenCalledWith('padding');
     expect(removePreset).not.toHaveBeenCalled();
   });
+
+  it('does not offer Padding/Spacing presets on Margin properties', () => {
+    const presets = getAllMenuItems(makeCtx({
+      property: 'margin',
+      presetTokens: [
+        { name: 'space-card', value: '16px', category: 'spacing', label: 'Card Padding' },
+        { name: 'margin-card', value: '24px', category: 'margin', label: 'Card Margin' },
+      ],
+    })).find((item) => item.label === 'Presets')!;
+    expect(presets.submenuItems?.map((item) => item.label)).toEqual(['Card Margin']);
+  });
 });
 
 describe('getVariableMenuItems — component "Set Variable" submenu (bind to existing prop)', () => {

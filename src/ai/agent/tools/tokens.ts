@@ -21,6 +21,7 @@ import {
 } from '@/editor/tools/typography-utils';
 import type { PresetToken } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
+import { validateDimensionPresetTokenWrite } from '@/shared/dimension-presets';
 
 const store = getDefaultStore();
 
@@ -51,6 +52,7 @@ export const createTokenTool: AgentTool = {
   name: 'create_token',
   description:
     'Create a design token (a CSS variable in the project\'s presets) — or update it if it exists. Name it kebab-case with its category prefix so it groups in the panel: color-accent, space-section, radius-card, shadow-soft, typo-… ' +
+    'Dimension preset values (space-/margin-/radius-) must use px; Margin also supports auto. clamp() is reserved for typography preset tokens. ' +
     'Then use it as var(--name) in styles, so one change follows everywhere. Optional dark_value for dark mode. get_design_tokens lists what exists.',
   inputSchema: {
     name: z.string().describe('kebab-case with category prefix, e.g. "color-accent"'),
@@ -66,8 +68,18 @@ export const createTokenTool: AgentTool = {
     const value = String(args.value ?? '').trim();
     if (!value) return fail('A token needs a value.');
     if (isBranchedRun(ctx)) return fail('Tokens are project-wide and are written on the active branch only — run unbranched.');
-    const category = (args.category as PresetToken['category'] | undefined) ?? categoryFromName(name) ?? 'other';
-    const existing = new Set(getPresetTokens().map((t) => t.name));
+    const existingTokens = getPresetTokens();
+    const existingToken = existingTokens.find((token) => token.name === name);
+    const suppliedCategory = args.category as PresetToken['category'] | undefined;
+    const validation = validateDimensionPresetTokenWrite(name, value, suppliedCategory, existingTokens);
+    if (validation.error) {
+      trace.error('agent-tool:create_token:reject-dimension', {
+        category: validation.category, tokenName: name, reason: validation.error,
+      });
+      return fail(`Invalid ${validation.category} preset token "${name}": ${validation.error}`);
+    }
+    const category = suppliedCategory ?? existingToken?.category ?? validation.category ?? categoryFromName(name) ?? 'other';
+    const existing = new Set(existingTokens.map((t) => t.name));
     ctx.ensureCheckpoint();
     if (existing.has(name)) queueToolMutation(ctx, { type: 'updatePresetToken', name, value });
     else queueToolMutation(ctx, { type: 'addPresetToken', token: { name, value, category, ...(args.label ? { label: String(args.label) } : {}) } });

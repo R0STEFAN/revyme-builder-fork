@@ -551,9 +551,9 @@ const PROPERTY_CATEGORY_MAP: Record<string, PresetToken['category'][]> = {
   // spacing/margin
   padding: ['spacing'], paddingTop: ['spacing'], paddingRight: ['spacing'],
   paddingBottom: ['spacing'], paddingLeft: ['spacing'],
-  margin: ['margin', 'spacing'], marginTop: ['margin', 'spacing'],
-  marginRight: ['margin', 'spacing'], marginBottom: ['margin', 'spacing'],
-  marginLeft: ['margin', 'spacing'],
+  margin: ['margin'], marginTop: ['margin'],
+  marginRight: ['margin'], marginBottom: ['margin'],
+  marginLeft: ['margin'],
   gap: ['spacing'], rowGap: ['spacing'], columnGap: ['spacing'],
   top: ['spacing'], left: ['spacing'], right: ['spacing'], bottom: ['spacing'],
   // Intentionally NOT mapped: width / height / minWidth / minHeight /

@@ -6,6 +6,7 @@ import {
   validateCanvasNodePosition,
   validateVariantConfig,
 } from './preflight-validation';
+import type { PresetToken } from '@/shared/types';
 
 describe('preflight-validation', () => {
   describe('validateStyleInput', () => {
@@ -29,6 +30,29 @@ describe('preflight-validation', () => {
       expect(validateStyleInput({ borderRadius: '1.5em' })).toContain('must be in pixels');
       expect(validateStyleInput({ padding: '24px' })).toBeNull();
       expect(validateStyleInput({ padding: '0' })).toBeNull();
+    });
+
+    it('validates px-only gap values and compatible responsive dimension token refs', () => {
+      const tokens: PresetToken[] = [
+        { name: 'space-card', value: '16px', category: 'spacing' },
+        { name: 'space-card-md', value: '12px', category: 'spacing' },
+        { name: 'radius-card', value: '12px', category: 'radius' },
+        { name: 'margin-page', value: '0 auto', category: 'margin' },
+      ];
+      const opts = { presetTokens: tokens };
+
+      expect(validateStyleInput({ gap: '16px 24px' }, opts)).toBeNull();
+      expect(validateStyleInput({ rowGap: '12px' }, opts)).toBeNull();
+      expect(validateStyleInput({ columnGap: '1rem' }, opts)).toContain('must use pixels');
+      expect(validateStyleInput({ gap: 'clamp(8px, 2vw, 24px)' }, opts)).toContain('must use pixels');
+      expect(validateStyleInput({ gap: '8px 12px 16px' }, opts)).toContain('many dimension values');
+      expect(validateStyleInput({ padding: 'var(--space-card)' }, opts)).toBeNull();
+      expect(validateStyleInput({ padding: 'var(--space-card-sm, var(--space-card))' }, opts)).toBeNull();
+      expect(validateStyleInput({ margin: 'var(--margin-page)' }, opts)).toBeNull();
+      expect(validateStyleInput({ borderRadius: 'var(--radius-card)' }, opts)).toBeNull();
+      expect(validateStyleInput({ padding: 'var(--radius-card)' }, opts)).toContain('category does not match');
+      expect(validateStyleInput({ padding: 'var(--space-missing)' }, opts)).toContain('category does not match');
+      expect(validateStyleInput({ fontSize: 'clamp(24px, 4vw, 64px)' }, opts)).toBeNull();
     });
 
     it('rejects invalid min/max constraints', () => {

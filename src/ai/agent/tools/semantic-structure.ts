@@ -20,7 +20,7 @@ import { buildComponentRegistry, STRUCTURAL_PROPS, type ComponentInfo } from '@/
 import { wouldCreateComponentCycle } from '@/code/components/component-cycle';
 import { projectFS, projectVersionAtom, installBuiltInCodeComponent } from '@/code/project/project-fs';
 import type { AgentTool, AgentToolResult, ToolContext } from '@/ai/agent';
-import { queueToolMutation, flushTool, getToolNodes, isBranchedRun, branchFsView, resolveToolFile, getToolCode } from '@/ai/agent/workspace';
+import { queueToolMutation, flushTool, getToolNodes, getToolTokens, isBranchedRun, branchFsView, resolveToolFile, getToolCode } from '@/ai/agent/workspace';
 import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { coerceRecord } from './coerce';
 import { formatNodeNotFound } from '../error-format';
@@ -233,6 +233,7 @@ export const addNodeTool: AgentTool = {
       isInstance,
       isTopLevel,
       fs: projectFS,
+      presetTokens: getToolTokens(ctx),
     });
     if (styleErr) return fail(styleErr);
     // A child of a layout needs a position, a no-shrink flex and its place in
@@ -312,6 +313,7 @@ export const addCanvasNodeTool: AgentTool = {
       isInstance,
       isTopLevel: true,
       fs: projectFS,
+      presetTokens: getToolTokens(ctx),
     });
     if (styleErr) return fail(styleErr);
     const resolved = resolveCreateId(args.id ?? idHint, getToolNodes(ctx));
