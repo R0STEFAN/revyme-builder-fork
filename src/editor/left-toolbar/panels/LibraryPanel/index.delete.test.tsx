@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
-import { projectFS, resetProjectFS } from '@/code/project/project-fs';
+import { projectFS, projectVersionAtom, resetProjectFS } from '@/code/project/project-fs';
 import { activeFilePathAtom, componentBreadcrumbAtom } from '@/code/project/active-file-store';
 import { componentEditorFileAtom, componentEditorPropsAtom } from '@/code/stores/component-editor-store';
 import { selectedIdsAtom } from '@/code/stores/store';
@@ -158,5 +158,25 @@ describe('LibraryPanel component deletion', () => {
     act(() => { expect(redo()).toBe(true); finishPendingRestore(); });
     expect(store.get(componentEditorFileAtom)).toBeNull();
     expect(store.get(componentEditorPropsAtom)).toEqual({});
+  });
+
+  it('deletes every token in a responsive dimension preset family and preserves other presets', () => {
+    projectFS.writeFile('app/globals.css', `:root {
+  --space-card: 16px;
+  --space-card-md: 12px;
+  --space-card-sm: 8px;
+  --radius-card: 10px;
+}`);
+    store.set(projectVersionAtom, value => value + 1);
+    render(<LibraryPanel mode="presets" />);
+
+    const row = document.querySelector('[data-folder-tree-row="space-card"]');
+    expect(row).toBeTruthy();
+    fireEvent.click(row!.querySelector('button')!);
+    fireEvent.click(screen.getByText('Delete'));
+
+    const updatedCss = projectFS.readFile('app/globals.css') ?? '';
+    expect(updatedCss).not.toContain('--space-card');
+    expect(updatedCss).toContain('--radius-card: 10px');
   });
 });

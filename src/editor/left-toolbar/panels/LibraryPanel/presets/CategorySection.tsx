@@ -21,9 +21,11 @@ import {
 import { type PresetUsage } from '@/code/stores/preset-store';
 import { groupBorderTokens, type BorderGroup } from '@/editor/ui/border-preset-utils';
 import type { PresetToken } from '@/shared/types';
+import { groupDimensionTokens, type DimensionPresetCategory, type DimensionPresetGroup } from '@/shared/dimension-presets';
 import type { TypoGroup as TypographyGroup } from '@/editor/tools/typography-utils';
 import { PresetRow } from './PresetRow';
 import { TypographyGroupRow } from './TypographyGroupRow';
+import { DimensionPresetGroupRow } from './DimensionPresetGroupRow';
 import { CreatePresetInline } from './CreatePresetInline';
 import { UsageBadge } from './UsagePopup';
 import { CreatorFolderIcon } from '../shared/icons';
@@ -95,7 +97,10 @@ export function CategorySection({
 }: CategorySectionProps) {
   const isTypography = config.key === 'typography';
   const isBorder = config.key === 'border';
+  const isDimension = config.key === 'spacing' || config.key === 'margin' || config.key === 'radius';
+  const dimensionCategory = isDimension ? config.key as DimensionPresetCategory : null;
   const borderGroups = isBorder ? groupBorderTokens(tokens) : [];
+  const dimensionGroups = dimensionCategory ? groupDimensionTokens(tokens, dimensionCategory) : [];
 
   // ─── Folder system (per category) ──────────────────────────────────────
   // Each category gets its own folder tree backed by
@@ -113,13 +118,15 @@ export function CategorySection({
   }, [userFolders]);
 
   // Top-level item ids the panel knows about (for drift fallback).
-  // For typography / border this is the GROUP names; for simple
-  // categories, the token names.
+  // Typography / border use group names, dimension families use the
+  // base token name (preserving existing folder order), and simple
+  // categories use individual token names.
   const itemIds = useMemo<string[]>(() => {
     if (isTypography && typoGroups) return typoGroups.map(g => g.name);
     if (isBorder) return borderGroups.map(g => g.name);
+    if (isDimension) return dimensionGroups.map(g => g.base.name);
     return tokens.map(t => t.name);
-  }, [isTypography, isBorder, typoGroups, tokens, borderGroups]);
+  }, [isTypography, isBorder, isDimension, typoGroups, tokens, borderGroups, dimensionGroups]);
   const allItemIds = useMemo(() => new Set(itemIds), [itemIds]);
 
   const persistedRootOrder = useMemo(() => folderOps.getRootOrder(), [folderOps, version]);
@@ -212,6 +219,11 @@ export function CategorySection({
     for (const g of borderGroups) m.set(g.name, g);
     return m;
   }, [borderGroups]);
+  const dimensionGroupByBaseName = useMemo(() => {
+    const m = new Map<string, DimensionPresetGroup>();
+    for (const group of dimensionGroups) m.set(group.base.name, group);
+    return m;
+  }, [dimensionGroups]);
   const tokenByName = useMemo(() => {
     const m = new Map<string, PresetToken>();
     for (const t of tokens) m.set(t.name, t);
@@ -283,6 +295,33 @@ export function CategorySection({
         />
       );
     }
+    if (isDimension) {
+      const group = dimensionGroupByBaseName.get(itemId);
+      if (!group) return null;
+      const seen = new Set<string>();
+      const groupUsages: PresetUsage[] = [];
+      for (const token of group.tokens) {
+        for (const usage of usageMap.get(token.name) ?? []) {
+          const key = `${usage.filePath}::${usage.nodeId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          groupUsages.push(usage);
+        }
+      }
+      const groupId = `dimension-group:${group.category}:${group.name}`;
+      return (
+        <DimensionPresetGroupRow
+          group={group}
+          isEditing={editingName === groupId}
+          onEdit={() => editClearingSelection(groupId)}
+          onDelete={() => onDeletePreset(groupId)}
+          usages={groupUsages}
+          onShiftClick={multiSelect.togglePath}
+          isMultiSelected={multiSelect.isMultiSelected(groupId)}
+          menuOverride={bulkItems}
+        />
+      );
+    }
     const token = tokenByName.get(itemId);
     if (!token) return null;
     return (
@@ -304,8 +343,8 @@ export function CategorySection({
       />
     );
   }, [
-    isTypography, isBorder,
-    typoGroupByName, borderGroupByName, tokenByName,
+    isTypography, isBorder, isDimension,
+    typoGroupByName, borderGroupByName, dimensionGroupByBaseName, tokenByName,
     editingName, renamingName, renameValue,
     onRenameChange, onRenameSubmit, onRenameCancel,
     editClearingSelection, onStartRename, onDeletePreset, usageMap,

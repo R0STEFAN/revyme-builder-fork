@@ -23,6 +23,11 @@ import { presetTokensAtom, presetUsageAtom } from '@/code/stores/preset-store';
 import { flushNow, syncQueueCode, queueMutation } from '@/code/mutation/mutation-queue';
 import { captureHistoryFileOpBefore, pushHistoryFileOp } from '@/code/mutation/history';
 import type { PresetToken } from '@/shared/types';
+import {
+  dimensionPresetValueError,
+  groupDimensionTokens,
+  type DimensionPresetCategory,
+} from '@/shared/dimension-presets';
 import ToolPopup from '@/editor/ui/ToolPopup';
 import { refreshCanvasTokens } from '@/canvas/node-ops';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
@@ -45,6 +50,7 @@ export type { TypographyGroup };
 // inside the LibraryPanel preset edit popup below.
 import { TypographyEditContent } from './presets/TypographyEditContent';
 export { TypographyEditContent };
+import { DimensionPresetEditContent } from './presets/DimensionPresetEditContent';
 
 import {
   isDisplayOnly,
@@ -71,6 +77,12 @@ import { TemplatesSection } from './sections/TemplatesSection';
 import { CodeOverridesSection } from './sections/CodeOverridesSection';
 import { VectorsSection } from './sections/VectorsSection';
 import { ComponentsSection } from './sections/ComponentsSection';
+
+function parseDimensionGroupId(id: string | null): { category: DimensionPresetCategory; name: string } | null {
+  if (!id) return null;
+  const match = /^dimension-group:(spacing|margin|radius):(.+)$/.exec(id);
+  return match ? { category: match[1] as DimensionPresetCategory, name: match[2] } : null;
+}
 
 // ─── LibraryPanel ───────────────────────────────────────────────────────────
 
@@ -111,6 +123,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
   const [renamingName, setRenamingName] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [creatingCategory, setCreatingCategory] = useState<string | null>(null);
+  const pendingDimensionTokenNames = useRef(new Set<string>());
 
   // Collapsed state for preset category accordions. In-memory only — resets
   // each session. Keys: TokenCategory for data categories, label string for
@@ -405,6 +418,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
     // panel ran exactly one action behind (delete showed on the NEXT delete,
     // two creates appeared together — live find 2026-07-23).
     flushNow();
+    pendingDimensionTokenNames.current.clear();
     bumpVersion(v => v + 1);
     // Re-inject tokens.css into canvas so CSS variables update immediately
     refreshCanvasTokens();
@@ -423,6 +437,26 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
       refreshTokens();
     }, 300);
   }, [refreshTokens]);
+
+  const handleUpdateDimensionPreset = useCallback((name: string, value: string, category: DimensionPresetCategory) => {
+    const reason = dimensionPresetValueError(category, value);
+    if (reason) {
+      trace.error('dimension-preset:reject-value', { category, tokenName: name, reason });
+      return;
+    }
+
+    const exists = tokens.some(token => token.name === name) || pendingDimensionTokenNames.current.has(name);
+    const bridge = getCanvasBridge() as any;
+    if (typeof bridge?.setCanvasTokenVar === 'function') bridge.setCanvasTokenVar(name, value);
+    if (exists) {
+      queueMutation({ type: 'updatePresetToken', name, value });
+    } else {
+      queueMutation({ type: 'addPresetToken', token: { name, value, category } });
+    }
+    pendingDimensionTokenNames.current.add(name);
+    trace.action('dimension-preset:library-update', { category, name, value, created: !exists });
+    refreshTokensDebounced();
+  }, [tokens, refreshTokensDebounced]);
 
   // Edit popup handlers
   const handleEdit = useCallback((name: string) => {
@@ -462,6 +496,12 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
   // scheme: plain token name, `typo-group:<name>`, `border-group:<name>` —
   // compound groups expand to all their constituent tokens on delete.
   const presetDisplayName = useCallback((id: string) => {
+    const dimensionGroupId = parseDimensionGroupId(id);
+    if (dimensionGroupId) {
+      const group = groupDimensionTokens(grouped.get(dimensionGroupId.category) ?? [], dimensionGroupId.category)
+        .find(item => item.name === dimensionGroupId.name);
+      return group?.label ?? dimensionGroupId.name;
+    }
     if (id.startsWith('typo-group:')) {
       const groupName = id.slice('typo-group:'.length);
       return typoGroups.find(g => g.name === groupName)?.label ?? groupName;
@@ -477,7 +517,12 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
 
   const deletePresetById = useCallback((id: string) => {
     trace.action('library-panel:bulk-delete-preset', { id });
-    if (id.startsWith('typo-group:')) {
+    const dimensionGroupId = parseDimensionGroupId(id);
+    if (dimensionGroupId) {
+      const group = groupDimensionTokens(grouped.get(dimensionGroupId.category) ?? [], dimensionGroupId.category)
+        .find(item => item.name === dimensionGroupId.name);
+      group?.tokens.forEach(token => queueMutation({ type: 'removePresetToken', name: token.name }));
+    } else if (id.startsWith('typo-group:')) {
       const groupName = id.slice('typo-group:'.length);
       const group = typoGroups.find(g => g.name === groupName);
       group?.tokens.forEach(t => queueMutation({ type: 'removePresetToken', name: t.name }));
@@ -541,6 +586,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
       handleEdit(`typo-group:${slug}`);
     } else {
       const fullName = `${config.prefix}-${slug}`;
+      const isDimensionPreset = config.key === 'spacing' || config.key === 'margin' || config.key === 'radius';
       trace.action('library-panel:create-preset', { category: config.key, name: fullName });
       queueMutation({ type: 'addPresetToken', token: {
         name: fullName,
@@ -549,7 +595,7 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
       } });
       setCreatingCategory(null);
       refreshTokens();
-      handleEdit(fullName);
+      handleEdit(isDimensionPreset ? `dimension-group:${config.key}:${slug}` : fullName);
     }
   }, [handleEdit, refreshTokens]);
 
@@ -566,7 +612,12 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
   const editingBorderGroup = isEditingBorderGroup
     ? groupBorderTokens(tokens).find(g => g.name === editingName!.replace('border-group:', ''))
     : null;
-  const editingToken = (!isEditingTypoGroup && !isEditingBorderGroup && editingName)
+  const editingDimensionId = parseDimensionGroupId(editingName);
+  const editingDimensionGroup = editingDimensionId
+    ? groupDimensionTokens(grouped.get(editingDimensionId.category) ?? [], editingDimensionId.category)
+      .find(group => group.name === editingDimensionId.name) ?? null
+    : null;
+  const editingToken = (!isEditingTypoGroup && !isEditingBorderGroup && !editingDimensionId && editingName)
     ? tokens.find(t => t.name === editingName)
     : null;
 
@@ -726,6 +777,27 @@ export default function LibraryPanel({ mode = 'all' }: { mode?: 'all' | 'library
             group={editingTypoGroup}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
+            onClose={handleEditClose}
+          />
+        </ToolPopup>
+      )}
+
+      {/* Edit Popup — Responsive Dimension Group */}
+      {editingDimensionGroup && (
+        <ToolPopup
+          isOpen={!!editingDimensionGroup}
+          onClose={handleEditClose}
+          title={editingDimensionGroup.label}
+          anchorRef={editAnchorRef}
+          width={280}
+          resetKey={`dimension-group:${editingDimensionGroup.category}:${editingDimensionGroup.name}`}
+          side="right"
+        >
+          <DimensionPresetEditContent
+            key={`dimension-group:${editingDimensionGroup.category}:${editingDimensionGroup.name}`}
+            group={editingDimensionGroup}
+            onUpdate={handleUpdateDimensionPreset}
+            onDelete={(group) => deletePresetById(`dimension-group:${group.category}:${group.name}`)}
             onClose={handleEditClose}
           />
         </ToolPopup>

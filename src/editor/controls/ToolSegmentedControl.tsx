@@ -6,6 +6,7 @@ import { trace } from '@/shared/debug-trace';
 interface Option {
   value: string;
   label?: string;
+  ariaLabel?: string;
   icon?: React.ReactNode;
 }
 
@@ -84,6 +85,9 @@ export default function ToolSegmentedControl({ value, onChange, options, size = 
       {options.map(opt => (
         <button
           key={opt.value}
+          type="button"
+          aria-label={opt.ariaLabel ?? opt.label}
+          title={opt.ariaLabel}
           onClick={() => { trace.action('tool-segmented:change', { from: value, to: opt.value }); onChange(opt.value); }}
           className={`flex-1 flex items-center justify-center gap-2 text-xs ${py} ${px} cut-corners transition-colors relative z-10 ${value === opt.value ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
         >
