@@ -265,6 +265,57 @@ describe('getOverrideMenuItems — Remove', () => {
   });
 });
 
+describe('getPresetMenuItems — responsive dimension groups', () => {
+  const dimensionTokens = [
+    { name: 'space-card', value: '16px', category: 'spacing' as const, label: 'Card' },
+    { name: 'space-card-md', value: '12px', category: 'spacing' as const, label: 'Card Tablet' },
+    { name: 'space-card-sm', value: '8px', category: 'spacing' as const, label: 'Card Mobile' },
+    { name: 'space-legacy', value: '24px', category: 'spacing' as const, label: 'Legacy' },
+  ];
+
+  it('shows one entry per dimension family and applies the selected group to the current property', () => {
+    const applyDimensionPreset = vi.fn();
+    const ctx = makeCtx({ property: 'padding', presetTokens: dimensionTokens, applyDimensionPreset } as Partial<MenuContext>);
+    const presets = getAllMenuItems(ctx).find((item) => item.label === 'Presets')!;
+
+    expect(presets.submenuItems?.map((item) => item.label)).toEqual(['Card', 'Legacy']);
+    presets.submenuItems![0].onClick();
+    expect(applyDimensionPreset).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'card', category: 'spacing', base: expect.objectContaining({ name: 'space-card' }) }),
+      'padding',
+    );
+  });
+
+  it('keeps non-dimension presets on the existing single-token update path', () => {
+    const updateStyle = vi.fn();
+    const ctx = makeCtx({
+      property: 'boxShadow',
+      updateStyle,
+      presetTokens: [{ name: 'shadow-soft', value: '0px 4px 12px #000', category: 'shadow', label: 'Soft' }],
+    });
+    const presets = getAllMenuItems(ctx).find((item) => item.label === 'Presets')!;
+
+    presets.submenuItems![0].onClick();
+    expect(updateStyle).toHaveBeenCalledWith('boxShadow', 'var(--shadow-soft)');
+  });
+
+  it('routes removal of a dimension token to the responsive-aware remover', () => {
+    const removePreset = vi.fn();
+    const removeDimensionPreset = vi.fn();
+    const ctx = makeCtx({
+      property: 'padding',
+      value: 'var(--space-card)',
+      hasPreset: true,
+      removePreset,
+      removeDimensionPreset,
+    });
+
+    getAllMenuItems(ctx).find((item) => item.label === 'Remove Preset')!.onClick();
+    expect(removeDimensionPreset).toHaveBeenCalledWith('padding');
+    expect(removePreset).not.toHaveBeenCalled();
+  });
+});
+
 describe('getVariableMenuItems — component "Set Variable" submenu (bind to existing prop)', () => {
   it('offers existing same-style component variables to bind to', () => {
     const ctx = makeCtx({

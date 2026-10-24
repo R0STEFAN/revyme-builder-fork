@@ -14,7 +14,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { isComponentFileAtom, variableModalRequestAtom, canvasInteractingAtom } from '@/code/stores/store';
+import { isComponentFileAtom, variableModalRequestAtom, canvasInteractingAtom, selectedIdsAtom } from '@/code/stores/store';
 import { isIconSetFilePath } from '@/code/project/file-path-kind';
 import { buildComponentRegistry, parseComponentInfoFromSource, STRUCTURAL_PROPS, type ComponentProp } from '@/code/components/component-registry';
 import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
@@ -49,6 +49,8 @@ import { useLocalizeHidden } from './localize-gate';
 import CreatePresetPopup from '../ui/CreatePresetPopup';
 import type { PresetToken } from '@/shared/types';
 import { isStyleModified } from './style-modified';
+import { getViewportWidths } from '@/code/stores/viewport-store';
+import { buildDimensionPresetApplyPlan, dimensionCategoryFromToken, findDimensionPresetGroupForToken, type DimensionPresetGroup, type DimensionPresetTier } from '@/shared/dimension-presets';
 
 interface ControlLabelProps {
   label: string;
@@ -187,6 +189,7 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   } = useControl();
 
   const isComponentFile = useAtomValue(isComponentFileAtom);
+  const selectedIds = useAtomValue(selectedIdsAtom);
   const isModified = isStyleModified(property, styles, node, unifiedCtx, label);
   const plainColorClass = (overridden || isModified)
     ? (isComponentFile ? 'text-[var(--accent-secondary-modified,var(--accent-secondary))]' : 'text-[var(--accent-modified,var(--accent-text))]')
@@ -592,6 +595,78 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
       const resolved = resolveTokenValue(value ?? '', presetTokens);
       updateStyle(prop, resolved ?? '');
       trace.action('control-label:remove-preset', { property: prop, resolved });
+    },
+    applyDimensionPreset: (group: DimensionPresetGroup, prop: string) => {
+      const nodeIds = selectedIds.length ? selectedIds : nodeId ? [nodeId] : [];
+      if (isComponentFile) {
+        updateStyle(prop, `var(--${group.base.name})`);
+        trace.action('control-label:apply-dimension-preset', {
+          property: prop, category: group.category, group: group.name, nodeIds,
+          responsivePageBandsApplied: false, reason: 'component-file',
+        });
+        return;
+      }
+
+      const viewportWidths = getViewportWidths();
+      const plan = buildDimensionPresetApplyPlan(group, prop, viewportWidths);
+      for (const targetNodeId of nodeIds) {
+        queueMutation({ type: 'updateStyles', nodeId: targetNodeId, styles: plan.baseStyles });
+      }
+      for (const band of plan.responsive) {
+        for (const targetNodeId of nodeIds) {
+          queueMutation({ type: 'updateContainerStyle', nodeId: targetNodeId, maxWidth: band.maxWidth, styles: band.styles });
+        }
+      }
+      trace.action('control-label:apply-dimension-preset', {
+        property: prop, category: group.category, group: group.name, nodeIds,
+        baseStyles: plan.baseStyles, bands: plan.responsive.map(({ maxWidth }) => maxWidth),
+      });
+    },
+    removeDimensionPreset: (prop: string) => {
+      const tokenName = [...(value ?? '').matchAll(/--([a-zA-Z0-9_-]+)/g)]
+        .map((match) => match[1])
+        .find((name) => dimensionCategoryFromToken(name) !== null);
+      const category = tokenName ? dimensionCategoryFromToken(tokenName) : null;
+      const group = tokenName && category
+        ? findDimensionPresetGroupForToken(tokenName, category, presetTokens)
+        : null;
+
+      if (!group) {
+        const resolved = resolveTokenValue(value ?? '', presetTokens);
+        updateStyle(prop, resolved ?? '');
+        trace.action('control-label:remove-dimension-preset-fallback', { property: prop, resolved });
+        return;
+      }
+
+      const nodeIds = selectedIds.length ? selectedIds : nodeId ? [nodeId] : [];
+      const resolvedValue = (tokenValue: string) => resolveTokenValue(tokenValue, presetTokens) ?? tokenValue;
+      const baseValue = resolvedValue(group.base.value);
+      if (isComponentFile) {
+        updateStyle(prop, baseValue);
+        trace.action('control-label:remove-dimension-preset', {
+          property: prop, category: group.category, group: group.name, nodeIds,
+          responsivePageBandsApplied: false, reason: 'component-file',
+        });
+        return;
+      }
+
+      const plan = buildDimensionPresetApplyPlan(group, prop, getViewportWidths());
+      for (const targetNodeId of nodeIds) {
+        queueMutation({ type: 'updateStyles', nodeId: targetNodeId, styles: { [prop]: baseValue } });
+      }
+      const tiers: DimensionPresetTier[] = ['md', 'sm'];
+      plan.responsive.forEach((band, index) => {
+        const tier = tiers[index];
+        const tierToken = tier ? group[tier] : undefined;
+        const bandValue = resolvedValue(tierToken?.value ?? group.base.value);
+        for (const targetNodeId of nodeIds) {
+          queueMutation({ type: 'updateContainerStyle', nodeId: targetNodeId, maxWidth: band.maxWidth, styles: { [prop]: bandValue } });
+        }
+      });
+      trace.action('control-label:remove-dimension-preset', {
+        property: prop, category: group.category, group: group.name, nodeIds,
+        bands: plan.responsive.map(({ maxWidth }) => maxWidth),
+      });
     },
     onOpenPresetPicker: () => { setMenuOpen(false); setPresetPickerOpen(true); },
     onCreatePreset: (category) => {

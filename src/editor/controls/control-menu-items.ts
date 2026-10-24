@@ -12,6 +12,7 @@ import { groupBorderTokens, buildBorderApplyStyles, getBorderTokenVar } from '@/
 import { TEXT_TAGS } from '@/shared/constants';
 import { pageVariableTypeForProperty, type PageVariable } from '@/code/features/page-variables';
 import { acceptedVariableFamilies, resolveVariableIconKey } from './VariableTypeIcon';
+import { dimensionCategoryFromToken, dimensionCategoryForProperty, groupDimensionTokens, type DimensionPresetCategory, type DimensionPresetGroup } from '@/shared/dimension-presets';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ export interface MenuContext {
   presetTokens?: PresetToken[];
   hasPreset?: boolean;
   removePreset?: (property: string) => void;
+  removeDimensionPreset?: (property: string) => void;
+  applyDimensionPreset?: (group: DimensionPresetGroup, property: string) => void;
   onOpenPresetPicker?: () => void;
   /** Open a ToolPopup that creates a new preset token in the given category and
    *  applies it to the current property on commit. ControlLabel implements this. */
@@ -627,13 +630,17 @@ function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
   const items: MenuItem[] = [];
 
   // "Remove Preset" — when value is var(--*)
-  if (ctx.hasPreset && ctx.removePreset) {
+  if (ctx.hasPreset && (ctx.removePreset || ctx.removeDimensionPreset)) {
     items.push({
       label: 'Remove Preset',
       show: true,
       separator: true,
       onClick: () => {
-        ctx.removePreset!(ctx.property);
+        const tokenName = ctx.value?.match(/var\(\s*--([a-zA-Z0-9_-]+)/)?.[1];
+        const isDimensionToken = !!tokenName && !!dimensionCategoryFromToken(tokenName)
+          && dimensionCategoryForProperty(ctx.property) !== null;
+        if (isDimensionToken && ctx.removeDimensionPreset) ctx.removeDimensionPreset(ctx.property);
+        else ctx.removePreset?.(ctx.property);
         trace.action('control-menu:remove-preset', { property: ctx.property });
       },
     });
@@ -645,13 +652,28 @@ function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
   if (ctx.presetTokens && ctx.presetTokens.length > 0) {
     const categories = matchingCategoriesFor(ctx.property);
     const compatible = ctx.presetTokens.filter(t => categories.has(t.category));
+    const dimensionCategories = (['spacing', 'margin', 'radius'] as const)
+      .filter((category) => categories.has(category)) as DimensionPresetCategory[];
+    const dimensionTokens = compatible.filter((token) => dimensionCategories.includes(token.category as DimensionPresetCategory));
+    const dimensionItems = dimensionCategories.flatMap((category) => groupDimensionTokens(dimensionTokens, category))
+      .map((group) => ({
+        label: group.label,
+        show: true,
+        onClick: () => {
+          if (ctx.applyDimensionPreset) ctx.applyDimensionPreset(group, ctx.property);
+          else ctx.updateStyle(ctx.property, `var(--${group.base.name})`);
+          trace.action('control-menu:apply-dimension-preset', {
+            property: ctx.property, category: group.category, group: group.name,
+          });
+        },
+      }));
 
     // Special case: border presets are *compound* — one preset = a group of
     // 3+ tokens (width/style/color OR width/image-source/image-slice). Show
     // one submenu entry per GROUP, and apply by writing all the longhand
     // var() refs in a single updateStyles call.
     const isBorderProperty = categories.has('border');
-    const submenuItems: MenuItem[] = isBorderProperty
+    const ordinaryItems: MenuItem[] = isBorderProperty
       ? groupBorderTokens(compatible).map(group => ({
           label: group.label,
           show: true,
@@ -665,7 +687,7 @@ function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
             trace.action('control-menu:apply-border-preset', { property: ctx.property, group: group.name, flavor: group.flavor });
           },
         }))
-      : compatible.map(token => ({
+      : compatible.filter((token) => !dimensionCategories.includes(token.category as DimensionPresetCategory)).map(token => ({
           label: presetDisplayLabel(token),
           show: true,
           onClick: () => {
@@ -673,6 +695,9 @@ function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
             trace.action('control-menu:apply-preset', { property: ctx.property, token: token.name });
           },
         }));
+    const submenuItems: MenuItem[] = isBorderProperty
+      ? ordinaryItems
+      : [...dimensionItems, ...ordinaryItems];
 
     // Category-aware "Create … preset" entry. Only shown when the property
     // maps to a concrete category (color, typography, spacing, …). The old
