@@ -14,6 +14,17 @@ export default Comp;
 `;
 
 describe('setVariantVisibilityInCode', () => {
+  it('imports AnimatePresence and gives a plain target a motion layout prop', () => {
+    const code = `function Comp({ initialVariant = 'default' }) {
+  return <section data-id="root"><div data-id="panel">Menu</div></section>;
+}`;
+    const out = setVariantVisibilityInCode(code, 'panel', ['default'], ['default', 'menu-open']);
+    expect(out).toMatch(/import\s*\{[^}]*AnimatePresence[^}]*motion[^}]*\}\s*from\s*['"]framer-motion['"]/);
+    expect(out).toContain('<motion.div');
+    expect(out).toContain('layout={true}');
+    expect(out).toContain('</motion.div>');
+  });
+
   it('wraps a plain element with AnimatePresence + conditional when hiding on one variant', () => {
     const code = COMPONENT_SHELL(`<motion.div data-id="child-1" />`);
     const out = setVariantVisibilityInCode(code, 'child-1', ['variant-1'], ['default', 'variant-1', 'variant-2']);

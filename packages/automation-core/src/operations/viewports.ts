@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { updateContainerQueryStyle } from '@/code/generation/generator-styles';
+import { parseCanvasConfig } from '@/code/project/canvas-config';
 
 export interface ViewportDefinition {
   id: string;
@@ -86,15 +87,22 @@ export const viewportsSetOverrideOperation: Operation<
 
     if (typeof input.viewport === 'number') {
       width = input.viewport;
-    } else if (input.viewport === 'mobile') {
-      width = 375;
-    } else if (input.viewport === 'tablet') {
-      width = 768;
-    } else if (input.viewport === 'desktop') {
-      width = 1200;
     } else {
-      const parsed = parseInt(input.viewport, 10);
-      width = isNaN(parsed) ? 768 : parsed;
+      const configured = parseCanvasConfig(code)?.viewports.find(
+        (viewport) => viewport.id === input.viewport || viewport.label === input.viewport,
+      );
+      if (configured) {
+        width = configured.width;
+      } else if (input.viewport === 'mobile') {
+        width = 375;
+      } else if (input.viewport === 'tablet') {
+        width = 768;
+      } else if (input.viewport === 'desktop') {
+        width = 1200;
+      } else {
+        const parsed = parseInt(input.viewport, 10);
+        width = isNaN(parsed) ? 768 : parsed;
+      }
     }
 
     const nextCode = updateContainerQueryStyle(code, input.nodeId, width, input.styles);

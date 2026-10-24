@@ -1,12 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDefaultStore } from 'jotai';
-import { bridgeHandlers, runBridgeRequest } from './bridge-client';
+import { bridgeHandlers, runBridgeRequest, startMcpBridge, stopMcpBridge } from './bridge-client';
 import { lockBranch, unlockBranch } from '@/code/stores/agent-run-lock-store';
 import { agentRunEnd } from '@/ai/agent/bridge-tools';
 import { backend } from '@/backend';
+import { saveStatusAtom } from '@/backend/save-store';
+import { getBaseRevision, setLoadedRevision } from '@/backend/save-revision';
 import { projectFS, resetProjectFS } from '@/code/project/project-fs';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { projectVersionAtom } from '@/code/project/project-fs';
+import { codeAtom } from '@/code/stores/store';
 import { resetReadTracker } from './read-tracker';
+import * as renderWait from '@/ai/agent/tools/wait-for-render';
+import * as canvasBridge from '@/canvas/canvas-bridge';
+import * as nodeOps from '@/canvas/node-ops';
+import * as mutationQueue from '@/code/mutation/mutation-queue';
 
 const PAGE_PATH = 'app/page.client.tsx';
 const PAGE = `'use client';
@@ -67,6 +75,231 @@ describe('bridgeHandlers', () => {
     expect(ctx.pages).toContain(PAGE_PATH);
     expect(Array.isArray(ctx.components)).toBe(true);
     expect(typeof ctx.nodeTree).toBe('string');
+  });
+
+  it('applies an external MCP commit to a clean editor without reloading the page', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const projectVersionBefore = getDefaultStore().get(projectVersionAtom);
+    const refreshedPage = PAGE.replace('data-name="Page"', 'data-name="Updated through MCP"');
+    const loadProject = vi.spyOn(backend, 'loadProject').mockImplementation(async () => {
+      setLoadedRevision(11);
+      return {
+        format: 'revyme-v1',
+        files: { [PAGE_PATH]: refreshedPage, 'components/ProjectCard.tsx': 'export default function ProjectCard() { return null; }' },
+      };
+    });
+
+    try {
+      const result = await bridgeHandlers.projectSnapshotChanged({
+        projectId: 'project-refresh-test',
+        branchId: 'main',
+        baseRevision: 10,
+        revision: 11,
+        changedFiles: [PAGE_PATH],
+      }) as any;
+
+      expect(result).toMatchObject({ applied: true, revision: 11 });
+      expect(loadProject).toHaveBeenCalledWith('project-refresh-test');
+      expect(projectFS.readFile(PAGE_PATH)).toContain('Updated through MCP');
+      expect(projectFS.readFile('components/ProjectCard.tsx')).toContain('ProjectCard');
+      expect(getBaseRevision()).toBe(11);
+      expect(getDefaultStore().get(codeAtom)).toContain('Updated through MCP');
+      expect(getDefaultStore().get(projectVersionAtom)).toBe(projectVersionBefore + 1);
+    } finally {
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+    }
+  });
+
+  it('catches up a clean tab that missed an earlier MCP revision', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(8);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const refreshedPage = PAGE.replace('data-name="Page"', 'data-name="Caught up through MCP"');
+    const loadProject = vi.spyOn(backend, 'loadProject').mockImplementation(async () => {
+      setLoadedRevision(11);
+      return { format: 'revyme-v1', files: { [PAGE_PATH]: refreshedPage } };
+    });
+
+    try {
+      const result = await bridgeHandlers.projectSnapshotChanged({
+        projectId: 'project-refresh-test', branchId: 'main', baseRevision: 10, revision: 11,
+      }) as any;
+      expect(result).toMatchObject({ applied: true, revision: 11 });
+      expect(projectFS.readFile(PAGE_PATH)).toContain('Caught up through MCP');
+    } finally {
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+    }
+  });
+
+  it('refuses an external snapshot while local edits are unsaved', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'unsaved');
+    const loadProject = vi.spyOn(backend, 'loadProject');
+
+    try {
+      const result = await bridgeHandlers.projectSnapshotChanged({
+        projectId: 'project-refresh-test', branchId: 'main', baseRevision: 10, revision: 11,
+      }) as any;
+      expect(result).toMatchObject({ applied: false, reason: 'LOCAL_CHANGES_PENDING' });
+      expect(loadProject).not.toHaveBeenCalled();
+      expect(projectFS.readFile(PAGE_PATH)).toBe(PAGE);
+    } finally {
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+      getDefaultStore().set(saveStatusAtom, 'saved');
+    }
+  });
+
+  it('refuses an external snapshot before loading while queued mutations are pending', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const queuedMutations = vi.spyOn(mutationQueue, 'hasQueuedMutations').mockReturnValue(true);
+    const processing = vi.spyOn(mutationQueue, 'isMutationQueueProcessing').mockReturnValue(false);
+    const loadProject = vi.spyOn(backend, 'loadProject').mockImplementation(async () => {
+      setLoadedRevision(11);
+      return { format: 'revyme-v1', files: { [PAGE_PATH]: PAGE } };
+    });
+
+    try {
+      const result = await bridgeHandlers.projectSnapshotChanged({
+        projectId: 'project-refresh-test', branchId: 'main', baseRevision: 10, revision: 11,
+      }) as any;
+
+      expect(result).toMatchObject({ applied: false, reason: 'LOCAL_CHANGES_PENDING' });
+      expect(loadProject).not.toHaveBeenCalled();
+      expect(projectFS.readFile(PAGE_PATH)).toBe(PAGE);
+    } finally {
+      queuedMutations.mockRestore();
+      processing.mockRestore();
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+      getDefaultStore().set(saveStatusAtom, 'saved');
+    }
+  });
+
+  it('rechecks mutation queue state after loading before replacing the project snapshot', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(10);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    let queueActive = false;
+    const queuedMutations = vi.spyOn(mutationQueue, 'hasQueuedMutations').mockImplementation(() => queueActive);
+    const processing = vi.spyOn(mutationQueue, 'isMutationQueueProcessing').mockReturnValue(false);
+    const refreshedPage = PAGE.replace('data-name="Page"', 'data-name="Must Not Replace Local Work"');
+    const loadProject = vi.spyOn(backend, 'loadProject').mockImplementation(async () => {
+      setLoadedRevision(11);
+      queueActive = true;
+      return { format: 'revyme-v1', files: { [PAGE_PATH]: refreshedPage } };
+    });
+
+    try {
+      const result = await bridgeHandlers.projectSnapshotChanged({
+        projectId: 'project-refresh-test', branchId: 'main', baseRevision: 10, revision: 11,
+      }) as any;
+
+      expect(result).toMatchObject({ applied: false, reason: 'LOCAL_CHANGES_PENDING' });
+      expect(projectFS.readFile(PAGE_PATH)).toBe(PAGE);
+    } finally {
+      queuedMutations.mockRestore();
+      processing.mockRestore();
+      loadProject.mockRestore();
+      window.history.pushState({}, '', previousPath);
+      getDefaultStore().set(saveStatusAtom, 'saved');
+    }
+  });
+
+  it('captures screenshots through the live iframe bridge for the requested project scope', async () => {
+    const dataUrl = 'data:image/png;base64,aGVsbG8=';
+    const waitSpy = vi.spyOn(renderWait, 'waitForRender').mockResolvedValue({
+      ready: true,
+      status: 'ready',
+      waitedMs: 18,
+      withRect: 1,
+      epoch: { renderSeq: 2, projectVersionAtFill: 1, projectVersionNow: 1, stale: false },
+      coverage: { withRect: 1, total: 1 },
+      unmeasured: [],
+      unmeasuredTotal: 0,
+    });
+    const capture = vi.fn().mockResolvedValue(dataUrl);
+    vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({ captureElement: capture } as any);
+    vi.spyOn(nodeOps, 'findNodeRect').mockReturnValue({ x: 0, y: 0, width: 1280, height: 720 } as DOMRect);
+    vi.spyOn(nodeOps, 'getViewportPrefix').mockReturnValue('');
+
+    const result = await bridgeHandlers.captureScreenshot({
+      branchId: 'main',
+      filePath: PAGE_PATH,
+      viewport: 'desktop',
+      nodeId: 'root',
+      format: 'png',
+      pixelRatio: 1.5,
+    }) as any;
+
+    expect(waitSpy).toHaveBeenCalledWith({
+      vpId: 'desktop',
+      nodeIds: ['root'],
+      branchId: 'main',
+      timeoutMs: 1500,
+      intervalMs: 100,
+    });
+    expect(capture).toHaveBeenCalledWith('root', '', { format: 'png', pixelRatio: 1.5, backgroundColor: undefined });
+    expect(result).toMatchObject({
+      available: true,
+      status: 'ready',
+      dataUrl,
+      width: 1280,
+      height: 720,
+      waitedMs: 18,
+    });
+  });
+
+  it('returns fresh rendered layout measurements only for the matching saved page revision', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/audit-snapshot-project');
+    setLoadedRevision(7);
+    getDefaultStore().set(saveStatusAtom, 'saved');
+    const version = getDefaultStore().get(projectVersionAtom);
+    const rect = { x: 0, y: 0, width: 1200, height: 900 } as DOMRect;
+    const settle = vi.spyOn(renderWait, 'settleObservation').mockResolvedValue(undefined);
+    vi.spyOn(nodeOps, 'getRectInViewportSpace').mockReturnValue(rect);
+    vi.spyOn(nodeOps, 'findNodeComputedStyles').mockReturnValue({ display: 'block' });
+    vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({
+      getCacheEpoch: () => ({ renderSeq: 9, projectVersion: version }),
+    } as any);
+
+    try {
+      const result = await bridgeHandlers.observeAuditSnapshot({
+        projectId: 'audit-snapshot-project',
+        branchId: 'main',
+        filePath: PAGE_PATH,
+        revision: 7,
+        viewport: 'desktop',
+      }) as any;
+
+      expect(settle).toHaveBeenCalledWith({
+        vpId: 'desktop',
+        nodeIds: ['root'],
+        branchId: 'main',
+        timeoutMs: 1500,
+      });
+      expect(result.status).toBe('ready');
+      expect(result.revision).toBe(7);
+      expect(result.nodes).toEqual([
+        expect.objectContaining({ id: 'root', rect: { x: 0, y: 0, width: 1200, height: 900 }, computed: { display: 'block' } }),
+      ]);
+      expect(result.epoch).toMatchObject({ renderSeq: 9, withRect: 1, total: 1, stale: false });
+    } finally {
+      window.history.pushState({}, '', previousPath);
+    }
   });
 
   it('searchProject finds matching lines across project files', async () => {
@@ -218,6 +451,32 @@ describe('bridgeHandlers', () => {
     await expect(bridgeHandlers.submitFiles({
       files: [{ path: '/images/hero.png', kind: 'page', code: '' }],
     })).rejects.toThrow('Access denied');
+  });
+});
+
+describe('MCP bridge EventSource project routing', () => {
+  it('tags standalone local editor connections so project-scoped commits reach them', () => {
+    const previousPath = window.location.pathname;
+    const openedUrls: string[] = [];
+    class FakeEventSource {
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      constructor(url: string) { openedUrls.push(url); }
+      close() {}
+    }
+    vi.stubGlobal('EventSource', FakeEventSource);
+    window.history.pushState({}, '', '/');
+
+    try {
+      startMcpBridge();
+
+      expect(openedUrls).toEqual(['http://127.0.0.1:8082/bridge/events?websiteId=local']);
+    } finally {
+      stopMcpBridge();
+      window.history.pushState({}, '', previousPath);
+      vi.unstubAllGlobals();
+    }
   });
 });
 

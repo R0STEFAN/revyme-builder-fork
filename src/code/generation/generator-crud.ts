@@ -15,7 +15,7 @@ import { trace } from '@/shared/debug-trace';
 import { flattenPastedRichHtml } from '@/shared/rich-message';
 import { findVariantRootId } from '@/shared/variant-root';
 import { sweepEmptyGlideWrappers, syncEnclosingGlideItem } from './glide-gen';
-import { generate, findTagClose, findJSXDataIdIndex, quoteStyleValue, serializeJSXAttr, findMatchingCloseTagIndex, findStyleObjectEnd } from './generator-utils';
+import { generate, findTagClose, findJSXDataIdIndex, quoteStyleValue, serializeJSXAttr, findMatchingCloseTagIndex, findStyleObjectEnd, ensureNamedImport } from './generator-utils';
 import { moveNodeIntoParentFast } from './move-fast';
 import { clearContainerStylesForNode, removeHoverStyleInCode, removeBorderOverlayStyle, removePseudoStyleInCode, removeSelectCaretRuleInCode, removeScopedChildRulesInCode, findBandedOrderWidths, stripBandedOrderForNode } from './generator-styles';
 import { clearNodeScrollFx, ensureTransformTemplateInCode } from './generator-motion';
@@ -145,6 +145,35 @@ export function updateNodeInCode(
   const changed = astResult !== code;
   trace.action('generator:ast-path-result', { nodeId, changed, codeLen: astResult.length });
   return syncEnclosingGlideItem(syncTemplate(astResult), nodeId, styleChanges);
+}
+
+/** Set a node's editable layer name without changing its stable data-id. */
+export function updateNodeNameInCode(code: string, nodeId: string, name: string): string {
+  const ast = parseJSX(code);
+  if (!ast) return code;
+
+  let changed = false;
+  findFirstElementByDataId(ast, nodeId, (_path, element) => {
+    const opening = element.openingElement;
+    const nameAttr = findAttribute(opening, 'data-name');
+    if (nameAttr) {
+      if (nameAttr.value?.type === 'StringLiteral' && nameAttr.value.value === name) return;
+      nameAttr.value = t.stringLiteral(name);
+    } else {
+      const idIndex = opening.attributes.findIndex(
+        (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name, { name: 'data-id' }),
+      );
+      opening.attributes.splice(idIndex < 0 ? 0 : idIndex + 1, 0,
+        t.jsxAttribute(t.jsxIdentifier('data-name'), t.stringLiteral(name)),
+      );
+    }
+    changed = true;
+  });
+
+  if (!changed) return code;
+  const nextCode = generate(ast, { retainLines: true }, code).code;
+  trace.action('generator:updateNodeNameInCode', { nodeId, name });
+  return nextCode;
 }
 
 /** Index of a TOP-LEVEL `key:` property in a style-object body, or -1 — the
@@ -3472,15 +3501,19 @@ export function addNodeInCode(
   const isComponentFile = !isContainerSetMaster
     && (code.includes('withResponsiveProps') || code.includes('variantConfig'));
   const jsxStr = buildNodeJSX(node, isComponentFile);
+  const ensureMotionImport = (nextCode: string) =>
+    isComponentFile && jsxStr.includes('<motion.')
+      ? ensureNamedImport(nextCode, 'framer-motion', ['motion'])
+      : nextCode;
 
   // FAST PATH: append as last child (no index = append, no Babel needed)
   if (index === undefined && !insertBeforeId) {
     const fast = addNodeFast(code, parentId, jsxStr);
-    if (fast !== null) return fast;
+    if (fast !== null) return ensureMotionImport(fast);
   }
 
   // SLOW PATH: full AST (for specific index insertion or when wrappers present)
-  return addNodeAST(code, parentId, jsxStr, index, insertBeforeId);
+  return ensureMotionImport(addNodeAST(code, parentId, jsxStr, index, insertBeforeId));
 }
 
 /** Fast path: find parent's closing tag and insert JSX before it. O(1), no Babel. */

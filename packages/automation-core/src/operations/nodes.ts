@@ -9,6 +9,7 @@ import {
   updateNodeInCode,
   moveNodeInCode,
   reorderNodeInCode,
+  updateNodeNameInCode,
   type AddNodeDef,
 } from '@/code/generation/generator-crud';
 
@@ -27,6 +28,32 @@ function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; c
     throw new Error(`FILE_NOT_FOUND: Target file "${target || 'default page'}" not found in snapshot`);
   }
   return { path: target, code: snapshot.files.get(target)! };
+}
+
+/** New direct children of CSS flow containers need explicit order values for
+ *  the builder's reorder engine. Fill only missing values and leave explicit
+ *  user-authored orders intact. */
+function ensureFlowChildOrder(code: string, parentId: string): string {
+  const nodes = parseJSXToNodes(code);
+  const parent = nodes.get(parentId);
+  const display = parent?.styles.display;
+  if (!parent || !['flex', 'inline-flex', 'grid', 'inline-grid'].includes(display || '')) return code;
+
+  const flowChildren = parent.children
+    .map((childId) => nodes.get(childId))
+    .filter((child): child is CanvasNode => !!child && child.styles.position !== 'absolute' && child.styles.position !== 'fixed');
+  const explicitOrders = flowChildren
+    .map((child) => Number(child.styles.order))
+    .filter(Number.isFinite);
+  let nextCode = code;
+  let flowOrder = explicitOrders.length ? Math.max(...explicitOrders) + 1 : 0;
+  for (const child of flowChildren) {
+    if (child.styles.order === undefined || child.styles.order === '') {
+      nextCode = updateNodeInCode(nextCode, child.id, { order: String(flowOrder) });
+      flowOrder++;
+    }
+  }
+  return nextCode;
 }
 
 // 1. nodes.get
@@ -105,7 +132,8 @@ export const nodesCreateOperation: Operation<
       textContent: input.textContent,
     };
 
-    const nextCode = addNodeInCode(code, input.parentId, nodeDef, input.index);
+    const insertedCode = addNodeInCode(code, input.parentId, nodeDef, input.index);
+    const nextCode = ensureFlowChildOrder(insertedCode, input.parentId);
 
     return {
       nodeId,
@@ -125,6 +153,7 @@ export const nodesUpdateOperation: Operation<
   {
     filePath?: string;
     nodeId: string;
+    name?: string;
     styles?: Record<string, string>;
   },
   {
@@ -133,7 +162,7 @@ export const nodesUpdateOperation: Operation<
   }
 > = {
   name: 'nodes.update',
-  description: 'Update node inline styles in JSX source',
+  description: 'Update a node display name or inline styles in JSX source',
   category: 'nodes',
   kind: 'mutation',
   permit: 'write',
@@ -142,11 +171,16 @@ export const nodesUpdateOperation: Operation<
   inputSchema: z.object({
     filePath: z.string().optional(),
     nodeId: z.string().min(1),
+    name: z.string().min(1).optional(),
     styles: z.record(z.string(), z.string()).optional(),
   }),
   async execute(snapshot, input) {
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let nextCode = code;
+
+    if (input.name) {
+      nextCode = updateNodeNameInCode(nextCode, input.nodeId, input.name);
+    }
 
     if (input.styles && Object.keys(input.styles).length > 0) {
       nextCode = updateNodeInCode(nextCode, input.nodeId, input.styles);

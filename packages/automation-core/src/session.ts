@@ -118,6 +118,15 @@ export async function prepareOperation(
   }
 
   try {
+    // Some legacy operation adapters synchronize through ProjectFS and mutate
+    // their input snapshot while collecting candidate changes. Keep the source
+    // snapshot immutable so normalization always calculates CAS hashes against
+    // the server version, not an optimistic local candidate.
+    const operationSnapshot: Snapshot = {
+      ...snapshot,
+      files: new Map(snapshot.files),
+      config: { ...snapshot.config },
+    };
     context.trace('operation:start', { name: operationName, scope: snapshot.scope });
     const data = op.name === 'projects.duplicate'
       ? (() => {
@@ -137,7 +146,7 @@ export async function prepareOperation(
       ? prepareScopedRestore(snapshot, validation.data as { backupPayload: string; restoreBranches: boolean; cleanOrphanFiles: boolean }, context)
       : op.name === 'history.undo' || op.name === 'history.redo'
       ? prepareHistory(snapshot, op.name === 'history.undo' ? 'undo' : 'redo', context)
-      : await op.execute(snapshot, validation.data, context);
+      : await op.execute(operationSnapshot, validation.data, context);
     const candidate = data && typeof data === 'object' ? (data as any).plan ?? data : null;
     if (candidate && Array.isArray(candidate.changes)) {
       const normalized = normalizeCandidateChanges(snapshot, candidate.changes);

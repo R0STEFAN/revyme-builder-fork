@@ -85,7 +85,7 @@ export const workflowBatchOperation: Operation<
     const issues: Issue[] = [];
     const normalizations: Normalization[] = [];
     const createdIds: string[] = [];
-    const accumulatedChanges: FileChange[] = [];
+    const accumulatedChanges = new Map<string, FileChange>();
 
     let currentSnapshot = snapshot;
 
@@ -115,9 +115,21 @@ export const workflowBatchOperation: Operation<
       if (candidate && 'changes' in candidate) {
         issues.push(...(candidate.issues ?? []));
         normalizations.push(...(candidate.normalizations ?? []));
+        if (Array.isArray(candidate.createdIds)) createdIds.push(...candidate.createdIds);
         const changes = candidate.changes as FileChange[];
         if (Array.isArray(changes)) {
-          accumulatedChanges.push(...changes);
+          for (const change of changes) {
+            const previous = accumulatedChanges.get(change.path);
+            if (previous) {
+              accumulatedChanges.set(change.path, { ...change, beforeHash: previous.beforeHash });
+              context.trace('workflow:change-coalesced', {
+                path: change.path,
+                stepIndex: i,
+              });
+            } else {
+              accumulatedChanges.set(change.path, change);
+            }
+          }
           // Update candidate snapshot for subsequent steps
           const nextFiles = new Map(currentSnapshot.files);
           for (const ch of changes) {
@@ -139,7 +151,12 @@ export const workflowBatchOperation: Operation<
       scope: snapshot.scope,
       baseRevision: snapshot.revision,
       operationId: context.createId('batch'),
-      changes: accumulatedChanges,
+      changes: [...accumulatedChanges.values()].filter((change) => {
+        const originalContent = snapshot.files.has(change.path)
+          ? snapshot.files.get(change.path)!
+          : null;
+        return originalContent !== change.content;
+      }),
       createdIds,
       normalizations,
       issues,

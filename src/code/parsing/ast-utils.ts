@@ -7,7 +7,15 @@ import _traverse from '@babel/traverse';
 import type { JSXElement, JSXAttribute, JSXOpeningElement } from '@babel/types';
 import { trace } from '@/shared/debug-trace';
 
-const traverse = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
+// Vite SSR can wrap this CommonJS dependency twice:
+// `{ default: { default: traverse } }`. Keep the parser usable from the
+// automation server as well as from Vitest's direct-function import.
+export function normalizeBabelTraverse(value: unknown): typeof _traverse {
+  const first = typeof value === 'function' ? value : (value as any)?.default;
+  return (typeof first === 'function' ? first : first?.default) as typeof _traverse;
+}
+
+const traverse = normalizeBabelTraverse(_traverse);
 
 /**
  * Parse JSX code into an AST. Returns null on parse error (user is typing).

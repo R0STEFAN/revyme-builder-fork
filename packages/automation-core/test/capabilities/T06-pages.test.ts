@@ -243,6 +243,7 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
     expect(readBack.metadata.icons?.icon).toBe('/favicon.ico');
     expect(readBack.metadata.openGraph?.title).toBe('My Brand Social');
     expect(readBack.siteConfig?.theme).toBe('dark');
+    expect(snapshot.files.get('app/layout.tsx')).toContain(`<html lang={siteConfig.language || 'en'} suppressHydrationWarning>`);
 
     // 4. Test Invariant 3: Empty string deletes property
     const deletePropRes = await metaUpdateOp.execute(

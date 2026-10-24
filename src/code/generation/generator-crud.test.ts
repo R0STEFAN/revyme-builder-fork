@@ -1,9 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { transform } from '@babel/standalone';
-import { setVariantTextBindingInCode, setVariantStyleBindingInCode, removeNodeInCode, healStyleBlockSelectorAttrsInCode, updateNodeInCode } from './generator-crud';
+import { setVariantTextBindingInCode, setVariantStyleBindingInCode, removeNodeInCode, healStyleBlockSelectorAttrsInCode, updateNodeInCode, addNodeInCode } from './generator-crud';
 
 const parsesOk = (code: string) =>
   expect(() => transform(code, { presets: ['react', 'typescript'], filename: 'f.tsx' })).not.toThrow();
+
+describe('addNodeInCode — motion import in Design Components', () => {
+  it('adds framer-motion when inserting a node into a variant master', () => {
+    const master = `"use client";\nimport { withResponsiveProps } from "@revyme/runtime";\nexport const variantConfig = [{ name: 'default' }];\nfunction Card() { return <div data-id="card-root" />; }\nexport default withResponsiveProps(Card);`;
+    const out = addNodeInCode(master, 'card-root', {
+      id: 'card-image', type: 'img', name: 'Card Image',
+      styles: { width: '100%', height: '100%', objectFit: 'cover' },
+      attrs: { src: 'https://example.com/image.jpg', alt: 'Project image' },
+    });
+
+    expect(out).toContain("import { motion } from 'framer-motion';");
+    expect(out).toContain('<motion.img');
+    parsesOk(out);
+  });
+});
 
 describe('removeNodeInCode — attr value containing `>` (arrow handler)', () => {
   // Regression: a self-closing <input> with `onChange={(e) => …}` — the `=>` has

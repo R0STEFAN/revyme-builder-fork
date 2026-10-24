@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect } from 'vitest';
+import React from 'react';
 import { serializeSlotChildren, buildSlotChildren, collectAncestorIds, isEligibleSlotTarget } from './slot-children';
 import type { CanvasNode } from '@/code/parsing/parser';
 
@@ -333,5 +334,53 @@ describe('slot-target eligibility — block the component\'s own hierarchy', () 
     expect(els).toHaveLength(1);
     const el = els[0] as any;
     expect(el.type).toBe('div');
+  });
+
+  it('renders a connected design-component instance with its source and instance props', () => {
+    const nodes = new Map<string, CanvasNode>();
+    nodes.set('project-card', node({
+      id: 'project-card',
+      type: 'ProjectCard',
+      isComponentInstance: true,
+      componentFile: 'components/ProjectCard.tsx',
+      attrs: {
+        'data-id': 'project-card',
+        initialVariant: 'asymmetric',
+        title: 'NOIR — цифровий досвід',
+        image: 'https://images.example/noir.jpg',
+      },
+      styles: { width: '320px', position: 'absolute', left: '-320px' },
+    }));
+
+    const serialized = serializeSlotChildren(['project-card'], nodes, undefined, {
+      getCode: (file) => file === 'components/ProjectCard.tsx' ? 'design-card-source' : null,
+      getProps: () => ({ initialVariant: 'asymmetric', title: 'NOIR — цифровий досвід' }),
+    });
+    const Card = (props: any) => React.createElement('article', { 'data-variant': props.initialVariant }, props.title);
+    const els = buildSlotChildren(serialized, { compileComponent: () => Card as any, vpWidth: 1200 });
+    const el = els[0] as any;
+
+    expect(el.type).toBe(Card);
+    expect(el.props.initialVariant).toBe('asymmetric');
+    expect(el.props.title).toBe('NOIR — цифровий досвід');
+    expect(el.props.__canvasViewportWidth).toBe(1200);
+    expect(el.props.style.width).toBe('320px');
+    expect(el.props.style.left).toBeUndefined();
+  });
+
+  it('does not leak component-only props onto the fallback DOM ghost', () => {
+    const els = buildSlotChildren([{
+      type: 'ProjectCard',
+      styles: { width: '320px' },
+      attrs: { initialVariant: 'asymmetric', image: 'https://images.example/noir.jpg', title: 'NOIR' },
+      isDesignComponent: true,
+      children: [],
+    }]);
+    const el = els[0] as any;
+
+    expect(el.type).toBe('div');
+    expect(el.props.initialVariant).toBeUndefined();
+    expect(el.props.image).toBeUndefined();
+    expect(el.props.title).toBeUndefined();
   });
 });

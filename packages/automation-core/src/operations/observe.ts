@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import type { Operation, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
+import { DEFAULT_VIEWPORTS } from './viewports';
 import { parseJSXToNodes, type CanvasNode } from '@/code/parsing/parser';
 import { parseCanvasConfig } from '@/code/project/canvas-config';
 import { getAllSlotConnections } from '@/code/generation/slot-ops';
@@ -13,6 +14,7 @@ import {
 import { getScreenCornersById } from '@/canvas/resize/geometry-utils';
 import {
   collectEpochSnapshot,
+  observationStatusWithEpoch,
   type ObservationEpoch,
   type ObservationStatus,
 } from '@/ai/agent/tools/observation-epoch';
@@ -56,7 +58,9 @@ export function getTargetPageFile(snapshot: Snapshot, filePath?: string): { path
 
 export function resolveTargetViewport(code: string, raw?: unknown): { id: string; width: number | null } {
   const config = parseCanvasConfig(code);
-  const widths: Record<string, number> = {};
+  const widths: Record<string, number> = Object.fromEntries(
+    DEFAULT_VIEWPORTS.map((viewport) => [viewport.id, viewport.width]),
+  );
   if (config && config.viewports && config.viewports.length > 0) {
     for (const vp of config.viewports) {
       widths[vp.id] = vp.width;
@@ -1369,7 +1373,7 @@ export const observeAuditOperation: Operation<
   inputSchema: observeAuditInputSchema,
   outputSchema: observeAuditOutputSchema,
   async execute(snapshot: Snapshot, input: ObserveAuditInput, _context: OperationContext) {
-    const { code } = getTargetPageFile(snapshot, input.filePath ?? input.targetFile);
+    const { path: filePath, code } = getTargetPageFile(snapshot, input.filePath ?? input.targetFile);
     const vp = resolveTargetViewport(code, input.viewport ?? input.vpId);
 
     if (vp.width === null) {
@@ -1392,7 +1396,119 @@ export const observeAuditOperation: Operation<
     }
 
     const nodeMap = parseJSXToNodes(code);
-    const epochSnap = collectEpochSnapshot(nodeMap, vp.id);
+    let epochSnap: ReturnType<typeof collectEpochSnapshot>;
+    const auditSnapshotService = _context.adapters?.auditSnapshotService as {
+      getSnapshot?: (args: {
+        projectId: string;
+        branchId: string;
+        filePath: string;
+        revision: number;
+        viewport: string;
+      }) => Promise<{
+        status: ObservationStatus;
+        reason?: string;
+        nodes?: AuditNode[];
+        epoch?: ObservationEpoch;
+      }>;
+    } | undefined;
+
+    if (typeof auditSnapshotService?.getSnapshot === 'function') {
+      let renderedSnapshot: Awaited<ReturnType<NonNullable<typeof auditSnapshotService.getSnapshot>>>;
+      try {
+        renderedSnapshot = await auditSnapshotService.getSnapshot({
+          projectId: snapshot.scope.projectId,
+          branchId: snapshot.scope.branchId,
+          filePath,
+          revision: snapshot.revision,
+          viewport: vp.id,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return {
+          clean: false,
+          passed: false,
+          viewport: vp.id,
+          viewportWidth: vp.width,
+          status: 'unavailable' as const,
+          summary: `Audit unavailable: ${reason}`,
+          totalFindings: 0,
+          errors: 0,
+          warnings: 0,
+          checked: 0,
+          violations: [],
+          findings: [],
+          unmeasured: [],
+          stats: { nodesAudited: 0, contrastChecked: 0, touchTargetsChecked: 0, overflowChecked: 0 },
+        };
+      }
+
+      if (!renderedSnapshot.nodes || !renderedSnapshot.epoch) {
+        renderedSnapshot.status = 'unavailable';
+        renderedSnapshot.reason ||= 'The Builder audit bridge returned no measurement snapshot.';
+      }
+
+      if (renderedSnapshot.status !== 'ready' || !renderedSnapshot.nodes || !renderedSnapshot.epoch) {
+        const status = renderedSnapshot.status === 'pending' ? 'pending' : 'unavailable';
+        const reason = renderedSnapshot.reason || 'The Builder canvas has no fresh measurement for this viewport.';
+        const pendingFinding: AuditFinding | null = status === 'pending'
+          ? { rule: 'CANVAS_MID_RENDER', severity: 'warning', message: reason }
+          : null;
+        const findings = pendingFinding ? [pendingFinding] : [];
+        return {
+          clean: false,
+          passed: false,
+          viewport: vp.id,
+          viewportWidth: vp.width,
+          status,
+          summary: status === 'pending' ? `Audit pending: ${reason}` : `Audit unavailable: ${reason}`,
+          totalFindings: findings.length,
+          errors: 0,
+          warnings: findings.length,
+          checked: renderedSnapshot.epoch?.total ?? 0,
+          violations: findings.map((finding) => `${finding.rule}: ${finding.message}`),
+          findings,
+          unmeasured: renderedSnapshot.epoch?.unmeasured ?? [],
+          stats: {
+            nodesAudited: renderedSnapshot.epoch?.total ?? 0,
+            contrastChecked: 0,
+            touchTargetsChecked: 0,
+            overflowChecked: 0,
+          },
+        };
+      }
+
+      const liveStatus = observationStatusWithEpoch(vp, renderedSnapshot.epoch);
+      if (liveStatus.status !== 'ready') {
+        const findings: AuditFinding[] = liveStatus.status === 'pending'
+          ? [{ rule: 'CANVAS_MID_RENDER', severity: 'warning', message: liveStatus.reason }]
+          : [];
+        return {
+          clean: false,
+          passed: false,
+          viewport: vp.id,
+          viewportWidth: vp.width,
+          status: liveStatus.status,
+          summary: liveStatus.status === 'pending' ? `Audit pending: ${liveStatus.reason}` : `Audit unavailable: ${liveStatus.reason}`,
+          totalFindings: findings.length,
+          errors: 0,
+          warnings: findings.length,
+          checked: renderedSnapshot.epoch.total,
+          violations: findings.map((finding) => `${finding.rule}: ${finding.message}`),
+          findings,
+          unmeasured: renderedSnapshot.epoch.unmeasured,
+          stats: {
+            nodesAudited: renderedSnapshot.epoch.total,
+            contrastChecked: 0,
+            touchTargetsChecked: 0,
+            overflowChecked: 0,
+          },
+        };
+      }
+
+      epochSnap = { nodes: renderedSnapshot.nodes, epoch: renderedSnapshot.epoch };
+    } else {
+      epochSnap = collectEpochSnapshot(nodeMap, vp.id);
+    }
     const auditNodes = epochSnap.nodes;
 
     // Check if snapshot is mid-render / has unmeasured nodes
@@ -1626,6 +1742,7 @@ export const observeScreenshotOperation: Operation<
             height: res.height ?? res.dimensions?.height ?? 800,
             dimensions: res.dimensions ?? (res.width && res.height ? { width: res.width, height: res.height } : undefined),
             waitedMs: res.waitedMs ?? 0,
+            reason: res.reason,
             note: res.note,
           });
           continue;

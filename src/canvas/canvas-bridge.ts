@@ -56,6 +56,14 @@ export interface CanvasBridge {
   /** Get multiple computed style properties at once. */
   getComputedValues(nodeId: string, vpPrefix: string, props: string[]): Record<string, string>;
 
+  /** Capture a rendered node inside the sandbox iframe. Implementations must
+   *  delegate to the iframe because the canvas DOM is not owned by this frame. */
+  captureElement?(
+    nodeId: string,
+    vpPrefix: string,
+    opts: { format: 'png' | 'jpeg' | 'svg'; pixelRatio: number; backgroundColor?: string },
+  ): Promise<string | null>;
+
   /** Get container rect (the content root transform container). */
   getContainerRect(): DOMRect | null;
 
@@ -172,6 +180,7 @@ class NullBridge implements CanvasBridge {
   getChildRects(): Array<{ id: string; rect: DOMRect }> { return []; }
   getComputedValue(): string { return ''; }
   getComputedValues(): Record<string, string> { return {}; }
+  async captureElement(): Promise<string | null> { return null; }
   getContainerRect(): DOMRect | null { return null; }
   getElementIdsAtPoint(): string[] { return []; }
   patchStyles(): void {}

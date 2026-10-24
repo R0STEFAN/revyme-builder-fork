@@ -259,6 +259,99 @@ describe('T04: Canonical Repository, CAS/Idempotency and Commit Service', () => 
   });
 
   describe('HTTP Automation API Middleware', () => {
+    it('notifies the live editor after a committed automation plan', async () => {
+      const scope = { projectId: 'test-live-editor', branchId: 'main' };
+      const initial = createPlan({
+        scope,
+        baseRevision: 1,
+        operationId: 'op-live-init',
+        changes: [{ path: 'notes.txt', beforeHash: null, content: 'before' }],
+      });
+      await repo.applyPlan(initial);
+
+      const plan = createPlan({
+        scope,
+        baseRevision: 2,
+        operationId: 'op-live-update',
+        changes: [{
+          path: 'notes.txt',
+          beforeHash: createHash('sha256').update('before').digest('hex'),
+          content: 'after',
+        }],
+      });
+      const onCommit = vi.fn().mockResolvedValue({ applied: true });
+      const middleware = createAutomationMiddleware({ repository: repo, commitService: service, onCommit });
+      const { req, res, bodyData } = createMockReqRes({
+        method: 'POST', url: '/api/automation/commit', body: plan,
+      });
+      const ended = new Promise<void>((resolve) => {
+        const end = res.end;
+        res.end = function (chunk?: string) { end.call(this, chunk); resolve(); };
+      });
+
+      middleware(req, res, () => {});
+      req.emit('data', Buffer.from(bodyData));
+      req.emit('end');
+      await ended;
+
+      expect(res.statusCode).toBe(200);
+      expect(onCommit).toHaveBeenCalledOnce();
+      expect(onCommit.mock.calls[0][0]).toMatchObject({
+        plan: { scope, baseRevision: 2 },
+        receipt: { operationId: 'op-live-update', revision: 3, changedFiles: ['notes.txt'] },
+      });
+    });
+
+    it('preserves UTF-8 characters split across request chunks during plan validation', async () => {
+      const middleware = createAutomationMiddleware({ repository: repo, commitService: service });
+      const scope = { projectId: 'test-http-utf8', branchId: 'main' };
+      const initial = createPlan({
+        scope,
+        baseRevision: 1,
+        operationId: 'op-http-utf8-init',
+        changes: [{ path: 'notes.txt', beforeHash: null, content: 'old' }],
+      });
+      await repo.applyPlan(initial);
+
+      const nextContent = 'Привіт, Україно 🌻';
+      const plan = createPlan({
+        scope,
+        baseRevision: 2,
+        operationId: 'op-http-utf8-validation',
+        changes: [{
+          path: 'notes.txt',
+          beforeHash: createHash('sha256').update('old').digest('hex'),
+          content: nextContent,
+        }],
+      });
+      const { req, res, bodyData } = createMockReqRes({
+        method: 'POST',
+        url: '/api/automation/plan',
+        body: plan,
+      });
+      const endPromise = new Promise<void>((resolve) => {
+        const originalEnd = res.end;
+        res.end = function (chunk?: string) {
+          originalEnd.call(this, chunk);
+          resolve();
+        };
+      });
+
+      const body = Buffer.from(bodyData);
+      const splitAt = body.indexOf(Buffer.from('Привіт')) + 1;
+      expect(splitAt).toBeGreaterThan(0);
+      middleware(req, res, () => {});
+      req.emit('data', body.subarray(0, splitAt));
+      req.emit('data', body.subarray(splitAt));
+      req.emit('end');
+      await endPromise;
+
+      expect(res.statusCode).toBe(200);
+      const result = JSON.parse(res.writtenData.join(''));
+      expect(result.ok).toBe(true);
+      expect(result.data.issues).not.toContainEqual(expect.objectContaining({ code: 'PLAN_HASH_MISMATCH' }));
+    });
+
     it('serves snapshot, validates plan, and commits with CAS via HTTP', async () => {
       const middleware = createAutomationMiddleware({ repository: repo, commitService: service });
 

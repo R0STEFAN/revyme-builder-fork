@@ -414,7 +414,7 @@ export default defineConfig(({ mode }) => {
     tailwindcss(),
     debugTracePlugin(),
     dashboardRedirectPlugin(cloudMode),
-    ...(cloudMode ? [] : [selfHostApiPlugin()]),
+    ...(cloudMode ? [] : [selfHostApiPlugin({ autoStartMcpHttp: true })]),
   ],
   // In cloud mode assets must be served under /builder/ so Next.js rewrite proxy can forward them.
   // Standalone mode uses root path (no proxy).

@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { z } from 'zod';
 import { defaultRegistry } from '@revyme/automation-core';
 import type { Scope } from '@revyme/automation-core';
 import { loadConfig, initProjectConfig, findProjectRoot } from './config';
@@ -53,6 +54,44 @@ function parseCliTokens(args: string[]): { flags: Record<string, any>; positiona
   }
 
   return { flags, positionals };
+}
+
+function coerceInputToSchema(input: Record<string, unknown>, schema: z.ZodType): Record<string, unknown> {
+  let properties: Record<string, any>;
+  try {
+    const jsonSchema = z.toJSONSchema(schema) as { properties?: Record<string, any> };
+    properties = jsonSchema.properties ?? {};
+  } catch {
+    return input;
+  }
+
+  return Object.fromEntries(Object.entries(input).map(([key, value]) => {
+    if (typeof value !== 'string') return [key, value];
+    const property = properties[key];
+    const types = new Set<string>([
+      ...(typeof property?.type === 'string' ? [property.type] : Array.isArray(property?.type) ? property.type : []),
+      ...(property?.anyOf ?? []).map((option: any) => option?.type).filter((type: unknown): type is string => typeof type === 'string'),
+      ...(property?.oneOf ?? []).map((option: any) => option?.type).filter((type: unknown): type is string => typeof type === 'string'),
+    ]);
+
+    if (types.has('boolean')) {
+      if (value === 'true') return [key, true];
+      if (value === 'false') return [key, false];
+    }
+    if (types.has('number') || types.has('integer')) {
+      const number = Number(value);
+      if (value.trim() !== '' && Number.isFinite(number)) return [key, number];
+    }
+    if (types.has('object') || types.has('array')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (types.has(Array.isArray(parsed) ? 'array' : 'object')) return [key, parsed];
+      } catch {
+        // Keep ordinary string values intact; schema validation will explain the mismatch.
+      }
+    }
+    return [key, value];
+  }));
 }
 
 export interface CliOptions {
@@ -282,6 +321,8 @@ EXAMPLES:
     );
     return 1;
   }
+
+  inputData = coerceInputToSchema(inputData, op.inputSchema);
 
   if (op.category !== 'meta' && !config.projectId) {
     printErr(

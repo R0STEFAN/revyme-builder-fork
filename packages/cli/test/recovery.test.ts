@@ -135,4 +135,22 @@ describe('T05: Recovery, Dry-Run & CAS Enforcement', () => {
     expect(res.receipt.operationId).toBe('op-valid-1');
     expect(res.receipt.planHash).toBe(validPlan.planHash);
   });
+
+  it('reports both hashes when the commit service rejects a corrupted plan hash', async () => {
+    const scope = { projectId: 'hash-diagnostic-proj', branchId: 'main' };
+    const snapshot: Snapshot = { scope, revision: 1, files: new Map(), config: {} };
+    const plan = createPlan({
+      scope,
+      baseRevision: 1,
+      operationId: 'op-hash-diagnostic',
+      changes: [{ path: 'app/page.tsx', beforeHash: null, content: 'export default function Page() { return <div />; }' }],
+    });
+    plan.planHash = 'invalid-hash';
+
+    const result = await commitService(snapshot).commit(plan);
+
+    expect(result.error?.code).toBe('PLAN_HASH_MISMATCH');
+    expect(result.error?.message).toContain('received invalid-hash');
+    expect(result.error?.message).toContain('calculated ');
+  });
 });

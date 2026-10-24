@@ -50,7 +50,7 @@ interface DispatchResult {
   passedThrough: boolean;
 }
 
-function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
+function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>, serverOverrides: Record<string, unknown> = {}) {
   const middlewares: Array<(req: any, res: any, next: (err?: any) => void) => Promise<void> | void> = [];
   const mockServer = {
     middlewares: {
@@ -58,6 +58,7 @@ function createDispatcher(plugin: ReturnType<typeof selfHostApiPlugin>) {
         middlewares.push(fn);
       },
     },
+    ...serverOverrides,
   };
   (plugin as any).configureServer(mockServer);
 
@@ -152,6 +153,92 @@ describe('selfHostApiPlugin - Local Server REST API', () => {
     mockManager = createMockManager();
     const plugin = selfHostApiPlugin({ manager: mockManager, autoStartMcpHttp: false });
     dispatch = createDispatcher(plugin);
+  });
+
+  it('rebuilds the automation middleware from the current SSR module for each request', async () => {
+    let generation = 0;
+    const createAutomationMiddleware = vi.fn(() => {
+      const currentGeneration = ++generation;
+      return (_req: any, res: any, _next: (err?: any) => void) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ generation: currentGeneration }));
+      };
+    });
+    const ssrLoadModule = vi.fn(async () => ({ createAutomationMiddleware }));
+    const plugin = selfHostApiPlugin({ manager: mockManager, autoStartMcpHttp: false });
+    const dispatchWithSsr = createDispatcher(plugin, { ssrLoadModule });
+
+    const first = await dispatchWithSsr({ method: 'POST', url: '/api/automation/v2' });
+    const second = await dispatchWithSsr({ method: 'POST', url: '/api/automation/v2' });
+
+    expect(first.body).toEqual({ generation: 1 });
+    expect(second.body).toEqual({ generation: 2 });
+    expect(ssrLoadModule).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes committed automation revisions to the matching live Builder project', async () => {
+    const sendToEditors = vi.fn().mockResolvedValue([
+      { ok: true, result: { applied: false, reason: 'LOCAL_CHANGES_PENDING', saveStatus: 'error' } },
+      { ok: true, result: { applied: true, revision: 6 } },
+    ]);
+    const bridge = {
+      middleware: () => (_req: any, _res: any, next: () => void) => next(),
+      sendToEditors,
+    };
+    let middlewareOptions: any;
+    const createAutomationMiddleware = vi.fn((options: any) => {
+      middlewareOptions = options;
+      return (_req: any, res: any) => {
+        res.statusCode = 200;
+        res.end('{}');
+      };
+    });
+    const plugin = selfHostApiPlugin({ bridge: bridge as any, manager: mockManager, autoStartMcpHttp: false });
+    const dispatchWithSsr = createDispatcher(plugin, {
+      ssrLoadModule: vi.fn(async () => ({ createAutomationMiddleware })),
+    });
+
+    await dispatchWithSsr({ method: 'POST', url: '/api/automation/commit', body: {} });
+    const editorSync = await middlewareOptions.onCommit({
+      plan: { scope: { projectId: 'proj-live', branchId: 'main' }, baseRevision: 5 },
+      receipt: { revision: 6, changedFiles: ['components/Card.tsx'] },
+    });
+
+    expect(sendToEditors).toHaveBeenCalledWith('projectSnapshotChanged', {
+      projectId: 'proj-live',
+      branchId: 'main',
+      baseRevision: 5,
+      revision: 6,
+      changedFiles: ['components/Card.tsx'],
+    }, 2500);
+    expect(editorSync).toEqual({
+      applied: true,
+      status: 'partial',
+      clientCount: 2,
+      synchronizedClients: 1,
+      results: [
+        { ok: true, result: { applied: false, reason: 'LOCAL_CHANGES_PENDING', saveStatus: 'error' } },
+        { ok: true, result: { applied: true, revision: 6 } },
+      ],
+    });
+  });
+
+  it('starts and stops the local MCP HTTP bridge when explicitly enabled', () => {
+    const bridge = {
+      middleware: () => vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+      startHttpServer: vi.fn(() => ({} as any)),
+      stopHttpServer: vi.fn(async () => {}),
+    };
+    const plugin = selfHostApiPlugin({ bridge: bridge as any, mcpPort: 0, autoStartMcpHttp: true });
+    const httpServer = new EventEmitter();
+    const middlewares = { use: vi.fn() };
+
+    (plugin as any).configureServer({ middlewares, httpServer });
+    expect(bridge.startHttpServer).toHaveBeenCalledWith(0);
+
+    httpServer.emit('close');
+    expect(bridge.stopHttpServer).toHaveBeenCalledOnce();
   });
 
   describe('GET /api/local-server/:projectId/status', () => {

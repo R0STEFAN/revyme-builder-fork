@@ -249,7 +249,7 @@ export const tokensSetOperation: Operation<
   environment: 'headless',
   ownerTask: 'T08',
   inputSchema: z.object({
-    name: z.string().min(1),
+    name: z.string().regex(/^(--)?[A-Za-z_][A-Za-z0-9_-]*$/, 'Token name must be a valid CSS custom-property identifier'),
     value: z.string().optional(),
     darkValue: z.string().optional(),
     category: z
@@ -343,7 +343,7 @@ export const tokensRenameOperation: Operation<
   ownerTask: 'T08',
   inputSchema: z.object({
     oldName: z.string().min(1),
-    newName: z.string().min(1),
+    newName: z.string().regex(/^(--)?[A-Za-z_][A-Za-z0-9_-]*$/, 'Token name must be a valid CSS custom-property identifier'),
     updateReferences: z.boolean().optional().default(true),
     targetFile: z.string().optional().default('app/globals.css'),
   }),

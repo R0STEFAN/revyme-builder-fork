@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Snapshot, FileChange } from '../../src/contracts';
-import { createSnapshot, createOperationContext } from '../../src/session';
+import { createSnapshot, createOperationContext, prepareOperation } from '../../src/session';
 import { defaultRegistry } from '../../src/registry';
 import {
   codeComponentsCreateOperation,
@@ -189,6 +189,36 @@ export default withResponsiveProps(InteractiveWidget);
       expect(result.changes[0].path).toBe('components/InteractiveWidget.tsx');
 
       expect(projectFS.readFile('components/InteractiveWidget.tsx')).toContain('InteractiveWidget');
+    });
+
+    it('creates a component with a null beforeHash when stale ProjectFS state contains that path', async () => {
+      projectFS.writeFile('components/InteractiveWidget.tsx', 'stale local component');
+
+      const result = await codeComponentsCreateOperation.execute(
+        createMockSnapshot({}),
+        { name: 'InteractiveWidget', code: VALID_CODE_COMPONENT, defaultWidth: 450, defaultHeight: 320 },
+        context,
+      );
+
+      expect(result.changes).toEqual([
+        expect.objectContaining({ path: 'components/InteractiveWidget.tsx', beforeHash: null }),
+      ]);
+    });
+
+    it('preserves the original snapshot while preparing a new component plan', async () => {
+      const snapshot = createMockSnapshot({});
+      const prepared = await prepareOperation(
+        snapshot,
+        'codeComponents.create',
+        { name: 'InteractiveWidget', code: VALID_CODE_COMPONENT, defaultWidth: 450, defaultHeight: 320 },
+        context,
+      );
+
+      expect(prepared.ok).toBe(true);
+      expect((prepared.data as { changes: FileChange[] }).changes).toEqual([
+        expect.objectContaining({ path: 'components/InteractiveWidget.tsx', beforeHash: null }),
+      ]);
+      expect(snapshot.files.has('components/InteractiveWidget.tsx')).toBe(false);
     });
 
     it('reads and retrieves code component by name with parsed controls', async () => {

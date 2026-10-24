@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalBackend } from './local-backend';
 import { PROJECT_FORMAT } from './types';
+import { getBaseRevision } from './save-revision';
 
 class MemStorage implements Storage {
   private store = new Map<string, string>();
@@ -115,6 +116,24 @@ describe('LocalBackend', () => {
     vi.stubGlobal('fetch', put);
     await expect(backend.saveProject('local', { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest' } })).resolves.toBeUndefined();
     expect(put).toHaveBeenCalledOnce();
+  });
+
+  it('prefers a newer server revision over stale local recovery and preserves that recovery copy', async () => {
+    const stale = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'stale builder snapshot' } };
+    const latest = { format: PROJECT_FORMAT, files: { 'app/page.tsx': 'latest MCP snapshot' } };
+    const staleRecovery = {
+      ...stale,
+      __revymeUnsynced: true,
+      __revymePersistenceRevision: 1_800_000_000_000,
+      __revymeBaseRevision: 239,
+    };
+    const serverData = { ...latest, __revymePersistenceRevision: 1_700_000_000_000 };
+    localStorage.setItem('revyme-project-local', JSON.stringify(staleRecovery));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: serverData, revision: 274 }), { status: 200 })));
+
+    expect(await backend.loadProject('local')).toEqual(latest);
+    expect(getBaseRevision()).toBe(274);
+    expect(JSON.parse(localStorage.getItem('revyme-project-recovery-local-239')!)).toEqual(staleRecovery);
   });
 
   it('loads an acknowledged newer server snapshot over an older unsynced local copy', async () => {

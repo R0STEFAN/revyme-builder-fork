@@ -520,6 +520,55 @@ export default function Page() {
   // Group 6: Design Audit & Accessibility Linter
   // ───────────────────────────────────────────────────────────────────────────
   describe('6. Design Audit & Accessibility Linter', () => {
+    it('uses fresh rendered measurements supplied by the MCP browser adapter', async () => {
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOCK_PAGE_CODE }, 7);
+      const auditNodes = [
+        {
+          id: 'root', parentId: null, children: ['cta-btn'], text: '',
+          rect: { x: 0, y: 0, width: 1200, height: 900 }, computed: { display: 'block' },
+        },
+        {
+          id: 'cta-btn', parentId: 'root', children: [], text: 'Get Started',
+          rect: { x: 1056, y: 16, width: 120, height: 48 },
+          computed: { display: 'block', color: '#ffffff', backgroundColor: '#2563eb', fontSize: '16px' },
+        },
+      ];
+      const epoch = {
+        renderSeq: 4,
+        projectVersionAtFill: 3,
+        projectVersionNow: 3,
+        stale: false,
+        withRect: 2,
+        total: 2,
+        unmeasured: [],
+        unmeasuredTotal: 0,
+      };
+      const getSnapshot = vi.fn().mockResolvedValue({
+        status: 'ready',
+        reason: 'Measured from the active Builder canvas.',
+        nodes: auditNodes,
+        epoch,
+      });
+      const adapterContext = {
+        ...context,
+        adapters: { auditSnapshotService: { getSnapshot } },
+      };
+
+      const result = await observeAuditOperation.execute(snapshot, { viewport: 'desktop' }, adapterContext as any);
+
+      expect(getSnapshot).toHaveBeenCalledWith({
+        projectId: 'test-project',
+        branchId: 'main',
+        filePath: 'app/page.client.tsx',
+        revision: 7,
+        viewport: 'desktop',
+      });
+      expect(result.status).toBe('ready');
+      expect(result.checked).toBe(2);
+      expect(result.stats.touchTargetsChecked).toBe(1);
+      expect(result.passed).toBe(true);
+    });
+
     it('flags small touch target on interactive elements smaller than 44x44px', async () => {
       bridge.setNode('tiny-btn', '', { x: 50, y: 50, width: 28, height: 28 }, { display: 'inline-block' });
       const tinyBtnCode = `'use client';
@@ -547,6 +596,19 @@ export default function Page() {
       expect(result.passed).toBe(true);
       expect(result.errors).toBe(0);
       expect(result.summary).toBe('No violations detected.');
+    });
+
+    it('audits built-in viewports omitted from a page canvas configuration', async () => {
+      const desktopOnly = `'use client';
+/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 } ] } */
+export default function Page() { return <div data-id="root">Page</div>; }`;
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': desktopOnly });
+
+      const result = await observeAuditOperation.execute(snapshot, { viewport: 'mobile' }, context);
+
+      expect(result.viewportWidth).toBe(375);
+      expect(result.status).not.toBe('unavailable');
+      expect(result.summary).not.toContain('Unknown viewport');
     });
 
     it('detects sibling overlap exceeding tolerance', async () => {
@@ -661,6 +723,93 @@ export default function Page() {
       expect(result.missing.length).toBeGreaterThan(0);
       expect(result.states.find((s) => s.label === 'hover')?.state).toBe('absent');
     });
+
+    it('recognizes a two-state component hover wired through interaction handlers', async () => {
+      const connectedVariantCode = `'use client';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+const variants = { default: { scale: 1 }, hover: { scale: 1.04 } };
+export default function Button() {
+  const [variant, setVariant] = useState('default');
+  return <motion.button data-id="button-root" variants={variants} animate={variant}
+    onHoverStart={() => setVariant('hover')} onHoverEnd={() => setVariant('default')}>CTA</motion.button>;
+}`;
+      const snapshot = createMockSnapshot({ 'components/PrimaryButton.tsx': connectedVariantCode });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          targetFile: 'components/PrimaryButton.tsx',
+          request: 'Button hover interaction',
+          nodeId: 'button-root',
+          effectType: 'hover',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(true);
+      expect(result.motionAnalysis?.['button-root']?.hasHover).toBe(true);
+      expect(result.checks.find((check) => check.label === 'hover-animation')?.state).toBe('wired');
+    });
+
+    it('recognizes custom motion.create wrappers as valid motion elements', async () => {
+      const wrappedLinkCode = `'use client';
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+const MotionLink = motion.create(React.forwardRef(function MotionLinkBase(props: any, ref: any) {
+  return <Link ref={ref} {...props} />;
+}));
+const variants = { default: { backgroundColor: '#000' }, hover: { backgroundColor: '#fff' } };
+export default function Button() {
+  const [variant, setVariant] = useState('default');
+  return <MotionLink data-id="button-root" variants={variants} animate={variant}
+    onHoverStart={() => setVariant('hover')} onHoverEnd={() => setVariant('default')}>CTA</MotionLink>;
+}`;
+      const snapshot = createMockSnapshot({ 'components/PrimaryButton.tsx': wrappedLinkCode });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          targetFile: 'components/PrimaryButton.tsx',
+          request: 'Button hover interaction',
+          nodeId: 'button-root',
+          effectType: 'hover',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(true);
+      expect(result.motionAnalysis?.['button-root']?.isMotionElement).toBe(true);
+      expect(result.motionAnalysis?.['button-root']?.hasHover).toBe(true);
+      expect(result.missing).toEqual([]);
+    });
+
+    it('recognizes a component hover state propagated to nested variants', async () => {
+      const nestedVariantCode = `'use client';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+const mediaVariants = { default: { filter: 'grayscale(100%)' }, hover: { filter: 'grayscale(0%)' } };
+export default function Card() {
+  const [variant, setVariant] = useState('default');
+  return <motion.article data-id="project-card" animate={['default', variant]}
+    onHoverStart={() => setVariant('hover')} onHoverEnd={() => setVariant('default')}>
+    <motion.div data-id="project-media" variants={mediaVariants} />
+  </motion.article>;
+}`;
+      const snapshot = createMockSnapshot({ 'components/ProjectCard.tsx': nestedVariantCode });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          targetFile: 'components/ProjectCard.tsx',
+          request: 'Project card hover interaction',
+          nodeId: 'project-card',
+          effectType: 'hover',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(true);
+      expect(result.motionAnalysis?.['project-card']?.hasHover).toBe(true);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -679,6 +828,34 @@ export default function Page() {
       expect(result.brokenImports).toHaveLength(0);
     });
 
+    it('does not apply canvas Oracle rules to generated Next wrappers or plugin source', async () => {
+      const snapshot = createMockSnapshot({
+        'app/globals.css': 'body { margin: 0; }',
+        'app/page.client.tsx': MOCK_PAGE_CODE,
+        'app/providers.tsx': 'export function Providers({ children }) { return children; }',
+        'app/page.tsx': `import PageClient from './page.client';
+export const metadata = { title: 'IMPCT.DIGITAL' };
+export default function Page() { return <PageClient />; }`,
+        'app/layout.tsx': `import './globals.css';
+import { Providers } from './providers';
+export default function Layout({ children }) { return <html><body><Providers>{children}</Providers></body></html>; }`,
+        'plugins/DirectusSync.tsx': `const entries = [1, 2];
+export default function DirectusSync() { return <div>{entries.map((entry) => <span>{entry}</span>)}</div>; }`,
+      });
+
+      const result = await diagnosticsProjectCheckOperation.execute(snapshot, {}, context);
+
+      const nonCanvasFiles = new Set([
+        'app/page.tsx',
+        'app/layout.tsx',
+        'app/providers.tsx',
+        'plugins/DirectusSync.tsx',
+      ]);
+      expect(result.oracleViolations.filter(({ file }) => nonCanvasFiles.has(file))).toEqual([]);
+      expect(result.oracleViolations.some(({ file }) => file === 'app/page.client.tsx')).toBe(true);
+      expect(result.totalFilesChecked).toBe(5);
+    });
+
     it('detects syntax errors in project files', async () => {
       const brokenSyntaxCode = `'use client';
 export default function Broken() {
@@ -692,6 +869,27 @@ export default function Broken() {
       expect(result.clean).toBe(false);
       expect(result.blockingViolationsCount).toBeGreaterThan(0);
       expect(result.oracleViolations.some((v) => v.code === 'SYNTAX_ERROR')).toBe(true);
+    });
+
+    it('audits @controls code components as opaque code instead of editable design components', async () => {
+      const codeComponent = `'use client';
+/** @label "Looping Items" */
+/** @defaultWidth 600 */
+/** @defaultHeight 160 */
+/** @controls { "speed": { "type": "number", "label": "Speed", "default": 60 } } */
+import { withResponsiveProps } from '@revyme/runtime';
+function LoopingItems({ speed = 60, ...props }) {
+  return <div style={{ position: 'relative', ...props.style }}>{[1, 2].map((copy) => <span>{copy}</span>)}</div>;
+}
+export default withResponsiveProps(LoopingItems);`;
+      const result = await diagnosticsProjectCheckOperation.execute(
+        createMockSnapshot({ 'components/LoopingItems.tsx': codeComponent }),
+        { targetFile: 'components/LoopingItems.tsx' },
+        context,
+      );
+
+      expect(result.oracleViolations).toEqual([]);
+      expect(result.clean).toBe(true);
     });
 
     it('detects broken component imports', async () => {

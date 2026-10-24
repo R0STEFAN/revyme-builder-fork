@@ -87,6 +87,14 @@ describe('@canvas breakpoint mismatch — styled widths need a viewport tile', (
     expect(bm(code)).toBe(0);
   });
 
+  it('accepts an artboard narrower than each max-width breakpoint as a preview tile', () => {
+    const code = PAGE(GOOD).replace(
+      '</div>',
+      `<style data-id="responsive-style" style={{ position: 'absolute' }}>{\`@media (max-width: 1199px) { [data-id="x"] { padding: 0 !important; } } @media (max-width: 599px) { [data-id="x"] { padding: 0 !important; } }\`}</style></div>`,
+    );
+    expect(bm(code)).toBe(0);
+  });
+
   it('a page with no responsive code passes with any viewport set', () => {
     expect(bm(PAGE(DESKTOP_ONLY))).toBe(0);
   });

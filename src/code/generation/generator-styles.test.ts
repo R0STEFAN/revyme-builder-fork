@@ -296,6 +296,27 @@ export default withResponsiveProps(LeCeJo);
   });
 });
 
+describe('updateVariantStyleInCode — new transform variant preserves all declared states', () => {
+  it('seeds a return entry for every non-default configured variant', () => {
+    const component = `'use client';
+import { motion } from 'framer-motion';
+const variantConfig = [{ name: 'default', isPrimary: true }, { name: 'hover' }, { name: 'asymmetric' }];
+function ProjectCard({ initialVariant = 'default' }) {
+  return <motion.img data-id="project-image" style={{ filter: 'grayscale(100%)' }} />;
+}`;
+
+    const out = updateVariantStyleInCode(component, 'project-image', 'hover', {
+      filter: 'grayscale(0%)',
+      scale: '1.05',
+    });
+    const variants = out.match(/const projectImageVariants = \{([\s\S]*?)\n\};/)?.[1] ?? '';
+    expect(variants).toContain("'hover':");
+    expect(variants).toContain("'asymmetric':");
+    expect(variants.match(/asymmetric/g)).toHaveLength(1);
+    expect(variants).toMatch(/'asymmetric':\s*\{[^}]*scale:\s*1/);
+  });
+});
+
 
 describe('MotionLink variant style + comma values (the per-variant rgba crash)', () => {
   // The "Start free trial" button is `<MotionLink>` (= motion.create(Link)). It

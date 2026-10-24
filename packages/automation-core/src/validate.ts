@@ -21,12 +21,15 @@ const TRANSPARENT_INLINE_TAGS = new Set([
   'sup',
   'br',
   'wbr',
+  // Responsive CSS is editor-owned metadata, not a selectable canvas node.
+  'style',
 ]);
 
 export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; issues: Issue[] } {
   const issues: Issue[] = [...plan.issues];
-  if (calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan) !== plan.planHash) {
-    issues.push({ code: 'PLAN_HASH_MISMATCH', path: ['planHash'], message: 'Plan bytes do not match planHash' });
+  const calculatedPlanHash = calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan);
+  if (calculatedPlanHash !== plan.planHash) {
+    issues.push({ code: 'PLAN_HASH_MISMATCH', path: ['planHash'], message: `Plan bytes do not match planHash (received ${plan.planHash}, calculated ${calculatedPlanHash})` });
   }
   if (plan.scope.projectId !== snapshot.scope.projectId || plan.scope.branchId !== snapshot.scope.branchId) {
     issues.push({ code: 'SCOPE_MISMATCH', path: ['scope'], message: 'Plan scope does not match snapshot' });
@@ -209,8 +212,17 @@ function validateSourceCode(
 
   const seenIds = new Set<string>();
 
-  function walk(node: any) {
+  function walk(node: any, insideMotionLinkScaffold = false) {
     if (!node || typeof node !== 'object') return;
+    // MotionLink's module-scope forwardRef adapter contains a private <Link>
+    // and fallback <div>. These are implementation plumbing, not authored
+    // canvas nodes; keep this lightweight pass aligned with checkFile's
+    // needsDataId exemption so generated components pass both validation layers.
+    const inMotionLinkScaffold = insideMotionLinkScaffold || (
+      node.type === 'VariableDeclarator' &&
+      node.id?.type === 'Identifier' &&
+      node.id.name === 'MotionLink'
+    );
 
     // Check relative and alias imports
     if (node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
@@ -260,7 +272,7 @@ function validateSourceCode(
         }
       }
 
-      if (!exemptFromDataId && !dataId && !isInline && tagName) {
+      if (!exemptFromDataId && !inMotionLinkScaffold && !dataId && !isInline && tagName) {
         // UpperCase tags can be custom component instances or icons;
         // Standard structural tags (div, section, main, header, footer, button, etc.) require data-id
         const isStandardTag = /^[a-z]/.test(tagName);
@@ -292,9 +304,9 @@ function validateSourceCode(
       if (key !== 'loc') {
         const child = node[key];
         if (Array.isArray(child)) {
-          for (const c of child) walk(c);
+          for (const c of child) walk(c, inMotionLinkScaffold);
         } else if (child && typeof child === 'object') {
-          walk(child);
+          walk(child, inMotionLinkScaffold);
         }
       }
     }

@@ -2,7 +2,7 @@
 // plus per-scope (viewport/variant) value overrides on those props.
 // All code moved VERBATIM from generator-motion.ts (Phase 7.4 god-file split).
 import { trace } from '@/shared/debug-trace';
-import { findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine } from './generator-utils';
+import { findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport } from './generator-utils';
 import { convertToMotionLinkInCode } from './generator-attrs';
 import { scopeMotionValueResolved, type ResolvedScope } from '@/code/animations/animation-scope';
 import { scopeTest, testToScope, ensureMediaQueryHook, ensureMediaGate, detectVariantVar, type SerScope } from './scoped-expr';
@@ -10,6 +10,14 @@ import { wrapInstanceWithMotionConfig } from './generator-motion-transition';
 import { parseObjLiteral } from './generator-motion-loop';
 import { type FxScopeOverride } from './generator-motion-scroll-fx';
 import { ensureEnclosingMapIndexParamInCode } from './map-gen';
+
+function ensureMotionImport(code: string): string {
+  if (/from\s+['"]framer-motion['"]/.test(code)) {
+    return ensureNamedImport(code, 'framer-motion', ['motion']);
+  }
+  const importLine = "import { motion } from 'framer-motion';";
+  return insertAfterLastImportLine(code, importLine) ?? `${importLine}\n${code}`;
+}
 
 // ─── Motion Props Manipulation ────────────────────────────────────────
 
@@ -124,10 +132,7 @@ export function updateMotionPropInCode(
       }
     }
 
-    if (!result.includes("from 'framer-motion'") && !result.includes('from "framer-motion"')) {
-      const importLine = "import { motion } from 'framer-motion';";
-      result = insertAfterLastImportLine(result, importLine) ?? (importLine + '\n' + result);
-    }
+    result = ensureMotionImport(result);
     trace.action('generator:converted-to-motion', { nodeId, from: tagName, to: motionTag });
   }
 
@@ -201,6 +206,59 @@ export function updateMotionPropInCode(
   }
 
   return result;
+}
+
+/** Bind a component element to the live variant state using the dialect's
+ *  sparse-list form. This is intentionally separate from object-target
+ *  motion props: `animate={{ opacity: 1 }}` is not the same as
+ *  `animate={['default', variant]}` and the latter must remain an expression. */
+export function updateMotionVariantStateInCode(
+  code: string,
+  nodeId: string,
+  state: 'current' | 'initial',
+): string {
+  trace.fn('generator.updateMotionVariantStateInCode', { nodeId, state });
+  let result = code;
+  if (state === 'current') {
+    result = updateMotionExpressionInCode(result, nodeId, 'animate', "['default', variant]");
+  }
+  result = updateMotionExpressionInCode(result, nodeId, 'initial', "['default', initialVariant]");
+  return result;
+}
+
+function updateMotionExpressionInCode(code: string, nodeId: string, propName: string, expression: string): string {
+  let idIdx = findJSXDataIdIndex(code, nodeId);
+  if (idIdx === -1) return code;
+  let tagStart = code.lastIndexOf('<', idIdx);
+  let tagEnd = findTagClose(code, idIdx);
+  if (tagStart === -1 || tagEnd === -1) return code;
+
+  let tagName = code.slice(tagStart + 1).match(/^([\w.]+)/)?.[1];
+  if (!tagName) return code;
+  if (!tagName.startsWith('motion.')) {
+    const motionTag = `motion.${tagName.toLowerCase()}`;
+    const isSelfClosing = code[tagEnd - 1] === '/';
+    code = code.slice(0, tagStart + 1) + motionTag + code.slice(tagStart + 1 + tagName.length);
+    if (!isSelfClosing) {
+      const closeIdx = findMatchingCloseTagIndex(code, tagName, tagStart + motionTag.length + 1);
+      if (closeIdx !== -1) {
+        const closeTag = `</${tagName}>`;
+        code = code.slice(0, closeIdx) + `</${motionTag}>` + code.slice(closeIdx + closeTag.length);
+      }
+    }
+    code = ensureMotionImport(code);
+    idIdx = findJSXDataIdIndex(code, nodeId);
+    tagStart = code.lastIndexOf('<', idIdx);
+    tagEnd = findTagClose(code, idIdx);
+    if (idIdx === -1 || tagStart === -1 || tagEnd === -1) return code;
+  }
+
+  const existing = findMotionPropExpr(code, nodeId, propName);
+  if (existing) {
+    return code.slice(0, existing.start) + expression + code.slice(existing.end);
+  }
+  const insertPos = tagEnd - (code[tagEnd - 1] === '/' ? 1 : 0);
+  return code.slice(0, insertPos) + `\n          ${propName}={${expression}}\n          ` + code.slice(insertPos);
 }
 
 // ─── Per-scope wrapping for motion props (whileHover, etc.) ──────────────────

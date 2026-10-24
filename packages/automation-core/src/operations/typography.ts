@@ -118,6 +118,46 @@ export interface TypoPreset {
   };
 }
 
+function upsertTypographyResponsiveBlock(code: string, nodeId: string, rules: string): string {
+  const styleId = `typography-responsive-${nodeId}`;
+  const marker = `data-id="${styleId}"`;
+  const markerIndex = code.indexOf(marker);
+
+  if (markerIndex !== -1) {
+    const styleStart = code.lastIndexOf('<style', markerIndex);
+    const openingEnd = code.indexOf('>', markerIndex);
+    const expressionStart = openingEnd === -1 ? -1 : code.indexOf('{`', openingEnd);
+    const expressionEnd = expressionStart === -1 ? -1 : code.indexOf('`}', expressionStart + 2);
+    if (styleStart !== -1 && expressionStart !== -1 && expressionEnd !== -1) {
+      const opening = code.slice(styleStart, openingEnd + 1);
+      if (!/\bstyle=/.test(opening)) {
+        code = code.slice(0, openingEnd) + ` style={{ position: 'absolute' }}` + code.slice(openingEnd);
+      }
+      const updatedOpeningEnd = code.indexOf('>', styleStart);
+      const updatedExpressionStart = code.indexOf('{`', updatedOpeningEnd);
+      const updatedExpressionEnd = code.indexOf('`}', updatedExpressionStart + 2);
+      if (updatedExpressionStart !== -1 && updatedExpressionEnd !== -1) {
+        return code.slice(0, updatedExpressionStart + 2) + `\n${rules}\n` + code.slice(updatedExpressionEnd);
+      }
+    }
+  }
+
+  // Migrate the legacy unlabelled style node if present, preserving its rules.
+  const legacyStyleStart = code.indexOf('<style>{`');
+  if (legacyStyleStart !== -1) {
+    const openingEnd = code.indexOf('>', legacyStyleStart);
+    const expressionEnd = openingEnd === -1 ? -1 : code.indexOf('`}</style>', openingEnd);
+    if (openingEnd !== -1 && expressionEnd !== -1) {
+      const existingRules = code.slice(openingEnd + 1, expressionEnd);
+      const migrated = `<style data-id="${styleId}" data-name="Typography Responsive Styles" style={{ position: 'absolute' }}>{\`${existingRules}\n${rules}\n\`}</style>`;
+      return code.slice(0, legacyStyleStart) + migrated + code.slice(expressionEnd + '`}</style>'.length);
+    }
+  }
+
+  const responsiveStyle = `<style data-id="${styleId}" data-name="Typography Responsive Styles" style={{ position: 'absolute' }}>{\`\n${rules}\n\`}</style>\n`;
+  return code.replace(/(<\/div>|<\/section>|<\/main>)([\s\S]*?$)/, `${responsiveStyle}$1$2`);
+}
+
 export function groupTypographyPresets(tokens: Array<{ name: string; value: string; category: string }>): TypoPreset[] {
   const groups = new Map<string, Record<string, string>>();
 
@@ -134,12 +174,11 @@ export function groupTypographyPresets(tokens: Array<{ name: string; value: stri
         break;
       }
     }
+    if (!foundSuffix) continue;
     if (!groupName) groupName = withoutPrefix;
 
     const current = groups.get(groupName) ?? {};
-    if (foundSuffix) {
-      current[foundSuffix] = token.value;
-    }
+    current[foundSuffix] = token.value;
     groups.set(groupName, current);
   }
 
@@ -416,19 +455,7 @@ export const typographyApplyOperation: Operation<
       }
 
       if (rules.length > 0) {
-        const responsiveBlock = rules.join('\n');
-        if (nextCode.includes('<style>{`')) {
-          nextCode = nextCode.replace(
-            /(<style>\{`)([\s\S]*?)(`\}<\/style>)/,
-            `$1$2\n${responsiveBlock}\n$3`,
-          );
-        } else {
-          // Add style before last closing tag
-          nextCode = nextCode.replace(
-            /(<\/div>|<\/section>|<\/main>)([\s\S]*?$)/,
-            `<style>{\`\n${responsiveBlock}\n\`}</style>\n$1$2`,
-          );
-        }
+        nextCode = upsertTypographyResponsiveBlock(nextCode, input.nodeId, rules.join('\n'));
       }
     }
 

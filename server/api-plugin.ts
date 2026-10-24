@@ -130,30 +130,54 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
 
   const setupMiddlewares = (middlewares: any, server?: any) => {
     middlewares.use(bridge.middleware());
-    let automationMiddleware: ((req: any, res: any, next: any) => void) | null = null;
     middlewares.use(async (req: any, res: any, next: any) => {
       const url = req.url || '';
       if (url.startsWith('/api/automation')) {
-        if (!automationMiddleware) {
-          try {
-            if (server && typeof server.ssrLoadModule === 'function') {
-              const apiModulePath = '/server/automation/api.ts';
-              const apiModule = await server.ssrLoadModule(apiModulePath);
-              automationMiddleware = apiModule.createAutomationMiddleware();
-            } else {
-              res.statusCode = 503;
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: false, error: 'Automation middleware requires dev server SSR runner' }));
-              return;
-            }
-          } catch (err: any) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: false, error: err?.message || String(err) }));
-            return;
+        try {
+          if (server && typeof server.ssrLoadModule === 'function') {
+            // Ask Vite's SSR runner for the current module on each request. It
+            // owns HMR invalidation; retaining a middleware closure here would
+            // keep old validators/generators alive until the whole dev server
+            // was restarted.
+            const apiModulePath = '/server/automation/api.ts';
+            const apiModule = await server.ssrLoadModule(apiModulePath);
+            const automationMiddleware = apiModule.createAutomationMiddleware({
+              onCommit: async ({ plan, receipt }: { plan: any; receipt: any }) => {
+                const results = await bridge.sendToEditors(
+                  'projectSnapshotChanged',
+                  {
+                    projectId: plan.scope.projectId,
+                    branchId: plan.scope.branchId || 'main',
+                    baseRevision: plan.baseRevision,
+                    revision: receipt.revision,
+                    changedFiles: receipt.changedFiles,
+                  },
+                  2500,
+                );
+                const synchronizedClients = results.filter((outcome) =>
+                  outcome.ok && (outcome.result?.applied === true || outcome.result?.reason === 'ALREADY_CURRENT')
+                ).length;
+                return {
+                  applied: synchronizedClients > 0,
+                  status: synchronizedClients === results.length ? 'synced' : synchronizedClients > 0 ? 'partial' : 'not_synced',
+                  clientCount: results.length,
+                  synchronizedClients,
+                  results,
+                };
+              },
+            });
+            return automationMiddleware(req, res, next);
           }
+          res.statusCode = 503;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: false, error: 'Automation middleware requires dev server SSR runner' }));
+          return;
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: false, error: err?.message || String(err) }));
+          return;
         }
-        return automationMiddleware(req, res, next);
       }
       next();
     });

@@ -16,18 +16,23 @@ export function syncCodeSnapshotToProjectFS(snapshot?: Snapshot): {
   collectChanges: () => FileChange[];
 } {
   const beforeFiles = new Map<string, string>();
-  for (const path of projectFS.listFiles()) {
-    const content = projectFS.readFile(path);
-    if (content !== null) {
-      beforeFiles.set(path, content);
-    }
-  }
   if (snapshot && snapshot.files && snapshot.files.size > 0) {
+    const snapshotPaths = new Set(snapshot.files.keys());
+    for (const path of projectFS.listFiles()) {
+      if (!snapshotPaths.has(path)) projectFS.deleteFile(path);
+    }
     for (const [path, content] of snapshot.files) {
       beforeFiles.set(path, content);
       if (projectFS.readFile(path) !== content) {
         projectFS.writeFile(path, content);
       }
+    }
+  } else if (snapshot) {
+    for (const path of projectFS.listFiles()) projectFS.deleteFile(path);
+  } else {
+    for (const path of projectFS.listFiles()) {
+      const content = projectFS.readFile(path);
+      if (content !== null) beforeFiles.set(path, content);
     }
   }
 
@@ -60,12 +65,9 @@ export function syncCodeSnapshotToProjectFS(snapshot?: Snapshot): {
 
       if (snapshot && 'set' in snapshot.files) {
         const map = snapshot.files as Map<string, string>;
-        for (const c of changes) {
-          if (c.content === null) {
-            map.delete(c.path);
-          } else {
-            map.set(c.path, c.content);
-          }
+        for (const change of changes) {
+          if (change.content === null) map.delete(change.path);
+          else map.set(change.path, change.content);
         }
       }
 

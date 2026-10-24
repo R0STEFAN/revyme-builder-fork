@@ -60,28 +60,28 @@ function checkCanvasConfig(code: string, v: OracleViolation[]): void {
     });
   }
 
-  // CANVAS_VIEWPORT_BREAKPOINT_MISMATCH — the page's RESPONSIVE code targets
-  // breakpoint widths (@media max-width rules and/or data-responsive "_bp"
-  // lists) that have NO corresponding viewport tile in @canvas. The CSS is
-  // then responsive on the live site but the canvas shows no tile to edit
-  // those widths on — the "it's responsive but I don't see the viewports"
-  // trap (live find 2026-07-29: MCP-authored pricing/about pages shipped
-  // desktop-only @canvas blocks next to 768/375 @media overrides). Every
-  // breakpoint the code styles must exist as a viewport so the user can see
-  // and edit it.
+  // CANVAS_VIEWPORT_BREAKPOINT_MISMATCH — responsive rules need a canvas tile
+  // on which that rule actually applies. A max-width media query is covered
+  // by ANY declared viewport at or below its threshold (e.g. width 810 previews
+  // max-width 1199); data-responsive `_bp` entries are exact viewport widths.
   if (vps.length > 0) {
     const vpWidths = new Set(vps.map((vp) => (typeof vp.width === 'number' ? vp.width : -1)));
-    const referenced = new Set<number>();
+    const maxWidthBreakpoints = new Set<number>();
+    const exactBreakpoints = new Set<number>();
     for (const mm of code.matchAll(/@media[^{]*max-width:\s*(\d+(?:\.\d+)?)px/g)) {
-      referenced.add(Math.round(parseFloat(mm[1])));
+      maxWidthBreakpoints.add(Math.round(parseFloat(mm[1])));
     }
     for (const bp of code.matchAll(/"_bp"\s*:\s*\[([^\]]*)\]/g)) {
       for (const n of bp[1].split(',')) {
         const w = Math.round(parseFloat(n));
-        if (Number.isFinite(w)) referenced.add(w);
+        if (Number.isFinite(w)) exactBreakpoints.add(w);
       }
     }
-    const missing = [...referenced].filter((w) => w > 0 && !vpWidths.has(w));
+    const configuredWidths = [...vpWidths].filter((w) => w > 0);
+    const missing = [
+      ...[...maxWidthBreakpoints].filter((w) => w > 0 && !configuredWidths.some((width) => width <= w)),
+      ...[...exactBreakpoints].filter((w) => w > 0 && !vpWidths.has(w)),
+    ].filter((w, i, all) => all.indexOf(w) === i);
     if (missing.length > 0) {
       v.push({
         code: 'CANVAS_VIEWPORT_BREAKPOINT_MISMATCH', tier: 2,

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Operation, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { checkFile, type FileKind } from '@/code/oracle/check-file';
+import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
@@ -120,6 +121,10 @@ function resolveRelativeImport(fromFile: string, relPath: string): string {
   return parts.join('/');
 }
 
+const isCanvasEditableSource = (filePath: string) =>
+  filePath.startsWith('components/') ||
+  (filePath.startsWith('app/') && filePath.endsWith('.client.tsx'));
+
 function detectCyclesInAdjacency(adj: Map<string, string[]>): string[][] {
   const cycles: string[][] = [];
   const visited = new Set<string>();
@@ -186,43 +191,60 @@ export const diagnosticsProjectCheckOperation: Operation<
       if (!code) continue;
       checkedCount++;
 
-      // A. Oracle Check
-      const kind: FileKind = filePath.includes('/page')
-        ? 'page'
-        : filePath.includes('/layout') || filePath.includes('/template')
-        ? 'template'
-        : filePath.includes('/components/')
-        ? 'component'
-        : 'component';
+      // Oracle rules describe Builder-editable source, not generated Next wrappers or plugins.
+      if (isCanvasEditableSource(filePath)) {
+        const kind: FileKind = filePath.includes('/page')
+          ? 'page'
+          : filePath.includes('/layout') || filePath.includes('/template')
+          ? 'template'
+          : isCodeComponentSource(code)
+          ? 'code-component'
+          : 'component';
 
-      try {
-        const violations = checkFile(code, { kind, path: filePath });
-        for (const v of violations) {
+        try {
+          const violations = checkFile(code, { kind, path: filePath });
+          for (const v of violations) {
+            oracleViolations.push({
+              file: filePath,
+              path: filePath,
+              kind,
+              code: v.code,
+              tier: v.tier,
+              line: v.line,
+              elementId: v.elementId,
+              message: v.message,
+            });
+            if (v.tier >= 3 || v.code === 'SYNTAX_ERROR' || input.strict) {
+              filesWithErrors.add(filePath);
+            }
+          }
+        } catch (err) {
           oracleViolations.push({
             file: filePath,
             path: filePath,
             kind,
-            code: v.code,
-            tier: v.tier,
-            line: v.line,
-            elementId: v.elementId,
-            message: v.message,
+            code: 'SYNTAX_ERROR',
+            tier: 3,
+            line: 1,
+            message: err instanceof Error ? err.message : String(err),
           });
-          if (v.tier >= 3 || v.code === 'SYNTAX_ERROR' || input.strict) {
-            filesWithErrors.add(filePath);
-          }
+          filesWithErrors.add(filePath);
         }
-      } catch (err) {
-        oracleViolations.push({
-          file: filePath,
-          path: filePath,
-          kind,
-          code: 'SYNTAX_ERROR',
-          tier: 3,
-          line: 1,
-          message: err instanceof Error ? err.message : String(err),
-        });
-        filesWithErrors.add(filePath);
+      } else {
+        try {
+          parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+        } catch (err) {
+          oracleViolations.push({
+            file: filePath,
+            path: filePath,
+            kind: 'source',
+            code: 'SYNTAX_ERROR',
+            tier: 3,
+            line: 1,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          filesWithErrors.add(filePath);
+        }
       }
 
       // B. AST Imports, Assets, and Links Check

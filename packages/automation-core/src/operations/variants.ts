@@ -11,7 +11,9 @@ import {
   removeVariantFromCode,
   renameVariantInCode,
 } from '@/code/variants/variant-ops';
+import { addConnectionToCode, removeConnectionFromCode } from '@/code/variants/connection-config';
 import { setVariantVisibilityInCode } from '@/code/generation/variant-visibility-gen';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 
 // 1. variants.list
 export const variantsListOperation: Operation<
@@ -47,7 +49,7 @@ export const variantsCreateOperation: Operation<
     label?: string;
     position?: { x: number; y: number };
     sourceVariant?: string;
-    interaction?: { type: 'hover' | 'pressed'; parent: string };
+    interaction?: { type: 'hover' | 'pressed'; parent: string; sourceNode?: string };
   },
   {
     changes: FileChange[];
@@ -71,6 +73,7 @@ export const variantsCreateOperation: Operation<
       .object({
         type: z.enum(['hover', 'pressed']),
         parent: z.string().min(1),
+        sourceNode: z.string().min(1).optional(),
       })
       .optional(),
   }),
@@ -80,13 +83,47 @@ export const variantsCreateOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Component file "${input.componentFile}" not found in project`);
     }
 
-    const { code: nextCode, configs } = addVariantToCode(code, {
+    if (input.interaction?.sourceNode && !parseJSXToNodes(code).has(input.interaction.sourceNode)) {
+      throw new Error(`NODE_NOT_FOUND: Variant interaction source node "${input.interaction.sourceNode}" does not exist in component`);
+    }
+
+    const { code: variantCode, configs } = addVariantToCode(code, {
       name: input.name,
       label: input.label,
       position: input.position,
       sourceVariant: input.sourceVariant,
       interaction: input.interaction,
     });
+
+    let nextCode = variantCode;
+    if (input.interaction) {
+      const { type, parent, sourceNode } = input.interaction;
+      if (!parseVariantConfig(code).some(v => v.name === parent)) {
+        throw new Error(`VARIANT_NOT_FOUND: Interaction parent variant "${parent}" does not exist on component`);
+      }
+      const sibling = parseVariantConfig(code).find(v =>
+        v.parentVariant === parent && v.interactionType && v.interactionType !== type,
+      );
+      const forwardTrigger = type === 'hover' ? 'mouseEnter' : 'clickStart';
+      const reverseTrigger = type === 'hover' ? 'mouseLeave' : 'click';
+      const add = (from: string, to: string, trigger: typeof forwardTrigger | typeof reverseTrigger) => {
+        nextCode = addConnectionToCode(nextCode, from, to, trigger, undefined, sourceNode).code;
+      };
+
+      if (!sibling) {
+        add(parent, input.name, forwardTrigger);
+        add(input.name, parent, reverseTrigger);
+      } else if (type === 'pressed') {
+        add(sibling.name, input.name, 'clickStart');
+        add(input.name, sibling.name, 'click');
+      } else {
+        nextCode = removeConnectionFromCode(nextCode, sibling.name, parent, { trigger: 'click' }).code;
+        add(parent, input.name, 'mouseEnter');
+        add(input.name, parent, 'mouseLeave');
+        add(input.name, sibling.name, 'clickStart');
+        add(sibling.name, input.name, 'click');
+      }
+    }
 
     return {
       changes: [

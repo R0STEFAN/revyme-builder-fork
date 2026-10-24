@@ -208,7 +208,7 @@ export class AutomationClient {
     scope: Scope,
     toolName: string,
     input: unknown,
-    options?: { dryRun?: boolean; context?: Partial<OperationContext> }
+    options?: { dryRun?: boolean; context?: Partial<OperationContext>; _planHashRetried?: boolean }
   ): Promise<Result<Receipt | Plan | any>> {
     const op = defaultRegistry.get(toolName);
     if (!op) {
@@ -423,6 +423,15 @@ export class AutomationClient {
     }
 
     // Commit plan atomically via CAS
-    return this.commit(plan);
+    const committed = await this.commit(plan);
+    // A plan can be rejected while the local automation service finishes
+    // synchronizing its snapshot immediately after a previous mutation. The
+    // plan was never applied in this case, so one fresh snapshot + re-plan is
+    // safe and preserves the server's CAS guarantees. Do not loop: a second
+    // mismatch is a real failure the caller needs to see.
+    if (!committed.ok && committed.error?.code === 'PLAN_HASH_MISMATCH' && !options?._planHashRetried) {
+      return this.execute(scope, toolName, input, { ...options, _planHashRetried: true });
+    }
+    return committed;
   }
 }

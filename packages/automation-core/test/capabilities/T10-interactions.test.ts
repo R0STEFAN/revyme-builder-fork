@@ -25,6 +25,12 @@ import {
   linksSetOperation,
   linksRemoveOperation,
 } from '../../src/operations/links';
+import { normalizeBabelGenerator, normalizeBabelTraverse } from '../../../../src/code/generation/variant-visibility-gen';
+import { normalizeBabelTraverse as normalizeParserTraverse } from '../../../../src/code/parsing/ast-utils';
+import { checkFile } from '@/code/oracle/check-file';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
+import { createHash } from 'node:crypto';
 
 function createMockSnapshot(files: Record<string, string>): Snapshot {
   return createSnapshot({ projectId: 'test-project', branchId: 'main' }, 0, files);
@@ -43,6 +49,15 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 }
 
 describe('T10: Variants, Connections, Overlays, and Navigation', () => {
+  it('normalizes Babel traverse from direct, default, and nested Vite SSR module shapes', () => {
+    const traverse = () => undefined;
+    expect(normalizeBabelTraverse(traverse)).toBe(traverse);
+    expect(normalizeBabelTraverse({ default: traverse })).toBe(traverse);
+    expect(normalizeBabelTraverse({ default: { default: traverse } })).toBe(traverse);
+    expect(normalizeParserTraverse({ default: { default: traverse } })).toBe(traverse);
+    expect(normalizeBabelGenerator({ default: { default: traverse } })).toBe(traverse);
+  });
+
   it('manages component master variants lifecycle and visibility overrides', async () => {
     const initialComponent = `"use client";
 import { withResponsiveProps } from "@revyme/runtime";
@@ -147,8 +162,67 @@ export default withResponsiveProps(Navbar);
     ).rejects.toThrow(/CANNOT_REMOVE_PRIMARY/);
   });
 
+  it('creates a hover interaction state with metadata and working enter/leave transitions', async () => {
+    const componentCode = `"use client";
+import { withResponsiveProps } from "@revyme/runtime";
+import { motion } from "framer-motion";
+
+/** @name "PrimaryButton" */
+export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+];
+const buttonVariants = { default: { scale: 1 } };
+
+function PrimaryButton({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return <motion.button data-id="button-root" variants={buttonVariants} style={{ ...style }}>Click</motion.button>;
+}
+
+export default withResponsiveProps(PrimaryButton);
+`;
+    const snapshot = createMockSnapshot({ 'components/PrimaryButton.tsx': componentCode });
+
+    const result = await variantsCreateOperation.execute(
+      snapshot,
+      {
+        componentFile: 'components/PrimaryButton.tsx',
+        name: 'default-hover',
+        label: 'Button - Hover',
+        sourceVariant: 'default',
+        interaction: { type: 'hover', parent: 'default' },
+      },
+      mockContext,
+    );
+
+    const generated = result.changes[0].content!;
+    expect(generated).toContain("interactionType: 'hover'");
+    expect(generated).toContain("parentVariant: 'default'");
+    expect(generated).toContain("trigger: 'mouseEnter'");
+    expect(generated).toContain("trigger: 'mouseLeave'");
+    expect(generated).toContain('onHoverStart=');
+    expect(generated).toContain('onHoverEnd=');
+  });
+
+  it('rejects variant interactions whose source node does not exist', async () => {
+    const snapshot = createMockSnapshot({
+      'components/PrimaryButton.tsx': `export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+];
+function PrimaryButton() { return <button data-id="real-button">Open</button>; }
+`,
+    });
+
+    await expect(variantsCreateOperation.execute(snapshot, {
+      componentFile: 'components/PrimaryButton.tsx',
+      name: 'default-hover',
+      label: 'Hover',
+      sourceVariant: 'default',
+      interaction: { type: 'hover', parent: 'default', sourceNode: 'missing-button' },
+    }, mockContext)).rejects.toThrow(/NODE_NOT_FOUND/);
+  });
+
   it('wires and removes variant transition connections', async () => {
     const componentCode = `"use client";
+import React from "react";
 import { withResponsiveProps } from "@revyme/runtime";
 import { motion } from "framer-motion";
 
@@ -202,6 +276,7 @@ export default withResponsiveProps(Modal);
     expect(code).toContain("to: 'open'");
     expect(code).toContain("sourceNode: 'open-btn'");
     expect(code).toContain('onTap');
+    expect(code).toMatch(/import React, \{ useState \} from 'react';/);
 
     // 3. Remove connection
     const removeRes = await connectionsRemoveOperation.execute(
@@ -220,6 +295,106 @@ export default withResponsiveProps(Modal);
 
     code = snapshot.files.get('components/Modal.tsx')!;
     expect(code).not.toContain("sourceNode: 'open-btn'");
+  });
+
+  it('repairs missing runtime handlers when reapplying an existing connection', async () => {
+    const componentCode = `"use client";
+import { withResponsiveProps } from "@revyme/runtime";
+import { motion } from "framer-motion";
+
+/** @name "PrimaryButton" */
+export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'hover', label: 'Hover', x: 400, y: 0 },
+];
+const connections = [
+  { from: 'default', to: 'hover', trigger: 'mouseEnter', sourceNode: 'button-root' },
+  { from: 'hover', to: 'default', trigger: 'mouseLeave', sourceNode: 'button-root' },
+];
+
+function PrimaryButton({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return <motion.button data-id="button-root" style={{ ...style }}>Click</motion.button>;
+}
+
+export default withResponsiveProps(PrimaryButton);
+`;
+    const snapshot = createMockSnapshot({ 'components/PrimaryButton.tsx': componentCode });
+
+    const result = await connectionsCreateOperation.execute(
+      snapshot,
+      {
+        componentFile: 'components/PrimaryButton.tsx',
+        from: 'default',
+        to: 'hover',
+        trigger: 'mouseEnter',
+        sourceNode: 'button-root',
+      },
+      mockContext,
+    );
+
+    const repaired = result.changes[0].content!;
+    expect(repaired).toContain('onHoverStart=');
+    expect(repaired).toContain('onHoverEnd=');
+    expect(repaired).toContain("animate={['default', variant]}");
+  });
+
+  it('converts a plain HTML connection source into a motion element', async () => {
+    const componentCode = `"use client";
+import { withResponsiveProps } from "@revyme/runtime";
+
+/** @name "Navbar" */
+export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'open', label: 'Open', x: 400, y: 0 },
+];
+
+function Navbar({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return <div data-id="nav-root" style={{ ...style }}><button data-id="nav-toggle">Menu</button></div>;
+}
+
+export default withResponsiveProps(Navbar);
+`;
+    const snapshot = createMockSnapshot({ 'components/Navbar.tsx': componentCode });
+
+    const result = await connectionsCreateOperation.execute(
+      snapshot,
+      {
+        componentFile: 'components/Navbar.tsx',
+        from: 'default',
+        to: 'open',
+        trigger: 'click',
+        sourceNode: 'nav-toggle',
+      },
+      mockContext,
+    );
+
+    const generated = result.changes[0].content!;
+    expect(generated).toContain('<motion.button');
+    expect(generated).toContain('onTap=');
+    expect(generated).toContain("from 'framer-motion'");
+  });
+
+  it('rejects a connection whose source node does not exist in the component', async () => {
+    const snapshot = createMockSnapshot({
+      'components/Navbar.tsx': `export const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'open', label: 'Open', x: 400, y: 0 },
+];
+function Navbar() { return <button data-id="real-button">Open</button>; }
+`,
+    });
+
+    await expect(connectionsCreateOperation.execute(
+      snapshot,
+      {
+        componentFile: 'components/Navbar.tsx',
+        from: 'default',
+        to: 'open',
+        trigger: 'click',
+        sourceNode: 'missing-button',
+      },
+      mockContext,
+    )).rejects.toThrow(/NODE_NOT_FOUND/);
   });
 
   it('creates, updates, and removes overlays and close overlay interactions', async () => {
@@ -388,6 +563,124 @@ export default withResponsiveProps(Modal);
     snapshot = { ...snapshot, files: mutableFiles };
 
     code = snapshot.files.get('app/page.tsx')!;
+    expect(code).not.toContain('href="/about"');
+  });
+
+  it('emits framework-safe link elements for pages and design components', async () => {
+    const page = createMockSnapshot({
+      'app/page.client.tsx': `import React from 'react';\nexport default function Page() { return <a data-id="page-link">Work</a>; }`,
+    });
+    const pageResult = await linksSetOperation.execute(page, {
+      targetFile: 'app/page.client.tsx', nodeId: 'page-link', url: '#work',
+    }, mockContext);
+    const pageCode = pageResult.changes[0].content!;
+
+    expect(pageCode).toContain("import Link from 'next/link';");
+    expect(pageCode).toContain('<Link data-id="page-link" href="#work"');
+    expect(pageCode).not.toContain('<a data-id="page-link" href=');
+
+    const component = createMockSnapshot({
+      'components/Nav.tsx': `import React from 'react';\nimport { motion } from 'framer-motion';\nfunction Nav() { return <a data-id="component-link">Work</a>; }`,
+    });
+    const componentResult = await linksSetOperation.execute(component, {
+      targetFile: 'components/Nav.tsx', nodeId: 'component-link', url: '#work',
+    }, mockContext);
+    const componentCode = componentResult.changes[0].content!;
+
+    expect(componentCode).toContain("import Link from 'next/link';");
+    expect(componentCode).toContain('const MotionLink = motion.create(React.forwardRef');
+    expect(componentCode).toContain('<MotionLink data-id="component-link" href="#work"');
+    expect(componentCode).not.toContain('<a data-id="component-link" href=');
+    const componentViolations = checkFile(componentCode, { kind: 'component', path: 'components/Nav.tsx' });
+    expect(componentViolations.map((violation) => violation.code)).not.toContain('MISSING_DATA_ID');
+    expect(componentViolations.map((violation) => violation.code)).not.toContain('COMPONENT_LINK_NOT_MOTIONLINK');
+    expect(componentViolations.map((violation) => violation.code)).not.toContain('MOTIONLINK_SETUP_MISSING');
+    const originalComponentCode = component.files.get('components/Nav.tsx')!;
+    const validation = validatePlan(component, createPlan({
+      scope: component.scope,
+      baseRevision: component.revision,
+      operationId: 'links-set-motionlink-plan',
+      changes: [{
+        path: 'components/Nav.tsx',
+        beforeHash: createHash('sha256').update(originalComponentCode).digest('hex'),
+        content: componentCode,
+      }],
+    }));
+    expect(validation.issues.map((issue) => issue.code)).not.toContain('MISSING_DATA_ID');
+
+    const clientComponent = createMockSnapshot({
+      'components/ClientNav.tsx': `"use client";\nfunction ClientNav() { return <a data-id="client-link">Work</a>; }`,
+    });
+    const clientResult = await linksSetOperation.execute(clientComponent, {
+      targetFile: 'components/ClientNav.tsx', nodeId: 'client-link', url: '#work',
+    }, mockContext);
+    const clientCode = clientResult.changes[0].content!;
+
+    expect(clientCode.indexOf('"use client";')).toBeLessThan(clientCode.indexOf("import Link from 'next/link';"));
+    expect(clientCode).toContain('<MotionLink data-id="client-link" href="#work"');
+  });
+
+  it('imports MotionLink runtime dependencies when linking a plain design-component anchor', async () => {
+    const component = createMockSnapshot({
+      'components/Footer.tsx': `"use client";\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction Footer() { return <a data-id="footer-email">hello@example.com</a>; }\nexport default withResponsiveProps(Footer);`,
+    });
+    const result = await linksSetOperation.execute(component, {
+      targetFile: 'components/Footer.tsx', nodeId: 'footer-email', url: 'mailto:hello@example.com',
+    }, mockContext);
+    const code = result.changes[0].content!;
+
+    expect(code).toMatch(/import\s+React(?:,\s*\{[^}]*\})?\s+from\s+['"]react['"]/);
+    expect(code).toMatch(/import\s+\{\s*motion\s*\}\s+from\s+['"]framer-motion['"]/);
+    expect(checkFile(code, { kind: 'component', path: 'components/Footer.tsx' }).map((issue) => issue.code))
+      .not.toContain('WOULD_CRASH');
+  });
+
+  it('keeps external page links as native anchors without Next Link imports', async () => {
+    const page = createMockSnapshot({
+      'app/page.tsx': `export default function Page() { return <a data-id="external-link">Mail</a>; }`,
+    });
+    const result = await linksSetOperation.execute(page, {
+      targetFile: 'app/page.tsx', nodeId: 'external-link', url: 'mailto:hello@example.com',
+    }, mockContext);
+    const code = result.changes[0].content!;
+
+    expect(code).toContain('<a data-id="external-link" href="mailto:hello@example.com"');
+    expect(code).not.toContain("from 'next/link'");
+  });
+
+  it('restores safe anchor tags when clearing or removing internal page links', async () => {
+    const snapshot = createMockSnapshot({
+      'app/page.client.tsx': `export default function Page() {
+  return <nav><a data-id="link-cleared">Work</a><a data-id="link-removed">About</a></nav>;
+}`,
+    });
+    const files = new Map(snapshot.files);
+    let current = snapshot;
+
+    for (const [nodeId, url] of [['link-cleared', '/work'], ['link-removed', '/about']] as const) {
+      const result = await linksSetOperation.execute(current, {
+        targetFile: 'app/page.client.tsx', nodeId, url,
+      }, mockContext);
+      applyChanges(files, result.changes);
+      current = { ...current, files };
+    }
+
+    const clearResult = await linksSetOperation.execute(current, {
+      targetFile: 'app/page.client.tsx', nodeId: 'link-cleared', url: '',
+    }, mockContext);
+    applyChanges(files, clearResult.changes);
+    current = { ...current, files };
+
+    const removeResult = await linksRemoveOperation.execute(current, {
+      targetFile: 'app/page.client.tsx', nodeId: 'link-removed',
+    }, mockContext);
+    applyChanges(files, removeResult.changes);
+
+    const code = files.get('app/page.client.tsx')!;
+    expect(code).toContain('<a data-id="link-cleared"');
+    expect(code).toContain('<a data-id="link-removed"');
+    expect(code).not.toMatch(/<Link\b[^>]*data-id="(?:link-cleared|link-removed)"/);
+    expect(code).not.toContain('href="/work"');
     expect(code).not.toContain('href="/about"');
   });
 });

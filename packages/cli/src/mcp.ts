@@ -13,6 +13,100 @@ import type { OperationContext, Scope } from '@revyme/automation-core';
 import type { AutomationClient } from './client';
 import type { ProjectConfig } from './config';
 
+const DEFAULT_MCP_BRIDGE_URL = 'http://127.0.0.1:8082';
+
+function createBridgeScreenshotService() {
+  const bridgeUrl = (
+    process.env.REVYME_MCP_BRIDGE_URL ||
+    process.env.VITE_AI_SERVICE_URL ||
+    DEFAULT_MCP_BRIDGE_URL
+  ).replace(/\/+$/, '');
+
+  return {
+    async captureScreenshot({ snapshot, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
+      const filePath = snapshot.scope.filePath || [...snapshot.files.keys()].find((path: string) =>
+        path.endsWith('/page.client.tsx') || path === 'page.client.tsx'
+      );
+      if (!filePath) {
+        return {
+          available: false,
+          status: 'unavailable',
+          reason: 'TARGET_FILE_NOT_FOUND',
+          note: 'No canvas page is included in the automation snapshot.',
+          waitedMs: 0,
+        };
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45_000);
+      try {
+        const response = await fetch(`${bridgeUrl}/rpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'captureScreenshot',
+            params: {
+              projectId: snapshot.scope.projectId,
+              branchId: snapshot.scope.branchId || 'main',
+              filePath,
+              viewport,
+              nodeId,
+              format,
+              pixelRatio,
+              backgroundColor,
+            },
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Screenshot bridge returned HTTP ${response.status}`);
+        const payload = await response.json() as { ok?: boolean; result?: unknown; error?: string };
+        if (!payload.ok) throw new Error(payload.error || 'Screenshot bridge returned an empty response');
+        return payload.result;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+function createBridgeAuditSnapshotService() {
+  const bridgeUrl = (
+    process.env.REVYME_MCP_BRIDGE_URL ||
+    process.env.VITE_AI_SERVICE_URL ||
+    DEFAULT_MCP_BRIDGE_URL
+  ).replace(/\/+$/, '');
+
+  return {
+    async getSnapshot({ projectId, branchId, filePath, revision, viewport }: {
+      projectId: string;
+      branchId: string;
+      filePath: string;
+      revision: number;
+      viewport: string;
+    }) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const response = await fetch(`${bridgeUrl}/rpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'observeAuditSnapshot',
+            params: { projectId, branchId, filePath, revision, viewport },
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Audit snapshot bridge returned HTTP ${response.status}`);
+        const payload = await response.json() as { ok?: boolean; result?: unknown; error?: string };
+        if (!payload.ok) throw new Error(payload.error || 'Audit snapshot bridge returned an empty response');
+        return payload.result;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
 export interface McpServerOptions {
   client: AutomationClient;
   config?: ProjectConfig;
@@ -172,9 +266,19 @@ export function createMcpServer(options: McpServerOptions): Server {
       };
     }
 
+    // Scope participates in the plan hash. Document-oriented operations use
+    // several schema names; retain the target path before preparing a plan so
+    // the client and commit service hash the same scope.
+    const scopeFilePath =
+      (typeof rawArgs.filePath === 'string' && rawArgs.filePath) ||
+      (typeof rawArgs.targetFile === 'string' && rawArgs.targetFile) ||
+      (typeof rawArgs.componentFile === 'string' && rawArgs.componentFile) ||
+      (typeof rawArgs.sourceFile === 'string' && rawArgs.sourceFile) ||
+      undefined;
     const scope: Scope = {
       projectId: projectId || 'meta-project',
       branchId,
+      ...(scopeFilePath ? { filePath: scopeFilePath } : {}),
     };
 
     const dryRun = Boolean(rawArgs.dryRun);
@@ -205,7 +309,10 @@ export function createMcpServer(options: McpServerOptions): Server {
       createId: createIdFactory('mcp'),
       signal: extra.signal || new AbortController().signal,
       trace,
-      adapters: {},
+      adapters: {
+        screenshotService: createBridgeScreenshotService(),
+        auditSnapshotService: createBridgeAuditSnapshotService(),
+      },
     };
 
     const result = await client.execute(scope, toolName, opInput, {

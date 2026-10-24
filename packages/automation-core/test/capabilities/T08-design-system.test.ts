@@ -61,6 +61,21 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 }
 
 describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts', () => {
+  it('rejects token identifiers that cannot round-trip through CSS custom properties', () => {
+    expect(tokensSetOperation.inputSchema.safeParse({
+      name: 'spacing-Page Gutter',
+      value: 'clamp(16px, 5vw, 72px)',
+    }).success).toBe(false);
+    expect(tokensRenameOperation.inputSchema.safeParse({
+      oldName: 'radius-card',
+      newName: 'Marquee Round',
+    }).success).toBe(false);
+    expect(tokensRenameOperation.inputSchema.safeParse({
+      oldName: 'radius-card',
+      newName: 'radius-marquee-round',
+    }).success).toBe(true);
+  });
+
   it('manages brand tokens, light/dark themes, and Invariant 3 empty-string deletion', async () => {
     const initialFiles = {
       'app/globals.css': `/* Design Tokens — Presets */
@@ -369,6 +384,18 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
     expect(pageCode).toMatch(/fontWeight:\s*['"]var\(--typo-display-weight\)['"]/);
     expect(pageCode).toContain('@media (max-width: 1199px)');
     expect(pageCode).toContain('[data-id="hero-header"] { font-size: var(--typo-display-size-md) !important; }');
+    expect(pageCode).toMatch(/<style\s+data-id="typography-responsive-hero-header"[^>]*style=\{\{\s*position:\s*'absolute'/);
+
+    const reapplyRes = await typographyApplyOperation.execute(
+      snapshot,
+      { name: 'display', targetFile: 'app/page.tsx', nodeId: 'hero-header', retag: false },
+      mockContext,
+    );
+    const reappliedCode = reapplyRes.changes[0].content!;
+    expect(reappliedCode.match(/<style\b/g)).toHaveLength(1);
+    expect(reappliedCode.match(/data-id="typography-responsive-hero-header"/g)).toHaveLength(1);
+    applyChanges(mutableFiles, reapplyRes.changes);
+    snapshot = { ...snapshot, files: mutableFiles };
 
     // 4. Detach preset: bakes literal token values into inline style and removes preset vars
     const detachRes = await typographyDetachOperation.execute(
@@ -401,6 +428,29 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
     snapshot = { ...snapshot, files: mutableFiles };
 
     expect(snapshot.files.get('app/globals.css')).not.toContain('--typo-display-font');
+  });
+
+  it('lists only compound typography presets and ignores unsupported one-property tokens', async () => {
+    const snapshot = createMockSnapshot({
+      'app/globals.css': `:root {
+  --typo-body-font: 'Inter', sans-serif;
+  --typo-body-size: 16px;
+  --typo-body-weight: 400;
+  --typo-studio-display-fontFamily: 'Inter', sans-serif;
+  --typo-studio-display-fontSize: 12vw;
+  --typo-studio-body-letterSpacing: -0.02em;
+}
+`,
+    });
+
+    const result = await typographyListOperation.execute(snapshot, {}, mockContext);
+
+    expect(result.presets.map((preset) => preset.name)).toEqual(['body']);
+    expect(result.presets[0].values).toMatchObject({
+      font: "'Inter', sans-serif",
+      size: '16px',
+      weight: '400',
+    });
   });
 
   it('supports Google font catalog, verified weight imports, workspace font-face, and layout Next.js font codegen', async () => {

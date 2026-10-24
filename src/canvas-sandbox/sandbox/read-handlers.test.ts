@@ -51,7 +51,7 @@ describe('captureElement', () => {
     expect(passedOptions.onImageErrorHandler!()).toBe(true);
   });
 
-  it('provides a filter to html-to-image that skips external cross-origin images to prevent CORS network errors', async () => {
+  it('keeps cross-origin images in captures so externally hosted project photography is visible', async () => {
     const root = document.createElement('div');
     const target = document.createElement('div');
     target.setAttribute('data-node-id', 'vp1_node-1');
@@ -61,29 +61,14 @@ describe('captureElement', () => {
     await captureElement('node-1', 'vp1_', { format: 'jpeg', pixelRatio: 1 });
     expect(toJpegMock).toHaveBeenCalledTimes(1);
 
-    const passedOptions = toJpegMock.mock.calls[0][1] as { filter?: (node: Node) => boolean };
-    expect(typeof passedOptions.filter).toBe('function');
-
-    const filter = passedOptions.filter!;
-
-    // Non-img node should pass
-    const div = document.createElement('div');
-    expect(filter(div)).toBe(true);
-
-    // Data URI img should pass
-    const dataImg = document.createElement('img');
-    dataImg.src = 'data:image/png;base64,aaa';
-    expect(filter(dataImg)).toBe(true);
-
-    // Same-origin img should pass
-    const sameOriginImg = document.createElement('img');
-    sameOriginImg.src = `${window.location.origin}/test.png`;
-    expect(filter(sameOriginImg)).toBe(true);
-
-    // Cross-origin img should be skipped (returns false)
-    const crossOriginImg = document.createElement('img');
-    crossOriginImg.src = 'https://api.tattoozp.com/assets/59dd35bc-2953-448a-9832-cae3bc2e4357?width=500';
-    expect(filter(crossOriginImg)).toBe(false);
+    const passedOptions = toJpegMock.mock.calls[0][1] as {
+      filter?: (node: Node) => boolean;
+      onImageErrorHandler?: () => boolean;
+    };
+    // Do not drop remote project photography; html-to-image handles CORS
+    // failures through its configured image-error placeholder instead.
+    expect(passedOptions.filter).toBeUndefined();
+    expect(passedOptions.onImageErrorHandler?.()).toBe(true);
   });
 
   it('temporarily restores display on culled elements (data-culled) during capture and restores display: none afterwards', async () => {

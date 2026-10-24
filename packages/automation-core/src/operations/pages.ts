@@ -240,9 +240,13 @@ export default function Page() {
   description: 'Built with Revyme',
 };
 
+export const siteConfig = {
+  language: 'en',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang={siteConfig.language || 'en'}>
       <body>{children}</body>
     </html>
   );

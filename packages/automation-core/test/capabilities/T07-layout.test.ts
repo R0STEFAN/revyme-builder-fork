@@ -133,6 +133,71 @@ export default function Page() {
     expect(parsed.has(card2Id)).toBe(false);
   });
 
+  it('assigns sequential string order when creating children in a flex/grid container', async () => {
+    const flexPage = `export default function Page() {
+  return <div data-id="root"><nav data-id="flex-parent" style={{ display: 'flex', flexDirection: 'column' }}><a data-id="old-link">Old</a></nav></div>;
+}`;
+    const flexSnapshot = {
+      ...snapshot,
+      files: new Map([['app/page.client.tsx', flexPage]]),
+    };
+    const createOp = defaultRegistry.get('nodes.create')!;
+
+    const result = await createOp.execute(
+      flexSnapshot,
+      {
+        parentId: 'flex-parent',
+        type: 'a',
+        id: 'new-link',
+        name: 'New Link',
+        textContent: 'New',
+        index: 1,
+      },
+      context,
+    );
+    const code = result.changes[0].content!;
+
+    expect(code).toMatch(/<a data-id="old-link"[^>]*order:\s*["']0["']/);
+    expect(code).toMatch(/<a data-id="new-link"[^>]*order:\s*["']1["']/);
+  });
+
+  it('places a new flow child after sparse explicit order values', async () => {
+    const flexPage = `export default function Page() {
+  return <div data-id="root"><nav data-id="flex-parent" style={{ display: 'flex' }}><a data-id="old-link" style={{ order: '10' }}>Old</a></nav></div>;
+}`;
+    const flexSnapshot = {
+      ...snapshot,
+      files: new Map([['app/page.client.tsx', flexPage]]),
+    };
+
+    const result = await defaultRegistry.get('nodes.create')!.execute(flexSnapshot, {
+      parentId: 'flex-parent',
+      type: 'a',
+      id: 'new-link',
+      textContent: 'New',
+      index: 1,
+    }, context);
+    const code = result.changes[0].content!;
+
+    expect(code).toMatch(/<a data-id="old-link"[^>]*order:\s*["']10["']/);
+    expect(code).toMatch(/<a data-id="new-link"[^>]*order:\s*["']11["']/);
+  });
+
+  it('updates a node display name without changing its stable data-id', async () => {
+    const updateOp = defaultRegistry.get('nodes.update')!;
+
+    const result = await updateOp.execute(
+      snapshot,
+      { nodeId: 'header-1', name: 'Site Navigation' } as any,
+      context,
+    );
+    applyChanges(result.changes);
+
+    const parsed = parseJSXToNodes(files.get('app/page.client.tsx')!);
+    expect(parsed.get('header-1')?.name).toBe('Site Navigation');
+    expect(parsed.get('header-1')?.id).toBe('header-1');
+  });
+
   it('sets flex, grid, pins, sizing, and position layout properties', async () => {
     const layoutOp = defaultRegistry.get('layout.set')!;
 
@@ -248,6 +313,48 @@ export default function Page() {
     const codeWithMobile = files.get('app/page.client.tsx')!;
     expect(codeWithMobile).toMatch(/@media\s*\(max-width:\s*375px\)/);
     expect(codeWithMobile).toContain('grid-template-columns: 1fr');
+  });
+
+  it('uses the target page viewport width for named responsive overrides', async () => {
+    files.set('app/page.client.tsx', INITIAL_PAGE_CODE.replace(
+      '/* @canvas { single: true, height: \'auto\' } */',
+      `/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1200, "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 810, "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 390, "isPrimary": false, "order": 2 }], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1360, "y": 0 }, "mobile": { "x": 2330, "y": 0 } } } */`,
+    ));
+
+    const vpOverrideOp = defaultRegistry.get('viewports.setOverride')!;
+    const result = await vpOverrideOp.execute(snapshot, {
+      nodeId: 'main-1',
+      viewport: 'mobile',
+      styles: { gridTemplateColumns: '1fr' },
+    }, context);
+
+    expect(result.changes[0].content).toContain('@media (max-width: 390px)');
+    expect(result.changes[0].content).not.toContain('@media (max-width: 375px)');
+  });
+
+  it('writes component hover styling into the requested motion variant, not an unsupported style tag', async () => {
+    files.set('components/ProjectCard.tsx', `'use client';
+import React from 'react';
+import { motion } from 'framer-motion';
+const variantConfig = [{ name: 'default' }, { name: 'hover' }];
+function ProjectCard({ initialVariant = 'default' }) {
+  return <motion.div data-id="image" data-name="Image" style={{ filter: 'grayscale(100%)' }} initial={initialVariant} animate={initialVariant} />;
+}
+export default ProjectCard;
+`);
+
+    const stylesSetOp = defaultRegistry.get('styles.set')!;
+    const result = await stylesSetOp.execute(snapshot, {
+      filePath: 'components/ProjectCard.tsx',
+      nodeId: 'image',
+      variantName: 'hover',
+      styles: { filter: 'grayscale(0%)', scale: '1.05' },
+    }, context);
+
+    const updated = result.changes[0].content!;
+    expect(updated).toContain('grayscale(0%)');
+    expect(updated).toContain('scale: 1.05');
+    expect(updated).not.toContain('<style>');
   });
 
   it('updates text content without breaking inline JSX structure', async () => {

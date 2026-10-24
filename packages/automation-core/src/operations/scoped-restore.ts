@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import type { FileChange, OperationContext, ProjectAction, Snapshot } from '../contracts';
-import { calculateBackupEnvelopeChecksum, calculateFilesChecksum } from './projects';
+import { calculateBackupEnvelopeChecksum, calculateFilesChecksum } from './project-checksums';
 
 type RestoreAction = Extract<ProjectAction, { kind: 'project.restore' }>;
 const MAX_BACKUP_BYTES = 64 * 1024 * 1024;

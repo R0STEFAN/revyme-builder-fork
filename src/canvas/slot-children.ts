@@ -26,7 +26,9 @@ export interface SerializedSlotNode {
   hasMixedContent?: boolean;
   children: SerializedSlotNode[];
   isCodeComponent?: boolean;
+  isDesignComponent?: boolean;
   code?: string;
+  /** Instance props extracted/coerced by CodeComponentHost. */
   codeComponentProps?: Record<string, any>;
 }
 
@@ -123,8 +125,10 @@ function serializeSlotNode(
     .filter((c): c is SerializedSlotNode => c !== null);
 
   const isCode = !!(n.isCodeComponent && n.componentFile);
-  const code = (isCode && opts?.getCode) ? opts.getCode(n.componentFile!) : undefined;
-  const codeComponentProps = isCode
+  const isDesignComponent = !!(n.isComponentInstance && n.componentFile);
+  const isComponent = isCode || isDesignComponent;
+  const code = (isComponent && opts?.getCode) ? opts.getCode(n.componentFile!) : undefined;
+  const codeComponentProps = isComponent
     ? (opts?.getProps ? opts.getProps(n) : undefined)
     : undefined;
 
@@ -136,6 +140,7 @@ function serializeSlotNode(
     hasMixedContent: n.hasMixedContent,
     children: [...inlineChildren, ...slotChildren],
     isCodeComponent: isCode || undefined,
+    isDesignComponent: isDesignComponent || undefined,
     code: (code != null) ? code : undefined,
     codeComponentProps,
   };
@@ -184,12 +189,15 @@ function buildOne(
     delete style.bottom;
   }
 
+  const isComponent = !!(sn.isCodeComponent || sn.isDesignComponent);
   const props: Record<string, any> = { key, style };
+  const componentAttrs: Record<string, any> = {};
   for (const [k, v] of Object.entries(sn.attrs)) {
     // Strip editor-only data-* attrs so the ghost carries no data-id
     // (no selection collision with the real floating copy).
     if (k.startsWith('data-')) continue;
-    props[k] = v;
+    if (isComponent) componentAttrs[k] = v;
+    else props[k] = v;
   }
 
   // RICH TEXT — `textContent` holds raw inner JSX, so convert it to HTML and
@@ -211,10 +219,11 @@ function buildOne(
   // When a code component (e.g. Carousel) is wired inside a slot, compile
   // and instantiate it with its component props and slot children rather than
   // dumping child slides into an unstyled fallback div.
-  if (sn.isCodeComponent && sn.code && opts?.compileComponent) {
+  if (isComponent && sn.code && opts?.compileComponent) {
     const Comp = opts.compileComponent(sn.code, sn.type);
     if (Comp) {
       const mergedProps: Record<string, any> = {
+        ...componentAttrs,
         ...(sn.codeComponentProps || {}),
         ...props,
         style: {

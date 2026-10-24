@@ -2,9 +2,10 @@
 import { z } from 'zod';
 import type { Operation, FileChange } from '../contracts';
 import { defaultRegistry } from '../registry';
-import { updateHtmlAttrsInCode } from '@/code/generation/generator-attrs';
+import { changeTagInCode, convertToMotionLinkInCode, updateHtmlAttrsInCode } from '@/code/generation/generator-attrs';
 import { scanTagAttrs, readTagAttr } from '@/code/components/jsx-tag-attrs';
 import { findJSXDataIdIndex, findTagClose } from '@/code/generation/generator-utils';
+import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 
 function ensureNextLinkImport(code: string): string {
   if (/import\s+Link\s+from\s+['"]next\/link['"]/.test(code)) return code;
@@ -14,7 +15,28 @@ function ensureNextLinkImport(code: string): string {
     const insertPos = lastImportMatch.index + lastImportMatch[0].length;
     return code.slice(0, insertPos) + importLine + '\n' + code.slice(insertPos);
   }
+  const clientDirective = code.match(/^(\uFEFF?[ \t]*(['"])use client\2;?[ \t]*)(\r?\n|$)/);
+  if (clientDirective) {
+    const insertPos = clientDirective[0].length;
+    const separator = clientDirective[3] || '\n';
+    return code.slice(0, insertPos) + (separator ? '' : '\n') + importLine + '\n' + code.slice(insertPos);
+  }
   return importLine + '\n' + code;
+}
+
+function clearLinkAttributes(code: string, nodeId: string, targetFile: string): string {
+  if (!targetFile.startsWith('components/')) {
+    const idIndex = findJSXDataIdIndex(code, nodeId);
+    const tagStart = idIndex === -1 ? -1 : code.lastIndexOf('<', idIndex);
+    const tagName = tagStart === -1 ? null : code.slice(tagStart + 1).match(/^([\w.]+)/)?.[1] ?? null;
+    if (tagName === 'Link') code = changeTagInCode(code, nodeId, 'a');
+  }
+  return updateHtmlAttrsInCode(code, nodeId, {
+    href: '',
+    target: '',
+    rel: '',
+    prefetch: '',
+  });
 }
 
 // 1. links.get
@@ -133,13 +155,24 @@ export const linksSetOperation: Operation<
 
     // Invariant 3: empty url removes link attributes
     if (input.url === '') {
-      code = updateHtmlAttrsInCode(code, input.nodeId, {
-        href: '',
-        target: '',
-        rel: '',
-        prefetch: '',
-      });
+      code = clearLinkAttributes(code, input.nodeId, input.targetFile);
     } else {
+      const isDesignComponent = input.targetFile.startsWith('components/') && !isCodeComponentSource(code);
+      const isExternal = /^(https?:\/\/|mailto:|tel:)/i.test(input.url);
+
+      if (isDesignComponent) {
+        // Design components animate layout/variants, so a raw <a> is both
+        // invalid for Next navigation and invisible to the Motion graph.
+        code = convertToMotionLinkInCode(code, input.nodeId);
+        code = ensureNextLinkImport(code);
+      } else if (!input.targetFile.startsWith('components/')) {
+        // Pages/templates use Next Link for internal navigation; external
+        // destinations remain native anchors, which is the correct browser
+        // behavior and the dialect's explicit exception.
+        code = changeTagInCode(code, input.nodeId, isExternal ? 'a' : 'Link');
+        if (!isExternal) code = ensureNextLinkImport(code);
+      }
+
       const attrs: Record<string, string> = {
         href: input.url,
       };
@@ -203,12 +236,7 @@ export const linksRemoveOperation: Operation<
       throw new Error(`NODE_NOT_FOUND: Node with data-id "${input.nodeId}" not found in "${input.targetFile}"`);
     }
 
-    code = updateHtmlAttrsInCode(code, input.nodeId, {
-      href: '',
-      target: '',
-      rel: '',
-      prefetch: '',
-    });
+    code = clearLinkAttributes(code, input.nodeId, input.targetFile);
 
     return {
       changes: [

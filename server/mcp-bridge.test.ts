@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { McpBridge } from './mcp-bridge';
 
 function createMockReqRes(opts: {
@@ -20,7 +22,7 @@ function createMockReqRes(opts: {
         : JSON.stringify(opts.body)
       : '';
 
-  const res = {
+  const res = Object.assign(new EventEmitter(), {
     statusCode: 200,
     headers: {} as Record<string, string>,
     writtenData: [] as string[],
@@ -43,7 +45,7 @@ function createMockReqRes(opts: {
       this.ended = true;
     },
     ended: false,
-  };
+  });
 
   return { req, res, bodyData };
 }
@@ -77,8 +79,12 @@ describe('McpBridge', () => {
       expect(res.writtenData[0]).toBe(': ping\n\n');
       expect(bridge.getActiveClientCount()).toBe(1);
 
+      // Completing the GET request is not the same as closing its SSE response.
+      req.emit('end');
+      expect(bridge.getActiveClientCount()).toBe(1);
+
       // Disconnect
-      req.emit('close');
+      res.emit('close');
       expect(bridge.getActiveClientCount()).toBe(0);
     });
 
@@ -109,6 +115,107 @@ describe('McpBridge', () => {
       const response = await sendPromise;
       expect(response).toEqual({ code: 'export default function Page() {}' });
       expect(bridge.getPendingRequestCount()).toBe(0);
+    });
+
+    it('routes project-scoped RPC only to the editor tab for that website', async () => {
+      const other = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=other-site' });
+      const target = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      bridge.handleEventsStream(other.req, other.res);
+      bridge.handleEventsStream(target.req, target.res);
+
+      const sendPromise = bridge.sendToEditor('project.snapshot.changed', {
+        projectId: 'target-site',
+        baseRevision: 10,
+        revision: 11,
+      });
+
+      expect(other.res.writtenData).toHaveLength(1);
+      expect(target.res.writtenData[1]).toContain('"method":"project.snapshot.changed"');
+      expect(target.res.writtenData[1]).toContain('"projectId":"target-site"');
+
+      bridge.handleResult(JSON.stringify({ id: 1, result: { applied: true } }), {
+        statusCode: 200, headers: {}, setHeader() {}, end() {},
+      });
+      await expect(sendPromise).resolves.toEqual({ applied: true });
+
+      other.res.emit('close');
+      target.res.emit('close');
+    });
+
+    it('collects independent acknowledgements from every matching project tab', async () => {
+      const first = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      const second = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      const other = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=other-site' });
+      bridge.handleEventsStream(first.req, first.res);
+      bridge.handleEventsStream(second.req, second.res);
+      bridge.handleEventsStream(other.req, other.res);
+
+      const sendPromise = bridge.sendToEditors('projectSnapshotChanged', {
+        projectId: 'target-site',
+        revision: 12,
+      });
+      const firstRequest = JSON.parse(first.res.writtenData[1].slice('data: '.length));
+      const secondRequest = JSON.parse(second.res.writtenData[1].slice('data: '.length));
+
+      expect(firstRequest.method).toBe('projectSnapshotChanged');
+      expect(secondRequest.method).toBe('projectSnapshotChanged');
+      expect(firstRequest.id).not.toBe(secondRequest.id);
+      expect(other.res.writtenData).toHaveLength(1);
+
+      const resultResponse = () => ({ statusCode: 200, headers: {}, setHeader() {}, end() {} });
+      bridge.handleResult(JSON.stringify({ id: firstRequest.id, result: { applied: false, reason: 'LOCAL_CHANGES_PENDING' } }), resultResponse());
+      bridge.handleResult(JSON.stringify({ id: secondRequest.id, result: { applied: true, revision: 12 } }), resultResponse());
+
+      await expect(sendPromise).resolves.toEqual([
+        { ok: true, result: { applied: false, reason: 'LOCAL_CHANGES_PENDING' } },
+        { ok: true, result: { applied: true, revision: 12 } },
+      ]);
+      first.res.emit('close');
+      second.res.emit('close');
+      other.res.emit('close');
+    });
+
+    it('chooses the audit snapshot from the tab matching the requested revision', async () => {
+      const stale = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      const current = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=target-site' });
+      bridge.handleEventsStream(stale.req, stale.res);
+      bridge.handleEventsStream(current.req, current.res);
+      const { res } = createMockReqRes({ method: 'POST', url: '/rpc' });
+
+      const rpcPromise = bridge.handleRpc(JSON.stringify({
+        method: 'observeAuditSnapshot',
+        params: { projectId: 'target-site', revision: 12, viewport: 'desktop' },
+      }), res);
+      const staleRequest = JSON.parse(stale.res.writtenData[1].slice('data: '.length));
+      const currentRequest = JSON.parse(current.res.writtenData[1].slice('data: '.length));
+      expect(staleRequest.id).not.toBe(currentRequest.id);
+
+      const resultResponse = () => ({ statusCode: 200, headers: {}, setHeader() {}, end() {} });
+      bridge.handleResult(JSON.stringify({ id: staleRequest.id, result: {
+        status: 'unavailable', reason: 'REVISION_MISMATCH', revision: 11,
+      } }), resultResponse());
+      bridge.handleResult(JSON.stringify({ id: currentRequest.id, result: {
+        status: 'ready', revision: 12, nodes: [{ id: 'root' }],
+      } }), resultResponse());
+
+      await rpcPromise;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.writtenData.join(''))).toMatchObject({
+        ok: true,
+        result: { status: 'ready', revision: 12, nodes: [{ id: 'root' }] },
+      });
+      stale.res.emit('close');
+      current.res.emit('close');
+    });
+
+    it('does not fall back to a different project tab for project-scoped RPC', async () => {
+      const other = createMockReqRes({ method: 'GET', url: '/bridge/events?websiteId=other-site' });
+      bridge.handleEventsStream(other.req, other.res);
+
+      await expect(bridge.sendToEditor('project.snapshot.changed', { projectId: 'target-site' }))
+        .rejects.toThrow(/No editor tab connected for project "target-site"/);
+      expect(other.res.writtenData).toHaveLength(1);
+      other.res.emit('close');
     });
 
     it('rejects sendToEditor if editor returns an error', async () => {
@@ -142,6 +249,51 @@ describe('McpBridge', () => {
   });
 
   describe('HTTP & Middleware handling', () => {
+    it('binds the standalone HTTP bridge to loopback only', async () => {
+      const server = bridge.startHttpServer(0);
+      await new Promise<void>((resolve) => server.once('listening', resolve));
+
+      expect((server.address() as AddressInfo).address).toBe('127.0.0.1');
+    });
+
+    it('recovers after a transient EADDRINUSE during a Vite restart', async () => {
+      const blocker = http.createServer();
+      await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+      const port = (blocker.address() as AddressInfo).port;
+      const recoveringBridge = new McpBridge();
+      const failedAttempt = recoveringBridge.startHttpServer(port);
+
+      try {
+        const bindError = await new Promise<NodeJS.ErrnoException>((resolve) => {
+          failedAttempt.once('error', resolve);
+        });
+        expect(bindError.code).toBe('EADDRINUSE');
+
+        await new Promise<void>((resolve, reject) => {
+          blocker.close((error) => error ? reject(error) : resolve());
+        });
+
+        const deadline = Date.now() + 1500;
+        let status: number | undefined;
+        while (Date.now() < deadline) {
+          status = await new Promise<number | undefined>((resolve) => {
+            const request = http.get({ host: '127.0.0.1', port, path: '/api/mcp/status' }, (response) => {
+              response.resume();
+              resolve(response.statusCode);
+            });
+            request.once('error', () => resolve(undefined));
+          });
+          if (status === 200) break;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+
+        expect(status).toBe(200);
+      } finally {
+        await recoveringBridge.stopHttpServer();
+        await new Promise<void>((resolve) => blocker.close(() => resolve()));
+      }
+    });
+
     it('handles CORS OPTIONS request', async () => {
       const middleware = bridge.middleware();
       const { req, res } = createMockReqRes({

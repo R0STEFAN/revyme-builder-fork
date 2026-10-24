@@ -36,10 +36,30 @@
 // AnimatePresence + conditional, leaving the element rendered inline.
 
 import { parseJSX, findFirstElementByDataId } from '../parsing/ast-utils';
-import generate from '@babel/generator';
+import _generate from '@babel/generator';
 import * as t from '@babel/types';
 import { trace } from '@/shared/debug-trace';
-import traverse from '@babel/traverse';
+import _traverse from '@babel/traverse';
+
+// The Vite SSR bundle exposes @babel/traverse as `{ default: { default } }`,
+// while Vitest returns the function directly. Normalize both shapes so visual
+// visibility edits work in the running Builder as well as in tests.
+export function normalizeBabelTraverse(value: unknown): typeof _traverse {
+  const first = typeof value === 'function' ? value : (value as any)?.default;
+  return (typeof first === 'function' ? first : first?.default) as typeof _traverse;
+}
+
+const traverse = normalizeBabelTraverse(_traverse);
+
+// @babel/generator has the same CommonJS-to-ESM wrapping behavior under Vite
+// SSR. A raw default import becomes an object and fails only when a visibility
+// mutation reaches code generation.
+export function normalizeBabelGenerator(value: unknown): typeof _generate {
+  const first = typeof value === 'function' ? value : (value as any)?.default;
+  return (typeof first === 'function' ? first : first?.default) as typeof _generate;
+}
+
+const generate = normalizeBabelGenerator(_generate);
 
 /** Build the variant condition expression matching:
  *    visible when `<ident> !== 'A' && <ident> !== 'B' && ...`
@@ -239,6 +259,49 @@ function clearHiddenDisplay(el: t.JSXElement, ast: t.File, nodeId: string): void
   trace.action('generator:setVariantVisibility:clear-hidden-display', { nodeId });
 }
 
+/** AnimatePresence layout animations require a Motion child. Promote a native
+ *  JSX element and ensure both runtime imports and `layout` are present before
+ *  wrapping it; the previous writer emitted the wrapper alone, which failed
+ *  Oracle (missing AnimatePresence) and could not FLIP (missing layout). */
+function ensureVisibilityMotionScaffold(target: t.JSXElement, ast: t.File): void {
+  const name = target.openingElement.name;
+  if (t.isJSXIdentifier(name) && /^[a-z]/.test(name.name)) {
+    const oldName = name.name;
+    const motionName = t.jsxMemberExpression(t.jsxIdentifier('motion'), t.jsxIdentifier(oldName));
+    target.openingElement.name = motionName;
+    if (target.closingElement && t.isJSXIdentifier(target.closingElement.name) && target.closingElement.name.name === oldName) {
+      target.closingElement.name = t.jsxMemberExpression(t.jsxIdentifier('motion'), t.jsxIdentifier(oldName));
+    }
+  }
+
+  if (!target.openingElement.attributes.some((attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'layout')) {
+    target.openingElement.attributes.push(t.jsxAttribute(
+      t.jsxIdentifier('layout'),
+      t.jsxExpressionContainer(t.booleanLiteral(true)),
+    ));
+  }
+
+  let motionImport = ast.program.body.find((node): node is t.ImportDeclaration =>
+    t.isImportDeclaration(node) && t.isStringLiteral(node.source) && node.source.value === 'framer-motion');
+  const ensureNamedImport = (imported: string) => {
+    if (motionImport) {
+      const exists = motionImport.specifiers.some((specifier) =>
+        t.isImportSpecifier(specifier) && (t.isIdentifier(specifier.imported) ? specifier.imported.name : specifier.imported.value) === imported);
+      if (!exists) motionImport.specifiers.push(t.importSpecifier(t.identifier(imported), t.identifier(imported)));
+    } else {
+      motionImport = t.importDeclaration(
+        [t.importSpecifier(t.identifier(imported), t.identifier(imported))],
+        t.stringLiteral('framer-motion'),
+      );
+      ast.program.body.unshift(motionImport);
+    }
+  };
+  ensureNamedImport('AnimatePresence');
+  if (t.isJSXMemberExpression(target.openingElement.name)
+    && t.isJSXIdentifier(target.openingElement.name.object)
+    && target.openingElement.name.object.name === 'motion') ensureNamedImport('motion');
+}
+
 export function setVariantVisibilityInCode(
   code: string,
   nodeId: string,
@@ -374,6 +437,8 @@ export function setVariantVisibilityInCode(
     void wrappedTargetIdx;
     return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
   }
+
+  ensureVisibilityMotionScaffold(target, ast);
 
   // ── Case 2: hiddenVariants non-empty → WRAP (or update existing wrap) ──
   ensureKeyProp(target);

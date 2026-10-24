@@ -313,6 +313,31 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
       expect(validation.issues.some((i) => i.code === 'MISSING_DATA_ID')).toBe(true);
     });
 
+    it('allows editor-owned responsive style metadata without a canvas data-id', () => {
+      const snapshot = createSnapshot(
+        { projectId: 'proj-1', branchId: 'main' },
+        1,
+        new Map()
+      );
+      const plan = createPlan({
+        scope: snapshot.scope,
+        baseRevision: 1,
+        operationId: 'op-responsive-style',
+        changes: [{
+          path: 'app/page.client.tsx',
+          beforeHash: null,
+          content: `export default function Page() {
+            return <div data-id="root" data-name="Page" style={{ width: '100%' }}>
+              <style>{\`@media (max-width: 390px) { [data-id="root"] { padding: 16px !important; } }\`}</style>
+            </div>;
+          }`,
+        }],
+      });
+
+      const validation = validatePlan(snapshot, plan);
+      expect(validation.issues.filter((issue) => issue.code === 'MISSING_DATA_ID')).toEqual([]);
+    });
+
     it('detects unresolved relative imports', () => {
       const snapshot = createSnapshot(
         { projectId: 'proj-1', branchId: 'main' },
@@ -374,6 +399,33 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
       expect(result.success).toBe(true);
       expect(result.plan).toBeDefined();
       expect(result.plan.baseRevision).toBe(1);
+    });
+
+    it('coalesces sequential edits to the same file into one atomic change', async () => {
+      const result = await workflowBatchOperation.execute(
+        snapshot,
+        {
+          operations: [
+            {
+              tool: 'nodes.update',
+              input: { filePath: 'app/page.tsx', nodeId: 'root', name: 'First Name' },
+            },
+            {
+              tool: 'nodes.update',
+              input: { filePath: 'app/page.tsx', nodeId: 'root', name: 'Final Name' },
+            },
+          ],
+        },
+        context,
+      );
+
+      expect(result.plan.changes).toHaveLength(1);
+      expect(result.plan.changes[0].path).toBe('app/page.tsx');
+      expect(result.plan.changes[0].beforeHash).toBe(
+        createHash('sha256').update(snapshot.files.get('app/page.tsx')!).digest('hex'),
+      );
+      expect(result.plan.changes[0].content).toContain('data-name="Final Name"');
+      expect(result.plan.changes[0].content).not.toContain('data-name="First Name"');
     });
 
     it('workflow.chain executes sequential steps and reports per-step receipts', async () => {

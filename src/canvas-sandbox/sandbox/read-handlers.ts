@@ -205,21 +205,6 @@ export async function captureElement(
         height: norm.height,
         style: norm.style as Partial<CSSStyleDeclaration>,
         skipFonts: true,
-        filter: (domNode: Node) => {
-          if (domNode instanceof HTMLImageElement || (domNode && (domNode as HTMLElement).tagName === 'IMG')) {
-            const src = (domNode as HTMLImageElement).src;
-            if (src && !src.startsWith('data:') && !src.startsWith('blob:')) {
-              try {
-                const u = new URL(src, window.location.href);
-                if (u.origin !== window.location.origin) {
-                  // Skip cross-origin images in html-to-image to prevent browser CORS ERR_FAILED console logs
-                  return false;
-                }
-              } catch {}
-            }
-          }
-          return true;
-        },
       };
       let res: string;
       if (opts.format === 'svg') res = await htmlToImage.toSvg(el, base);

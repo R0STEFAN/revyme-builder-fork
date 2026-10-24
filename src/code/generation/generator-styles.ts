@@ -2793,6 +2793,28 @@ function updateVariantStyleInCodeInner(
     // When variantName is 'default', merge styles into the single default entry
     // (don't create separate `default: {}` and `'default': { ... }` — same JS key, parser reads first only)
     let variantsConst: string;
+    // A newly-created variants object must declare a transform return value
+    // for every configured state. The existing-object update path below heals
+    // sparse entries, but this create path used to return immediately after
+    // wiring the JSX, leaving sibling variants (e.g. `asymmetric`) absent.
+    // Motion then retained the last scale/rotate when switching states, and
+    // Oracle correctly rejected the plan with VARIANT_OBJECT_MISSING_ENTRY.
+    const transformProps = Object.keys(styles).filter((key) => MOTION_TRANSFORM_PROPS.has(key));
+    const configuredNames = parseVariantConfig(code)
+      .map((variant: { name: string }) => variant.name)
+      .filter((name: string) => !!name && name !== 'default');
+    const extraTransformEntries = transformProps.length > 0
+      ? configuredNames
+        .filter((name: string) => name !== variantName)
+        .map((name: string) => {
+          const values = transformProps.map((key) => {
+            const rest = baseValues[key] ?? MOTION_TRANSFORM_NEUTRAL[key] ?? '0';
+            const isMotionNum = /^-?\d+(\.\d+)?$/.test(String(rest));
+            return `${emitKey(key)}: ${isMotionNum ? rest : quoteStyleValue(String(rest))}`;
+          }).join(', ');
+          return `  '${name}': { ${values} },`;
+        })
+      : [];
     if (variantName === 'default') {
       // Drop empty-string values — `key: ''` in default renders as an empty
       // (and an empty `background` shorthand wipes a sibling backgroundColor).
@@ -2804,9 +2826,9 @@ function updateVariantStyleInCodeInner(
         const isNum = NUMERIC_INIT.has(k) && /^-?\d+(\.\d+)?$/.test(v);
         return `${emitKey(k)}: ${isNum ? v : `'${v}'`}`;
       }).join(', ');
-      variantsConst = `const ${variantsVarName} = {\n  default: { ${mergedProps} },\n};\n\n`;
+      variantsConst = `const ${variantsVarName} = {\n  default: { ${mergedProps} },\n${extraTransformEntries.join('\n')}${extraTransformEntries.length ? '\n' : ''}};\n\n`;
     } else {
-      variantsConst = `const ${variantsVarName} = {\n  default: ${defaultProps},\n  '${variantName}': { ${variantProps} },\n};\n\n`;
+      variantsConst = `const ${variantsVarName} = {\n  default: ${defaultProps},\n  '${variantName}': { ${variantProps} },\n${extraTransformEntries.join('\n')}${extraTransformEntries.length ? '\n' : ''}};\n\n`;
     }
 
     // Insert the const at the earliest of:

@@ -6,6 +6,7 @@ import {
   parseMetadataFromCode,
   parseSiteConfigFromCode,
   updateMetadataInCode,
+  updateSiteConfigInCode,
   ensureLayoutFile,
   moduleParses,
   type SiteMetadata,
@@ -92,13 +93,7 @@ export const metadataUpdateOperation: Operation<
     let nextCode = updateMetadataInCode(code, input.metadata as SiteMetadata);
 
     if (input.siteConfig) {
-      // Update siteConfig block if provided
-      const siteConfigDecl = `export const siteConfig: Record<string, string> = ${JSON.stringify(input.siteConfig, null, 2)};`;
-      if (/export\s+const\s+siteConfig[\s\S]*?;/.test(nextCode)) {
-        nextCode = nextCode.replace(/export\s+const\s+siteConfig[\s\S]*?;/, siteConfigDecl);
-      } else {
-        nextCode = `${nextCode}\n\n${siteConfigDecl}`;
-      }
+      nextCode = updateSiteConfigInCode(nextCode, input.siteConfig);
     }
 
     if (!moduleParses(nextCode)) {

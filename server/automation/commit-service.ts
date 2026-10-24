@@ -49,8 +49,10 @@ export class CommitService {
         meta: { commitStatus: 'not_committed', revision: 0 } };
     }
     plan = parsed.data;
-    if (calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan) !== plan.planHash) {
-      return { ok: false, error: { code: 'PLAN_HASH_MISMATCH', message: 'Plan bytes do not match planHash',
+    const calculatedPlanHash = calculatePlanHash(plan.scope, plan.baseRevision, plan.operationId, plan.changes, plan);
+    if (calculatedPlanHash !== plan.planHash) {
+      return { ok: false, error: { code: 'PLAN_HASH_MISMATCH',
+        message: `Plan bytes do not match planHash (received ${plan.planHash}, calculated ${calculatedPlanHash})`,
         issues: [{ code: 'PLAN_HASH_MISMATCH', path: ['planHash'], message: 'Prepare the plan again before committing' }] },
         meta: { commitStatus: 'not_committed', revision: plan.baseRevision } };
     }

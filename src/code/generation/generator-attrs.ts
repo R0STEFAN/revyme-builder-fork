@@ -8,7 +8,7 @@ import { parseJSX, findFirstElementByDataId, findAttribute, traverse } from '../
 import { SVG_SHAPE_TAGS } from '@/shared/constants';
 import { trace } from '@/shared/debug-trace';
 import { translateShapeGeometry, translatePathD } from '@/shared/svg-geometry';
-import { generate, findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findSubtreeRange } from './generator-utils';
+import { generate, findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findSubtreeRange, ensureNamedImport } from './generator-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
 
 // ─── Variant Style Update ───────────────────────────────────────────────────
@@ -246,6 +246,9 @@ export function convertToMotionLinkInCode(code: string, nodeId: string): string 
   // the framework import and drop it — taking the const with it. The ensure
   // also UPGRADES a legacy `motion.create(Link)` in place.
   out = ensureCanonicalMotionLinkDecl(out);
+  out = ensureNamedImport(out, 'react', [], { ensureDefault: 'React' });
+  out = ensureNamedImport(out, 'framer-motion', ['motion']);
+  out = ensureNamedImport(out, 'next/link', [], { ensureDefault: 'Link' });
   trace.action('generator.convert-to-motion-link', { nodeId });
   return out;
 }

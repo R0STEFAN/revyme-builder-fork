@@ -191,6 +191,18 @@ export default function RootLayout({ children }) {
     expect(result).toContain('export const siteConfig');
     expect(result).toContain('language: "fr"');
   });
+
+  it('keeps the root html language in sync with siteConfig', () => {
+    const code = `export const siteConfig = { language: 'en' };
+export default function RootLayout({ children }) {
+  return <html lang="en"><body>{children}</body></html>;
+}`;
+
+    const result = updateSiteConfigInCode(code, { language: 'uk' });
+
+    expect(result).toContain(`<html lang={siteConfig.language || 'en'}>`);
+    expect(parses(result)).toBe(true);
+  });
 });
 
 describe('ensureLayoutFile', () => {

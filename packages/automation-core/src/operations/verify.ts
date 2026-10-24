@@ -87,6 +87,23 @@ function getOpeningTagName(nameNode: t.JSXIdentifier | t.JSXMemberExpression | t
   return `${nameNode.namespace.name}:${nameNode.name.name}`;
 }
 
+function usesMotionCreate(node: t.Node | null | undefined): boolean {
+  if (!node) return false;
+  let found = false;
+  t.traverseFast(node, (candidate) => {
+    if (
+      t.isCallExpression(candidate) &&
+      t.isMemberExpression(candidate.callee) &&
+      !candidate.callee.computed &&
+      t.isIdentifier(candidate.callee.object, { name: 'motion' }) &&
+      t.isIdentifier(candidate.callee.property, { name: 'create' })
+    ) {
+      found = true;
+    }
+  });
+  return found;
+}
+
 export const verifyEffectOperation: Operation<
   VerifyEffectInput,
   VerifyEffectOutput
@@ -136,6 +153,18 @@ export const verifyEffectOperation: Operation<
     // 2. Motion and Interactive AST Analysis
     const targetNodeIds = input.nodeIds ?? input.node_ids ?? (input.nodeId ? [input.nodeId] : undefined);
     const motionNodes: Record<string, z.infer<typeof motionAnalysisItemSchema>> = {};
+    const motionWrappedComponents = new Set<string>();
+
+    traverse(ast, {
+      VariableDeclarator(pathNode) {
+        if (
+          t.isIdentifier(pathNode.node.id) &&
+          usesMotionCreate(pathNode.node.init)
+        ) {
+          motionWrappedComponents.add(pathNode.node.id.name);
+        }
+      },
+    });
 
     let hasHover = false;
     let hasScroll = false;
@@ -148,7 +177,7 @@ export const verifyEffectOperation: Operation<
       JSXElement(pathNode) {
         const opening = pathNode.node.openingElement;
         const tagName = getOpeningTagName(opening.name);
-        const isMotion = tagName.startsWith('motion.');
+        const isMotion = tagName.startsWith('motion.') || motionWrappedComponents.has(tagName);
         if (isMotion) hasAnyMotionElement = true;
 
         let dataId: string | undefined;
@@ -183,7 +212,17 @@ export const verifyEffectOperation: Operation<
           invalidMotionOnIntrinsic = true;
         }
 
-        if (propsMap['whileHover']) hasHover = true;
+        // Component interaction variants use paired Framer Motion gesture
+        // handlers to select a named variant instead of a `whileHover` prop.
+        // Treat that explicit two-state wiring as a real hover mechanism too.
+        const hasVariantHover = Boolean(
+          propsMap['onHoverStart'] &&
+          propsMap['onHoverEnd'] &&
+          propsMap['animate'] &&
+          /\bset[A-Z]\w*\s*\(/.test(`${propsMap['onHoverStart']} ${propsMap['onHoverEnd']}`)
+        );
+        const hasHoverOnNode = Boolean(propsMap['whileHover'] || hasVariantHover);
+        if (hasHoverOnNode) hasHover = true;
         if (propsMap['whileTap']) hasTap = true;
         if (propsMap['whileInView'] || propsMap['data-scroll-fx']) hasScroll = true;
 
@@ -223,7 +262,7 @@ export const verifyEffectOperation: Operation<
           tag: tagName,
           props: propsMap,
           physics: physicsInfo,
-          hasHover: Boolean(propsMap['whileHover']),
+          hasHover: hasHoverOnNode,
           hasScrollTrigger: Boolean(propsMap['whileInView'] || propsMap['data-scroll-fx']),
           hasSpringPhysics: Boolean(physicsInfo),
         };

@@ -1,10 +1,11 @@
 // packages/cli/test/mcp.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../src/mcp';
 import { AutomationClient } from '../src/client';
 import { defaultRegistry } from '@revyme/automation-core';
+import { observeAuditOperation, observeScreenshotOperation } from '@revyme/automation-core';
 
 describe('T05: Revyme Model Context Protocol (MCP) Server v2', () => {
   let client: Client;
@@ -102,6 +103,191 @@ function getTextContent(res: any, index = 0): string {
     const data = JSON.parse(getTextContent(res));
     expect(data.ok).toBe(true);
     expect(data.data.operations.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('passes a mutation target file into the scope used for plan hashing', async () => {
+    const execute = vi.spyOn(autoClient, 'execute').mockResolvedValue({
+      ok: true,
+      data: { removedTokens: [] },
+      meta: { commitStatus: 'not_committed', revision: 1 },
+    });
+
+    const res = await client.callTool({
+      name: 'typography.remove',
+      arguments: { name: 'legacy-copy', force: true, targetFile: 'app/globals.css' },
+    });
+
+    expect(res.isError).toBe(false);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'app/globals.css' }),
+      'typography.remove',
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('passes component master paths into the scope used for plan hashing', async () => {
+    const execute = vi.spyOn(autoClient, 'execute').mockResolvedValue({
+      ok: true,
+      data: { connections: [] },
+      meta: { commitStatus: 'not_committed', revision: 1 },
+    });
+
+    const res = await client.callTool({
+      name: 'connections.create',
+      arguments: {
+        componentFile: 'components/PrimaryButton.tsx',
+        from: 'default',
+        to: 'hover',
+        trigger: 'mouseEnter',
+        sourceNode: 'button-root',
+      },
+    });
+
+    expect(res.isError).toBe(false);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'components/PrimaryButton.tsx' }),
+      'connections.create',
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('captures screenshots through the active editor bridge adapter', async () => {
+    const dataUrl = 'data:image/png;base64,aGVsbG8=';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        result: {
+          available: true,
+          status: 'ready',
+          dataUrl,
+          width: 640,
+          height: 480,
+          waitedMs: 24,
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const execute = vi.spyOn(autoClient, 'execute').mockImplementation(async (scope, toolName, input, options) => {
+      if (toolName !== 'observe.screenshot') throw new Error(`Unexpected tool: ${toolName}`);
+      const output = await observeScreenshotOperation.execute(
+        {
+          scope,
+          revision: 7,
+          files: new Map([['app/page.client.tsx', '<div data-id="root" />']]),
+          config: {},
+        },
+        input as any,
+        options?.context as any,
+      );
+      return {
+        ok: true,
+        data: output,
+        meta: { commitStatus: 'not_committed', revision: 7 },
+      } as any;
+    });
+
+    const res = await client.callTool({
+      name: 'observe.screenshot',
+      arguments: {
+        projectId: 'test-default-proj',
+        branchId: 'main',
+        filePath: 'app/page.client.tsx',
+        viewport: 'desktop',
+        format: 'png',
+      },
+    });
+
+    expect(res.isError).toBe(false);
+    const payload = JSON.parse(getTextContent(res));
+    expect(payload.data.available).toBe(true);
+    expect(payload.data.primary.dataUrl).toBe(dataUrl);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:8082/rpc');
+    expect(JSON.parse(String(request.body))).toEqual({
+      method: 'captureScreenshot',
+      params: {
+        projectId: 'test-default-proj',
+        branchId: 'main',
+        filePath: 'app/page.client.tsx',
+        viewport: 'desktop',
+        nodeId: 'root',
+        format: 'png',
+        pixelRatio: 1,
+      },
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('collects audit measurements from the active Builder canvas', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        result: {
+          status: 'ready',
+          reason: 'Measured from the active Builder canvas.',
+          nodes: [
+            { id: 'root', parentId: null, children: ['cta-btn'], text: '', rect: { x: 0, y: 0, width: 1200, height: 900 }, computed: {} },
+            { id: 'cta-btn', parentId: 'root', children: [], text: 'Go', rect: { x: 20, y: 20, width: 120, height: 48 }, computed: { color: '#fff', backgroundColor: '#000', fontSize: '16px' } },
+          ],
+          epoch: {
+            renderSeq: 4,
+            projectVersionAtFill: 3,
+            projectVersionNow: 3,
+            stale: false,
+            withRect: 2,
+            total: 2,
+            unmeasured: [],
+            unmeasuredTotal: 0,
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const execute = vi.spyOn(autoClient, 'execute').mockImplementation(async (scope, toolName, input, options) => {
+      if (toolName !== 'observe.audit') throw new Error(`Unexpected tool: ${toolName}`);
+      const data = await observeAuditOperation.execute(
+        {
+          scope,
+          revision: 7,
+          files: new Map([['app/page.client.tsx', '<div data-id="root"><button data-id="cta-btn">Go</button></div>']]),
+          config: {},
+        },
+        input as any,
+        options?.context as any,
+      );
+      return { ok: true, data, meta: { commitStatus: 'not_committed', revision: 7 } } as any;
+    });
+
+    const res = await client.callTool({
+      name: 'observe.audit',
+      arguments: { projectId: 'test-default-proj', branchId: 'main', filePath: 'app/page.client.tsx', viewport: 'desktop' },
+    });
+
+    expect(res.isError).toBe(false);
+    const payload = JSON.parse(getTextContent(res));
+    expect(payload.data.status).toBe('ready');
+    expect(payload.data.stats.touchTargetsChecked).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:8082/rpc');
+    expect(JSON.parse(String(request.body))).toEqual({
+      method: 'observeAuditSnapshot',
+      params: {
+        projectId: 'test-default-proj',
+        branchId: 'main',
+        filePath: 'app/page.client.tsx',
+        revision: 7,
+        viewport: 'desktop',
+      },
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('enforces structured error when project operation lacks projectId', async () => {

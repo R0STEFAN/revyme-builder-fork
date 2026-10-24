@@ -8,6 +8,7 @@ import { getProjectId } from './project-id';
 import { getBaseRevision, noteSaved, setLoadedRevision } from './save-revision';
 
 const STORAGE_PREFIX = 'revyme-project-';
+const RECOVERY_PREFIX = 'revyme-project-recovery-';
 const NAME_PREFIX = 'revyme:project-name:';
 const UNSYNCED_FIELD = '__revymeUnsynced';
 const REVISION_FIELD = '__revymePersistenceRevision';
@@ -54,7 +55,7 @@ export class LocalBackend implements ProjectBackend {
 
   async loadProject(id: string): Promise<ProjectData | null> {
     let serverError: Error | null = null;
-    const readLocal = (): { data: ProjectData; unsynced: boolean; revision: number | null; baseRevision: number | null } | null => {
+    const readLocal = (): { raw: string; data: ProjectData; unsynced: boolean; revision: number | null; baseRevision: number | null } | null => {
       const raw = localStorage.getItem(STORAGE_PREFIX + id);
       if (!raw) return null;
       const stored = JSON.parse(raw) as ProjectData & { [UNSYNCED_FIELD]?: boolean; [REVISION_FIELD]?: number; [BASE_REVISION_FIELD]?: number };
@@ -66,7 +67,7 @@ export class LocalBackend implements ProjectBackend {
       if (!isKnownProjectFormat(data.format)) {
         trace.error('local-backend:unknown-format', { id, format: data.format, fileCount });
       }
-      return { data: data as ProjectData, unsynced: unsynced === true, revision, baseRevision: readRevision(baseRevision) };
+      return { raw, data: data as ProjectData, unsynced: unsynced === true, revision, baseRevision: readRevision(baseRevision) };
     };
 
     // A failed server PUT leaves an older row behind. The local snapshot is
@@ -114,10 +115,36 @@ export class LocalBackend implements ProjectBackend {
     }
 
     // An unsynced local copy beats a legacy server row, or a server row
-    // carrying an older revision. An acknowledged equal/newer server revision
-    // wins even if quota prevented clearing the local recovery marker.
+    // carrying an older revision. If an external writer advanced the server
+    // past this copy's base, preserve the local recovery snapshot separately
+    // and load the authoritative server copy instead of resurrecting stale code.
+    const serverAdvancedPastRecovery = Boolean(
+      local?.unsynced &&
+      server &&
+      local.baseRevision !== null &&
+      server.revision !== null &&
+      local.baseRevision < server.revision
+    );
+    if (serverAdvancedPastRecovery && local && server) {
+      const recoveryKey = `${RECOVERY_PREFIX}${id}-${local.baseRevision}`;
+      try {
+        if (!localStorage.getItem(recoveryKey)) localStorage.setItem(recoveryKey, local.raw);
+        trace.action('local-backend:stale-recovery-preserved', {
+          id,
+          baseRevision: local.baseRevision,
+          serverRevision: server.revision,
+        });
+      } catch (err) {
+        trace.error('local-backend:stale-recovery-preserve-error', {
+          id,
+          baseRevision: local.baseRevision,
+          serverRevision: server.revision,
+          error: String(err),
+        });
+      }
+    }
     if (local?.unsynced && (!server || server.recoveryRevision === null ||
-      (local.revision !== null && server.recoveryRevision < local.revision))) {
+      (local.revision !== null && server.recoveryRevision < local.revision)) && !serverAdvancedPastRecovery) {
       setLoadedRevision(local.baseRevision);
       trace.action('backend:load-project', { id, source: 'localStorage', fileCount: Object.keys(local.data.files).length });
       return local.data;

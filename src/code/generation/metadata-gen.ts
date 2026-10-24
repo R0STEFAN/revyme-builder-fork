@@ -59,7 +59,7 @@ export const siteConfig: Record<string, string> = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={siteConfig.language || 'en'} suppressHydrationWarning>
       <body>
         {siteConfig.customHead ? (
           <div data-custom-code="head" style={{ display: 'contents' }} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: siteConfig.customHead }} />
@@ -262,9 +262,10 @@ export function updateMetadataInCode(code: string, updates: SiteMetadata): strin
     : `export const metadata = {};`;
 
   const block = extractExportObject(code, 'metadata');
-  const out = block
+  let out = block
     ? code.slice(0, block.start) + newBlock + code.slice(block.end)
     : insertBeforeDefaultExport(code, newBlock);
+
   if (!moduleParses(out)) {
     trace.error('metadata-gen:update-metadata-parse-gate', { updates: Object.keys(updates) });
     return code;
@@ -303,9 +304,21 @@ export function updateSiteConfigInCode(code: string, updates: Record<string, str
     : `export const siteConfig: Record<string, string> = {};`;
 
   const block = extractExportObject(code, 'siteConfig');
-  const out = block
+  let out = block
     ? code.slice(0, block.start) + newBlock + code.slice(block.end)
     : insertBeforeDefaultExport(code, newBlock);
+
+  // Keep the document language aligned with the Builder's siteConfig value.
+  // The root layout is the source of the published <html lang> attribute too.
+  if (typeof merged.language === 'string' && /<html\b/.test(out)) {
+    out = out.replace(/<html\b([^>]*)>/, (_tag, rawAttributes: string) => {
+      const langAttribute = /\s+lang=(?:\{[^}]*\}|"[^"]*"|'[^']*'|[^\s>]+)/;
+      const attributes = langAttribute.test(rawAttributes)
+        ? rawAttributes.replace(langAttribute, " lang={siteConfig.language || 'en'}")
+        : `${rawAttributes} lang={siteConfig.language || 'en'}`;
+      return `<html${attributes}>`;
+    });
+  }
   if (!moduleParses(out)) {
     trace.error('metadata-gen:update-site-config-parse-gate', { updates: Object.keys(updates) });
     return code;

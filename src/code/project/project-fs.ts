@@ -2212,7 +2212,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: next-themes mutates the <html> class on
     // mount to apply the user's persisted theme; without this React
     // warns about the server/client class mismatch.
-    <html lang="en" suppressHydrationWarning>
+    <html lang={siteConfig.language || 'en'} suppressHydrationWarning>
       <body>
         <Providers>
           {children}

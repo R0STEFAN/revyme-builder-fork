@@ -126,7 +126,7 @@ it('refuses stale duplicate plans and never overwrites an existing target', asyn
     expect(stale.error?.code).toBe('REVISION_CONFLICT');
   } finally { await server.close(); }
 });
-it('recovery reload must not bypass stale-save protection', async () => {
+it('recovery reload must prefer a newer server snapshot over stale local recovery', async () => {
   const f = fixture(); resetSaveRevisionForTest(); localStorage.clear();
   vi.stubGlobal('fetch', async (_url: unknown, init?: RequestInit) => {
     if (init?.method === 'PUT') {
@@ -142,9 +142,8 @@ it('recovery reload must not bypass stale-save protection', async () => {
   await expect(backend.saveProject(scope.projectId, loaded)).rejects.toThrow('REVISION_CONFLICT');
   resetSaveRevisionForTest();
   const recovered = (await backend.loadProject(scope.projectId))!;
-  let rejected = false;
-  try { await backend.saveProject(scope.projectId, recovered); } catch { rejected = true; }
-  expect(rejected).toBe(true);
+  expect(recovered.files['app/page.client.tsx']).toContain('Agent');
+  await expect(backend.saveProject(scope.projectId, recovered)).resolves.toBeUndefined();
   expect(JSON.parse(fs.readFileSync(f.file, 'utf8')).data.files['app/page.client.tsx']).toContain('Agent');
 });
 it('workflow.chain must persist successful steps', async () => {

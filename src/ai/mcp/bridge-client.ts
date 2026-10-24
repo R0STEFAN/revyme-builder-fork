@@ -27,24 +27,31 @@ import {
   getPageClientPath,
 } from '@/code/project/active-file-store';
 import { applyTemplate } from '@/code/project/template-ops';
-import { canvasInteractingAtom, getNodesSnapshot } from '@/code/stores/store';
+import { canvasInteractingAtom, codeAtom, getNodesSnapshot } from '@/code/stores/store';
 import { isTextEditingAtom } from '@/code/stores/editor-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { withAgentWriteAccessAsync } from '@/code/stores/agent-run-lock-store';
 import { registerExternalRunMirror } from '@/editor/agent/external-run';
 import { projectVersionAtom } from '@/code/project/project-fs';
 import { triggerAutosave, flushSaveNow } from '@/backend/autosave';
+import { saveStatusAtom } from '@/backend/save-store';
+import { getBaseRevision, setLoadedRevision } from '@/backend/save-revision';
 import { backend } from '@/backend';
 import { getProjectId } from '@/backend/project-id';
 import { getPresetTokens } from '@/code/project/preset-ops';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { checkFile } from '@/code/oracle/check-file';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
+import { settleObservation, waitForRender } from '@/ai/agent/tools/wait-for-render';
+import { collectEpochSnapshot, observationStatusWithEpoch } from '@/ai/agent/tools/observation-epoch';
+import { getViewportWidths } from '@/code/stores/viewport-store';
+import { getCanvasBridge } from '@/canvas/canvas-bridge';
+import { findNodeRect, getViewportPrefix } from '@/canvas/node-ops';
 import { getI18nConfig, addLocale } from '@/code/project/locale-ops';
 import { listTranslatableTexts, readTranslationText, commitTranslationText, ensureIntlScaffold } from '@/code/project/translation-ops';
 import { scanPresetUsage } from '@/code/stores/preset-store';
 import { refreshCanvasTokens } from '@/canvas/node-ops';
-import { queueMutation, flushNow } from '@/code/mutation/mutation-queue';
+import { queueMutation, flushNow, getQueueActiveFilePath, syncQueueCode, hasQueuedMutations, isMutationQueueProcessing } from '@/code/mutation/mutation-queue';
 import { listCollections, getCollectionSchema, getCollectionData, createBlankCollection } from '@/code/project/cms-ops';
 import {
   loadCmsProjectConfig,
@@ -90,7 +97,7 @@ import { hasComponentControls } from '@/code/components/controls-parser';
 import { createVectorSetFromSvgs, looksLikeSvg, MAX_ICONS_PER_SET, MAX_SVG_FILE_BYTES, type PreflightSvg } from '@/code/icons/create-vector-set-from-svgs';
 import { isComponentUrl, importComponentFromUrl } from '@/cloud/components/component-paste';
 
-const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8082';
+const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://127.0.0.1:8082';
 
 type BridgeHandler = (params: any) => Promise<unknown>;
 
@@ -104,6 +111,265 @@ export function assertProjectScopedPath(filePath: unknown): void {
 
 /** Exported for tests — the dispatch table behind the EventSource. */
 export const bridgeHandlers: Record<string, BridgeHandler> = {
+  async projectSnapshotChanged(params: {
+    projectId: string;
+    branchId?: string;
+    baseRevision: number;
+    revision: number;
+    changedFiles?: string[];
+  }) {
+    const projectId = getProjectId();
+    if (!params?.projectId || params.projectId !== projectId) {
+      return { applied: false, reason: 'PROJECT_MISMATCH', activeProjectId: projectId };
+    }
+
+    const branchId = params.branchId || 'main';
+    const activeBranchId = projectFS.getActiveBranchId();
+    if (branchId !== activeBranchId) {
+      return { applied: false, reason: 'BRANCH_MISMATCH', activeBranchId };
+    }
+
+    const baseRevision = getBaseRevision();
+    if (baseRevision !== null && baseRevision >= params.revision) {
+      return { applied: false, reason: 'ALREADY_CURRENT', revision: baseRevision };
+    }
+
+    const store = getDefaultStore();
+    const saveStatus = store.get(saveStatusAtom);
+    const queuedMutations = hasQueuedMutations();
+    const queueProcessing = isMutationQueueProcessing();
+    if (saveStatus !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || queuedMutations || queueProcessing) {
+      return {
+        applied: false,
+        reason: 'LOCAL_CHANGES_PENDING',
+        saveStatus,
+        interacting: store.get(canvasInteractingAtom),
+        textEditing: store.get(isTextEditingAtom),
+        queuedMutations,
+        queueProcessing,
+      };
+    }
+    // A tab can miss earlier automation commits (or their SSE notification).
+    // A clean tab behind this plan is safe to advance from the durable server
+    // snapshot; a tab ahead of the commit's base is not safe to replace.
+    if (baseRevision === null || baseRevision > params.baseRevision) {
+      return { applied: false, reason: 'REVISION_MISMATCH', baseRevision };
+    }
+    if (baseRevision < params.baseRevision) {
+      trace.action('mcp-bridge:project-snapshot-catch-up', {
+        projectId,
+        localRevision: baseRevision,
+        commitBaseRevision: params.baseRevision,
+      });
+    }
+
+    const data = await backend.loadProject(projectId);
+    if (!data?.files || Object.keys(data.files).length === 0) {
+      return { applied: false, reason: 'PROJECT_SNAPSHOT_UNAVAILABLE' };
+    }
+
+    // Loading the durable snapshot is async. Re-check the local edit/save gate
+    // immediately before replacing ProjectFS so work begun during the request
+    // remains untouched. The backend load may also advance its revision token.
+    const latestSaveStatus = store.get(saveStatusAtom);
+    const latestQueuedMutations = hasQueuedMutations();
+    const latestQueueProcessing = isMutationQueueProcessing();
+    if (latestSaveStatus !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || latestQueuedMutations || latestQueueProcessing) {
+      return {
+        applied: false,
+        reason: 'LOCAL_CHANGES_PENDING',
+        saveStatus: latestSaveStatus,
+        interacting: store.get(canvasInteractingAtom),
+        textEditing: store.get(isTextEditingAtom),
+        queuedMutations: latestQueuedMutations,
+        queueProcessing: latestQueueProcessing,
+      };
+    }
+    const loadedRevision = getBaseRevision();
+    if (loadedRevision !== null && loadedRevision < params.revision) {
+      return { applied: false, reason: 'SNAPSHOT_BEHIND_COMMIT', loadedRevision };
+    }
+
+    projectFS.loadSnapshot(new Map(Object.entries(data.files)));
+    if (data.branches) projectFS.hydrateBranches(data.branches, data.activeBranchId);
+    const activeFilePath = store.get(activeFilePathAtom);
+    const activeCode = projectFS.readFile(activeFilePath);
+    if (activeCode !== null) store.set(codeAtom, activeCode);
+    const queueFilePath = getQueueActiveFilePath();
+    const queueCode = queueFilePath ? projectFS.readFile(queueFilePath) : null;
+    if (queueCode !== null) syncQueueCode(queueCode);
+    store.set(projectVersionAtom, (version) => version + 1);
+    const appliedRevision = loadedRevision ?? params.revision;
+    setLoadedRevision(appliedRevision);
+    trace.action('mcp-bridge:project-snapshot-applied', {
+      projectId,
+      branchId,
+      revision: appliedRevision,
+      changedFiles: params.changedFiles?.length ?? 0,
+    });
+    return { applied: true, revision: appliedRevision, changedFiles: params.changedFiles ?? [] };
+  },
+
+  async captureScreenshot(params: {
+    projectId?: string;
+    branchId?: string;
+    filePath?: string;
+    viewport?: string;
+    nodeId?: string;
+    format?: 'png' | 'jpeg' | 'webp';
+    pixelRatio?: number;
+    backgroundColor?: string;
+  }) {
+    const projectId = getProjectId();
+    if (params.projectId && params.projectId !== projectId) {
+      return { available: false, status: 'unavailable', reason: 'PROJECT_MISMATCH', note: 'The active builder tab belongs to a different project.', waitedMs: 0 };
+    }
+
+    const branchId = projectFS.getActiveBranchId();
+    if (params.branchId && params.branchId !== branchId) {
+      return { available: false, status: 'unavailable', reason: 'BRANCH_MISMATCH', note: `The canvas displays branch "${branchId}", not "${params.branchId}".`, waitedMs: 0 };
+    }
+
+    const activeFilePath = getDefaultStore().get(activeFilePathAtom);
+    const filePath = params.filePath || activeFilePath;
+    if (filePath !== activeFilePath) {
+      return { available: false, status: 'unavailable', reason: 'ACTIVE_FILE_MISMATCH', note: `The canvas displays "${activeFilePath}", not "${filePath}".`, waitedMs: 0 };
+    }
+
+    if (params.format === 'webp') {
+      return { available: false, status: 'unavailable', reason: 'UNSUPPORTED_FORMAT', note: 'The canvas capture bridge currently supports PNG and JPEG.', waitedMs: 0 };
+    }
+
+    const viewport = params.viewport || 'desktop';
+    const nodeId = params.nodeId || 'root';
+    const format = params.format === 'jpeg' ? 'jpeg' : 'png';
+    const pixelRatio = params.pixelRatio ?? 1;
+    const wait = await waitForRender({
+      vpId: viewport,
+      nodeIds: [nodeId],
+      branchId,
+      timeoutMs: 1500,
+      intervalMs: 100,
+    });
+    if (wait.status !== 'ready') {
+      return {
+        available: false,
+        status: wait.status,
+        reason: wait.status === 'pending' ? 'CANVAS_RENDER_PENDING' : 'CANVAS_RENDER_UNAVAILABLE',
+        note: wait.status === 'pending' ? 'The requested canvas node has not finished rendering yet.' : `No rendered canvas is available for viewport "${viewport}".`,
+        waitedMs: wait.waitedMs,
+      };
+    }
+
+    const rect = findNodeRect(nodeId, viewport);
+    if (!rect) {
+      return { available: false, status: 'pending', reason: 'NODE_RECT_UNAVAILABLE', note: `No rendered bounds are cached for node "${nodeId}".`, waitedMs: wait.waitedMs };
+    }
+
+    const bridge = getCanvasBridge();
+    if (typeof bridge.captureElement !== 'function') {
+      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_UNAVAILABLE', note: 'The active canvas bridge does not expose iframe capture.', waitedMs: wait.waitedMs };
+    }
+    const dataUrl = await bridge.captureElement(nodeId, getViewportPrefix(viewport), {
+      format,
+      pixelRatio,
+      backgroundColor: params.backgroundColor || (format === 'jpeg' ? '#ffffff' : undefined),
+    });
+    if (!dataUrl) {
+      return { available: false, status: 'unavailable', reason: 'CANVAS_CAPTURE_EMPTY', note: 'The iframe could not capture the requested node.', waitedMs: wait.waitedMs, width: rect.width, height: rect.height };
+    }
+    trace.action('mcp-bridge:capture-screenshot', { projectId, branchId, filePath, viewport, nodeId, format, bytes: dataUrl.length });
+    return {
+      available: true,
+      status: 'ready',
+      dataUrl,
+      bytes: dataUrl.length,
+      width: rect.width,
+      height: rect.height,
+      waitedMs: wait.waitedMs,
+    };
+  },
+
+  async observeAuditSnapshot(params: {
+    projectId: string;
+    branchId: string;
+    filePath: string;
+    revision: number;
+    viewport: string;
+  }) {
+    const store = getDefaultStore();
+    const projectId = getProjectId();
+    const activeBranchId = projectFS.getActiveBranchId();
+    const activeFilePath = store.get(activeFilePathAtom);
+    const unavailable = (reason: string, note: string) => ({ status: 'unavailable' as const, reason, note });
+    const pending = (reason: string, note: string) => ({ status: 'pending' as const, reason, note });
+
+    if (!params?.projectId || params.projectId !== projectId) {
+      return unavailable('PROJECT_MISMATCH', 'The active Builder tab belongs to a different project.');
+    }
+    if (!params.branchId || params.branchId !== activeBranchId) {
+      return unavailable('BRANCH_MISMATCH', `The canvas displays branch "${activeBranchId}", not "${params.branchId}".`);
+    }
+    if (!params.filePath || params.filePath !== activeFilePath) {
+      return unavailable('ACTIVE_FILE_MISMATCH', `The canvas displays "${activeFilePath}", not "${params.filePath}".`);
+    }
+
+    const baseRevision = getBaseRevision();
+    if (baseRevision !== params.revision) {
+      return unavailable('REVISION_MISMATCH', `The active canvas is saved at revision ${baseRevision ?? 'unknown'}, not ${params.revision}.`);
+    }
+    if (store.get(saveStatusAtom) !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || hasQueuedMutations() || isMutationQueueProcessing()) {
+      return pending('CANVAS_NOT_STABLE', 'Wait for canvas edits and autosave to finish, then retry the audit.');
+    }
+
+    const width = getViewportWidths()[params.viewport] ?? null;
+    if (width === null) {
+      return unavailable('UNKNOWN_VIEWPORT', `No rendered canvas viewport matches "${params.viewport}".`);
+    }
+
+    const initialNodes = getNodesSnapshot();
+    if (initialNodes.size === 0) {
+      return pending('CANVAS_NODES_UNAVAILABLE', 'The active canvas has not produced a node tree yet.');
+    }
+
+    await settleObservation({
+      vpId: params.viewport,
+      nodeIds: [...initialNodes.keys()],
+      branchId: activeBranchId,
+      timeoutMs: 1500,
+    });
+
+    // Recheck the write boundary after the asynchronous settle so a concurrent
+    // save or page/branch switch cannot make the snapshot appear authoritative.
+    if (getProjectId() !== params.projectId || projectFS.getActiveBranchId() !== params.branchId || store.get(activeFilePathAtom) !== params.filePath) {
+      return unavailable('CANVAS_SCOPE_CHANGED', 'The active project, branch, or page changed while the canvas was settling.');
+    }
+    if (getBaseRevision() !== params.revision || store.get(saveStatusAtom) !== 'saved' || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom) || hasQueuedMutations() || isMutationQueueProcessing()) {
+      return pending('CANVAS_CHANGED_DURING_AUDIT', 'The page changed while measurements were collected; retry after it is saved.');
+    }
+
+    const snapshot = collectEpochSnapshot(getNodesSnapshot(), params.viewport);
+    const verdict = observationStatusWithEpoch({ id: params.viewport, width }, snapshot.epoch);
+    trace.action('mcp-bridge:observe-audit-snapshot', {
+      projectId: params.projectId,
+      branchId: params.branchId,
+      filePath: params.filePath,
+      revision: params.revision,
+      viewport: params.viewport,
+      status: verdict.status,
+      withRect: snapshot.epoch.withRect,
+      total: snapshot.epoch.total,
+      stale: snapshot.epoch.stale,
+    });
+    return {
+      status: verdict.status,
+      reason: verdict.reason,
+      revision: params.revision,
+      nodes: snapshot.nodes,
+      epoch: snapshot.epoch,
+    };
+  },
+
   async getContext() {
     const store = getDefaultStore();
     const activeFilePath = store.get(activeFilePathAtom);
@@ -1397,7 +1663,7 @@ export function startMcpBridge(): void {
   // Key the connection by project so the multi-tenant bridge routes MCP
   // calls ONLY to this tab's project (production model; 'local' = dev key).
   const bridgeProjectId = getProjectId();
-  const bridgeQs = bridgeProjectId && bridgeProjectId !== 'local' ? `?websiteId=${encodeURIComponent(bridgeProjectId)}` : '';
+  const bridgeQs = bridgeProjectId ? `?websiteId=${encodeURIComponent(bridgeProjectId)}` : '';
   // withCredentials: the production bridge verifies the tab's session cookie
   // (REVYME_BRIDGE_AUTH) — cookies must flow even if the bridge origin differs.
   source = new EventSource(`${AI_SERVICE_URL}/bridge/events${bridgeQs}`, { withCredentials: true });

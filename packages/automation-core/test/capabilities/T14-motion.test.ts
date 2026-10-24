@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Snapshot, FileChange } from '../../src/contracts';
 import { createSnapshot, createOperationContext } from '../../src/session';
+import { checkFile } from '@/code/oracle/check-file';
 import {
   motionSetOperation,
   motionGetOperation,
@@ -44,6 +45,75 @@ function applyChanges(files: Map<string, string>, changes: FileChange[]): void {
 }
 
 describe('T14: Complete Motion, Text Effects, and Site Effects', () => {
+  it('adds motion to an existing framer-motion import when converting a plain tag', async () => {
+    const pageCode = `import { AnimatePresence } from 'framer-motion';
+export default function Page() {
+  return <div data-id="root"><button data-id="cta">Start</button></div>;
+}`;
+    const snapshot = createMockSnapshot({ 'app/page.tsx': pageCode });
+
+    const result = await motionSetOperation.execute(snapshot, {
+      targetFile: 'app/page.tsx', nodeId: 'cta', prop: 'whileHover', values: { scale: '1.05' },
+    }, mockContext);
+    const code = result.changes[0].content!;
+
+    expect(code).toMatch(/import\s*\{\s*AnimatePresence\s*,\s*motion\s*\}\s*from 'framer-motion'/);
+    expect(code).toContain('<motion.button data-id="cta"');
+  });
+
+  it('adds motion to an existing framer-motion import for variant-state bindings', async () => {
+    const componentCode = `import { AnimatePresence } from 'framer-motion';
+const variants = { default: {}, open: {} };
+function Menu({ initialVariant = 'default' }) {
+  const variant = initialVariant;
+  return <div data-id="menu-root" variants={variants} />;
+}`;
+    const snapshot = createMockSnapshot({ 'components/Menu.tsx': componentCode });
+
+    const result = await motionSetOperation.execute(snapshot, {
+      targetFile: 'components/Menu.tsx', nodeId: 'menu-root', prop: 'animate', values: {}, variantState: 'current',
+    }, mockContext);
+    const code = result.changes[0].content!;
+
+    expect(code).toMatch(/import\s*\{\s*AnimatePresence\s*,\s*motion\s*\}\s*from 'framer-motion'/);
+    expect(code).toContain('<motion.div data-id="menu-root"');
+    expect(code).toContain("animate={['default', variant]}");
+  });
+
+  it('binds variants to live component state with the list-form initial and animate expressions', async () => {
+    const componentCode = `import React from 'react';
+import { useState } from 'react';
+const navVariants = { default: {}, open: {} };
+const variantConfig = [{ name: 'default', label: 'Default', isPrimary: true }, { name: 'open', label: 'Open' }];
+const connections = [{ from: 'default', to: 'open', trigger: 'click' }];
+function Nav({ initialVariant = 'default' }) {
+  const [variant, setVariant] = useState(initialVariant);
+  return <div data-id="nav-root" variants={navVariants} />;
+}`;
+    const snapshot = createMockSnapshot({ 'components/Nav.tsx': componentCode });
+
+    const result = await motionSetOperation.execute(
+      snapshot,
+      {
+        targetFile: 'components/Nav.tsx',
+        nodeId: 'nav-root',
+        prop: 'animate',
+        values: {},
+        variantState: 'current',
+      } as any,
+      mockContext,
+    );
+    const code = result.changes[0].content!;
+
+    expect(code).toContain('<motion.div');
+    expect(code).toContain("animate={['default', variant]}");
+    expect(code).toContain("initial={['default', initialVariant]}");
+    expect(code).not.toContain('animate={{');
+    const violations = checkFile(code, { kind: 'component', path: 'components/Nav.tsx' });
+    expect(violations.map((violation) => violation.code)).not.toContain('MISSING_ANIMATE_ON_VARIANTS');
+    expect(violations.map((violation) => violation.code)).not.toContain('MOTION_PROPS_ON_PLAIN_TAG');
+  });
+
   it('handles framer-motion props, presets, reading and removal', async () => {
     const pageCode = `export default function Page() {
   return (

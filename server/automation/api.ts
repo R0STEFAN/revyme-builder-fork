@@ -1,7 +1,7 @@
 // server/automation/api.ts
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
-import type { Plan } from '../../packages/automation-core/src/contracts';
+import type { Plan, Receipt } from '../../packages/automation-core/src/contracts';
 import { LocalProjectRepository } from './project-repository';
 import { CommitService } from './commit-service';
 import { PlanSchema } from '../../packages/automation-core/src/contracts';
@@ -11,6 +11,7 @@ export function createAutomationMiddleware(options: {
   repository?: LocalProjectRepository;
   commitService?: CommitService;
   validatePlan?: (snapshot: any, plan: Plan) => { ok: boolean; issues: any[] };
+  onCommit?: (commit: { plan: Plan; receipt: Receipt }) => Promise<unknown> | unknown;
 } = {}) {
   const repository = options.repository || new LocalProjectRepository();
   const commitService = options.commitService || new CommitService(repository);
@@ -45,12 +46,13 @@ export function createAutomationMiddleware(options: {
     // Helper to read JSON body
     const readBody = (): Promise<any> =>
       new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', (chunk) => {
-          body += chunk.toString();
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer | string) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8'));
         });
         req.on('end', () => {
           try {
+            const body = Buffer.concat(chunks).toString('utf8');
             resolve(body ? JSON.parse(body) : {});
           } catch (e) {
             reject(new Error('Invalid JSON'));
@@ -110,7 +112,18 @@ export function createAutomationMiddleware(options: {
         const plan = (await readBody()) as Plan;
         const result = await commitService.commit(plan);
         const statusCode = result.ok ? 200 : result.error?.code === 'REVISION_CONFLICT' ? 409 : 400;
-        return sendJson(statusCode, result);
+        if (!result.ok || !result.data || !options.onCommit) return sendJson(statusCode, result);
+
+        // The durable snapshot is already committed. A live-editor notification
+        // failure must be reported separately and must never turn that commit
+        // into an apparent failure that a caller might retry as a new edit.
+        let editorSync: unknown;
+        try {
+          editorSync = await options.onCommit({ plan, receipt: result.data });
+        } catch (err) {
+          editorSync = { applied: false, error: err instanceof Error ? err.message : String(err) };
+        }
+        return sendJson(statusCode, { ...result, editorSync });
       }
 
       // 4. GET /api/automation/status?projectId=...&operationId=...

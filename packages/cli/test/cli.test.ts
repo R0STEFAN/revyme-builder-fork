@@ -1,9 +1,10 @@
 // packages/cli/test/cli.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { runCli } from '../src/main';
+import { AutomationClient } from '../src/client';
 import { loadConfig, saveConfig, sanitizeConfig } from '../src/config';
 
 describe('T05: Revyme CLI Command Line Interface', () => {
@@ -161,6 +162,58 @@ describe('T05: Revyme CLI Command Line Interface', () => {
     const result = JSON.parse(outputs.join(''));
     expect(result.ok).toBe(true);
     expect(result.data.topic).toBe('recipes');
+  });
+
+  it('coerces typed flags from the operation schema', async () => {
+    const execute = vi.spyOn(AutomationClient.prototype, 'execute').mockResolvedValue({
+      ok: true,
+      data: {},
+      meta: { commitStatus: 'not_committed', revision: 1 },
+    } as any);
+    const outputs: string[] = [];
+
+    try {
+      const code = await runCli({
+        argv: [
+          'diagnostics.projectCheck',
+          '--project-id', 'test-project',
+          '--branch-id', 'main',
+          '--api', 'http://localhost:3333',
+          '--strict', 'true',
+          '--targetFile', 'components/SiteNavbar.tsx',
+        ],
+        stdout: (msg) => outputs.push(msg),
+      });
+
+      expect(code).toBe(0);
+      expect(execute).toHaveBeenCalledWith(
+        { projectId: 'test-project', branchId: 'main' },
+        'diagnostics.projectCheck',
+        { strict: true, targetFile: 'components/SiteNavbar.tsx' },
+        { dryRun: false },
+      );
+
+      execute.mockClear();
+      await runCli({
+        argv: [
+          'codeFiles.read',
+          '--project-id', 'test-project',
+          '--branch-id', 'main',
+          '--api', 'http://localhost:3333',
+          '--path', 'components/SiteNavbar.tsx',
+          '--toLine', '120',
+        ],
+        stdout: (msg) => outputs.push(msg),
+      });
+      expect(execute).toHaveBeenCalledWith(
+        { projectId: 'test-project', branchId: 'main' },
+        'codeFiles.read',
+        { path: 'components/SiteNavbar.tsx', toLine: 120 },
+        { dryRun: false },
+      );
+    } finally {
+      execute.mockRestore();
+    }
   });
 
   it('fails with nonzero exit code and structured error on unknown tool', async () => {

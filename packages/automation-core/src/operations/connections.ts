@@ -10,6 +10,7 @@ import {
   type ConnectionTrigger,
 } from '@/code/variants/connection-config';
 import { parseVariantConfig } from '@/code/variants/variant-config';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 
 // 1. connections.list
 export const connectionsListOperation: Operation<
@@ -81,6 +82,9 @@ export const connectionsCreateOperation: Operation<
     }
     if (!toExists) {
       throw new Error(`VARIANT_NOT_FOUND: Target variant "${input.to}" does not exist on component`);
+    }
+    if (input.sourceNode && !parseJSXToNodes(code).has(input.sourceNode)) {
+      throw new Error(`NODE_NOT_FOUND: Connection source node "${input.sourceNode}" does not exist in component`);
     }
 
     const { code: nextCode, connections } = addConnectionToCode(

@@ -8,6 +8,7 @@ import {
   updateHoverStyleInCode,
   updatePseudoStyleInCode,
   updateContainerQueryStyle,
+  updateVariantStyleInCode,
   type PseudoRuleKind,
 } from '@/code/generation/generator-styles';
 
@@ -74,6 +75,7 @@ export const stylesSetOperation: Operation<
     styles: Record<string, string>;
     breakpoint?: string | number;
     pseudo?: string;
+    variantName?: string;
   },
   {
     nodeId: string;
@@ -93,12 +95,15 @@ export const stylesSetOperation: Operation<
     styles: z.record(z.string(), z.string()),
     breakpoint: z.union([z.string(), z.number()]).optional(),
     pseudo: z.string().optional(),
+    variantName: z.string().min(1).optional(),
   }),
   async execute(snapshot, input) {
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let nextCode = code;
 
-    if (input.pseudo) {
+    if (input.variantName) {
+      nextCode = updateVariantStyleInCode(nextCode, input.nodeId, input.variantName, input.styles);
+    } else if (input.pseudo) {
       const cleanPseudo = input.pseudo.replace(/^:+/, '');
       if (cleanPseudo === 'hover') {
         nextCode = updateHoverStyleInCode(nextCode, input.nodeId, input.styles);

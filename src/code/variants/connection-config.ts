@@ -11,7 +11,8 @@ import { findVariantRootId } from '@/shared/variant-root';
 import { projectFS } from '@/code/project/project-fs';
 import { isIndexInsideSlotConst } from '@/code/generation/slot-ops';
 import { ensureVariantListWiring, ensureInitialVariantParam } from '@/code/generation/generator-styles';
-import { stripAllTagAttrsBalanced, findBalancedBraceEnd } from '@/code/generation/generator-utils';
+import { stripAllTagAttrsBalanced, findBalancedBraceEnd, ensureNamedImport } from '@/code/generation/generator-utils';
+import { ensureMotionTag } from '@/code/generation/generator-motion-scroll';
 import { extractImports, resolveImportPath } from '@/code/components/import-resolver';
 import { forwardEventPropsToComponentRoot } from './event-prop-forwarding';
 import { trace } from '@/shared/debug-trace';
@@ -450,43 +451,13 @@ export function generateConnectionCode(code: string, connections: Connection[]):
   // on the initial variant.
   result = result.replace(/data-variant=\{initialVariant\}/, 'data-variant={variant}');
 
-  // 1. Add useState import if not present
-  if (!result.includes("useState")) {
-    // Named import: import { X } from 'react' → import { X, useState } from 'react'
-    if (/import\s*\{[^}]*\}\s*from\s*'react'/.test(result)) {
-      result = result.replace(
-        /import\s*\{([^}]*)\}\s*from\s*'react'/,
-        (_, imports) => `import { ${imports.trim()}, useState } from 'react'`
-      );
-    // Default import: import React from 'react' → import React, { useState } from 'react'
-    } else if (/import\s+\w+\s+from\s*'react'/.test(result)) {
-      result = result.replace(
-        /import\s+(\w+)\s+from\s*'react'/,
-        `import $1, { useState } from 'react'`
-      );
-    } else if (result.includes("from 'framer-motion'")) {
-      result = result.replace(
-        /import.*from 'framer-motion'/,
-        `import { useState } from 'react';\n$&`
-      );
-    }
-  }
-
-  // 1b. Add useEffect import (needed for inView chains + afterDelay)
+  // 1. State-driven transitions require React hooks. The component builder
+  // emits double-quoted imports, so hand-written single-quote regexes left
+  // `useState` undefined in every fresh Design Component. Use the shared
+  // import transformer instead; it handles default/named imports and both
+  // quote styles idempotently.
   const needsUseEffect = connections.some(c => c.trigger === 'inView' || c.trigger === 'afterDelay');
-  if (needsUseEffect && !result.includes('useEffect')) {
-    if (/import\s*\{([^}]*)\}\s*from\s*'react'/.test(result)) {
-      result = result.replace(
-        /import\s*\{([^}]*)\}\s*from\s*'react'/,
-        (_, imports) => `import { ${imports.trim()}, useEffect } from 'react'`
-      );
-    } else if (/import\s+(\w+),\s*\{([^}]*)\}\s*from\s*'react'/.test(result)) {
-      result = result.replace(
-        /import\s+(\w+),\s*\{([^}]*)\}\s*from\s*'react'/,
-        (_, def, imports) => `import ${def}, { ${imports.trim()}, useEffect } from 'react'`
-      );
-    }
-  }
+  result = ensureNamedImport(result, 'react', needsUseEffect ? ['useState', 'useEffect'] : ['useState']);
 
   // 2. Add useState(initialVariant) inside the COMPONENT function body if not
   // present. The component uses `function Name() {} + export default
@@ -964,23 +935,34 @@ function insertPropOnRootMotion(code: string, propName: string, handler: string)
  *  (deleted node, stale connection, etc.). */
 function insertPropOnMotionWithDataId(code: string, dataId: string, propName: string, handler: string): string {
   const dataIdAttr = `data-id="${dataId}"`;
-  const dataIdIdx = code.indexOf(dataIdAttr);
+  let result = code;
+  let dataIdIdx = result.indexOf(dataIdAttr);
   if (dataIdIdx === -1) return code;
+  const originalTagStart = result.lastIndexOf('<', dataIdIdx);
+  const originalTagName = originalTagStart === -1 ? null : result.slice(originalTagStart).match(/^<([a-zA-Z][\w.]*)/)?.[1] ?? null;
+  // Native HTML elements do not accept Framer Motion event props. Convert the
+  // connection source before inserting a handler; otherwise the connection
+  // array/arrow is persisted while the actual trigger silently disappears.
+  if (originalTagName && /^[a-z]/.test(originalTagName) && !originalTagName.startsWith('motion.')) {
+    result = ensureMotionTag(result, dataId);
+    result = ensureNamedImport(result, 'framer-motion', ['motion']);
+    dataIdIdx = result.indexOf(dataIdAttr);
+  }
   // Walk backward from the data-id attr to find the opening tag for THIS
   // element — a `<motion.*>` OR an Uppercase component instance
   // (`<JiPoZa ...>`). Component instances forward the handler to their root
   // motion element via `...rest` (event-prop-forwarding), so connections on
   // nested component instances work the same as on motion elements.
-  const tagStart = code.lastIndexOf('<', dataIdIdx);
-  if (tagStart === -1) return code;
-  const nameMatch = code.slice(tagStart).match(HANDLER_TAG_OPEN);
-  if (!nameMatch || nameMatch.index !== 0) return code;
+  const tagStart = result.lastIndexOf('<', dataIdIdx);
+  if (tagStart === -1) return result;
+  const nameMatch = result.slice(tagStart).match(HANDLER_TAG_OPEN);
+  if (!nameMatch || nameMatch.index !== 0) return result;
   // Make sure the tag we found actually contains this data-id (no
   // intervening `>` between tagStart and dataIdIdx — otherwise the
   // data-id belongs to a different tag).
-  const tagEnd = findTagEnd(code, tagStart);
-  if (tagEnd === -1 || tagEnd < dataIdIdx) return code;
-  return insertPropAtTag(code, tagStart, propName, handler);
+  const tagEnd = findTagEnd(result, tagStart);
+  if (tagEnd === -1 || tagEnd < dataIdIdx) return result;
+  return insertPropAtTag(result, tagStart, propName, handler);
 }
 
 /** Insert `\n      <propName>={<handler>}` immediately after the tag's
@@ -1061,7 +1043,12 @@ export function addConnectionToCode(
     c.from === from && c.to === to && c.trigger === trigger
     && (c.sourceNode ?? null) === (sourceNode ?? null)
   )) {
-    return { code, connections };
+    // A previous file edit may have preserved the declarative connection but
+    // removed its generated state/handlers. Reapplying that connection is the
+    // MCP's natural repair action, so always reconcile runtime code from the
+    // existing connection list instead of treating the metadata as proof that
+    // the behavior is still wired.
+    return { code: generateConnectionCode(code, connections), connections };
   }
 
   const newConnection: Connection = { from, to, trigger };

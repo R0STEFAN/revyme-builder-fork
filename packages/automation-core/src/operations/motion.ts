@@ -4,6 +4,7 @@ import type { Operation, FileChange } from '../contracts';
 import { defaultRegistry } from '../registry';
 import {
   updateMotionPropInCode,
+  updateMotionVariantStateInCode,
   removeMotionPropFromCode,
 } from '@/code/generation/generator-motion-props';
 import {
@@ -42,13 +43,14 @@ export const motionSetOperation: Operation<
     nodeId: string;
     prop: 'initial' | 'animate' | 'whileHover' | 'whileTap' | 'whileInView' | 'exit' | 'transition';
     values: Record<string, string>;
+    variantState?: 'current' | 'initial';
   },
   {
     changes: FileChange[];
   }
 > = {
   name: 'motion.set',
-  description: 'Set a framer-motion prop (initial, animate, whileHover, whileTap, whileInView, exit, transition) on an element',
+  description: 'Set a framer-motion prop on an element; use variantState=current for the live connected variant and its matching initial state',
   category: 'motion',
   kind: 'mutation',
   permit: 'write',
@@ -59,6 +61,7 @@ export const motionSetOperation: Operation<
     nodeId: z.string().min(1),
     prop: z.enum(['initial', 'animate', 'whileHover', 'whileTap', 'whileInView', 'exit', 'transition']),
     values: z.record(z.string(), z.string()),
+    variantState: z.enum(['current', 'initial']).optional().describe('Bind animate/initial to the connected design-component variant state instead of an object target'),
   }),
   async execute(snapshot, input) {
     let code = snapshot.files.get(input.targetFile);
@@ -66,7 +69,17 @@ export const motionSetOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found`);
     }
 
-    code = updateMotionPropInCode(code, input.nodeId, input.prop, input.values);
+    if (input.variantState) {
+      const validBinding =
+        (input.prop === 'animate' && input.variantState === 'current') ||
+        (input.prop === 'initial' && input.variantState === 'initial');
+      if (!validBinding) {
+        throw new Error('INVALID_VARIANT_STATE_BINDING: use prop="animate" with variantState="current", or prop="initial" with variantState="initial".');
+      }
+      code = updateMotionVariantStateInCode(code, input.nodeId, input.variantState);
+    } else {
+      code = updateMotionPropInCode(code, input.nodeId, input.prop, input.values);
+    }
 
     return {
       changes: [
