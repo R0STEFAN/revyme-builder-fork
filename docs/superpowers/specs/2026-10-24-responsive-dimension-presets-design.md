@@ -1,6 +1,6 @@
 # Responsive Dimension Presets — Design
 
-**Status:** approved in conversation; awaiting review of this written specification
+**Status:** approved by the user in conversation on 2026-10-24
 **Date:** 2026-10-24
 
 ## Intent
