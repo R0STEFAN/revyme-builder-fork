@@ -156,7 +156,7 @@ function parseDimensionVar(value: string): ParsedDimensionVar | null {
   return { name: match[1], ...(match[2] ? { fallbackName: match[2] } : {}) };
 }
 
-function compatibleToken(token: PresetToken | undefined, category: DimensionPresetCategory): boolean {
+function compatibleToken(token: PresetToken | undefined, category: DimensionPresetCategory): token is PresetToken {
   if (!token || token.category !== category) return false;
   const prefixedCategory = dimensionCategoryFromToken(token.name);
   return prefixedCategory === null || prefixedCategory === category;
