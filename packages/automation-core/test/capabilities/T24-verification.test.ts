@@ -700,6 +700,58 @@ export default function Page() {
   // Group 8: Effect Verification & Interactive Mechanisms
   // ───────────────────────────────────────────────────────────────────────────
   describe('8. Effect Verification & Interactive Mechanisms', () => {
+    it('requires an animation target when effectType is motion', async () => {
+      const staticHeroCode = `'use client';
+export default function Page() {
+  return <section data-id="hero" data-name="Hero Section"><h1>Hero</h1></section>;
+}`;
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': staticHeroCode });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          filePath: 'app/page.client.tsx',
+          request: 'Check the hero section',
+          expectedRoles: ['hero'],
+          effectType: 'motion',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(false);
+      expect(result.checks.find((check) => check.label === 'motion-animation')).toMatchObject({
+        present: false,
+        state: 'absent',
+        required: true,
+      });
+      expect(result.missing).toContain('Missing animation target on a motion element');
+    });
+
+    it('accepts a motion animation target on an actual motion element', async () => {
+      const animatedHeroCode = `'use client';
+import { motion } from 'framer-motion';
+export default function Page() {
+  return <motion.section data-id="hero" data-name="Hero Section" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><h1>Hero</h1></motion.section>;
+}`;
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': animatedHeroCode });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          filePath: 'app/page.client.tsx',
+          request: 'Check the hero section',
+          expectedRoles: ['hero'],
+          effectType: 'motion',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(true);
+      expect(result.checks.find((check) => check.label === 'motion-animation')).toMatchObject({
+        present: true,
+        state: 'wired',
+        required: true,
+      });
+    });
+
     it('verifies hover animation and spring physics on motion components', async () => {
       const snapshot = createMockSnapshot({ 'app/page.client.tsx': MOTION_EFFECT_PAGE });
       const result = await verifyEffectOperation.execute(

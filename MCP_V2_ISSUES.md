@@ -994,6 +994,27 @@ listeners; the subsequent audit reached the canvas and reported only the
 documented 22-node marquee measurement gap. The reason for the external
 SIGTERM is not established, so it is not attributed to the screenshot fix.
 
+## 2026-10-24 — verify.effect ignored `effectType: motion`
+
+**Status:** fixed locally with red/green regression coverage.
+
+**Symptom:** `verify.effect` could return `satisfied: true` for a static hero
+when the caller explicitly requested `effectType: "motion"` but described the
+target as a hero section without using the words motion/animation.
+
+**Cause:** the operation calculated `needsMotion` but never used it to add a
+motion-specific check. The shared prose verifier only inferred motion when the
+request itself contained motion-related terms, so the enum value was ignored.
+
+**Fix:** `effectType: "motion"` (and explicit motion/animation wording) now
+requires a motion element carrying an actual target prop such as `animate`,
+`exit`, `variants`, a `while*` prop, or `layout`. A bare static element no
+longer passes; a real motion target does.
+
+**Verification:** the static-hero regression failed before the fix because the
+operation returned `satisfied: true`; static and animated hero cases now pass
+their expected false/true verdicts.
+
 ## 2026-10-24 — observe.audit misclassified intentional layout as errors
 
 **Status:** fixed locally and regression-tested. Rebuild/reload the

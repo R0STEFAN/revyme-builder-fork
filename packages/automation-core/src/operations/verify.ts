@@ -171,6 +171,7 @@ export const verifyEffectOperation: Operation<
     let hasSpring = false;
     let hasTap = false;
     let hasAnyMotionElement = false;
+    let hasMotionAnimation = false;
     let invalidMotionOnIntrinsic = false;
 
     traverse(ast, {
@@ -225,6 +226,13 @@ export const verifyEffectOperation: Operation<
         if (hasHoverOnNode) hasHover = true;
         if (propsMap['whileTap']) hasTap = true;
         if (propsMap['whileInView'] || propsMap['data-scroll-fx']) hasScroll = true;
+        const motionTargets = ['animate', 'exit', 'whileHover', 'whileTap', 'whileInView', 'whileFocus', 'whileDrag', 'whilePress', 'variants', 'layout', 'layoutId'];
+        if (isMotion && motionTargets.some((prop) => {
+          const value = propsMap[prop]?.trim();
+          return Boolean(value) && value !== 'false' && value !== 'undefined' && value !== 'null';
+        })) {
+          hasMotionAnimation = true;
+        }
 
         let physicsInfo: z.infer<typeof motionPhysicsSchema> | undefined;
         if (propsMap['transition'] && propsMap['transition'].includes('spring')) {
@@ -320,6 +328,23 @@ export const verifyEffectOperation: Operation<
     const needsScroll = input.effectType === 'scroll' || reqLower.includes('scroll');
     const needsSpring = input.effectType === 'spring' || reqLower.includes('spring');
     const needsMotion = input.effectType === 'motion' || reqLower.includes('motion') || reqLower.includes('animate') || reqLower.includes('animation');
+
+    if (needsMotion) {
+      const motionPresent = hasAnyMotionElement && hasMotionAnimation;
+      checks.push({
+        label: 'motion-animation',
+        present: motionPresent,
+        count: motionPresent ? 1 : 0,
+        required: true,
+        state: motionPresent ? 'wired' : 'absent',
+      });
+      states.push({
+        label: 'motion',
+        state: motionPresent ? 'wired' : 'absent',
+        fixHint: 'Add an animation target (animate/exit/variants or a while* prop) to a motion element.',
+      });
+      if (!motionPresent) missing.push('Missing animation target on a motion element');
+    }
 
     if (needsHover) {
       checks.push({
