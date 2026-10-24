@@ -215,6 +215,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     projectId?: string;
     branchId?: string;
     filePath?: string;
+    revision?: number;
     viewport?: string;
     nodeId?: string;
     format?: 'png' | 'jpeg' | 'webp';
@@ -235,6 +236,14 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     const filePath = params.filePath || activeFilePath;
     if (filePath !== activeFilePath) {
       return { available: false, status: 'unavailable', reason: 'ACTIVE_FILE_MISMATCH', note: `The canvas displays "${activeFilePath}", not "${filePath}".`, waitedMs: 0 };
+    }
+
+    if (typeof params.revision !== 'number') {
+      return { available: false, status: 'unavailable', reason: 'REVISION_REQUIRED', note: 'Screenshot requests must include the project revision being observed.', waitedMs: 0 };
+    }
+    const baseRevision = getBaseRevision();
+    if (baseRevision !== params.revision) {
+      return { available: false, status: 'unavailable', reason: 'REVISION_MISMATCH', note: `The active canvas is saved at revision ${baseRevision ?? 'unknown'}, not ${params.revision}.`, waitedMs: 0 };
     }
 
     if (params.format === 'webp') {

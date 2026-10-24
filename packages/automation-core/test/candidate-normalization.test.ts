@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeCandidateChanges } from '../src/ingestion/candidate';
 import { createSnapshot } from '../src/session';
+import { checkFile } from '../../../src/code/oracle/check-file';
 
 const file = 'app/page.client.tsx';
 const code = `// keep formatting\nexport default function Page(){return <div data-id="root" style={{padding:'1.5rem', width:'50%', marginTop:'2em', fontSize:'20px'}}/>;}`;
@@ -37,5 +38,25 @@ describe('canonical source normalization', () => {
       { path: 'notes.txt', beforeHash: 'intermediate-hash', content: 'final' },
     ]);
     expect(result.changes).toEqual([{ path: 'notes.txt', beforeHash: null, content: 'final' }]);
+  });
+
+  it('makes newly inserted flex children reorderable and non-shrinking before Oracle validation', () => {
+    const source = `export default function Page() {
+  return <div data-id="root" style={{ position: 'relative' }}>
+    <div data-id="faq-list" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <p data-id="faq-placeholder" style={{ position: 'relative', padding: '24px 0' }}>Placeholder</p>
+      <FAQItem data-id="faq-item-instance" style={{ position: 'relative', width: '100%' }} />
+    </div>
+  </div>;
+}`;
+    const candidate = createSnapshot({ projectId: 'components', branchId: 'main' }, 1, { [file]: '' });
+    const result = normalizeCandidateChanges(candidate, [{ path: file, beforeHash: null, content: source }]);
+    const normalized = result.changes[0].content!;
+    const violations = checkFile(normalized, { kind: 'page', path: file })
+      .filter((issue) => issue.code === 'FLEX_CHILD_MISSING_ORDER' || issue.code === 'FLEX_CHILD_SHRINKS');
+
+    expect(normalized).toMatch(/data-id="faq-placeholder" style=\{\{[^}]*order: '0'[^}]*flex: '0 0 auto'/);
+    expect(normalized).toMatch(/data-id="faq-item-instance" style=\{\{[^}]*order: '1'[^}]*flex: '0 0 auto'/);
+    expect(violations).toEqual([]);
   });
 });

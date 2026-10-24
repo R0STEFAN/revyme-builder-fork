@@ -214,6 +214,7 @@ function getTextContent(res: any, index = 0): string {
         projectId: 'test-default-proj',
         branchId: 'main',
         filePath: 'app/page.client.tsx',
+        revision: 7,
         viewport: 'desktop',
         nodeId: 'root',
         format: 'png',
@@ -221,6 +222,50 @@ function getTextContent(res: any, index = 0): string {
       },
     });
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a disconnected editor as an unavailable screenshot instead of a generic bridge error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ ok: false, error: 'No editor tab connected for project "test-default-proj"' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.spyOn(autoClient, 'execute').mockImplementation(async (scope, toolName, input, options) => {
+      if (toolName !== 'observe.screenshot') throw new Error(`Unexpected tool: ${toolName}`);
+      const output = await observeScreenshotOperation.execute(
+        {
+          scope,
+          revision: 7,
+          files: new Map([['app/page.client.tsx', '<div data-id="root" />']]),
+          config: {},
+        },
+        input as any,
+        options?.context as any,
+      );
+      return { ok: true, data: output, meta: { commitStatus: 'not_committed', revision: 7 } } as any;
+    });
+
+    const res = await client.callTool({
+      name: 'observe.screenshot',
+      arguments: {
+        projectId: 'test-default-proj',
+        branchId: 'main',
+        filePath: 'app/page.client.tsx',
+        viewport: 'desktop',
+        format: 'png',
+      },
+    });
+
+    expect(res.isError).toBe(false);
+    const payload = JSON.parse(getTextContent(res));
+    expect(payload.data.primary).toMatchObject({
+      available: false,
+      status: 'unavailable',
+      reason: 'EDITOR_NOT_CONNECTED',
+      note: 'No editor tab connected for project "test-default-proj"',
+    });
   });
 
   it('collects audit measurements from the active Builder canvas', async () => {

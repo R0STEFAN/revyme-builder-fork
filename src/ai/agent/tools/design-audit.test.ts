@@ -153,6 +153,30 @@ describe('auditOverlaps', () => {
     expect(auditOverlaps([a, b])).toHaveLength(0);
   });
 
+  it('does not flag an absolutely positioned overlay contained by its media sibling', () => {
+    const media = makeNode({ id: 'media', parentId: 'card', rect: rect(0, 0, 240, 180) });
+    const overlay = makeNode({
+      id: 'overlay',
+      parentId: 'card',
+      rect: rect(0, 0, 240, 180),
+      computed: { position: 'absolute' },
+    });
+
+    expect(auditOverlaps([media, overlay])).toHaveLength(0);
+  });
+
+  it('still flags an absolute sibling that protrudes beyond the media bounds', () => {
+    const media = makeNode({ id: 'media', parentId: 'card', rect: rect(0, 0, 240, 180) });
+    const overlay = makeNode({
+      id: 'overlay',
+      parentId: 'card',
+      rect: rect(220, 20, 40, 40),
+      computed: { position: 'absolute' },
+    });
+
+    expect(auditOverlaps([media, overlay])).toHaveLength(1);
+  });
+
   it('skips nodes without a rect (norect guard)', () => {
     const a = makeNode({ id: 'a', parentId: 'p' });
     const b = makeNode({ id: 'b', parentId: 'p', rect: rect(90, 90, 100, 100) });

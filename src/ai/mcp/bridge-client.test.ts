@@ -219,6 +219,7 @@ describe('bridgeHandlers', () => {
   });
 
   it('captures screenshots through the live iframe bridge for the requested project scope', async () => {
+    setLoadedRevision(7);
     const dataUrl = 'data:image/png;base64,aGVsbG8=';
     const waitSpy = vi.spyOn(renderWait, 'waitForRender').mockResolvedValue({
       ready: true,
@@ -238,6 +239,7 @@ describe('bridgeHandlers', () => {
     const result = await bridgeHandlers.captureScreenshot({
       branchId: 'main',
       filePath: PAGE_PATH,
+      revision: 7,
       viewport: 'desktop',
       nodeId: 'root',
       format: 'png',
@@ -260,6 +262,37 @@ describe('bridgeHandlers', () => {
       height: 720,
       waitedMs: 18,
     });
+  });
+
+  it('does not report a screenshot ready when the canvas is behind the requested project revision', async () => {
+    const previousPath = window.location.pathname;
+    window.history.pushState({}, '', '/builder/project-refresh-test');
+    setLoadedRevision(7);
+    const capture = vi.fn();
+    vi.spyOn(canvasBridge, 'getCanvasBridge').mockReturnValue({ captureElement: capture } as any);
+
+    try {
+      const result = await bridgeHandlers.captureScreenshot({
+        projectId: 'project-refresh-test',
+        branchId: 'main',
+        filePath: PAGE_PATH,
+        revision: 8,
+        viewport: 'desktop',
+        nodeId: 'root',
+        format: 'png',
+        pixelRatio: 1,
+      }) as any;
+
+      expect(result).toMatchObject({
+        available: false,
+        status: 'unavailable',
+        reason: 'REVISION_MISMATCH',
+        note: 'The active canvas is saved at revision 7, not 8.',
+      });
+      expect(capture).not.toHaveBeenCalled();
+    } finally {
+      window.history.pushState({}, '', previousPath);
+    }
   });
 
   it('returns fresh rendered layout measurements only for the matching saved page revision', async () => {

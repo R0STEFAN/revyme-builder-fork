@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { FileChange, Snapshot, Issue, Normalization } from '../contracts';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { SPACING_PX_KEYS } from '@/code/oracle/checks/style-object';
+import { applyRuntimeGuarantees } from '@/code/generation/runtime-guarantees';
 import { lowerUnits } from './units';
 import { IngestionReporter } from './report';
 
@@ -64,7 +65,7 @@ export function normalizeCandidateChanges(snapshot: Snapshot, changes: FileChang
     walk(ast.program);
     let content = source;
     for (const edit of edits.sort((a, b) => b.start - a.start)) content = content.slice(0, edit.start) + edit.text + content.slice(edit.end);
-    change.content = content;
+    change.content = applyRuntimeGuarantees(content);
   }
   return { changes: [...finalChanges.values()], issues, normalizations };
 }

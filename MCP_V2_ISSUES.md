@@ -807,8 +807,10 @@ the current bridge path.
 **Status:** root cause confirmed; fix not yet applied because the canvas slot
 preview currently strips node IDs from its visible ghost copy.
 
-**Symptom:** the IMPCT.DIGITAL page audit reports `Not measured: 121/132` and
-lists 11 missing nodes from `marquee-card-forma` and its subtree.
+**Symptom:** the IMPCT.DIGITAL page audit reports missing measurements for
+connected marquee source nodes. On the latest live check (revision 494),
+coverage was `194/216`; the missing IDs are the free-canvas card sources and
+their `ProjectCard` descendants.
 
 **Cause:** slot-connected source nodes are parsed as `isCanvasNode` and remain
 in the free canvas workspace. The marquee renders a separate, non-interactive
@@ -820,7 +822,179 @@ identity the bridge can measure. `collectLayoutSnapshot()` currently counts
 both regular viewport nodes and those off-canvas sources toward 100% coverage.
 
 **Why not filter the sources:** the connected card data is also real page
-content in the live website. Dropping these 11 nodes would make the audit look
+content in the live website. Dropping these nodes would make the audit look
 complete while omitting the marquee content. A correct fix needs a distinct
 measurement identity for slot-preview ghosts (separate from selection/hit-test
 IDs), or page-level headless rendering that measures the real generated DOM.
+
+**Latest status (2026-10-24):** project diagnostics are clean at revision 494,
+but the rendered audit remains `pending` because these 22 marquee-source nodes
+are not measured. This is separate from the severity-classification fix below;
+do not report a complete visual audit until the slot-preview measurement path
+is resolved or an equivalent rendered-page capture is available.
+
+## 2026-10-24 — Codex MCP transport closed while Revyme stdio server is healthy
+
+**Status:** isolated to the Codex-managed connector; Revyme MCP server and API
+are operational. No Revyme source change is justified by this evidence.
+
+**Symptom:** native `mcp__revyme_v2` calls to `pages.list`, `components.list`,
+and `codeFiles.read` fail with `Transport closed`.
+
+**Evidence:** the configured `packages/cli/bin/revyme.mjs mcp` child remains
+alive under Codex's app-server. The project's API responds to the official
+CLI at revision 380. An independent JSON-RPC stdio handshake against the same
+CLI process successfully initialized MCP and executed `pages.list` at revision
+380.
+
+**Conclusion:** the operations registry, MCP stdio implementation, and Builder
+automation API are functioning. The break is in the existing Codex-managed
+stdio transport/session; changing Revyme operation code would be a speculative
+fix. Continue using the official Revyme MCP stdio server directly for this task
+and retain this host-connector failure for follow-up.
+
+**Follow-up check (2026-10-24):** the native `pages.list` call still returns
+`Transport closed`. The exact Codex-managed Revyme child was verified at
+`/home/rost/Документи/revyme/revyme-builder-fork` and terminated with SIGTERM;
+Codex did not automatically respawn it, and the connector remained closed.
+The independent official stdio session continues to serve requests. This
+points to a stale Codex app-server connection/catalog that needs the
+app-server itself reinitialized, not a Builder `npm run dev` restart. Do not
+kill or restart the app-server from inside its active session; recovery needs
+a full desktop/backend restart, then verify that its MCP child is recreated
+and `pages.list` succeeds.
+
+**Recovery and local-server collision (2026-10-24):** after the user's Codex
+restart, a new app-server and Revyme MCP child appeared; the native
+`pages.list` transport recovered but returned `SERVER_UNAVAILABLE` because
+the Builder API at `localhost:3333` was not running. I then started `npm run
+dev` while the user was starting it in their own terminal. That duplicate
+launch occupied `3333`, `5174`, `5175`, and `8082`; the user's Vite process
+fell back to `3334` and the bridge could not start. I stopped only my own
+saved terminal session and verified those ports are now free. This collision
+was caused by duplicate startup, not an MCP implementation defect. The user
+prefers to start `npm run dev` themselves; do not start it again without
+checking with them first.
+
+## 2026-10-24 — MCP component insertion skipped Builder layout guarantees
+
+**Status:** fixed locally; rebuild the CLI and restart Codex's Revyme MCP child
+before retrying the live operation.
+
+**Symptom:** `components.instance.create` inserted a new FAQ row into a flex
+list, then Oracle refused it with `FLEX_CHILD_MISSING_ORDER` and
+`FLEX_CHILD_SHRINKS`. No partial project write was committed.
+
+**Cause:** the editor's structural-mutation path applies
+`applyRuntimeGuarantees`, but the MCP operation preparation boundary only
+lowered spacing units before Oracle validation. Generated JSX therefore
+reached Oracle without the same sequential `order` and non-shrinking `flex`
+values the Builder itself adds.
+
+**Fix and regression:** `normalizeCandidateChanges()` now applies the shared
+runtime guarantee pass to every changed TSX/JSX source. A test first reproduced
+the missing child styles and Oracle warnings; it now passes after normalization.
+
+**Post-reboot follow-up (2026-10-24):** the first live retry still rejected an
+FAQ child because the Codex-managed MCP process had started at 12:29, before
+the source fix was written at 12:37 and the CLI bundle rebuilt at 12:39. The
+running process therefore still held the pre-fix code in memory. This is a
+stale-process retry, not evidence that the new normalization fix failed. The
+next retry must happen after Codex recreates its Revyme MCP child from the
+rebuilt bundle; no second code workaround should be applied unless that fresh
+process reproduces the same Oracle errors.
+
+## 2026-10-24 — Screenshot bridge hid missing editor tab behind HTTP 500
+
+**Status:** response semantics fixed locally; CLI rebuild and Codex MCP restart
+required. Actual capture still needs a connected editor tab; headless capture
+is not implemented by this bridge yet.
+
+**Symptom:** `observe.screenshot` returned `SCREENSHOT_SERVICE_ERROR` with the
+unhelpful note `Screenshot bridge returned HTTP 500` after a machine restart.
+
+**Cause:** the bridge's `/rpc` endpoint returns an HTTP 500 and a useful JSON
+message when no editor tab is attached. The MCP adapter discarded that body and
+raised a generic status-only error.
+
+**Fix and regression:** the CLI adapter now maps this specific condition to a
+structured unavailable result with reason `EDITOR_NOT_CONNECTED`, preserving
+the bridge's explanation. Other HTTP failures still surface as errors. The
+focused MCP test verifies the structured result. This clarifies the current
+tab dependency; it does not claim to provide the separately requested
+headless-rendering capability.
+
+**Post-reboot follow-up (2026-10-24):** one screenshot retry during the same
+stale MCP process returned `SCREENSHOT_SERVICE_ERROR` with
+`This operation was aborted`. The call did not produce an image, so the latest
+hover and menu changes remain visually unverified. Do not use browser
+automation as a substitute; retry once after the Codex-managed MCP child has
+reloaded the rebuilt adapter, then report `EDITOR_NOT_CONNECTED` honestly if
+no Builder editor tab is attached.
+
+## 2026-10-24 — Screenshot bridge reported a stale canvas as ready
+
+**Status:** revision validation fixed locally and regression-tested. The CLI
+bundle has been rebuilt, but the running Codex-managed MCP child predates the
+build and still returns `REVISION_REQUIRED`. Reload the Revyme MCP child before
+using screenshot results as visual verification.
+
+**Symptom:** `observe.screenshot` returned `available: true` / `status: ready`
+while the capture showed only the first FAQ row and the old placeholder. The
+persisted `components/FAQSection.tsx` at revision 449 already contained four
+`FAQItem` instances and no placeholder.
+
+**Cause:** `observe.screenshot` had the requested project snapshot, but the CLI
+adapter discarded its `revision`. The canvas bridge checked project, branch,
+active file, and rendered bounds but not `getBaseRevision()`. It could therefore
+return a successful image from a canvas behind the requested project state.
+
+**Fix:** pass `snapshot.revision` through the CLI bridge request and require an
+exact loaded-revision match before capture. Missing revision returns
+`REVISION_REQUIRED`; a stale/ahead canvas returns `REVISION_MISMATCH` and does
+not capture. This follows the exact-revision guard already used by
+`observeAuditSnapshot`.
+
+**Verification:** the new stale-canvas regression failed before the fix by
+reaching `CANVAS_CAPTURE_EMPTY` instead of rejecting the revision; after the
+fix, 115 targeted bridge/CLI/verification tests pass. The CLI bundle and main
+Builder app both build, and `npx tsc --noEmit` passes. The full-suite result is
+tracked below.
+
+## 2026-10-24 — observe.audit misclassified intentional layout as errors
+
+**Status:** fixed locally and regression-tested. Rebuild/reload the
+Codex-managed MCP child before expecting the live audit to use the new
+classification.
+
+**Symptom:** the IMPCT.DIGITAL audit reported 43 errors, including the
+ProjectCard image/hover-overlay pair and marquee cards translated outside the
+viewport by the marquee animation.
+
+**Cause:** `auditOverlaps()` treated a fully contained absolute overlay as a
+layout collision. Separately, `observe.audit` promoted every geometric overlap
+and every viewport-tile overflow to an error, even though viewport overflow is
+explicitly documented in the rule as informational and may be intentional
+(marquees, fixed headers, cursor overlays, negative-margin CTAs).
+
+**Fix:** a fully contained absolute overlay is excluded from sibling overlap
+findings; remaining geometric overlaps are warnings for human review, while
+viewport-tile overflow is informational and no longer blocks `passed`. The
+summary now distinguishes blocking errors, warnings, and informational
+findings.
+
+**Verification:** design-audit and T24 suites pass (100 tests). The main app
+build, CLI build, and TypeScript check pass. The live project audit from the
+old MCP child remains pending on the separate marquee-source measurement gap;
+a fresh live audit must be rerun after the MCP child loads the rebuilt bundle.
+
+## 2026-10-24 — full test suite has three missing portfolio-test2 fixtures
+
+**Status:** unrelated to the IMPCT.DIGITAL/MCP changes; fixture is absent from
+this checkout and was not recreated or changed.
+
+**Verification:** `npx vitest run` completed with 14,922 passed, 36 skipped,
+5 todo, and 3 failed tests. All three failures are `ENOENT` for
+`data/projects/proj-1791960645579-j02nu7.json` in the existing
+`portfolio-test2` parser, CMS pagination, and source-export tests. The
+remaining 1,033 test files passed; no new regression failures appeared.

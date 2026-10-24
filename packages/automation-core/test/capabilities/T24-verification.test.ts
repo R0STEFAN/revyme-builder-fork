@@ -627,7 +627,28 @@ export default function Page() {
       const result = await observeAuditOperation.execute(snapshot, {}, context);
 
       const overlapFinding = result.findings.find((f) => f.rule === 'OVERLAP');
-      expect(overlapFinding).toBeDefined();
+      expect(overlapFinding?.severity).toBe('warning');
+      expect(result.errors).toBe(0);
+      expect(result.warnings).toBe(1);
+      expect(result.passed).toBe(true);
+    });
+
+    it('reports viewport-tile overflow as informational rather than a blocking violation', async () => {
+      bridge.setNode('root', '', { x: 0, y: 0, width: 1220, height: 900 });
+      const rootOnlyCode = `'use client';
+export default function Page() {
+  return <div data-id="root" style={{ width: '1200px' }}>Page</div>;
+}`;
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': rootOnlyCode });
+
+      const result = await observeAuditOperation.execute(snapshot, {}, context);
+      const overflowFinding = result.findings.find((f) => f.rule === 'SECTION_DEPASSE_VIEWPORT');
+
+      expect(overflowFinding?.severity).toBe('info');
+      expect(result.errors).toBe(0);
+      expect(result.clean).toBe(true);
+      expect(result.passed).toBe(true);
+      expect(result.summary).toContain('informational');
     });
   });
 

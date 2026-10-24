@@ -203,6 +203,18 @@ function hasVisibleRect(rect: LayoutRect | null): boolean {
   return !!rect && (rect.width > 0 || rect.height > 0);
 }
 
+function containsRect(outer: LayoutRect, inner: LayoutRect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height;
+}
+
+function isContainedAbsoluteOverlay(a: AuditNode, b: AuditNode): boolean {
+  if (!a.rect || !b.rect) return false;
+  return (a.computed.position === 'absolute' && containsRect(b.rect, a.rect)) ||
+    (b.computed.position === 'absolute' && containsRect(a.rect, b.rect));
+}
+
 // ─── The six linter rules (pure, one fixture per rule) ─────────────────────
 
 /** 1. OVERLAP — two SIBLINGS whose rects overlap by more than
@@ -223,6 +235,9 @@ export function auditOverlaps(nodes: AuditNode[]): AuditFinding[] {
         const a = siblings[i];
         const b = siblings[j];
         if (!a.rect || !b.rect) continue;
+        // Full-size absolute overlays (e.g. a hover scrim over an image) are
+        // intentional layering, not a sibling layout collision.
+        if (isContainedAbsoluteOverlay(a, b)) continue;
         const o = overlapPx(a.rect, b.rect);
         if (o.x > OVERLAP_TOLERANCE_PX && o.y > OVERLAP_TOLERANCE_PX) {
           findings.push({

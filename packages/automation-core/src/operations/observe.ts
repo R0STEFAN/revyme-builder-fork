@@ -1560,15 +1560,18 @@ export const observeAuditOperation: Operation<
         contrastChecked++;
       } else if (df.rule === 'OVERLAP') {
         ruleName = 'OVERLAP';
-        severity = 'error';
-        overflowChecked++;
+        // Geometric overlap alone cannot distinguish collisions from
+        // deliberate layering (fixed headers, cursor overlays, negative-margin CTAs).
+        severity = 'warning';
       } else if (df.rule === 'OVERFLOW') {
         ruleName = 'OVERFLOW';
         severity = 'error';
         overflowChecked++;
       } else if (df.rule === 'SECTION_DEPASSE_VIEWPORT') {
         ruleName = 'SECTION_DEPASSE_VIEWPORT';
-        severity = 'error';
+        // Viewport overflow is explicitly heuristic: clipped marquees and
+        // decorative art are valid, so surface it without failing the audit.
+        severity = 'info';
         overflowChecked++;
       } else if (df.rule === 'FONT_SIZE') {
         ruleName = 'FONT_SIZE';
@@ -1622,8 +1625,13 @@ export const observeAuditOperation: Operation<
 
     const errors = findings.filter((f) => f.severity === 'error').length;
     const warnings = findings.filter((f) => f.severity === 'warning').length;
+    const informational = findings.filter((f) => f.severity === 'info').length;
     const clean = errors === 0;
-    const summary = clean ? 'No violations detected.' : `Found ${findings.length} design audit findings (${errors} errors, ${warnings} warnings).`;
+    const summary = findings.length === 0
+      ? 'No violations detected.'
+      : clean
+        ? `No blocking violations; ${warnings} warning(s), ${informational} informational finding(s).`
+        : `Found ${findings.length} design audit findings (${errors} errors, ${warnings} warnings, ${informational} informational).`;
 
     return {
       clean,
@@ -1636,7 +1644,7 @@ export const observeAuditOperation: Operation<
       errors,
       warnings,
       checked: auditNodes.length,
-      violations: findings.map((f) => f.message),
+      violations: findings.filter((f) => f.severity !== 'info').map((f) => f.message),
       findings,
       unmeasured: epochSnap.epoch.unmeasured,
       stats: {
@@ -1724,6 +1732,7 @@ export const observeScreenshotOperation: Operation<
         try {
           const res = await screenshotService.captureScreenshot({
             snapshot,
+            revision: snapshot.revision,
             viewport: vpId,
             nodeId,
             format,

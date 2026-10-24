@@ -23,7 +23,7 @@ function createBridgeScreenshotService() {
   ).replace(/\/+$/, '');
 
   return {
-    async captureScreenshot({ snapshot, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
+    async captureScreenshot({ snapshot, revision, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
       const filePath = snapshot.scope.filePath || [...snapshot.files.keys()].find((path: string) =>
         path.endsWith('/page.client.tsx') || path === 'page.client.tsx'
       );
@@ -49,6 +49,7 @@ function createBridgeScreenshotService() {
               projectId: snapshot.scope.projectId,
               branchId: snapshot.scope.branchId || 'main',
               filePath,
+              revision,
               viewport,
               nodeId,
               format,
@@ -58,7 +59,19 @@ function createBridgeScreenshotService() {
           }),
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error(`Screenshot bridge returned HTTP ${response.status}`);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { error?: string } | null;
+          if (payload?.error?.startsWith('No editor tab connected')) {
+            return {
+              available: false,
+              status: 'unavailable',
+              reason: 'EDITOR_NOT_CONNECTED',
+              note: payload.error,
+              waitedMs: 0,
+            };
+          }
+          throw new Error(`Screenshot bridge returned HTTP ${response.status}`);
+        }
         const payload = await response.json() as { ok?: boolean; result?: unknown; error?: string };
         if (!payload.ok) throw new Error(payload.error || 'Screenshot bridge returned an empty response');
         return payload.result;
