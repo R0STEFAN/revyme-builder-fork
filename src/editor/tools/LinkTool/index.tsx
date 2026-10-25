@@ -569,8 +569,11 @@ export default function LinkTool() {
     else return muts; // already a non-link — nothing to revert
     // '' removes the property (the textDecoration:none / color:inherit added on link-ify).
     muts.push({ type: 'updateStyles', nodeId, styles: { textDecoration: '', color: '' } });
+    if (node?.attrs?.['data-name'] === 'a') {
+      muts.push({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-name': 'div' } });
+    }
     return muts;
-  }, [node?.type, nodeId]);
+  }, [node?.type, node?.attrs, nodeId]);
 
   const handleUrlChange = useCallback((newHref: string) => {
     if (!nodeId) return;
@@ -616,6 +619,10 @@ export default function LinkTool() {
       if (isExternal) {
         attrs.rel = 'noopener noreferrer';
       }
+      const dataName = node?.attrs?.['data-name'];
+      if (!dataName || dataName === 'div' || dataName === 'Div' || dataName === 'Frame') {
+        attrs['data-name'] = 'a';
+      }
       mutations.push({ type: 'updateHtmlAttrs', nodeId, attrs });
     }
 
@@ -625,7 +632,7 @@ export default function LinkTool() {
     mutations.push({ type: 'syncLinkHandler', nodeId });
 
     queueMutations(mutations);
-  }, [nodeId, isLink, node?.type, isComponentFile, navMode, hrefBinding, revertLinkToDivMutations]);
+  }, [nodeId, isLink, node?.type, node?.attrs, isComponentFile, navMode, hrefBinding, revertLinkToDivMutations]);
 
   const handleNewTabChange = useCallback((newTab: boolean) => {
     if (!nodeId) return;
@@ -775,13 +782,37 @@ export default function LinkTool() {
     const newHref = section ? `${base}#${section}` : base;
     trace.action('link-tool:section-change', { nodeId, section, newHref });
 
-    // Set the #section href + (re)sync the anchor-scroll handler so the link
-    // scrolls to the section on click (instant, or smooth when enabled).
-    queueMutations([
-      { type: 'updateHtmlAttrs', nodeId, attrs: { href: newHref } },
-      { type: 'syncLinkHandler', nodeId },
-    ]);
-  }, [nodeId, pagePart]);
+    if (!newHref && navMode === 'none' && !hrefBinding) {
+      queueMutations([
+        { type: 'updateHtmlAttrs', nodeId, attrs: { href: '' } },
+        ...revertLinkToDivMutations(),
+      ]);
+      return;
+    }
+
+    const mutations: any[] = [];
+    const currentType = node?.type || 'div';
+    if (isComponentFile) {
+      if (currentType !== 'MotionLink') {
+        mutations.push({ type: 'convertToMotionLink', nodeId });
+      }
+    } else {
+      if (currentType !== 'Link' && currentType !== 'a') {
+        mutations.push({ type: 'changeTag', nodeId, newTag: 'Link' });
+        mutations.push({ type: 'updateStyles', nodeId, styles: { textDecoration: 'none', color: 'inherit' } });
+      }
+    }
+
+    const attrs: Record<string, string> = { href: newHref };
+    const dataName = node?.attrs?.['data-name'];
+    if (!dataName || dataName === 'div' || dataName === 'Div' || dataName === 'Frame') {
+      attrs['data-name'] = 'a';
+    }
+    mutations.push({ type: 'updateHtmlAttrs', nodeId, attrs });
+    mutations.push({ type: 'syncLinkHandler', nodeId });
+
+    queueMutations(mutations);
+  }, [nodeId, pagePart, isComponentFile, node?.type, node?.attrs, navMode, hrefBinding, revertLinkToDivMutations]);
 
   // CMS slug binding. Picks one of:
   //   - Detail page: Current / Previous / Next → resolve via `params.slug`.
@@ -801,6 +832,10 @@ export default function LinkTool() {
         mutations.push({ type: 'changeTag', nodeId, newTag: 'Link' });
         mutations.push({ type: 'updateStyles', nodeId, styles: { textDecoration: 'none', color: 'inherit' } });
       }
+      const dataName = node?.attrs?.['data-name'];
+      if (!dataName || dataName === 'div' || dataName === 'Div' || dataName === 'Frame') {
+        mutations.push({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-name': 'a' } });
+      }
     }
     mutations.push({
       type: 'setCmsNavHref',
@@ -818,7 +853,7 @@ export default function LinkTool() {
     // to a div (a href-less link crashes SSR). Re-adding a slug re-links it.
     if (mode === 'none') mutations.push(...revertLinkToDivMutations());
     queueMutations(mutations);
-  }, [nodeId, node?.type, isComponentFile, slugCollection, cmsMapContext, revertLinkToDivMutations]);
+  }, [nodeId, node?.type, node?.attrs, isComponentFile, slugCollection, cmsMapContext, revertLinkToDivMutations]);
 
   // Literal CMS item link — a plain string href to one specific item.
   // Works on EITHER a detail page or inside a CMS map — same shape: pick
@@ -837,7 +872,12 @@ export default function LinkTool() {
         mutations.push({ type: 'changeTag', nodeId, newTag: 'Link' });
         mutations.push({ type: 'updateStyles', nodeId, styles: { textDecoration: 'none', color: 'inherit' } });
       }
-      mutations.push({ type: 'updateHtmlAttrs', nodeId, attrs: { href: `/${slugCollection}/${slug}`, 'data-cms-nav': '' } });
+      const attrs: Record<string, string> = { href: `/${slugCollection}/${slug}`, 'data-cms-nav': '' };
+      const dataName = node?.attrs?.['data-name'];
+      if (!dataName || dataName === 'div' || dataName === 'Div' || dataName === 'Frame') {
+        attrs['data-name'] = 'a';
+      }
+      mutations.push({ type: 'updateHtmlAttrs', nodeId, attrs });
     } else {
       // Cleared the literal slug → navigates nowhere → revert to a plain div
       // (don't leave a href-less <Link>, which crashes SSR).
@@ -845,7 +885,7 @@ export default function LinkTool() {
       mutations.push(...revertLinkToDivMutations());
     }
     queueMutations(mutations);
-  }, [nodeId, node?.type, isComponentFile, slugCollection, revertLinkToDivMutations]);
+  }, [nodeId, node?.type, node?.attrs, isComponentFile, slugCollection, revertLinkToDivMutations]);
 
   trace.fn('LinkTool:render', { nodeId, isLink, href });
 

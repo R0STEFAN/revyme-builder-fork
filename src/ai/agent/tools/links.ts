@@ -58,7 +58,9 @@ export const setLinkTool: AgentTool = {
       // would crash at render, so the tag goes first.
       if (currentType === 'MotionLink') queueToolMutation(ctx, { type: 'changeTag', nodeId, newTag: 'motion.div' });
       else if (LINK_TAGS.has(currentType)) queueToolMutation(ctx, { type: 'changeTag', nodeId, newTag: 'div' });
-      queueToolMutation(ctx, { type: 'updateHtmlAttrs', nodeId, attrs: { href: '', target: '', rel: '', 'data-smooth-scroll': '' } });
+      const attrs: Record<string, string> = { href: '', target: '', rel: '', 'data-smooth-scroll': '' };
+      if (node.attrs?.['data-name'] === 'a') attrs['data-name'] = 'div';
+      queueToolMutation(ctx, { type: 'updateHtmlAttrs', nodeId, attrs });
       if (LINK_TAGS.has(currentType)) queueToolMutation(ctx, { type: 'updateStyles', nodeId, styles: { textDecoration: '', color: '' } });
       flushTool(ctx);
       trace.action('agent-tool:set_link', { nodeId, removed: true });
@@ -81,6 +83,10 @@ export const setLinkTool: AgentTool = {
     if (external) attrs.rel = 'noopener noreferrer';
     if (args.new_tab !== undefined) attrs.target = args.new_tab ? '_blank' : '';
     if (args.smooth_scroll !== undefined) attrs['data-smooth-scroll'] = args.smooth_scroll ? 'true' : '';
+    const dataName = node.attrs?.['data-name'];
+    if (dataName === 'div' || dataName === 'Div' || dataName === 'Frame') {
+      attrs['data-name'] = 'a';
+    }
     queueToolMutation(ctx, { type: 'updateHtmlAttrs', nodeId, attrs });
     // Anchor hrefs scroll on click through a handler the builder keeps in sync
     // (native hash navigation is unreliable across the canvas and the site).

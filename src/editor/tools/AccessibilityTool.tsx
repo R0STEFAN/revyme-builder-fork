@@ -1,15 +1,17 @@
 // AccessibilityTool.tsx — Semantic tag + aria-label editor.
-// Toggle with +/- button. Only shows tag select for frame/text nodes (not SVG/img).
+// Toggle with +/- button. Only shows tag select for frame/text/link nodes (not SVG/img).
 // Tag change uses changeTag mutation; aria-label uses updateHtmlAttrs mutation.
 
 import { useState, useCallback, useEffect } from 'react';
+import { useAtomValue } from 'jotai';
 import { ToolSection, ToolInput, ToolSelect, ControlLabel } from '../controls';
 import { useControl } from '../controls/ControlProvider';
-import { queueMutation } from '@/code/mutation/mutation-queue';
+import { queueMutation, queueMutations } from '@/code/mutation/mutation-queue';
 import { trace } from '@/shared/debug-trace';
-import { isFrameTag, isTextTag } from '@/shared/constants';
+import { isFrameTag, isTextTag, isLinkTag } from '@/shared/constants';
+import { activeFilePathAtom, isComponentLikeFilePath } from '@/code/project/active-file-store';
 
-const FRAME_TAG_OPTIONS = [
+export const FRAME_TAG_OPTIONS = [
   { value: 'div', label: 'div' },
   { value: 'section', label: 'section' },
   { value: 'article', label: 'article' },
@@ -21,9 +23,10 @@ const FRAME_TAG_OPTIONS = [
   { value: 'figure', label: 'figure' },
   { value: 'figcaption', label: 'figcaption' },
   { value: 'button', label: 'button' },
+  { value: 'a', label: 'a' },
 ];
 
-const TEXT_TAG_OPTIONS = [
+export const TEXT_TAG_OPTIONS = [
   { value: 'p', label: 'p' },
   { value: 'span', label: 'span' },
   { value: 'h1', label: 'h1' },
@@ -40,23 +43,29 @@ const TEXT_TAG_OPTIONS = [
 
 export default function AccessibilityTool() {
   const { node, nodeId } = useControl();
+  const filePath = useAtomValue(activeFilePathAtom);
+  const isComponentFile = isComponentLikeFilePath(filePath);
 
   const elementTag = node?.type || '';
   const ariaLabel = node?.attrs?.['aria-label'] ?? '';
 
+  const isLink = isLinkTag(elementTag);
+  const displayedTag = isLink ? 'a' : elementTag;
+
   const isFrame = isFrameTag(elementTag);
   const isText = isTextTag(elementTag);
-  const canEditTag = isFrame || isText;
-  const tagOptions = isFrame ? FRAME_TAG_OPTIONS : TEXT_TAG_OPTIONS;
+  const isContainerLink = isLink && (!isText || (Array.isArray(node?.children) && node.children.length > 0) || !node?.textContent);
+  const canEditTag = isFrame || isText || isLink;
+  const tagOptions = (isFrame || isContainerLink) ? FRAME_TAG_OPTIONS : TEXT_TAG_OPTIONS;
 
   const [open, setOpen] = useState(false);
   const [localAriaLabel, setLocalAriaLabel] = useState(ariaLabel);
 
-  // When selection changes: sync aria-label and auto-open if it already has one
+  // When selection changes: sync aria-label and auto-open if it already has one or a non-default tag
   useEffect(() => {
     setLocalAriaLabel(ariaLabel);
-    setOpen(!!ariaLabel);
-  }, [nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+    setOpen(!!ariaLabel || (!!elementTag && elementTag !== 'div'));
+  }, [nodeId, ariaLabel, elementTag]);
 
   // Keep local in sync when code changes update the node
   useEffect(() => {
@@ -71,9 +80,50 @@ export default function AccessibilityTool() {
   }, [nodeId]);
 
   const commitTag = useCallback((value: string) => {
-    if (!nodeId || value === elementTag) return;
+    if (!nodeId || value === displayedTag) return;
     trace.action('accessibility-tool:change-tag', { nodeId, from: elementTag, to: value });
-    queueMutation({ type: 'changeTag', nodeId, newTag: value });
+
+    const href = node?.attrs?.href ?? '';
+    const isExternal = href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:');
+    const dataName = node?.attrs?.['data-name'] ?? '';
+
+    if (value === 'a') {
+      let newTag = 'a';
+      if (isComponentFile) {
+        newTag = (href && !isExternal) ? 'MotionLink' : 'a';
+      } else {
+        newTag = (href && !isExternal) ? 'Link' : 'a';
+      }
+      const muts: any[] = [
+        { type: 'changeTag', nodeId, newTag },
+        { type: 'updateStyles', nodeId, styles: { textDecoration: 'none', color: 'inherit' } },
+      ];
+      if (!dataName || dataName === elementTag || dataName.toLowerCase() === elementTag.toLowerCase()) {
+        muts.push({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-name': 'a' } });
+      }
+      queueMutations(muts);
+    } else if (isLink) {
+      let newTag = value;
+      if (isComponentFile && elementTag === 'MotionLink' && value === 'div') {
+        newTag = 'motion.div';
+      }
+      const muts: any[] = [
+        { type: 'changeTag', nodeId, newTag },
+        { type: 'updateHtmlAttrs', nodeId, attrs: { href: '', target: '', rel: '', 'data-smooth-scroll': '' } },
+        { type: 'updateStyles', nodeId, styles: { textDecoration: '', color: '' } },
+      ];
+      if (dataName === 'a' || dataName.toLowerCase() === 'a' || dataName === 'Link') {
+        muts.push({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-name': value } });
+      }
+      queueMutations(muts);
+    } else {
+      const muts: any[] = [{ type: 'changeTag', nodeId, newTag: value }];
+      if (dataName === elementTag || dataName.toLowerCase() === elementTag.toLowerCase()) {
+        muts.push({ type: 'updateHtmlAttrs', nodeId, attrs: { 'data-name': value } });
+      }
+      queueMutations(muts);
+    }
+
     if (value === 'button') {
       // `<button>` is the one frame tag with UA chrome (buttonface fill,
       // outset border, system font, buttontext color) AND form behavior — the
@@ -97,7 +147,7 @@ export default function AccessibilityTool() {
       // Leaving button: drop the type attr — it's button-specific.
       queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { type: '' } });
     }
-  }, [nodeId, elementTag, node]);
+  }, [nodeId, elementTag, displayedTag, isLink, isComponentFile, node]);
 
   const handleToggle = useCallback(() => {
     const next = !open;
@@ -133,13 +183,13 @@ export default function AccessibilityTool() {
     <ToolSection title="Accessibility" collapsible action={toggleBtn} hasContent={open}>
       {/* Always render a wrapper so ToolSection doesn't bail on empty children */}
       <div className="contents">
-        {/* Semantic tag — only for frame/text nodes */}
+        {/* Semantic tag — for frame/text/link nodes */}
         {canEditTag && (
           <div className="flex items-center justify-between w-full">
             <ControlLabel label="Element" property="__a11y-tag" plain />
             <div className="flex items-center gap-2 w-full">
               <ToolSelect
-                value={elementTag}
+                value={displayedTag}
                 onChange={commitTag}
                 options={tagOptions}
               />
