@@ -318,6 +318,27 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Ran `publish.preflight`: all page and Oracle checks passed.
   - Ran `npx tsc --noEmit`: 0 TypeScript errors across entire repo.
 
+### Bug 17: Preview Mode Broken Due to 404 `srcSet` Injections on All Section Images & Navbar Shadow Interpolation Fix
+- **Location:**
+  - `app/page.client.tsx` (lines 477, 844, 1146, 1207, 1478)
+  - `components/SiteHeader.tsx`
+- **Symptom:**
+  - When opening the preview (`http://localhost:5175/`), the site appeared completely broken and all background images across all 5 sections (`hero-bg-img`, `suites-img`, `terrace-img`, `table-img`, `night-img`) disappeared, showing empty dark boxes. On the editor canvas (`http://localhost:5174/`), the images still showed because the canvas AST parser only reads the primary `src` property.
+  - Additionally, the navbar's shadow snapped instantaneously when scrolling rather than blending smoothly.
+- **Root Cause:**
+  1. *Unresolved webp `srcSet` paths:* Responsive `srcSet` attributes pointing to non-existent `/api/uploads/*-320w.webp` files were present on the 5 background `<img>` tags in `app/page.client.tsx`. When loaded in a real browser in preview, the browser evaluated `srcSet`, attempted to load the WebP images, received HTTP 404 Not Found, and failed to render the images.
+  2. *BoxShadow interpolation snap in Framer Motion:* In `components/SiteHeader.tsx`, `boxShadow: 'none'` was used in the `default` variant. Framer Motion cannot interpolate between the keyword `'none'` and a shadow string like `'0 12px 36px rgba(0, 0, 0, 0.45)'`, causing an instant jump. Using `'0 0 0 rgba(0, 0, 0, 0)'` enables Framer Motion to smoothly interpolate color, blur, and spread.
+  3. *Global layout group leakage:* `<LayoutGroup>` without an `id` in `SiteHeader.tsx` could leak layout projections into outside page elements.
+- **Fix:**
+  1. Cleaned `app/page.client.tsx` of all 404 `srcSet` and `sizes` attributes, restoring clean `src="/api/uploads/*.jpg"` which return HTTP 200 OK.
+  2. Updated `components/SiteHeader.tsx` variants to use `'0 0 0 rgba(0, 0, 0, 0)'` for `boxShadow` in `default`, isolated `<LayoutGroup id="site-header">`, and configured smooth `MotionConfig` transition (`0.5s` ease).
+  3. Submitted changes via Revyme MCP CLI (`codeFiles.submit`).
+- **Verification & Testing:**
+  - All 5 images (`hero.jpg`, `section2-suites.jpg`, `section3-terrace.jpg`, `section4-table.jpg`, `section5-night.jpg`) verified via HTTP curl returning 200 OK.
+  - Ran `diagnostics.projectCheck`: 0 violations, `clean: true`.
+  - Ran `npx tsc --noEmit`: 0 TypeScript errors.
+
+
 
 
 
