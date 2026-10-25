@@ -67,6 +67,27 @@ function mentionsVariant(e: t.Node): boolean {
   return false;
 }
 
+/** Does an expression compare or inspect the live `variant`/`initialVariant`? */
+function isVariantComparison(node: t.Node): boolean {
+  if (t.isParenthesizedExpression(node)) {
+    return isVariantComparison(node.expression);
+  }
+  if (t.isBinaryExpression(node)) {
+    const isEq = node.operator === '===' || node.operator === '!==' || node.operator === '==' || node.operator === '!=';
+    const hasVariantLeft = t.isIdentifier(node.left) && (node.left.name === 'variant' || node.left.name === 'initialVariant');
+    const hasVariantRight = t.isIdentifier(node.right) && (node.right.name === 'variant' || node.right.name === 'initialVariant');
+    if (isEq && (hasVariantLeft || hasVariantRight)) return true;
+  }
+  if (t.isLogicalExpression(node) && (node.operator === '&&' || node.operator === '||')) {
+    return isVariantComparison(node.left) || isVariantComparison(node.right);
+  }
+  if (t.isCallExpression(node) && t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.object)
+      && (node.callee.object.name === 'variant' || node.callee.object.name === 'initialVariant')) {
+    return true;
+  }
+  return false;
+}
+
 const NON_PIN_TRANSFORM_RE = /\b(rotate[XYZ]?|scale[XYZ]?|skew[XY]?|matrix(3d)?)\s*\(/i;
 
 function extractTransformStrings(val: t.Node): string[] {
@@ -173,6 +194,20 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
   }
 
   traverse(ast, {
+    VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+      const init = path.node.init;
+      if (!init) return;
+      if (isVariantComparison(init)) {
+        const varName = t.isIdentifier(path.node.id) ? path.node.id.name : 'variable';
+        const vLine = path.node.loc?.start.line ?? 0;
+        v.push({
+          code: 'FORBIDDEN_INDIRECT_VARIANT_CHECK',
+          tier: 2,
+          line: vLine,
+          message: `Intermediate variant variable "${varName}" (line ${vLine}) — do not store variant checks in boolean variables (e.g. \`const ${varName} = initialVariant === '...'\`). Revyme's parser and editor inspect inline AST ternaries directly (\`initialVariant === 'variant-name' ? val : fallback\` in style objects, or \`{initialVariant === 'variant-name' && <Child/>}\` inside AnimatePresence). Using an intermediate variable prevents conditionalStyles extraction, causing variants to lose their styling in the visual editor. Delete "${varName}" and inline the check directly where needed.`,
+        });
+      }
+    },
     JSXElement(path: NodePath<t.JSXElement>) {
       const attrs = jsxAttrs(path.node.openingElement);
       const dataId = stringAttr(attrs, 'data-id');
@@ -257,6 +292,26 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
       }
 
       if (styleObj) {
+        // FORBIDDEN_INDIRECT_VARIANT_CHECK on style properties:
+        // Catch style ternaries testing an indirect boolean identifier (e.g. `backgroundColor: isScrolled ? ... : ...`).
+        for (const prop of styleObj.properties) {
+          if (!t.isObjectProperty(prop)) continue;
+          if (t.isConditionalExpression(prop.value)) {
+            const test = prop.value.test;
+            if (t.isIdentifier(test) && !booleanPropNames.has(test.name) && !/^__mq\d+$/.test(test.name)) {
+              const propKey = t.isIdentifier(prop.key) ? prop.key.name : t.isStringLiteral(prop.key) ? prop.key.value : 'style';
+              const sLine = prop.loc?.start.line ?? line;
+              v.push({
+                code: 'FORBIDDEN_INDIRECT_VARIANT_CHECK',
+                tier: 2,
+                line: sLine,
+                elementId: dataId,
+                message: `Style property "${propKey}" (line ${sLine}) uses an indirect boolean identifier "${test.name}" in its ternary condition. Design component style ternaries must directly test the variant (\`initialVariant === 'variant-name' ? val : fallback\`). Indirect variables prevent the visual editor from extracting and updating conditionalStyles.`,
+              });
+            }
+          }
+        }
+
         const transformProp = styleObj.properties.find((p): p is t.ObjectProperty =>
           t.isObjectProperty(p) && ((t.isIdentifier(p.key) && p.key.name === 'transform') || (t.isStringLiteral(p.key) && p.key.value === 'transform')));
         if (transformProp) {

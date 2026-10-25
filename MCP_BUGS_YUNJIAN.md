@@ -243,6 +243,31 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Ran `publish.preflight` via CLI: returned `passed: true`, `failedChecks: 0`, and confirmed `oracle.app/page.client.tsx: pass`.
   - Verified live browser synchronization: revisions 191, 192, and 193 were applied and synced immediately to the open editor tab (`"status": "synced", "clientCount": 1`).
 
+### Bug 14: Systemic Prevention in MCP & Oracle — Added `FORBIDDEN_INDIRECT_VARIANT_CHECK` Rule
+- **Location:**
+  - `src/code/oracle/checks/variant-dialect.ts`
+  - `src/code/oracle/checks/forbidden-indirect-variant.test.ts`
+  - `packages/cli/dist/main.js`
+  - `.agents/skills/revyme-mcp/SKILL.md`
+  - `.agents/skills/revyme-mcp/references/oracle-rules.md`
+  - `components/PassageCard.tsx`
+- **Symptom:** AI agents constructing Design Components repeatedly used intermediate boolean variables (e.g. `const isScrolled = initialVariant === 'scrolled'`, `const isActive = initialVariant === 'active'`) and used them in style object ternaries (`filter: isActive ? ... : ...`). Because Revyme's parser (`src/code/parsing/parser.ts:4753`) strictly inspects AST BinaryExpressions where `cond.test.left.name === 'variant' || cond.test.left.name === 'initialVariant'`, any intermediate boolean identifier causes `conditionalStyles` to be evaluated as `null`. As a result, switching variants in the visual canvas or layers panel produced identical static styling.
+- **Fix:**
+  1. Implemented new Oracle rule `FORBIDDEN_INDIRECT_VARIANT_CHECK` in `src/code/oracle/checks/variant-dialect.ts`.
+     - Scans `VariableDeclarator` nodes for intermediate variables initialized with variant comparisons (`variant === ...`, `initialVariant === ...`, `!=`, `!==`, `&&`, `||`, or member calls).
+     - Scans style object properties in design components for `ConditionalExpression` nodes where `test` is an indirect boolean identifier (not a declared `@propMeta` boolean prop or responsive gate `__mqN`).
+     - Rejects any offending code on submission with a clear tier 2 error:
+       `[FORBIDDEN_INDIRECT_VARIANT_CHECK] Intermediate variant variable "<varName>" (line X) — do not store variant checks in boolean variables (e.g. const <varName> = initialVariant === '...'). Revyme's parser and editor inspect inline AST ternaries directly (initialVariant === 'variant-name' ? val : fallback in style objects, or {initialVariant === 'variant-name' && <Child/>} inside AnimatePresence). Using an intermediate variable prevents conditionalStyles extraction, causing variants to lose their styling in the visual editor. Delete "<varName>" and inline the check directly where needed.`
+  2. Fixed `components/PassageCard.tsx`: removed `const isActive = initialVariant === 'active'` and used inline `initialVariant === 'active' ? 'grayscale(0) sepia(0)' : 'grayscale(1) sepia(0.16)'`, successfully enabling the `Active Seal` variant filter.
+  3. Rebuilt `@revyme/cli` bundle (`packages/cli/dist/main.js`).
+- **Verification & Testing:**
+  - Unit test suite `src/code/oracle/checks/forbidden-indirect-variant.test.ts`: 4/4 tests passed (100%).
+  - Full suite `src/code/oracle/variant-dialect.test.ts`: 26/26 tests passed (100%).
+  - Tested rejection by attempting to submit non-compliant `PassageCard.tsx`: CLI correctly rejected submission with `ORACLE_VIOLATION: Batch rejected due to 2 violation(s): [FORBIDDEN_INDIRECT_VARIANT_CHECK]`.
+  - Submitted fixed `PassageCard.tsx`: accepted cleanly and committed (revision 209).
+  - Ran `diagnostics.projectCheck`: `clean: true`, `passed: true`, 0 oracle violations.
+
+
 
 
 
