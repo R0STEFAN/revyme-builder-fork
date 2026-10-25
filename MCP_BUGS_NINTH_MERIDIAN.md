@@ -115,12 +115,48 @@ During the construction process, the following Oracle and Builder rules were ver
 
 ---
 
-## 3. Preflight & Quality Gate Results
+8. **`COMPONENT_LINK_NOT_MOTIONLINK`:**
+   Inside design components (`components/*.tsx`), any navigating link with `href` MUST NOT be a raw `<a>` or plain `<Link>`. It must declare `const MotionLink = motion.create(Link)` and render `<MotionLink data-id="..." data-name="a" href="..." layout style={{ ... }}>`.
+9. **`MOTION_PROPS_ON_PLAIN_TAG`:**
+   Any element with motion props like `onTap` must be a motion component (e.g. `<motion.button>` rather than `<button>`).
+10. **`SPACING_UNIT_NOT_PX`:**
+    In design components, Padding/Margin/Radius controls are PX-only. Values like `clamp(...)` or `%` in inline padding/margin/radius trigger `SPACING_UNIT_NOT_PX`. Fluid typography with `clamp()` belongs in typography presets, font sizes, or global CSS.
+11. **`ANIMATEPRESENCE_POPLAYOUT_MODE` & `ANIMATEPRESENCE_CHILD_LAYOUT`:**
+    Revealed panels inside `<AnimatePresence>` must use `mode="popLayout"`, and direct children must carry `key` and `layout={true}`.
+12. **`MEDIA_COLUMN_FLIP_MISSING_REBASE`:**
+    When flipping a flex container from row to column in a media query, any child with `flex: '1 0 0px'` must have `flex: 0 0 auto !important; width: 100% !important;` in the same media block.
+
+---
+
+## 3. Responsive Polish & Component Variants Implemented
+
+1. **Responsive Navbar with Variants (`components/ObservatoryHeader.tsx`):**
+   - Implemented with two variants: `default` (standard top bar) and `menu-open` (expanded station directory drawer).
+   - Declared interactive connections:
+     - `{ from: 'default', to: 'menu-open', trigger: 'click', sourceNode: 'hdr-hamburger-btn' }`
+     - `{ from: 'menu-open', to: 'default', trigger: 'click', sourceNode: 'hdr-close-btn' }`
+   - Smooth enter/exit transitions powered by Framer Motion `<AnimatePresence mode="popLayout">`.
+   - On desktop screens (> 810px), the hamburger button is hidden and direct CTA/telemetry is shown; on mobile screens (<= 810px), the hamburger button is displayed and opens the directory drawer.
+2. **Fluid Typography with `clamp()` Across All Presets:**
+   - `display`: `clamp(32px, 6.5vw, 68px)`
+   - `heading-stage`: `clamp(26px, 4.2vw, 44px)`
+   - `body-desert`: `clamp(14px, 1.5vw, 17px)`
+   - `mono-furniture`: `clamp(10px, 1.1vw, 11px)`
+   - Updated directly in `app/globals.css` and via `typography.set`.
+3. **Contrast Corrections on Sand Ground:**
+   - `components/FaqItem.tsx`: Question in `var(--color-ink)` `#33291E`, answer in `rgba(51, 41, 30, 0.72)`, index in `var(--color-coral)`, and border in `rgba(51, 41, 30, 0.15)`.
+4. **Mobile Layout & Pinned Stage Stickiness:**
+   - All 4 pinned stages operate on sticky positioning (`position: sticky; top: 0px; height: 100svh; overflow: hidden`) inside `300svh` to `360svh` stage containers.
+   - Mobile media queries (`max-width: 810px` and `max-width: 390px`) rebase flex rows to clean stacked columns without overflow.
+
+---
+
+## 4. Preflight & Quality Gate Results
 
 - **`diagnostics.projectCheck`:**
   - `clean: true`, `passed: true`
-  - Total files checked: 18
-  - Clean files: 18, Error files: 0
+  - Total files checked: 19
+  - Clean files: 19, Error files: 0
   - Blocking violations: 0, Drift violations: 0, Broken links: 0, Missing assets: 0
 - **`publish.preflight`:**
   - `passed: true`
@@ -130,5 +166,5 @@ During the construction process, the following Oracle and Builder rules were ver
   - Routes validated: 1 (`/` → `app/page.client.tsx`)
 - **`export.generate` (Next.js):**
   - Generated: `proj-1792922782087-qo0wnl-nextjs.zip`
-  - Total files in archive: 30
+  - Total files in archive: 31
   - `preflightClean: true`
