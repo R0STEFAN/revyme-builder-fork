@@ -18,6 +18,9 @@ playwright-report/
 *.log
 .claude/
 .agents/teamwork/
+public/uploads/
+public/assets/
+public/api/
 
 # env — only the example ships
 .env*
