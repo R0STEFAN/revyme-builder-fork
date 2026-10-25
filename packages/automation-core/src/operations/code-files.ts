@@ -290,7 +290,7 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
     }
 
     // Phase 3: Oracle Verification Gate for TSX / TS files
-    const projectFileSet = new Set(projectFS.listFiles());
+    const projectFileSet = new Set(snapshot.files?.size ? snapshot.files.keys() : projectFS.listFiles());
     for (const f of input.files) {
       if (f.code !== null) {
         projectFileSet.add(f.path);

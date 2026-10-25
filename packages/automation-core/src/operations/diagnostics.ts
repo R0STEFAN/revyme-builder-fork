@@ -202,7 +202,7 @@ export const diagnosticsProjectCheckOperation: Operation<
           : 'component';
 
         try {
-          const projectFiles = new Set(projectFS.listFiles());
+          const projectFiles = new Set(snapshot.files?.size ? snapshot.files.keys() : []);
           const violations = checkFile(code, { kind, path: filePath, projectFiles });
           for (const v of violations) {
             oracleViolations.push({

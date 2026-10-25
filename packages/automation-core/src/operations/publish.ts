@@ -253,18 +253,11 @@ export async function executePreflightChecks(
         }
       }
 
-      // In Next.js App Router, root layout.tsx is the server HTML wrapper (contains <html>/<body>/metadata).
-      // Only editable route-group LayoutClient.tsx or layout files without server root wrappers are canvas templates.
-      if (/(^|\/)layout\.tsx$/.test(path)) {
-        if (code.includes('<html') || code.includes('<body') || code.includes('export const metadata') || code.includes('export const siteConfig')) {
-          continue;
-        }
-      }
 
       inspectedPagesCount += 1;
       let violations;
       try {
-        const projectFiles = new Set(projectFS.listFiles());
+        const projectFiles = new Set(filesMap?.size ? filesMap.keys() : projectFS.listFiles());
         violations = checkFile(code, {
           kind: isLayout ? 'template' : 'page',
           path,

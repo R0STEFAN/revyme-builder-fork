@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { duplicateProject } from '../storage';
+import { duplicateProject, saveUploadExact, deleteUpload } from '../storage';
 import type {
   Scope,
   Snapshot,
@@ -244,8 +244,37 @@ export class LocalProjectRepository implements ProjectRepository {
       const destination = change.path.startsWith('_meta/') ? record.data.files : targetFiles;
       if (change.content === null) {
         delete destination[change.path];
+        if (change.path.startsWith('public/assets/') || change.path.startsWith('public/images/') || change.path.startsWith('public/uploads/')) {
+          try {
+            deleteUpload(path.basename(change.path), this.dataDir);
+          } catch {
+            // Ignore asset delete sync errors
+          }
+        }
       } else {
         destination[change.path] = change.content;
+        if (change.path.startsWith('public/assets/') || change.path.startsWith('public/images/') || change.path.startsWith('public/uploads/')) {
+          try {
+            const safeName = path.basename(change.path);
+            let buf: Buffer;
+            if (change.content.startsWith('data:')) {
+              const base64Data = change.content.replace(/^data:[^;]+;base64,/, '');
+              buf = Buffer.from(base64Data, 'base64');
+            } else if (change.path.endsWith('.svg') || change.path.endsWith('.json') || change.path.endsWith('.txt')) {
+              buf = Buffer.from(change.content, 'utf8');
+            } else {
+              try {
+                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(change.content.trim().slice(0, 100));
+                buf = isBase64 ? Buffer.from(change.content, 'base64') : Buffer.from(change.content, 'utf8');
+              } catch {
+                buf = Buffer.from(change.content, 'utf8');
+              }
+            }
+            saveUploadExact(safeName, buf, this.dataDir, projectId);
+          } catch {
+            // Ignore asset upload sync errors
+          }
+        }
       }
     }
     if (branchId !== 'main' && plan.changes.some(change => !change.path.startsWith('_meta/'))) {

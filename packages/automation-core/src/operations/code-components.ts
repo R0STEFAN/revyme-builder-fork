@@ -159,7 +159,7 @@ export const codeComponentsCreateOperation: Operation<
     const violations = checkFile(finalCode, {
       kind: 'code-component',
       path,
-      projectFiles: new Set(projectFS.listFiles()),
+      projectFiles: new Set(snapshot.files?.size ? snapshot.files.keys() : projectFS.listFiles()),
     });
     if (violations.length > 0) {
       const summary = violations.map((v) => `[${v.code}] ${v.message}`).join(' | ');
