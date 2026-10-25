@@ -145,16 +145,20 @@ function upsertTypographyResponsiveBlock(code: string, nodeId: string, rules: st
   // Migrate the legacy unlabelled style node if present, preserving its rules.
   const legacyStyleStart = code.indexOf('<style>{`');
   if (legacyStyleStart !== -1) {
-    const openingEnd = code.indexOf('>', legacyStyleStart);
-    const expressionEnd = openingEnd === -1 ? -1 : code.indexOf('`}</style>', openingEnd);
-    if (openingEnd !== -1 && expressionEnd !== -1) {
-      const existingRules = code.slice(openingEnd + 1, expressionEnd);
-      const migrated = `<style data-id="${styleId}" data-name="Typography Responsive Styles" style={{ position: 'absolute' }}>{\`${existingRules}\n${rules}\n\`}</style>`;
-      return code.slice(0, legacyStyleStart) + migrated + code.slice(expressionEnd + '`}</style>'.length);
+    const exprStart = code.indexOf('{`', legacyStyleStart);
+    const exprEnd = exprStart === -1 ? -1 : code.indexOf('`}</style>', exprStart);
+    if (exprStart !== -1 && exprEnd !== -1) {
+      const existingRules = code.slice(exprStart + 2, exprEnd).trim();
+      const migrated = `<style data-id="${styleId}" data-name="Typography Responsive Styles" style={{ position: 'absolute' }}>{\`${existingRules ? existingRules + '\n' : ''}${rules}\n\`}</style>`;
+      return code.slice(0, legacyStyleStart) + migrated + code.slice(exprEnd + '`}</style>'.length);
     }
   }
 
   const responsiveStyle = `<style data-id="${styleId}" data-name="Typography Responsive Styles" style={{ position: 'absolute' }}>{\`\n${rules}\n\`}</style>\n`;
+  const lastCloseIndex = code.lastIndexOf('</div>');
+  if (lastCloseIndex !== -1) {
+    return code.slice(0, lastCloseIndex) + `  ${responsiveStyle}` + code.slice(lastCloseIndex);
+  }
   return code.replace(/(<\/div>|<\/section>|<\/main>)([\s\S]*?$)/, `${responsiveStyle}$1$2`);
 }
 

@@ -432,6 +432,26 @@ describe('T08: Design System — Tokens, Presets, Themes, Typography and Fonts',
     applyChanges(mutableFiles, reapplyRes.changes);
     snapshot = { ...snapshot, files: mutableFiles };
 
+    // 3b. Regression test: legacy style block without data-id correctly migrates without syntax corruption {`{`
+    const withLegacyStyle = snapshot.files.get('app/page.tsx')!.replace(
+      /<style[^>]*>\{`[\s\S]*?`\}<\/style>/,
+      `<style>{\`\n  @media (max-width: 390px) { .custom { color: red; } }\n\`}</style>`,
+    );
+    mutableFiles.set('app/page.tsx', withLegacyStyle);
+    snapshot = { ...snapshot, files: mutableFiles };
+
+    const legacyMigrateRes = await typographyApplyOperation.execute(
+      snapshot,
+      { name: 'display', targetFile: 'app/page.tsx', nodeId: 'hero-header', retag: false },
+      mockContext,
+    );
+    const migratedCode = legacyMigrateRes.changes[0].content!;
+    expect(migratedCode).not.toContain('{`{`');
+    expect(migratedCode).toContain('.custom { color: red; }');
+    expect(migratedCode).toContain('[data-id="hero-header"] { font-size: var(--typo-display-size-md) !important; }');
+    applyChanges(mutableFiles, legacyMigrateRes.changes);
+    snapshot = { ...snapshot, files: mutableFiles };
+
     // 4. Detach preset: bakes literal token values into inline style and removes preset vars
     const detachRes = await typographyDetachOperation.execute(
       snapshot,
