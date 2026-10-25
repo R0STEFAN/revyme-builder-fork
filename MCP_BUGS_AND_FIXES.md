@@ -247,6 +247,12 @@ Throughout this automated run, several bugs, false-positives, and configuration 
 - **Root Cause:** Line 188 used `code.match(/\}\}>\s*\n/)` to locate the closing bracket of the root element. When formatted as `}}\n >`, the regex failed to match, silently dropping responsive style block insertions.
 - **Fix:** Replaced regex matching with AST tag boundary traversal via `findTagClose`, ensuring robust insertion regardless of newline formatting between `}}` and `>`. Added unit test in `src/code/generation/generator-styles.test.ts` (129/129 vitest passed).
 
+### Issue 4.10: Unconstrained Flex Parent Collapsing `width: 100%` Code Components on Desktop
+- **Symptom:** `CircularDriftImage` appeared shrunk to 100px on the desktop canvas artboard and completely collapsed/blank (0px) in desktop standalone preview, while displaying normally on mobile.
+- **Root Cause:** In `app/page.client.tsx`, `statement-right-col` was an auto-width flex item (`flex: '0 0 auto'`) without an explicit width or flex basis. Inside it, `CircularDriftImage` was styled with `width: '100%'` with `maxWidth: '360px'` and `aspectRatio: '1 / 1'`. In CSS flexbox, a child with `width: 100%` inside an unconstrained auto-width parent produces an indeterminate cyclical dependency: the browser collapses min-content width to 100px (canvas sandboxed artboard) or 0px (standalone preview). On mobile, explicit `280px` overrides existed, masking the issue there.
+- **Fix:** Set explicit desktop pixel geometry `width: '360px', height: '360px'` on both `statement-right-col` and `statement-drift-image` in `app/page.client.tsx`, and ensured `CircularDriftImage.tsx` uses `width: \`${size}px\`, height: \`${size}px\`, maxWidth: '100%', aspectRatio: '1 / 1'\`. Verified with `observe.layout`: Desktop measures exactly 360.0px x 360.0px; Mobile measures exactly 280.0px x 280.0px.
+
+
 
 
 
