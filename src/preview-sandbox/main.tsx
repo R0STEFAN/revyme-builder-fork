@@ -46,6 +46,7 @@ import * as NextIntl from 'next-intl';
 // this import resolves to the same code that runs in the canvas editor and
 // in production.
 import * as RevymeRuntime from '@revyme/runtime';
+import PreviewRevymeSplitText from './PreviewRevymeSplitText';
 import EmblaCarousel from 'embla-carousel';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
@@ -335,7 +336,9 @@ const MODULE_MAP: Record<string, any> = {
     // Sketch draw-on animation player — generated `useEffect` blocks
     // call this with the wrapper SVG + the user's animation options.
     playSketchDraw: RevymeRuntime.playSketchDraw,
-    RevymeSplitText: RevymeRuntime.RevymeSplitText,
+    // Preview-adapted SplitText that measures host.parentElement when host has
+    // display: contents, preventing Layer in View from premature 0ms triggering.
+    RevymeSplitText: PreviewRevymeSplitText,
     // Collection-list locale resolution — a localized list's source is
     // `localizeRows(slug, __activeLocale)`, so the preview needs it or the
     // page throws "localizeRows is not a function" and renders nothing.
