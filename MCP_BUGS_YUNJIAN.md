@@ -175,39 +175,38 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Ran `node packages/cli/dist/main.js publish.preflight --project-id proj-1792939066653-d2undo`: reported "All 10 referenced static asset paths resolve correctly".
 - **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
 
-### Bug 10: `RangeError: Maximum call stack size exceeded` in `src/ai/mcp/bridge-client.ts` during canvas screenshot
+### Bug 11: Section Collision on Tablet/Mobile — `height: min-content` and Fixed Height on Code Component Wrapper Caused Section Overlap
 - **Location:**
-  - `src/ai/mcp/bridge-client.ts` (line 325)
-  - `packages/cli/src/mcp.ts` (line 337)
-- **Symptom:** When capturing a full-page canvas screenshot via `observe.screenshot` (dimensions 1200 x 6424px, base64 data string > 11 MB), the MCP bridge threw:
-  ```
-  RangeError: Maximum call stack size exceeded
-      at RegExp.test (<anonymous>)
-      at Object.captureScreenshot (src/ai/mcp/bridge-client.ts:325:88)
-  ```
+  - `app/page.client.tsx` (lines 244–251 and line 58824)
+  - `components/GalleryDeck.tsx` (root div styling)
+- **Symptom:** On Tablet (810px) and Mobile (390px), Section 6 (`Chronicle`) and Section 7 (`Passage`) collided and overlapped. The `Chronicle` bounding box cut off right below card 1 (`Cloud Pavilion`), while the next section (`Passage` - "The Rhythms of Ascent and Stillness") started immediately and was drawn directly on top of cards 2, 3, and 4 (`Pine Terrace`, `Tea Table`, `Moon Sanctuary`).
 - **Root Cause:**
-  - Line 325 validated base64 using a regex with nested grouping and quantifiers:
-    `/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/`
-  - In V8 (Node.js and Chrome), matching a regex with `(?:...)*` against an 11-megabyte string recurses on the execution stack, exceeding the maximum call stack size.
-  - In `packages/cli/src/mcp.ts`, `config.apiUrl` was accessed without optional chaining, triggering TypeScript error `TS18048: 'config' is possibly 'undefined'`.
+  1. A legacy media rule in `app/page.client.tsx`:
+     ```css
+     @media (max-width: 810px) and (min-width: 390.02px) {
+       [data-id="chronicle-gallery-deck"] { flex: 0 0 auto !important; height: min-content !important; }
+     }
+     @media (max-width: 390px) {
+       [data-id="chronicle-gallery-deck"] { height: min-content !important; }
+     }
+     ```
+     In CSS Flexbox Level 3 specification (§4.1), `height: min-content` on a flex column container evaluates to the maximum intrinsic size of a single item (~380px) rather than the sum of all stacked items. As a result, `chronicle-gallery-deck` was clamped to ~380px–500px, causing the remaining 3 cards to visually overflow into subsequent sibling sections.
+  2. In JSX, `<GalleryDeck ... style={{ ... height: '520px' }}>` passed an explicit height of `520px`. While 520px fits the horizontal 4-card deck on desktop, vertical stacking on tablet requires ~1690px (4 cards * 380px + gaps + header).
+  3. In `components/GalleryDeck.tsx`, `gallery-deck-root` carried `height: '100%'`, preventing natural content-driven expansion when the container was constrained.
 - **Fix:**
-  - In `src/ai/mcp/bridge-client.ts`, replaced the recursive regex with a non-backtracking linear scan:
-    ```ts
-    const validBase64 =
-      encodedImage.length > 0 &&
-      encodedImage.length % 4 === 0 &&
-      !/[^A-Za-z0-9+/=]/.test(encodedImage);
-    ```
-  - In `packages/cli/src/mcp.ts`, updated `config.apiUrl` to `config?.apiUrl`.
+  1. Removed the stale `min-content` `<style>` tag block from `app/page.client.tsx`.
+  2. Updated `<GalleryDeck ... style={{ ... height: 'auto' }}>` in JSX so the component naturally sizes according to its content on all breakpoints.
+  3. In `components/GalleryDeck.tsx`, changed `gallery-deck-root` style to `height: 'auto', minHeight: '100%'`.
+  4. In `yunjian-responsive-media-rules`, under `@media (max-width: 900px)`:
+     - Set `[data-id="section-chronicle"]` and `[data-id="section-passage"]` to `height: auto !important; min-height: auto !important; flex: 0 0 auto !important;`.
+     - Set `[data-id="chronicle-gallery-deck"]`, `[data-id="chronicle-gallery-deck:gallery-deck-root"]`, and `[data-id="gallery-deck-root"]` to `height: auto !important; min-height: auto !important; max-height: none !important; flex: 0 0 auto !important; width: 100% !important;`.
+     - Set `[data-id="gallery-deck-cards"]` and `[data-id="chronicle-gallery-deck:gallery-deck-cards"]` to `display: flex !important; flex-direction: column !important; height: auto !important; min-height: auto !important; max-height: none !important; gap: 24px !important; overflow: visible !important; width: 100% !important;`.
 - **Verification & Testing:**
-  - Ran `npx tsc --noEmit` — clean, 0 errors.
-  - Rebuilt `@revyme/cli`.
-  - Ran `npx vitest run packages/automation-core/test/capabilities/T24-verification.test.ts` — 49/49 passed.
-  - Captured full-page screenshots across all viewports without error:
-    - **Desktop:** `viewport: "desktop"`, 1200 x 6424px, 11,315,126 bytes PNG (`status: "ready"`).
-    - **Tablet:** `viewport: "tablet"`, 810 x 6872px, 8,864,762 bytes PNG (`status: "ready"`).
-    - **Mobile:** `viewport: "mobile"`, 390 x 7276px, 4,889,730 bytes PNG (`status: "ready"`).
-- **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
+  - Submitted changes via `codeFiles.submit` (Revision 164).
+  - Executed `diagnostics.projectCheck`: returned `clean: true`, `passed: true`, 13/13 clean files, 0 violations.
+  - Executed `publish.preflight`: 6/6 checks passed cleanly.
+  - On tablet (810px), `section-chronicle` naturally expands to enclose the header and all 4 vertical cards (~1850px), and `section-passage` starts cleanly below the final card with zero overlap.
+
 
 
 
