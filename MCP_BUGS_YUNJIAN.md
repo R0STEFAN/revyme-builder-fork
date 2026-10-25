@@ -78,4 +78,23 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Rebuilt `@revyme/cli` binary.
 - **Git Commit:** `b51cf01` ("fix(automation-core): supply projectFiles to Oracle checkFile to validate project-scoped assets").
 
+### Bug 4: CLI fails to map kebab-case CLI flags to camelCase operation schema keys, causing `SCHEMA_VALIDATION_FAILED` (e.g. `Invalid input: expected string, received undefined` for `nodeId`)
+- **Location:** `packages/cli/src/main.ts` (in `coerceInputToSchema` and `flags` collection).
+- **Symptom:** Running CLI commands with standard UNIX kebab-case flags such as `revyme viewports.setOverride --project-id ... --node-id hero-heading --viewport tablet --styles '{"fontSize":"42px"}'` rejected the input with:
+  ```
+  SCHEMA_VALIDATION_FAILED: Validation failed for operation "viewports.setOverride"
+  [invalid_type] (path: ["nodeId"]): Invalid input: expected string, received undefined
+  ```
+- **Root Cause:** Standard CLI flag conventions use kebab-case (`--node-id`, `--file-path`, `--project-id`), whereas Zod operation schemas throughout `automation-core` define input properties in camelCase (`nodeId`, `filePath`, `projectId`). The CLI collected flags directly into `inputData` using raw flag keys without converting kebab-case to camelCase or matching against schema properties. Furthermore, `coerceInputToSchema` only looked up `properties[key]`, leaving `nodeId` undefined.
+- **Fix:**
+  1. Added `kebabToCamel(str: string): string` conversion in `packages/cli/src/main.ts`.
+  2. In `coerceInputToSchema`, normalized incoming input keys to match schema property keys (checking both exact key and its camelCase variant).
+  3. In CLI flag collection, populated both kebab-case and camelCase keys in `inputData` so both styles work interchangeably.
+- **Verification & Testing:**
+  - Added unit test in `packages/cli/test/cli.test.ts`: `maps kebab-case CLI flags to camelCase schema properties and coerces types`.
+  - Ran vitest suite: 13/13 tests passed cleanly in `packages/cli/test/cli.test.ts`.
+  - Tested running `node packages/cli/dist/main.js viewports.setOverride --project-id proj-1792939066653-d2undo --node-id hero-heading --viewport tablet --styles '{"fontSize":"42px"}'`. Succeeded with revision 33.
+- **Git Commit:** (Pending commit)
+
+
 

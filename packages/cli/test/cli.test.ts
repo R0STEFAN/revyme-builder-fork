@@ -292,4 +292,42 @@ describe('T05: Revyme CLI Command Line Interface', () => {
       execute.mockRestore();
     }
   });
+
+  it('maps kebab-case CLI flags to camelCase schema properties and coerces types', async () => {
+    const outputs: string[] = [];
+    const execute = vi.spyOn(AutomationClient.prototype, 'execute').mockResolvedValue({
+      ok: true,
+      data: { nodeId: 'hero-heading', viewport: 'tablet' },
+      meta: { commitStatus: 'committed', revision: 33 },
+    } as any);
+
+    try {
+      const code = await runCli({
+        argv: [
+          'viewports.setOverride',
+          '--project-id', 'test-project',
+          '--branch-id', 'main',
+          '--api', 'http://localhost:3333',
+          '--node-id', 'hero-heading',
+          '--viewport', 'tablet',
+          '--styles', '{"fontSize":"42px"}',
+        ],
+        stdout: (msg) => outputs.push(msg),
+      });
+
+      expect(code).toBe(0);
+      expect(execute).toHaveBeenCalledWith(
+        { projectId: 'test-project', branchId: 'main' },
+        'viewports.setOverride',
+        {
+          nodeId: 'hero-heading',
+          viewport: 'tablet',
+          styles: { fontSize: '42px' },
+        },
+        { dryRun: false },
+      );
+    } finally {
+      execute.mockRestore();
+    }
+  });
 });

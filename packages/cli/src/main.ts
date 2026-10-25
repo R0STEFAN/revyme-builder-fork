@@ -55,6 +55,10 @@ function parseCliTokens(args: string[]): { flags: Record<string, any>; positiona
   return { flags, positionals };
 }
 
+function kebabToCamel(str: string): string {
+  return str.replace(/-([a-z0-9])/g, (_, g) => g.toUpperCase());
+}
+
 function coerceInputToSchema(input: Record<string, unknown>, schema: z.ZodType): Record<string, unknown> {
   let properties: Record<string, any>;
   try {
@@ -64,7 +68,14 @@ function coerceInputToSchema(input: Record<string, unknown>, schema: z.ZodType):
     return input;
   }
 
-  return Object.fromEntries(Object.entries(input).map(([key, value]) => {
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const camel = kebabToCamel(key);
+    const resolvedKey = properties[camel] ? camel : (properties[key] ? key : camel);
+    normalized[resolvedKey] = value;
+  }
+
+  return Object.fromEntries(Object.entries(normalized).map(([key, value]) => {
     if (typeof value !== 'string') return [key, value];
     const property = properties[key];
     const types = new Set<string>([
@@ -331,6 +342,10 @@ EXAMPLES:
     for (const [key, val] of Object.entries(flags)) {
       if (!['project-id', 'branch-id', 'api', 'input-file', 'stdin', 'dry-run', 'format'].includes(key)) {
         inputData[key] = val;
+        const camel = kebabToCamel(key);
+        if (camel !== key) {
+          inputData[camel] = val;
+        }
       }
     }
   }
