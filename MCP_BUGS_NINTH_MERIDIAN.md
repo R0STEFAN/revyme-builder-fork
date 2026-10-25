@@ -19,11 +19,29 @@ During the end-to-end automated construction and testing of the long scroll-chor
 6. Responsive multi-viewport overrides (`viewports.setOverride`).
 7. Full project diagnostics, deployment preflight, preview generation, and production export (`diagnostics.projectCheck`, `publish.preflight`, `preview.build`, `export.generate`).
 
-During this automated run, 2 server-level bugs were identified in `@revyme/automation-core`, diagnosed, fixed, accompanied by automated regression tests in vitest, and verified with zero remaining defects.
+During this automated run, 3 server-level bugs were identified in `@revyme/automation-core`, diagnosed, fixed, accompanied by automated regression tests in vitest, and verified with zero remaining defects.
 
 ---
 
 ## 1. Diagnosed MCP Server Bugs & Code Fixes
+
+### Bug 1.3: `typography.apply` JSX Syntax Corruption (`{`{``) on Style Block Migration
+- **Location:** `packages/automation-core/src/operations/typography.ts` (`upsertTypographyResponsiveBlock`, lines 145–160).
+- **Symptom:** Executing `typography.apply` on a node when a page already has an unlabelled `<style>{`...`}</style>` block threw a fatal error:
+  ```json
+  {
+    "code": "PLAN_VALIDATION_FAILED",
+    "message": "Syntax error in app/page.client.tsx: Unexpected token, expected \"}\" (74:4)"
+  }
+  ```
+- **Root Cause:** When `upsertTypographyResponsiveBlock` detected an existing `<style>{`...`}</style>` block, it attempted to migrate existing rules into `<style data-id="typography-responsive-${nodeId}" ...>`. However:
+  1. It extracted `code.slice(openingEnd + 1, expressionEnd)`. Since `openingEnd` pointed to the `>` of `<style>`, `openingEnd + 1` was `{`. This meant `existingRules` captured `{` and `` ` ``!
+  2. It then interpolated `existingRules` into `{\`${existingRules}\n${rules}\n\`}`, producing invalid JSX `{`{`...`}``, breaking Babel compilation.
+  3. The fallback insertion used regex `code.replace(/(<\/div>|<\/section>|<\/main>)([\s\S]*?$)/, ...)`, which inadvertently matched the very first `</div>` in the document instead of the root closing tag.
+- **Fix:** Corrected expression boundaries to index `{` and slice `exprStart + 2` to strictly extract the rule body without delimiters. Changed root container fallback to `code.lastIndexOf('</div>')`.
+- **Verification:** Added vitest regression test `legacy style block without data-id correctly migrates without syntax corruption {`{`` in `packages/automation-core/test/capabilities/T08-design-system.test.ts`. All 8 tests in T08 passed cleanly.
+
+---
 
 ### Bug 1.1: Preflight Asset Scanner Falsely Flagging Template Literal Expressions (`assets.unlinked:${GRAIN_SVG}`)
 - **Location:** `packages/automation-core/src/operations/publish.ts` (lines 381–399).

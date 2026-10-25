@@ -111,6 +111,12 @@ Throughout this automated run, several bugs, false-positives, and configuration 
   ```
   Added unit test in `src/code/generation/generator-styles.test.ts` verifying `<style>` block creation on multiline root closing tags. All 129 tests passed. Rebuilt CLI bundle.
 
+### Issue 2.5: `typography.apply` Corrupting JSX Syntax During Style Node Migration
+- **Location:** `packages/automation-core/src/operations/typography.ts` (`upsertTypographyResponsiveBlock`).
+- **Symptom:** Applying typography presets to nodes in pages with `<style>{`...`}</style>` produced invalid syntax `{`{`...`}``, causing `PLAN_VALIDATION_FAILED` (Unexpected token).
+- **Root Cause:** Slicing starting from `openingEnd + 1` included `{` and `` ` `` into `existingRules`.
+- **Fix:** Fixed slicing index to `exprStart + 2` and updated fallback insertion to `lastIndexOf('</div>')`. Added unit regression test in `T08-design-system.test.ts`.
+
 ---
 
 ## 3. Test Suites & Verification
