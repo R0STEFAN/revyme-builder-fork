@@ -28,7 +28,7 @@ export function isAllowedImageSource(src: string, projectFiles?: Set<string>): b
     const clean = s.replace(/^\//, '');
     if (projectFiles.has(clean) || projectFiles.has(s)) return true;
     // Next serves files under public/ from the site root (public/assets/x -> /assets/x).
-    if (s.startsWith('/') && projectFiles.has(`public${s}`)) return true;
+    if (projectFiles.has(`public/${clean}`) || (s.startsWith('/') && projectFiles.has(`public${s}`))) return true;
   }
   // All other relative or absolute host paths (e.g. /images/...) are blocked
   return false;

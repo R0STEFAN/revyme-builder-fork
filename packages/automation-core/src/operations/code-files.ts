@@ -290,6 +290,15 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
     }
 
     // Phase 3: Oracle Verification Gate for TSX / TS files
+    const projectFileSet = new Set(projectFS.listFiles());
+    for (const f of input.files) {
+      if (f.code !== null) {
+        projectFileSet.add(f.path);
+      } else {
+        projectFileSet.delete(f.path);
+      }
+    }
+
     for (const f of input.files) {
       if (f.code !== null && (f.path.endsWith('.tsx') || f.path.endsWith('.ts'))) {
         // Next.js server layouts are structural wrappers, not editable canvas
@@ -315,6 +324,7 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
         const violations = checkFile(f.code, {
           kind,
           path: f.path,
+          projectFiles: projectFileSet,
         });
 
         if (violations.length > 0) {

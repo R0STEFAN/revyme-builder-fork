@@ -821,6 +821,47 @@ export default withResponsiveProps(SecondWidget);
         expect(projectFS.readFile('components/ValidWidget.tsx')).toBe(updatedWidget);
         expect(projectFS.readFile('components/SecondWidget.tsx')).toBe(secondWidget);
       });
+
+      it('successfully allows referencing uploaded project assets in public/assets/ via /assets/ without INVALID_IMAGE_SOURCE', async () => {
+        const snap = createMockSnapshot({
+          'public/assets/hero.jpg': 'binary-hero-content',
+        });
+
+        const imageWidget = `'use client';
+/** @name "ImageWidget" */
+/** @defaultWidth 400 */
+/** @defaultHeight 300 */
+/** @controls {} */
+import React from 'react';
+import { withResponsiveProps } from '@revyme/runtime';
+
+function ImageWidget() {
+  return (
+    <div data-id="img-root" style={{ width: '400px', height: '300px' }}>
+      <img data-id="img-hero" src="/assets/hero.jpg" alt="Hero" style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
+}
+
+export default withResponsiveProps(ImageWidget);
+`;
+
+        const res = await codeFilesSubmitOperation.execute(
+          snap,
+          {
+            files: [
+              {
+                path: 'components/ImageWidget.tsx',
+                code: imageWidget,
+              },
+            ],
+          },
+          context,
+        );
+
+        expect(res.committed).toBe(true);
+        expect(projectFS.readFile('components/ImageWidget.tsx')).toBe(imageWidget);
+      });
     });
   });
 });

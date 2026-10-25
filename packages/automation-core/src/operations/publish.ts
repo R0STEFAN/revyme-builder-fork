@@ -264,9 +264,11 @@ export async function executePreflightChecks(
       inspectedPagesCount += 1;
       let violations;
       try {
+        const projectFiles = new Set(projectFS.listFiles());
         violations = checkFile(code, {
           kind: isLayout ? 'template' : 'page',
           path,
+          projectFiles,
         });
       } catch (err) {
         checks.push({
