@@ -795,4 +795,115 @@ function checkMediaColumnFlipRebase(ast: t.File, v: OracleViolation[]): void {
   }
 }
 
-export { checkSlotComponentInlineChildren, checkUnresolvableTernary, checkGridNeedsTemplate, checkGridChildSpan, checkCanvasFillFeedback, checkPaddingNeedsLayout, checkFlexChildOrder, checkOrderIsString, checkFlexChildShrink, checkFlexRowChildFullWidth, checkImageBackgroundFrame, checkNoLayoutParentRelativeChild, checkMediaColumnFlipRebase };
+/**
+ * FORBIDDEN_MIN_CONTENT_HEIGHT — 'height: min-content' or 'minHeight: min-content'
+ * on a component instance, section, or in a responsive @media rule collapses
+ * vertical containers. In CSS Flexbox/Grid and block flow, min-content on the
+ * vertical axis evaluates to the height of a SINGLE item (the largest child)
+ * rather than the sum of all stacked children, causing multi-item containers
+ * (such as decks, cards, gallery grids, or code component instances) to clamp
+ * and visually overflow, resulting in massive section collisions with subsequent
+ * sibling sections. Use 'height: auto' or explicit pixel dimensions instead.
+ */
+function checkForbiddenMinContentHeight(ast: t.File, v: OracleViolation[]): void {
+  // 1. Collect all component imports from components/
+  const componentNames = new Set<string>();
+  for (const node of ast.program.body) {
+    if (t.isImportDeclaration(node) && (
+      node.source.value.startsWith('@/components/') ||
+      node.source.value.startsWith('../components/') ||
+      node.source.value.includes('/components/') ||
+      node.source.value.startsWith('./')
+    )) {
+      for (const spec of node.specifiers) {
+        if (t.isImportSpecifier(spec) || t.isImportDefaultSpecifier(spec)) {
+          componentNames.add(spec.local.name);
+        }
+      }
+    }
+  }
+
+  // 2. Identify component instance IDs and root section IDs
+  const sensitiveIds = new Set<string>();
+  const idToName = new Map<string, string>();
+
+  traverse(ast, {
+    JSXElement(path) {
+      const opening = path.node.openingElement;
+      const attrs = jsxAttrs(opening);
+      const dataId = stringAttr(attrs, 'data-id');
+      const tag = jsxTagName(opening.name);
+
+      // Component instances
+      if (t.isJSXIdentifier(opening.name) && componentNames.has(tag)) {
+        if (dataId) {
+          sensitiveIds.add(dataId);
+          idToName.set(dataId, `<${tag}> (data-id "${dataId}")`);
+        }
+      }
+
+      // Root sections: direct children of data-id="root" or <section> elements
+      if (tag === 'section' && dataId) {
+        sensitiveIds.add(dataId);
+        idToName.set(dataId, `<section> (data-id "${dataId}")`);
+      }
+
+      // Inline styles check for all elements
+      const styleAttr = attrs.find((a) => a.name.name === 'style');
+      if (styleAttr?.value?.type === 'JSXExpressionContainer' && t.isObjectExpression(styleAttr.value.expression)) {
+        for (const prop of styleAttr.value.expression.properties) {
+          if (!t.isObjectProperty(prop)) continue;
+          const k = t.isIdentifier(prop.key) ? prop.key.name : t.isStringLiteral(prop.key) ? prop.key.value : '';
+          if (k !== 'height' && k !== 'minHeight') continue;
+          if (t.isStringLiteral(prop.value) && prop.value.value === 'min-content') {
+            const line = prop.loc?.start.line;
+            const desc = idToName.get(dataId ?? '') ?? `<${tag}>${dataId ? ` (data-id "${dataId}")` : ''}`;
+            v.push({
+              code: 'FORBIDDEN_MIN_CONTENT_HEIGHT',
+              tier: 2,
+              line,
+              elementId: dataId ?? undefined,
+              message: `${desc} has '${k}: min-content' (line ${line}). In CSS Flexbox, Grid, and vertical flow, min-content height resolves to a single child height rather than the total stack height, causing container clamping, content overflow, and section collisions. Use '${k === 'minHeight' ? 'minHeight: auto' : 'height: auto'}' or explicit px dimensions instead.`,
+            });
+          }
+        }
+      }
+    },
+  });
+
+  // 3. Check CSS rules in <style> blocks
+  traverse(ast, {
+    JSXElement(path) {
+      if (jsxTagName(path.node.openingElement.name) !== 'style') return;
+      for (const child of path.node.children) {
+        if (!t.isJSXExpressionContainer(child) || child.expression.type !== 'TemplateLiteral') continue;
+        const css = child.expression.quasis.map((q) => q.value.raw).join('');
+        if (!css.includes('min-content')) continue;
+
+        // Parse rules with [data-id="..."] { ... min-content ... }
+        const ruleRe = /\[data-id="([^"]+)"\][^{]*\{([^}]*)\}/g;
+        let r: RegExpExecArray | null;
+        while ((r = ruleRe.exec(css)) !== null) {
+          const ruleId = r[1];
+          const decls = r[2];
+          if (/(?:^|[;\s{}])(?:(?:min-)?height)\s*:\s*min-content\b/i.test(decls)) {
+            // Check if rule targets a sensitive element (component/section) or if it's in a media query
+            if (sensitiveIds.has(ruleId) || sensitiveIds.has(ruleId.split(':')[0])) {
+              const line = child.loc?.start.line;
+              const desc = idToName.get(ruleId) ?? idToName.get(ruleId.split(':')[0]) ?? `[data-id="${ruleId}"]`;
+              v.push({
+                code: 'FORBIDDEN_MIN_CONTENT_HEIGHT',
+                tier: 2,
+                line,
+                elementId: ruleId,
+                message: `Media rule for ${desc} declares 'height: min-content' (line ${line}). In CSS Flexbox, Grid, and vertical flow, min-content height resolves to a single child height (~380px) instead of the total stack height, causing container clamping and sibling section collisions. Use 'height: auto !important;' or explicit px dimensions instead.`,
+              });
+            }
+          }
+        }
+      }
+    },
+  });
+}
+
+export { checkSlotComponentInlineChildren, checkUnresolvableTernary, checkGridNeedsTemplate, checkGridChildSpan, checkCanvasFillFeedback, checkPaddingNeedsLayout, checkFlexChildOrder, checkOrderIsString, checkFlexChildShrink, checkFlexRowChildFullWidth, checkImageBackgroundFrame, checkNoLayoutParentRelativeChild, checkMediaColumnFlipRebase, checkForbiddenMinContentHeight };

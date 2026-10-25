@@ -35,7 +35,7 @@ import { checkVariantDialect, checkVariantTernaryPrimary } from './checks/varian
 import { checkScrollDialect } from './checks/scroll-dialect';
 import { checkPageVariableTypes, checkEventVariables, checkComponentFluidWidth } from './checks/element-identity';
 import { checkDuplicateAttributes, checkInlineDataUris } from './checks/attribute-hygiene';
-import { checkSlotComponentInlineChildren, checkUnresolvableTernary, checkGridNeedsTemplate, checkGridChildSpan, checkCanvasFillFeedback, checkPaddingNeedsLayout, checkFlexChildOrder, checkOrderIsString, checkFlexChildShrink, checkFlexRowChildFullWidth, checkImageBackgroundFrame, checkNoLayoutParentRelativeChild, checkMediaColumnFlipRebase } from './checks/layout-rules';
+import { checkSlotComponentInlineChildren, checkUnresolvableTernary, checkGridNeedsTemplate, checkGridChildSpan, checkCanvasFillFeedback, checkPaddingNeedsLayout, checkFlexChildOrder, checkOrderIsString, checkFlexChildShrink, checkFlexRowChildFullWidth, checkImageBackgroundFrame, checkNoLayoutParentRelativeChild, checkMediaColumnFlipRebase, checkForbiddenMinContentHeight } from './checks/layout-rules';
 import { checkCanvasConfig } from './checks/canvas-config';
 import { checkOverlayDialect } from './checks/overlay-dialect';
 import { checkSvgShapeDialect, checkShapeVariantDForm } from './checks/svg-shape-dialect';
@@ -1454,6 +1454,7 @@ export function checkFile(
     checkGridChildSpan(ast, v, existingDataIds);
     checkNoLayoutParentRelativeChild(ast, v, existingDataIds);
     checkMediaColumnFlipRebase(ast, v);
+    checkForbiddenMinContentHeight(ast, v);
     checkSlotComponentInlineChildren(ast, v);
     if (/<(?:motion\.)?img[\s/>]/.test(code)) checkImageBackgroundFrame(ast, v);
   }

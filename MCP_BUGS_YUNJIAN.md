@@ -201,11 +201,14 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
      - Set `[data-id="section-chronicle"]` and `[data-id="section-passage"]` to `height: auto !important; min-height: auto !important; flex: 0 0 auto !important;`.
      - Set `[data-id="chronicle-gallery-deck"]`, `[data-id="chronicle-gallery-deck:gallery-deck-root"]`, and `[data-id="gallery-deck-root"]` to `height: auto !important; min-height: auto !important; max-height: none !important; flex: 0 0 auto !important; width: 100% !important;`.
      - Set `[data-id="gallery-deck-cards"]` and `[data-id="chronicle-gallery-deck:gallery-deck-cards"]` to `display: flex !important; flex-direction: column !important; height: auto !important; min-height: auto !important; max-height: none !important; gap: 24px !important; overflow: visible !important; width: 100% !important;`.
-- **Verification & Testing:**
-  - Submitted changes via `codeFiles.submit` (Revision 164).
-  - Executed `diagnostics.projectCheck`: returned `clean: true`, `passed: true`, 13/13 clean files, 0 violations.
-  - Executed `publish.preflight`: 6/6 checks passed cleanly.
-  - On tablet (810px), `section-chronicle` naturally expands to enclose the header and all 4 vertical cards (~1850px), and `section-passage` starts cleanly below the final card with zero overlap.
+- **Systemic Prevention (Oracle Rule Enforced):**
+  - Added new Oracle validation check `FORBIDDEN_MIN_CONTENT_HEIGHT` in `src/code/oracle/checks/layout-rules.ts` and wired into `src/code/oracle/check-file.ts`.
+  - The rule scans both inline JSX `style={{ height: 'min-content' }}` and `@media` `<style>` blocks for rules targeting component instances or sections.
+  - Any future attempt by an AI agent, MCP client, or developer to submit `height: min-content` or `min-height: min-content` on component instances or sections is rejected with a descriptive tier 2 error:
+    `ORACLE_VIOLATION: Batch rejected due to 1 violation(s): [FORBIDDEN_MIN_CONTENT_HEIGHT] ... In CSS Flexbox, Grid, and vertical flow, min-content height resolves to a single child height (~380px) instead of the total stack height, causing container clamping and sibling section collisions. Use 'height: auto' or explicit px dimensions instead.`
+  - Added 4 unit tests in `src/code/oracle/checks/forbidden-min-content.test.ts` (100% passing).
+  - Rebuilt `@revyme/cli` binary (`packages/cli/dist/main.js`).
+- **Git Commit:** `b17a02c` ("feat(oracle): add FORBIDDEN_MIN_CONTENT_HEIGHT rule to prevent container clamping and section collisions").
 
 
 
