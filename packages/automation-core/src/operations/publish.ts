@@ -238,9 +238,20 @@ export async function executePreflightChecks(
     let inspectedPagesCount = 0;
 
     for (const [path, code] of filesMap.entries()) {
+      if (path.startsWith('plugins/') || path.startsWith('_meta/') || path.startsWith('_revyme/')) continue;
+
       const isPage = /(^|\/)page(\.client)?\.tsx$/.test(path);
       const isLayout = /(^|\/)(layout|LayoutClient)\.tsx$/.test(path);
       if (!isPage && !isLayout) continue;
+
+      // In Next.js App Router, if page.client.tsx exists or page.tsx imports page.client,
+      // page.tsx is an internal server wrapper, not a canvas-authored client page.
+      if (/(^|\/)page\.tsx$/.test(path)) {
+        const clientPath = path.replace(/page\.tsx$/, 'page.client.tsx');
+        if (filesMap.has(clientPath) || code.includes('./page.client')) {
+          continue;
+        }
+      }
 
       inspectedPagesCount += 1;
       let violations;
@@ -356,6 +367,7 @@ export async function executePreflightChecks(
 
     for (const [path, code] of filesMap.entries()) {
       if (!path.endsWith('.tsx')) continue;
+      if (path.startsWith('plugins/') || path.startsWith('_meta/') || path.startsWith('_revyme/')) continue;
 
       // Scan JSX src and image props
       const srcMatches = code.matchAll(/(?:src|image|poster|avatar|thumbnail)=['"]([^'"]+)['"]/g);
@@ -367,7 +379,9 @@ export async function executePreflightChecks(
       }
 
       // Scan CSS url(...) in style attributes
-      const urlMatches = code.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/gi);
+      // Match explicit CSS url(...) function calls with quoted file paths or asset paths.
+      // Must not match JavaScript constructors/identifiers like "new URL(...)" or "isValidUrl(...)".
+      const urlMatches = code.matchAll(/(?<![A-Za-z0-9_$])url\(\s*['"]([^'"]+)['"]\s*\)/g);
       for (const m of urlMatches) {
         const val = m[1].trim();
         if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val)) {
@@ -420,6 +434,7 @@ export async function executePreflightChecks(
 
     for (const [path, code] of filesMap.entries()) {
       if (!path.endsWith('.tsx')) continue;
+      if (path.startsWith('plugins/') || path.startsWith('_meta/') || path.startsWith('_revyme/')) continue;
       if (!code.includes('<form') && !code.includes('data-form=')) continue;
 
       // Extract data-form attributes

@@ -2171,5 +2171,28 @@ export default function Card({ initialVariant = 'default' }) {
     expect(v1Content).toContain("padding: '50px'");
     expect(v1Content).toContain("paddingTop: '80px'");
   });
+
+  test('updateContainerQueryStyle creates style block when root tag close has newline between }} and >', () => {
+    const CODE_MULTILINE_ROOT = `'use client';
+export default function Page() {
+  return (
+    <div
+      data-id="root"
+      style={{
+        position: 'relative',
+        width: '100%',
+      }}
+    >
+      <div data-id="box" style={{ position: 'relative' }}>box</div>
+    </div>
+  );
+}`;
+    const out = updateContainerQueryStyle(CODE_MULTILINE_ROOT, 'box', 810, { display: 'none' });
+    expect(out).toContain('<style>');
+    expect(out).toContain('@media (max-width: 810px)');
+    expect(out).toContain('[data-id="box"]');
+    expect(out).toContain('display: none !important');
+  });
 });
+
 

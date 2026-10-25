@@ -426,10 +426,21 @@ export function updateContainerQueryStyle(
   } else {
     // No existing block, and there's nothing to write — leave the file alone.
     if (rules.size === 0 && lang.topLevel.length === 0 && lang.banded.size === 0) return code;
-    const rootCloseMatch = code.match(/\}\}>\s*\n/);
-    if (!rootCloseMatch) return code;
-    const insertIdx = rootCloseMatch.index! + rootCloseMatch[0].length;
-    const styleBlock = `  <style>{\`${newCss}\`}</style>\n`;
+    const retIdx = code.search(/\breturn\s*[(<]/);
+    const idIdx = code.indexOf('data-id="', retIdx === -1 ? 0 : retIdx);
+    let insertIdx = -1;
+    if (idIdx !== -1) {
+      const gt = findTagClose(code, idIdx);
+      if (gt !== -1 && code[gt - 1] !== '/') {
+        insertIdx = gt + 1;
+      }
+    }
+    if (insertIdx === -1) {
+      const rootCloseMatch = code.match(/\}\}\s*>\s*\n/);
+      if (!rootCloseMatch) return code;
+      insertIdx = rootCloseMatch.index! + rootCloseMatch[0].length;
+    }
+    const styleBlock = `\n  <style>{\`${newCss}\`}</style>\n`;
     return code.slice(0, insertIdx) + styleBlock + code.slice(insertIdx);
   }
 }
