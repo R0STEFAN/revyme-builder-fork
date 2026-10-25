@@ -119,6 +119,23 @@ dot-name such as `pages.list`.
 - `codeFiles.submit` expects `{ path, code }` and validates source code against the Oracle before
   committing. Code Components authored via `codeFiles.submit` must NOT use `className` attributes
   (`CLASSNAME_STYLING`); use inline styles or scoped `<style>` blocks targeting `[data-id="..."]`.
+- **CRITICAL: Never read raw files from disk paths like `data/builds/...`**: Always read project files
+  through `codeFiles.read` via MCP CLI. Files in `data/builds/` contain internal build/export artifacts
+  (such as auto-injected responsive `srcSet` stubs) and stale SSR caches that will corrupt the project
+  if read and submitted back.
+- **CRITICAL: Component Variants & Animation Rules**:
+  - **Motion tag requirement**: Any element inside a design component that has `variants={...}` or changes
+    visual paint properties across variants MUST be a `motion.*` component (e.g. `<motion.div>`, `<motion.header>`,
+    `MotionLink`), NOT a plain HTML `<div>` or `<header>`. A plain HTML tag ignores motion props and lacks an animation loop.
+  - **Layout vs Paint separation**:
+    - **Layout properties** (`width`, `height`, `padding`, `margin`, `order`, `flexDirection`) that differ per variant
+      MUST be inline style ternaries (`variant === '...' ? ... : ...`).
+    - **Paint properties** (`backgroundColor`, `borderBottomColor`, `backdropFilter`, `boxShadow`, `opacity`, `color`)
+      MUST live in `variants={...}` paired with `animate={variant}` and `initial={initialVariant}` for smooth transitions.
+  - **Box shadow interpolation**: In `variants={...}`, NEVER write `boxShadow: 'none'`. Framer Motion cannot
+    interpolate between `'none'` and a shadow string, causing an abrupt 0ms snap. ALWAYS use `'0 0 0 rgba(0, 0, 0, 0)'`.
+  - **No duplicate style properties**: In JSX `style={{ ... }}`, never declare the same property key twice. Later keys
+    silently overwrite earlier keys, leading to frozen overrides and dead code.
 - `viewports.setOverride` accepts `{ filePath, nodeId, viewport, styles }`. It generates responsive
   container query rules in the page's `<style data-viewport-styles="...">` block. For code components
   or deep custom typography, ensure the component handles canvas multi-viewport sizing (see Section 4).

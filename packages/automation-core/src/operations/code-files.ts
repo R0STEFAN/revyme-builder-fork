@@ -25,7 +25,9 @@ export function isSystemProtectedPath(path: string): boolean {
     path.startsWith('node_modules/') ||
     path === 'node_modules' ||
     path.startsWith('.next/') ||
-    path === '.next'
+    path === '.next' ||
+    path.startsWith('data/') ||
+    path === 'data'
   );
 }
 

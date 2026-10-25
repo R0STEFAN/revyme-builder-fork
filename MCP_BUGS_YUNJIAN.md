@@ -333,10 +333,35 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   1. Cleaned `app/page.client.tsx` of all 404 `srcSet` and `sizes` attributes, restoring clean `src="/api/uploads/*.jpg"` which return HTTP 200 OK.
   2. Updated `components/SiteHeader.tsx` variants to use `'0 0 0 rgba(0, 0, 0, 0)'` for `boxShadow` in `default`, isolated `<LayoutGroup id="site-header">`, and configured smooth `MotionConfig` transition (`0.5s` ease).
   3. Submitted changes via Revyme MCP CLI (`codeFiles.submit`).
+### Bug 18: Guard Against Direct `data/builds/` Access, Duplicate Style Properties, and Non-Interpolable Variant Shadows
+- **Location:**
+  - `packages/automation-core/src/operations/code-files.ts` (lines 28–30)
+  - `src/code/oracle/checks/style-object.ts` (lines 80–98)
+  - `src/code/oracle/checks/variant-dialect.ts` (lines 437–448, 690–697)
+  - `.agents/skills/revyme-mcp/SKILL.md`
+  - `AGENTS.md`
+- **Symptom:**
+  - Agents reading raw files from `data/builds/` directly rather than through MCP `codeFiles.read` ended up pulling uncommitted build/export artifacts (such as WebP `srcSet` stubs) into source code.
+  - Plain `<div>` tags were used with variant ternaries for paint properties (such as background colors and shadows), resulting in 0ms snaps without smooth animation on the live site.
+  - Duplicate keys in JSX `style={{ ... }}` objects went undetected, causing later keys to silently override earlier ones.
+  - Variants using `boxShadow: 'none'` caused Framer Motion interpolation failures.
+- **Root Cause:**
+  1. *Unprotected build directory in automation core:* `isSystemProtectedPath` did not include `data/` or `data/builds/`, allowing agents to accidentally read or write internal Next.js build caches directly.
+  2. *Missing duplicate style property validation in Oracle:* Babel AST allows duplicate keys in object expressions; Oracle lacked a rule checking for duplicate CSS property declarations.
+  3. *Unrestricted 'none' shadow in variants:* Oracle did not validate that `boxShadow` values in Framer Motion variant objects must be represented numerically (`'0 0 0 rgba(0,0,0,0)'`) rather than `'none'` to allow smooth numeric interpolation.
+  4. *Gated animate check in variant dialect:* `MISSING_ANIMATE_ON_VARIANTS` was guarded by `hasConnections`, failing to flag elements with `variants={...}` that lacked `animate` when driven by props or scroll variants rather than internal connections.
+- **Fix:**
+  1. Added `path.startsWith('data/') || path === 'data'` to `isSystemProtectedPath` in `packages/automation-core`.
+  2. Implemented `DUPLICATE_STYLE_PROPERTY` in `src/code/oracle/checks/style-object.ts` to block duplicate keys in JSX style objects.
+  3. Implemented `BOX_SHADOW_INTERPOLATION` in `src/code/oracle/checks/variant-dialect.ts` to block `boxShadow: 'none'` in variant objects.
+  4. Removed the `&& hasConnections` constraint from `MISSING_ANIMATE_ON_VARIANTS` so any element with `variants={...}` is required to have `animate`.
+  5. Updated `AGENTS.md` and `.agents/skills/revyme-mcp/SKILL.md` with explicit rules forbidding direct `data/builds/` reads and enforcing `motion.*` tags with motion variants for visual paint properties.
 - **Verification & Testing:**
-  - All 5 images (`hero.jpg`, `section2-suites.jpg`, `section3-terrace.jpg`, `section4-table.jpg`, `section5-night.jpg`) verified via HTTP curl returning 200 OK.
-  - Ran `diagnostics.projectCheck`: 0 violations, `clean: true`.
-  - Ran `npx tsc --noEmit`: 0 TypeScript errors.
+  - Added unit tests in `src/code/oracle/checks/duplicate-style-box-shadow.test.ts` (4/4 tests passing).
+  - Verified `packages/automation-core/test/capabilities/T20-code.test.ts` (39/39 tests passing).
+  - Verified `src/code/oracle/checks/*.test.ts` (54/54 tests passing).
+  - Full TypeScript typecheck `npx tsc --noEmit` passed with 0 errors.
+
 
 
 

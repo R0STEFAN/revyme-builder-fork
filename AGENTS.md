@@ -102,11 +102,14 @@ patchNodeStyles(contentEl, nodeId, vpPrefix, styles)
 (`rectCache`, `computedCache`, `cornersCache`) exist so drag and resize can run at 60fps without
 a round trip per frame.
 
-### 2. Never write ProjectFS directly
+### 2. Never read or write ProjectFS or build caches directly
 
 `modifyProjectFile(path, code => next)` flushes pending mutations, reads fresh, writes, re-syncs.
 A raw `readFile → modify → writeFile` silently discards anything still queued. Read-only
 `readFile` for parsing or display is fine.
+**Never read raw files from `data/builds/`**: always read through `codeFiles.read` via MCP CLI.
+Files in `data/builds/` contain uncommitted build artifacts, export stubs (such as auto-injected responsive
+`srcSet` stubs), and stale SSR caches that corrupt source code when read and re-submitted.
 
 ### 3. Empty string means *delete this property*
 

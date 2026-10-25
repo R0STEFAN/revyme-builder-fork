@@ -78,6 +78,25 @@ function checkShorthandLonghandMix(obj: t.ObjectExpression, dataId: string | und
   }
 }
 
+function checkDuplicateStyleProperties(obj: t.ObjectExpression, dataId: string | undefined, v: OracleViolation[]): void {
+  const seen = new Map<string, number>();
+  for (const p of obj.properties) {
+    if (!t.isObjectProperty(p)) continue;
+    const k = t.isIdentifier(p.key) ? p.key.name : t.isStringLiteral(p.key) ? p.key.value : null;
+    if (!k) continue;
+    const line = p.loc?.start.line ?? 0;
+    if (seen.has(k)) {
+      const prevLine = seen.get(k);
+      v.push({
+        code: 'DUPLICATE_STYLE_PROPERTY', tier: 2, line, elementId: dataId,
+        message: `Duplicate style property "${k}" in style object (line ${line}, previously defined at line ${prevLine}) — React and JavaScript apply style keys in object order, so the later definition silently overwrites the earlier one. Delete the duplicate and keep only one definition.`,
+      });
+    } else {
+      seen.set(k, line);
+    }
+  }
+}
+
 function checkStyleObject(
   obj: t.ObjectExpression,
   dataId: string | undefined,
@@ -89,6 +108,7 @@ function checkStyleObject(
     booleanProps?: Set<string>;
   } = { fixedAllowed: true },
 ): void {
+  checkDuplicateStyleProperties(obj, dataId, v);
   checkShorthandLonghandMix(obj, dataId, v);
   // BG_COLOR_WITH_IMAGE — the builder's Fill control is single-color OR
   // multi-layer, never both. An element carrying BOTH backgroundColor and

@@ -676,6 +676,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         '.git/HEAD',
         'node_modules/some-lib/index.js',
         '.next/cache/build.json',
+        'data/builds/proj-123/app/page.tsx',
       ]) {
         await expect(
           codeFilesSubmitOperation.execute(

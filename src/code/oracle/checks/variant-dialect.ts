@@ -437,12 +437,12 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
       // PER-TAG ANIMATE — connection codegen injects animate={variant} on EVERY
       // element with variants= (propagation is unreliable here). A varianted
       // element without it is frozen: it never reacts to variant switches.
-      if (variantsName && hasConnections) {
+      if (variantsName) {
         const hasAnimate = attrs.some((a) => a.name.name === 'animate');
         if (!hasAnimate) {
           v.push({
             code: 'MISSING_ANIMATE_ON_VARIANTS', tier: 2, line, elementId: dataId,
-            message: `<${dataId ?? 'element'}> has variants={${variantsName}} but no animate (line ${line}) — it will NEVER react to variant switches. Every element with variants needs animate={['default', variant]} and initial={['default', initialVariant]} on the same tag (the list form merges the default entry under the variant — sparse-entry inheritance).`,
+            message: `<${dataId ?? 'element'}> has variants={${variantsName}} but no animate (line ${line}) — it will NEVER react to variant switches. Every element with variants needs animate={['default', variant]} (or animate={variant}) and initial={['default', initialVariant]} on the same tag (the list form merges the default entry under the variant — sparse-entry inheritance).`,
           });
         }
       }
@@ -690,6 +690,12 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
         if (t.isObjectExpression(entry.value)) {
           for (const p of entry.value.properties) {
             if (!t.isObjectProperty(p) || !t.isIdentifier(p.key)) continue;
+            if (p.key.name === 'boxShadow' && t.isStringLiteral(p.value) && p.value.value.trim() === 'none') {
+              v.push({
+                code: 'BOX_SHADOW_INTERPOLATION', tier: 2, line: p.loc?.start.line,
+                message: `${objName}.${entryName}.boxShadow is set to 'none' (line ${p.loc?.start.line}) — Framer Motion cannot interpolate between the keyword 'none' and shadow strings, causing an abrupt 0ms snap on variant switch. Use '0 0 0 rgba(0, 0, 0, 0)' (or matching color) so Framer Motion can interpolate blur, spread, and color smoothly.`,
+              });
+            }
             if (CONDITIONAL_LAYOUT_PROPS.has(p.key.name)) {
               v.push({
                 code: 'LAYOUT_PROP_IN_VARIANT_OBJECT', tier: 2, line: p.loc?.start.line,
