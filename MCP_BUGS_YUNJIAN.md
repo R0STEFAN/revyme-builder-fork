@@ -78,23 +78,47 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Rebuilt `@revyme/cli` binary.
 - **Git Commit:** `b51cf01` ("fix(automation-core): supply projectFiles to Oracle checkFile to validate project-scoped assets").
 
-### Bug 4: CLI fails to map kebab-case CLI flags to camelCase operation schema keys, causing `SCHEMA_VALIDATION_FAILED` (e.g. `Invalid input: expected string, received undefined` for `nodeId`)
-- **Location:** `packages/cli/src/main.ts` (in `coerceInputToSchema` and `flags` collection).
-- **Symptom:** Running CLI commands with standard UNIX kebab-case flags such as `revyme viewports.setOverride --project-id ... --node-id hero-heading --viewport tablet --styles '{"fontSize":"42px"}'` rejected the input with:
-  ```
-  SCHEMA_VALIDATION_FAILED: Validation failed for operation "viewports.setOverride"
-  [invalid_type] (path: ["nodeId"]): Invalid input: expected string, received undefined
-  ```
-- **Root Cause:** Standard CLI flag conventions use kebab-case (`--node-id`, `--file-path`, `--project-id`), whereas Zod operation schemas throughout `automation-core` define input properties in camelCase (`nodeId`, `filePath`, `projectId`). The CLI collected flags directly into `inputData` using raw flag keys without converting kebab-case to camelCase or matching against schema properties. Furthermore, `coerceInputToSchema` only looked up `properties[key]`, leaving `nodeId` undefined.
-- **Fix:**
-  1. Added `kebabToCamel(str: string): string` conversion in `packages/cli/src/main.ts`.
-  2. In `coerceInputToSchema`, normalized incoming input keys to match schema property keys (checking both exact key and its camelCase variant).
-  3. In CLI flag collection, populated both kebab-case and camelCase keys in `inputData` so both styles work interchangeably.
+### Bug 5: Editor Media Gallery tab empty because assets committed via automation did not sync to `data/uploads/` and `data/uploads-meta.json`
+- **Location:**
+  - `packages/automation-core/src/operations/assets.ts`
+  - `server/automation/project-repository.ts` (inside `applyPlan()`)
+- **Symptom:** Assets uploaded via `assets.upload` or committed to `public/assets/` were saved in the project's source tree (`record.data.files`), but the editor's left-toolbar Media tab remained empty. Querying `GET /api/upload?websiteId=proj-1792939066653-d2undo&type=image` returned an empty list `{"uploads": []}`.
+- **Root Cause:** Revyme has two complementary asset storage systems:
+  1. `ProjectFS` (project git tree under `public/assets/` or `snapshot.files`), which Next.js bundles and JSX references.
+  2. `Media Gallery` (`data/uploads/` and `data/uploads-meta.json`), which powers the visual editor's Media tab via `server/storage.ts` `listUploads()`.
+  The automation commit pipeline in `project-repository.ts` only saved changes into `record.data.files` and did not notify or write to `saveUploadExact()`, leaving the server uploads metadata unpopulated for the project.
+- **Fix:** In `server/automation/project-repository.ts`, added automatic synchronization in `applyPlan()`:
+  - Whenever a committed plan modifies or creates a file under `public/assets/`, `public/images/`, or `public/uploads/`, the file content is decoded (handling base64, data URIs, SVG, and binary buffers) and written via `saveUploadExact(safeName, buf, this.dataDir, projectId)`.
+  - When an asset file is deleted (`change.content === null`), `deleteUpload(safeName, this.dataDir)` is called.
+  - Thumbnails are generated automatically by `ensureThumbnail()`.
 - **Verification & Testing:**
-  - Added unit test in `packages/cli/test/cli.test.ts`: `maps kebab-case CLI flags to camelCase schema properties and coerces types`.
-  - Ran vitest suite: 13/13 tests passed cleanly in `packages/cli/test/cli.test.ts`.
-  - Tested running `node packages/cli/dist/main.js viewports.setOverride --project-id proj-1792939066653-d2undo --node-id hero-heading --viewport tablet --styles '{"fontSize":"42px"}'`. Succeeded with revision 33.
-- **Git Commit:** `3d5c861` ("fix(cli): map kebab-case flags to camelCase schema properties in coerceInputToSchema").
+  - All 7 assets (`hero.jpg`, `section2-suites.jpg`, `section3-terrace.jpg`, `section4-table.jpg`, `section5-night.jpg`, `grain.svg`, `ink-wash.svg`) were synchronized into `data/uploads/` with `projectId: "proj-1792939066653-d2undo"`.
+  - Verified live via `curl -s "http://localhost:3333/api/upload?websiteId=proj-1792939066653-d2undo&type=image"`: returns all 7 assets with valid names, keys, sizes, URLs, and thumbnails.
+- **Git Commit:** `99f9f0d` ("fix(automation-core, server): resolve snapshot projectFiles in diagnostics and sync assets to editor media gallery").
+
+### Bug 6: `ReferenceError: projectFS is not defined` during `diagnostics.projectCheck`
+- **Location:**
+  - `packages/automation-core/src/operations/diagnostics.ts` (line 205)
+  - `packages/automation-core/src/operations/publish.ts` (line 267)
+- **Symptom:** Executing `diagnostics.projectCheck` crashed with:
+  ```
+  ReferenceError: projectFS is not defined
+      at Object.execute (packages/automation-core/src/operations/diagnostics.ts:205:37)
+  ```
+- **Root Cause:** When updating `diagnostics.ts` to supply `projectFiles` to `checkFile()`, `new Set(projectFS.listFiles())` was referenced, but `projectFS` was never imported in `diagnostics.ts`. In automation operations, the current project state is passed cleanly through `snapshot: Snapshot`, whose `snapshot.files` is a `Map<string, string>`.
+- **Fix:**
+  - In `packages/automation-core/src/operations/diagnostics.ts`, changed:
+    ```ts
+    const projectFiles = new Set(snapshot.files?.size ? snapshot.files.keys() : []);
+    ```
+  - In `publish.ts`, `code-files.ts`, and `code-components.ts`, prioritized `snapshot.files.keys()` over ambient `projectFS`, ensuring headless CLI and server operations are fully decoupled from global state.
+- **Verification & Testing:**
+  - Ran `npx tsc --noEmit` — 0 errors.
+  - Rebuilt `@revyme/cli` binary.
+  - Executed `node packages/cli/dist/main.js diagnostics.projectCheck --project-id proj-1792939066653-d2undo`: returned `clean: true`, `passed: true`, 13/13 clean files, 0 errors, 0 violations.
+  - Executed `node packages/cli/dist/main.js publish.preflight --project-id proj-1792939066653-d2undo`: 6/6 checks passed cleanly.
+- **Git Commit:** `99f9f0d` ("fix(automation-core, server): resolve snapshot projectFiles in diagnostics and sync assets to editor media gallery").
+
 
 
 
