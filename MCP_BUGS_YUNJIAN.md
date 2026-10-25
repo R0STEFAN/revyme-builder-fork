@@ -210,6 +210,40 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Rebuilt `@revyme/cli` binary (`packages/cli/dist/main.js`).
 - **Git Commit:** `b17a02c` ("feat(oracle): add FORBIDDEN_MIN_CONTENT_HEIGHT rule to prevent container clamping and section collisions").
 
+### Bug 13: Design Component Variants (`Default Header` vs `Scrolled Glass`) Failed to Switch Styles in Visual Editor and Had No Scroll Wiring on Page
+- **Location:**
+  - `components/SiteHeader.tsx` (lines 28–43)
+  - `components/ReserveButton.tsx` (lines 28–36)
+  - `app/page.client.tsx` (SiteHeader instance)
+- **Symptom:**
+  - When switching between ❖ `Default Header` and ❖ `Scrolled Glass` in the visual canvas / layers panel (as shown in user screenshot `media_1792945718430_ab056cae.png`), the component's styles did not change in the property controls or on the canvas.
+  - On the live site, scrolling past the arrival threshold never triggered the scrolled variant.
+- **Root Cause:**
+  1. *Parser bypassed by boolean intermediate variable:* In `components/SiteHeader.tsx` and `components/ReserveButton.tsx`, the code declared `const isScrolled = initialVariant === 'scrolled'` (or `const isSecondary = ...; const isCompact = ...`) and used `isScrolled ? '...' : '...'` in style objects. Revyme's parser (`src/code/parsing/parser.ts:4753`) checks AST conditional expressions where `cond.test.left.name === 'variant' || cond.test.left.name === 'initialVariant'`. Because an intermediate identifier `isScrolled` was used, the parser classified it as a `condvar` and evaluated `conditionalStyles: null`. Without `conditionalStyles`, the editor's variant switch mechanism had no variant-specific overrides and rendered identical styles for both variants.
+  2. *Missing Scroll Variant wiring on Page:* In `app/page.client.tsx`, `<SiteHeader>` was mounted statically without `data-scroll-variant` or `initialVariant={pageHeaderSv}`, and the page lacked the `useScroll` / `useMotionValueEvent` scroll tracker. Furthermore, an instance style override `height: '76px'` was hardcoded on the page, blocking the component's variant-driven height shrinkage.
+- **Fix:**
+  1. *Direct Variant Ternaries in Design Components:* In `components/SiteHeader.tsx` and `components/ReserveButton.tsx`, removed intermediate boolean variables and replaced all conditionals with direct inline ternaries testing `initialVariant === '...'`.
+     For `SiteHeader.tsx`, authored high-contrast, distinct luxury styling for `scrolled` vs `default`:
+     - `height`: `initialVariant === 'scrolled' ? '68px' : '76px'`
+     - `paddingLeft` / `paddingRight`: `initialVariant === 'scrolled' ? '28px' : '36px'`
+     - `backgroundColor`: `initialVariant === 'scrolled' ? 'rgba(15, 26, 23, 0.94)' : 'rgba(19, 32, 29, 0.25)'`
+     - `borderBottom`: `initialVariant === 'scrolled' ? '1px solid rgba(143, 162, 140, 0.35)' : '1px solid rgba(245, 240, 228, 0.08)'`
+     - `backdropFilter` / `WebkitBackdropFilter`: `initialVariant === 'scrolled' ? 'blur(20px)' : 'blur(8px)'`
+     - `boxShadow`: `initialVariant === 'scrolled' ? '0 12px 36px rgba(0, 0, 0, 0.45)' : 'none'`
+     - CTA Button `backgroundColor`: `initialVariant === 'scrolled' ? 'var(--vermilion)' : 'var(--pine)'`
+     - CTA Button `border`: `initialVariant === 'scrolled' ? '1px solid rgba(156, 61, 49, 0.65)' : '1px solid rgba(143, 162, 140, 0.45)'`
+  2. *Page Scroll Variant Wiring:* In `app/page.client.tsx`:
+     - Connected `data-scroll-variant='{"trigger":"onScroll","from":"default","to":"scrolled","direction":"down","replay":true}'` and `initialVariant={pageHeaderSv}` to `<SiteHeader>`.
+     - Injected page-level framer-motion scroll hooks: `const [pageHeaderSv, setPageHeaderSv] = useState('default'); const { scrollY: pageHeaderSvScroll } = useScroll(); useMotionValueEvent(pageHeaderSvScroll, "change", (y) => { const prev = pageHeaderSvScroll.getPrevious() ?? 0; if (y > prev) setPageHeaderSv('scrolled'); else if (y < prev) setPageHeaderSv('default'); });`.
+     - Removed hardcoded `height: '76px'` from the page instance style so the component's variant-driven height transition applies cleanly.
+     - Resolved `mobile-nav-trigger` desktop visibility via responsive CSS media query instead of inline `display: 'none'`, cleanly satisfying Oracle rule `DISPLAY_TOGGLE_VISIBILITY`.
+- **Verification & Testing:**
+  - Ran `parseJSXToNodes` on `components/SiteHeader.tsx` and `components/ReserveButton.tsx`: verified full `conditionalStyles` extraction for all 8 visual style properties.
+  - Ran `diagnostics.projectCheck` via CLI: returned `clean: true`, `passed: true`, `totalFilesChecked: 13`, `oracleViolations: []`.
+  - Ran `publish.preflight` via CLI: returned `passed: true`, `failedChecks: 0`, and confirmed `oracle.app/page.client.tsx: pass`.
+  - Verified live browser synchronization: revisions 191, 192, and 193 were applied and synced immediately to the open editor tab (`"status": "synced", "clientCount": 1`).
+
+
 
 
 
