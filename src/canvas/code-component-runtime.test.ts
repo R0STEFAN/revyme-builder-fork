@@ -102,6 +102,31 @@ export default withResponsiveProps(TestCodeComponent);
       expect(Component).not.toBeNull();
     });
 
+    it('compiles a code component with named export interface and export type declarations', () => {
+      const code = `
+'use client';
+/** @label "Test" */
+/** @comment "Test" */
+/** @controls {} */
+import React from 'react';
+import { withResponsiveProps } from '@revyme/runtime';
+
+export interface FaceItem {
+  title: string;
+  image: string;
+}
+
+export type VariantMode = 'primary' | 'secondary';
+
+function TestWithExports({ title = 'Hello' }: { title?: string }) {
+  return <div>{title}</div>;
+}
+export default withResponsiveProps(TestWithExports);
+`;
+      const Component = compileCodeComponent(code, 'TestWithExports');
+      expect(Component).not.toBeNull();
+    });
+
     it('compiles a code component with multiple helper functions before export', () => {
       // Tests that only export default gets the __CODE_COMPONENT__ assignment,
       // not the helper functions

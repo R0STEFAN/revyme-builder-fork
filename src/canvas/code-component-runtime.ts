@@ -431,7 +431,7 @@ export function compileCodeComponent(
     // publishes, so without this no published module compiles — and any user
     // component with a named export failed the same way.
     cleanCode = cleanCode
-      .replace(/export\s+(const|let|var|function|class|async)\b/g, '$1')
+      .replace(/export\s+(const|let|var|function|class|async|interface|type)\b/g, '$1')
       .replace(/export\s*\{[^}]*\}\s*;?/g, '');
 
     // 4. Convert export default → variable assignment
