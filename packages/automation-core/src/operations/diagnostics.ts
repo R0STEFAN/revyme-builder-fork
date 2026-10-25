@@ -328,9 +328,17 @@ export const diagnosticsProjectCheckOperation: Operation<
                   const val = attr.value.value;
                   if (val.startsWith('/') && !val.startsWith('//') && !val.startsWith('http') && !val.startsWith('data:')) {
                     const assetRel = val.replace(/^\//, '');
-                    const exists =
-                      snapshot.files.has(assetRel) ||
-                      snapshot.files.has(`public/${assetRel}`);
+                    const baseName = val.split('?')[0].split('/').pop() || '';
+                    const candidates = [
+                      assetRel,
+                      `public/${assetRel}`,
+                      `public/assets/${assetRel}`,
+                      `public/assets/${baseName}`,
+                      `public/uploads/${baseName}`,
+                      `public/api/uploads/${baseName}`,
+                      `assets/${baseName}`,
+                    ];
+                    const exists = candidates.some((c) => snapshot.files.has(c));
 
                     if (!exists) {
                       missingAssets.push({

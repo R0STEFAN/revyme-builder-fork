@@ -388,14 +388,20 @@ export function selfHostApiPlugin(options?: SelfHostApiPluginOptions): Plugin {
         return stream.pipe(res);
       }
 
-      // ─── GET /api/uploads/:file ───────────────────────────────────────────
-      if (url.startsWith('/api/uploads/') && (method === 'GET' || method === 'HEAD')) {
-        const rawFilename = url.replace('/api/uploads/', '').split('?')[0];
+      // ─── GET /api/uploads/:file or /assets/:file ─────────────────────────
+      if ((url.startsWith('/api/uploads/') || url.startsWith('/assets/')) && (method === 'GET' || method === 'HEAD')) {
+        const rawFilename = url.replace(/^\/(?:api\/uploads|assets)\//, '').split('?')[0];
         let filename = rawFilename;
         try {
           filename = decodeURIComponent(rawFilename);
         } catch {}
-        const filePath = getUploadFilePath(filename);
+        let filePath = getUploadFilePath(filename);
+        if (!filePath) {
+          const publicAssetPath = path.resolve(process.cwd(), 'public/assets', filename);
+          if (fs.existsSync(publicAssetPath)) {
+            filePath = publicAssetPath;
+          }
+        }
         if (!filePath) {
           res.statusCode = 404;
           return res.end('Not found');

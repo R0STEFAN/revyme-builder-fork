@@ -7,7 +7,7 @@ import { defaultRegistry } from '@revyme/automation-core';
 import type { Scope } from '@revyme/automation-core';
 import { loadConfig, initProjectConfig, findProjectRoot } from './config';
 import { AutomationClient } from './client';
-import { startStdioServer, createMcpServer } from './mcp';
+import { startStdioServer, createMcpServer, createBridgeScreenshotService } from './mcp';
 
 export * from './config';
 export * from './client';
@@ -397,9 +397,15 @@ EXAMPLES:
     branchId: config.branchId,
   };
 
+  const screenshotService = createBridgeScreenshotService(config.apiUrl);
   const client = new AutomationClient({ apiUrl: config.apiUrl });
   const result = await client.execute(scope, toolName, inputData, {
     dryRun: Boolean(flags['dry-run']),
+    context: {
+      adapters: {
+        screenshotService,
+      },
+    },
   });
 
   if (result.ok) {

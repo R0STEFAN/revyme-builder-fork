@@ -322,7 +322,11 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     }
     const expectedPrefix = `data:image/${format === 'jpeg' ? 'jpeg' : 'png'};base64,`;
     const encodedImage = dataUrl.startsWith(expectedPrefix) ? dataUrl.slice(expectedPrefix.length) : '';
-    const validBase64 = encodedImage.length > 0 && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encodedImage);
+    // Avoid recursive regex quantifiers on large data URLs which trigger V8 "Maximum call stack size exceeded"
+    const validBase64 =
+      encodedImage.length > 0 &&
+      encodedImage.length % 4 === 0 &&
+      !/[^A-Za-z0-9+/=]/.test(encodedImage);
     if (!validBase64) {
       trace.error('mcp-bridge:capture-screenshot-invalid-data', {
         projectId,

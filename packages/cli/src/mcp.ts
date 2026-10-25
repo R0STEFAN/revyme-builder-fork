@@ -15,8 +15,9 @@ import type { ProjectConfig } from './config';
 
 const DEFAULT_MCP_BRIDGE_URL = 'http://127.0.0.1:8082';
 
-function createBridgeScreenshotService() {
+export function createBridgeScreenshotService(customUrl?: string) {
   const bridgeUrl = (
+    customUrl ||
     process.env.REVYME_MCP_BRIDGE_URL ||
     process.env.VITE_AI_SERVICE_URL ||
     DEFAULT_MCP_BRIDGE_URL
@@ -49,7 +50,7 @@ function createBridgeScreenshotService() {
               projectId: snapshot.scope.projectId,
               branchId: snapshot.scope.branchId || 'main',
               filePath,
-              revision,
+              revision: revision ?? snapshot.revision,
               viewport,
               nodeId,
               format,
@@ -333,7 +334,7 @@ export function createMcpServer(options: McpServerOptions): Server {
       signal: extra.signal || new AbortController().signal,
       trace,
       adapters: {
-        screenshotService: createBridgeScreenshotService(),
+        screenshotService: createBridgeScreenshotService(config?.apiUrl),
         auditSnapshotService: createBridgeAuditSnapshotService(),
       },
     };

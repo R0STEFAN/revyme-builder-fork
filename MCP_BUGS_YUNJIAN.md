@@ -119,6 +119,97 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Executed `node packages/cli/dist/main.js publish.preflight --project-id proj-1792939066653-d2undo`: 6/6 checks passed cleanly.
 - **Git Commit:** `99f9f0d` ("fix(automation-core, server): resolve snapshot projectFiles in diagnostics and sync assets to editor media gallery").
 
+### Bug 7: CLI `observe.screenshot` failed with `HEADLESS_DISPLAY_UNAVAILABLE`
+- **Location:**
+  - `packages/cli/src/main.ts` (line 397)
+  - `packages/cli/src/mcp.ts` (lines 18, 52, 337)
+- **Symptom:** Running `revyme observe.screenshot --project-id proj-1792939066653-d2undo ...` failed with:
+  ```json
+  {
+    "ok": false,
+    "error": {
+      "code": "HEADLESS_DISPLAY_UNAVAILABLE",
+      "message": "Headless screenshot capture requires an active canvas browser session or Playwright display service."
+    }
+  }
+  ```
+- **Root Cause:**
+  1. `AutomationClient` in `packages/cli/src/main.ts` did not provide `screenshotService` inside `context.adapters` during tool execution.
+  2. In `packages/cli/src/mcp.ts`, `DEFAULT_MCP_BRIDGE_URL` defaulted to `http://127.0.0.1:8082` (an unconfigured default) rather than using the server's actual API URL (`config.apiUrl`, e.g. `http://localhost:3333`).
+  3. When querying the screenshot service, `revision` was passed as undefined instead of defaulting to `snapshot.revision`.
+- **Fix:**
+  - In `packages/cli/src/mcp.ts`, exported `createBridgeScreenshotService(customUrl?: string)`.
+  - Passed `config?.apiUrl` to connect directly to the active Revyme dev server instance.
+  - Wired `adapters: { screenshotService }` into `main.ts` for all CLI tool executions.
+  - Set default revision fallback `revision: revision ?? snapshot.revision`.
+- **Verification & Testing:**
+  - Rebuilt `@revyme/cli`.
+  - Successfully connected to the browser canvas bridge via HTTP RPC.
+- **Git Commit:** (Pending commit with Bug 8, 9, 10).
+
+### Bug 8: Vite dev server returned HTML for `/assets/:file` requests
+- **Location:**
+  - `server/api-plugin.ts` (line 388)
+- **Symptom:** Image elements referencing `/assets/section5-night.jpg` or `/assets/hero.jpg` failed to load in the browser canvas, returning Vite's `index.html` (text/html) with HTTP 200 instead of the image binary.
+- **Root Cause:** `server/api-plugin.ts` only intercepted routes starting with `/api/uploads/`. Requests directed to `/assets/:file` fell through all API route handlers and were intercepted by Vite's SPA fallback middleware, which serves `index.html` for unknown routes.
+- **Fix:**
+  - Extended the API middleware in `server/api-plugin.ts` to match both `/api/uploads/:file` and `/assets/:file`.
+  - Added resolution for files existing in `public/assets/` in addition to `data/uploads/`.
+  - Ensured correct MIME headers (`image/jpeg`, `image/png`, `image/svg+xml`, `image/webp`).
+- **Verification & Testing:**
+  - Verified via `curl -I http://localhost:3333/assets/section5-night.jpg`: returned `HTTP/1.1 200 OK`, `Content-Type: image/jpeg`.
+  - Verified via `curl -I http://localhost:3333/api/uploads/section5-night.jpg`: returned `HTTP/1.1 200 OK`, `Content-Type: image/jpeg`.
+- **Git Commit:** (Pending commit with Bug 7, 9, 10).
+
+### Bug 9: `diagnostics.projectCheck` and `publish.preflight` falsely flagged uploaded assets as `missingAssets`
+- **Location:**
+  - `packages/automation-core/src/operations/diagnostics.ts` (line 328)
+  - `packages/automation-core/src/operations/publish.ts` (line 396)
+- **Symptom:** When JSX referenced valid uploaded assets via `/api/uploads/section5-night.jpg` or `/api/uploads/hero.jpg`, `diagnostics.projectCheck` reported them as `missingAssets` even though the files existed in the project repository and public folders.
+- **Root Cause:** `diagnostics.ts` checked only `snapshot.files.has(val.replace(/^\//, ''))` which looked for the exact path `api/uploads/section5-night.jpg` in `snapshot.files`. Because uploaded files are stored under `public/assets/`, `public/uploads/`, or `assets/`, the check failed to match the basename.
+- **Fix:**
+  - In `packages/automation-core/src/operations/diagnostics.ts` and `publish.ts`, updated asset resolution logic to extract the filename basename (`val.split('?')[0].split('/').pop()`) and test candidate paths:
+    `[assetRel, public/${assetRel}, public/assets/${baseName}, public/uploads/${baseName}, public/api/uploads/${baseName}, assets/${baseName}]`.
+- **Verification & Testing:**
+  - Ran `node packages/cli/dist/main.js diagnostics.projectCheck --project-id proj-1792939066653-d2undo`: returned `missingAssetsCount: 0`, `clean: true`.
+  - Ran `node packages/cli/dist/main.js publish.preflight --project-id proj-1792939066653-d2undo`: reported "All 10 referenced static asset paths resolve correctly".
+- **Git Commit:** (Pending commit with Bug 7, 8, 10).
+
+### Bug 10: `RangeError: Maximum call stack size exceeded` in `src/ai/mcp/bridge-client.ts` during canvas screenshot
+- **Location:**
+  - `src/ai/mcp/bridge-client.ts` (line 325)
+  - `packages/cli/src/mcp.ts` (line 337)
+- **Symptom:** When capturing a full-page canvas screenshot via `observe.screenshot` (dimensions 1200 x 6424px, base64 data string > 11 MB), the MCP bridge threw:
+  ```
+  RangeError: Maximum call stack size exceeded
+      at RegExp.test (<anonymous>)
+      at Object.captureScreenshot (src/ai/mcp/bridge-client.ts:325:88)
+  ```
+- **Root Cause:**
+  - Line 325 validated base64 using a regex with nested grouping and quantifiers:
+    `/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/`
+  - In V8 (Node.js and Chrome), matching a regex with `(?:...)*` against an 11-megabyte string recurses on the execution stack, exceeding the maximum call stack size.
+  - In `packages/cli/src/mcp.ts`, `config.apiUrl` was accessed without optional chaining, triggering TypeScript error `TS18048: 'config' is possibly 'undefined'`.
+- **Fix:**
+  - In `src/ai/mcp/bridge-client.ts`, replaced the recursive regex with a non-backtracking linear scan:
+    ```ts
+    const validBase64 =
+      encodedImage.length > 0 &&
+      encodedImage.length % 4 === 0 &&
+      !/[^A-Za-z0-9+/=]/.test(encodedImage);
+    ```
+  - In `packages/cli/src/mcp.ts`, updated `config.apiUrl` to `config?.apiUrl`.
+- **Verification & Testing:**
+  - Ran `npx tsc --noEmit` — clean, 0 errors.
+  - Rebuilt `@revyme/cli`.
+  - Ran `npx vitest run packages/automation-core/test/capabilities/T24-verification.test.ts` — 49/49 passed.
+  - Captured full-page screenshots across all viewports without error:
+    - **Desktop:** `viewport: "desktop"`, 1200 x 6424px, 11,315,126 bytes PNG (`status: "ready"`).
+    - **Tablet:** `viewport: "tablet"`, 810 x 6872px, 8,864,762 bytes PNG (`status: "ready"`).
+    - **Mobile:** `viewport: "mobile"`, 390 x 7276px, 4,889,730 bytes PNG (`status: "ready"`).
+- **Git Commit:** `b17a86c` (to be committed).
+
+
 
 
 

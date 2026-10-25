@@ -396,6 +396,7 @@ export async function executePreflightChecks(
     let missingAssets = 0;
     for (const ref of staticRefs) {
       const clean = ref.rawPath.replace(/^\/+/, '');
+      const baseName = ref.rawPath.split('?')[0].split('/').pop() || '';
       const candidates = [
         ref.rawPath,
         clean,
@@ -404,6 +405,10 @@ export async function executePreflightChecks(
         `public/images/${clean}`,
         `public/uploads/${clean}`,
         `public/api/uploads/${clean}`,
+        `public/assets/${baseName}`,
+        `public/uploads/${baseName}`,
+        `public/api/uploads/${baseName}`,
+        `assets/${baseName}`,
       ];
 
       const exists = candidates.some((c) => filesMap.has(c) || projectFS.readFile(c) !== null);
