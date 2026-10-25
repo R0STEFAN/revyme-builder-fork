@@ -100,6 +100,19 @@ export interface CliOptions {
   stdinData?: string;
 }
 
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return '';
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', (err) => reject(err));
+  });
+}
+
 export async function runCli(options: CliOptions = {}): Promise<number> {
   const argv = options.argv || process.argv.slice(2);
   const printOut = options.stdout || ((msg: string) => console.log(msg));
@@ -233,7 +246,7 @@ EXAMPLES:
   if (flags['input-file'] === '-' || flags.stdin || toolArgs.includes('-')) {
     let stdinStr = options.stdinData;
     if (stdinStr === undefined) {
-      stdinStr = fs.readFileSync(0, 'utf8');
+      stdinStr = await readStdin();
     }
     try {
       inputData = stdinStr.trim() ? JSON.parse(stdinStr) : {};
