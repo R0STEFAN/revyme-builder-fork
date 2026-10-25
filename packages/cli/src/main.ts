@@ -19,7 +19,10 @@ function parseCliTokens(args: string[]): { flags: Record<string, any>; positiona
 
   for (let i = 0; i < args.length; i++) {
     const token = args[i];
-    if (token.startsWith('--')) {
+    if (token === '-') {
+      flags.stdin = true;
+      positionals.push(token);
+    } else if (token.startsWith('--')) {
       const raw = token.slice(2);
       if (raw.includes('=')) {
         const [k, ...v] = raw.split('=');
@@ -28,7 +31,7 @@ function parseCliTokens(args: string[]): { flags: Record<string, any>; positiona
         const next = args[i + 1];
         if (raw === 'dry-run' || raw === 'stdin') {
           flags[raw] = true;
-        } else if (next !== undefined && !next.startsWith('-')) {
+        } else if (next !== undefined && (!next.startsWith('-') || next === '-')) {
           flags[raw] = next;
           i++;
         } else {
@@ -36,17 +39,13 @@ function parseCliTokens(args: string[]): { flags: Record<string, any>; positiona
         }
       }
     } else if (token.startsWith('-') && token.length > 1) {
-      if (token === '-') {
-        flags.stdin = true;
+      const raw = token.slice(1);
+      const next = args[i + 1];
+      if (next !== undefined && (!next.startsWith('-') || next === '-')) {
+        flags[raw] = next;
+        i++;
       } else {
-        const raw = token.slice(1);
-        const next = args[i + 1];
-        if (next !== undefined && !next.startsWith('-')) {
-          flags[raw] = next;
-          i++;
-        } else {
-          flags[raw] = true;
-        }
+        flags[raw] = true;
       }
     } else {
       positionals.push(token);
@@ -231,7 +230,50 @@ EXAMPLES:
   // Collect input data
   let inputData: Record<string, unknown> = {};
 
-  if (flags['input-file']) {
+  if (flags['input-file'] === '-' || flags.stdin || toolArgs.includes('-')) {
+    let stdinStr = options.stdinData;
+    if (stdinStr === undefined) {
+      stdinStr = fs.readFileSync(0, 'utf8');
+    }
+    try {
+      inputData = stdinStr.trim() ? JSON.parse(stdinStr) : {};
+    } catch (err: any) {
+      printErr(
+        JSON.stringify(
+          {
+            ok: false,
+            error: {
+              code: 'INVALID_JSON_INPUT',
+              message: `Failed to parse stdin JSON: ${err.message}`,
+              issues: [{ code: 'JSON_SYNTAX_ERROR', path: ['stdin'], message: err.message }],
+            },
+            meta: { commitStatus: 'not_committed', revision: 0 },
+          },
+          null,
+          2
+        )
+      );
+      return 1;
+    }
+  } else if (flags['input-file']) {
+    if (typeof flags['input-file'] !== 'string') {
+      printErr(
+        JSON.stringify(
+          {
+            ok: false,
+            error: {
+              code: 'INVALID_CLI_FLAG',
+              message: 'Flag --input-file requires a file path or "-" for stdin',
+              issues: [{ code: 'INVALID_ARGUMENT', path: ['input-file'], message: 'Missing file path for --input-file' }],
+            },
+            meta: { commitStatus: 'not_committed', revision: 0 },
+          },
+          null,
+          2
+        )
+      );
+      return 1;
+    }
     const filePath = path.resolve(process.cwd(), flags['input-file']);
     if (!fs.existsSync(filePath)) {
       printErr(
@@ -262,31 +304,6 @@ EXAMPLES:
               code: 'INVALID_JSON_INPUT',
               message: `Failed to parse input file JSON: ${err.message}`,
               issues: [{ code: 'JSON_SYNTAX_ERROR', path: ['input-file'], message: err.message }],
-            },
-            meta: { commitStatus: 'not_committed', revision: 0 },
-          },
-          null,
-          2
-        )
-      );
-      return 1;
-    }
-  } else if (flags.stdin || toolArgs.includes('-')) {
-    let stdinStr = options.stdinData;
-    if (stdinStr === undefined) {
-      stdinStr = fs.readFileSync(0, 'utf8');
-    }
-    try {
-      inputData = stdinStr.trim() ? JSON.parse(stdinStr) : {};
-    } catch (err: any) {
-      printErr(
-        JSON.stringify(
-          {
-            ok: false,
-            error: {
-              code: 'INVALID_JSON_INPUT',
-              message: `Failed to parse stdin JSON: ${err.message}`,
-              issues: [{ code: 'JSON_SYNTAX_ERROR', path: ['stdin'], message: err.message }],
             },
             meta: { commitStatus: 'not_committed', revision: 0 },
           },

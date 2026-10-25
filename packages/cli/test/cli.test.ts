@@ -249,4 +249,47 @@ describe('T05: Revyme CLI Command Line Interface', () => {
       process.chdir(origCwd);
     }
   });
+
+  it('correctly parses --input-file - and passes stdinData to operation execution', async () => {
+    const outputs: string[] = [];
+    const execute = vi.spyOn(AutomationClient.prototype, 'execute').mockResolvedValue({
+      ok: true,
+      data: { success: true },
+      meta: { commitStatus: 'committed', revision: 5 },
+    } as any);
+
+    try {
+      const code = await runCli({
+        argv: [
+          'assets.upload',
+          '--project-id', 'test-project',
+          '--branch-id', 'main',
+          '--api', 'http://localhost:3333',
+          '--input-file', '-',
+        ],
+        stdinData: JSON.stringify({
+          fileName: 'grain.svg',
+          content: '<svg></svg>',
+          encoding: 'utf-8',
+          folder: 'public/assets',
+        }),
+        stdout: (msg) => outputs.push(msg),
+      });
+
+      expect(code).toBe(0);
+      expect(execute).toHaveBeenCalledWith(
+        { projectId: 'test-project', branchId: 'main' },
+        'assets.upload',
+        {
+          fileName: 'grain.svg',
+          content: '<svg></svg>',
+          encoding: 'utf-8',
+          folder: 'public/assets',
+        },
+        { dryRun: false },
+      );
+    } finally {
+      execute.mockRestore();
+    }
+  });
 });
