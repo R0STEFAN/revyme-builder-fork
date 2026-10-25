@@ -145,7 +145,7 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
 - **Verification & Testing:**
   - Rebuilt `@revyme/cli`.
   - Successfully connected to the browser canvas bridge via HTTP RPC.
-- **Git Commit:** (Pending commit with Bug 8, 9, 10).
+- **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
 
 ### Bug 8: Vite dev server returned HTML for `/assets/:file` requests
 - **Location:**
@@ -159,7 +159,7 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
 - **Verification & Testing:**
   - Verified via `curl -I http://localhost:3333/assets/section5-night.jpg`: returned `HTTP/1.1 200 OK`, `Content-Type: image/jpeg`.
   - Verified via `curl -I http://localhost:3333/api/uploads/section5-night.jpg`: returned `HTTP/1.1 200 OK`, `Content-Type: image/jpeg`.
-- **Git Commit:** (Pending commit with Bug 7, 9, 10).
+- **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
 
 ### Bug 9: `diagnostics.projectCheck` and `publish.preflight` falsely flagged uploaded assets as `missingAssets`
 - **Location:**
@@ -173,7 +173,7 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
 - **Verification & Testing:**
   - Ran `node packages/cli/dist/main.js diagnostics.projectCheck --project-id proj-1792939066653-d2undo`: returned `missingAssetsCount: 0`, `clean: true`.
   - Ran `node packages/cli/dist/main.js publish.preflight --project-id proj-1792939066653-d2undo`: reported "All 10 referenced static asset paths resolve correctly".
-- **Git Commit:** (Pending commit with Bug 7, 8, 10).
+- **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
 
 ### Bug 10: `RangeError: Maximum call stack size exceeded` in `src/ai/mcp/bridge-client.ts` during canvas screenshot
 - **Location:**
@@ -207,7 +207,7 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
     - **Desktop:** `viewport: "desktop"`, 1200 x 6424px, 11,315,126 bytes PNG (`status: "ready"`).
     - **Tablet:** `viewport: "tablet"`, 810 x 6872px, 8,864,762 bytes PNG (`status: "ready"`).
     - **Mobile:** `viewport: "mobile"`, 390 x 7276px, 4,889,730 bytes PNG (`status: "ready"`).
-- **Git Commit:** `b17a86c` (to be committed).
+- **Git Commit:** `f6b4d6b` ("fix(mcp, cli, server): fix observe.screenshot bridge regex overflow, cli adapter wiring, and asset route resolution").
 
 
 
