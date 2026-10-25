@@ -434,3 +434,82 @@ Executed through the internal agent tool dispatcher (`src/ai/agent/bridge-tools.
   Batches up to 20 semantic operations into an atomic transaction with a single undo checkpoint.
 - **`get_node_tree`**:
   Inspects the live CanvasNode tree of the active document.
+
+---
+
+## 4. MCP v2 Standard Operations Reference
+
+In MCP v2, operations are namespaced by domain. Discover live schemas via `meta.tools({ includeSchemas: true, names: [...] })`.
+
+### `codeFiles.submit`
+Commits or updates complete code files with automatic AST Oracle validation:
+```json
+{
+  "path": "components/InteractiveHero.tsx",
+  "code": "'use client';\n/** @label \"Interactive Hero\" */\n/** @controls { ... } */\n..."
+}
+```
+*Note:* Rejects `className` styling (`CLASSNAME_STYLING`). Scoped `<style>` tags must use `[data-id="..."]` selectors only.
+
+### `codeFiles.read`
+Reads the raw source text of any project file:
+```json
+{
+  "path": "app/page.client.tsx"
+}
+```
+
+### `viewports.setOverride`
+Inserts or updates responsive style overrides for a specific node at a target breakpoint:
+```json
+{
+  "filePath": "app/page.client.tsx",
+  "nodeId": "projects-grid",
+  "viewport": "mobile",
+  "styles": {
+    "gridTemplateColumns": "1fr",
+    "gap": "16px"
+  }
+}
+```
+*Note:* Generates container query rules in `<style data-viewport-styles="...">`.
+
+### `cms.schema.create` & `cms.items.create`
+Defines CMS collection schemas and seeds data items:
+```json
+// cms.schema.create
+{
+  "name": "roster",
+  "fields": [
+    { "name": "code", "type": "text", "label": "Catalog Number" },
+    { "name": "artist", "type": "text", "label": "Artist Name" }
+  ]
+}
+
+// cms.items.create
+{
+  "collection": "roster",
+  "item": {
+    "code": "AUR-001",
+    "artist": "ALVA NOTO"
+  }
+}
+```
+*Note:* Code components can directly import `@/cms/<name>.json` to consume live collection data.
+
+### `publish.preflight` & `preview.build`
+Verifies and prepares project release readiness:
+```json
+// publish.preflight
+{
+  "projectId": "proj-..."
+}
+// Returns { passed: true, errorCount: 0, fileCount: N }
+
+// preview.build
+{
+  "projectId": "proj-..."
+}
+// Returns { status: "ready", previewUrl: "http://..." }
+```
+

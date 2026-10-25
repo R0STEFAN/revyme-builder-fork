@@ -222,5 +222,31 @@ Throughout this automated run, several bugs, false-positives, and configuration 
   - Seeded 5 archival artist entries into `cms/roster.json` via `cms.items.create` (ALVA NOTO, MURCOF, RROSE, CATERINA BARBIERI, ANDY STOTT).
   - Bound `components/InteractiveRoster.tsx` to `@/cms/roster.json` with fallback defaults, ensuring immediate live rendering and zero-friction visual CMS management in the builder chrome.
 
+### Issue 4.7: Fullscreen Navbar Overlay Z-Index Blocking Close Button
+- **Symptom:** Opening the mobile navigation menu on `ResponsiveNavbar` covered the header bar and close button, preventing the user from closing the menu.
+- **Root Cause:** The fullscreen drawer backdrop container had a higher or matching stacking context (`zIndex: 100+`) relative to the header bar, and lacked top clearance padding.
+- **Fix:** Restructured the z-index hierarchy:
+  - Header top bar: `zIndex: 110`.
+  - Hamburger / Close button: `zIndex: 120`.
+  - Fullscreen menu overlay container: `zIndex: 90`, `position: 'absolute'`, `top: 0`, `left: 0`, `width: '100%'`, `height: '100vh'`, `overflowY: 'scroll'`, and `paddingTop: '80px'`.
+  - Result: The close button stays permanently above the overlay backdrop and clickable, and menu items scroll smoothly without colliding with the top bar.
+
+### Issue 4.8: Multi-Viewport Canvas Iframe vs Preview Responsiveness (Wordmark "OBSIDIAN")
+- **Symptom:** Wordmark "OBSIDIAN" in `PortalHeroStage` was responsive in standalone preview mode, but rendered oversized (110px) on the canvas mobile tile, overflowing the artboard boundary.
+- **Root Cause:** All viewports on the Revyme canvas render side-by-side in a single shared iframe with `window.innerWidth > 2400px`. Standard CSS `@media (max-width: 480px)` evaluates against `window.innerWidth`, which never matches on canvas artboards.
+- **Fix:** Implemented a 4-layer responsive sizing strategy:
+  1. `ResizeObserver` tracking `containerRef.current.clientWidth` dynamically in React state.
+  2. CSS Container Queries (`@container (max-width: 500px)`).
+  3. Canvas artboard wrapper attribute scoping (`[data-viewport="mobile"] [data-id="hero-wordmark"]`).
+  4. Standard `@media (max-width: 500px)` for preview and production.
+  - Sizing resolved to: 44px on mobile (bold, prominent, zero overflow), 72px on tablet, 110px on desktop.
+
+### Issue 4.9: `updateContainerQueryStyle` Root Tag Closure Parsing Bug
+- **Location:** `src/code/generation/generator-styles.ts`
+- **Symptom:** `viewports.setOverride` returned success but failed to inject the `<style data-viewport-styles="...">` block into `app/page.client.tsx`.
+- **Root Cause:** Line 188 used `code.match(/\}\}>\s*\n/)` to locate the closing bracket of the root element. When formatted as `}}\n >`, the regex failed to match, silently dropping responsive style block insertions.
+- **Fix:** Replaced regex matching with AST tag boundary traversal via `findTagClose`, ensuring robust insertion regardless of newline formatting between `}}` and `>`. Added unit test in `src/code/generation/generator-styles.test.ts` (129/129 vitest passed).
+
+
 
 

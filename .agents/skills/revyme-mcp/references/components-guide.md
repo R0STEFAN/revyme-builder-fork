@@ -289,18 +289,19 @@ function Navbar({
             exit={{ opacity: 0, y: -20 }}
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
             style={{
-              position: 'fixed',
-              inset: 0,
-              width: '100vw',
+              position: 'absolute',
+              top: '0px',
+              left: '0px',
+              width: '100%',
               height: '100vh',
-              zIndex: 9999,
+              zIndex: 90,
               backgroundColor: 'var(--color-bg)',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
               padding: '100px 48px 48px 48px',
               boxSizing: 'border-box',
-              overflowY: 'auto',
+              overflowY: 'scroll',
             }}
           >
             <div data-id="drawer-top-bar" style={{ display: 'flex', justifyContent: 'flex-end', order: '0', flex: '0 0 auto' }}>
@@ -314,6 +315,7 @@ function Navbar({
                   borderRadius: '6px',
                   fontSize: '12px',
                   cursor: 'pointer',
+                  zIndex: 120,
                 }}
               >
                 [✕] CLOSE
@@ -337,6 +339,13 @@ function Navbar({
 
 export default withResponsiveProps(Navbar);
 ```
+
+> **CRITICAL INVARIANTS FOR NAVBAR MASTERS & INSTANCES:**
+> 1. **Master Root vs Instance Placement**: The master component root in `components/Navbar.tsx` MUST use `position: 'absolute'` (or relative/flow), NEVER `position: 'fixed'` (`COMPONENT_ROOT_POSITION`). `position: 'fixed'` is applied strictly to the **page instance** in `app/page.client.tsx` directly under the page root (`FIXED_DEPTH`).
+> 2. **Z-Index Layering**: The top bar must carry `zIndex: 110` (and close button `120`), while the fullscreen drawer has `zIndex: 90`. This ensures the close button is always reachable and not blocked by the backdrop.
+> 3. **Overflow Keywords**: The Oracle strictly permits `visible | hidden | scroll | clip`. Values like `auto` trigger Oracle rejection.
+> 4. **No `className`**: Scoped styles or inline styles must use `[data-id="..."]` selectors only (`CLASSNAME_STYLING`).
+
 
 ---
 
@@ -419,6 +428,152 @@ function VectorCanvas(props: VectorCanvasProps) {
 
 export default withResponsiveProps(VectorCanvas);
 ```
+
+### 3.1 The Canvas Multi-Viewport Responsive Trap & The 4-Layer Solution (CRITICAL)
+
+#### Why standard CSS `@media` fails on the Builder Canvas
+On the Revyme visual canvas, all device viewports (Desktop 1200px, Tablet 810px, Mobile 390px) render side-by-side inside **one single iframe** whose window width is $>2400\text{px}$.
+A traditional CSS media query like `@media (max-width: 480px)` evaluates against `window.innerWidth`. Inside the canvas iframe, `window.innerWidth` is always large ($>2400\text{px}$). Consequently:
+- `@media (max-width: 480px)` **never triggers on the mobile artboard** during visual editing.
+- Components styled purely with `@media` render with desktop sizing (e.g. 110px font size or fixed large widths), overflowing and breaking the mobile canvas tile.
+- Yet in standalone Preview mode (where the browser window is resized to 390px), `@media` triggers normally, creating a confusing mismatch where preview looks fine but canvas is broken!
+
+#### The 4-Layer Solution for Bulletproof Responsiveness
+Every Code Component that contains large text, complex stage layouts, or canvas/WebGL graphics must implement the 4-layer responsive strategy:
+
+1. **`ResizeObserver` Container Measurement**:
+   Directly track the actual rendered container width (`clientWidth`) via a React ref and `ResizeObserver`. This guarantees responsive logic updates dynamically when rendered inside any artboard tile, regardless of iframe window size:
+   ```tsx
+   const containerRef = useRef<HTMLDivElement>(null);
+   const [containerWidth, setContainerWidth] = useState(1200);
+
+   useEffect(() => {
+     if (!containerRef.current) return;
+     const ro = new ResizeObserver((entries) => {
+       for (const entry of entries) {
+         setContainerWidth(entry.contentRect.width);
+       }
+     });
+     ro.observe(containerRef.current);
+     return () => ro.disconnect();
+   }, []);
+
+   const isMobile = containerWidth <= 500;
+   const isTablet = containerWidth > 500 && containerWidth <= 850;
+   const wordmarkSize = isMobile ? '44px' : isTablet ? '72px' : '110px';
+   ```
+
+2. **CSS Container Queries (`@container`)**:
+   Revyme wraps each canvas artboard in a container declaring `container-type: inline-size`. Scoped container queries inside `<style>` evaluate against the artboard width:
+   ```css
+   @container (max-width: 500px) {
+     [data-id="hero-wordmark"] {
+       font-size: 44px !important;
+       letter-spacing: -0.02em !important;
+     }
+   }
+   ```
+
+3. **Canvas Artboard Scoping (`[data-viewport="mobile"]`)**:
+   Revyme stamps the active viewport name onto the canvas wrapper (`data-viewport="mobile"` and `data-viewport="tablet"`). Explicitly scope critical sizing overrides:
+   ```css
+   [data-viewport="mobile"] [data-id="hero-wordmark"] {
+     font-size: 44px !important;
+   }
+   [data-viewport="tablet"] [data-id="hero-wordmark"] {
+     font-size: 72px !important;
+   }
+   ```
+
+4. **Standard CSS `@media` Queries**:
+   Retain standard `@media (max-width: 500px)` rules in the scoped `<style>` block for standalone Preview mode and Next.js static/production builds.
+
+---
+
+### 3.2 Binding Code Components to Built-in CMS Collections (`@/cms/*.json`)
+
+When building dynamic or data-driven code components (e.g. interactive discographies, 3D card decks, carousels, or timeline tables), connect the component to Revyme's native CMS:
+
+1. **Create the CMS Schema** using `cms.schema.create`:
+   ```json
+   {
+     "name": "roster",
+     "fields": [
+       { "name": "code", "type": "text", "label": "Catalog Code" },
+       { "name": "artist", "type": "text", "label": "Artist Name" },
+       { "name": "title", "type": "text", "label": "Album Title" },
+       { "name": "year", "type": "text", "label": "Release Year" },
+       { "name": "image", "type": "image", "label": "Artwork URL" }
+     ]
+   }
+   ```
+2. **Seed Initial CMS Items** using `cms.items.create`:
+   ```json
+   {
+     "collection": "roster",
+     "item": {
+       "code": "AUR-001",
+       "artist": "ALVA NOTO",
+       "title": "HYBR:ID III",
+       "year": "2024",
+       "image": "https://images.unsplash.com/..."
+     }
+   }
+   ```
+3. **Import CMS Collection in the Code Component**:
+   ```tsx
+   'use client';
+   
+   /** @label "Interactive Roster" */
+   /** @controls {
+     "accentColor": { "type": "color", "label": "Accent Color", "default": "#E8913C" }
+   } */
+
+   import React, { useState, useRef } from 'react';
+   import { withResponsiveProps } from '@revyme/runtime';
+   import rosterData from '@/cms/roster.json';
+
+   interface RosterItem {
+     id: string;
+     code: string;
+     artist: string;
+     title: string;
+     year: string;
+     image?: string;
+   }
+
+   interface Props {
+     items?: RosterItem[];
+     accentColor?: string;
+     style?: React.CSSProperties;
+   }
+
+   function InteractiveRoster(props: Props) {
+     // Use passed items prop or fallback to live CMS collection data
+     const activeItems: RosterItem[] = (props.items && props.items.length > 0) ? props.items : rosterData;
+     const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+     return (
+       <div data-id="roster-container" style={{ display: 'flex', flexDirection: 'column', width: '100%', ...props.style }}>
+         {activeItems.map((item) => (
+           <div
+             key={item.id || item.code}
+             data-id={`roster-row-${item.code.toLowerCase()}`}
+             onMouseEnter={() => setHoveredId(item.id)}
+             style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+           >
+             <span style={{ fontFamily: 'monospace', color: props.accentColor || '#E8913C' }}>{item.code}</span>
+             <span style={{ fontWeight: 600 }}>{item.artist}</span>
+             <span style={{ opacity: 0.6 }}>{item.title}</span>
+           </div>
+         ))}
+       </div>
+     );
+   }
+
+   export default withResponsiveProps(InteractiveRoster);
+   ```
+4. **Benefit**: The user can now edit, add, and reorder artists or items directly in Revyme's visual CMS panel, while the Code Component renders them with custom mouse parallax, audio playback, or RAF animations!
 
 ---
 

@@ -116,6 +116,18 @@ dot-name such as `pages.list`.
   visible text field alone does not prove the search still filters results. Headless operations
   must add the React `useState` import themselves rather than depending on the canvas mutation
   queue's later import synchronization.
+- `codeFiles.submit` expects `{ path, code }` and validates source code against the Oracle before
+  committing. Code Components authored via `codeFiles.submit` must NOT use `className` attributes
+  (`CLASSNAME_STYLING`); use inline styles or scoped `<style>` blocks targeting `[data-id="..."]`.
+- `viewports.setOverride` accepts `{ filePath, nodeId, viewport, styles }`. It generates responsive
+  container query rules in the page's `<style data-viewport-styles="...">` block. For code components
+  or deep custom typography, ensure the component handles canvas multi-viewport sizing (see Section 4).
+- `cms.schema.create` and `cms.items.create` allow defining native structured data collections and
+  seeding items. Code Components can directly import `@/cms/<collectionName>.json` to bridge
+  custom WebGL/RAF animations with Revyme's visual CMS manager.
+- `publish.preflight` performs pre-deployment linting across all pages. Note that Next.js server entry
+  wrappers (`app/**/page.tsx`) that delegate to client components (`page.client.tsx`) are automatically
+  recognized as server entrypoints and verified without client-only Oracle false positives.
 
 ---
 
@@ -221,9 +233,29 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
        - Inlined raw elements BREAK component variant transitions (`default-hover`, `menu-open`, etc.).
        - If the user wants to add a button or card, they should only need to add an instance of `<Button />` or `<ProjectCard />`, not hand-craft raw HTML trees!
 - **Navbars & Headers Rule**: When asked to create a navigation bar or header as a component, **NEVER build it as a closed Code Component with internal React `useState(false)` and `mixBlendMode: 'difference'`**. Instead:
-  1. Create a **Design Component** with visual variant states (`default` vs `menu-open`) using `create_component` (or `revyme_manage_component_variant`)!
-  2. Wire the toggle button with `revyme_add_connection`: trigger `'click'` from the hamburger button switches from `'default'` to `'menu-open'`.
-  3. Instantiate `<Navbar />` on the page via `revyme_insert_fragment` or `revyme_add_component_instance`.
+  1. Create a **Design Component** with visual variant states (`default`, `solid`, `amber-accent`, `open`) using `components.create` (or `create_component`)!
+  2. **Master Root vs Page Instance (`position: fixed`)**:
+     - In the component master (`components/ResponsiveNavbar.tsx`), the root MUST use `position: 'absolute'` (or relative/flow), NEVER `position: 'fixed'`. The Oracle rejects `position: 'fixed'` on component masters (`COMPONENT_ROOT_POSITION`).
+     - Place `position: 'fixed'`, `top: '0px'`, `left: '0px'`, `width: '100%'`, `zIndex: 100` on the **page instance** (`data-id="navbar-instance"` in `app/page.client.tsx`).
+     - The page instance MUST be a direct child of the page `root` container (`FIXED_DEPTH` rule).
+  3. **Z-Index Hierarchy for Fullscreen Overlays**:
+     - When the menu overlay opens, it must NEVER obscure the top navbar bar or block clicks on the close button!
+     - Top bar container: `zIndex: 110`.
+     - Hamburger / close button: `zIndex: 120`.
+     - Fullscreen menu overlay container: `zIndex: 90`, `position: 'absolute'`, `top: '0px'`, `left: '0px'`, `width: '100%'`, `height: '100vh'`, `overflowY: 'scroll'`, and `paddingTop: '80px'`.
+     - This guarantees the user can scroll through menu links without colliding with the top bar, and the close button remains visible and clickable at all times.
+  4. **Razor-Sharp Symmetrical Hamburger 'X' Cross Geometry**:
+     - Avoid loose flex offsets when animating two bars into a cross. Use absolute geometry:
+       - Container: 20x20px.
+       - Bar 1 rest: `top: '6px'`, `left: '1px'`. Active 'open': `y: 3, rotate: 45`.
+       - Bar 2 rest: `top: '12px'`, `left: '1px'`. Active 'open': `y: -3, rotate: -45`.
+       - Both bars meet at the exact vertical midpoint (`top: 9px`) at a clean 90° angle, forming a mathematically symmetrical 'X'.
+  5. **Strict Oracle Style Invariants for Design Components**:
+     - **NO `className` styling** (`CLASSNAME_STYLING`). Scoped `<style>` tags must use `[data-id="..."]` selectors only.
+     - **Size units** (`minWidth`, `maxWidth`, `minHeight`, `maxHeight`) only accept `px` or `%` (`MINMAX_SIZE_UNIT`). Viewport units (`vh`, `vw`, `auto`) are forbidden in the Size panel.
+     - **`overflow` values** must strictly be `visible | hidden | scroll | clip` (`auto` is rejected).
+  6. Wire the toggle button with `connections.create`: trigger `'click'` from the hamburger button switches from `'default'` to `'open'`.
+  7. Instantiate `<Navbar />` on the page via `revyme_insert_fragment` or `components.instance.create`.
 - **File Structure**:
   - `/** @name "ComponentName" */`
   - `export const variantConfig = [ { name: 'default', ... }, { name: 'highlight', ... } ];`
@@ -238,6 +270,46 @@ In Revyme, components in `components/<Name>.tsx` belong to two completely differ
   - **MUST have `/** @controls { ... } */`** JSDoc annotation.
   - Can use `useState`, `useEffect`, `useRef`, `useCallback`, `requestAnimationFrame`, `window` event listeners.
   - `export default withResponsiveProps(ComponentName);`
+
+#### 1. THE CANVAS MULTI-VIEWPORT RESPONSIVE TRAP & THE 4-LAYER SOLUTION (CRITICAL)
+- **The Architecture Reality**: On the Revyme canvas, all viewports (Desktop 1200px, Tablet 810px, Mobile 390px) render side-by-side inside **one single iframe** whose window width is $>2400\text{px}$.
+- **The Trap**: A standard CSS media query like `@media (max-width: 480px)` inside a Code Component will **NEVER** fire on the mobile canvas tile because `window.innerWidth > 2400px`!
+  If you only use `@media`, the component will look responsive in standalone Preview mode, but will appear massive, broken, and overflowing on the builder canvas!
+- **The 4-Layer Solution for Code Components**:
+  1. **`ResizeObserver` Container Tracking**: Measure `containerRef.current.clientWidth` dynamically using a `ResizeObserver`. Switch state or inline sizes accordingly:
+     ```tsx
+     const [containerWidth, setContainerWidth] = useState(1200);
+     useEffect(() => {
+       if (!containerRef.current) return;
+       const ro = new ResizeObserver((entries) => {
+         for (const entry of entries) {
+           setContainerWidth(entry.contentRect.width);
+         }
+       });
+       ro.observe(containerRef.current);
+       return () => ro.disconnect();
+     }, []);
+     const isMobile = containerWidth <= 500;
+     const isTablet = containerWidth > 500 && containerWidth <= 850;
+     ```
+  2. **Container Queries (`@container`)**: Revyme canvas viewport wrappers declare `container-type: inline-size`. Use `@container (max-width: 500px) { [data-id="..."] { ... } }`.
+  3. **Canvas Artboard Scoping (`[data-viewport="mobile"]`)**: Target the canvas viewport container:
+     ```css
+     [data-viewport="mobile"] [data-id="hero-wordmark"] { font-size: 44px !important; }
+     [data-viewport="tablet"] [data-id="hero-wordmark"] { font-size: 72px !important; }
+     ```
+  4. **Standard `@media` Queries**: Keep `@media (max-width: 500px)` for preview mode and the final static/production Next.js build.
+
+#### 2. Binding Code Components to CMS Collections (`@/cms/*.json`)
+- When authoring custom interactive components (like interactive rosters, 3D card decks, carousels, schedule tables):
+  1. Define a native CMS collection schema via `cms.schema.create` (`cms/<collectionName>.schema.json`).
+  2. Seed initial items via `cms.items.create` (`cms/<collectionName>.json`).
+  3. In the Code Component, directly import the collection data:
+     ```tsx
+     import rosterData from '@/cms/roster.json';
+     ```
+  4. Use the collection items with fallback defaults (`const items = (props.items && props.items.length > 0) ? props.items : rosterData;`).
+  5. This bridges the visual CMS editor with custom high-performance WebGL/RAF code components! The user can edit, add, and reorder items visually in the builder CMS panel.
 
 ---
 
@@ -1604,26 +1676,29 @@ page config before Oracle validation; use the live `meta.tools` schema for curre
 }
 ```
 
+### Canvas Artboard vs Standalone Preview Responsiveness
+Always remember the builder invariant: on the canvas, viewports render as side-by-side artboards inside a shared iframe (`window.innerWidth > 2400px`).
+- Page-level responsive overrides applied via `viewports.setOverride` emit CSS container queries inside `<style data-viewport-styles="...">` (the artboard root has `container-type: inline-size`).
+- In Code Components, avoid relying exclusively on `@media` queries; include `ResizeObserver` container measurements and `[data-viewport="mobile"]` attribute selectors to ensure identical appearance on both the canvas artboard and standalone preview.
+
 ---
 
 ## 11. Visual Verification Loop: Screenshot Capture & Overflow Checks
 
-Never claim that a website is ready without visual verification. Follow the 2-step verification loop:
+Never claim that a website is ready without visual verification. Follow the verification loop:
 
-1. **Capture Visual Screenshot (`revyme_capture_screenshot`)**:
-   ```json
-   revyme_capture_screenshot({ "viewport": "mobile", "format": "png" })
-   ```
-   Inspect the response:
-   - Check `layout.horizontalOverflow`: if `true`, content is spilling out horizontally!
-   - Inspect the saved image file returned in `savedFilePath` using multimodal inspection tools.
+1. **Check Canvas Artboard Observations & Overflows (`observe.layout` / `observe.screenshot`)**:
+   - Verify layout boundaries across viewports (`desktop`, `tablet`, `mobile`).
+   - Check `layout.horizontalOverflow`: if `true`, content is spilling out horizontally on the canvas artboard!
+   - Ensure Code Components do not maintain desktop widths on canvas mobile tiles.
 
-2. **Run Hard Linting (`revyme_audit_design`)**:
-   ```json
-   revyme_audit_design({ "viewport": "mobile" })
-   revyme_audit_design({ "viewport": "desktop" })
-   ```
-   Both viewports must achieve zero overlapping or boundary violations.
+2. **Verify Standalone Preview (`preview.build`)**:
+   - Check that responsive behavior works both inside the multi-artboard canvas iframe and in single-viewport preview mode.
+   - Verify z-index layering on open menus: ensure fullscreen overlays stay behind the fixed navbar header and the close button remains visible and clickable.
+
+3. **Run Hard Linting & Preflight (`diagnostics.projectCheck` & `publish.preflight`)**:
+   - Verify 0 Oracle errors across all project files.
+   - Verify preflight checks pass with zero unlinked assets or form configuration errors.
 
 ---
 
