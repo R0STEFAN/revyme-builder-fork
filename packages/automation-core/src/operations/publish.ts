@@ -253,6 +253,14 @@ export async function executePreflightChecks(
         }
       }
 
+      // In Next.js App Router, root layout.tsx is the server HTML wrapper (contains <html>/<body>/metadata).
+      // Only editable route-group LayoutClient.tsx or layout files without server root wrappers are canvas templates.
+      if (/(^|\/)layout\.tsx$/.test(path)) {
+        if (code.includes('<html') || code.includes('<body') || code.includes('export const metadata') || code.includes('export const siteConfig')) {
+          continue;
+        }
+      }
+
       inspectedPagesCount += 1;
       let violations;
       try {
@@ -373,7 +381,7 @@ export async function executePreflightChecks(
       const srcMatches = code.matchAll(/(?:src|image|poster|avatar|thumbnail)=['"]([^'"]+)['"]/g);
       for (const m of srcMatches) {
         const val = m[1].trim();
-        if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val)) {
+        if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val) && !val.includes('${') && !val.startsWith('$')) {
           staticRefs.push({ file: path, rawPath: val });
         }
       }
@@ -384,7 +392,7 @@ export async function executePreflightChecks(
       const urlMatches = code.matchAll(/(?<![A-Za-z0-9_$])url\(\s*['"]([^'"]+)['"]\s*\)/g);
       for (const m of urlMatches) {
         const val = m[1].trim();
-        if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val)) {
+        if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val) && !val.includes('${') && !val.startsWith('$')) {
           staticRefs.push({ file: path, rawPath: val });
         }
       }

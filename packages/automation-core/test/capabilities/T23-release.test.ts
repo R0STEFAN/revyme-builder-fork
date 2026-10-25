@@ -514,6 +514,50 @@ export default function AssetPage() {
       expect(assetCheck?.status).toBe('fail');
       expect(assetCheck?.message).toContain('non-existent-hero-banner-999.png');
     });
+
+    it('ignores interpolated template variables in CSS url() expressions', async () => {
+      const DYNAMIC_URL_COMPONENT = `'use client';
+import React from 'react';
+const GRAIN_SVG = "data:image/svg+xml,...";
+export default function DynamicBg() {
+  return (
+    <div data-id="root" style={{ backgroundImage: \`url("\${GRAIN_SVG}")\` }} />
+  );
+}
+`;
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT_CODE,
+        'app/page.client.tsx': CLEAN_PAGE_CODE,
+        'components/DynamicBg.tsx': DYNAMIC_URL_COMPONENT,
+      });
+
+      const result = await publishPreflightOperation.execute(snapshot, {}, context);
+      const assetFailures = result.checks.filter((c) => c.category === 'assets' && c.status === 'fail');
+      expect(assetFailures).toHaveLength(0);
+    });
+
+    it('bypasses Next.js root server layout.tsx from client canvas Oracle checks', async () => {
+      const SERVER_ROOT_LAYOUT = `import './globals.css';
+import { Providers } from './providers';
+export const metadata = { title: 'Site Title', description: 'Site Desc' };
+export const siteConfig = { language: 'en', theme: 'dark' };
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body><Providers>{children}</Providers></body>
+    </html>
+  );
+}
+`;
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': SERVER_ROOT_LAYOUT,
+        'app/page.client.tsx': CLEAN_PAGE_CODE,
+      });
+
+      const result = await publishPreflightOperation.execute(snapshot, {}, context);
+      const layoutOracleCheck = result.checks.find((c) => c.name === 'oracle.app/layout.tsx');
+      expect(layoutOracleCheck).toBeUndefined();
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

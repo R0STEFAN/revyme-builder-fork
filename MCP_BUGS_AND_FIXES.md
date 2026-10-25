@@ -252,6 +252,30 @@ Throughout this automated run, several bugs, false-positives, and configuration 
 - **Root Cause:** In `app/page.client.tsx`, `statement-right-col` was an auto-width flex item (`flex: '0 0 auto'`) without an explicit width or flex basis. Inside it, `CircularDriftImage` was styled with `width: '100%'` with `maxWidth: '360px'` and `aspectRatio: '1 / 1'`. In CSS flexbox, a child with `width: 100%` inside an unconstrained auto-width parent produces an indeterminate cyclical dependency: the browser collapses min-content width to 100px (canvas sandboxed artboard) or 0px (standalone preview). On mobile, explicit `280px` overrides existed, masking the issue there.
 - **Fix:** Set explicit desktop pixel geometry `width: '360px', height: '360px'` on both `statement-right-col` and `statement-drift-image` in `app/page.client.tsx`, and ensured `CircularDriftImage.tsx` uses `width: \`${size}px\`, height: \`${size}px\`, maxWidth: '100%', aspectRatio: '1 / 1'\`. Verified with `observe.layout`: Desktop measures exactly 360.0px x 360.0px; Mobile measures exactly 280.0px x 280.0px.
 
+---
+
+## 5. Ninth Meridian Project Audit & Fixes (proj-1792922782087-qo0wnl)
+
+### Issue 5.1: Preflight Static Asset Scanner Matching Interpolated Template Literals (`assets.unlinked:${GRAIN_SVG}`)
+- **Location:** `packages/automation-core/src/operations/publish.ts` (lines 381–399).
+- **Symptom:** `publish.preflight` failed with a fatal error: `Missing static asset "${GRAIN_SVG}" referenced in "components/FilmGrain.tsx"`.
+- **Root Cause:** In `components/FilmGrain.tsx`, `backgroundImage: \`url("\${GRAIN_SVG}")\`` was captured by regex `url\(\s*['"]([^'"]+)['"]\s*\)`. The scanner extracted `"${GRAIN_SVG}"` and treated it as a relative filesystem path inside `public/`.
+- **Fix:** Added guards in `publish.ts` to skip any scanned value containing `${` or starting with `$`:
+  ```ts
+  if (val && !/^(https?:|\/\/|data:|blob:)/i.test(val) && !val.includes('${') && !val.startsWith('$')) {
+    staticRefs.push({ file: path, rawPath: val });
+  }
+  ```
+- **Test:** Added regression test `ignores interpolated template variables in CSS url() expressions` to `packages/automation-core/test/capabilities/T23-release.test.ts`.
+
+### Issue 5.2: Next.js Root Server Layout Treated as Canvas Client Template (`oracle.app/layout.tsx`)
+- **Location:** `packages/automation-core/src/operations/publish.ts` (lines 244–256).
+- **Symptom:** `publish.preflight` flagged 24 Oracle violations on `app/layout.tsx` (`USE_CLIENT_REQUIRED`, `FORBIDDEN_IMPORT` for `./globals.css`, `PAGE_EXTRA_EXPORT` for metadata).
+- **Root Cause:** Next.js App Router root layout `app/layout.tsx` is a server wrapper containing `<html>`, `<body>`, metadata, and CSS `@import`. `publish.ts` passed `app/layout.tsx` into `checkFile({ kind: 'template' })` without distinguishing server wrappers from editable route-group `LayoutClient.tsx` templates.
+- **Fix:** Added a server layout bypass: if `layout.tsx` contains `<html>`, `<body>`, `export const metadata`, or `export const siteConfig`, it is bypassed as the root server wrapper.
+- **Test:** Added regression test `bypasses Next.js root server layout.tsx from client canvas Oracle checks` to `packages/automation-core/test/capabilities/T23-release.test.ts`. All 35 capability tests passing.
+
+
 
 
 
