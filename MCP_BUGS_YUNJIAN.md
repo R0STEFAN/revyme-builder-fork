@@ -94,7 +94,7 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Added unit test in `packages/cli/test/cli.test.ts`: `maps kebab-case CLI flags to camelCase schema properties and coerces types`.
   - Ran vitest suite: 13/13 tests passed cleanly in `packages/cli/test/cli.test.ts`.
   - Tested running `node packages/cli/dist/main.js viewports.setOverride --project-id proj-1792939066653-d2undo --node-id hero-heading --viewport tablet --styles '{"fontSize":"42px"}'`. Succeeded with revision 33.
-- **Git Commit:** (Pending commit)
+- **Git Commit:** `3d5c861` ("fix(cli): map kebab-case flags to camelCase schema properties in coerceInputToSchema").
 
 
 
