@@ -76,6 +76,6 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Added test in `packages/automation-core/test/capabilities/T20-challenger1.test.ts`: `successfully allows referencing uploaded project assets in public/assets/ via /assets/ without INVALID_IMAGE_SOURCE`.
   - Ran vitest suite: 34/34 tests passed cleanly in `T20-challenger1.test.ts`.
   - Rebuilt `@revyme/cli` binary.
-- **Git Commit:** (Pending commit)
+- **Git Commit:** `b51cf01` ("fix(automation-core): supply projectFiles to Oracle checkFile to validate project-scoped assets").
 
 
