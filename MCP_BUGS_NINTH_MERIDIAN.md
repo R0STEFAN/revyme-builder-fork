@@ -43,6 +43,47 @@ During this automated run, 3 server-level bugs were identified in `@revyme/autom
 
 ---
 
+### Bug 1.4: `extractStyleCSS` Failed to Match `<style>` Tags with Attributes
+- **Location:** `src/code/parsing/parser.ts` (`extractStyleCSS`, line 784).
+- **Symptom:** Canvas responsive breakpoint previews (`Tablet 810`, `Mobile 390`) failed to render responsive media queries defined in `<style data-id="...">` or `<style data-name="...">` tags, causing the canvas to display only desktop styling.
+- **Root Cause:** The parser regular expression:
+  ```ts
+  const styleMatch = /<style>\s*\{[`'"]([\s\S]*?)[`'"]\}\s*<\/style>/gs;
+  ```
+  strictly expected a bare `<style>` tag without any JSX attributes. Because Revyme's Oracle rule `ORACLE_ATTRS_REQUIRED` mandates `data-id` (and optionally `data-name`, `style`) on all tags in page JSX, any compliant `<style data-id="..." data-name="...">` tag was silently skipped. `extractStyleCSS` returned an empty string, preventing `Renderer.ts` from converting page `@media` queries into responsive canvas `@container` queries.
+- **Fix:** Updated the regex in `src/code/parsing/parser.ts` to support optional attributes:
+  ```ts
+  const styleMatch = /<style\b[^>]*>\s*\{[`'"]([\s\S]*?)[`'"]\}\s*<\/style>/gs;
+  ```
+- **Verification:** Added automated unit test in `src/code/parsing/parser.test.ts`:
+  `extracts CSS from style tags with attributes (e.g. data-id, data-name)`. Commit: `51da5d3`.
+
+---
+
+### Bug 1.5: Oracle `PAGE_LINK_NOT_NEXTLINK` False Positive on Component Instances
+- **Location:** `src/code/oracle/checks/link-rules.ts` (`checkPageLinks`, line 21).
+- **Symptom:** When placing a design component instance that accepts an `href` prop (e.g. `<ObservatoryButton data-id="obs-btn" href="#rates" label="RESERVE" />`) onto a page, the Oracle checker rejected the page:
+  ```json
+  {
+    "code": "PAGE_LINK_NOT_NEXTLINK",
+    "message": "Page links must use Next.js <Link href=\"...\">, not raw <a> (found <ObservatoryButton href=\"#rates\">)"
+  }
+  ```
+- **Root Cause:** `checkPageLinks` inspected all JSX elements that contained an `href` prop:
+  ```ts
+  if (tag === 'Link' || tag === 'MotionLink') return;
+  ```
+  It assumed that any JSX element with an `href` prop was an anchor element (`<a>`). When a user or designer encapsulated navigation into a design component (like a button component with hover variants and an `href` prop), the checker treated the component instance itself as an illegal raw `<a>` tag.
+- **Fix:** In `src/code/oracle/checks/link-rules.ts`, exempted uppercase React component identifiers:
+  ```ts
+  if (tag === 'Link' || tag === 'MotionLink' || /^[A-Z]/.test(tag)) return;
+  ```
+  This permits custom component instances with `href` props while strictly enforcing that native lowercase elements with `href` must be Next.js `<Link>` or `<MotionLink>`.
+- **Verification:** Added vitest regression tests in `src/code/oracle/page-links-dialect.test.ts`:
+  `allows component instances (PascalCase) with href prop on pages`. Commit: `7334269`.
+
+---
+
 ### Bug 1.1: Preflight Asset Scanner Falsely Flagging Template Literal Expressions (`assets.unlinked:${GRAIN_SVG}`)
 - **Location:** `packages/automation-core/src/operations/publish.ts` (lines 381–399).
 - **Symptom:** `publish.preflight` failed with a fatal error:
