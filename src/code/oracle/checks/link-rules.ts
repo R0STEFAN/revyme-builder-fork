@@ -78,6 +78,9 @@ function checkPageLinks(code: string, ast: t.File, v: OracleViolation[]): void {
       if (tag === 'MotionLink') { usesLink = true; usesMotionLink = true; return; }
       if (isInsideMotionLinkDecl(path)) return; // the wrapper's own <Link>/<div>
       if (tag === 'Link') { usesLink = true; return; }
+      // Component instances (<Button href="...">, <Card href="...">) pass href as a prop;
+      // they are not raw HTML anchors.
+      if (/^[A-Z]/.test(tag)) return;
       const attrs = jsxAttrs(opening);
       if (!attrs.some((a) => a.name.name === 'href')) return; // not a link
       // CMS field-bound anchors are tool-owned <a> — leave them.

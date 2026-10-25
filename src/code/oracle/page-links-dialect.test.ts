@@ -79,4 +79,9 @@ describe('page links must be the next/link <Link>', () => {
     expect(codes(PAGE(`  <motion.a data-id="lnk" data-name="a" href="/pricing" style={{ position: 'relative' }}>Pricing</motion.a>`, "import { motion } from 'framer-motion';\n")))
       .toContain('PAGE_LINK_NOT_NEXTLINK');
   });
+
+  it('a custom component instance with an href prop is allowed on a page', () => {
+    expect(codes(PAGE(`  <CustomButton data-id="btn" href="#rates" style={{ position: 'relative' }} />`)))
+      .not.toContain('PAGE_LINK_NOT_NEXTLINK');
+  });
 });
