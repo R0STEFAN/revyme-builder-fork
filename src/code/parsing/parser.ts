@@ -780,8 +780,8 @@ let _extractCssCode: string | null = null;
 let _extractCssResult = '';
 export function extractStyleCSS(code: string): string {
   if (code === _extractCssCode) return _extractCssResult;
-  // Match <style>{`...`}</style> or <style>{'...'}</style>
-  const styleRegex = /<style>\s*\{[`'"]([\s\S]*?)[`'"]\}\s*<\/style>/gs;
+  // Match <style ...>{`...`}</style> or <style ...>{'...'}</style>
+  const styleRegex = /<style\b[^>]*>\s*\{[`'"]([\s\S]*?)[`'"]\}\s*<\/style>/gs;
   let css = '';
   let match;
   while ((match = styleRegex.exec(code)) !== null) {

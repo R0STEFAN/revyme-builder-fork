@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parseJSXToNodes, extractItemMemberPath } from './parser';
+import { parseJSXToNodes, extractItemMemberPath, extractStyleCSS } from './parser';
 import { projectFS } from '@/code/project/project-fs';
 
 describe('parseJSXToNodes', () => {
@@ -1864,6 +1864,18 @@ export default function Page() {
       expect(nodes.get('p2')?.binding).toEqual({ field: 'img_file.filename_disk', property: 'text' });
       expect(nodes.get('img1')?.binding).toEqual({ field: 'img_file.url', property: 'src' });
       expect(nodes.get('img2')?.binding).toEqual({ field: 'img_file.url', property: 'src' });
+    });
+  });
+
+  describe('extractStyleCSS', () => {
+    test('extracts CSS from bare <style> tag', () => {
+      const code = `export default function Page() { return (<div><style>{\`@media (max-width: 810px) { [data-id="card"] { width: 100% !important; } }\`}</style></div>); }`;
+      expect(extractStyleCSS(code)).toBe('@media (max-width: 810px) { [data-id="card"] { width: 100% !important; } }');
+    });
+
+    test('extracts CSS from <style> tag with data-id and style attributes', () => {
+      const code = `export default function Page() { return (<div><style data-id="page-responsive-styles" data-name="Responsive Styles" style={{ position: 'absolute' }}>{\`@media (max-width: 390px) { [data-id="hero"] { padding: 16px !important; } }\`}</style></div>); }`;
+      expect(extractStyleCSS(code)).toBe('@media (max-width: 390px) { [data-id="hero"] { padding: 16px !important; } }');
     });
   });
 });
