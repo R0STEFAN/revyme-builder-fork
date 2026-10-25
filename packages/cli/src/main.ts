@@ -196,10 +196,14 @@ EXAMPLES:
   if (firstArg === 'init') {
     const projectId = argv[1];
     if (!projectId || projectId.startsWith('-')) {
-      printErr(JSON.stringify({ ok: false, error: 'Usage: revyme init <projectId> [--branch <branch>]' }, null, 2));
+      printErr(JSON.stringify({ ok: false, error: 'Usage: revyme init <projectId> [--branch <branch>] [--api <url>]' }, null, 2));
       return 1;
     }
-    const config = initProjectConfig(process.cwd(), projectId);
+    const { flags } = parseCliTokens(argv.slice(2));
+    const currentConfig = loadConfig();
+    const branchId = flags.branch || flags['branch-id'] || 'main';
+    const apiUrl = flags.api || flags.apiUrl || currentConfig.apiUrl || 'http://localhost:3333';
+    const config = initProjectConfig(process.cwd(), projectId, branchId, apiUrl);
     printOut(JSON.stringify({ ok: true, message: `Project ${projectId} linked successfully`, config }, null, 2));
     return 0;
   }

@@ -80,7 +80,7 @@ export function loadConfig(cwd?: string, overrides?: Partial<ProjectConfig>): Pr
   const apiUrl =
     overrides?.apiUrl ||
     process.env.REVYME_API_URL ||
-    (typeof cleanFileConfig.apiUrl === 'string' ? cleanFileConfig.apiUrl : 'http://localhost:3000');
+    (typeof cleanFileConfig.apiUrl === 'string' ? cleanFileConfig.apiUrl : 'http://localhost:3333');
 
   return {
     projectId,
@@ -108,7 +108,7 @@ export function initProjectConfig(
   cwd: string,
   projectId: string,
   branchId = 'main',
-  apiUrl = 'http://localhost:3000'
+  apiUrl = 'http://localhost:3333'
 ): ProjectConfig {
   const projectDir = findProjectRoot(cwd);
   const config: ProjectConfig = {
