@@ -293,6 +293,32 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Verified `src/editor/controls/reset-override-canvas-sync.test.ts` (8/8 tests passing).
   - Full TypeScript typecheck `npx tsc --noEmit` passed with 0 errors.
 
+### Bug 16: Navbar Scroll Variant Abruptly Snaps Styles on Scroll (Lack of Motion Variants & Layout Animation)
+- **Location:**
+  - `components/SiteHeader.tsx`
+  - `app/page.client.tsx`
+- **Symptom:**
+  - When scrolling on the website, the navbar (`SiteHeader`), which uses a scroll variant (`scrolled` / `Scrolled Glass`), changed its styles abruptly and instantaneously (0ms snap) instead of morphing smoothly between glass blur and solid color/compact height.
+- **Root Cause:**
+  1. *Plain DOM tag instead of motion component:* `site-header-root` was a standard `<div>` instead of `<motion.div>`, had an empty `variants` object without paint values, and lacked an `animate` binding.
+  2. *Inline style ternaries snap without interpolation:* In React / Framer Motion, paint properties (`backgroundColor`, `borderBottom`, `backdropFilter`, `boxShadow`) placed inside style ternaries `variant === 'scrolled' ? ... : ...` update synchronously upon state re-render. Without Framer Motion variant interpolation, the browser applies them instantly.
+  3. *Duplicate property overwrite:* In `SiteHeader.tsx`, static declarations of `borderBottom: '1px solid rgba(245, 240, 228, 0.12)'` and `backdropFilter: 'blur(16px)'` were declared after the dynamic ternaries in the style object, overriding them and freezing the blur.
+  4. *Undefined CSS token:* The CTA button used `var(--vermilion)` which was not defined in `globals.css` (seal red `#9c3d31`).
+  5. *1px scroll jitter in `page.client.tsx`:* `useMotionValueEvent` triggered immediately on any 1-pixel scroll delta (`y > prev`), causing twitching at the top edge.
+- **Fix:**
+  1. Wrapped `SiteHeader` in `<LayoutGroup>` and `<MotionConfig transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>`.
+  2. Promoted root to `<motion.div layout={true} variants={siteHeaderRootVariants} initial={initialVariant} animate={variant}>`.
+  3. Extracted paint properties (`backgroundColor`, `borderBottom`, `backdropFilter`, `WebkitBackdropFilter`, `boxShadow`) into `siteHeaderRootVariants` with both `default` and `scrolled` definitions, while mirroring base defaults in `style` to satisfy the `DEFAULT_VALUE_NOT_IN_BASE` Oracle rule.
+  4. Added `siteHeaderCtaVariants` and `siteHeaderBrandVariants` for smooth CTA button and logo shadow transitions.
+  5. Kept layout properties (`height`, `paddingLeft`, `paddingRight`) in inline style ternaries paired with `layout={true}` for Framer Motion FLIP projection.
+  6. Added scroll threshold (`y > 30`) to `useMotionValueEvent` in `app/page.client.tsx`.
+  7. Submitted changes cleanly via Revyme MCP CLI (`codeFiles.submit`).
+- **Verification & Testing:**
+  - Ran `diagnostics.projectCheck`: 0 violations, 0 drift violations (`clean: true`, `passed: true`).
+  - Ran `publish.preflight`: all page and Oracle checks passed.
+  - Ran `npx tsc --noEmit`: 0 TypeScript errors across entire repo.
+
+
 
 
 
