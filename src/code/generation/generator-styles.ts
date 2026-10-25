@@ -2713,6 +2713,37 @@ function updateVariantStyleInCodeInner(
     return writeInstanceConditionalStyles(code, nodeId, variantName, styles);
   }
 
+  // Check if any written style property is already authored as an inline style ternary
+  // on this element (e.g. `boxShadow: initialVariant === 'scrolled' ? ... : ...`).
+  // If so, update that ternary via setConditionalStyleInCode directly instead of
+  // creating or modifying a framer-motion variants object.
+  const styleStart = code.indexOf('style={{', idIdx);
+  const tagEndInline = code.indexOf('>', idIdx);
+  if (styleStart !== -1 && tagEndInline !== -1 && styleStart < tagEndInline) {
+    const objStart = styleStart + 'style={{'.length;
+    const posEnd = findStyleObjectEnd(code, objStart);
+    if (posEnd !== -1) {
+      const styleContent = code.slice(objStart, posEnd);
+      let handledAny = false;
+      let nextStyles = { ...styles };
+      for (const [k, v] of Object.entries(styles)) {
+        const span = findTopLevelPropSpan(styleContent, k);
+        if (span) {
+          const valStr = styleContent.slice(span.valStart, span.valEnd);
+          if (/(?:variant|initialVariant)\s*===/.test(valStr)) {
+            code = setConditionalStyleInCode(code, nodeId, k, variantName, v);
+            delete nextStyles[k];
+            handledAny = true;
+          }
+        }
+      }
+      if (handledAny) {
+        if (Object.keys(nextStyles).length === 0) return code;
+        styles = nextStyles;
+      }
+    }
+  }
+
   // Strip canvas-only positioning from variant entries for root elements.
   // Variant roots have position managed by variantConfig (x, y), not CSS left/top.
   // These values leak from the Renderer's canvas layout and should NOT go to code.
@@ -3928,13 +3959,13 @@ export function setConditionalStyleInCode(
   const parseSpan = findTopLevelPropSpan(styleContent, prop);
   if (parseSpan) {
     const expr = styleContent.slice(parseSpan.valStart, parseSpan.valEnd).trim();
-    const branchRegex = /(?:variant|initialVariant)\s*===\s*'([^']+)'\s*\?\s*'([^']*)'/g;
+    const branchRegex = /(?:variant|initialVariant)\s*===\s*['"]([^'"]+)['"]\s*\?\s*['"]([\s\S]*?)['"]/g;
     let bm: RegExpExecArray | null;
     while ((bm = branchRegex.exec(expr)) !== null) map[bm[1]] = bm[2];
     // Fallback (default) branch — strip the `X === 'v' ? 'val' :` segments and
     // read the trailing quoted literal (or a bare value).
-    const tail = expr.replace(/(?:variant|initialVariant)\s*===\s*'[^']+'\s*\?\s*'[^']*'\s*:\s*/g, '').trim();
-    const tailQuoted = tail.match(/^'([^']*)'/);
+    const tail = expr.replace(/(?:variant|initialVariant)\s*===\s*['"][^'"]+['"]\s*\?\s*['"][\s\S]*?['"]\s*:\s*/g, '').trim();
+    const tailQuoted = tail.match(/^['"]([\s\S]*?)['"]/);
     if (tailQuoted) {
       map.default = tailQuoted[1];
       hadExplicitDefault = true;

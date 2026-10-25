@@ -267,6 +267,33 @@ Per user instructions, every bug or edge case discovered in the MCP tools/CLI is
   - Submitted fixed `PassageCard.tsx`: accepted cleanly and committed (revision 209).
   - Ran `diagnostics.projectCheck`: `clean: true`, `passed: true`, 0 oracle violations.
 
+### Bug 15: "Reset Override" in Visual Inspector Failed to Reset Variant Overrides on Component Artboards
+- **Location:**
+  - `src/canvas/drag/replica-context.ts` (line 682)
+  - `src/canvas/node-ops.ts` (lines 2296, 2797, 2806, 2815–2820)
+  - `src/code/generation/generator-styles.ts` (lines 2716–2748, 3962, 3967)
+  - `src/editor/tools/StylesTool/atoms/ShadowControl.tsx` (lines 28, 287–296, 338)
+- **Symptom:**
+  - In the component editor on a non-default variant artboard (e.g. `Scrolled Glass`), selecting an element with an override (such as `site-header-brand` with shadow `0, 4, 16`) and clicking "Reset Override" on the Shadow property row context menu did not reset the shadow (as shown in user screenshot `media_1792947174472_4e3238e1.png`).
+  - The shadow remained visible, the purple override accent persisted, and the source file was never modified.
+- **Root Cause:**
+  1. *Missing authored conditional style check in `replica-context.ts`:* `getReplicaContext().styleUpdate` only treated a property as conditional if `PROJECTION_STYLE_PROPS.has(k) || (k === 'display' && isCmsRow)`. Properties authored as conditional ternaries (like `boxShadow`, `backgroundColor`, `border`, `color`, `opacity`, `backdropFilter`, etc.) were routed into `other` -> `updateVariantStyle` (motion variants object) instead of `setConditionalStyleInCode`!
+  2. *Stale interacting viewport in `node-ops.ts`:* When editing via inspector panels, `options.viewportPrefix` (e.g. `'scrolled--'`) is passed and mapped to `effectiveVpId = 'scrolled'`. However, `updateNodeStyles` passed `_interactingVpId` (which defaults to `'desktop'` if the user clicked in the sidebar rather than dragging on canvas) to `getReplicaContext(_interactingVpId, ...)`. This falsely treated the write as a primary viewport edit (`isPrimary = true`), causing `styleUpdate` to bypass replica routing.
+  3. *Uncaptured conditional style removal in `node-ops.ts`:* In `updateNodeStyles`, lines 2815–2819 checked `if (CSS_RULE_STORAGE_MUTATIONS.has(m.type) && m.styles)` to gather `overrideRemovedKeys`. For `setConditionalStyle` mutations, `m.styles` is undefined (it carries `m.prop` and `m.value`), so `forceRenderForOverrideRemoval` was completely skipped on conditional removals!
+  4. *Generator ignored inline ternaries in `updateVariantStyleInCodeInner`:* When `updateVariantStyleInCode` ran on an element without `variants={...}`, an empty value `{ [prop]: '' }` returned `code` untouched instead of modifying the inline ternary.
+  5. *`ShadowControl` lacked custom `onResetOverride` handler:* `ShadowControl` manages both `boxShadow` and drop-shadow in `filter`, but didn't pass `onResetOverride` to `EntryList`, so resetting an override only cleared `boxShadow` and missed `filter`.
+- **Fix:**
+  1. In `src/canvas/drag/replica-context.ts`: extended `isConditional` to check `Boolean(cachedNode?.conditionalStyles && k in cachedNode.conditionalStyles)`.
+  2. In `src/canvas/node-ops.ts`: passed `effectiveVpId` to `getReplicaContext(effectiveVpId, ...)` and updated `overrideRemovedKeys` to check `m.type === 'setConditionalStyle' && (m as any).value === ''`.
+  3. In `src/code/generation/generator-styles.ts`: added inspection in `updateVariantStyleInCodeInner` to delegate any property with an existing inline ternary to `setConditionalStyleInCode`, and broadened regex matching in `setConditionalStyleInCode` to support both single and double quotes.
+  4. In `src/editor/tools/StylesTool/atoms/ShadowControl.tsx`: added `handleResetOverride` to clear `boxShadow: ''` and strip drop-shadow from `filter` via `extractNonShadowFilter`, and passed `onResetOverride={handleResetOverride}` to `EntryList`.
+- **Verification & Testing:**
+  - Added unit tests in `src/canvas/drag/replica-context.test.ts` (42/42 tests passing).
+  - Added unit tests in `src/code/generation/generator-styles.test.ts` (131/131 tests passing).
+  - Verified `src/editor/controls/reset-override-canvas-sync.test.ts` (8/8 tests passing).
+  - Full TypeScript typecheck `npx tsc --noEmit` passed with 0 errors.
+
+
 
 
 

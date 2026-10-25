@@ -24,7 +24,7 @@ import ToolPopup from '../../../ui/ToolPopup';
 import { useEditorPanel } from '../../../hooks/useEditorPanel';
 import {
   parseShadowEntries, formatShadowEntries, mergeFilterWithDropShadows,
-  shadowSummary, createDefaultShadow,
+  shadowSummary, createDefaultShadow, extractNonShadowFilter,
   type ShadowEntry,
 } from '../../../ui/shadow-utils';
 import { parsePx, formatPx } from '../style-helpers';
@@ -287,6 +287,14 @@ function ShadowAtom() {
     commitEntries(n);
   };
 
+  const handleResetOverride = useCallback(() => {
+    const nonShadowFilter = extractNonShadowFilter(filter);
+    onChangeMultiple({
+      boxShadow: '',
+      filter: nonShadowFilter,
+    });
+  }, [filter, onChangeMultiple]);
+
   // Shadow preset reference: when boxShadow is exactly `var(--shadow-...)`, the
   // EntryList view (which expects parsed shadow entries) doesn't really apply
   // — show a blue-pill row instead, mirroring the color/image/video preset
@@ -322,6 +330,7 @@ function ShadowAtom() {
         onEdit={openEditor}
         onRemove={handleRemove}
         onAdd={handleAdd}
+        onResetOverride={handleResetOverride}
         renderSwatch={(e) => ({ backgroundColor: resolvePresetColor(e.color, allTokens) })}
         renderLabel={(e) => e.type === 'drop' ? 'Drop' : shadowSummary(e)}
         addButtonRef={btnRef}

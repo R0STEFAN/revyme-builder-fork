@@ -556,6 +556,38 @@ function Foo({ style, initialVariant = 'default' }) {
     expect(out).toContain("flexDirection: 'column'");
   });
 
+  test("reset override on boxShadow ternary drops the variant branch and collapses to 'none'", () => {
+    const COMP = `'use client';
+export default function SiteHeader({ initialVariant = 'default' }) {
+  return <div>
+    <a data-id="brand-link" style={{
+      cursor: 'pointer',
+      boxShadow: initialVariant === 'scrolled' ? '0 4px 16px rgba(156, 61, 49, 0.35)' : 'none'
+    }} />
+  </div>;
+}`;
+    const out = setConditionalStyleInCode(COMP, 'brand-link', 'boxShadow', 'scrolled', '');
+    expect(out).not.toContain("initialVariant === 'scrolled'");
+    expect(out).toContain("boxShadow: 'none'");
+  });
+
+  test("updateVariantStyleInCode delegates to setConditionalStyleInCode for existing inline style ternaries", () => {
+    const COMP = `'use client';
+export default function SiteHeader({ initialVariant = 'default' }) {
+  return <div>
+    <a data-id="brand-link" style={{
+      cursor: 'pointer',
+      boxShadow: initialVariant === 'scrolled' ? '0 4px 16px rgba(156, 61, 49, 0.35)' : 'none'
+    }} />
+  </div>;
+}`;
+    // Reset override via updateVariantStyleInCode
+    const out = updateVariantStyleInCode(COMP, 'brand-link', 'scrolled', { boxShadow: '' });
+    expect(out).not.toContain("initialVariant === 'scrolled'");
+    expect(out).toContain("boxShadow: 'none'");
+    expect(out).not.toContain('brandLinkVariants');
+  });
+
   test('uses `initialVariant` when the component has no useState variant', () => {
     const noConnections = COMPONENT
       .replace('const [variant, setVariant] = useState(initialVariant);', '')

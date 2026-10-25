@@ -679,7 +679,9 @@ export function getReplicaContext(
         const other: Record<string, string> = {};
         for (const [k, v] of Object.entries(styles)) {
           const isSvgSize = isSvgWrapper && (k === 'width' || k === 'height');
-          const isConditional = PROJECTION_STYLE_PROPS.has(k) || (k === 'display' && isCmsRow);
+          const isConditional = PROJECTION_STYLE_PROPS.has(k)
+            || (k === 'display' && isCmsRow)
+            || Boolean(cachedNode?.conditionalStyles && k in cachedNode.conditionalStyles);
           if (isConditional && !isSvgSize) layout[k] = v;
           else other[k] = v;
         }

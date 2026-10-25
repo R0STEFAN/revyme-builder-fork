@@ -2293,7 +2293,7 @@ export function updateNodeStyles(options: {
       && !domOnly) {
     const displayValue = styles.display;
     const hide = displayValue === 'none';
-    const visVariant = isPrimary ? 'default' : _interactingVpId;
+    const visVariant = isPrimary ? 'default' : effectiveVpId;
     const nodeForVis = getNodeFromCache(id);
     if (nodeForVis) {
       let allVariants: string[] = ['default', visVariant];
@@ -2794,7 +2794,7 @@ export function updateNodeStyles(options: {
       }
       if (hasDisplayWrite) {
         // Display still routes via ReplicaContext (per-vp @container).
-        const rctx = getReplicaContext(_interactingVpId, _activeFilePath, { [_interactingVpId]: vpWidth });
+        const rctx = getReplicaContext(effectiveVpId, _activeFilePath, { [effectiveVpId]: vpWidth });
         const muts = rctx.styleUpdate(id, { display: styles.display });
         for (const m of muts) {
           if (m.type === 'style') queueMutation({ type: 'updateStyles', nodeId: m.nodeId, styles: m.styles! });
@@ -2803,7 +2803,7 @@ export function updateNodeStyles(options: {
       }
     } else {
       // Standard routing via ReplicaContext (handles page/component × primary/replica)
-      const rctx = getReplicaContext(_interactingVpId, _activeFilePath, { [_interactingVpId]: vpWidth });
+      const rctx = getReplicaContext(effectiveVpId, _activeFilePath, { [effectiveVpId]: vpWidth });
       const mutations = rctx.styleUpdate(id, styles);
       const overrideRemovedKeys: string[] = [];
       for (const m of mutations) {
@@ -2812,9 +2812,13 @@ export function updateNodeStyles(options: {
           queueMutation({ type: 'updateStyles', nodeId: m.nodeId, styles: m.styles! });
         } else {
           queueMutation(m as any);
-          if (CSS_RULE_STORAGE_MUTATIONS.has(m.type) && m.styles) {
-            for (const [k, v] of Object.entries(m.styles)) {
-              if (v === '') overrideRemovedKeys.push(k);
+          if (CSS_RULE_STORAGE_MUTATIONS.has(m.type)) {
+            if (m.styles) {
+              for (const [k, v] of Object.entries(m.styles)) {
+                if (v === '') overrideRemovedKeys.push(k);
+              }
+            } else if (m.type === 'setConditionalStyle' && (m as any).value === '') {
+              overrideRemovedKeys.push((m as any).prop);
             }
           }
         }

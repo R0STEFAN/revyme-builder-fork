@@ -251,6 +251,19 @@ describe('Component Primary (default)', () => {
     });
   });
 
+  test('authored conditionalStyles (e.g. boxShadow) route to setConditionalStyle on primary', () => {
+    vi.mocked(getNodeFromCache).mockReturnValueOnce({
+      id: 'node-1',
+      conditionalStyles: {
+        boxShadow: { 'variant-1': '0 4px 16px rgba(0,0,0,0.5)', default: 'none' },
+      },
+    } as any);
+    const updates = ctx.styleUpdate('node-1', { boxShadow: '0 2px 4px #000' });
+    expect(updates).toEqual([
+      { nodeId: 'node-1', type: 'setConditionalStyle', variantName: 'default', prop: 'boxShadow', value: '0 2px 4px #000' },
+    ]);
+  });
+
   test('component INSTANCE: skips the plain `style` write (only updateVariantStyle) so it cannot clobber inline ternaries', () => {
     // An instance stores per-variant styles as inline `prop: variant === 'v' ? …`
     // ternaries; a plain `style` write would overwrite the whole expression and
@@ -340,6 +353,19 @@ describe('Component Replica (variant-1)', () => {
     const updates = ctx.styleUpdate('node-1', { width: '375px', backgroundColor: 'blue' });
     expect(updates).toContainEqual({ nodeId: 'node-1', type: 'setConditionalStyle', variantName: 'variant-1', prop: 'width', value: '375px' });
     expect(updates).toContainEqual({ nodeId: 'node-1', type: 'updateVariantStyle', variantName: 'variant-1', styles: { backgroundColor: 'blue' } });
+  });
+
+  test('authored conditionalStyles (e.g. boxShadow) route to setConditionalStyle on replica', () => {
+    vi.mocked(getNodeFromCache).mockReturnValueOnce({
+      id: 'node-1',
+      conditionalStyles: {
+        boxShadow: { 'variant-1': '0 4px 16px rgba(0,0,0,0.5)', default: 'none' },
+      },
+    } as any);
+    const updates = ctx.styleUpdate('node-1', { boxShadow: '' });
+    expect(updates).toEqual([
+      { nodeId: 'node-1', type: 'setConditionalStyle', variantName: 'variant-1', prop: 'boxShadow', value: '' },
+    ]);
   });
 
   test('GROUP CHILD (nested svg): left/top → x/y translate DELTAS in the variant object (+legacy attrX clears)', () => {
