@@ -286,10 +286,17 @@ export function addPresetTokenToCSS(css: string, token: PresetToken): string {
       return css.replace(rootMatch[1], newBody);
     }
   } else {
-    // No category group — parse all, add token, re-serialize for clean output
+    // No category group in :root — parse all tokens, add the new token, serialize,
+    // and replace ONLY the existing :root block (and its leading /* Design Tokens */ header if present),
+    // preserving any @imports, resets, .dark theme blocks, or custom CSS outside :root.
     const tokens = parsePresetTokens(css);
     tokens.push(token);
-    return serializePresetTokens(tokens);
+    const newRootBlock = serializePresetTokens(tokens);
+    const fullRootPattern = /(?:\/\*\s*Design Tokens[^\n]*\*\/\s*)?:root\s*\{[\s\S]*?\}/;
+    if (fullRootPattern.test(css)) {
+      return css.replace(fullRootPattern, newRootBlock.trim());
+    }
+    return css.replace(rootMatch[0], newRootBlock.trim());
   }
 }
 

@@ -344,4 +344,28 @@ describe_wipe('addPresetTokenToCSS — no :root block', () => {
     const out = addTok('', { name: 'color-brand', value: '#ff0000', category: 'color' } as any);
     expect_wipe(out).toContain('--color-brand: #ff0000;');
   });
+
+  it_wipe('preserves imports, reset, and dark theme when adding token in a new category group to existing :root', () => {
+    const css = `@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
+*, *::before, *::after {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Colors */
+  --color-brand: #6366f1;
+}
+
+:root.dark {
+  --color-surface: #000000;
+}
+`;
+    // Add token in 'border' category which doesn't exist in :root yet
+    const out = addTok(css, { name: 'border-glass', value: '1px solid rgba(255,255,255,0.1)', category: 'border' } as any);
+    expect_wipe(out).toContain('@import url(');
+    expect_wipe(out).toContain('box-sizing: border-box');
+    expect_wipe(out).toContain(':root.dark');
+    expect_wipe(out).toContain('--border-glass: 1px solid rgba(255,255,255,0.1);');
+  });
 });
