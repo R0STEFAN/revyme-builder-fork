@@ -102,15 +102,32 @@ export const cmsListConfigureOperation: Operation<
       throw new Error(`Target file "${input.targetFile}" not found`);
     }
 
+    let filterGroup = input.filterGroup;
+    if (typeof filterGroup === 'string') {
+      try {
+        filterGroup = JSON.parse(filterGroup);
+      } catch {
+        /* skip */
+      }
+    }
+    let sort = input.sort;
+    if (typeof sort === 'string') {
+      try {
+        sort = JSON.parse(sort);
+      } catch {
+        /* skip */
+      }
+    }
+
     let fg: FilterGroup | undefined = undefined;
-    if (input.filterGroup) {
-      const rawFilters = input.filterGroup.filters ?? (input.filterGroup as any).rules ?? [];
+    if (filterGroup) {
+      const rawFilters = filterGroup.filters ?? (filterGroup as any).rules ?? [];
       const normalizedFilters = rawFilters.map((f: any) => ({
         ...f,
         operator: f.operator === 'eq' ? 'equals' : f.operator === 'neq' ? 'not_equals' : f.operator,
       }));
       fg = {
-        combinator: input.filterGroup.combinator ?? 'and',
+        combinator: filterGroup.combinator ?? 'and',
         filters: normalizedFilters,
       };
     }
@@ -119,7 +136,7 @@ export const cmsListConfigureOperation: Operation<
       code,
       input.parentId,
       fg,
-      input.sort,
+      sort,
       input.limit,
       input.offset,
     );
