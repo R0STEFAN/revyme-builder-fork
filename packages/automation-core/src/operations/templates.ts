@@ -355,6 +355,22 @@ export const templatesAssignOperation: Operation<
       },
     ];
 
+    // If multilingual, update any generated locale route wrappers pointing to the moved server page
+    const oldImport = `@/${currentServerPath.replace(/\.tsx$/, '')}`;
+    const newImport = `@/${targetServerPath.replace(/\.tsx$/, '')}`;
+    for (const [filePath, content] of snapshot.files.entries()) {
+      if (filePath.endsWith('/page.tsx') && content.includes(oldImport)) {
+        const updatedContent = content
+          .replace(oldImport, newImport)
+          .replace(`Content lives in ${currentClientPath}`, `Content lives in ${targetClientPath}`);
+        changes.push({
+          path: filePath,
+          beforeHash: null,
+          content: updatedContent,
+        });
+      }
+    }
+
     return {
       pageSlug: cleanSlug,
       template: targetTemplate,
@@ -423,6 +439,24 @@ export const templatesRemoveOperation: Operation<
           });
           if (filePath.endsWith('page.client.tsx')) {
             unassignedCount++;
+          }
+          if (filePath.endsWith('page.tsx')) {
+            const oldImport = `@/${filePath.replace(/\.tsx$/, '')}`;
+            const newImport = `@/${rootTarget.replace(/\.tsx$/, '')}`;
+            const oldClient = filePath.replace(/page\.tsx$/, 'page.client.tsx');
+            const newClient = rootTarget.replace(/page\.tsx$/, 'page.client.tsx');
+            for (const [p, c] of snapshot.files.entries()) {
+              if (p.endsWith('/page.tsx') && c.includes(oldImport)) {
+                const updated = c
+                  .replace(oldImport, newImport)
+                  .replace(`Content lives in ${oldClient}`, `Content lives in ${newClient}`);
+                changes.push({
+                  path: p,
+                  beforeHash: null,
+                  content: updated,
+                });
+              }
+            }
           }
         }
       }

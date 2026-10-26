@@ -70,6 +70,27 @@ During this end-to-end test, several edge cases, dialect constraints, and builde
 
 ---
 
+### Issue 7: Direct Submission of Canvas Pages and Templates via `codeFiles.submit`
+- **Symptom:** Submitting raw TSX source for `page.client.tsx` or `LayoutClient.tsx` bypasses the visual editor's responsive styling engine, strips container styles (`<style data-viewport-styles="...">`), breaks canvas node `data-id` tracking, and risks overwriting concurrent user visual edits.
+- **Root Cause:** Lack of an explicit guard in `packages/automation-core/src/operations/code-files.ts`.
+- **Fix Implemented:** Added `CANVAS_PAGE_SUBMISSION_DISALLOWED` runtime guard in `codeFiles.submit` (commit `9dd11f8`), rejecting any submission of `kind: 'page' | 'template'` or paths ending in `page.client.tsx` / `LayoutClient.tsx`. Directed agents to use high-level semantic tools (`nodes.*`, `templates.*`, `components.instance.*`, `styles.*`).
+
+---
+
+### Issue 8: `templates.assign` Broke Generated Locale Route Wrappers (`UNRESOLVED_IMPORT`)
+- **Symptom:** When assigning a page (e.g. `/` or `/blog`) to a route group template (e.g. `(main)`), `templates.assign` moved `app/page.tsx` to `app/(main)/page.tsx`. However, the generated locale routes (e.g. `app/en/page.tsx`) still imported `export { default } from '@/app/page'`, causing `UNRESOLVED_IMPORT: Unresolved import "@/app/page" in app/en/page.tsx` during validation.
+- **Root Cause:** `templates.assign` and `templates.remove` in `packages/automation-core/src/operations/templates.ts` moved server page files without cascading path updates to `@revyme-locale-route` wrappers.
+- **Fix Implemented:** Updated `templatesAssignOperation` and `templatesRemoveOperation` to scan for `@revyme-locale-route` files referencing the moved server paths and rewrite both the `@/app/...` import path and the `Content lives in ...` metadata header.
+
+---
+
+### Issue 9: Authoring Design Components via `codeFiles.submit` vs `components.create`
+- **Symptom:** Attempting to write Design Components (`Navbar`, `Footer`) with raw code via `codeFiles.submit` triggered Oracle errors (`[COMPONENT_ROOT_PERCENT_SIZE]`, `[TEXT_STYLE_ON_FRAME]`, `[COMPONENT_LINK_NOT_MOTIONLINK]`).
+- **Root Cause:** Design Components in Revyme require specific canvas AST structures: artboard wrapper with `withResponsiveProps`, `variantConfig`, typography isolated on text leaves rather than frames, and unique `data-id`s.
+- **Resolution:** Used the official high-level semantic MCP tool `components.create` with typed `props` and declarative `layout` AST. Also inserted interactive sub-components (`ThemeToggle`, `LocaleSwitcher`) into the master component using `components.instance.create`.
+
+---
+
 ## 3. Export Pipeline Verification
 
 Both export targets were tested and verified via `export.generate` at ProjectFS Revision 78:
