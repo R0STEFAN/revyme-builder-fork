@@ -33,6 +33,8 @@ const CUSTOM_TEXT = '__custom__';
 
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { collectionSchemasAtom } from '@/code/stores/cms-store';
+import { activeLocaleAtom, isDefaultLocaleAtom, i18nConfigAtom } from '@/code/stores/locale-store';
+import { readSeoOverrides, writeSeoOverrides } from '@/code/project/translation-ops';
 import ExpressionBoundPill from '@/editor/controls/ExpressionBoundPill';
 import ExpressionEditorPopup from '@/editor/ui/ExpressionEditorPopup';
 import { validateCmsExpression } from '@/shared/cms-expression-validator';
@@ -367,6 +369,9 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // read/write operations.
   const metadataPath = useMemo(() => getServerWrapperPath(page.filePath), [page.filePath]);
   const schemas = useAtomValue(collectionSchemasAtom);
+  const [activeLocale, setActiveLocale] = useAtom(activeLocaleAtom);
+  const isDefaultLocale = useAtomValue(isDefaultLocaleAtom);
+  const i18nConfig = useAtomValue(i18nConfigAtom);
 
   // A CMS DETAIL page is the one case where a typed-in title is wrong: the
   // route renders every item in the collection, so the value has to come
@@ -380,7 +385,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     return { collection: meta.collection, schema: schemas.get(meta.collection) ?? null };
   }, [page.filePath, schemas, version]);
 
-  const initial = useMemo<PageMeta>(() => {
+  const baseMeta = useMemo<PageMeta>(() => {
     void version;
     const code = projectFS.readFile(metadataPath);
     if (!code) return EMPTY_META;
@@ -392,6 +397,17 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     if (hasCmsSeo(code)) return { ...EMPTY_META, ...(parseCmsSeoDefaults(code) as Partial<PageMeta>) };
     return metaToForm(parseMetadataFromCode(code));
   }, [metadataPath, version]);
+
+  const initial = useMemo<PageMeta>(() => {
+    if (isDefaultLocale) return baseMeta;
+    void version;
+    const overrides = readSeoOverrides(page.filePath, activeLocale);
+    if (!overrides) return EMPTY_META;
+    return {
+      ...EMPTY_META,
+      ...(overrides as Partial<PageMeta>),
+    };
+  }, [isDefaultLocale, baseMeta, page.filePath, activeLocale, version]);
 
   const initialBindings = useMemo<CmsSeoBindings>(() => {
     void version;
@@ -419,16 +435,16 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   const [exprError, setExprError] = useState<string | null>(null);
 
   const [form, setForm] = useState<PageMeta>(initial);
-  // Reset form state when the parent swaps to a different page. The
-  // PagesSeoSection passes `key={page.filePath}` so this remounts in
-  // practice, but keep the effect for belt-and-suspenders.
+  // Reset form state when the parent swaps to a different page or locale changes.
   useEffect(() => { setForm(initial); }, [initial]);
 
   const dirty = useMemo(
-    () => JSON.stringify(form) !== JSON.stringify(initial)
-      || JSON.stringify(bindings) !== JSON.stringify(initialBindings)
-      || JSON.stringify(expressions) !== JSON.stringify(initialExpressions),
-    [form, initial, bindings, initialBindings, expressions, initialExpressions],
+    () => isDefaultLocale
+      ? (JSON.stringify(form) !== JSON.stringify(initial)
+         || JSON.stringify(bindings) !== JSON.stringify(initialBindings)
+         || JSON.stringify(expressions) !== JSON.stringify(initialExpressions))
+      : JSON.stringify(form) !== JSON.stringify(initial),
+    [isDefaultLocale, form, initial, bindings, initialBindings, expressions, initialExpressions],
   );
 
   // One writer per page kind. A bound wrapper is REGENERATED whole rather
@@ -463,9 +479,23 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
 
   const save = useCallback(() => {
     if (!dirty) return;
-    trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings, expressions });
-    writeMeta(form, bindings, expressions);
-  }, [dirty, form, bindings, expressions, metadataPath, page.filePath, cms, writeMeta]);
+    if (isDefaultLocale) {
+      trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings, expressions });
+      writeMeta(form, bindings, expressions);
+    } else {
+      const cleanOverrides: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(form)) {
+        if (typeof v === 'string' && v.trim()) {
+          cleanOverrides[k] = v.trim();
+        } else if (typeof v === 'boolean' && v !== baseMeta[k as keyof PageMeta]) {
+          cleanOverrides[k] = v;
+        }
+      }
+      const toWrite = Object.keys(cleanOverrides).length > 0 ? cleanOverrides : null;
+      trace.action('pages-seo:save-locale-override', { filePath: page.filePath, activeLocale, overrides: toWrite });
+      writeSeoOverrides(page.filePath, activeLocale, toWrite);
+    }
+  }, [dirty, isDefaultLocale, form, bindings, expressions, metadataPath, page.filePath, cms, writeMeta, activeLocale, baseMeta]);
 
   // Binding changes are discrete picks, like the image fields — commit them
   // straight away so a pick can't be lost by forgetting Save. Any in-flight
@@ -543,16 +573,18 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     return (
       <div className="flex items-center gap-1.5 w-full">
         <div className="flex-1 min-w-0">{children}</div>
-        <button
-          type="button"
-          onClick={() => {
-            setActiveExprSlot({ slot, targetProperty, label });
-          }}
-          title="Dynamic Expression (Formula)"
-          className="shrink-0 h-[32px] px-2 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-xs font-mono font-bold"
-        >
-          fx
-        </button>
+        {isDefaultLocale && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveExprSlot({ slot, targetProperty, label });
+            }}
+            title="Dynamic Expression (Formula)"
+            className="shrink-0 h-[32px] px-2 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-xs font-mono font-bold"
+          >
+            fx
+          </button>
+        )}
       </div>
     );
   };
@@ -565,9 +597,20 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // immediately, leaving any in-progress text-field edits intact in
   // form state (a follow-up Save button click commits those).
   const commitImageField = useCallback((field: 'ogImage' | 'twitterImage', url: string) => {
-    trace.action('pages-seo:commit-image', { field, hasUrl: url.length > 0, urlLen: url.length });
-    writeMeta({ ...form, [field]: url }, bindings, expressions);
-  }, [form, bindings, expressions, writeMeta]);
+    trace.action('pages-seo:commit-image', { field, hasUrl: url.length > 0, urlLen: url.length, isDefaultLocale, activeLocale });
+    if (isDefaultLocale) {
+      writeMeta({ ...form, [field]: url }, bindings, expressions);
+    } else {
+      const nextForm = { ...form, [field]: url };
+      setForm(nextForm);
+      const cleanOverrides: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(nextForm)) {
+        if (typeof v === 'string' && v.trim()) cleanOverrides[k] = v.trim();
+        else if (typeof v === 'boolean' && v !== baseMeta[k as keyof PageMeta]) cleanOverrides[k] = v;
+      }
+      writeSeoOverrides(page.filePath, activeLocale, Object.keys(cleanOverrides).length > 0 ? cleanOverrides : null);
+    }
+  }, [form, bindings, expressions, writeMeta, isDefaultLocale, activeLocale, page.filePath, baseMeta]);
 
   return (
     <div className="space-y-8">
@@ -577,8 +620,34 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
           <button type="button" onClick={() => setExprError(null)} className="font-bold ml-2">✕</button>
         </div>
       )}
+      {i18nConfig.locales && i18nConfig.locales.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="text-xs text-[var(--text-tertiary)] mr-1">Language:</span>
+          {i18nConfig.locales.map((loc) => {
+            const isActive = loc.code === activeLocale;
+            return (
+              <button
+                key={loc.code}
+                type="button"
+                onClick={() => {
+                  trace.action('pages-seo:switch-locale', { locale: loc.code });
+                  setActiveLocale(loc.code);
+                }}
+                className={`px-2.5 py-1 text-xs rounded font-medium transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-black/[0.05] dark:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {loc.label || loc.code.toUpperCase()}
+                {loc.code === i18nConfig.defaultLocale ? ' (Default)' : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <SettingsGroup
-        title={`SEO · ${page.label}`}
+        title={isDefaultLocale ? `SEO · ${page.label}` : `SEO · ${page.label} (${activeLocale.toUpperCase()})`}
         action={<SaveButton onClick={save} saving={false} dirty={dirty} />}
       >
         <SettingsRow label="Title" htmlFor="seo-title">
@@ -592,7 +661,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.title}
                   onChange={(e) => update('title', e.target.value)}
                   className={ROW_INPUT_CLS}
-                  placeholder="Page title, falls back to the site title"
+                  placeholder={!isDefaultLocale && baseMeta.title ? baseMeta.title : 'Page title, falls back to the site title'}
                 />
               )}
             </>
@@ -609,7 +678,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.description}
                   onChange={(e) => update('description', e.target.value)}
                   className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-                  placeholder="A brief description that shows in search results."
+                  placeholder={!isDefaultLocale && baseMeta.description ? baseMeta.description : 'A brief description that shows in search results.'}
                 />
               )}
             </>
@@ -623,7 +692,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
               value={form.canonical}
               onChange={(e) => update('canonical', e.target.value)}
               className={ROW_INPUT_CLS}
-              placeholder="https://example.com/about"
+              placeholder={!isDefaultLocale && baseMeta.canonical ? baseMeta.canonical : 'https://example.com/about'}
             />
           ))}
         </SettingsRow>
@@ -641,7 +710,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.ogTitle}
                   onChange={(e) => update('ogTitle', e.target.value)}
                   className={ROW_INPUT_CLS}
-                  placeholder="Falls back to page title when empty"
+                  placeholder={!isDefaultLocale && baseMeta.ogTitle ? baseMeta.ogTitle : 'Falls back to page title when empty'}
                 />
               )}
             </>
@@ -658,7 +727,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.ogDescription}
                   onChange={(e) => update('ogDescription', e.target.value)}
                   className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-                  placeholder="Falls back to page description when empty"
+                  placeholder={!isDefaultLocale && baseMeta.ogDescription ? baseMeta.ogDescription : 'Falls back to page description when empty'}
                 />
               )}
             </>
@@ -703,7 +772,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.twitterTitle}
                   onChange={(e) => update('twitterTitle', e.target.value)}
                   className={ROW_INPUT_CLS}
-                  placeholder="Falls back to OG title / page title"
+                  placeholder={!isDefaultLocale && baseMeta.twitterTitle ? baseMeta.twitterTitle : 'Falls back to OG title / page title'}
                 />
               )}
             </>
@@ -720,7 +789,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
                   value={form.twitterDescription}
                   onChange={(e) => update('twitterDescription', e.target.value)}
                   className={`${ROW_INPUT_CLS} resize-none min-h-[56px]`}
-                  placeholder="Falls back to OG description / page description"
+                  placeholder={!isDefaultLocale && baseMeta.twitterDescription ? baseMeta.twitterDescription : 'Falls back to OG description / page description'}
                 />
               )}
             </>

@@ -41,7 +41,7 @@ const ITEMS = [
  * Server wrappers get no FileKind, so the oracle never sees this file and it
  * ships to production verbatim — executing it here is the only gate it has.
  */
-async function runGenerateMetadata(src: string, items: unknown[] | null, slug: string) {
+async function runGenerateMetadata(src: string, items: unknown[] | null, slug: string, lang?: string) {
   // The collection arrives through an import, which `new Function` cannot
   // resolve — bind that identifier to the test data instead.
   const importVar = /^import (\w+) from ['"]@\/cms\//m.exec(src)?.[1];
@@ -57,7 +57,7 @@ async function runGenerateMetadata(src: string, items: unknown[] | null, slug: s
   const fn = factory(items) as (a: { params: unknown }) => Promise<Record<string, any>>;
   // vinext passes params as a THENABLE, matching Next 15 — the emitted code
   // must await it, so hand it a promise rather than a plain object.
-  return fn({ params: Promise.resolve({ slug }) });
+  return fn({ params: Promise.resolve({ slug, lang }) });
 }
 
 async function runGenerateStaticParams(src: string, items: unknown[] | null) {
@@ -436,6 +436,56 @@ export default function Page({ params }: any) {
     expect(result).toContain('export default function Page({ params }: any) {');
     expect(result).toContain('<PageClient banner={customBanner} />');
     expect(hasCmsSeo(result)).toBe(true);
+  });
+});
+
+describe('buildCmsDetailServerWrapper with localized _i18n items', () => {
+  const LOCALIZED_ITEMS = [
+    {
+      _slug: 'kyiv',
+      name: 'Kyiv Tour',
+      excerpt: 'Base description in English',
+      cover: 'https://cdn/kyiv.jpg',
+      _i18n: {
+        uk: {
+          name: 'Тур Києвом',
+          excerpt: '', // Empty string falls back to base
+        },
+        de: {
+          name: 'Kiew Tour',
+          excerpt: 'Beschreibung auf Deutsch',
+        },
+      },
+    },
+  ];
+
+  const src = buildCmsDetailServerWrapper({
+    collection: 'tours',
+    bindings: { title: 'name', description: 'excerpt', ogImage: 'cover' },
+  });
+
+  it('resolves localized title and falls back on empty string for secondary locale', async () => {
+    const metaUk = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv', 'uk');
+    expect(metaUk.title).toBe('Тур Києвом');
+    expect(metaUk.description).toBe('Base description in English'); // fallback because ''
+
+    const metaDe = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv', 'de');
+    expect(metaDe.title).toBe('Kiew Tour');
+    expect(metaDe.description).toBe('Beschreibung auf Deutsch');
+
+    const metaDefault = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv');
+    expect(metaDefault.title).toBe('Kyiv Tour');
+    expect(metaDefault.description).toBe('Base description in English');
+  });
+
+  it('has exact parity with localizeRows nonempty-string merge semantics', () => {
+    const raw = LOCALIZED_ITEMS[0];
+    const serverMergeUk = {
+      ...raw,
+      ...Object.fromEntries(Object.entries(raw._i18n.uk).filter(([, v]) => typeof v === 'string' && v !== '')),
+    };
+    expect(serverMergeUk.name).toBe('Тур Києвом');
+    expect(serverMergeUk.excerpt).toBe('Base description in English');
   });
 });
 

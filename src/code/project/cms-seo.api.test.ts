@@ -40,7 +40,7 @@ describe('cms-seo — API Headless CMS Server Wrapper Generation', () => {
 
     expect(code).toContain("import articles from '@/cms/articles.json';");
     expect(code).toContain('export async function generateMetadata');
-    expect(code).toContain('export default function Page');
+    expect(code).toContain('export default async function Page');
   });
 
   it('generates async server fetch wrapper with process.env headers for API collection', () => {
@@ -83,5 +83,31 @@ describe('cms-seo — API Headless CMS Server Wrapper Generation', () => {
     expect(code).toContain('export default async function Page');
     expect(code).toContain('notFound()');
     expect(code).toContain('<PageClient item={item} />');
+  });
+
+  it('generates server fetch wrapper with evaluated defaultQueryParams fx expressions', () => {
+    saveApiCollection('posts', {
+      name: 'Posts',
+      slug: 'posts',
+      provider: 'custom_rest',
+      url: 'https://cms.example.com/api/posts',
+      method: 'GET',
+      headers: {},
+      defaultQueryParams: [
+        { key: 'locale', value: '{params.lang || "uk"}', isExpression: true },
+        { key: 'format', value: 'json', isExpression: false },
+      ],
+    });
+    setCmsMode('api');
+
+    const code = buildCmsDetailServerWrapper({
+      collection: 'posts',
+      bindings: { title: 'title' },
+    });
+
+    expect(code).toContain('evaluateParam');
+    expect(code).toContain('locale');
+    expect(code).toContain('format');
+    expect(code).toContain('{ slug, lang }');
   });
 });

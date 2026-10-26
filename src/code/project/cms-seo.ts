@@ -250,6 +250,14 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
         if (v !== undefined && v !== null) defaultQuery.set(k, String(v));
       }
     }
+    if (Array.isArray(apiConfig.defaultQueryParams)) {
+      for (const p of apiConfig.defaultQueryParams) {
+        if (!p.key) continue;
+        if (!p.isExpression && p.value !== undefined && p.value !== null && !defaultQuery.has(p.key)) {
+          defaultQuery.set(p.key, String(p.value));
+        }
+      }
+    }
     const defaultQueryStr = defaultQuery.toString();
     const endpointBase = apiConfig.url;
     const separator = endpointBase.includes('?') ? '&' : '?';
@@ -257,6 +265,18 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
       ? `${endpointBase}${separator}${defaultQueryStr}`
       : endpointBase;
     const finalSeparator = baseWithDefaults.includes('?') ? '&' : '?';
+
+    const hasDefaultExprs = Array.isArray(apiConfig.defaultQueryParams) && apiConfig.defaultQueryParams.some((p) => p.isExpression);
+    const evalHelper = hasDefaultExprs
+      ? `\nfunction evaluateParam(expr: string, params: Record<string, any>): string {
+  try {
+    const val = new Function('params', 'routeParams', \`return (\${expr});\`)(params, params);
+    return val !== undefined && val !== null ? String(val) : '';
+  } catch {
+    return '';
+  }
+}\n`
+      : '';
 
     const itemExtract = apiConfig.itemsKey
       ? `json[${JSON.stringify(apiConfig.itemsKey)}]?.[0]`
@@ -270,9 +290,30 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
       ? `\n    method: '${apiConfig.method.toUpperCase()}',`
       : '';
 
+    const buildEndpointExpr = (forStatic?: boolean) => {
+      if (!hasDefaultExprs) {
+        return forStatic
+          ? `\`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\``
+          : `\`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\``;
+      }
+      if (forStatic) {
+        const exprs = apiConfig.defaultQueryParams!
+          .filter((p) => p.isExpression && p.key)
+          .map((p, i) => `const pVal_${i} = evaluateParam(${JSON.stringify(p.value)}, { lang }); if (pVal_${i}) qp.set(${JSON.stringify(p.key)}, pVal_${i});`)
+          .join(' ');
+        return `(() => { const qp = new URLSearchParams(); ${exprs}; const qs = qp.toString(); return \`${baseWithDefaults}\${qs ? ('${finalSeparator}' + qs + '&') : '${finalSeparator}'}fields=slug&limit=500\`; })()`;
+      }
+      const exprs = apiConfig.defaultQueryParams!
+        .filter((p) => p.isExpression && p.key)
+        .map((p, i) => `const pVal_${i} = evaluateParam(${JSON.stringify(p.value)}, { slug, lang }); if (pVal_${i}) qp.set(${JSON.stringify(p.key)}, pVal_${i});`)
+        .join(' ');
+      return `(() => { const qp = new URLSearchParams(); ${exprs}; const qs = qp.toString(); return \`${baseWithDefaults}\${qs ? ('${finalSeparator}' + qs + '&') : '${finalSeparator}'}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`; })()`;
+    };
+
     const staticParams = includeStaticParams !== false
-      ? `\nexport async function generateStaticParams() {
-  const endpoint = \`${baseWithDefaults}${finalSeparator}fields=slug&limit=500\`;
+      ? `\nexport async function generateStaticParams({ params }: { params?: { lang?: string } } = {}) {
+  const lang = params?.lang;
+  const endpoint = ${buildEndpointExpr(true)};
   try {
     const res = await fetch(endpoint, {${methodLine}
       headers: ${headersCode},
@@ -299,10 +340,10 @@ const seoDefaults = ${defaultsLiteral};
 const seoBindings = ${bindingsLiteral};
 
 const seoExpressions = ${expressionsLiteral};
-
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
+${evalHelper}
+export async function generateMetadata({ params }: { params: Promise<{ slug: string; lang?: string }> }) {
+  const { slug, lang } = (await params) as { slug: string; lang?: string };
+  const endpoint = ${buildEndpointExpr(false)};
   try {
     const res = await fetch(endpoint, {${methodLine}
       headers: ${headersCode},
@@ -377,9 +418,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 ${staticParams}
 export const dynamicParams = true;
 
-export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const endpoint = \`${baseWithDefaults}${finalSeparator}${slugParam}=\${encodeURIComponent(slug)}&limit=1\`;
+export default async function Page({ params }: { params: Promise<{ slug: string; lang?: string }> }) {
+  const { slug, lang } = (await params) as { slug: string; lang?: string };
+  const endpoint = ${buildEndpointExpr(false)};
   let res;
   try {
     res = await fetch(endpoint, {${methodLine}
@@ -417,6 +458,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
 
   return `import PageClient from './page.client';
 import ${varName} from '@/cms/${collection}.json';
+import { notFound } from 'next/navigation';
 
 const seoDefaults = ${defaultsLiteral};
 
@@ -427,7 +469,10 @@ const seoExpressions = ${expressionsLiteral};
 export async function generateMetadata({ params }) {
   const resolved = await params;
   const items = Array.isArray(${varName}) ? ${varName} : [];
-  const item = items.find((i) => i && i._slug === resolved?.slug);
+  const raw = items.find((i) => i && i._slug === resolved?.slug);
+  const item = (raw && resolved?.lang && raw._i18n?.[resolved.lang])
+    ? { ...raw, ...Object.fromEntries(Object.entries(raw._i18n[resolved.lang]).filter(([, v]) => typeof v === 'string' && v !== '')) }
+    : raw;
   const evalExpr = (expr) => {
     try {
       const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
@@ -488,8 +533,12 @@ export async function generateMetadata({ params }) {
 ${staticParams}
 export const dynamicParams = true;
 
-export default function Page() {
-  return <PageClient />;
+export default async function Page({ params }: { params?: Promise<{ slug: string; lang?: string }> } = {}) {
+  const resolved = (params ? await params : undefined) as { slug: string; lang?: string } | undefined;
+  const items = Array.isArray(${varName}) ? ${varName} : [];
+  const raw = resolved?.slug ? items.find((i) => i && i._slug === resolved.slug) : undefined;
+  if (resolved?.slug && !raw) notFound();
+  return <PageClient item={raw} />;
 }
 `;
 }
