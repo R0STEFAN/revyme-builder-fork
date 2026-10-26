@@ -212,6 +212,28 @@ const nextIntlStub = {
     React.createElement(React.Fragment, null, children),
 };
 
+const nextNavigationStub = {
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  notFound: () => {},
+  redirect: () => {},
+};
+
+const nextLinkStub = {
+  default: React.forwardRef(function NextLinkStub({ href, children, ...props }: any, ref: any) {
+    return React.createElement('a', { ref, href: href || '#', ...props }, children);
+  }),
+};
+
 // Module scope for Code component code execution — pre-loaded ES modules
 const MODULE_MAP: Record<string, any> = {
   'react': { ...React, default: React, Children, cloneElement, isValidElement, useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect, useReducer, useContext, createContext, forwardRef, memo, lazy, Suspense, Fragment, createElement: React.createElement },
@@ -257,6 +279,8 @@ const MODULE_MAP: Record<string, any> = {
   'motion': motionOne,
   'next-themes': nextThemesStub,
   'next-intl': nextIntlStub,
+  'next/navigation': nextNavigationStub,
+  'next/link': nextLinkStub,
   'embla-carousel': { default: EmblaCarousel, EmblaCarousel },
   'embla-carousel-react': { default: useEmblaCarousel, useEmblaCarousel },
   'embla-carousel-autoplay': { default: Autoplay, Autoplay },
