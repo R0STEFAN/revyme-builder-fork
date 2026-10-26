@@ -1,0 +1,15 @@
+{
+  "gallery": {
+    "title": "Work Gallery"
+  },
+  "about": {
+    "title": "About Us"
+  },
+  "nav": {
+    "gallery": "Gallery",
+    "about": "About Us"
+  },
+  "notFound": {
+    "title": "Page Not Found"
+  }
+}

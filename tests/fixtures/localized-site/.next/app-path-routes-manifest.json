@@ -1,0 +1,6 @@
+{
+  "/[lang]/about/page": "/[lang]/about",
+  "/[lang]/gallery/page": "/[lang]/gallery",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found"
+}

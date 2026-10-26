@@ -1,0 +1,15 @@
+1:"$Sreact.fragment"
+2:I[39756,["/_next/static/chunks/158myu8e_yme3.js"],"default"]
+3:I[37457,["/_next/static/chunks/158myu8e_yme3.js"],"default"]
+4:I[62134,["/_next/static/chunks/158myu8e_yme3.js","/_next/static/chunks/147gcj-7uvixo.js","/_next/static/chunks/01-knzfsw0um2.js"],"Providers"]
+5:I[97367,["/_next/static/chunks/158myu8e_yme3.js"],"OutletBoundary"]
+6:"$Sreact.suspense"
+9:I[97367,["/_next/static/chunks/158myu8e_yme3.js"],"ViewportBoundary"]
+b:I[97367,["/_next/static/chunks/158myu8e_yme3.js"],"MetadataBoundary"]
+d:I[68027,["/_next/static/chunks/158myu8e_yme3.js"],"default",1]
+0:{"P":null,"c":["","_not-found"],"q":"","i":false,"f":[[["",{"children":["/_not-found",{"children":["__PAGE__",{}]}]},"$undefined","$undefined",16],[["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/158myu8e_yme3.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"children":["$","body",null,{"children":["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[["$","html",null,{"lang":"uk","children":["$","body",null,{"children":["$","$L4",null,{"locale":"uk","children":["$","div",null,{"data-testid":"custom-404","children":[["$","h1",null,{"children":"404"}],["$","p",null,{"children":"Сторінку не знайдено"}]]}]}]}]}],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":[["$","html",null,{"lang":"uk","children":["$","body",null,{"children":["$","$L4",null,{"locale":"uk","children":["$","div",null,{"data-testid":"custom-404","children":[["$","h1",null,{"children":"404"}],["$","p",null,{"children":"Сторінку не знайдено"}]]}]}]}]}],[["$","script","script-0",{"src":"/_next/static/chunks/147gcj-7uvixo.js","async":true,"nonce":"$undefined"}],["$","script","script-1",{"src":"/_next/static/chunks/01-knzfsw0um2.js","async":true,"nonce":"$undefined"}]],["$","$L5",null,{"children":["$","$6",null,{"name":"Next.MetadataOutlet","children":"$@7"}]}]]}],{},null,false,null]},null,false,"$@8"]},null,false,null],["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L9",null,{"children":"$La"}],["$","div",null,{"hidden":true,"children":["$","$Lb",null,{"children":["$","$6",null,{"name":"Next.Metadata","children":"$Lc"}]}]}],null]}],false]],"m":"$undefined","G":["$d",[]],"S":true,"h":null,"s":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"UPW-j2SZ6Wh8S7QvMnjKh"}
+e:[]
+8:"$We"
+a:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+7:null
+c:[]

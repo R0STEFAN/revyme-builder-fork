@@ -1,0 +1,6 @@
+{
+  "/[lang]/about/page": "app/[lang]/about/page.js",
+  "/[lang]/gallery/page": "app/[lang]/gallery/page.js",
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js"
+}
