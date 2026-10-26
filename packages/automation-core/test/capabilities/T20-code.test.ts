@@ -609,12 +609,45 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
       const result = await codeFilesSubmitOperation.execute(
         snap,
-        { files: [{ path: 'app/layout.tsx', code: layout, kind: 'template' }] },
+        { files: [{ path: 'app/layout.tsx', code: layout, kind: 'other' }] },
         context,
       );
 
       expect(result.committed).toBe(true);
       expect(projectFS.readFile('app/layout.tsx')).toBe(layout);
+    });
+
+    it('strictly forbids submitting canvas pages (page.client.tsx, LayoutClient.tsx)', async () => {
+      const snap = createMockSnapshot({});
+      await expect(
+        codeFilesSubmitOperation.execute(
+          snap,
+          {
+            files: [
+              {
+                path: 'app/page.client.tsx',
+                code: "'use client';\nexport default function Page() { return <div data-id=\"root\" />; }",
+              },
+            ],
+          },
+          context,
+        ),
+      ).rejects.toThrow(/CANVAS_PAGE_SUBMISSION_DISALLOWED/);
+
+      await expect(
+        codeFilesSubmitOperation.execute(
+          snap,
+          {
+            files: [
+              {
+                path: 'app/LayoutClient.tsx',
+                code: "'use client';\nexport default function Layout() { return <div data-id=\"root\" />; }",
+              },
+            ],
+          },
+          context,
+        ),
+      ).rejects.toThrow(/CANVAS_PAGE_SUBMISSION_DISALLOWED/);
     });
 
     it('rejects batch submit with CAS conflict when baseHash does not match, writing zero files', async () => {

@@ -227,6 +227,13 @@ export const codeFilesSearchOperation: Operation<CodeFilesSearchInput, CodeFiles
   },
 };
 
+export function isCanvasPageOrTemplatePath(path: string): boolean {
+  return (
+    /(^|\/)page(\.client)?\.tsx$/.test(path) ||
+    /(^|\/)LayoutClient\.tsx$/.test(path)
+  );
+}
+
 // ─── 4. codeFiles.submit (Guarded Batch Submit) ───────────────────────────────
 
 export const codeFilesSubmitInputSchema = z.object({
@@ -236,7 +243,7 @@ export const codeFilesSubmitInputSchema = z.object({
         path: z.string().min(1),
         code: z.string().nullable(),
         kind: z
-          .enum(['page', 'template', 'component', 'code-component', 'asset', 'config', 'other'])
+          .enum(['component', 'code-component', 'asset', 'config', 'other'])
           .optional(),
         baseHash: z.string().optional(),
       }),
@@ -255,7 +262,7 @@ export interface CodeFilesSubmitOutput {
 export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFilesSubmitOutput> = {
   name: 'codeFiles.submit',
   description:
-    'Guarded batch file submit with CAS hash matching, protected path enforcement, and Oracle verification',
+    'Guarded batch file submit for Code Components (components/*.tsx with @controls) and non-canvas project files. STRICTLY FORBIDDEN for canvas pages (app/**/page.client.tsx, LayoutClient.tsx) — use sections.insert, nodes.create, styles.set, components.instance.add, or cms.pages.* instead',
   category: 'code',
   kind: 'mutation',
   permit: 'write',
@@ -271,6 +278,22 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
       if (PROTECTED_SYSTEM_FILES.has(f.path) || isSystemProtectedPath(f.path)) {
         throw new Error(
           `PROTECTED_PATH: Modifying protected system file "${f.path}" is disallowed.`,
+        );
+      }
+      if (
+        (f as any).kind === 'page' ||
+        (f as any).kind === 'template' ||
+        isCanvasPageOrTemplatePath(f.path)
+      ) {
+        throw new Error(
+          `CANVAS_PAGE_SUBMISSION_DISALLOWED: Direct creation or modification of canvas pages ("${f.path}") via codeFiles.submit is strictly forbidden.\n` +
+          `Rewriting entire page files breaks the live visual editor lifecycle, erases responsive container styles (<style data-viewport-styles="...">), breaks canvas node data-ids, and overwrites concurrent user edits.\n` +
+          `Use high-level semantic MCP operations instead:\n` +
+          `  - To insert sections or layouts: "sections.insert" or "fragments.insert" / "nodes.create"\n` +
+          `  - To adjust styles or responsive overrides: "styles.set", "viewports.setOverride"\n` +
+          `  - To add component instances to canvas: "components.instance.add"\n` +
+          `  - To create CMS pages & listings: "cms.pages.createIndex", "cms.pages.createDetail", "cms.list.create"\n` +
+          `codeFiles.submit is restricted exclusively to Code Components (components/*.tsx with @controls) and non-canvas project assets/configs.`
         );
       }
     }
@@ -309,15 +332,11 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
         // imports and the required <html>/<body> structure.
         if (/(^|\/)layout\.(tsx|ts)$/.test(f.path)) continue;
 
-        let kind: FileKind = 'page';
-        if (f.kind === 'template' || isLayoutFile(f.path)) {
-          kind = 'template';
-        } else if (f.kind === 'component' || f.path.startsWith('components/')) {
+        let kind: FileKind = 'code-component';
+        if (f.kind === 'component' || f.path.startsWith('components/')) {
           kind = isCodeComponentSource(f.code) ? 'code-component' : 'component';
         } else if (f.kind === 'code-component') {
           kind = 'code-component';
-        } else if (f.kind === 'page' || /(^|\/)page(\.client)?\.tsx$/.test(f.path)) {
-          kind = 'page';
         } else {
           // If kind is 'asset', 'config', or 'other', skip Oracle gate
           continue;
