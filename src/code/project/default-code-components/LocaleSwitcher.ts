@@ -36,7 +36,8 @@ export const LOCALE_SWITCHER_COMPONENT = `'use client';
 
 import { useEffect, useState } from 'react';
 import { useLocale } from 'next-intl';
-import { withResponsiveProps } from '@revyme/runtime';
+import { usePathname } from 'next/navigation';
+import { useStaticCanvas, withResponsiveProps } from '@revyme/runtime';
 
 function LocaleSwitcher({
   locales = 'en, fr, es',
@@ -50,10 +51,12 @@ function LocaleSwitcher({
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
-  // useLocale() reads from NextIntlClientProvider — single source of truth
-  // when the provider is mounted (live site). Fallback to first list item
-  // for the canvas-only stub (which returns 'en' by default).
   const providerLocale = useLocale();
+  const isCanvas = useStaticCanvas();
+  let pathname = '/';
+  try {
+    pathname = usePathname() || '/';
+  } catch {}
   const initialLocale = localeList.indexOf(providerLocale) >= 0
     ? providerLocale
     : (localeList[0] || 'en');
@@ -64,19 +67,37 @@ function LocaleSwitcher({
     if (document.documentElement.lang !== initialLocale) {
       document.documentElement.lang = initialLocale;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerLocale, locales]);
 
-  const handleChange = (next) => {
+  const handleCanvasChange = (next) => {
     setCurrent(next);
     if (typeof window !== 'undefined') {
       try { window.localStorage.setItem('locale', next); } catch {}
-      // Provider listens for this event and re-mounts NextIntlClientProvider
-      // with the new locale + messages dictionary, so every useTranslations()
-      // call returns the right translation on next render.
       document.documentElement.lang = next;
       window.dispatchEvent(new CustomEvent('locale-change', { detail: { locale: next } }));
     }
+  };
+
+  const buildTargetHref = (target) => {
+    const segments = pathname.split('/').filter(Boolean);
+    const first = segments[0];
+    const isFirstLocale = localeList.includes(first);
+    const barePath = isFirstLocale
+      ? '/' + segments.slice(1).join('/')
+      : pathname;
+    const cleanBare = (barePath === '' || barePath === '//') ? '/' : barePath;
+    const defaultLocale = localeList[0] || 'en';
+    const isDefault = target === defaultLocale;
+    const baseTarget = isDefault
+      ? cleanBare
+      : (cleanBare === '/' ? ('/' + target) : ('/' + target + cleanBare));
+
+    if (typeof window !== 'undefined') {
+      const search = window.location.search || '';
+      const hash = window.location.hash || '';
+      return baseTarget + search + hash;
+    }
+    return baseTarget;
   };
 
   return (
@@ -84,37 +105,69 @@ function LocaleSwitcher({
       data-id={props['data-id']}
       data-name={props['data-name']}
       style={{
-        
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
         padding: '6px 10px',
         background,
         borderRadius,
-        color, ...props.style }}
+        color,
+        ...props.style,
+      }}
     >
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <line x1="2" y1="12" x2="22" y2="12" />
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
-      <select
-        value={current}
-        onChange={(e) => handleChange(e.target.value)}
-        style={{
-          background: 'transparent',
-          color: 'currentColor',
-          border: 'none',
-          cursor: 'pointer',
-          font: 'inherit',
-          textTransform: 'uppercase',
-          outline: 'none',
-        }}
-      >
-        {localeList.map((l) => (
-          <option key={l} value={l} style={{ color: '#000' }}>{l}</option>
-        ))}
-      </select>
+      {isCanvas ? (
+        <select
+          value={current}
+          onChange={(e) => handleCanvasChange(e.target.value)}
+          style={{
+            background: 'transparent',
+            color: 'currentColor',
+            border: 'none',
+            cursor: 'pointer',
+            font: 'inherit',
+            textTransform: 'uppercase',
+            outline: 'none',
+          }}
+        >
+          {localeList.map((l) => (
+            <option key={l} value={l} style={{ color: '#000' }}>{l}</option>
+          ))}
+        </select>
+      ) : (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {localeList.map((l) => {
+            const isCurrent = l === current;
+            const targetHref = buildTargetHref(l);
+            return (
+              <a
+                key={l}
+                href={targetHref}
+                data-no-vt=""
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  try { window.localStorage.setItem('locale', l); } catch {}
+                }}
+                style={{
+                  color: 'currentColor',
+                  opacity: isCurrent ? 1 : 0.6,
+                  fontWeight: isCurrent ? 700 : 400,
+                  textDecoration: 'none',
+                  textTransform: 'uppercase',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                {l}
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

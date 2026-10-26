@@ -48,6 +48,7 @@ import {
 } from './cms-page-ops';
 import { loadCmsProjectConfig, type ApiCollectionConfig, type CmsImageOptimizationConfig } from './cms-api-config';
 import { isLocaleRouteFile } from './locale-route-ops';
+import { prepareLocalizedSiteFiles } from './localized-site-export';
 import { escapeRegExp } from '@/shared/regex-utils';
 
 export {
@@ -384,6 +385,7 @@ export function buildCmsQueryRouteHandler(apiConfigs: Record<string, ApiCollecti
       method: cfg.method || 'GET',
       headers: cfg.headers || {},
       defaultParams: cfg.defaultParams || {},
+      defaultQueryParams: cfg.defaultQueryParams || [],
       itemsKey: cfg.itemsKey,
       provider: cfg.provider || 'custom_rest',
       revalidateTtl: cfg.revalidateTtl,
@@ -399,6 +401,7 @@ const API_COLLECTIONS: Record<string, {
   method?: string;
   headers?: Record<string, string>;
   defaultParams?: Record<string, string>;
+  defaultQueryParams?: Array<{ key: string; value: string; isExpression?: boolean }>;
   itemsKey?: string;
   provider?: string;
   revalidateTtl?: number;
@@ -440,10 +443,16 @@ async function handleQuery(payload: {
   limit?: number;
   offset?: number;
   params?: any;
+  lang?: string;
+  routeParams?: Record<string, string>;
 }) {
-  const { collection, page, limit, offset, params } = payload;
+  const { collection, page, limit, offset, params, lang, routeParams } = payload;
   if (!collection || !API_COLLECTIONS[collection]) {
     return NextResponse.json({ ok: false, error: 'Unknown or unconfigured collection' }, { status: 400 });
+  }
+
+  if (lang && !/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/.test(lang)) {
+    return NextResponse.json({ ok: false, error: 'Invalid language code' }, { status: 400 });
   }
 
   const config = API_COLLECTIONS[collection];
@@ -468,6 +477,25 @@ async function handleQuery(payload: {
     for (const [k, v] of Object.entries(config.defaultParams)) {
       if (v !== undefined && v !== null && v !== '') {
         targetUrl.searchParams.set(k, String(v));
+      }
+    }
+  }
+
+  if (Array.isArray(config.defaultQueryParams)) {
+    const exprContext = { ...(routeParams || {}), ...(lang ? { lang } : {}) };
+    for (const p of config.defaultQueryParams) {
+      if (!p.key) continue;
+      let val: any = p.value;
+      if (p.isExpression) {
+        try {
+          const fn = new Function('params', 'with({ params }) { return (' + p.value + '); }');
+          val = fn(exprContext);
+        } catch {
+          val = '';
+        }
+      }
+      if (val !== undefined && val !== null && val !== '') {
+        targetUrl.searchParams.set(p.key, String(val));
       }
     }
   }
@@ -1157,6 +1185,9 @@ export function prepareSiteFiles(
 
   // Transform Google Fonts @import into next/font/google loaders
   files = transformSiteFilesForNextFonts(files);
+
+  // Deterministic publish-time localization pass
+  files = prepareLocalizedSiteFiles(files);
 
   // Provide lib/image-utils.ts and scripts/optimize-images.mjs for runtime / build resolution
   if (!files['lib/image-utils.ts']) {

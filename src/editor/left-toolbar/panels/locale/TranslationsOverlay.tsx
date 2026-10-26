@@ -41,13 +41,14 @@ interface Row {
 
 interface Section {
   id: string;
-  kind: 'page' | 'component' | 'cms';
+  kind: 'page' | 'component' | 'template' | 'cms';
   label: string;
   rows: Row[];
 }
 
 const SECTION_ICONS: Record<Section['kind'], JSX.Element> = {
   page: <PageDocumentIcon size={13} />,
+  template: <PageDocumentIcon size={13} />,
   // The SAME purple diamond icon the Library panel's Components section uses
   // (SidebarRow's accent-secondary default) — one component identity everywhere.
   component: <span style={{ color: 'var(--accent-secondary, #a78bfa)', display: 'inline-flex' }}><DesignComponentIcon /></span>,

@@ -49,7 +49,7 @@ import { trace } from '@/shared/debug-trace';
 
 export interface TranslatableText {
   filePath: string;
-  kind: 'page' | 'component';
+  kind: 'page' | 'component' | 'template';
   nodeId: string;
   /** Display label — the node's data-name, falling back to its tag. */
   label: string;
@@ -127,11 +127,15 @@ function readInstancePropLocaleText(hostCode: string, instanceId: string, compon
 export function listTranslatableTexts(defaultLocale: string): TranslatableText[] {
   const out: TranslatableText[] = [];
   const files = projectFS.listFiles().filter(f =>
-    f.endsWith('page.client.tsx') || (f.startsWith('components/') && f.endsWith('.tsx')));
+    f.endsWith('page.client.tsx') ||
+    (f.startsWith('components/') && f.endsWith('.tsx')) ||
+    (f.startsWith('app/') && f.endsWith('LayoutClient.tsx')));
   for (const filePath of files) {
     const code = projectFS.readFile(filePath);
     if (!code) continue;
-    const kind: TranslatableText['kind'] = filePath.startsWith('components/') ? 'component' : 'page';
+    const kind: TranslatableText['kind'] = filePath.startsWith('components/')
+      ? 'component'
+      : (filePath.endsWith('LayoutClient.tsx') ? 'template' : 'page');
     let nodes;
     try { nodes = parseJSXToNodes(code); } catch { continue; }
     for (const [nodeId, node] of nodes) {
@@ -714,6 +718,100 @@ export function migrateLegacyLocaleTextOverrides(config: { defaultLocale: string
     projectFS.writeFile(legacyPath, JSON.stringify({ pages: {}, collections: (parsed as any).collections ?? {} }, null, 2));
     trace.action('migrateLegacyLocaleTextOverrides', { locale: l.code, migrated });
   }
+
+  // Also migrate legacy template translation keys
+  migrateLegacyTemplateTranslations(config);
+}
+
+/**
+ * Migrate template translation keys stored under legacy 'LayoutClient.tsx' namespace
+ * to the proper 'template:<group>' namespace.
+ *
+ * If a key unambiguously belongs to one template, it is moved to that template's namespace.
+ * If multiple templates contain the same key, it is reported as a conflict and not moved.
+ */
+export function migrateLegacyTemplateTranslations(config?: { locales?: { code: string }[] }): {
+  migrated: number;
+  conflicts: Array<{ key: string; templates: string[] }>;
+} {
+  const templateFiles = projectFS.listFiles('app/').filter(f => f.endsWith('LayoutClient.tsx'));
+  if (templateFiles.length === 0) return { migrated: 0, conflicts: [] };
+
+  const templateNodes = new Map<string, Set<string>>();
+  for (const tf of templateFiles) {
+    const code = projectFS.readFile(tf) ?? '';
+    const keys = new Set<string>();
+    try {
+      const nodes = parseJSXToNodes(code);
+      for (const [id] of nodes) keys.add(id);
+    } catch { /* ignore */ }
+    const tMatches = code.matchAll(/\bt\(['"]([^'"]+)['"]\)/g);
+    for (const m of tMatches) keys.add(m[1]);
+    templateNodes.set(tf, keys);
+  }
+
+  const locales = config?.locales?.map(l => l.code) ??
+    projectFS.listFiles('messages/').map(f => f.replace(/^messages\//, '').replace(/\.json$/, ''));
+
+  let migrated = 0;
+  const conflicts: Array<{ key: string; templates: string[] }> = [];
+  const reportedConflictKeys = new Set<string>();
+
+  for (const locale of locales) {
+    const msgPath = `messages/${locale}.json`;
+    const raw = projectFS.readFile(msgPath);
+    if (!raw) continue;
+    let parsed: Record<string, any>;
+    try { parsed = JSON.parse(raw); } catch { continue; }
+
+    const legacyEntries = parsed['LayoutClient.tsx'];
+    if (!legacyEntries || typeof legacyEntries !== 'object') continue;
+
+    let modified = false;
+    for (const [key, val] of Object.entries(legacyEntries)) {
+      if (key === '_seo') continue;
+      const matches: string[] = [];
+      for (const [tf, keys] of templateNodes) {
+        if (templateFiles.length === 1 || keys.has(key)) {
+          matches.push(tf);
+        }
+      }
+
+      if (matches.length === 1) {
+        const targetNs = filePathToSlug(matches[0]);
+        if (!parsed[targetNs]) parsed[targetNs] = {};
+        if (parsed[targetNs][key] === undefined) {
+          parsed[targetNs][key] = val;
+          migrated++;
+        }
+        delete legacyEntries[key];
+        modified = true;
+
+        const tFile = matches[0];
+        const tCode = projectFS.readFile(tFile);
+        if (tCode && tCode.includes("useTranslations('LayoutClient.tsx')")) {
+          projectFS.writeFile(tFile, tCode.replace("useTranslations('LayoutClient.tsx')", `useTranslations('${targetNs}')`));
+        }
+      } else if (matches.length > 1) {
+        if (!reportedConflictKeys.has(key)) {
+          reportedConflictKeys.add(key);
+          conflicts.push({ key, templates: matches });
+          trace.error('migrateLegacyTemplateTranslations:ambiguous-key', { key, matches });
+        }
+      }
+    }
+
+    if (Object.keys(legacyEntries).length === 0) {
+      delete parsed['LayoutClient.tsx'];
+      modified = true;
+    }
+
+    if (modified) {
+      projectFS.writeFile(msgPath, JSON.stringify(parsed, null, 2));
+    }
+  }
+
+  return { migrated, conflicts };
 }
 
 /** Read the stored text for (nodeId, locale): messages value, or for the
@@ -818,4 +916,71 @@ export function adoptTranslationsForComponent(opts: {
     componentFilePath, fromNs, toNs, keys: keys.length, moved,
   });
   return ensureTranslationsScaffoldInCode(componentCode, toNs);
+}
+
+// ─── Per-Locale SEO Overrides ───────────────────────────────────────────────
+
+/**
+ * Read optional SEO field overrides for a page in a specific locale.
+ * SEO overrides live under `messages/{locale}.json` -> `[namespace]._seo`.
+ */
+export function readSeoOverrides(
+  filePath: string,
+  locale: string,
+): Record<string, unknown> | null {
+  const namespace = filePathToSlug(filePath);
+  const msgPath = `messages/${locale}.json`;
+  const raw = projectFS.readFile(msgPath);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const seo = parsed?.[namespace]?._seo;
+    if (seo && typeof seo === 'object' && !Array.isArray(seo)) {
+      return seo;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Write or clear SEO field overrides for a page in a specific locale.
+ * If `overrides` is null or empty, deletes `_seo` from that namespace.
+ */
+export function writeSeoOverrides(
+  filePath: string,
+  locale: string,
+  overrides: Record<string, unknown> | null,
+): void {
+  const namespace = filePathToSlug(filePath);
+  const msgPath = `messages/${locale}.json`;
+  let parsed: Record<string, any> = {};
+  const raw = projectFS.readFile(msgPath);
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') parsed = {};
+
+  if (!overrides || Object.keys(overrides).length === 0) {
+    if (parsed[namespace] && typeof parsed[namespace] === 'object') {
+      delete parsed[namespace]._seo;
+      if (Object.keys(parsed[namespace]).length === 0) {
+        delete parsed[namespace];
+      }
+    }
+  } else {
+    if (!parsed[namespace] || typeof parsed[namespace] !== 'object') {
+      parsed[namespace] = {};
+    }
+    parsed[namespace]._seo = overrides;
+  }
+
+  projectFS.writeFile(msgPath, JSON.stringify(parsed, null, 2));
+  pushHistory(`Update SEO overrides for ${locale}`);
+  trace.action('translation-ops:write-seo-overrides', { filePath, namespace, locale, overrides });
 }

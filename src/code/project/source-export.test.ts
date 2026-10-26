@@ -84,6 +84,27 @@ export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
     expect(out.files['README.md']).toMatch(/^# Halden Studio\n/);
   });
 
+  it('exports localized multi-locale project into app/[lang] tree with proxy.ts', async () => {
+    const out = await buildSourceExport({
+      'i18n/config.json': JSON.stringify({
+        defaultLocale: 'uk',
+        locales: [{ code: 'uk', label: 'Ukrainian' }, { code: 'en', label: 'English' }],
+      }),
+      'app/layout.tsx': `import './globals.css';\nimport { Providers } from './providers';\nexport default function RootLayout({ children }: any) { return <html><body><Providers>{children}</Providers></body></html>; }`,
+      'app/globals.css': 'body { margin: 0; }',
+      'app/providers.tsx': 'export function Providers({ children }: any) { return children; }',
+      'app/page.client.tsx': PAGE,
+      'app/page.tsx': 'export default function Page() { return null; }',
+    }, { name: 'Localized Site', runtimeRange: '^1', now: NOW });
+
+    expect(out.files['app/[lang]/page.tsx']).toBeDefined();
+    expect(out.files['app/[lang]/page.client.tsx']).toBeDefined();
+    expect(out.files['app/[lang]/layout.tsx']).toBeDefined();
+    expect(out.files['app/layout.tsx']).toBeUndefined();
+    expect(out.files['proxy.ts']).toBeDefined();
+    expect(out.files['lib/revyme-locale-routing.ts']).toBeDefined();
+  });
+
   it('keeps the project\'s own config files; README is always added', async () => {
     const out = await buildSourceExport({
       'app/page.client.tsx': PAGE,

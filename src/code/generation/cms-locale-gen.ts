@@ -100,6 +100,26 @@ export function localizeCollectionListsInCode(code: string): string {
       + out.slice(head.slugEnd);
     wrapped.push(head.slug);
   }
+
+  // Check for CMS detail item declaration that hasn't been localized yet
+  for (const cmsName of cmsNames) {
+    if (out.includes('localizeRows([rawItem]') || out.includes('localizeRows([rawItem], __activeLocale)')) {
+      continue;
+    }
+    const itemRe = new RegExp(`const\\s+item\\s*=\\s*(serverItem\\s*\\?\\?\\s*)?\\(?${cmsName}\\.find\\([\\s\\S]*?\\)(?:\\s*\\?\\?\\s*${cmsName}\\[0\\])?\\)?;`);
+    const match = itemRe.exec(out);
+    if (match) {
+      if (!out.includes('item: serverItem') && out.includes('export default function Page(')) {
+        out = out.replace(/export default function Page\([^)]*\)\s*\{/, 'export default function Page({ item: serverItem }: { item?: any } = {}) {');
+      }
+      const rhs = match[0].replace(/^const\s+item\s*=\s*/, '').replace(/;$/, '');
+      const cleanRhs = rhs.startsWith('serverItem') ? rhs : `serverItem ?? (${rhs})`;
+      const replacement = `const rawItem = ${cleanRhs};\n  const item = rawItem ? (localizeRows([rawItem], __activeLocale)[0] || rawItem) : undefined;`;
+      out = out.replace(match[0], replacement);
+      wrapped.push(cmsName);
+    }
+  }
+
   if (wrapped.length === 0) return code;
 
   out = ensureLocalizeRowsImport(out);

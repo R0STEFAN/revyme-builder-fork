@@ -18,7 +18,20 @@ import type { OracleViolation } from './shared';
 /** Same slug derivation as active-file-store's filePathToSlug for app/ pages —
  *  duplicated MINIMALLY here so the oracle stays dependency-light. */
 export function pageSlugForPath(path: string): string | null {
-  if (!path.startsWith('app/')) return null;
+  if (!path.startsWith('app/')) {
+    if (path.startsWith('components/')) {
+      return 'component:' + path.replace(/^components\//, '').replace(/\.tsx$/, '');
+    }
+    return null;
+  }
+  const templateMatch = path.match(/^app\/\(([^)]+)\)\/(?:LayoutClient|layout)\.tsx$/);
+  if (templateMatch) {
+    return 'template:' + templateMatch[1].replace(/\./g, '__dot__');
+  }
+  const bareTemplate = path.match(/^app\/(?:LayoutClient|layout)\.tsx$/);
+  if (bareTemplate) {
+    return 'template:default';
+  }
   const stripped = path.replace(/^app\//, '').replace(/\([^)]+\)\//, '');
   if (stripped === 'page.tsx' || stripped === 'page.client.tsx') return 'home';
   return stripped.replace(/\/page\.client\.tsx$/, '').replace(/\/page\.tsx$/, '');

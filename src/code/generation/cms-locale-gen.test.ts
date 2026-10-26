@@ -104,6 +104,30 @@ export default function Page() {
 }`;
     expect(localizeCollectionListsInCode(none)).toBe(none);
   });
+
+  it('localizes a CMS detail page by wrapping item in rawItem and localizeRows', () => {
+    const detail = `'use client';
+import React from 'react';
+import { useParams } from 'next/navigation';
+import programme from '@/cms/programme.json';
+
+export default function Page() {
+  const params = useParams();
+  const item = programme.find((i) => i._slug === params?.slug) ?? programme[0];
+  return <div data-id="root">{item.title}</div>;
+}
+`;
+    const out = localizeCollectionListsInCode(detail);
+    expect(out).toContain("import { localizeRows } from '@revyme/runtime'");
+    expect(out).toContain("import { useLocale } from 'next-intl'");
+    expect(out).toContain('const __activeLocale = useLocale();');
+    expect(out).toContain('export default function Page({ item: serverItem }: { item?: any } = {}) {');
+    expect(out).toContain('const rawItem = serverItem ?? (programme.find((i) => i._slug === params?.slug) ?? programme[0]);');
+    expect(out).toContain('const item = rawItem ? (localizeRows([rawItem], __activeLocale)[0] || rawItem) : undefined;');
+
+    // Idempotent
+    expect(localizeCollectionListsInCode(out)).toBe(out);
+  });
 });
 
 // ─── The hook must land INSIDE the component ────────────────────────────────

@@ -1,7 +1,7 @@
 // translation-ops.test.ts — per-locale text/attr commits + the legacy
 // override migration (localization overhaul Phases 2/3/5).
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/shared/debug-trace', () => ({
   trace: { action: vi.fn(), fn: vi.fn(), dom: vi.fn(), error: vi.fn() },
@@ -34,7 +34,10 @@ import {
   commitTranslationAttr,
   readTranslationText,
   migrateLegacyLocaleTextOverrides,
+  migrateLegacyTemplateTranslations,
   listTranslatableTexts,
+  readSeoOverrides,
+  writeSeoOverrides,
 } from './translation-ops';
 
 const PAGE = `'use client';
@@ -409,5 +412,158 @@ describe('rich text — the default owns the run styles', () => {
     // Default restyle (canvas edit): the fr span follows.
     commitTranslationText({ filePath: FILE, nodeId: 'greet', locale: 'en', defaultLocale: 'en', text: '<strong>hello</strong> my <span style="color: rgb(4, 79, 253); font-size: 58px">friend</span>', rich: true });
     expect(readTranslationText({ filePath: FILE, key: 'greet', locale: 'fr' })).toBe('<strong>bonjour</strong> mon <span style="color: rgb(4, 79, 253); font-size: 58px">ami</span>');
+  });
+});
+
+describe('template text localization and namespaces', () => {
+  const TEMPLATE_BODY = 'app/(Body)/LayoutClient.tsx';
+  const TEMPLATE_BODY_CODE = `'use client';
+import React from 'react';
+
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  return (
+    <div data-id="root">
+      <header data-id="header">
+        <h1 data-id="site-title">Revyme Studio</h1>
+      </header>
+      {children}
+    </div>
+  );
+}
+`;
+
+  beforeEach(() => {
+    fsStore.clear();
+    fsStore.set(TEMPLATE_BODY, TEMPLATE_BODY_CODE);
+    fsStore.set('i18n/config.json', JSON.stringify({ defaultLocale: 'en', locales: [{ code: 'en' }, { code: 'uk' }] }));
+  });
+
+  it('lists template direct text in listTranslatableTexts with kind: template', () => {
+    const texts = listTranslatableTexts('en');
+    const titleText = texts.find((t) => t.filePath === TEMPLATE_BODY && t.nodeId === 'site-title');
+    expect(titleText).toBeDefined();
+    expect(titleText?.kind).toBe('template');
+    expect(titleText?.source).toBe('Revyme Studio');
+  });
+
+  it('commits translation under template:Body namespace without TRANSLATION_NAMESPACE_MISMATCH', () => {
+    commitTranslationText({
+      filePath: TEMPLATE_BODY,
+      nodeId: 'site-title',
+      locale: 'uk',
+      defaultLocale: 'en',
+      text: 'Студія Ревіме',
+    });
+
+    const transformed = fsStore.get(TEMPLATE_BODY)!;
+    expect(transformed).toContain('useTranslations("template:Body")');
+    expect(transformed).toContain('{t("site-title")}');
+
+    const ukJson = JSON.parse(fsStore.get('messages/uk.json') ?? '{}');
+    expect(ukJson['template:Body']?.['site-title']).toBe('Студія Ревіме');
+
+    const readBack = readTranslationText({ filePath: TEMPLATE_BODY, key: 'site-title', locale: 'uk' });
+    expect(readBack).toBe('Студія Ревіме');
+  });
+
+  it('migrates unambiguous legacy LayoutClient.tsx keys to template:Body', () => {
+    fsStore.set('messages/uk.json', JSON.stringify({
+      'LayoutClient.tsx': {
+        'site-title': 'Студія Ревіме',
+      },
+    }));
+
+    const result = migrateLegacyTemplateTranslations({ locales: [{ code: 'uk' }] });
+    expect(result.migrated).toBe(1);
+    expect(result.conflicts).toHaveLength(0);
+
+    const ukJson = JSON.parse(fsStore.get('messages/uk.json') ?? '{}');
+    expect(ukJson['template:Body']?.['site-title']).toBe('Студія Ревіме');
+    expect(ukJson['LayoutClient.tsx']).toBeUndefined();
+  });
+
+  it('reports conflicts when two templates share identical node IDs', () => {
+    const TEMPLATE_MARKETING = 'app/(Marketing)/LayoutClient.tsx';
+    fsStore.set(TEMPLATE_MARKETING, TEMPLATE_BODY_CODE); // same site-title ID
+
+    fsStore.set('messages/uk.json', JSON.stringify({
+      'LayoutClient.tsx': {
+        'site-title': 'Студія Ревіме',
+      },
+    }));
+
+    const result = migrateLegacyTemplateTranslations({ locales: [{ code: 'uk' }] });
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0].key).toBe('site-title');
+    expect(result.conflicts[0].templates).toContain(TEMPLATE_BODY);
+    expect(result.conflicts[0].templates).toContain(TEMPLATE_MARKETING);
+    expect(result.migrated).toBe(0);
+
+    // Legacy entry preserved because ambiguous
+    const ukJson = JSON.parse(fsStore.get('messages/uk.json') ?? '{}');
+    expect(ukJson['LayoutClient.tsx']?.['site-title']).toBe('Студія Ревіме');
+  });
+});
+
+describe('per-locale SEO overrides', () => {
+  const PAGE_PATH = 'app/gallery/page.client.tsx';
+
+  beforeEach(() => {
+    fsStore.set('messages/en.json', JSON.stringify({
+      gallery: {
+        'title-1': 'Work Gallery',
+        _seo: {
+          title: 'Art Gallery',
+          description: 'Contemporary art exhibitions',
+        },
+      },
+    }));
+  });
+
+  it('reads SEO overrides under [namespace]._seo', () => {
+    const seo = readSeoOverrides(PAGE_PATH, 'en');
+    expect(seo).toEqual({
+      title: 'Art Gallery',
+      description: 'Contemporary art exhibitions',
+    });
+  });
+
+  it('returns null when no overrides exist', () => {
+    expect(readSeoOverrides(PAGE_PATH, 'uk')).toBeNull();
+    expect(readSeoOverrides('app/about/page.client.tsx', 'en')).toBeNull();
+  });
+
+  it('writes and updates SEO overrides preserving other keys', () => {
+    writeSeoOverrides(PAGE_PATH, 'en', {
+      title: 'Updated Gallery Title',
+      description: 'New description',
+      ogTitle: 'Social Gallery',
+    });
+
+    const parsed = JSON.parse(fsStore.get('messages/en.json') ?? '{}');
+    expect(parsed.gallery['title-1']).toBe('Work Gallery');
+    expect(parsed.gallery._seo).toEqual({
+      title: 'Updated Gallery Title',
+      description: 'New description',
+      ogTitle: 'Social Gallery',
+    });
+  });
+
+  it('clears _seo when empty overrides are passed', () => {
+    writeSeoOverrides(PAGE_PATH, 'en', null);
+    const parsed = JSON.parse(fsStore.get('messages/en.json') ?? '{}');
+    expect(parsed.gallery._seo).toBeUndefined();
+    expect(parsed.gallery['title-1']).toBe('Work Gallery');
+  });
+
+  it('preserves _seo across legacy template migrations', () => {
+    fsStore.set('messages/uk.json', JSON.stringify({
+      'LayoutClient.tsx': {
+        _seo: { title: 'Template SEO' },
+      },
+    }));
+    migrateLegacyTemplateTranslations({ locales: [{ code: 'uk' }] });
+    const ukJson = JSON.parse(fsStore.get('messages/uk.json') ?? '{}');
+    expect(ukJson['LayoutClient.tsx']?._seo).toEqual({ title: 'Template SEO' });
   });
 });
