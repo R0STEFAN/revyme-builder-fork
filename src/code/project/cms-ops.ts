@@ -60,10 +60,29 @@ export function generateItemId(): string {
   return id;
 }
 
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ye', ж: 'zh',
+  з: 'z', и: 'y', і: 'i', ї: 'yi', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n',
+  о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts',
+  ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'yu', я: 'ya',
+  ъ: '', ы: 'y', э: 'e', ё: 'yo', ў: 'u',
+};
+
+/** Transliterate Cyrillic characters to Latin equivalents (Ukrainian & standard Cyrillic). */
+export function transliterateCyrillic(text: string): string {
+  return text.replace(/[\u0400-\u04FF]/gi, (char) => {
+    const lower = char.toLowerCase();
+    const mapped = CYRILLIC_TO_LATIN[lower];
+    if (mapped === undefined) return char;
+    return char === char.toUpperCase() && mapped.length > 0
+      ? mapped.charAt(0).toUpperCase() + mapped.slice(1)
+      : mapped;
+  });
+}
+
 /** Convert text to a URL-safe slug. */
 export function slugify(text: string): string {
-  const slug = text
-    .toString()
+  const slug = transliterateCyrillic(text.toString())
     .normalize('NFD')                   // decompose unicode
     .replace(/[\u0300-\u036f]/g, '')    // strip diacritics
     .toLowerCase()

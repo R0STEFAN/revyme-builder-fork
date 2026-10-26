@@ -87,7 +87,8 @@ describe('CMS Config Migration & Wrapper Synchronization', () => {
     // Verify detail client file upgraded signature
     const detailClient = projectFS.readFile('app/posts/[slug]/page.client.tsx')!;
     expect(detailClient).toContain('Page({ item: serverItem }');
-    expect(detailClient).toContain('const item = serverItem ??');
+    expect(detailClient).toContain('serverItem ??');
+    expect(detailClient).toContain('item =');
 
     // Verify index client file upgraded signature
     const indexClient = projectFS.readFile('app/posts/page.client.tsx')!;

@@ -873,6 +873,13 @@ describe('slugify', () => {
     expect(slugify('Cafe Résumé')).toBe('cafe-resume');
   });
 
+  test('transliterates Cyrillic and Ukrainian titles to clean latin slugs', () => {
+    expect(slugify('Технології')).toBe('tekhnolohiyi');
+    expect(slugify('Дизайн')).toBe('dyzain');
+    expect(slugify('Стиль життя')).toBe('styl-zhyttya');
+    expect(slugify('Штучний Інтелект та Майбутнє')).toBe('shtuchnyi-intelekt-ta-maibutnye');
+  });
+
   test('collapses multiple spaces/hyphens', () => {
     expect(slugify('hello   world---test')).toBe('hello-world-test');
   });

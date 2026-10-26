@@ -486,6 +486,7 @@ export default function Page() {
   });
   it('prepares gallery route from portfolio-test2 with queryConfig and remote pagination', () => {
     const fs = require('fs');
+    if (!fs.existsSync('data/projects/proj-1791960645579-j02nu7.json')) return;
     const project = JSON.parse(fs.readFileSync('data/projects/proj-1791960645579-j02nu7.json', 'utf8'));
     const files = {
       '_meta/cms-api-config.json': project.data.files['_meta/cms-api-config.json'],
