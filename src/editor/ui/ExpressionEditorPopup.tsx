@@ -6,6 +6,7 @@ import { useAtomValue } from 'jotai';
 import Modal from '@/design-system/Modal';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
 import { collectionDataAtom, collectionSchemasAtom } from '@/code/stores/cms-store';
+import { listCollections, getCollectionSchema, getCollectionData } from '@/code/project/cms-ops';
 import type { FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 
@@ -46,6 +47,18 @@ export default function ExpressionEditorPopup({
     }
   }, [isOpen, initialExpression]);
 
+  const safeSchemas = useMemo(() => {
+    const map = new Map(collectionSchemas instanceof Map ? collectionSchemas : []);
+    if (map.size === 0) {
+      const slugs = listCollections();
+      for (const slug of slugs) {
+        const s = getCollectionSchema(slug);
+        if (s) map.set(slug, s);
+      }
+    }
+    return map;
+  }, [collectionSchemas]);
+
   // Extract route parameters from active file path (e.g. `app/gallery/[category]/[place]/page.client.tsx` -> `['category', 'place']`)
   const routeParams = useMemo(() => {
     if (!effectiveFilePath) return [];
@@ -80,7 +93,7 @@ export default function ExpressionEditorPopup({
     // 1. Mock params
     const mockParams: Record<string, string> = {};
     for (const p of routeParams) {
-      mockParams[p] = p === 'category' ? 'men' : p === 'place' || p === 'placement' ? 'chest' : p;
+      mockParams[p] = p === 'category' ? 'tech' : p === 'place' || p === 'placement' ? 'chest' : p;
     }
     ctx.params = mockParams;
 
@@ -91,17 +104,27 @@ export default function ExpressionEditorPopup({
       const varName = slug.replace(/[^a-zA-Z0-9]/g, '');
       if (varName) ctx[varName] = items;
     }
+    for (const [slug] of safeSchemas.entries()) {
+      if (!ctx[slug]) {
+        const items = getCollectionData(slug);
+        if (items.length > 0) {
+          ctx[slug] = items;
+          const varName = slug.replace(/[^a-zA-Z0-9]/g, '');
+          if (varName) ctx[varName] = items;
+        }
+      }
+    }
 
     // 3. Mock item inside collection loop
     if (collectionSlug) {
-      const items = safeData.get(collectionSlug) || [];
-      ctx[itemVar] = items[0] || { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
+      const items = ctx[collectionSlug] || safeData.get(collectionSlug) || getCollectionData(collectionSlug) || [];
+      ctx[itemVar] = items[0] || { name: 'Sample Item', slug: 'sample-item', title: 'Sample Item', _slug: 'sample-item', image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200' };
     } else {
-      ctx[itemVar] = { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
+      ctx[itemVar] = { name: 'Sample Item', slug: 'sample-item', title: 'Sample Item', _slug: 'sample-item', image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200' };
     }
 
     return ctx;
-  }, [routeParams, collectionData, collectionSlug, itemVar]);
+  }, [routeParams, collectionData, collectionSlug, itemVar, safeSchemas]);
 
   // Evaluate expression preview in real-time
   const evaluation = useMemo(() => {
@@ -185,13 +208,16 @@ export default function ExpressionEditorPopup({
 
           {/* Current Loop Item Fields */}
           {(() => {
-            const safeSchemas = collectionSchemas instanceof Map ? collectionSchemas : new Map();
             const hasFields = fields.length > 0 || (collectionSlug ? (safeSchemas.get(collectionSlug)?.fields?.length ?? 0) > 0 : false);
             if (!hasFields) return null;
             const rowFields: FieldDefinition[] = fields.length > 0 ? fields : ((safeSchemas.get(collectionSlug!)?.fields as FieldDefinition[] | undefined) || []);
+            const currentSchema = collectionSlug ? safeSchemas.get(collectionSlug) : null;
+            const currentLabel = currentSchema?.name || (collectionSlug ? collectionSlug : null);
             return (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-[var(--text-disabled)] font-medium">This Row ({itemVar}):</span>
+                <span className="text-[10px] text-[var(--text-disabled)] font-medium">
+                  {currentLabel ? `${currentLabel} (${itemVar}):` : `This Row (${itemVar}):`}
+                </span>
                 {rowFields.map((f: FieldDefinition) => (
                   <button
                     key={f.id}
@@ -207,10 +233,8 @@ export default function ExpressionEditorPopup({
             );
           })()}
 
-          {/* CMS Collections */}
-          {Array.from((collectionSchemas instanceof Map ? collectionSchemas : new Map()).entries())
-            .filter(([colSlug]) => colSlug !== collectionSlug)
-            .map(([colSlug, schema]) => (
+          {/* CMS Collections (all available collections in the project) */}
+          {Array.from(safeSchemas.entries()).map(([colSlug, schema]) => (
             <div key={colSlug} className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] text-[var(--text-disabled)] font-medium">{schema.name || colSlug}:</span>
               {schema.fields?.map((f: FieldDefinition) => (

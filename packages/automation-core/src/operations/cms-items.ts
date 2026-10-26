@@ -127,7 +127,12 @@ export const cmsItemsUpdateOperation: Operation<
   inputSchema: z.object({
     collection: z.string().min(1),
     itemId: z.string().min(1),
-    updates: z.record(z.string(), z.unknown()),
+    updates: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return val; }
+      }
+      return val;
+    }, z.record(z.string(), z.unknown())),
   }),
   async execute(snapshot, input) {
     updateCollectionItem(input.collection, input.itemId, input.updates);

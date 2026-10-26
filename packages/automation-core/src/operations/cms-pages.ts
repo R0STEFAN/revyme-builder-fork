@@ -129,8 +129,18 @@ export const cmsPagesSeoOperation: Operation<
   ownerTask: 'T16',
   inputSchema: z.object({
     targetFile: z.string().min(1),
-    bindings: z.record(z.string(), z.string()),
-    defaults: z.record(z.string(), z.any()).optional(),
+    bindings: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return val; }
+      }
+      return val;
+    }, z.record(z.string(), z.string())),
+    defaults: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return val; }
+      }
+      return val;
+    }, z.record(z.string(), z.any())).optional(),
   }),
   async execute(snapshot, input) {
     const serverPath = input.targetFile.endsWith('.client.tsx')
