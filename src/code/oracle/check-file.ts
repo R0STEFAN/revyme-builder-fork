@@ -51,6 +51,7 @@ import { checkCmsLocaleFilter, checkCmsI18nDirectAccess, checkCmsMapResolves, ch
 import { checkResolutionFidelity } from './checks/fidelity';
 import { checkStyleSurface, checkTextStyleOnFrame, checkElementSurface, checkLoopCarrier, checkPageExports, checkExpressionDataAttrs } from './checks/surface-dialect';
 import { checkConditionalRenderDialect, checkHandWrittenMediaQuery, checkUnreadableHandlers, checkPageHooks, checkHandlerBodies } from './checks/conditional-render-dialect';
+import { checkCodeComponentRootStyle } from './checks/code-component-style';
 
 // Re-exports — the oracle's public surface stays on check-file.ts (external
 // importers and the test suites are unchanged by the split).
@@ -1207,32 +1208,13 @@ export function checkFile(
     });
   }
 
-  // ── CODE COMPONENT ROOT STYLE SPREAD ORDER — ...props.style LAST, so the instance's
-  //    page placement (position/size) overrides the code component's defaults. Spread-
-  //    first renders fine on the EDITOR canvas (expandComponent merges instance
-  //    styles over the root at parse time) but the PUBLISHED site runs the raw
-  //    React, where the code component's own values win — live find 2026-06-10: an
-  //    absolute background code component published in-flow and shoved the hero content
-  //    down. Canvas/publish divergence; the old component-chat canon already
-  //    said "at the END".
-  if (kind === 'code-component') {
-    traverse(ast, {
-      JSXAttribute(path: NodePath<t.JSXAttribute>) {
-        if (!t.isJSXIdentifier(path.node.name, { name: 'style' })) return;
-        const val = path.node.value;
-        if (!t.isJSXExpressionContainer(val) || !t.isObjectExpression(val.expression)) return;
-        const entries = val.expression.properties;
-        const spreadIdx = entries.findIndex((p) =>
-          t.isSpreadElement(p) && t.isMemberExpression(p.argument)
-          && t.isIdentifier(p.argument.property, { name: 'style' }));
-        if (spreadIdx !== -1 && spreadIdx !== entries.length - 1) {
-          v.push({
-            code: 'CODE_COMPONENT_STYLE_SPREAD_ORDER', tier: 2, line: entries[spreadIdx].loc?.start.line,
-            message: `...props.style must be the LAST entry of the style object (line ${entries[spreadIdx].loc?.start.line}) — the instance's page placement (position/width/height) must override the code component's defaults. Spread-first looks right on the canvas but the PUBLISHED site renders the code component's own values and the layout diverges. Move the spread to the end: style={{ <defaults>, ...props.style }}.`,
-          });
-        }
-      },
-    });
+  // ── CODE COMPONENT ROOT STYLE & SPREAD ORDER ───────────────────────────────
+  // A code component in components/*.tsx must accept `style` or `...props` and
+  // apply it to its outermost element. Furthermore, `...props.style` (or `...style`)
+  // must be the LAST entry of the style object so the instance's page placement
+  // (position/size/order) overrides the component defaults.
+  if (isCodeComponent) {
+    checkCodeComponentRootStyle(ast, code, v);
   }
 
   // ── TEMPLATE SLOT (LayoutClient.tsx) — exactly one plain {children} must
