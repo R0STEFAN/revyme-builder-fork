@@ -13,6 +13,7 @@ import { projectFS } from '@/code/project/project-fs';
 import { activeFilePathAtom, isComponentFilePath, filePathToSlug } from '@/code/project/active-file-store';
 import { getProjectId } from '@/backend/project-id';
 import { ensureLayoutFile } from '@/code/generation/metadata-gen';
+import { prepareLocalizedSiteFiles } from '@/code/project/localized-site-export';
 import { trace } from '@/shared/debug-trace';
 import ComponentLivePreview from './ComponentLivePreview';
 import { templateGroupFromLayoutFile, templatePreviewRoute, templatePreviewPages } from './template-preview';
@@ -93,56 +94,85 @@ const PREVIEW_HOST = import.meta.env.VITE_PREVIEW_HOST || 'http://localhost:5173
  * Values are the processed source code (imports already handled by mutation-queue syncImports).
  * Source code uses real @media queries — no transforms needed for preview/production.
  */
-function buildFiles(sessionId: string): Record<string, string> {
+export function buildFiles(sessionId: string, fsInput?: Record<string, string>): Record<string, string> {
   const files: Record<string, string> = {};
-  const allFiles = projectFS.listFiles();
+  const allFiles = fsInput ? Object.keys(fsInput) : projectFS.listFiles();
 
   for (const filePath of allFiles) {
-    const content = projectFS.readFile(filePath);
+    const content = fsInput ? fsInput[filePath] : projectFS.readFile(filePath);
     if (content == null) continue;
 
     if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx') || filePath.endsWith('.ts') || filePath.endsWith('.js')) {
-      let processed = content;
-      // Strip @canvas comment block (builder-only metadata, not real code)
-      processed = stripCanvasConfig(processed);
-      // Rewrite internal page hrefs to include session prefix for preview server.
-      // Match both string literals AND paths in data arrays
-      processed = processed
-        // href="/path" → href="/{sessionId}/path"
-        .replace(/href="\/([^"]*?)"/g, (_, path) => `href="/${sessionId}${path ? '/' + path : ''}"`)
-        .replace(/href='\/([^']*?)'/g, (_, path) => `href='/${sessionId}${path ? '/' + path : ''}'`)
-        // path: "/something" in data arrays → path: "/{sessionId}/something"
-        .replace(/path:\s*"\/([^"]*?)"/g, (_, path) => `path: "/${sessionId}${path ? '/' + path : ''}"`)
-        .replace(/path:\s*'\/([^']*?)'/g, (_, path) => `path: '/${sessionId}${path ? '/' + path : ''}'`)
-        // href: "/something" in data arrays
-        .replace(/href:\s*"\/([^"]*?)"/g, (_, path) => `href: "/${sessionId}${path ? '/' + path : ''}"`)
-        .replace(/href:\s*'\/([^']*?)'/g, (_, path) => `href: '/${sessionId}${path ? '/' + path : ''}'`)
-        // url: "/something" in data arrays
-        .replace(/url:\s*"\/([^"]*?)"/g, (_, path) => `url: "/${sessionId}${path ? '/' + path : ''}"`)
-        .replace(/url:\s*'\/([^']*?)'/g, (_, path) => `url: '/${sessionId}${path ? '/' + path : ''}'`);
-      files[filePath] = processed;
+      files[filePath] = stripCanvasConfig(content);
     } else if (filePath.endsWith('.css') || filePath.endsWith('.json')) {
       files[filePath] = content;
     }
   }
 
-  // Build the root server layout if missing. The bare `app/LayoutClient.tsx`
-  // is no longer auto-created — pages without a Template render against
-  // `app/layout.tsx`'s `{children}` directly; pages with a Template
-  // resolve their LayoutClient via the route-group folder.
-  if (!files['app/layout.tsx']) {
+  // Apply root healing only before compilation or when both root paths are absent
+  if (!files['app/layout.tsx'] && !files['app/[lang]/layout.tsx']) {
     files['app/layout.tsx'] = ensureLayoutFile();
   }
 
+  // Compile localized route tree before mounting under session prefix
+  const prepared = prepareLocalizedSiteFiles(files);
+
   // Inject a placeholder page per template (route-group LayoutClient) so every
-  // template is previewable around a page-content placeholder. Unconditional so
-  // any template is reachable without re-syncing when switching between them.
-  for (const { file, content } of templatePreviewPages(Object.keys(files))) {
-    files[file] = content;
+  // template is previewable around a page-content placeholder.
+  for (const { file, content } of templatePreviewPages(Object.keys(prepared))) {
+    prepared[file] = content;
   }
 
-  trace.fn('server-preview:buildFiles', { fileCount: Object.keys(files).length, files: Object.keys(files) });
-  return files;
+  // Rewrite internal page hrefs to include session prefix for preview server without double-prefixing.
+  const output: Record<string, string> = {};
+  for (const [filePath, content] of Object.entries(prepared)) {
+    if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx') || filePath.endsWith('.ts') || filePath.endsWith('.js')) {
+      let processed = content;
+      processed = processed
+        // href="/path" → href="/{sessionId}/path"
+        .replace(/href="\/([^"]*?)"/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `href="/${sessionId}${path ? '/' + path : ''}"`;
+        })
+        .replace(/href='\/([^']*?)'/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `href='/${sessionId}${path ? '/' + path : ''}'`;
+        })
+        // path: "/something" in data arrays → path: "/{sessionId}/something"
+        .replace(/path:\s*"\/([^"]*?)"/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `path: "/${sessionId}${path ? '/' + path : ''}"`;
+        })
+        .replace(/path:\s*'\/([^']*?)'/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `path: '/${sessionId}${path ? '/' + path : ''}'`;
+        })
+        // href: "/something" in data arrays
+        .replace(/href:\s*"\/([^"]*?)"/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `href: "/${sessionId}${path ? '/' + path : ''}"`;
+        })
+        .replace(/href:\s*'\/([^']*?)'/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `href: '/${sessionId}${path ? '/' + path : ''}'`;
+        })
+        // url: "/something" in data arrays
+        .replace(/url:\s*"\/([^"]*?)"/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `url: "/${sessionId}${path ? '/' + path : ''}"`;
+        })
+        .replace(/url:\s*'\/([^']*?)'/g, (match, path) => {
+          if (path.startsWith(sessionId + '/') || path === sessionId) return match;
+          return `url: '/${sessionId}${path ? '/' + path : ''}'`;
+        });
+      output[filePath] = processed;
+    } else {
+      output[filePath] = content;
+    }
+  }
+
+  trace.fn('server-preview:buildFiles', { fileCount: Object.keys(output).length, files: Object.keys(output) });
+  return output;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -192,8 +222,9 @@ export default function ServerPreview() {
     files['app/globals.css'] = `*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }\nbody { min-height: 100vh; }\nimg { display: block; max-width: 100%; }\na { text-decoration: inherit; color: inherit; }\n${tokensCss}`;
 
     // Ensure layout imports globals.css
-    if (files['app/layout.tsx'] && !files['app/layout.tsx'].includes('globals.css')) {
-      files['app/layout.tsx'] = `import './globals.css';\n` + files['app/layout.tsx'];
+    const layoutPath = files['app/[lang]/layout.tsx'] ? 'app/[lang]/layout.tsx' : 'app/layout.tsx';
+    if (files[layoutPath] && !files[layoutPath].includes('globals.css')) {
+      files[layoutPath] = `import './globals.css';\n` + files[layoutPath];
     }
 
     trace.action('server-preview:sending-files', { files: Object.keys(files) });

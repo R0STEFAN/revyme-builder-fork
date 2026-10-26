@@ -63,8 +63,9 @@ export { evaluateParamExpression, evaluateQueryParamExpressions };
 export function resolveApiEndpointWithParams(
   apiConfig: ApiCollectionConfig,
   resolvedParams: Record<string, string>,
+  routeParams?: Record<string, string>,
 ): string {
-  return buildApiRequestUrl(apiConfig, resolvedParams);
+  return buildApiRequestUrl(apiConfig, resolvedParams, routeParams);
 }
 
 export interface UseRendererSyncOptions {
@@ -200,10 +201,11 @@ export function useRendererSync(
 
     for (const { id: nodeId, source, queryConfig } of targetNodes) {
       const apiConfig = getApiCollection(source)!;
+      const effectiveRouteParams = { ...activeRouteParams, lang: activeLocale };
       const resolvedParams = queryConfig
-        ? evaluateQueryParamExpressions(queryConfig, activeRouteParams)
+        ? evaluateQueryParamExpressions(queryConfig, effectiveRouteParams)
         : {};
-      const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams);
+      const fullUrl = buildApiRequestUrl(apiConfig, resolvedParams, effectiveRouteParams);
       const requestKey = `${fullUrl}|${apiConfig.method || 'GET'}`;
 
       // Avoid refetching if same node already has data for this exact request
@@ -263,7 +265,7 @@ export function useRendererSync(
       }
       activeControllersRef.current.clear();
     };
-  }, [nodes, activeRouteParams, activeFilePath]);
+  }, [nodes, activeRouteParams, activeLocale, activeFilePath]);
 
 
   const setSelectedIds = useSetAtom(selectedIdsAtom);
