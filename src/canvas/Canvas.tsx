@@ -1299,14 +1299,16 @@ export default function Canvas() {
         // A right-click on a VIEWPORT HEADER opens the same menu, but none
         // of the node operations apply to a viewport — the flag disables
         // them (see context-menu-store).
-        const onViewportHeader =
-          (e.target as HTMLElement).closest?.('[data-viewport-header]') != null;
+        const headerEl = (e.target as HTMLElement).closest?.('[data-viewport-header]');
+        const onViewportHeader = headerEl != null;
+        const vpHeaderId = headerEl?.getAttribute('data-viewport-header') || null;
         setContextMenu({
           show: true,
           x: e.clientX,
           y: e.clientY,
           nodeId: onViewportHeader ? null : selectedId,
           viewportHeader: onViewportHeader,
+          viewportId: vpHeaderId ?? undefined,
         });
       }}
       style={{

@@ -30,7 +30,8 @@ import { buildGroupSvgsOpts } from '@/canvas/svg-group-helper';
 import { setForceRender, syncQueueCode, flushNow, queueMutation } from '@/code/mutation/mutation-queue';
 import { activeFilePathAtom, componentBreadcrumbAtom, isComponentFilePath, isDesignComponentFile } from '@/code/project/active-file-store';
 import { codeEditorOpenAtom, codeEditorViewRequestAtom } from '@/code/stores/left-panel-store';
-import { viewportsConfigAtom, interactingViewportIdAtom, isReplicaViewportAtom, isComponentVariantViewportAtom } from '@/code/stores/viewport-store';
+import { viewportsConfigAtom, interactingViewportIdAtom, isReplicaViewportAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
+import { buildMcpReference, formatMcpReference, copyTextToClipboard } from './mcp-reference';
 import { enterComponentFile } from '@/canvas/component-navigation';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
 import { projectVersionAtom } from '@/code/project/project-fs';
@@ -222,6 +223,7 @@ export default function ContextMenu() {
   const getContentEl = useCallback(() => getContentRoot(), []);
 
   const viewports = useAtomValue(viewportsConfigAtom);
+  const activeVariant = useAtomValue(activeComponentVariantAtom);
   // "Make Component" must run on a PRIMARY element only — never a replica viewport (tablet/mobile on a page)
   // nor a non-default variant artboard (inside a design component). Both write to non-primary code paths that
   // can't host a brand-new component. True = the right-clicked artboard is NOT primary → disable the action.
@@ -586,6 +588,30 @@ export default function ContextMenu() {
   const handleCopy = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
     if (ids.length > 0) copyNodes(ids, getNodesSnapshot());
+    close();
+  };
+
+  const handleCopyToMCP = async () => {
+    const nodes = getNodesSnapshot();
+    const ref = buildMcpReference({
+      activeFilePath,
+      targetNodeId: nodeId,
+      selectedIds,
+      nodes,
+      viewportHeader: menu.viewportHeader,
+      viewportId: menu.viewportId,
+      activeVariant,
+      interactingViewportId: interactingVp,
+    });
+    const text = formatMcpReference(ref);
+    trace.action('context-menu:copy-to-mcp', { ref });
+    const ok = await copyTextToClipboard(text);
+    if (ok) {
+      const label = ref.nodeId ? `"${ref.nodeId}"` : (ref.count ? `${ref.count} nodes` : 'Element');
+      toast.success(`Copied to MCP: ${label}`);
+    } else {
+      toast.error('Failed to copy to clipboard');
+    }
     close();
   };
 
@@ -1030,6 +1056,7 @@ export default function ContextMenu() {
 
         <MenuItem label="Cut" shortcut="Ctrl+X" onClick={handleCut} disabled={!nodeId} />
         <MenuItem label="Copy" shortcut="Ctrl+C" onClick={handleCopy} disabled={!nodeId} />
+        <MenuItem label="Copy to MCP" onClick={handleCopyToMCP} />
         <MenuItem label="Paste" shortcut="Ctrl+V" onClick={handlePaste} disabled={!hasClipboard()} />
         <MenuItem label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} disabled={!nodeId} />
         <MenuItem label="Copy Styles" shortcut="Ctrl+Alt+C" onClick={handleCopyStyles} disabled={!nodeId} />

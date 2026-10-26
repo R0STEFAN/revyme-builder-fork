@@ -26,6 +26,7 @@ export interface ContextMenuState {
    *  resurrect the current selection via its `menu.nodeId || selectedId`
    *  fallback and happily offer to cut it. */
   viewportHeader?: boolean;
+  viewportId?: string | null;
 }
 
 export const contextMenuAtom = atom<ContextMenuState>({
