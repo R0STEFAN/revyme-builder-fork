@@ -339,6 +339,14 @@ export function getLayoutForPage(pagePath: string): string | null {
  */
 export function filePathToSlug(filePath: string): string {
   if (filePath.startsWith('app/')) {
+    const templateMatch = filePath.match(/^app\/\(([^)]+)\)\/(?:LayoutClient|layout)\.tsx$/);
+    if (templateMatch) {
+      return 'template:' + templateMatch[1].replace(/\./g, '__dot__');
+    }
+    const bareTemplate = filePath.match(/^app\/(?:LayoutClient|layout)\.tsx$/);
+    if (bareTemplate) {
+      return 'template:default';
+    }
     const stripped = filePath
       .replace(/^app\//, '')
       // Strip route group folder(s): (marketing)/about/page.client.tsx → about/page.client.tsx
@@ -387,6 +395,10 @@ export function filePathToAbPagePath(filePath: string): string {
  * would collide at build time).
  */
 export function slugToFilePath(slug: string): string {
+  if (slug.startsWith('template:')) {
+    const rawGroup = slug.replace('template:', '').replace(/__dot__/g, '.');
+    return rawGroup === 'default' ? 'app/LayoutClient.tsx' : `app/(${rawGroup})/LayoutClient.tsx`;
+  }
   if (slug.startsWith('component:')) {
     return 'components/' + slug.replace('component:', '') + '.tsx';
   }

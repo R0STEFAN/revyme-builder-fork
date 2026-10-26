@@ -531,9 +531,21 @@ export function createCmsDetailPageFile(
     ? `export default function Page({ item: serverItem }: { item?: any } = {}) {
   const params = useParams();
   const item = serverItem ?? (${varName}.find((i) => (i.slug || i._slug || String(i.id)) === params?.slug) ?? ${varName}[0]);`
-    : `export default function Page() {
+    : `export default function Page({ item: serverItem }: { item?: any } = {}) {
   const params = useParams();
-  const item = ${varName}.find((i) => i._slug === params?.slug) ?? ${varName}[0];`;
+  const __activeLocale = useLocale();
+  const rawItem = serverItem ?? (${varName}.find((i) => i._slug === params?.slug) ?? ${varName}[0]);
+  const item = rawItem ? (localizeRows([rawItem], __activeLocale)[0] || rawItem) : undefined;`;
+
+  const pageImports = apiConfig
+    ? `import React from 'react';
+import { useParams } from 'next/navigation';
+import ${varName} from '@/cms/${slug}.json';`
+    : `import React from 'react';
+import { useParams } from 'next/navigation';
+import { useLocale } from 'next-intl';
+import { localizeRows } from '@revyme/runtime';
+import ${varName} from '@/cms/${slug}.json';`;
 
   const code = `'use client';
 
@@ -544,9 +556,7 @@ ${CANVAS_CONFIG_BLOCK}
   "kind": "detail"
 } */
 
-import React from 'react';
-import { useParams } from 'next/navigation';
-import ${varName} from '@/cms/${slug}.json';
+${pageImports}
 
 ${pageExportSignature}
   return (
@@ -970,9 +980,12 @@ export function orchestrateServerFetchForQueries(
   if (apiQueries.length === 0) return serverCode;
   if (serverCode.includes('cmsDatasets[')) return serverCode;
 
-  const hasExpressions = apiQueries.some((q) =>
-    Array.isArray(q.queryConfig.params) && q.queryConfig.params.some((p) => p.isExpression),
-  );
+  const hasExpressions = apiQueries.some((q) => {
+    const conf = (apiConfigs && apiConfigs[q.source]) || getApiCollection(q.source);
+    const hasDefaultExprs = Array.isArray(conf?.defaultQueryParams) && conf.defaultQueryParams.some((p) => p.isExpression);
+    const hasQueryExprs = Array.isArray(q.queryConfig.params) && q.queryConfig.params.some((p) => p.isExpression);
+    return hasDefaultExprs || hasQueryExprs;
+  });
 
   const evaluateParamHelper = `function evaluateParam(expr: string, params: Record<string, any>): string {
   try {
@@ -1020,6 +1033,18 @@ export function orchestrateServerFetchForQueries(
           lines.push(`  qParams_${idx}.set(${JSON.stringify(k)}, ${JSON.stringify(String(v))});`);
         }
       }
+    }
+
+    if (Array.isArray(conf.defaultQueryParams)) {
+      conf.defaultQueryParams.forEach((p, dpIdx) => {
+        if (!p.key) return;
+        if (p.isExpression) {
+          lines.push(`  const dpVal_${idx}_${dpIdx} = evaluateParam(${JSON.stringify(p.value)}, routeParams);`);
+          lines.push(`  if (dpVal_${idx}_${dpIdx}) qParams_${idx}.set(${JSON.stringify(p.key)}, dpVal_${idx}_${dpIdx});`);
+        } else if (!conf.defaultParams || conf.defaultParams[p.key] === undefined) {
+          lines.push(`  qParams_${idx}.set(${JSON.stringify(p.key)}, ${JSON.stringify(p.value ?? '')});`);
+        }
+      });
     }
 
     if (Array.isArray(q.queryConfig.params)) {

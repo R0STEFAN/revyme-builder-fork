@@ -222,7 +222,8 @@ describe('createCmsDetailPageFile at the root', () => {
     createCmsDetailPageFile('blog', { atRoot: true });
     const code = fsStore.get('app/[slug]/page.client.tsx')!;
     expect(parseCmsPageMeta(code)).toEqual({ collection: 'blog', kind: 'detail' });
-    expect(code).toContain('const item = blog.find((i) => i._slug === params?.slug)');
+    expect(code).toContain('blog.find((i) => i._slug === params?.slug)');
+    expect(code).toContain('localizeRows([rawItem], __activeLocale)');
   });
 
   test('is found again by collection, wherever it sits', () => {
