@@ -368,3 +368,93 @@ export function unbindSrcExpressionInCode(code: string, nodeId: string, fallback
   trace.action('expression-gen:unbindSrcExpression:done', { nodeId });
   return result;
 }
+
+/**
+ * Bind an aria-label expression: replaces or adds `aria-label={expression}` on the element.
+ */
+export function bindAriaLabelExpressionInCode(code: string, nodeId: string, expression: string): string {
+  const elStart = findJSXElementByDataId(code, nodeId);
+  if (elStart === -1) {
+    trace.error('expression-gen:bindAriaLabelExpression', { message: 'Element not found', nodeId });
+    return code;
+  }
+
+  const openTagEnd = findTagClose(code, elStart + 1);
+  if (openTagEnd === -1) {
+    trace.error('expression-gen:bindAriaLabelExpression', { message: 'Cannot find tag close', nodeId });
+    return code;
+  }
+
+  const tagSlice = code.slice(elStart, openTagEnd + 1);
+  const cleanExpr = expression.trim();
+
+  // Module scope protection (Defect #21): if node is outside component scope (e.g. in canvasNodes)
+  // and references item, do not inject live item that crashes module compilation.
+  if (isNodeInModuleScope(code, nodeId) && /\bitem\b/.test(cleanExpr)) {
+    const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'aria-label'), 'data-dormant-aria-label');
+    const escaped = cleanExpr.replace(/"/g, '&quot;');
+    const binding = `aria-label="" data-dormant-aria-label="${escaped}"`;
+    let newTagSlice: string;
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+    }
+    const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+    trace.action('expression-gen:bindAriaLabelExpression:dormant', { nodeId, expression: cleanExpr });
+    return result;
+  }
+
+  const binding = `aria-label={${cleanExpr}}`;
+
+  const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'aria-label'), 'data-dormant-aria-label');
+  let newTagSlice: string;
+  const insertIdx = strippedTag.length - 1;
+  const closingChar = strippedTag[insertIdx];
+  if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+    newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+  } else {
+    newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+  }
+
+  let result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+  result = ensureParamsHookIfUsed(result, nodeId, cleanExpr);
+
+  trace.action('expression-gen:bindAriaLabelExpression:done', { nodeId, expression: cleanExpr });
+  return result;
+}
+
+/**
+ * Unbind an aria-label expression: replaces `aria-label={expression}` with a static `aria-label="..."` (or removes it if fallback is empty).
+ */
+export function unbindAriaLabelExpressionInCode(code: string, nodeId: string, fallbackAriaLabel = ''): string {
+  const elStart = findJSXElementByDataId(code, nodeId);
+  if (elStart === -1) return code;
+
+  const openTagEnd = findTagClose(code, elStart + 1);
+  if (openTagEnd === -1) return code;
+
+  const tagSlice = code.slice(elStart, openTagEnd + 1);
+  const strippedTag = stripAttrFromTag(stripAttrFromTag(tagSlice, 'aria-label'), 'data-dormant-aria-label');
+  if (strippedTag === tagSlice) return code;
+
+  let newTagSlice: string;
+  if (!fallbackAriaLabel) {
+    newTagSlice = strippedTag;
+  } else {
+    const binding = `aria-label="${fallbackAriaLabel}"`;
+    const insertIdx = strippedTag.length - 1;
+    const closingChar = strippedTag[insertIdx];
+    if (closingChar === '>' && strippedTag[insertIdx - 1] === '/') {
+      newTagSlice = strippedTag.slice(0, insertIdx - 1).trimEnd() + ` ${binding} />`;
+    } else {
+      newTagSlice = strippedTag.slice(0, insertIdx).trimEnd() + ` ${binding}>`;
+    }
+  }
+
+  const result = code.slice(0, elStart) + newTagSlice + code.slice(openTagEnd + 1);
+  trace.action('expression-gen:unbindAriaLabelExpression:done', { nodeId });
+  return result;
+}

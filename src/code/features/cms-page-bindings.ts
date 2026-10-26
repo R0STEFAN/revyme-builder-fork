@@ -86,6 +86,15 @@ export function applyDetailPageBindings(
       }
     }
 
+    // Dynamic aria-label expression (e.g. item.title or `Buy ${item.title}`)
+    if (node.ariaLabelExpression) {
+      const evaluated = evaluateCmsExpression(node.ariaLabelExpression, exprContext);
+      if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+        if (!cloned) cloned = { ...node };
+        cloned.attrs = { ...cloned.attrs, 'aria-label': String(evaluated) };
+      }
+    }
+
     // Dynamic text expression (e.g. item.title + " - " + item.category.title)
     if (node.textExpression) {
       const evaluated = evaluateCmsExpression(node.textExpression, exprContext);

@@ -1756,6 +1756,32 @@ export default function Page() {
       const link = parseJSXToNodes(code).get('link')!;
       expect(link.hrefExpression).toBe('"/gallery/" + item.slug');
     });
+
+    test('parses dynamic aria-label expression into node.ariaLabelExpression', () => {
+      const code = `
+export default function Page() {
+  return (
+    <div data-id="root">
+      <button data-id="btn" aria-label={\`Read more about \${item.title}\`}>Click</button>
+    </div>
+  );
+}`;
+      const btn = parseJSXToNodes(code).get('btn')!;
+      expect(btn.ariaLabelExpression).toBe('`Read more about ${item.title}`');
+    });
+
+    test('parses dormant aria-label expression from data-dormant-aria-label', () => {
+      const code = `
+export default function Page() {
+  return (
+    <div data-id="root">
+      <button data-id="btn" aria-label="" data-dormant-aria-label="item.title">Click</button>
+    </div>
+  );
+}`;
+      const btn = parseJSXToNodes(code).get('btn')!;
+      expect(btn.ariaLabelExpression).toBe('item.title');
+    });
   });
 
   describe('custom data attributes', () => {

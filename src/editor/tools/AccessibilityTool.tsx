@@ -10,6 +10,8 @@ import { queueMutation, queueMutations } from '@/code/mutation/mutation-queue';
 import { trace } from '@/shared/debug-trace';
 import { isFrameTag, isTextTag, isLinkTag } from '@/shared/constants';
 import { activeFilePathAtom, isComponentLikeFilePath } from '@/code/project/active-file-store';
+import ExpressionBoundPill from '../controls/ExpressionBoundPill';
+import ExpressionEditorPopup from '../ui/ExpressionEditorPopup';
 
 export const FRAME_TAG_OPTIONS = [
   { value: 'div', label: 'div' },
@@ -42,12 +44,13 @@ export const TEXT_TAG_OPTIONS = [
 ];
 
 export default function AccessibilityTool() {
-  const { node, nodeId } = useControl();
+  const { node, nodeId, cmsBinding } = useControl();
   const filePath = useAtomValue(activeFilePathAtom);
   const isComponentFile = isComponentLikeFilePath(filePath);
 
   const elementTag = node?.type || '';
   const ariaLabel = node?.attrs?.['aria-label'] ?? '';
+  const ariaLabelExpression = node?.ariaLabelExpression;
 
   const isLink = isLinkTag(elementTag);
   const displayedTag = isLink ? 'a' : elementTag;
@@ -60,12 +63,13 @@ export default function AccessibilityTool() {
 
   const [open, setOpen] = useState(false);
   const [localAriaLabel, setLocalAriaLabel] = useState(ariaLabel);
+  const [expressionOpen, setExpressionOpen] = useState(false);
 
   // When selection changes: sync aria-label and auto-open if it already has one or a non-default tag
   useEffect(() => {
     setLocalAriaLabel(ariaLabel);
-    setOpen(!!ariaLabel || (!!elementTag && elementTag !== 'div'));
-  }, [nodeId, ariaLabel, elementTag]);
+    setOpen(!!ariaLabel || !!ariaLabelExpression || (!!elementTag && elementTag !== 'div'));
+  }, [nodeId, ariaLabel, ariaLabelExpression, elementTag]);
 
   // Keep local in sync when code changes update the node
   useEffect(() => {
@@ -76,7 +80,22 @@ export default function AccessibilityTool() {
     if (!nodeId) return;
     const trimmed = value.trim();
     trace.action('accessibility-tool:update-aria-label', { nodeId, to: trimmed });
+    if (node?.ariaLabelExpression) {
+      queueMutation({ type: 'unbindAriaLabelExpression', nodeId });
+    }
     queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'aria-label': trimmed } });
+  }, [nodeId, node?.ariaLabelExpression]);
+
+  const handleApplyExpression = useCallback((expr: string) => {
+    if (!nodeId) return;
+    trace.action('accessibility-tool:bind-aria-label-expression', { nodeId, expression: expr });
+    queueMutation({ type: 'bindAriaLabelExpression', nodeId, expression: expr });
+  }, [nodeId]);
+
+  const handleClearExpression = useCallback(() => {
+    if (!nodeId) return;
+    trace.action('accessibility-tool:unbind-aria-label-expression', { nodeId });
+    queueMutation({ type: 'unbindAriaLabelExpression', nodeId });
   }, [nodeId]);
 
   const commitTag = useCallback((value: string) => {
@@ -152,15 +171,20 @@ export default function AccessibilityTool() {
   const handleToggle = useCallback(() => {
     const next = !open;
     trace.action('accessibility-tool:toggle', { nodeId, open: next });
-    if (!next && ariaLabel && nodeId) {
-      // Remove aria-label when collapsing
-      queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'aria-label': '' } });
-      setLocalAriaLabel('');
+    if (!next && (ariaLabel || ariaLabelExpression) && nodeId) {
+      // Remove aria-label and expression when collapsing
+      if (ariaLabelExpression) {
+        queueMutation({ type: 'unbindAriaLabelExpression', nodeId });
+      }
+      if (ariaLabel) {
+        queueMutation({ type: 'updateHtmlAttrs', nodeId, attrs: { 'aria-label': '' } });
+        setLocalAriaLabel('');
+      }
     }
     setOpen(next);
-  }, [open, ariaLabel, nodeId]);
+  }, [open, ariaLabel, ariaLabelExpression, nodeId]);
 
-  trace.fn('AccessibilityTool:render', { nodeId, elementTag, ariaLabel, open, canEditTag });
+  trace.fn('AccessibilityTool:render', { nodeId, elementTag, ariaLabel, ariaLabelExpression, open, canEditTag });
 
   const toggleBtn = (
     <button
@@ -200,18 +224,52 @@ export default function AccessibilityTool() {
         {/* Aria label */}
         <div className="flex items-center justify-between w-full">
           <ControlLabel label="Aria Label" property="aria-label" plain />
-          <div className="flex items-center gap-2 w-full">
-            <ToolInput
-              value={localAriaLabel}
-              onChange={(val) => {
-                setLocalAriaLabel(val);
-                commitAriaLabel(val);
-              }}
-              text
-            />
-          </div>
+          {ariaLabelExpression ? (
+            <div className="w-full min-w-0">
+              <ExpressionBoundPill
+                expression={ariaLabelExpression}
+                onEdit={() => setExpressionOpen(true)}
+                onClear={handleClearExpression}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 w-full min-w-0">
+              <div className="flex-1 min-w-0">
+                <ToolInput
+                  value={localAriaLabel}
+                  onChange={(val) => {
+                    setLocalAriaLabel(val);
+                    commitAriaLabel(val);
+                  }}
+                  text
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpressionOpen(true)}
+                title="Dynamic Aria Label Expression (Formula)"
+                className="shrink-0 h-[var(--control-height)] px-1.5 flex items-center justify-center rounded bg-[var(--control-bg)] hover:bg-purple-600/20 text-[var(--text-secondary)] hover:text-purple-300 border border-[var(--control-border)] hover:border-purple-500/50 cursor-pointer transition-colors text-[11px] font-mono font-bold"
+              >
+                fx
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Expression Editor modal for dynamic aria-label formulas */}
+      {nodeId && (
+        <ExpressionEditorPopup
+          isOpen={expressionOpen}
+          onClose={() => setExpressionOpen(false)}
+          onApply={handleApplyExpression}
+          initialExpression={ariaLabelExpression || (localAriaLabel ? `"${localAriaLabel}"` : '')}
+          targetProperty="aria-label"
+          collectionSlug={cmsBinding?.slug}
+          itemVar={cmsBinding?.itemVar}
+          fields={cmsBinding?.fields}
+        />
+      )}
     </ToolSection>
   );
 }

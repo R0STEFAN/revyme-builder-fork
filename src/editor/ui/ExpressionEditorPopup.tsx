@@ -14,7 +14,7 @@ interface ExpressionEditorPopupProps {
   onClose: () => void;
   onApply: (expression: string) => void;
   initialExpression?: string;
-  targetProperty?: 'text' | 'href' | 'src';
+  targetProperty?: 'text' | 'href' | 'src' | 'aria-label';
   collectionSlug?: string;
   itemVar?: string;
   fields?: FieldDefinition[];
@@ -85,7 +85,8 @@ export default function ExpressionEditorPopup({
     ctx.params = mockParams;
 
     // 2. Mock collections data
-    for (const [slug, items] of collectionData.entries()) {
+    const safeData = collectionData instanceof Map ? collectionData : new Map();
+    for (const [slug, items] of safeData.entries()) {
       ctx[slug] = items;
       const varName = slug.replace(/[^a-zA-Z0-9]/g, '');
       if (varName) ctx[varName] = items;
@@ -93,7 +94,7 @@ export default function ExpressionEditorPopup({
 
     // 3. Mock item inside collection loop
     if (collectionSlug) {
-      const items = collectionData.get(collectionSlug) || [];
+      const items = safeData.get(collectionSlug) || [];
       ctx[itemVar] = items[0] || { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
     } else {
       ctx[itemVar] = { name: 'Dragon Sleeve', slug: 'dragon-sleeve', title: 'Dragon Sleeve', _slug: 'dragon-sleeve', image: 'abc-123.jpg' };
@@ -136,6 +137,8 @@ export default function ExpressionEditorPopup({
           ? 'Image Expression (Formula)'
           : targetProperty === 'href'
           ? 'Link Expression (Formula)'
+          : targetProperty === 'aria-label'
+          ? 'Aria Label Expression (Formula)'
           : 'Text Expression (Formula)'
       }
       width={480}
@@ -149,6 +152,8 @@ export default function ExpressionEditorPopup({
               ? '`https://directus.example.com/assets/${item.image}`'
               : targetProperty === 'href'
               ? '"/gallery/men/" + item.slug'
+              : targetProperty === 'aria-label'
+              ? '`View details for ${item.name}`'
               : 'params.category + " тату у Запоріжжі"'}
           </code>
           )
@@ -179,30 +184,36 @@ export default function ExpressionEditorPopup({
           )}
 
           {/* Current Loop Item Fields */}
-          {(fields.length > 0 || (collectionSlug && (collectionSchemas.get(collectionSlug)?.fields?.length ?? 0) > 0)) && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] text-[var(--text-disabled)] font-medium">This Row ({itemVar}):</span>
-              {(fields.length > 0 ? fields : (collectionSchemas.get(collectionSlug!)?.fields || [])).map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => insertToken(`${itemVar}.${f.id}`)}
-                  className="px-1.5 py-0.5 text-[11px] font-mono rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/40 cursor-pointer transition-colors"
-                  title={`Insert ${itemVar}.${f.id}`}
-                >
-                  {itemVar}.{f.id}
-                </button>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const safeSchemas = collectionSchemas instanceof Map ? collectionSchemas : new Map();
+            const hasFields = fields.length > 0 || (collectionSlug ? (safeSchemas.get(collectionSlug)?.fields?.length ?? 0) > 0 : false);
+            if (!hasFields) return null;
+            const rowFields: FieldDefinition[] = fields.length > 0 ? fields : ((safeSchemas.get(collectionSlug!)?.fields as FieldDefinition[] | undefined) || []);
+            return (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-[var(--text-disabled)] font-medium">This Row ({itemVar}):</span>
+                {rowFields.map((f: FieldDefinition) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => insertToken(`${itemVar}.${f.id}`)}
+                    className="px-1.5 py-0.5 text-[11px] font-mono rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/40 cursor-pointer transition-colors"
+                    title={`Insert ${itemVar}.${f.id}`}
+                  >
+                    {itemVar}.{f.id}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* CMS Collections */}
-          {Array.from(collectionSchemas.entries())
+          {Array.from((collectionSchemas instanceof Map ? collectionSchemas : new Map()).entries())
             .filter(([colSlug]) => colSlug !== collectionSlug)
             .map(([colSlug, schema]) => (
             <div key={colSlug} className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] text-[var(--text-disabled)] font-medium">{schema.name || colSlug}:</span>
-              {schema.fields?.map((f) => (
+              {schema.fields?.map((f: FieldDefinition) => (
                 <button
                   key={f.id}
                   type="button"

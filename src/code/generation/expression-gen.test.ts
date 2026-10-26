@@ -3,9 +3,11 @@ import {
   bindTextExpressionInCode,
   bindHrefExpressionInCode,
   bindSrcExpressionInCode,
+  bindAriaLabelExpressionInCode,
   unbindTextExpressionInCode,
   unbindHrefExpressionInCode,
   unbindSrcExpressionInCode,
+  unbindAriaLabelExpressionInCode,
 } from './expression-gen';
 
 describe('expression-gen', () => {
@@ -161,6 +163,85 @@ export default function Page() {
     });
   });
 
+  describe('bindAriaLabelExpressionInCode', () => {
+    const codeWithButton = `'use client';
+export default function Page() {
+  return (
+    <div data-id="root">
+      <button data-id="action-btn" aria-label="Delete">Click</button>
+    </div>
+  );
+}`;
+
+    it('replaces aria-label with dynamic expression', () => {
+      const result = bindAriaLabelExpressionInCode(
+        codeWithButton,
+        'action-btn',
+        '`Delete ${item.title}`',
+      );
+      expect(result).toContain('aria-label={`Delete ${item.title}`}');
+      expect(result).not.toContain('aria-label="Delete"');
+    });
+
+    it('injects useParams when aria-label expression references params', () => {
+      const result = bindAriaLabelExpressionInCode(
+        codeWithButton,
+        'action-btn',
+        '`Category ${params.category}`',
+      );
+      expect(result).toContain("import { useParams } from 'next/navigation';");
+      expect(result).toContain('const params = useParams();');
+      expect(result).toContain('aria-label={`Category ${params.category}`}');
+    });
+
+    it('replaces existing aria-label expression without fragments', () => {
+      const initial = bindAriaLabelExpressionInCode(
+        codeWithButton,
+        'action-btn',
+        '`Delete ${item.title}`',
+      );
+      const replaced = bindAriaLabelExpressionInCode(
+        initial,
+        'action-btn',
+        'item.name',
+      );
+      expect(replaced).toContain('aria-label={item.name}');
+      expect(replaced).not.toContain('Delete ${item.title}');
+    });
+  });
+
+  describe('unbindAriaLabelExpressionInCode', () => {
+    const codeWithButton = `'use client';
+export default function Page() {
+  return (
+    <div data-id="root">
+      <button data-id="action-btn" aria-label="Delete">Click</button>
+    </div>
+  );
+}`;
+
+    it('replaces dynamic aria-label with static aria-label', () => {
+      const withExpr = bindAriaLabelExpressionInCode(
+        codeWithButton,
+        'action-btn',
+        '`Delete ${item.title}`',
+      );
+      const unbind = unbindAriaLabelExpressionInCode(withExpr, 'action-btn', 'Static Delete');
+      expect(unbind).toContain('aria-label="Static Delete"');
+      expect(unbind).not.toContain('item.title');
+    });
+
+    it('removes aria-label when fallback is empty', () => {
+      const withExpr = bindAriaLabelExpressionInCode(
+        codeWithButton,
+        'action-btn',
+        '`Delete ${item.title}`',
+      );
+      const unbind = unbindAriaLabelExpressionInCode(withExpr, 'action-btn', '');
+      expect(unbind).not.toContain('aria-label');
+    });
+  });
+
   describe('module-scope protection (Defect #21)', () => {
     const codeWithCanvasNodes = `'use client';
 import React from 'react';
@@ -224,6 +305,21 @@ const canvasNodes = (<>
       const unbound = unbindTextExpressionInCode(result, 'detached-text', 'Static Text');
       expect(unbound).not.toContain('data-dormant-text');
       expect(unbound).toContain('Static Text</p>');
+    });
+
+    it('protects canvasNodes aria-label from unbound item by setting dormant metadata', () => {
+      const result = bindAriaLabelExpressionInCode(
+        codeWithCanvasNodes,
+        'detached-link',
+        '`Read ${item.title}`',
+      );
+      expect(result).not.toContain('aria-label={`Read ${item.title}`}');
+      expect(result).toContain('aria-label=""');
+      expect(result).toContain('data-dormant-aria-label="`Read ${item.title}`"');
+
+      const unbound = unbindAriaLabelExpressionInCode(result, 'detached-link', 'Read more');
+      expect(unbound).not.toContain('data-dormant-aria-label');
+      expect(unbound).toContain('aria-label="Read more"');
     });
   });
 });

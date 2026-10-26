@@ -221,4 +221,121 @@ describe('AccessibilityTool', () => {
       { type: 'updateHtmlAttrs', nodeId: 'card-1', attrs: { 'data-name': 'div' } },
     ]);
   });
+
+  describe('Aria Label expression (fx)', () => {
+    it('renders fx button next to aria-label input', () => {
+      mockControl = {
+        nodeId: 'btn-1',
+        node: {
+          id: 'btn-1',
+          type: 'button',
+          attrs: { 'data-id': 'btn-1', 'aria-label': 'Click me' },
+          styles: {},
+        },
+      };
+
+      const { container } = render(<AccessibilityTool />);
+      const fxBtn = screen.getByRole('button', { name: 'fx' });
+      expect(fxBtn).not.toBeNull();
+      expect(fxBtn.getAttribute('title')).toBe('Dynamic Aria Label Expression (Formula)');
+
+      const input = container.querySelector('input[type="text"]') as HTMLInputElement;
+      expect(input).not.toBeNull();
+      expect(input.value).toBe('Click me');
+    });
+
+    it('opens ExpressionEditorPopup when fx button is clicked and queues bindAriaLabelExpression on apply', () => {
+      mockControl = {
+        nodeId: 'btn-1',
+        node: {
+          id: 'btn-1',
+          type: 'button',
+          attrs: { 'data-id': 'btn-1', 'aria-label': 'Delete' },
+          styles: {},
+        },
+        cmsBinding: {
+          slug: 'posts',
+          itemVar: 'item',
+          fields: [{ id: 'title', name: 'Title', type: 'text' }],
+        },
+      };
+
+      const { container } = render(<AccessibilityTool />);
+      const fxBtn = screen.getByRole('button', { name: 'fx' });
+      fireEvent.click(fxBtn);
+
+      // Modal is open
+      expect(screen.getByText('Aria Label Expression (Formula)')).not.toBeNull();
+      // Token button for item.title
+      expect(screen.getByText('item.title')).not.toBeNull();
+
+      // Find textarea and change value in modal (portal in document.body)
+      const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
+      expect(textarea).not.toBeNull();
+      fireEvent.change(textarea, { target: { value: '`Delete ${item.title}`' } });
+
+      const applyBtn = screen.getByRole('button', { name: 'Apply Expression' });
+      fireEvent.click(applyBtn);
+
+      expect(queued).toContainEqual({
+        type: 'bindAriaLabelExpression',
+        nodeId: 'btn-1',
+        expression: '`Delete ${item.title}`',
+      });
+    });
+
+    it('renders ExpressionBoundPill when node.ariaLabelExpression is present and queues unbind on clear', () => {
+      mockControl = {
+        nodeId: 'btn-1',
+        node: {
+          id: 'btn-1',
+          type: 'button',
+          attrs: { 'data-id': 'btn-1' },
+          ariaLabelExpression: 'item.name',
+          styles: {},
+        },
+      };
+
+      const { container } = render(<AccessibilityTool />);
+      // Should show pill with expression
+      expect(screen.getByText('item.name')).not.toBeNull();
+      expect(screen.getByText('fx')).not.toBeNull();
+
+      // Clicking remove button clears expression
+      const removeBtn = container.querySelector('.group\\/remove') || container.querySelector('button[title*="Remove"], div[title*="Remove"]');
+      if (removeBtn) {
+        fireEvent.click(removeBtn);
+        expect(queued).toContainEqual({
+          type: 'unbindAriaLabelExpression',
+          nodeId: 'btn-1',
+        });
+      }
+    });
+
+    it('unbinds expression when section is collapsed via toggle', () => {
+      mockControl = {
+        nodeId: 'btn-1',
+        node: {
+          id: 'btn-1',
+          type: 'div',
+          attrs: { 'data-id': 'btn-1' },
+          ariaLabelExpression: '`Item ${item.id}`',
+          styles: {},
+        },
+      };
+
+      const { container } = render(<AccessibilityTool />);
+      // Section auto-opens because of ariaLabelExpression
+      expect(screen.getByText('`Item ${item.id}`')).not.toBeNull();
+
+      // Toggle button to collapse
+      const toggleBtn = container.querySelector('button') as HTMLButtonElement;
+      fireEvent.click(toggleBtn);
+
+      expect(queued).toContainEqual({
+        type: 'unbindAriaLabelExpression',
+        nodeId: 'btn-1',
+      });
+    });
+  });
 });

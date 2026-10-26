@@ -2855,6 +2855,14 @@ export function patchElement(
       if (key === 'src' && isPreviewAppliedSrc(el, safeValue)) continue;
       if (el.getAttribute(key) !== safeValue) el.setAttribute(key, safeValue);
     }
+    if (node.ariaLabelExpression && !node.attrs?.['aria-label']) {
+      const evalLabel = evaluateCanvasTextExpression(node.ariaLabelExpression);
+      if (evalLabel && el.getAttribute('aria-label') !== evalLabel) {
+        el.setAttribute('aria-label', evalLabel);
+      }
+    } else if (!node.ariaLabelExpression && !node.attrs?.['aria-label'] && el.hasAttribute('aria-label')) {
+      el.removeAttribute('aria-label');
+    }
     if (el.hasAttribute('srcset')) el.removeAttribute('srcset');
     if (el.hasAttribute('sizes')) el.removeAttribute('sizes');
     // Mark overlay nodes for CSS-based visibility control (hidden by the base
@@ -3746,6 +3754,11 @@ function buildNodeElement(
       if (typeof value === 'string' && value.startsWith('var:')) continue;
       el.setAttribute(key, node.responsiveAttrs ? resolveResponsiveAttr(node, key, value, vpWidth, variantName) : value);
     }
+  }
+
+  if (node.ariaLabelExpression && !node.attrs?.['aria-label']) {
+    const evalLabel = evaluateCanvasTextExpression(node.ariaLabelExpression);
+    if (evalLabel) el.setAttribute('aria-label', evalLabel);
   }
 
   // Images: load EAGERLY on the canvas. `loading="lazy"` uses the iframe

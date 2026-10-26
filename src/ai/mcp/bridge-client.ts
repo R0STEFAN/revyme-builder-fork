@@ -80,9 +80,11 @@ import {
   bindTextExpressionInCode,
   bindHrefExpressionInCode,
   bindSrcExpressionInCode,
+  bindAriaLabelExpressionInCode,
   unbindTextExpressionInCode,
   unbindHrefExpressionInCode,
   unbindSrcExpressionInCode,
+  unbindAriaLabelExpressionInCode,
 } from '@/code/generation/expression-gen';
 import { setInstanceProp, getInstancePropExpr } from '@/editor/tools/ComponentPropsTool/instance-props';
 import { createDefaultTypoTokens, TYPO_SUFFIXES } from '@/editor/tools/typography-utils';
@@ -1264,7 +1266,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // ─── bind_expression ───────────────────────────────────────────────────────
     if (action === 'bind_expression') {
       const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
-      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src';
+      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src' | 'aria-label';
       const rawExpression = String(effectiveArgs.expression ?? effectiveArgs.expr ?? '').trim();
       if (!nodeId) throw new Error('bind_expression requires a nodeId.');
       if (!rawExpression) throw new Error('bind_expression requires an expression formula.');
@@ -1278,6 +1280,8 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
           return bindSrcExpressionInCode(c, nodeId, expression);
         } else if (targetProperty === 'href') {
           return bindHrefExpressionInCode(c, nodeId, expression);
+        } else if (targetProperty === 'aria-label') {
+          return bindAriaLabelExpressionInCode(c, nodeId, expression);
         } else {
           return bindTextExpressionInCode(c, nodeId, expression);
         }
@@ -1292,7 +1296,7 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
     // ─── unbind_expression ─────────────────────────────────────────────────────
     if (action === 'unbind_expression') {
       const nodeId = String(effectiveArgs.nodeId ?? effectiveArgs.node_id ?? '').trim();
-      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src';
+      const targetProperty = String(effectiveArgs.targetProperty ?? effectiveArgs.target_property ?? effectiveArgs.property ?? 'text').trim() as 'text' | 'href' | 'src' | 'aria-label';
       const fallbackValue = effectiveArgs.fallbackValue ?? effectiveArgs.fallback_value;
       if (!nodeId) throw new Error('unbind_expression requires a nodeId.');
 
@@ -1302,6 +1306,8 @@ export const bridgeHandlers: Record<string, BridgeHandler> = {
           return unbindSrcExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : '');
         } else if (targetProperty === 'href') {
           return unbindHrefExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : '#');
+        } else if (targetProperty === 'aria-label') {
+          return unbindAriaLabelExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : '');
         } else {
           return unbindTextExpressionInCode(c, nodeId, fallbackValue != null ? String(fallbackValue) : 'Text');
         }

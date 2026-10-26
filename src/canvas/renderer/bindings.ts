@@ -196,6 +196,11 @@ export function applyNodeCmsBindings(
     if (val) el.setAttribute('src', canvasImageSrc(String(val)));
     else el.removeAttribute('src');
   }
+  if (node.ariaLabelExpression) {
+    const val = evaluateCmsExpression(node.ariaLabelExpression, { item: bindingData, collectionItem: bindingData, row: bindingData });
+    if (val) el.setAttribute('aria-label', String(val));
+    else el.removeAttribute('aria-label');
+  }
   // `styleKeys` = the inline style props this call OWNS (bound or overridden).
   // The caller records them so a binding that disappears (× on the Fill pill
   // removes `backgroundImage` from the source) is CLEARED on the next patch —

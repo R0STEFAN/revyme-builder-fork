@@ -210,6 +210,8 @@ export interface CanvasNode {
   hrefExpression?: string;
   /** Dynamic JS expression driving image src (e.g. `https://.../${item.image}`). */
   srcExpression?: string;
+  /** Dynamic JS expression driving aria-label (e.g. `item.name` or `item.title`). */
+  ariaLabelExpression?: string;
   textContent: string;
   hasMixedContent: boolean; // true if textContent contains inline HTML (spans, br, strong, etc.)
   /**
@@ -2381,6 +2383,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         const attrBindings: Array<{ field: string; property: 'src' | 'href' | 'alt' }> = [];
         let hrefExpression: string | undefined;
         let srcExpression: string | undefined;
+        let ariaLabelExpression: string | undefined;
         if (activeCtx) {
           const bindableAttrs: Array<{ attr: string; prop: 'src' | 'href' | 'alt' }> = [
             { attr: 'src', prop: 'src' },
@@ -2430,6 +2433,18 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             }
           }
         }
+        // Detect general dynamic aria-label expressions (e.g. `item.name` or template literals)
+        for (const a of (opening.attributes as any[])) {
+          if (a.type === 'JSXAttribute' && a.name?.name === 'aria-label') {
+            if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+              const expr = a.value.expression as any;
+              if (expr.start != null && expr.end != null && expr.type !== 'StringLiteral') {
+                ariaLabelExpression = code.slice(expr.start, expr.end);
+                trace.action('parser:aria-label-expression', { nodeId: id, ariaLabelExpression });
+              }
+            }
+          }
+        }
         for (const a of (opening.attributes as any[])) {
           if (a.type === 'JSXAttribute' && a.name) {
             if (a.name.name === 'data-dormant-src' && a.value?.type === 'StringLiteral' && !srcExpression) {
@@ -2441,6 +2456,9 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             } else if (a.name.name === 'data-dormant-text' && a.value?.type === 'StringLiteral' && !textExpression) {
               textExpression = a.value.value;
               trace.action('parser:dormant-text-expression', { nodeId: id, textExpression });
+            } else if (a.name.name === 'data-dormant-aria-label' && a.value?.type === 'StringLiteral' && !ariaLabelExpression) {
+              ariaLabelExpression = a.value.value;
+              trace.action('parser:dormant-aria-label-expression', { nodeId: id, ariaLabelExpression });
             }
           }
         }
@@ -2627,6 +2645,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (textExpression) node.textExpression = textExpression;
         if (hrefExpression) node.hrefExpression = hrefExpression;
         if (srcExpression) node.srcExpression = srcExpression;
+        if (ariaLabelExpression) node.ariaLabelExpression = ariaLabelExpression;
         if (translationKey) node.translationKey = translationKey;
         if (richTranslation) node.richTranslation = true;
         if (formattedTextVariable) node.formattedTextVariable = true;
@@ -3162,8 +3181,9 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       let hrefExpression: string | undefined;
       let srcExpression: string | undefined;
       let textExpression: string | undefined;
+      let ariaLabelExpression: string | undefined;
 
-      // Extract dynamic attribute expressions (src / href) and dormant expressions from attributes
+      // Extract dynamic attribute expressions (src / href / aria-label) and dormant expressions from attributes
       for (const a of (opening.attributes as any[])) {
         if (a.type !== 'JSXAttribute' || !a.name) continue;
         const attrName = a.name.name;
@@ -3183,6 +3203,14 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
               trace.action('parser:canvasNodes-src-expression', { nodeId: id, srcExpression });
             }
           }
+        } else if (attrName === 'aria-label') {
+          if (a.value?.type === 'JSXExpressionContainer' && a.value.expression) {
+            const expr = a.value.expression as any;
+            if (expr.start != null && expr.end != null && expr.type !== 'StringLiteral') {
+              ariaLabelExpression = code.slice(expr.start, expr.end);
+              trace.action('parser:canvasNodes-aria-label-expression', { nodeId: id, ariaLabelExpression });
+            }
+          }
         } else if (attrName === 'data-dormant-src' && a.value?.type === 'StringLiteral') {
           if (!srcExpression) {
             srcExpression = a.value.value;
@@ -3197,6 +3225,11 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           if (!textExpression) {
             textExpression = a.value.value;
             trace.action('parser:canvasNodes-dormant-text-expression', { nodeId: id, textExpression });
+          }
+        } else if (attrName === 'data-dormant-aria-label' && a.value?.type === 'StringLiteral') {
+          if (!ariaLabelExpression) {
+            ariaLabelExpression = a.value.value;
+            trace.action('parser:canvasNodes-dormant-aria-label-expression', { nodeId: id, ariaLabelExpression });
           }
         }
       }
@@ -3312,6 +3345,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       if (textExpression) node.textExpression = textExpression;
       if (srcExpression) node.srcExpression = srcExpression;
       if (hrefExpression) node.hrefExpression = hrefExpression;
+      if (ariaLabelExpression) node.ariaLabelExpression = ariaLabelExpression;
 
       // Orphaned component-variable bindings — a prop-bound node dragged onto the
       // canvas keeps its purple pill (Content/Style) via `data-var-orphan`. THIS is
