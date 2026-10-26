@@ -9,6 +9,10 @@ import { collectionDataAtom, collectionSchemasAtom } from '@/code/stores/cms-sto
 import { listCollections, getCollectionSchema, getCollectionData } from '@/code/project/cms-ops';
 import type { FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
+import {
+  getAutocompleteSuggestions,
+  type AutocompleteSuggestion,
+} from './expression-autocomplete';
 
 interface ExpressionEditorPopupProps {
   isOpen: boolean;
@@ -34,15 +38,22 @@ export default function ExpressionEditorPopup({
   filePath,
 }: ExpressionEditorPopupProps) {
   const [expression, setExpression] = useState(initialExpression);
+  const [cursorPos, setCursorPos] = useState<number>(initialExpression.length);
+  const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const activeFilePath = useAtomValue(activeFilePathAtom);
   const effectiveFilePath = filePath || activeFilePath;
   const collectionData = useAtomValue(collectionDataAtom);
   const collectionSchemas = useAtomValue(collectionSchemasAtom);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setExpression(initialExpression);
+      setCursorPos(initialExpression.length);
+      setIsDismissed(false);
+      setSelectedIndex(0);
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }, [isOpen, initialExpression]);
@@ -78,10 +89,12 @@ export default function ExpressionEditorPopup({
     const end = el.selectionEnd;
     const current = expression;
     const next = current.slice(0, start) + token + current.slice(end);
+    const nextPos = start + token.length;
     setExpression(next);
+    setCursorPos(nextPos);
+    setIsDismissed(false);
     setTimeout(() => {
       el.focus();
-      const nextPos = start + token.length;
       el.setSelectionRange(nextPos, nextPos);
     }, 0);
   }, [expression]);
@@ -151,10 +164,108 @@ export default function ExpressionEditorPopup({
     onClose();
   };
 
+  // Intelligent autocomplete suggestions based on cursor position and active expression
+  const suggestions = useMemo(() => {
+    if (isDismissed) return [];
+    return getAutocompleteSuggestions({
+      text: expression,
+      cursorPos,
+      scope: sampleContext,
+      routeParams,
+      collectionSchemas: safeSchemas,
+      itemVar,
+    });
+  }, [expression, cursorPos, sampleContext, routeParams, safeSchemas, itemVar, isDismissed]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [suggestions.length]);
+
+  useEffect(() => {
+    if (listRef.current) {
+      const activeItem = listRef.current.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`);
+      if (activeItem) {
+        activeItem.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [selectedIndex]);
+
+  const applySuggestion = useCallback((suggestion: AutocompleteSuggestion) => {
+    const el = textareaRef.current;
+    const current = expression;
+    const next = current.slice(0, suggestion.replaceFrom) + suggestion.insertText + current.slice(suggestion.replaceTo);
+    const nextPos = suggestion.replaceFrom + suggestion.insertText.length;
+
+    setExpression(next);
+    setCursorPos(nextPos);
+    setSelectedIndex(0);
+
+    setTimeout(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(nextPos, nextPos);
+      }
+    }, 0);
+  }, [expression]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = suggestions[selectedIndex];
+        if (selected) {
+          applySuggestion(selected);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDismissed(true);
+        return;
+      }
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleApply();
+    }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
+    setIsDismissed(false);
+    setExpression(val);
+    setCursorPos(pos);
+  };
+
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const pos = (e.target as HTMLTextAreaElement).selectionStart;
+    setCursorPos(pos);
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      onKeyDown={(e) => {
+        if (suggestions.length > 0 && e.key === 'Escape') {
+          e.stopPropagation();
+          setIsDismissed(true);
+          return false;
+        }
+      }}
       title={
         targetProperty === 'src'
           ? 'Image Expression (Formula)'
@@ -286,24 +397,101 @@ export default function ExpressionEditorPopup({
         </div>
 
         {/* Formula Input */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 relative">
           <label className="text-xs font-medium text-[var(--text-primary)]">
             Expression (JavaScript Formula):
           </label>
-          <textarea
-            ref={textareaRef}
-            rows={3}
-            value={expression}
-            onChange={(e) => setExpression(e.target.value)}
-            placeholder={
-              targetProperty === 'src'
-                ? '`https://directus.example.com/assets/${item.image}`'
-                : targetProperty === 'href'
-                ? '"/gallery/men/" + item.slug'
-                : 'params.category + " тату на " + params.place + " у Запоріжжі"'
-            }
-            className="w-full px-2.5 py-2 text-xs font-mono bg-[var(--grid-line)] border border-[var(--control-border)] hover:border-[var(--control-border-hover)] focus:border-purple-500 text-[var(--text-primary)] rounded focus:outline-none resize-none transition-colors"
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              rows={3}
+              value={expression}
+              onChange={handleTextChange}
+              onSelect={handleSelect}
+              onKeyUp={handleSelect}
+              onClick={handleSelect}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                targetProperty === 'src'
+                  ? '`https://directus.example.com/assets/${item.image}`'
+                  : targetProperty === 'href'
+                  ? '"/gallery/men/" + item.slug'
+                  : 'params.category + " тату на " + params.place + " у Запоріжжі"'
+              }
+              className="w-full px-2.5 py-2 text-xs font-mono bg-[var(--grid-line)] border border-[var(--control-border)] hover:border-[var(--control-border-hover)] focus:border-purple-500 text-[var(--text-primary)] rounded focus:outline-none resize-none transition-colors"
+            />
+
+            {/* Intelligent Autocomplete Dropdown */}
+            {suggestions.length > 0 && (
+              <div
+                ref={listRef}
+                className="absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-[#18181f] border border-[var(--control-border)] rounded-md shadow-2xl z-50 py-1 divide-y divide-white/5"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <div className="px-2.5 py-1 text-[10px] font-semibold text-[var(--text-disabled)] uppercase tracking-wider flex items-center justify-between bg-black/30">
+                  <span>Suggestions ({suggestions.length})</span>
+                  <span className="text-[9px] font-mono normal-case text-[var(--text-disabled)]">↑↓ navigate • ↵ select • esc close</span>
+                </div>
+                <div className="flex flex-col py-0.5">
+                  {suggestions.map((item, idx) => {
+                    const isSelected = idx === selectedIndex;
+                    return (
+                      <button
+                        key={`${item.label}-${idx}`}
+                        type="button"
+                        data-index={idx}
+                        onClick={() => applySuggestion(item)}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        className={`w-full text-left px-2.5 py-1.5 flex items-center justify-between gap-2 cursor-pointer transition-colors text-xs ${
+                          isSelected
+                            ? 'bg-purple-600/30 text-white font-medium'
+                            : 'text-[var(--text-primary)] hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {item.type === 'index' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                              idx
+                            </span>
+                          )}
+                          {item.type === 'property' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                              prop
+                            </span>
+                          )}
+                          {item.type === 'method' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              fn()
+                            </span>
+                          )}
+                          {item.type === 'collection' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                              col
+                            </span>
+                          )}
+                          {item.type === 'param' && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                              param
+                            </span>
+                          )}
+
+                          <span className="font-mono text-xs truncate">
+                            {item.displayLabel || item.label}
+                          </span>
+                        </div>
+
+                        {item.detail && (
+                          <span className="text-[11px] font-mono text-[var(--text-disabled)] truncate max-w-[180px] text-right">
+                            {item.detail}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Live Evaluated Output Preview */}

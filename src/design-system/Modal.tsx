@@ -23,13 +23,18 @@ interface ModalProps {
    *  (the remix workspace choice: the copy has nowhere to live until it's made).
    *  Use sparingly — every other modal should stay escapable. */
   dismissible?: boolean;
+  /** Custom keydown handler. Return false to prevent Modal from handling Escape / closing. */
+  onKeyDown?: (e: KeyboardEvent) => boolean | void;
 }
 
-export default function Modal({ isOpen, onClose, title, children, width = 384, headerAction, hideClose, dismissible = true }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, width = 384, headerAction, hideClose, dismissible = true, onKeyDown }: ModalProps) {
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
+      if (onKeyDown && onKeyDown(e) === false) {
+        return;
+      }
       // A non-dismissible modal still SWALLOWS Escape — letting it through
       // would run canvas shortcuts behind the modal.
       if (e.key === 'Escape') { e.stopPropagation(); if (dismissible) onClose(); }
@@ -37,7 +42,7 @@ export default function Modal({ isOpen, onClose, title, children, width = 384, h
     window.addEventListener('keydown', handleKey, true);
     trace.action('modal:open', { title });
     return () => window.removeEventListener('keydown', handleKey, true);
-  }, [isOpen, onClose, title, dismissible]);
+  }, [isOpen, onClose, title, dismissible, onKeyDown]);
 
   return createPortal(
     <AnimatePresence>
