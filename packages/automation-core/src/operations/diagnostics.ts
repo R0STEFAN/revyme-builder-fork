@@ -369,11 +369,27 @@ export const diagnosticsProjectCheckOperation: Operation<
                     const page2 = `app/${cleanRoute}/page.tsx`;
                     const page3 = `app/${cleanRoute}.client.tsx`;
                     const page4 = `app/${cleanRoute}.tsx`;
-                    const routeExists =
+                    let routeExists =
                       snapshot.files.has(page1) ||
                       snapshot.files.has(page2) ||
                       snapshot.files.has(page3) ||
                       snapshot.files.has(page4);
+
+                    if (!routeExists) {
+                      // Support route groups, e.g. app/(main)/blog/page.client.tsx
+                      for (const file of snapshot.files.keys()) {
+                        if (!file.startsWith('app/')) continue;
+                        const stripped = file
+                          .replace(/^app\//, '')
+                          .replace(/\/page\.(client\.)?(tsx|jsx|js|ts)$/, '')
+                          .replace(/\([^)]+\)\//g, '')
+                          .replace(/\([^)]+\)$/, '');
+                        if (stripped === cleanRoute) {
+                          routeExists = true;
+                          break;
+                        }
+                      }
+                    }
 
                     if (!routeExists) {
                       brokenLinks.push({
