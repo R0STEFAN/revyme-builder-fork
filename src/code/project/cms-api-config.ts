@@ -29,6 +29,7 @@ export interface ApiCollectionConfig {
   method: 'GET' | 'POST';
   headers: Record<string, string>; // e.g. { Authorization: "Bearer env:DIRECTUS_TOKEN" }
   defaultParams?: Record<string, string>; // e.g. { fields: "*.*", user_field_names: "true" }
+  defaultQueryParams?: import('@/shared/types').CollectionQueryParam[];
   cacheMaxAge?: number; // in seconds, default: 14400 (4 hours)
   revalidateTtl?: number; // in seconds, ISR / upstream fetch cache TTL
   imageOptimization?: CmsImageOptimizationConfig;
@@ -138,12 +139,14 @@ export function resolveEnvHeaders(
 export function buildApiRequestUrl(
   apiConfig: ApiCollectionConfig,
   queryParams?: Record<string, string>,
+  routeParams?: Record<string, string>,
 ): string {
   const rawUrl = apiConfig.url || '';
   try {
     const isAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl);
     const urlObj = new URL(rawUrl, typeof location !== 'undefined' ? location.origin : 'http://localhost');
 
+    // 1. Literal defaultParams
     if (apiConfig.defaultParams) {
       for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
         if (v !== undefined && v !== null && v !== '') {
@@ -151,6 +154,21 @@ export function buildApiRequestUrl(
         }
       }
     }
+
+    // 2. Evaluated defaultQueryParams (fx-capable)
+    if (Array.isArray(apiConfig.defaultQueryParams)) {
+      for (const p of apiConfig.defaultQueryParams) {
+        if (!p.key) continue;
+        const val = p.isExpression
+          ? evaluateParamExpression(p.value, routeParams || {})
+          : (p.value ?? '');
+        if (val !== undefined && val !== null && val !== '') {
+          urlObj.searchParams.set(p.key, val);
+        }
+      }
+    }
+
+    // 3. Query overrides
     if (queryParams) {
       for (const [k, v] of Object.entries(queryParams)) {
         if (v !== undefined && v !== null && v !== '') {
@@ -171,6 +189,17 @@ export function buildApiRequestUrl(
       for (const [k, v] of Object.entries(apiConfig.defaultParams)) {
         if (v !== undefined && v !== null && v !== '') {
           params.set(k, String(v));
+        }
+      }
+    }
+    if (Array.isArray(apiConfig.defaultQueryParams)) {
+      for (const p of apiConfig.defaultQueryParams) {
+        if (!p.key) continue;
+        const val = p.isExpression
+          ? evaluateParamExpression(p.value, routeParams || {})
+          : (p.value ?? '');
+        if (val !== undefined && val !== null && val !== '') {
+          params.set(p.key, val);
         }
       }
     }

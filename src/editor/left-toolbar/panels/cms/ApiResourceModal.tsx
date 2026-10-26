@@ -16,11 +16,14 @@ import {
   buildApiRequestUrl,
   extractApiItems,
   detectApiItemsKey,
+  evaluateParamExpression,
   type ApiCollectionConfig,
   type ApiProvider,
   type CmsImageOptimizationConfig,
   type CmsImageTransformEngine,
 } from '@/code/project/cms-api-config';
+import { useAtomValue } from 'jotai';
+import { activeLocaleAtom } from '@/code/stores/locale-store';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { toast } from 'sonner';
 import { trace } from '@/shared/debug-trace';
@@ -240,7 +243,8 @@ export function ApiResourceModal({
   const [headers, setHeaders] = useState<Array<{ key: string; value: string }>>([
     { key: 'Content-Type', value: 'application/json' },
   ]);
-  const [params, setParams] = useState<Array<{ key: string; value: string }>>([]);
+  const activeLocale = useAtomValue(activeLocaleAtom);
+  const [params, setParams] = useState<Array<{ key: string; value: string; isExpression?: boolean }>>([]);
   const [cacheMaxAge, setCacheMaxAge] = useState(14400);
   const [revalidateTtl, setRevalidateTtl] = useState<number | undefined>(undefined);
   const [itemsKey, setItemsKey] = useState('');
@@ -278,9 +282,13 @@ export function ApiResourceModal({
         setHeaders(
           Object.entries(existing.headers).map(([k, v]) => ({ key: k, value: v }))
         );
-        if (existing.defaultParams) {
+        if (existing.defaultQueryParams && existing.defaultQueryParams.length > 0) {
           setParams(
-            Object.entries(existing.defaultParams).map(([k, v]) => ({ key: k, value: String(v) }))
+            existing.defaultQueryParams.map(p => ({ key: p.key, value: p.value, isExpression: !!p.isExpression }))
+          );
+        } else if (existing.defaultParams) {
+          setParams(
+            Object.entries(existing.defaultParams).map(([k, v]) => ({ key: k, value: String(v), isExpression: false }))
           );
         } else {
           setParams([]);
@@ -390,7 +398,15 @@ export function ApiResourceModal({
   };
 
   const handleAddParam = () => {
-    setParams(prev => [...prev, { key: '', value: '' }]);
+    setParams(prev => [...prev, { key: '', value: '', isExpression: false }]);
+  };
+
+  const handleToggleFx = (index: number) => {
+    setParams(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], isExpression: !copy[index].isExpression };
+      return copy;
+    });
   };
 
   const handleRemoveParam = (index: number) => {
@@ -426,9 +442,12 @@ export function ApiResourceModal({
     }
     setTesting(true);
     setTestResult(null);
-    const paramRecord = Object.fromEntries(
-      params.filter(p => p.key.trim().length > 0).map(p => [p.key.trim(), p.value])
-    );
+    const paramRecord: Record<string, string> = {};
+    for (const p of params.filter(p => p.key.trim().length > 0)) {
+      paramRecord[p.key.trim()] = p.isExpression
+        ? evaluateParamExpression(p.value, { lang: activeLocale })
+        : p.value;
+    }
     const testUrl = buildApiRequestUrl({ url, defaultParams: paramRecord } as ApiCollectionConfig);
     trace.action('api-resource:test-connection', { url: testUrl, method });
 
@@ -504,9 +523,17 @@ export function ApiResourceModal({
     }
 
     const paramsRecord: Record<string, string> = {};
+    const defaultQueryParamsList: Array<{ key: string; value: string; isExpression?: boolean }> = [];
     for (const p of params) {
       if (p.key.trim()) {
-        paramsRecord[p.key.trim()] = p.value.trim();
+        const k = p.key.trim();
+        const v = p.value.trim();
+        if (p.isExpression) {
+          defaultQueryParamsList.push({ key: k, value: v, isExpression: true });
+        } else {
+          paramsRecord[k] = v;
+          defaultQueryParamsList.push({ key: k, value: v, isExpression: false });
+        }
       }
     }
 
@@ -529,6 +556,7 @@ export function ApiResourceModal({
       method,
       headers: headersRecord,
       defaultParams: Object.keys(paramsRecord).length > 0 ? paramsRecord : undefined,
+      defaultQueryParams: defaultQueryParamsList.length > 0 ? defaultQueryParamsList : undefined,
       cacheMaxAge,
       revalidateTtl: revalidateTtl || undefined,
       imageOptimization,
@@ -551,7 +579,7 @@ export function ApiResourceModal({
     syncAffectedCmsPageWrappers(finalSlug, finalConfig);
 
     toast.success(`API Collection "${finalConfig.name}" saved!`);
-    onSaved(finalSlug);
+    onSaved?.(finalSlug);
     onClose();
   };
 
@@ -682,13 +710,29 @@ export function ApiResourceModal({
                       placeholder="Param Name (e.g. fields)"
                       className="w-2/5 bg-[var(--input-bg,rgba(255,255,255,0.05))] border border-[var(--border-light)] rounded px-1.5 py-1 text-[11px] text-[var(--text-primary)]"
                     />
-                    <input
-                      type="text"
-                      value={p.value}
-                      onChange={e => handleParamChange(i, 'value', e.target.value)}
-                      placeholder="Value (e.g. *,img_file.*)"
-                      className="flex-1 bg-[var(--input-bg,rgba(255,255,255,0.05))] border border-[var(--border-light)] rounded px-1.5 py-1 text-[11px] text-[var(--text-primary)] font-mono"
-                    />
+                    <div className="flex-1 flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={p.value}
+                        onChange={e => handleParamChange(i, 'value', e.target.value)}
+                        placeholder={p.isExpression ? "Expression (e.g. ({uk:'uk-UA',en:'en-US'})[params.lang])" : "Value (e.g. *,img_file.*)"}
+                        className={`flex-1 bg-[var(--input-bg,rgba(255,255,255,0.05))] border rounded px-1.5 py-1 text-[11px] text-[var(--text-primary)] font-mono ${
+                          p.isExpression ? 'border-purple-400/80 bg-purple-500/10' : 'border-[var(--border-light)]'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFx(i)}
+                        title={p.isExpression ? "Expression active (click for literal)" : "Make expression (fx)"}
+                        className={`px-1.5 py-1 text-[10px] font-bold rounded font-mono cursor-pointer border ${
+                          p.isExpression
+                            ? 'bg-purple-500/30 text-purple-200 border-purple-400'
+                            : 'bg-[var(--input-bg,rgba(255,255,255,0.05))] text-[var(--text-disabled)] border-[var(--border-light)] hover:text-purple-300'
+                        }`}
+                      >
+                        fx
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveParam(i)}

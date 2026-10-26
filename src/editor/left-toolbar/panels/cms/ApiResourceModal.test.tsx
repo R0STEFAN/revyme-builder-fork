@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { atom } from 'jotai';
 
 const fsStore = vi.hoisted(() => new Map<string, string>());
 
 vi.mock('@/code/project/project-fs', () => ({
+  projectVersionAtom: atom(0),
   projectFS: {
     readFile: vi.fn((path: string) => fsStore.get(path) ?? null),
     writeFile: vi.fn((path: string, content: string) => { fsStore.set(path, content); }),
@@ -207,5 +209,55 @@ describe('ApiResourceModal', () => {
     expect(config.apiCollections.tattoos.defaultParams).toEqual({
       fields: '*,img_file.*',
     });
+    expect(config.apiCollections.tattoos.defaultQueryParams).toEqual([
+      { key: 'fields', value: '*,img_file.*', isExpression: false },
+    ]);
+  });
+
+  it('supports fx expressions for language-aware parameters in Test Connection and save', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ id: 1, name: 'Tattoo Art' }],
+      }),
+    });
+    global.fetch = mockFetch;
+
+    render(<ApiResourceModal isOpen={true} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Tattoos'), { target: { value: 'Products' } });
+    const urlInput = screen.getByPlaceholderText('https://api.example.com/items/tattoos');
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/products' } });
+    fireEvent.blur(urlInput);
+
+    const addParamBtn = screen.getByRole('button', { name: /\+ add param/i });
+    fireEvent.click(addParamBtn);
+
+    const keyInput = screen.getByPlaceholderText('Param Name (e.g. fields)');
+    fireEvent.change(keyInput, { target: { value: 'lang_filter' } });
+
+    // Toggle fx
+    const fxBtn = screen.getByTitle(/make expression \(fx\)/i);
+    fireEvent.click(fxBtn);
+
+    const exprInput = screen.getByPlaceholderText(/expression/i);
+    fireEvent.change(exprInput, { target: { value: "({en: 'en-US', uk: 'uk-UA'})[params.lang]" } });
+
+    const testBtn = screen.getByRole('button', { name: /load data \/ test connection/i });
+    fireEvent.click(testBtn);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/proxy', expect.objectContaining({
+        body: expect.stringContaining('lang_filter='),
+      }));
+    });
+
+    const saveBtn = screen.getByRole('button', { name: /save api collection/i });
+    fireEvent.click(saveBtn);
+
+    const config = JSON.parse(fsStore.get('_meta/cms-api-config.json')!);
+    expect(config.apiCollections.products.defaultQueryParams).toEqual([
+      { key: 'lang_filter', value: "({en: 'en-US', uk: 'uk-UA'})[params.lang]", isExpression: true },
+    ]);
   });
 });

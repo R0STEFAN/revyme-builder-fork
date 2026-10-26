@@ -96,6 +96,34 @@ describe('cms-api-config: buildApiRequestUrl', () => {
     expect(parsed.searchParams.get('limit')).toBe('10');
   });
 
+  it('evaluates defaultQueryParams expressions against routeParams including lang', () => {
+    const config: ApiCollectionConfig = {
+      name: 'Articles',
+      slug: 'articles',
+      provider: 'directus',
+      url: 'https://cms.example.com/items/articles',
+      method: 'GET',
+      headers: {},
+      defaultParams: { fields: '*,translations.*' },
+      defaultQueryParams: [
+        {
+          key: 'deep[translations][_filter][languages_code][_eq]',
+          value: "({uk: 'uk-UA', en: 'en-US'})[params.lang]",
+          isExpression: true,
+        },
+      ],
+    };
+
+    const urlUk = buildApiRequestUrl(config, undefined, { lang: 'uk' });
+    const parsedUk = new URL(urlUk);
+    expect(parsedUk.searchParams.get('deep[translations][_filter][languages_code][_eq]')).toBe('uk-UA');
+    expect(parsedUk.searchParams.get('fields')).toBe('*,translations.*');
+
+    const urlEn = buildApiRequestUrl(config, undefined, { lang: 'en' });
+    const parsedEn = new URL(urlEn);
+    expect(parsedEn.searchParams.get('deep[translations][_filter][languages_code][_eq]')).toBe('en-US');
+  });
+
   it('preserves relative URLs without adding a fake origin', () => {
     const config: ApiCollectionConfig = {
       name: 'Local API',
