@@ -86,8 +86,8 @@ During this end-to-end test, several edge cases, dialect constraints, and builde
 
 ### Issue 9: Authoring Design Components via `codeFiles.submit` vs `components.create`
 - **Symptom:** Attempting to write Design Components (`Navbar`, `Footer`) with raw code via `codeFiles.submit` triggered Oracle errors (`[COMPONENT_ROOT_PERCENT_SIZE]`, `[TEXT_STYLE_ON_FRAME]`, `[COMPONENT_LINK_NOT_MOTIONLINK]`).
-- **Root Cause:** Design Components in Revyme require specific canvas AST structures: artboard wrapper with `withResponsiveProps`, `variantConfig`, typography isolated on text leaves rather than frames, and unique `data-id`s.
-- **Resolution:** Used the official high-level semantic MCP tool `components.create` with typed `props` and declarative `layout` AST. Also inserted interactive sub-components (`ThemeToggle`, `LocaleSwitcher`) into the master component using `components.instance.create`.
+- **Root Cause:** Design Components in Revyme require specific canvas AST structures: artboard wrapper with `withResponsiveProps`, `variantConfig`, typography isolated on text leaves rather than frames, and unique `data-id`s. Moreover, `codeFiles.submit` previously lacked a guard against submitting design components, leaving a loophole.
+- **Fix Implemented:** Added `DESIGN_COMPONENT_SUBMISSION_DISALLOWED` runtime guard in `packages/automation-core/src/operations/code-files.ts`, rejecting any submission with `kind: 'component'` or any file in `components/` that lacks `/** @controls { ... } */`. Design components must be authored using the high-level semantic MCP tool `components.create` with typed `props` and declarative `layout` AST, or extracted from canvas via `components.extract`.
 
 ---
 

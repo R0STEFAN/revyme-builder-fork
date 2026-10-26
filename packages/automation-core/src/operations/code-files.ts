@@ -296,6 +296,16 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
           `codeFiles.submit is restricted exclusively to Code Components (components/*.tsx with @controls) and non-canvas project assets/configs.`
         );
       }
+      if (
+        (f as any).kind === 'component' ||
+        (f.path.startsWith('components/') && f.code !== null && !isCodeComponentSource(f.code))
+      ) {
+        throw new Error(
+          `DESIGN_COMPONENT_SUBMISSION_DISALLOWED: Direct creation or modification of design components ("${f.path}") via codeFiles.submit is strictly forbidden.\n` +
+          `Design components must be created using the high-level semantic MCP tool "components.create" (with layout and typed props) or extracted from canvas via "components.extract".\n` +
+          `codeFiles.submit is restricted exclusively to Code Components (components/*.tsx with /** @controls { ... } */) and non-canvas project assets/configs.`
+        );
+      }
     }
 
     // Phase 2: CAS (Compare-And-Swap) Check

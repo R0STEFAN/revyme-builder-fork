@@ -523,12 +523,16 @@ export default function Danger() {
 
     it('performs guarded batch submit with CAS hash matching, writes and deletes atomically', async () => {
       const initialContent = `'use client';
-/** @name "Card" */
+/** @defaultWidth 400 */
+/** @defaultHeight 300 */
+/** @controls {
+  "title": { "type": "text", "label": "Title", "default": "Old" }
+} */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function Card() {
-  return <div data-id="c1">Old</div>;
+function Card(props: { title?: string }) {
+  return <div data-id="c1">{props.title ?? 'Old'}</div>;
 }
 
 export default withResponsiveProps(Card);
@@ -537,27 +541,35 @@ export default withResponsiveProps(Card);
 
       const snap = createMockSnapshot({
         'components/Card.tsx': initialContent,
-        'components/OldToRemove.tsx': `'use client';\n/** @name "OldToRemove" */\nimport React from 'react';\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction OldToRemove() { return <div data-id="d1">Bye</div>; }\nexport default withResponsiveProps(OldToRemove);`,
+        'components/OldToRemove.tsx': `'use client';\n/** @defaultWidth 400 */\n/** @defaultHeight 300 */\n/** @controls {} */\nimport React from 'react';\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction OldToRemove() { return <div data-id="d1">Bye</div>; }\nexport default withResponsiveProps(OldToRemove);`,
       });
 
       const updatedContent = `'use client';
-/** @name "Card" */
+/** @defaultWidth 400 */
+/** @defaultHeight 300 */
+/** @controls {
+  "title": { "type": "text", "label": "Title", "default": "New" }
+} */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function Card() {
-  return <div data-id="c1">New</div>;
+function Card(props: { title?: string }) {
+  return <div data-id="c1">{props.title ?? 'New'}</div>;
 }
 
 export default withResponsiveProps(Card);
 `;
       const newFileContent = `'use client';
-/** @name "Badge" */
+/** @defaultWidth 200 */
+/** @defaultHeight 100 */
+/** @controls {
+  "text": { "type": "text", "label": "Text", "default": "Badge" }
+} */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function Badge() {
-  return <span data-id="b1">Badge</span>;
+function Badge(props: { text?: string }) {
+  return <span data-id="b1">{props.text ?? 'Badge'}</span>;
 }
 
 export default withResponsiveProps(Badge);
@@ -651,12 +663,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     });
 
     it('rejects batch submit with CAS conflict when baseHash does not match, writing zero files', async () => {
-      const liveContent = 'export default function Live() { return <div data-id="l1">Live</div>; }';
+      const liveContent = `'use client';\n/** @controls {} */\nexport default function Live() { return <div data-id="l1">Live</div>; }`;
       const staleHash = sha256('some-other-outdated-version');
 
       const snap = createMockSnapshot({
         'components/Live.tsx': liveContent,
-        'components/Other.tsx': 'export default function Other() { return <div data-id="o1">Other</div>; }',
+        'components/Other.tsx': `'use client';\n/** @controls {} */\nexport default function Other() { return <div data-id="o1">Other</div>; }`,
       });
 
       await expect(
@@ -666,12 +678,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             files: [
               {
                 path: 'components/Live.tsx',
-                code: 'export default function Live() { return <div data-id="l1">Corrupted</div>; }',
+                code: `'use client';\n/** @controls {} */\nexport default function Live() { return <div data-id="l1">Corrupted</div>; }`,
                 baseHash: staleHash,
               },
               {
                 path: 'components/Other.tsx',
-                code: 'export default function Other() { return <div data-id="o1">Changed</div>; }',
+                code: `'use client';\n/** @controls {} */\nexport default function Other() { return <div data-id="o1">Changed</div>; }`,
               },
             ],
           },
@@ -682,6 +694,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       // Verify ZERO files were written
       expect(projectFS.readFile('components/Live.tsx')).toBe(liveContent);
       expect(projectFS.readFile('components/Other.tsx')).toContain('Other');
+    });
+
+    it('strictly forbids submitting design components (components/*.tsx without @controls)', async () => {
+      const snap = createMockSnapshot({});
+      await expect(
+        codeFilesSubmitOperation.execute(
+          snap,
+          {
+            files: [
+              {
+                path: 'components/DesignCard.tsx',
+                code: `'use client';\nexport default function DesignCard() { return <div>Card</div>; }`,
+                kind: 'component',
+              },
+            ],
+          },
+          context,
+        ),
+      ).rejects.toThrow(/DESIGN_COMPONENT_SUBMISSION_DISALLOWED/);
     });
 
     it('rejects batch submit attempting to overwrite protected system files (package.json, tsconfig.json)', async () => {
@@ -728,6 +759,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         'app/page.tsx': SAMPLE_PAGE_JSX,
       });
 
+      const goodCode = `'use client';\n/** @defaultWidth 400 */\n/** @defaultHeight 300 */\n/** @controls {} */\nimport React from 'react';\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction Good() { return <div>Good</div>; }\nexport default withResponsiveProps(Good);\n`;
+      const brokenCode = `'use client';\n/** @defaultWidth 400 */\n/** @defaultHeight 300 */\n/** @controls {} */\nimport React from 'react';\nimport { withResponsiveProps } from '@revyme/runtime';\nfunction Broken() { return <div >>SYNTAX ERROR; }\nexport default withResponsiveProps(Broken);\n`;
+
       // Submit batch with 1 good file and 1 invalid TSX (syntax error)
       await expect(
         codeFilesSubmitOperation.execute(
@@ -736,11 +770,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             files: [
               {
                 path: 'components/Good.tsx',
-                code: 'export default function Good() { return <div data-id="g1">Good</div>; }',
+                code: goodCode,
               },
               {
                 path: 'components/Broken.tsx',
-                code: 'export default function Broken() { return <div >>SYNTAX ERROR; }',
+                code: brokenCode,
               },
             ],
           },
