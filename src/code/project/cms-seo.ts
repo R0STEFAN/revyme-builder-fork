@@ -469,15 +469,17 @@ const seoExpressions = ${expressionsLiteral};
 export async function generateMetadata({ params }) {
   const resolved = await params;
   const items = Array.isArray(${varName}) ? ${varName} : [];
-  const raw = items.find((i) => i && i._slug === resolved?.slug);
-  const item = (raw && resolved?.lang && raw._i18n?.[resolved.lang])
-    ? { ...raw, ...Object.fromEntries(Object.entries(raw._i18n[resolved.lang]).filter(([, v]) => typeof v === 'string' && v !== '')) }
+  const slugVal = resolved?.slug || (resolved ? Object.entries(resolved).find(([k, v]) => k !== 'lang' && typeof v === 'string')?.[1] : undefined);
+  const raw = items.find((i) => i && (i._slug === slugVal || i.slug === slugVal || i.id === slugVal));
+  const lang = resolved?.lang;
+  const item = (raw && lang && raw._i18n?.[lang])
+    ? { ...raw, ...Object.fromEntries(Object.entries(raw._i18n[lang]).filter(([, v]) => typeof v === 'string' && v !== '')) }
     : raw;
   const evalExpr = (expr) => {
     try {
       const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
-      const fn = new Function('item', 'params', \`return (\${unwrapped});\`);
-      const val = fn(item, { slug: resolved?.slug, ...(resolved || {}) });
+      const fn = new Function('item', 'params', '${varName}', \`return (\${unwrapped});\`);
+      const val = fn(item, { slug: slugVal, ...(resolved || {}) }, ${varName});
       if (val === undefined || val === null) return undefined;
       if (typeof val === 'object') {
         return val.url || (val.id ? \`/assets/\${val.id}\` : undefined) || val.filename_disk || undefined;
@@ -533,12 +535,17 @@ export async function generateMetadata({ params }) {
 ${staticParams}
 export const dynamicParams = true;
 
-export default async function Page({ params }: { params?: Promise<{ slug: string; lang?: string }> } = {}) {
-  const resolved = (params ? await params : undefined) as { slug: string; lang?: string } | undefined;
+export default async function Page({ params }: { params?: Promise<Record<string, string>> } = {}) {
+  const resolved = (params ? await params : undefined);
   const items = Array.isArray(${varName}) ? ${varName} : [];
-  const raw = resolved?.slug ? items.find((i) => i && i._slug === resolved.slug) : undefined;
-  if (resolved?.slug && !raw) notFound();
-  return <PageClient item={raw} />;
+  const slugVal = resolved?.slug || (resolved ? Object.entries(resolved).find(([k, v]) => k !== 'lang' && typeof v === 'string')?.[1] : undefined);
+  const raw = slugVal ? items.find((i) => i && (i._slug === slugVal || i.slug === slugVal || i.id === slugVal)) : undefined;
+  if (slugVal && !raw) notFound();
+  const lang = resolved?.lang;
+  const item = (raw && lang && raw._i18n?.[lang])
+    ? { ...raw, ...Object.fromEntries(Object.entries(raw._i18n[lang]).filter(([, v]) => typeof v === 'string' && v !== '')) }
+    : raw;
+  return <PageClient item={item || raw} />;
 }
 `;
 }

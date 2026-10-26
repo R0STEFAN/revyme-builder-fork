@@ -1,7 +1,8 @@
 // ExpressionEditorPopup.tsx — Visual expression / formula editor dialog.
 // Allows no-code authoring of dynamic composite text and URLs with token autocomplete and live preview.
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAtomValue } from 'jotai';
 import Modal from '@/design-system/Modal';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
@@ -40,6 +41,7 @@ export default function ExpressionEditorPopup({
   const [expression, setExpression] = useState(initialExpression);
   const [cursorPos, setCursorPos] = useState<number>(initialExpression.length);
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [isDotActive, setIsDotActive] = useState<boolean>(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const activeFilePath = useAtomValue(activeFilePathAtom);
   const effectiveFilePath = filePath || activeFilePath;
@@ -53,6 +55,7 @@ export default function ExpressionEditorPopup({
       setExpression(initialExpression);
       setCursorPos(initialExpression.length);
       setIsDismissed(false);
+      setIsDotActive(false);
       setSelectedIndex(0);
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
@@ -93,6 +96,7 @@ export default function ExpressionEditorPopup({
     setExpression(next);
     setCursorPos(nextPos);
     setIsDismissed(false);
+    setIsDotActive(false);
     setTimeout(() => {
       el.focus();
       el.setSelectionRange(nextPos, nextPos);
@@ -165,8 +169,9 @@ export default function ExpressionEditorPopup({
   };
 
   // Intelligent autocomplete suggestions based on cursor position and active expression
+  // Triggers ONLY after typing a dot '.', and stays active while typing identifier characters after that dot.
   const suggestions = useMemo(() => {
-    if (isDismissed) return [];
+    if (!isDotActive || isDismissed) return [];
     return getAutocompleteSuggestions({
       text: expression,
       cursorPos,
@@ -175,7 +180,68 @@ export default function ExpressionEditorPopup({
       collectionSchemas: safeSchemas,
       itemVar,
     });
-  }, [expression, cursorPos, sampleContext, routeParams, safeSchemas, itemVar, isDismissed]);
+  }, [expression, cursorPos, sampleContext, routeParams, safeSchemas, itemVar, isDismissed, isDotActive]);
+
+  const [portalStyle, setPortalStyle] = useState<React.CSSProperties | null>(null);
+
+  // Position portal floating dropdown right below or above the textarea
+  useLayoutEffect(() => {
+    if (suggestions.length === 0) {
+      setPortalStyle(null);
+      return;
+    }
+
+    const place = () => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = r.width || 440;
+      const left = r.width ? Math.max(8, Math.min(r.left, (window.innerWidth || 1024) - width - 8)) : (r.left || 20);
+
+      const spaceBelow = window.innerHeight ? window.innerHeight - r.bottom : 500;
+      const dropdownHeight = Math.min(220, 40 + suggestions.length * 32);
+      const placeAbove = spaceBelow < dropdownHeight && r.top > dropdownHeight;
+
+      if (placeAbove) {
+        setPortalStyle({
+          position: 'fixed',
+          left,
+          bottom: Math.max(8, (window.innerHeight || 800) - r.top + 4),
+          width,
+          zIndex: 100020,
+        });
+      } else {
+        setPortalStyle({
+          position: 'fixed',
+          left,
+          top: (r.bottom || 100) + 4,
+          width,
+          zIndex: 100020,
+        });
+      }
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [suggestions.length]);
+
+  // Click outside to dismiss suggestions
+  useEffect(() => {
+    if (suggestions.length === 0) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!textareaRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setIsDismissed(true);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [suggestions.length]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -198,6 +264,8 @@ export default function ExpressionEditorPopup({
 
     setExpression(next);
     setCursorPos(nextPos);
+    setIsDotActive(false);
+    setIsDismissed(true);
     setSelectedIndex(0);
 
     setTimeout(() => {
@@ -232,6 +300,7 @@ export default function ExpressionEditorPopup({
         e.preventDefault();
         e.stopPropagation();
         setIsDismissed(true);
+        setIsDotActive(false);
         return;
       }
     }
@@ -245,14 +314,38 @@ export default function ExpressionEditorPopup({
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     const pos = e.target.selectionStart;
-    setIsDismissed(false);
+    const textBefore = val.slice(0, pos);
+
+    if (textBefore.endsWith('.')) {
+      setIsDotActive(true);
+      setIsDismissed(false);
+    } else if (isDotActive) {
+      const lastDot = textBefore.lastIndexOf('.');
+      if (lastDot !== -1) {
+        const afterDot = textBefore.slice(lastDot + 1);
+        if (/^[a-zA-Z0-9_$]*$/.test(afterDot)) {
+          setIsDismissed(false);
+        } else {
+          setIsDotActive(false);
+        }
+      } else {
+        setIsDotActive(false);
+      }
+    }
+
     setExpression(val);
     setCursorPos(pos);
   };
 
   const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    const pos = (e.target as HTMLTextAreaElement).selectionStart;
+    const el = e.target as HTMLTextAreaElement;
+    const pos = el.selectionStart;
     setCursorPos(pos);
+    const textBefore = el.value.slice(0, pos);
+    const lastDot = textBefore.lastIndexOf('.');
+    if (lastDot === -1 || !/^[a-zA-Z0-9_$]*$/.test(textBefore.slice(lastDot + 1))) {
+      setIsDotActive(false);
+    }
   };
 
   return (
@@ -263,6 +356,7 @@ export default function ExpressionEditorPopup({
         if (suggestions.length > 0 && e.key === 'Escape') {
           e.stopPropagation();
           setIsDismissed(true);
+          setIsDotActive(false);
           return false;
         }
       }}
@@ -421,11 +515,12 @@ export default function ExpressionEditorPopup({
               className="w-full px-2.5 py-2 text-xs font-mono bg-[var(--grid-line)] border border-[var(--control-border)] hover:border-[var(--control-border-hover)] focus:border-purple-500 text-[var(--text-primary)] rounded focus:outline-none resize-none transition-colors"
             />
 
-            {/* Intelligent Autocomplete Dropdown */}
-            {suggestions.length > 0 && (
+            {/* Intelligent Autocomplete Dropdown (Portaled so it floats above the modal and outside its bounds) */}
+            {suggestions.length > 0 && portalStyle && typeof document !== 'undefined' && createPortal(
               <div
                 ref={listRef}
-                className="absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-[#18181f] border border-[var(--control-border)] rounded-md shadow-2xl z-50 py-1 divide-y divide-white/5"
+                style={portalStyle}
+                className="max-h-52 overflow-y-auto bg-[#18181f] border border-[var(--control-border)] rounded-md shadow-2xl py-1 divide-y divide-white/5"
                 onMouseDown={(e) => e.preventDefault()}
               >
                 <div className="px-2.5 py-1 text-[10px] font-semibold text-[var(--text-disabled)] uppercase tracking-wider flex items-center justify-between bg-black/30">
@@ -489,7 +584,8 @@ export default function ExpressionEditorPopup({
                     );
                   })}
                 </div>
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         </div>

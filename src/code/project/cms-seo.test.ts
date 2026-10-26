@@ -41,7 +41,7 @@ const ITEMS = [
  * Server wrappers get no FileKind, so the oracle never sees this file and it
  * ships to production verbatim — executing it here is the only gate it has.
  */
-async function runGenerateMetadata(src: string, items: unknown[] | null, slug: string, lang?: string) {
+async function runGenerateMetadata(src: string, items: unknown[] | null, slug: string, lang?: string, paramKey: string = 'slug') {
   // The collection arrives through an import, which `new Function` cannot
   // resolve — bind that identifier to the test data instead.
   const importVar = /^import (\w+) from ['"]@\/cms\//m.exec(src)?.[1];
@@ -57,7 +57,7 @@ async function runGenerateMetadata(src: string, items: unknown[] | null, slug: s
   const fn = factory(items) as (a: { params: unknown }) => Promise<Record<string, any>>;
   // vinext passes params as a THENABLE, matching Next 15 — the emitted code
   // must await it, so hand it a promise rather than a plain object.
-  return fn({ params: Promise.resolve({ slug, lang }) });
+  return fn({ params: Promise.resolve({ [paramKey]: slug, lang }) });
 }
 
 async function runGenerateStaticParams(src: string, items: unknown[] | null) {
@@ -476,6 +476,14 @@ describe('buildCmsDetailServerWrapper with localized _i18n items', () => {
     const metaDefault = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv');
     expect(metaDefault.title).toBe('Kyiv Tour');
     expect(metaDefault.description).toBe('Base description in English');
+  });
+
+  it('resolves localized title when route param is named category instead of slug', async () => {
+    const metaUk = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv', 'uk', 'category');
+    expect(metaUk.title).toBe('Тур Києвом');
+
+    const metaDe = await runGenerateMetadata(src, LOCALIZED_ITEMS, 'kyiv', 'de', 'category');
+    expect(metaDe.title).toBe('Kiew Tour');
   });
 
   it('has exact parity with localizeRows nonempty-string merge semantics', () => {

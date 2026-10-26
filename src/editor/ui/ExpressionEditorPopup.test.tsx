@@ -166,4 +166,29 @@ describe('ExpressionEditorPopup — Data Tokens Palette', () => {
     fireEvent.keyDown(textarea, { key: 'Escape' });
     expect(screen.queryByText(/Suggestions/)).toBeNull();
   });
+
+  it('closes dropdown after selecting a suggestion and does not show when text has no active dot', () => {
+    render(
+      <ExpressionEditorPopup
+        isOpen={true}
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        collectionSlug="categories"
+        itemVar="item"
+      />,
+    );
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'item.', selectionStart: 5, selectionEnd: 5 } });
+    expect(screen.queryByText(/Suggestions/)).not.toBeNull();
+
+    // Select first suggestion from the dropdown
+    const suggestionBtns = screen.getAllByRole('button').filter(b => b.hasAttribute('data-index'));
+    expect(suggestionBtns.length).toBeGreaterThan(0);
+    fireEvent.click(suggestionBtns[0]);
+    expect(textarea.value).toMatch(/^item\./);
+
+    // Dropdown MUST be closed!
+    expect(screen.queryByText(/Suggestions/)).toBeNull();
+  });
 });
