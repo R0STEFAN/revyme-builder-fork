@@ -101,6 +101,17 @@ describe('the Providers export contract', () => {
     const src = buildProvidersSource({ defaultLocale: 'en', locales: [{ code: 'en', label: 'English' }] });
     expect(src).toContain('NextIntlClientProvider');
   });
+
+  it('accepts explicit locale prop for publish-time SSR/hydration stability', () => {
+    const src = buildProvidersSource({ defaultLocale: 'uk', locales: [{ code: 'uk', label: 'Ukrainian' }, { code: 'en', label: 'English' }] });
+    expect(src).toMatch(/export function Providers\(\{\s*children,\s*locale:\s*propLocale\s*\}/);
+    expect(src).toContain('const locale = propLocale ?? (routeLocale ?? clientLocale);');
+  });
+
+  it('configures timeZone on NextIntlClientProvider to prevent ENVIRONMENT_FALLBACK during SSR/build', () => {
+    const src = buildProvidersSource({ defaultLocale: 'uk', locales: [{ code: 'uk', label: 'Ukrainian' }, { code: 'en', label: 'English' }] });
+    expect(src).toContain('<NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">');
+  });
 });
 
 // ─── Link attributes runtime (BUG 18: Smooth Scroll / Keep Params had no runtime) ──

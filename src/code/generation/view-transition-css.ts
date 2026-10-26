@@ -239,22 +239,43 @@ function routeMatches(pattern: string, actual: string): boolean {
   return true;
 }
 
+function normalizePath(p: string): string {
+  if (!p) return '/';
+  const clean = p.replace(/\/+$/, '');
+  return clean ? clean : '/';
+}
+
+function stripLocalePrefix(p: string): string {
+  if (!p) return '/';
+  const norm = normalizePath(p);
+  const match = norm.match(/^\/([a-z]{2,3}(?:-[A-Za-z0-9]+)?)(?:\/(.*))?$/);
+  if (match) {
+    return '/' + (match[2] || '');
+  }
+  return norm;
+}
+
 /** Pick the effect for a navigation source→dest: byTarget > all > __default > null. */
 export function resolvePageEffect(map: PageEffectsMap, source: string, dest: string): PageEffect | null {
   const pages = map?.pages;
-  let bucket = pages?.[source];
+  const normSource = stripLocalePrefix(source);
+  const normDest = stripLocalePrefix(dest);
+
+  let bucket = pages ? (pages[source] ?? pages[normSource]) : null;
   if (!bucket && pages) {
     for (const key of Object.keys(pages)) {
-      if (routeMatches(key, source)) { bucket = pages[key]; break; }
+      if (routeMatches(key, source) || routeMatches(key, normSource)) { bucket = pages[key]; break; }
     }
   }
   let eff: PageEffect | null = null;
   if (bucket?.byTarget) {
     if (bucket.byTarget[dest]) {
       eff = bucket.byTarget[dest];
+    } else if (bucket.byTarget[normDest]) {
+      eff = bucket.byTarget[normDest];
     } else {
       for (const tKey of Object.keys(bucket.byTarget)) {
-        if (routeMatches(tKey, dest)) { eff = bucket.byTarget[tKey]; break; }
+        if (routeMatches(tKey, dest) || routeMatches(tKey, normDest)) { eff = bucket.byTarget[tKey]; break; }
       }
     }
   }

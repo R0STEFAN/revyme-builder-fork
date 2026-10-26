@@ -150,21 +150,42 @@ function routeMatches(pattern, actual) {
   return true;
 }
 
+function normalizePath(p) {
+  if (!p) return '/';
+  var clean = p.replace(/\\/+$/, '');
+  return clean ? clean : '/';
+}
+
+function stripLocalePrefix(p) {
+  if (!p) return '/';
+  var norm = normalizePath(p);
+  var match = norm.match(/^\\/([a-z]{2,3}(?:-[A-Za-z0-9]+)?)(?:\\/(.*))?$/);
+  if (match) {
+    return '/' + (match[2] || '');
+  }
+  return norm;
+}
+
 export function resolvePageEffect(map, source, dest) {
   var pages = map && map.pages;
-  var bucket = pages ? pages[source] : null;
+  var normSource = stripLocalePrefix(source);
+  var normDest = stripLocalePrefix(dest);
+
+  var bucket = pages ? (pages[source] || pages[normSource]) : null;
   if (!bucket && pages) {
     for (var key in pages) {
-      if (routeMatches(key, source)) { bucket = pages[key]; break; }
+      if (routeMatches(key, source) || routeMatches(key, normSource)) { bucket = pages[key]; break; }
     }
   }
   var eff = null;
   if (bucket && bucket.byTarget) {
     if (bucket.byTarget[dest]) {
       eff = bucket.byTarget[dest];
+    } else if (bucket.byTarget[normDest]) {
+      eff = bucket.byTarget[normDest];
     } else {
       for (var tKey in bucket.byTarget) {
-        if (routeMatches(tKey, dest)) { eff = bucket.byTarget[tKey]; break; }
+        if (routeMatches(tKey, dest) || routeMatches(tKey, normDest)) { eff = bucket.byTarget[tKey]; break; }
       }
     }
   }
@@ -402,6 +423,10 @@ export function PageTransitions({ children }: { children: React.ReactNode }) {
       const dest = new URL(href, location.href);
       if (dest.origin !== location.origin) return;
       if (dest.pathname === location.pathname) return;
+      // Do not intercept cross-language navigation with SPA view transitions
+      const srcLocale = (location.pathname.match(/^\\/([a-z]{2,3}(?:-[A-Za-z0-9]+)?)(?:\\/|$)/) || [])[1];
+      const dstLocale = (dest.pathname.match(/^\\/([a-z]{2,3}(?:-[A-Za-z0-9]+)?)(?:\\/|$)/) || [])[1];
+      if (srcLocale !== dstLocale) return;
       const eff = resolvePageEffect(PAGE_EFFECTS as any, location.pathname, dest.pathname);
       if (!eff) return;
 

@@ -23,7 +23,7 @@ import { RTL_TEXT_CSS } from '@/shared/rtl-text';
 
 /** Version marker — bump when the template shape changes so older generated
  *  providers are upgraded on load. */
-export const PROVIDERS_MARKER = '@revyme-providers v4';
+export const PROVIDERS_MARKER = '@revyme-providers v5';
 
 /** A locale code safe to interpolate into generated code/identifiers. */
 function safeLocale(code: string): boolean {
@@ -133,14 +133,16 @@ function localeFromPath(pathname: string | null): string | null {
   return seg && seg !== DEFAULT_LOCALE && LOCALES.includes(seg) ? seg : null;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, locale: propLocale }: { children: React.ReactNode; locale?: string }) {
   // ROUTE-FIRST locale: /fr/... serves French on the server render itself
   // (usePathname resolves during SSR), so crawlers get translated HTML.
+  // When propLocale is explicitly supplied (published site / app/[lang]/layout.tsx),
+  // it wins synchronously over client storage to prevent hydration mismatches.
   const pathname = usePathname();
   const router = useRouter();
-  const routeLocale = localeFromPath(pathname);
+  const routeLocale = propLocale ?? localeFromPath(pathname);
   const [clientLocale, setClientLocale] = useState(DEFAULT_LOCALE);
-  const locale = routeLocale ?? clientLocale;
+  const locale = propLocale ?? (routeLocale ?? clientLocale);
 
   // Link attributes runtime — see revymeNavClick above.
   useEffect(() => {
@@ -151,9 +153,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => revymeScrollOnArrival(), [pathname]);
 
   // Client channel: persisted preference + the 'locale-change' event any
-  // component (LocaleSwitcher) can dispatch. Only applies on unprefixed URLs.
+  // component (LocaleSwitcher) can dispatch. Only applies when no explicit propLocale is passed.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (propLocale || typeof window === 'undefined') return;
     try {
       const stored = window.localStorage.getItem('locale');
       if (stored && messagesByLocale[stored]) setClientLocale(stored);
@@ -166,7 +168,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener('locale-change', handler);
     return () => window.removeEventListener('locale-change', handler);
-  }, []);
+  }, [propLocale]);
 
   // Mirror the ACTIVE locale to <html lang> and persist it, so :lang() CSS
   // fires and the choice survives navigation to unprefixed URLs.
@@ -174,13 +176,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (typeof document !== 'undefined') {
       if (document.documentElement.lang !== locale) document.documentElement.lang = locale;
     }
-    try { window.localStorage.setItem('locale', locale); } catch { /* ignore */ }
-  }, [locale]);
+    if (!propLocale) {
+      try { window.localStorage.setItem('locale', locale); } catch { /* ignore */ }
+    }
+  }, [locale, propLocale]);
 
   const messages = messagesByLocale[locale] || messagesByLocale[DEFAULT_LOCALE];
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         {/* lang on a wrapper (display:contents = no box) so :lang() styles —
             the RTL text rule among them — match in the SERVER-rendered HTML

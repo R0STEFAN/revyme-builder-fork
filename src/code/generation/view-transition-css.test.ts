@@ -170,6 +170,23 @@ describe('view-transition-css: resolvePageEffect', () => {
       )?.preset,
     ).toBe('gallery-to-tattoo');
   });
+
+  it('normalizes locale-prefixed routes to match authored logical keys', () => {
+    const locMap: PageEffectsMap = {
+      pages: {
+        '/gallery': {
+          byTarget: {
+            '/about': eff('gallery-to-about'),
+          },
+        },
+      },
+    };
+
+    // Resolves /en/gallery -> /en/about to authored /gallery -> /about effect
+    expect(resolvePageEffect(locMap, '/en/gallery', '/en/about')?.preset).toBe('gallery-to-about');
+    // Default unprefixed routes continue to resolve
+    expect(resolvePageEffect(locMap, '/gallery', '/about')?.preset).toBe('gallery-to-about');
+  });
 });
 
 describe('view-transition-css: defaults', () => {
