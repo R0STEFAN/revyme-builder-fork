@@ -1260,12 +1260,35 @@ export function ensureSeoAndAiDiscoveryFiles(
               : undefined,
           });
 
+          let titleField = 'title';
+          let descriptionField = 'summary';
+          let contentField = 'content';
+          let slugField = 'slug';
+
+          if (files[`cms/${matchedCol}.json`]) {
+            try {
+              const parsed = JSON.parse(files[`cms/${matchedCol}.json`]);
+              const first = Array.isArray(parsed) ? parsed[0] : null;
+              if (first && typeof first === 'object') {
+                const keys = Object.keys(first);
+                titleField = keys.find((k) => /^(title|name|headline|label)$/i.test(k)) || titleField;
+                descriptionField =
+                  keys.find((k) => /^(summary|excerpt|description|subtitle|shortDesc)$/i.test(k)) ||
+                  descriptionField;
+                contentField =
+                  keys.find((k) => /^(content|body|text|article)$/i.test(k)) || contentField;
+                slugField = keys.find((k) => /^(_slug|slug|id)$/i.test(k)) || slugField;
+              }
+            } catch {}
+          }
+
           llmsCollections.push({
             collectionSlug: matchedCol,
             routePrefix: routePrefix || '/',
-            titleField: 'title',
-            descriptionField: 'excerpt',
-            slugField: 'slug',
+            titleField,
+            descriptionField,
+            contentField,
+            slugField,
           });
         }
       }

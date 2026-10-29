@@ -98,10 +98,10 @@ export function generateLlmsRouteCode(input: LlmsGeneratorInput = {}): string {
   const ${linesVar} = ${listVar}
     .filter((it: any) => it && it._status !== 'draft')
     .map((it: any) => {
-      const slug = it.${slugF} || it.slug || it.id;
+      const slug = it.${slugF} || it.slug || it._slug || it.id;
       if (!slug) return null;
-      const title = it.${titleF} || it.name || slug;
-      const desc = it.${summaryF} || it.description || '';
+      const title = it.${titleF} || it.title || it.name || it.headline || slug;
+      const desc = it.${summaryF} || it.summary || it.excerpt || it.description || '';
       return \`- [\${title}](\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))})\${desc ? \`: \${desc}\` : ''}\`;
     })
     .filter(Boolean);
@@ -117,11 +117,11 @@ export function generateLlmsRouteCode(input: LlmsGeneratorInput = {}): string {
   const ${fullBlocksVar} = ${listVar}
     .filter((it: any) => it && it._status !== 'draft')
     .map((it: any) => {
-      const slug = it.${slugF} || it.slug || it.id;
+      const slug = it.${slugF} || it.slug || it._slug || it.id;
       if (!slug) return null;
-      const title = it.${titleF} || it.name || slug;
-      const desc = it.${summaryF} || it.description || '';
-      const content = it.${contentF} || desc || '';
+      const title = it.${titleF} || it.title || it.name || it.headline || slug;
+      const desc = it.${summaryF} || it.summary || it.excerpt || it.description || '';
+      const content = it.${contentF} || it.content || it.body || it.text || desc || '';
       return \`### \${title}\\nURL: \${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\\n\\n\${desc ? \`> \${desc}\\n\\n\` : ''}\${content}\`;
     })
     .filter(Boolean);
