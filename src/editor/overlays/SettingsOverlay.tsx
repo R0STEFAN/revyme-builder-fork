@@ -30,6 +30,7 @@ import { trace } from '@/shared/debug-trace';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { generateRobotsCode, type RobotsGeneratorInput } from '@/code/generation/robots-gen';
 import { generateLlmsRouteCode, generateLlmsFullRouteCode } from '@/code/generation/llms-gen';
+import { ensureSeoAndAiDiscoveryFiles } from '@/code/project/source-export';
 import {
   SettingsGroup,
   SettingsRow,
@@ -205,6 +206,29 @@ function parseCustomRobotsText(text: string): Array<{ userAgent: string; allow?:
   }));
 }
 
+function parseCustomSectionsMarkdown(md: string): Array<{ title: string; content: string }> {
+  if (!md.trim()) return [];
+  const sections: Array<{ title: string; content: string }> = [];
+  const parts = md.split(/(?:^|\n)##\s+/);
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part.trim()) continue;
+    if (i === 0 && !md.trim().startsWith('##')) {
+      sections.push({ title: 'Overview', content: part.trim() });
+      continue;
+    }
+    const newlineIdx = part.indexOf('\n');
+    if (newlineIdx === -1) {
+      sections.push({ title: part.trim(), content: '' });
+    } else {
+      const title = part.slice(0, newlineIdx).trim();
+      const content = part.slice(newlineIdx + 1).trim();
+      sections.push({ title, content });
+    }
+  }
+  return sections;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SettingsOverlay
 // ═══════════════════════════════════════════════════════════════════════════
@@ -297,6 +321,7 @@ export default function SettingsOverlay() {
 
   const [llmsEnabled, setLlmsEnabled] = useState(true);
   const [llmsNotes, setLlmsNotes] = useState('');
+  const [llmsCustomSectionsMarkdown, setLlmsCustomSectionsMarkdown] = useState('');
   const [hasLlmsChanges, setHasLlmsChanges] = useState(false);
 
   useEffect(() => {
@@ -334,6 +359,13 @@ export default function SettingsOverlay() {
         const parsed = JSON.parse(rawLlms);
         if (parsed.enabled !== undefined) setLlmsEnabled(parsed.enabled);
         if (parsed.notes) setLlmsNotes(parsed.notes);
+        if (typeof parsed.customSectionsMarkdown === 'string') {
+          setLlmsCustomSectionsMarkdown(parsed.customSectionsMarkdown);
+        } else if (Array.isArray(parsed.customSections) && parsed.customSections.length > 0) {
+          setLlmsCustomSectionsMarkdown(
+            parsed.customSections.map((s: any) => `## ${s.title}\n${s.content}`).join('\n\n')
+          );
+        }
       } catch {}
     }
   }, []);
@@ -713,31 +745,42 @@ export default function SettingsOverlay() {
   }, [robotsMode, robotsDisallow, robotsAllow, robotsCustomRaw, aiBots]);
 
   const handleSaveLlms = useCallback(() => {
+    const customSections = parseCustomSectionsMarkdown(llmsCustomSectionsMarkdown);
     const config = {
       enabled: llmsEnabled,
       notes: llmsNotes,
+      customSectionsMarkdown: llmsCustomSectionsMarkdown,
+      customSections,
     };
 
     trace.action('settings:save-llms', config);
     modifyProjectFile('_meta/llms.json', () => JSON.stringify(config, null, 2));
     if (llmsEnabled) {
-      modifyProjectFile('app/llms.txt/route.ts', () =>
-        generateLlmsRouteCode({
-          siteTitle: siteName || 'Revyme Website',
-          siteDescription: siteDescription || '',
-          notes: llmsNotes,
-        }),
-      );
-      modifyProjectFile('app/llms-full.txt/route.ts', () =>
-        generateLlmsFullRouteCode({
-          siteTitle: siteName || 'Revyme Website',
-          siteDescription: siteDescription || '',
-          notes: llmsNotes,
-        }),
-      );
+      const allFiles: Record<string, string> = {};
+      for (const p of projectFS.listFiles()) {
+        allFiles[p] = projectFS.readFile(p) || '';
+      }
+      allFiles['_meta/llms.json'] = JSON.stringify(config, null, 2);
+      delete allFiles['app/llms.txt/route.ts'];
+      delete allFiles['app/llms-full.txt/route.ts'];
+
+      const generated = ensureSeoAndAiDiscoveryFiles(allFiles);
+      if (generated['app/llms.txt/route.ts']) {
+        modifyProjectFile('app/llms.txt/route.ts', () => generated['app/llms.txt/route.ts']);
+      }
+      if (generated['app/llms-full.txt/route.ts']) {
+        modifyProjectFile('app/llms-full.txt/route.ts', () => generated['app/llms-full.txt/route.ts']);
+      }
+    } else {
+      if (projectFS.readFile('app/llms.txt/route.ts')) {
+        projectFS.deleteFile('app/llms.txt/route.ts');
+      }
+      if (projectFS.readFile('app/llms-full.txt/route.ts')) {
+        projectFS.deleteFile('app/llms-full.txt/route.ts');
+      }
     }
     setHasLlmsChanges(false);
-  }, [llmsEnabled, llmsNotes, siteName, siteDescription]);
+  }, [llmsEnabled, llmsNotes, llmsCustomSectionsMarkdown]);
 
   // ─── Upload handler ────────────────────────────────────────────────
 
@@ -1265,19 +1308,69 @@ export default function SettingsOverlay() {
               </div>
             </SettingsRow>
 
-            <SettingsRow label="Context & notes for LLMs" htmlFor="llms-notes" align="top">
-              <textarea
-                id="llms-notes"
-                rows={4}
-                value={llmsNotes}
-                onChange={(e) => {
-                  setLlmsNotes(e.target.value);
-                  setHasLlmsChanges(true);
-                }}
-                className={`${ROW_INPUT_CLS} resize-none min-h-[70px]`}
-                placeholder="Special guidelines, business overview, or key facts for AI agents visiting your site..."
-              />
-            </SettingsRow>
+            {llmsEnabled && (
+              <>
+                <SettingsRow label="Context & notes for LLMs" htmlFor="llms-notes" align="top">
+                  <textarea
+                    id="llms-notes"
+                    rows={3}
+                    value={llmsNotes}
+                    onChange={(e) => {
+                      setLlmsNotes(e.target.value);
+                      setHasLlmsChanges(true);
+                    }}
+                    className={`${ROW_INPUT_CLS} resize-none min-h-[70px]`}
+                    placeholder="Special guidelines, business overview, or key facts for AI agents visiting your site..."
+                  />
+                </SettingsRow>
+
+                <SettingsRow
+                  label="Custom sections (Markdown)"
+                  htmlFor="llms-custom-sections"
+                  align="top"
+                >
+                  <div className="flex flex-col gap-1 w-full">
+                    <textarea
+                      id="llms-custom-sections"
+                      rows={4}
+                      value={llmsCustomSectionsMarkdown}
+                      onChange={(e) => {
+                        setLlmsCustomSectionsMarkdown(e.target.value);
+                        setHasLlmsChanges(true);
+                      }}
+                      className={`${ROW_INPUT_CLS} font-mono text-xs resize-none min-h-[90px]`}
+                      placeholder={`## Documentation\n- [API Docs](/docs): Developer endpoints\n\n## Support\nContact support@example.com`}
+                    />
+                    <p className="text-[11px] text-[var(--text-tertiary)]">
+                      Add extra Markdown headings (<code>## Title</code>) to inject custom documentation or link lists into /llms.txt.
+                    </p>
+                  </div>
+                </SettingsRow>
+
+                <SettingsRow label="Live feeds">
+                  <div className="flex items-center gap-2 py-1">
+                    <a
+                      href="/llms.txt"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded bg-[var(--surface-layer-2)] hover:bg-[var(--surface-layer-3)] text-[var(--text-primary)] transition-colors border border-[var(--border-subtle)]"
+                    >
+                      <span>/llms.txt</span>
+                      <span className="text-[10px] text-[var(--text-tertiary)]">↗</span>
+                    </a>
+                    <a
+                      href="/llms-full.txt"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded bg-[var(--surface-layer-2)] hover:bg-[var(--surface-layer-3)] text-[var(--text-primary)] transition-colors border border-[var(--border-subtle)]"
+                    >
+                      <span>/llms-full.txt</span>
+                      <span className="text-[10px] text-[var(--text-tertiary)]">↗</span>
+                    </a>
+                  </div>
+                </SettingsRow>
+              </>
+            )}
           </SettingsGroup>
         </div>
       );

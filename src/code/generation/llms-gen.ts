@@ -41,6 +41,13 @@ function toValidIdentifier(name: string): string {
   return /^[0-9]/.test(clean) ? `cms_${clean}` : clean;
 }
 
+function escapeTemplateLiteral(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g, '\\`')
+    .replace(/\$\{/g, '\\${');
+}
+
 /**
  * Generate source code for Next.js App Router route handler (app/llms.txt/route.ts or app/llms-full.txt/route.ts).
  */
@@ -48,6 +55,7 @@ export function generateLlmsRouteCode(input: LlmsGeneratorInput = {}): string {
   const {
     siteName = input.siteTitle || 'Website',
     siteDescription = '',
+    notes = input.notes || '',
     corePages = input.keyPages || [{ title: 'Home', route: '/', description: 'Home page' }],
     cmsCollections = [],
     customSections = [],
@@ -129,19 +137,29 @@ export function generateLlmsRouteCode(input: LlmsGeneratorInput = {}): string {
     .map((p) => {
       const rawRoute = p.route || p.path || '/';
       const path = rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`;
-      const desc = p.description ? `: ${p.description}` : '';
-      return `    \`- [${p.title}](\${baseUrl}${path === '/' ? '' : path})${desc}\``;
+      const desc = p.description ? `: ${escapeTemplateLiteral(p.description)}` : '';
+      return `    \`- [${escapeTemplateLiteral(p.title)}](\${baseUrl}${path === '/' ? '' : path})${desc}\``;
     })
     .join(',\n');
 
   // Custom sections
   const customSectionsCode = customSections
-    .map((s) => `  sections.push(\`## ${s.title}\\n${s.content.replace(/`/g, '\\`')}\`);`)
+    .map((s) => `  sections.push(\`## ${escapeTemplateLiteral(s.title)}\\n${escapeTemplateLiteral(s.content)}\`);`)
     .join('\n');
 
   const optionalLink = !isFull
     ? `  sections.push(\`## Optional\\n- [Full Content](\${baseUrl}/llms-full.txt): Complete site documentation and content in markdown\`);\n`
     : '';
+
+  const activeNotes = isFull ? (input.fullMarkdownNotes || notes) : notes;
+  const headerLines: string[] = [`# ${escapeTemplateLiteral(siteName)}`];
+  if (siteDescription) {
+    headerLines.push(`> ${escapeTemplateLiteral(siteDescription)}`);
+  }
+  if (activeNotes && activeNotes.trim()) {
+    headerLines.push(escapeTemplateLiteral(activeNotes.trim()));
+  }
+  const headerCode = headerLines.join('\\n\\n');
 
   const code = `${imports.join('\n')}
 
@@ -152,7 +170,7 @@ export async function GET(): Promise<Response> {
   const sections: string[] = [];
 
   // Header & Title
-  sections.push(\`# ${siteName}\\n${siteDescription ? `> ${siteDescription}\\n` : ''}\`);
+  sections.push(\`${headerCode}\`);
 
   // Core Pages
   const pages = [

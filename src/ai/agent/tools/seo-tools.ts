@@ -242,21 +242,28 @@ export const configureLlmsTxtTool: AgentTool = {
     modifyProjectFile('_meta/llms.json', () => JSON.stringify(llmsConfig, null, 2));
 
     if (llmsConfig.enabled) {
-      const routeCode = generateLlmsRouteCode({
-        siteTitle: title,
-        siteDescription: desc,
-        notes: input.notes,
-        customSections: input.sections,
-      });
-      const fullRouteCode = generateLlmsFullRouteCode({
-        siteTitle: title,
-        siteDescription: desc,
-        notes: input.notes,
-        customSections: input.sections,
-      });
+      const allFiles: Record<string, string> = {};
+      for (const p of projectFS.listFiles()) {
+        allFiles[p] = projectFS.readFile(p) || '';
+      }
+      delete allFiles['app/llms.txt/route.ts'];
+      delete allFiles['app/llms-full.txt/route.ts'];
+      allFiles['_meta/llms.json'] = JSON.stringify(llmsConfig, null, 2);
 
-      modifyProjectFile('app/llms.txt/route.ts', () => routeCode);
-      modifyProjectFile('app/llms-full.txt/route.ts', () => fullRouteCode);
+      const generated = ensureSeoAndAiDiscoveryFiles(allFiles);
+      if (generated['app/llms.txt/route.ts']) {
+        modifyProjectFile('app/llms.txt/route.ts', () => generated['app/llms.txt/route.ts']);
+      }
+      if (generated['app/llms-full.txt/route.ts']) {
+        modifyProjectFile('app/llms-full.txt/route.ts', () => generated['app/llms-full.txt/route.ts']);
+      }
+    } else {
+      if (projectFS.readFile('app/llms.txt/route.ts')) {
+        projectFS.deleteFile('app/llms.txt/route.ts');
+      }
+      if (projectFS.readFile('app/llms-full.txt/route.ts')) {
+        projectFS.deleteFile('app/llms-full.txt/route.ts');
+      }
     }
     bump();
 

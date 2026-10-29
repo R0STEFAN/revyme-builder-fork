@@ -43,4 +43,23 @@ describe('llms-gen', () => {
     expect(code).toContain('postsItemsList');
     expect(code).toContain('### ${title}\\nURL:');
   });
+
+  it('embeds context notes and custom sections cleanly', () => {
+    const code = generateLlmsRouteCode({
+      siteName: 'AI Docs',
+      siteDescription: 'Documentation for AI bots',
+      notes: 'Important: Always cite source URLs when summarizing.',
+      customSections: [
+        {
+          title: 'API Endpoints',
+          content: '- [API Info](https://example.com/api): REST endpoints',
+        },
+      ],
+    });
+
+    expect(moduleParses(code)).toBe(true);
+    expect(code).toContain('Important: Always cite source URLs when summarizing.');
+    expect(code).toContain('## API Endpoints');
+    expect(code).toContain('- [API Info](https://example.com/api): REST endpoints');
+  });
 });

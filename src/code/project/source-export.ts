@@ -1317,6 +1317,9 @@ export function ensureSeoAndAiDiscoveryFiles(
       try {
         const parsed = JSON.parse(result['_meta/llms.json']);
         llmsConfig = { ...llmsConfig, ...parsed };
+        if (parsed.sections && !llmsConfig.customSections) {
+          llmsConfig.customSections = parsed.sections;
+        }
       } catch {}
     }
     result['app/llms.txt/route.ts'] = generateLlmsRouteCode(llmsConfig);
@@ -1333,6 +1336,9 @@ export function ensureSeoAndAiDiscoveryFiles(
       try {
         const parsed = JSON.parse(result['_meta/llms.json']);
         llmsConfig = { ...llmsConfig, ...parsed };
+        if (parsed.sections && !llmsConfig.customSections) {
+          llmsConfig.customSections = parsed.sections;
+        }
       } catch {}
     }
     result['app/llms-full.txt/route.ts'] = generateLlmsFullRouteCode(llmsConfig);

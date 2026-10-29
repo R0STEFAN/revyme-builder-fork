@@ -253,29 +253,41 @@ export const seoConfigureLlmsOperation: Operation<SeoConfigureLlmsInput, { chang
     ];
 
     if (llmsConfig.enabled) {
-      const routeCode = generateLlmsRouteCode({
-        siteTitle: title,
-        siteDescription: desc,
-        notes: input.notes,
-        customSections: input.sections,
-      });
-      const fullRouteCode = generateLlmsFullRouteCode({
-        siteTitle: title,
-        siteDescription: desc,
-        notes: input.notes,
-        customSections: input.sections,
-      });
+      const workingFiles = { ...files };
+      workingFiles['_meta/llms.json'] = JSON.stringify(llmsConfig, null, 2);
+      delete workingFiles['app/llms.txt/route.ts'];
+      delete workingFiles['app/llms-full.txt/route.ts'];
 
-      changes.push({
-        path: 'app/llms.txt/route.ts',
-        beforeHash: null,
-        content: routeCode,
-      });
-      changes.push({
-        path: 'app/llms-full.txt/route.ts',
-        beforeHash: null,
-        content: fullRouteCode,
-      });
+      const updated = ensureSeoAndAiDiscoveryFiles(workingFiles);
+      if (updated['app/llms.txt/route.ts']) {
+        changes.push({
+          path: 'app/llms.txt/route.ts',
+          beforeHash: null,
+          content: updated['app/llms.txt/route.ts'],
+        });
+      }
+      if (updated['app/llms-full.txt/route.ts']) {
+        changes.push({
+          path: 'app/llms-full.txt/route.ts',
+          beforeHash: null,
+          content: updated['app/llms-full.txt/route.ts'],
+        });
+      }
+    } else {
+      if (files['app/llms.txt/route.ts']) {
+        changes.push({
+          path: 'app/llms.txt/route.ts',
+          beforeHash: null,
+          content: '',
+        });
+      }
+      if (files['app/llms-full.txt/route.ts']) {
+        changes.push({
+          path: 'app/llms-full.txt/route.ts',
+          beforeHash: null,
+          content: '',
+        });
+      }
     }
 
     return { changes };
