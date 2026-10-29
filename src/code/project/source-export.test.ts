@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath, prepareSiteFiles, getUploadSrcSet, injectResponsiveImageSrcSets } from './source-export';
+import { buildSourceExport, localizeUrlImports, exportSlug, isBuilderMetadataPath, prepareSiteFiles, getUploadSrcSet, injectResponsiveImageSrcSets, ensureSeoAndAiDiscoveryFiles } from './source-export';
 import { createOverlayInCode } from '../generation/overlay-gen';
 import { PAGE_TRANSITIONS_SOURCE } from '../generation/page-transitions-gen';
 
@@ -400,6 +400,53 @@ export { default } from '@/app/articles/[slug]/page';
       const out = await buildSourceExport(files, { name: 'Custom SEO Site', runtimeRange: '^1', now: NOW });
       expect(out.files['app/sitemap.ts']).toBe(customSitemap);
       expect(out.files['app/robots.ts']).toBe(customRobots);
+    });
+
+    it('correctly associates routes with multiple collections and spreads staticUrls', async () => {
+      const files = {
+        'app/page.tsx': "export default function Page() { return <div>Home</div>; }",
+        'app/(main)/blog/page.tsx': "export default function BlogList() { return <div>Blog</div>; }",
+        'app/(main)/blog/[slug]/page.client.tsx': "import categories from '@/cms/categories.json'; export default function PostClient({ item }: any) { return <div>{item.title}</div>; }",
+        'app/(main)/blog/[slug]/page.tsx': "import posts from '@/cms/posts.json'; export default function PostPage() { return <div>Post</div>; }",
+        'app/(main)/category/[category]/page.client.tsx': "export default function CatClient({ item }: any) { return <div>{item.name}</div>; }",
+        'app/(main)/category/[category]/page.tsx': "import categories from '@/cms/categories.json'; export default function CatPage() { return <div>Cat</div>; }",
+        'cms/posts.json': JSON.stringify([
+          { _slug: 'mastering-typography', slug: 'mastering-typography', title: 'Mastering Typography' },
+        ]),
+        'cms/categories.json': JSON.stringify([
+          { _slug: 'design', slug: 'design', name: 'Design' },
+        ]),
+      };
+
+      const out = await buildSourceExport(files, { name: 'Multi Collection Site', runtimeRange: '^1', now: NOW });
+      const sitemap = out.files['app/sitemap.ts'];
+      expect(sitemap).toBeDefined();
+      expect(sitemap).toContain("import postsItems from '@/cms/posts.json';");
+      expect(sitemap).toContain("import categoriesItems from '@/cms/categories.json';");
+      expect(sitemap).toContain('${baseUrl}/blog/');
+      expect(sitemap).toContain('${baseUrl}/category/');
+      // Must spread staticUrls
+      expect(sitemap).toContain('return [...staticUrls,');
+      expect(sitemap).not.toContain('return [staticUrls,');
+    });
+
+    it('generates correct sitemap for real blog project proj-1793030645294-xrmdi5', async () => {
+      const fs = await import('fs');
+      const content = JSON.parse(fs.readFileSync('data/projects/proj-1793030645294-xrmdi5.json', 'utf8'));
+      const files = content.data.files;
+      const updated = ensureSeoAndAiDiscoveryFiles(files);
+      const sitemap = updated['app/sitemap.ts'];
+      // Write to data/builds/proj-1793030645294-xrmdi5/app/sitemap.ts so the running next server picks it up
+      if (fs.existsSync('data/builds/proj-1793030645294-xrmdi5/app')) {
+        fs.writeFileSync('data/builds/proj-1793030645294-xrmdi5/app/sitemap.ts', sitemap);
+      }
+      expect(sitemap).toBeDefined();
+      expect(sitemap).toContain("import postsItems from '@/cms/posts.json';");
+      expect(sitemap).toContain("import categoriesItems from '@/cms/categories.json';");
+      expect(sitemap).toContain('${baseUrl}/blog/${encodeURIComponent(String(slug))}');
+      expect(sitemap).toContain('${baseUrl}/category/${encodeURIComponent(String(slug))}');
+      expect(sitemap).toContain('return [...staticUrls,');
+      expect(sitemap).not.toContain('return [staticUrls,');
     });
   });
 });

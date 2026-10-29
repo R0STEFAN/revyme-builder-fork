@@ -37,6 +37,7 @@ describe('sitemap-gen', () => {
     expect(code).toContain('item.noindex !== true');
     expect(code).toContain('${baseUrl}/blog/');
     expect(code).toContain('...postsItemsUrls');
+    expect(code).toContain('return [...staticUrls, ...postsItemsUrls];');
   });
 
   it('handles external API CMS collections with server-side fetch', () => {

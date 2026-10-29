@@ -47,6 +47,7 @@ import {
   type DetectedCollectionQuery,
 } from './cms-page-ops';
 import { loadCmsProjectConfig, type ApiCollectionConfig, type CmsImageOptimizationConfig } from './cms-api-config';
+import { parseCmsPageMeta } from './cms-page-meta';
 import { isLocaleRouteFile } from './locale-route-ops';
 import { prepareLocalizedSiteFiles } from './localized-site-export';
 import { escapeRegExp } from '@/shared/regex-utils';
@@ -1161,20 +1162,34 @@ export function ensureSeoAndAiDiscoveryFiles(
 
       let matchedCol: string | null = null;
 
-      // 1. Check code for import or mention of @/cms/<col>.json
-      for (const col of allCollectionSlugs) {
-        if (
-          serverCode.includes(`cms/${col}.json`) ||
-          clientCode.includes(`cms/${col}.json`) ||
-          serverCode.includes(`apiCollections['${col}']`) ||
-          clientCode.includes(`apiCollections['${col}']`)
-        ) {
-          matchedCol = col;
-          break;
+      // 1. Check explicit @cmsPage annotation in client or server code
+      const cmsMeta = parseCmsPageMeta(clientCode) || parseCmsPageMeta(serverCode);
+      if (cmsMeta && allCollectionSlugs.has(cmsMeta.collection)) {
+        matchedCol = cmsMeta.collection;
+      }
+
+      // 2. Check server wrapper (page.tsx) which imports the primary collection for this detail route
+      if (!matchedCol && serverCode) {
+        const serverImportMatch = serverCode.match(/from\s+['"][^'"]*cms\/([^'"\/]+)\.json['"]/);
+        if (serverImportMatch && allCollectionSlugs.has(serverImportMatch[1])) {
+          matchedCol = serverImportMatch[1];
+        } else {
+          for (const col of allCollectionSlugs) {
+            if (
+              serverCode.includes(`apiCollections['${col}']`) ||
+              serverCode.includes(`apiCollections["${col}"]`) ||
+              serverCode.includes(`getApiCollection('${col}')`) ||
+              serverCode.includes(`getApiCollection("${col}")`) ||
+              serverCode.includes(`static params for ${col}:`)
+            ) {
+              matchedCol = col;
+              break;
+            }
+          }
         }
       }
 
-      // 2. Check parent segment or param name
+      // 3. Check URL segment matching against collection slugs
       if (!matchedCol) {
         const candidates = [
           paramName,
@@ -1192,6 +1207,8 @@ export function ensureSeoAndAiDiscoveryFiles(
           prefixSegments[prefixSegments.length - 1].endsWith('y')
             ? prefixSegments[prefixSegments.length - 1].slice(0, -1) + 'ies'
             : null,
+          prefixSegments[prefixSegments.length - 1] === 'blog' ? 'posts' : null,
+          prefixSegments[prefixSegments.length - 1] === 'blog' ? 'articles' : null,
         ].filter(Boolean) as string[];
 
         for (const cand of candidates) {
@@ -1202,7 +1219,21 @@ export function ensureSeoAndAiDiscoveryFiles(
         }
       }
 
-      // 3. Fallback: if only 1 collection exists, match it
+      // 4. Check client code imports (only if not matched by @cmsPage, server wrapper, or URL candidates)
+      if (!matchedCol && clientCode) {
+        for (const col of allCollectionSlugs) {
+          if (
+            clientCode.includes(`cms/${col}.json`) ||
+            clientCode.includes(`apiCollections['${col}']`) ||
+            clientCode.includes(`apiCollections["${col}"]`)
+          ) {
+            matchedCol = col;
+            break;
+          }
+        }
+      }
+
+      // 5. Fallback: if only 1 collection exists, match it
       if (!matchedCol && allCollectionSlugs.size === 1) {
         matchedCol = Array.from(allCollectionSlugs)[0];
       }

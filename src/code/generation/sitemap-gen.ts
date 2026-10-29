@@ -61,7 +61,7 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
   }
 
   // Generate processors for each collection route
-  const returnArrays: string[] = ['staticUrls'];
+  const returnArrays: string[] = ['...staticUrls'];
 
   for (let i = 0; i < cmsCollections.length; i++) {
     const col = cmsCollections[i];
@@ -83,7 +83,7 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
   const ${urlsVar}: MetadataRoute.Sitemap = ${listVar}
     .filter((item: any) => item && item._status !== 'draft' && item.noindex !== true)
     .map((item: any) => {
-      const slug = item.${col.slugField || '_slug'} || item.slug || item.id;
+      const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
       if (!slug) return null;
       const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item._createdAt || item.date;
       return {
@@ -118,7 +118,7 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
         ${urlsVar} = items
           .filter((item: any) => item && item._status !== 'draft' && item.noindex !== true)
           .map((item: any) => {
-            const slug = item.${col.slugField || '_slug'} || item.slug || item.id;
+            const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
             if (!slug) return null;
             const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item.date;
             return {
