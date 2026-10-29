@@ -153,6 +153,20 @@ export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
     expect(out.downloaded).toEqual(['components/remote/Dial-fedcba98.js', 'components/remote/ArcMeter-01234567.js']);
   });
 
+  it('protects page.client.tsx from having use client stripped and heals accidental metadata', () => {
+    const input = {
+      'app/page.tsx': "import PageClient from './page.client';\nexport const metadata = {};\nexport default function Page() { return <PageClient />; }",
+      'app/page.client.tsx': "'use client';\nimport { motion } from 'framer-motion';\nexport const metadata = { title: 'Accidental' };\nexport default function Client() { return <motion.div />; }",
+      'app/layout.tsx': "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+    };
+    const prepared = prepareSiteFiles(input);
+    const clientFile = prepared['app/page.client.tsx'];
+    const serverFile = prepared['app/page.tsx'];
+    expect(clientFile).toContain("'use client'");
+    expect(clientFile).not.toContain('export const metadata');
+    expect(serverFile).toContain('"Accidental"');
+  });
+
   it('an unreachable bundle stays a URL and is reported', async () => {
     const A = 'https://assets.revyme.app/components/ArcMeter@0123456789abcdef.js';
     const out = await localizeUrlImports({ 'app/page.client.tsx': `import X from "${A}";` }, async () => { throw new Error('offline'); });

@@ -2618,6 +2618,12 @@ export function syncBuiltInCodeComponents(fs: InMemoryProjectFS): void {
       fs.writeFile(path, template);
       continue;
     }
+    // Auto-migrate LocaleSwitcher if missing aria-label for accessibility compliance
+    if (path === 'components/LocaleSwitcher.tsx' && existing && !existing.includes('aria-label')) {
+      const healed = existing.replace(/<select(?![^>]*aria-label)/, '<select aria-label="Select language"');
+      fs.writeFile(path, healed);
+      continue;
+    }
     if (existing !== template) skippedModified++;
   }
   if (skippedModified > 0) {

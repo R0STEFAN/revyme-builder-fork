@@ -11,7 +11,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { trace } from '@/shared/debug-trace';
-import { FlagIcon } from '@/shared/flag-icon';
+import { FlagIcon, localeToCC } from '@/shared/flag-icon';
+import languages from '../left-toolbar/panels/locale/languages.json';
 
 // ─── LoadingSpinner ────────────────────────────────────────────────────────
 
@@ -227,22 +228,34 @@ export function RowSelect({
   options,
   onChange,
   placeholder = 'Select…',
+  searchable,
 }: {
   id?: string;
   value: string;
   options: RowSelectOption[];
   onChange: (value: string) => void;
   placeholder?: string;
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [rect, setRect] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const selected = options.find((o) => o.value === value);
 
+  const shouldSearch = searchable ?? options.length > 7;
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSearchQuery('');
+      return;
+    }
     if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect());
+    if (shouldSearch) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
 
     const close = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
@@ -264,7 +277,18 @@ export function RowSelect({
       window.removeEventListener('resize', close);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, shouldSearch]);
+
+  const q = searchQuery.toLowerCase().trim();
+  const filteredOptions = shouldSearch && q
+    ? options.filter((opt) => {
+        return (
+          opt.label.toLowerCase().includes(q) ||
+          opt.value.toLowerCase() === q ||
+          localeToCC(opt.value) === q
+        );
+      })
+    : options;
 
   return (
     <>
@@ -309,40 +333,63 @@ export function RowSelect({
             <div className="fixed inset-0 z-[10010]" onClick={() => setOpen(false)} />
             <div
               ref={popupRef}
-              className="fixed z-[10011] overflow-y-auto cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-lg py-1"
+              className="fixed z-[10011] overflow-hidden cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-lg py-1 flex flex-col"
               style={{
                 left: rect.left,
                 ...(placeAbove
                   ? {
                       bottom: window.innerHeight - rect.top + 4,
-                      maxHeight: Math.min(280, Math.max(120, spaceAbove - 16)),
+                      maxHeight: Math.min(320, Math.max(140, spaceAbove - 16)),
                     }
                   : {
                       top: rect.bottom + 4,
-                      maxHeight: Math.min(280, Math.max(120, spaceBelow - 16)),
+                      maxHeight: Math.min(320, Math.max(140, spaceBelow - 16)),
                     }),
-                width: Math.min(Math.max(rect.width, 180), 260),
+                width: Math.min(Math.max(rect.width, 240), 320),
               }}
             >
-              {options.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    trace.action('row-select:change', { id, from: value, to: opt.value });
-                    onChange(opt.value);
-                    setOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm transition-colors ${
-                    opt.value === value
-                      ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                  }`}
-                >
-                  {opt.icon}
-                  <span className="truncate">{opt.label}</span>
-                </button>
-              ))}
+              {shouldSearch && (
+                <div className="sticky top-0 z-10 bg-[var(--dropdown-bg)] px-2 pt-1 pb-1.5 border-b border-[var(--border-light)] mb-1 shrink-0">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search language…"
+                    className="w-full h-7 px-2 text-xs bg-[var(--control-bg)] border border-[var(--control-border)] rounded cut-corners text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] outline-none focus:border-[var(--accent)]"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+
+              <div className="overflow-y-auto flex-1 min-h-0">
+                {filteredOptions.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-[var(--text-tertiary)] text-center">
+                    No matching languages
+                  </div>
+                ) : (
+                  filteredOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        trace.action('row-select:change', { id, from: value, to: opt.value });
+                        onChange(opt.value);
+                        setOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                        opt.value === value
+                          ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
+                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                      }`}
+                    >
+                      {opt.icon}
+                      <span className="truncate">{opt.label}</span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </>,
           document.body,
@@ -476,106 +523,11 @@ export function ConfirmModal({
 // ─── Language options ───────────────────────────────────────
 
 /** Languages offered by the Website settings "Default language" row, each
- *  paired with a representative country flag. Tuples: [code, label, countryCode]. */
-export const LANGUAGE_OPTIONS: RowSelectOption[] = (
-  [
-    ['en', 'English', 'gb'],
-    ['es', 'Spanish', 'es'],
-    ['fr', 'French', 'fr'],
-    ['de', 'German', 'de'],
-    ['pt', 'Portuguese', 'pt'],
-    ['it', 'Italian', 'it'],
-    ['ja', 'Japanese', 'jp'],
-    ['zh', 'Chinese', 'cn'],
-    ['ar', 'Arabic', 'sa'],
-    ['hi', 'Hindi', 'in'],
-    ['ru', 'Russian', 'ru'],
-    ['ko', 'Korean', 'kr'],
-    ['nl', 'Dutch', 'nl'],
-    ['sv', 'Swedish', 'se'],
-    ['no', 'Norwegian', 'no'],
-    ['da', 'Danish', 'dk'],
-    ['fi', 'Finnish', 'fi'],
-    ['pl', 'Polish', 'pl'],
-    ['tr', 'Turkish', 'tr'],
-    ['th', 'Thai', 'th'],
-    ['vi', 'Vietnamese', 'vn'],
-    ['id', 'Indonesian', 'id'],
-    ['ms', 'Malay', 'my'],
-    ['uk', 'Ukrainian', 'ua'],
-    ['cs', 'Czech', 'cz'],
-    ['ro', 'Romanian', 'ro'],
-    ['el', 'Greek', 'gr'],
-    ['hu', 'Hungarian', 'hu'],
-    ['he', 'Hebrew', 'il'],
-    ['fa', 'Persian', 'ir'],
-    ['bn', 'Bengali', 'bd'],
-    ['ur', 'Urdu', 'pk'],
-    ['af', 'Afrikaans', 'za'],
-    ['sq', 'Albanian', 'al'],
-    ['am', 'Amharic', 'et'],
-    ['hy', 'Armenian', 'am'],
-    ['az', 'Azerbaijani', 'az'],
-    ['eu', 'Basque', 'es'],
-    ['be', 'Belarusian', 'by'],
-    ['bs', 'Bosnian', 'ba'],
-    ['bg', 'Bulgarian', 'bg'],
-    ['ca', 'Catalan', 'es'],
-    ['hr', 'Croatian', 'hr'],
-    ['et', 'Estonian', 'ee'],
-    ['tl', 'Tagalog', 'ph'],
-    ['gl', 'Galician', 'es'],
-    ['ka', 'Georgian', 'ge'],
-    ['gu', 'Gujarati', 'in'],
-    ['ht', 'Haitian Creole', 'ht'],
-    ['ha', 'Hausa', 'ng'],
-    ['is', 'Icelandic', 'is'],
-    ['ig', 'Igbo', 'ng'],
-    ['ga', 'Irish', 'ie'],
-    ['jv', 'Javanese', 'id'],
-    ['kn', 'Kannada', 'in'],
-    ['kk', 'Kazakh', 'kz'],
-    ['km', 'Khmer', 'kh'],
-    ['rw', 'Kinyarwanda', 'rw'],
-    ['ky', 'Kyrgyz', 'kg'],
-    ['lo', 'Lao', 'la'],
-    ['la', 'Latin', 'va'],
-    ['lv', 'Latvian', 'lv'],
-    ['lt', 'Lithuanian', 'lt'],
-    ['lb', 'Luxembourgish', 'lu'],
-    ['mk', 'Macedonian', 'mk'],
-    ['mg', 'Malagasy', 'mg'],
-    ['ml', 'Malayalam', 'in'],
-    ['mt', 'Maltese', 'mt'],
-    ['mi', 'Maori', 'nz'],
-    ['mr', 'Marathi', 'in'],
-    ['mn', 'Mongolian', 'mn'],
-    ['my', 'Burmese', 'mm'],
-    ['ne', 'Nepali', 'np'],
-    ['pa', 'Punjabi', 'in'],
-    ['ps', 'Pashto', 'af'],
-    ['sa', 'Sanskrit', 'in'],
-    ['sr', 'Serbian', 'rs'],
-    ['sd', 'Sindhi', 'pk'],
-    ['si', 'Sinhala', 'lk'],
-    ['sk', 'Slovak', 'sk'],
-    ['sl', 'Slovenian', 'si'],
-    ['so', 'Somali', 'so'],
-    ['sw', 'Swahili', 'ke'],
-    ['ta', 'Tamil', 'in'],
-    ['te', 'Telugu', 'in'],
-    ['bo', 'Tibetan', 'cn'],
-    ['tk', 'Turkmen', 'tm'],
-    ['ug', 'Uighur', 'cn'],
-    ['uz', 'Uzbek', 'uz'],
-    ['cy', 'Welsh', 'gb'],
-    ['xh', 'Xhosa', 'za'],
-    ['yi', 'Yiddish', 'il'],
-    ['yo', 'Yoruba', 'ng'],
-    ['zu', 'Zulu', 'za'],
-  ] as Array<[string, string, string]>
-).map(([value, label, cc]) => ({
-  value,
-  label,
-  icon: <FlagIcon code={cc} />,
-}));
+ *  paired with a representative country flag. Sorted alphabetically, with endonyms. */
+export const LANGUAGE_OPTIONS: RowSelectOption[] = [...(languages as Array<{ code: string; name: string; endonym: string; flag: string }>)]
+  .sort((a, b) => a.name.localeCompare(b.name))
+  .map((lang) => ({
+    value: lang.code,
+    label: lang.name === lang.endonym ? lang.name : `${lang.name} (${lang.endonym})`,
+    icon: <FlagIcon code={localeToCC(lang.code)} />,
+  }));

@@ -68,7 +68,7 @@ export function retagNodeInCode(code: string, nodeId: string, newTag: string): s
   });
 
   if (!changed) return code;
-  return generate(ast, { retainLines: true }, code).code;
+  return generate(ast, { retainLines: true, jsescOption: { minimal: true } }, code).code;
 }
 
 export function ensureGoogleFontImportInCSS(css: string, fontFamilyValue: string): string {

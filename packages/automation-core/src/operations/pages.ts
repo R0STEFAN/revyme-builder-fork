@@ -102,7 +102,7 @@ export function preparePageForTemplate(
     },
   });
 
-  return changed ? generate(ast, { retainLines: true }, code).code : code;
+  return changed ? generate(ast, { retainLines: true, jsescOption: { minimal: true } }, code).code : code;
 }
 
 function regeneratePageNodeIds(code: string, createId: (prefix?: string) => string): string {
@@ -121,7 +121,7 @@ function regeneratePageNodeIds(code: string, createId: (prefix?: string) => stri
     },
   });
 
-  return changed ? generate(ast, { retainLines: true }, code).code : code;
+  return changed ? generate(ast, { retainLines: true, jsescOption: { minimal: true } }, code).code : code;
 }
 
 export interface PageInfo {

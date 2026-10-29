@@ -81,16 +81,24 @@ export const hasActiveSubscriptionAtom = atom((get) => {
  */
 export function loadSettingsFromLayout(): WebsiteSettings {
   trace.fn('website-settings:loadFromLayout');
-  const code = projectFS.readFile('app/layout.tsx');
-  if (!code) return DEFAULT_WEBSITE_SETTINGS;
+  const code = projectFS.readFile('app/layout.tsx') || projectFS.readFile('app/[lang]/layout.tsx');
 
-  const meta = parseMetadataFromCode(code);
-  const config = parseSiteConfigFromCode(code);
+  const meta = code ? parseMetadataFromCode(code) : {};
+  const config = code ? parseSiteConfigFromCode(code) : {};
+
+  let languageCode = (config.language as string) || 'en';
+  const i18nRaw = projectFS.readFile('i18n/config.json');
+  if (i18nRaw) {
+    try {
+      const i18n = JSON.parse(i18nRaw);
+      if (i18n.defaultLocale) languageCode = i18n.defaultLocale;
+    } catch {}
+  }
 
   return {
     name: (meta.title as string) || '',
     description: (meta.description as string) || '',
-    languageCode: config.language || 'en',
+    languageCode,
     faviconLight: (meta.icons as any)?.icon || '',
     socialShareImage: ((meta.openGraph as any)?.images?.[0]) || '',
     customCodeHead: config.customHead || '',

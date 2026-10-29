@@ -64,7 +64,9 @@ export function updateHtmlAttrsInCode(
       // well as JSX expression containers `{...}`, AND bare legacy attributes (e.g. bare `alt`).
       // If the incoming value has the `var:<name>` sentinel (a component prop reference),
       // emit `{name}` (JSX expression) instead of quoting as `"var:name"`.
-      const lit = value.startsWith('var:')
+      const lit = value === '""'
+        ? '""'
+        : value.startsWith('var:')
         ? `{${value.slice(4)}}`
         : (value.includes('"') ? `'${value}'` : `"${value}"`);
       const attrRegex = new RegExp(`(\\s)(${escapedKey})(?:=(?:"[^"]*"|'[^']*'|\\{[^}]*\\}))?(?=[\\s/>]|$)`);

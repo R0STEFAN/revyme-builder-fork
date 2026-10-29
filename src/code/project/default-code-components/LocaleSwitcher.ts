@@ -122,6 +122,7 @@ function LocaleSwitcher({
       </svg>
       {isCanvas ? (
         <select
+          aria-label="Select language"
           value={current}
           onChange={(e) => handleCanvasChange(e.target.value)}
           style={{

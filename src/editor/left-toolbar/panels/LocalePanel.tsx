@@ -7,6 +7,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { i18nConfigAtom, activeLocaleAtom } from '@/code/stores/locale-store';
 import { removeLocale, saveI18nConfig, getI18nConfig } from '@/code/project/locale-ops';
 import { projectVersionAtom } from '@/code/project/project-fs';
+import { queueMutation } from '@/code/mutation/mutation-queue';
 import AddLocaleModal from './locale/AddLocaleModal';
 import type { LocaleConfig } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
@@ -86,6 +87,7 @@ export default function LocalePanel() {
     const cfg = getI18nConfig();
     cfg.defaultLocale = code;
     saveI18nConfig(cfg);
+    queueMutation({ type: 'updateSiteConfig', config: { language: code } });
     setActiveLocale(code);
     refresh();
   }, [refresh, setActiveLocale]);

@@ -3945,24 +3945,26 @@ function applyMutationCore(code: string, mutation: Mutation): string {
       // directly). Templates carry their own LayoutClient inside their route
       // group; metadata always lives in the server `app/layout.tsx`.
       case 'updateMetadata': {
-        if (!projectFS.exists('app/layout.tsx')) {
-          projectFS.writeFile('app/layout.tsx', ensureLayoutFile());
+        const layoutFile = projectFS.exists('app/[lang]/layout.tsx') ? 'app/[lang]/layout.tsx' : 'app/layout.tsx';
+        if (!projectFS.exists(layoutFile)) {
+          projectFS.writeFile(layoutFile, ensureLayoutFile());
         }
-        const metaLayoutCode = healLayoutFile(projectFS.readFile('app/layout.tsx')!);
+        const metaLayoutCode = healLayoutFile(projectFS.readFile(layoutFile)!);
         const metaUpdated = updateMetadataInCode(metaLayoutCode, mutation.metadata);
-        projectFS.writeFile('app/layout.tsx', metaUpdated);
-        if (_activeFilePath === 'app/layout.tsx') return metaUpdated;
+        projectFS.writeFile(layoutFile, metaUpdated);
+        if (_activeFilePath === layoutFile) return metaUpdated;
         return code;
       }
       case 'updateSiteConfig': {
-        if (!projectFS.exists('app/layout.tsx')) {
-          projectFS.writeFile('app/layout.tsx', ensureLayoutFile());
+        const layoutFile = projectFS.exists('app/[lang]/layout.tsx') ? 'app/[lang]/layout.tsx' : 'app/layout.tsx';
+        if (!projectFS.exists(layoutFile)) {
+          projectFS.writeFile(layoutFile, ensureLayoutFile());
         }
         // healLayoutFile: a corrupted (unparseable) layout from the
         // pre-hardening custom-code writer is rebuilt with salvage — no
         // incremental edit can fix a file the parser can't read, and the
         // site is already down until it parses again.
-        const configLayoutCode = healLayoutFile(projectFS.readFile('app/layout.tsx')!);
+        const configLayoutCode = healLayoutFile(projectFS.readFile(layoutFile)!);
         // ensureCustomCodeRenderInCode: older layouts predate the native
         // custom-code render blocks — make sure the snippets actually SHIP
         // (SSR'd by the layout itself; no publish-time injection). Both
@@ -3970,8 +3972,23 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         // so a bad transform can never persist a broken server layout.
         let configUpdated = updateSiteConfigInCode(configLayoutCode, mutation.config);
         configUpdated = ensureCustomCodeRenderInCode(configUpdated);
-        projectFS.writeFile('app/layout.tsx', configUpdated);
-        if (_activeFilePath === 'app/layout.tsx') return configUpdated;
+        projectFS.writeFile(layoutFile, configUpdated);
+
+        // Keep i18n/config.json defaultLocale in sync if localized
+        if (mutation.config.language && projectFS.exists('i18n/config.json')) {
+          try {
+            const raw = projectFS.readFile('i18n/config.json');
+            if (raw) {
+              const cfg = JSON.parse(raw);
+              if (cfg.defaultLocale !== mutation.config.language) {
+                cfg.defaultLocale = mutation.config.language;
+                projectFS.writeFile('i18n/config.json', JSON.stringify(cfg, null, 2));
+              }
+            }
+          } catch {}
+        }
+
+        if (_activeFilePath === layoutFile) return configUpdated;
         return code;
       }
 

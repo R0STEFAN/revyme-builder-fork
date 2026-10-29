@@ -28,6 +28,7 @@ import { backend } from '@/backend';
 import { getProjectId } from '@/backend/project-id';
 import { buildTabs, buildPreferencesSubmenu, buildThemeSubmenu } from './menu-builders';
 import ProjectChip from './ProjectChip';
+import AuditHeaderPill from './AuditHeaderPill';
 import KeyboardShortcutsModal from '@/editor/ui/KeyboardShortcutsModal';
 import DropdownMenu, { type DropdownMenuEntry } from '@/design-system/DropdownMenu';
 import Button from '@/design-system/Button';
@@ -288,7 +289,10 @@ export default function LeftHeader() {
             Back
           </Button>
         ) : (
-          <ProjectChip />
+          <>
+            <ProjectChip />
+            <AuditHeaderPill />
+          </>
         )}
       </div>
 

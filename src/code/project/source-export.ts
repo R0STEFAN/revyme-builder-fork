@@ -60,7 +60,7 @@ import {
   type LlmsCmsCollection,
   type LlmsRouteGeneratorInput,
 } from '../generation/llms-gen';
-import { parseMetadataFromCode } from '../generation/metadata-gen';
+import { parseMetadataFromCode, updateMetadataInCode } from '../generation/metadata-gen';
 
 export {
   getUploadSrcSet,
@@ -1485,8 +1485,28 @@ export function prepareSiteFiles(
     }
 
     // Server Component export guard: generateMetadata and metadata must never have 'use client'
-    if (files[path] && (files[path].includes('generateMetadata') || files[path].includes('export const metadata') || files[path].includes('generateStaticParams'))) {
-      files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
+    if (path.endsWith('.client.tsx') || path.endsWith('.client.jsx') || path.includes('/page.client.') || path === 'app/page.client.tsx') {
+      if (files[path] && (files[path].includes('export const metadata') || files[path].includes('generateMetadata'))) {
+        const serverPath = path.replace(/page\.client\.(tsx|jsx)$/, 'page.$1');
+        if (files[serverPath]) {
+          try {
+            const meta = parseMetadataFromCode(files[path]);
+            if (meta && Object.keys(meta).length > 0) {
+              files[serverPath] = updateMetadataInCode(files[serverPath], meta);
+            }
+          } catch {}
+        }
+        files[path] = files[path].replace(/export\s+const\s+metadata\s*=\s*\{[\s\S]*?\};?\n*/g, '');
+        files[path] = files[path].replace(/export\s+(?:async\s+)?function\s+generateMetadata[\s\S]*?\n\}\n*/g, '');
+      }
+      // Ensure client component files ALWAYS retain 'use client'
+      if (!files[path].includes("'use client'") && !files[path].includes('"use client"')) {
+        files[path] = `'use client';\n${files[path]}`;
+      }
+    } else {
+      if (files[path] && (files[path].includes('generateMetadata') || files[path].includes('export const metadata') || files[path].includes('generateStaticParams'))) {
+        files[path] = files[path].replace(/^(['"])use client\1;\s*\n?/m, '');
+      }
     }
 
     // Ensure metadataBase is set on root layout metadata to prevent Next.js build-time metadataBase warnings
