@@ -299,16 +299,28 @@ export function RowSelect({
         </svg>
       </button>
 
-      {open && rect &&
-        createPortal(
+      {open && rect && (() => {
+        const spaceBelow = typeof window !== 'undefined' ? window.innerHeight - rect.bottom : 300;
+        const spaceAbove = typeof window !== 'undefined' ? rect.top : 300;
+        const placeAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+
+        return createPortal(
           <>
             <div className="fixed inset-0 z-[10010]" onClick={() => setOpen(false)} />
             <div
               ref={popupRef}
-              className="fixed z-[10011] max-h-[280px] overflow-y-auto cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-lg py-1"
+              className="fixed z-[10011] overflow-y-auto cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] border border-[var(--border-light)] bg-[var(--dropdown-bg)] shadow-lg py-1"
               style={{
                 left: rect.left,
-                top: rect.bottom + 4,
+                ...(placeAbove
+                  ? {
+                      bottom: window.innerHeight - rect.top + 4,
+                      maxHeight: Math.min(280, Math.max(120, spaceAbove - 16)),
+                    }
+                  : {
+                      top: rect.bottom + 4,
+                      maxHeight: Math.min(280, Math.max(120, spaceBelow - 16)),
+                    }),
                 width: Math.min(Math.max(rect.width, 180), 260),
               }}
             >
@@ -334,7 +346,8 @@ export function RowSelect({
             </div>
           </>,
           document.body,
-        )}
+        );
+      })()}
     </>
   );
 }

@@ -46,7 +46,11 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
     staticRoutes = [{ url: '/', priority: 1.0, changeFrequency: 'daily' }],
     cmsCollections = [],
     locales = [],
+    defaultLocale = 'en',
   } = input;
+
+  const defaultLoc = defaultLocale || 'en';
+  const otherLocales = locales.filter((l) => l && l !== defaultLoc);
 
   const imports: string[] = ["import type { MetadataRoute } from 'next';"];
   const collectionProcessors: string[] = [];
@@ -72,40 +76,53 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
 
     returnArrays.push(`...${urlsVar}`);
 
-    if (!col.apiConfig?.endpoint) {
-      const prefix = col.routePrefix.replace(/\/+$/, '');
-      const priority = col.priority ?? 0.7;
-      const freq = col.changeFrequency ? `'${col.changeFrequency}'` : "'weekly'";
+    const prefix = col.routePrefix.replace(/\/+$/, '');
+    const priority = col.priority ?? 0.7;
+    const freq = col.changeFrequency ? `'${col.changeFrequency}'` : "'weekly'";
 
+    let alternatesExpr = '';
+    let otherPushSnippets = '';
+    if (otherLocales.length > 0) {
+      const langs = [`${JSON.stringify(defaultLoc)}: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\``];
+      for (const loc of otherLocales) {
+        langs.push(`${JSON.stringify(loc)}: \`\${baseUrl}/${loc}${prefix}/\${encodeURIComponent(String(slug))}\``);
+      }
+      alternatesExpr = `,\n      alternates: {\n        languages: { ${langs.join(', ')} },\n      }`;
+      otherPushSnippets = otherLocales.map((loc) => `
+    ${urlsVar}.push({
+      url: \`\${baseUrl}/${loc}${prefix}/\${encodeURIComponent(String(slug))}\`,
+      lastModified: dateVal ? new Date(dateVal) : new Date(),
+      changeFrequency: ${freq},
+      priority: ${priority}${alternatesExpr}
+    });`).join('');
+    }
+
+    if (!col.apiConfig?.endpoint) {
       collectionProcessors.push(`
   // CMS Collection: ${col.collection} (${col.routePrefix})
   const ${listVar} = Array.isArray(${baseVar}) ? ${baseVar} : [];
-  const ${urlsVar}: MetadataRoute.Sitemap = ${listVar}
-    .filter((item: any) => item && item._status !== 'draft' && item.noindex !== true)
-    .map((item: any) => {
-      const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
-      if (!slug) return null;
-      const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item._createdAt || item.date;
-      return {
-        url: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\`,
-        lastModified: dateVal ? new Date(dateVal) : new Date(),
-        changeFrequency: ${freq},
-        priority: ${priority},
-      };
-    })
-    .filter(Boolean) as MetadataRoute.Sitemap;
+  const ${urlsVar}: MetadataRoute.Sitemap = [];
+  for (const item of ${listVar}) {
+    if (!item || item._status === 'draft' || item.noindex === true) continue;
+    const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
+    if (!slug) continue;
+    const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item._createdAt || item.date;
+    ${urlsVar}.push({
+      url: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\`,
+      lastModified: dateVal ? new Date(dateVal) : new Date(),
+      changeFrequency: ${freq},
+      priority: ${priority}${alternatesExpr}
+    });${otherPushSnippets}
+  }
 `);
     } else {
       // API collection with server-side fetch
-      const prefix = col.routePrefix.replace(/\/+$/, '');
-      const priority = col.priority ?? 0.7;
-      const freq = col.changeFrequency ? `'${col.changeFrequency}'` : "'weekly'";
       const headers = JSON.stringify(col.apiConfig.headers || {});
       const endpoint = col.apiConfig.endpoint;
 
       collectionProcessors.push(`
   // API CMS Collection: ${col.collection} (${col.routePrefix})
-  let ${urlsVar}: MetadataRoute.Sitemap = [];
+  const ${urlsVar}: MetadataRoute.Sitemap = [];
   try {
     const res = await fetch(${JSON.stringify(endpoint)}, {
       headers: ${headers},
@@ -115,20 +132,18 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
       const json = await res.json();
       const items = Array.isArray(json) ? json : (json?.data || json?.items || []);
       if (Array.isArray(items)) {
-        ${urlsVar} = items
-          .filter((item: any) => item && item._status !== 'draft' && item.noindex !== true)
-          .map((item: any) => {
-            const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
-            if (!slug) return null;
-            const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item.date;
-            return {
-              url: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\`,
-              lastModified: dateVal ? new Date(dateVal) : new Date(),
-              changeFrequency: ${freq},
-              priority: ${priority},
-            };
-          })
-          .filter(Boolean) as MetadataRoute.Sitemap;
+        for (const item of items) {
+          if (!item || item._status === 'draft' || item.noindex === true) continue;
+          const slug = item.${col.slugField || 'slug'} || item.slug || item._slug || item.id;
+          if (!slug) continue;
+          const dateVal = item.${col.lastModifiedField || '_updatedAt'} || item.date;
+          ${urlsVar}.push({
+            url: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\`,
+            lastModified: dateVal ? new Date(dateVal) : new Date(),
+            changeFrequency: ${freq},
+            priority: ${priority}${alternatesExpr}
+          });${otherPushSnippets}
+        }
       }
     }
   } catch (err) {
@@ -139,18 +154,40 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
   }
 
   // Static routes literal
-  const staticItems = staticRoutes.map((r) => {
+  const staticItems: string[] = [];
+  for (const r of staticRoutes) {
     const path = r.url.startsWith('/') ? r.url : `/${r.url}`;
     const cleanPath = path === '/' ? '' : path;
     const freq = r.changeFrequency ? `'${r.changeFrequency}'` : "'daily'";
     const priority = r.priority !== undefined ? r.priority : path === '/' ? 1.0 : 0.8;
-    return `    {
+
+    let alternatesSnippet = '';
+    if (otherLocales.length > 0) {
+      const langs = [`${JSON.stringify(defaultLoc)}: \`\${baseUrl}${cleanPath || '/'}\``];
+      for (const loc of otherLocales) {
+        langs.push(`${JSON.stringify(loc)}: \`\${baseUrl}/${loc}${cleanPath}\``);
+      }
+      alternatesSnippet = `,\n      alternates: {\n        languages: { ${langs.join(', ')} },\n      }`;
+    }
+
+    // Default locale entry
+    staticItems.push(`    {
       url: \`\${baseUrl}${cleanPath}\`,
       lastModified: new Date(),
       changeFrequency: ${freq},
-      priority: ${priority},
-    }`;
-  }).join(',\n');
+      priority: ${priority}${alternatesSnippet}
+    }`);
+
+    // Localized entries for non-default locales
+    for (const loc of otherLocales) {
+      staticItems.push(`    {
+      url: \`\${baseUrl}/${loc}${cleanPath}\`,
+      lastModified: new Date(),
+      changeFrequency: ${freq},
+      priority: ${priority}${alternatesSnippet}
+    }`);
+    }
+  }
 
   const code = `${imports.join('\n')}
 
@@ -159,7 +196,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = rawBase.replace(/\\/+$/, '');
 
   const staticUrls: MetadataRoute.Sitemap = [
-${staticItems}
+${staticItems.join(',\n')}
   ];
 ${collectionProcessors.join('\n')}
   return [${returnArrays.join(', ')}];

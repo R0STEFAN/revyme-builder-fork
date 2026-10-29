@@ -171,6 +171,40 @@ export function buildMenuCategories(
   return result;
 }
 
+function parseCustomRobotsText(text: string): Array<{ userAgent: string; allow?: string | string[]; disallow?: string | string[] }> {
+  const blocks: Array<{ userAgent: string; allow: string[]; disallow: string[] }> = [];
+  let current: { userAgent: string; allow: string[]; disallow: string[] } | null = null;
+
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const uaMatch = trimmed.match(/^User-agent:\s*(.+)$/i);
+    if (uaMatch) {
+      if (current) blocks.push(current);
+      current = { userAgent: uaMatch[1].trim(), allow: [], disallow: [] };
+      continue;
+    }
+    const allowMatch = trimmed.match(/^Allow:\s*(.*)$/i);
+    if (allowMatch && current) {
+      const v = allowMatch[1].trim();
+      if (v) current.allow.push(v);
+      continue;
+    }
+    const disallowMatch = trimmed.match(/^Disallow:\s*(.*)$/i);
+    if (disallowMatch && current) {
+      const v = disallowMatch[1].trim();
+      current.disallow.push(v);
+      continue;
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks.map((b) => ({
+    userAgent: b.userAgent,
+    allow: b.allow.length === 1 ? b.allow[0] : (b.allow.length > 1 ? b.allow : undefined),
+    disallow: b.disallow.length === 1 ? b.disallow[0] : (b.disallow.length > 1 ? b.disallow : undefined),
+  }));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SettingsOverlay
 // ═══════════════════════════════════════════════════════════════════════════
@@ -251,6 +285,8 @@ export default function SettingsOverlay() {
   // ─── Robots & LLMs configuration state ─────────────────────────────
   const [robotsMode, setRobotsMode] = useState<'allow_all' | 'disallow_all' | 'custom'>('allow_all');
   const [robotsDisallow, setRobotsDisallow] = useState<string>('/api/');
+  const [robotsAllow, setRobotsAllow] = useState<string>('/');
+  const [robotsCustomRaw, setRobotsCustomRaw] = useState<string>('');
   const [aiBots, setAiBots] = useState({
     gptBot: true,
     claudeBot: true,
@@ -270,6 +306,25 @@ export default function SettingsOverlay() {
         const parsed = JSON.parse(rawRobots);
         if (parsed.mode) setRobotsMode(parsed.mode);
         if (Array.isArray(parsed.disallowPaths)) setRobotsDisallow(parsed.disallowPaths.join(', '));
+        if (Array.isArray(parsed.allowPaths)) setRobotsAllow(parsed.allowPaths.join(', '));
+        if (typeof parsed.customRulesRaw === 'string') {
+          setRobotsCustomRaw(parsed.customRulesRaw);
+        } else if (Array.isArray(parsed.customRules)) {
+          const lines: string[] = [];
+          for (const r of parsed.customRules) {
+            lines.push(`User-agent: ${Array.isArray(r.userAgent) ? r.userAgent.join(', ') : r.userAgent}`);
+            if (r.allow) {
+              const allows = Array.isArray(r.allow) ? r.allow : [r.allow];
+              allows.forEach((a: string) => lines.push(`Allow: ${a}`));
+            }
+            if (r.disallow) {
+              const disallows = Array.isArray(r.disallow) ? r.disallow : [r.disallow];
+              disallows.forEach((d: string) => lines.push(`Disallow: ${d}`));
+            }
+            lines.push('');
+          }
+          setRobotsCustomRaw(lines.join('\n').trim());
+        }
         if (parsed.aiBots) setAiBots((prev) => ({ ...prev, ...parsed.aiBots }));
       } catch {}
     }
@@ -630,22 +685,32 @@ export default function SettingsOverlay() {
   }, [hasThemeChanges, defaultTheme, websiteSettings, setWebsiteSettings]);
 
   const handleSaveRobots = useCallback(() => {
-    const paths = robotsDisallow
+    const disallowPaths = robotsDisallow
       .split(',')
       .map((p) => p.trim())
       .filter(Boolean);
 
-    const config: RobotsGeneratorInput = {
+    const allowPaths = robotsAllow
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const customRules = parseCustomRobotsText(robotsCustomRaw);
+
+    const config: RobotsGeneratorInput & { customRulesRaw?: string } = {
       mode: robotsMode,
-      disallowPaths: paths,
+      disallowPaths,
+      allowPaths: allowPaths.length > 0 ? allowPaths : ['/'],
       aiBots,
+      customRules: customRules.length > 0 ? customRules : undefined,
+      customRulesRaw: robotsCustomRaw.trim() ? robotsCustomRaw : undefined,
     };
 
     trace.action('settings:save-robots', config);
     modifyProjectFile('_meta/robots.json', () => JSON.stringify(config, null, 2));
     modifyProjectFile('app/robots.ts', () => generateRobotsCode(config));
     setHasRobotsChanges(false);
-  }, [robotsMode, robotsDisallow, aiBots]);
+  }, [robotsMode, robotsDisallow, robotsAllow, robotsCustomRaw, aiBots]);
 
   const handleSaveLlms = useCallback(() => {
     const config = {
@@ -1056,24 +1121,65 @@ export default function SettingsOverlay() {
                 <p className="text-xs text-[var(--text-tertiary)]">
                   {robotsMode === 'disallow_all'
                     ? 'Adds Disallow: / to prevent search engines from indexing this site.'
+                    : robotsMode === 'custom'
+                    ? 'Define allowed paths, disallowed paths, and custom crawler directives below.'
                     : 'Search engines are allowed to crawl and index public pages.'}
                 </p>
               </div>
             </SettingsRow>
 
-            <SettingsRow label="Disallow paths" htmlFor="robots-disallow" align="top">
-              <input
-                id="robots-disallow"
-                type="text"
-                value={robotsDisallow}
-                onChange={(e) => {
-                  setRobotsDisallow(e.target.value);
-                  setHasRobotsChanges(true);
-                }}
-                className={ROW_INPUT_CLS}
-                placeholder="/api/, /admin/, /private/"
-              />
-            </SettingsRow>
+            {robotsMode === 'custom' && (
+              <SettingsRow label="Allow paths" htmlFor="robots-allow" align="top">
+                <input
+                  id="robots-allow"
+                  type="text"
+                  value={robotsAllow}
+                  onChange={(e) => {
+                    setRobotsAllow(e.target.value);
+                    setHasRobotsChanges(true);
+                  }}
+                  className={ROW_INPUT_CLS}
+                  placeholder="/, /blog/, /about/"
+                />
+              </SettingsRow>
+            )}
+
+            {robotsMode !== 'disallow_all' && (
+              <SettingsRow label="Disallow paths" htmlFor="robots-disallow" align="top">
+                <input
+                  id="robots-disallow"
+                  type="text"
+                  value={robotsDisallow}
+                  onChange={(e) => {
+                    setRobotsDisallow(e.target.value);
+                    setHasRobotsChanges(true);
+                  }}
+                  className={ROW_INPUT_CLS}
+                  placeholder="/api/, /admin/, /private/"
+                />
+              </SettingsRow>
+            )}
+
+            {robotsMode === 'custom' && (
+              <SettingsRow label="Custom directives" htmlFor="robots-custom-raw" align="top">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <textarea
+                    id="robots-custom-raw"
+                    rows={5}
+                    value={robotsCustomRaw}
+                    onChange={(e) => {
+                      setRobotsCustomRaw(e.target.value);
+                      setHasRobotsChanges(true);
+                    }}
+                    className={`${ROW_INPUT_CLS} font-mono text-xs leading-relaxed resize-y`}
+                    placeholder={`# Add custom rules, e.g.:\nUser-agent: YandexBot\nDisallow: /private/\n\nUser-agent: Baiduspider\nAllow: /`}
+                  />
+                  <p className="text-[11px] text-[var(--text-tertiary)]">
+                    Standard robots.txt syntax. Directives will be compiled into app/robots.ts.
+                  </p>
+                </div>
+              </SettingsRow>
+            )}
 
             <SettingsRow label="AI crawler permissions" align="top">
               <div className="space-y-3 py-1">

@@ -33,11 +33,37 @@ describe('sitemap-gen', () => {
 
     expect(moduleParses(code)).toBe(true);
     expect(code).toContain("import postsItems from '@/cms/posts.json';");
-    expect(code).toContain("item._status !== 'draft'");
-    expect(code).toContain('item.noindex !== true');
+    expect(code).toContain("item._status === 'draft'");
+    expect(code).toContain('item.noindex === true');
     expect(code).toContain('${baseUrl}/blog/');
     expect(code).toContain('...postsItemsUrls');
     expect(code).toContain('return [...staticUrls, ...postsItemsUrls];');
+  });
+
+  it('generates localized entries and hreflang alternates for multilingual sites', () => {
+    const code = generateSitemapCode({
+      staticRoutes: [{ url: '/' }, { url: '/about' }],
+      cmsCollections: [
+        {
+          collection: 'posts',
+          routePrefix: '/blog',
+          slugField: 'slug',
+        },
+      ],
+      locales: ['uk', 'en'],
+      defaultLocale: 'uk',
+    });
+
+    expect(moduleParses(code)).toBe(true);
+    expect(code).toContain('${baseUrl}');
+    expect(code).toContain('${baseUrl}/en');
+    expect(code).toContain('${baseUrl}/about');
+    expect(code).toContain('${baseUrl}/en/about');
+    expect(code).toContain('${baseUrl}/blog/');
+    expect(code).toContain('${baseUrl}/en/blog/');
+    expect(code).toContain('alternates: {');
+    expect(code).toContain('"uk": `${baseUrl}');
+    expect(code).toContain('"en": `${baseUrl}/en');
   });
 
   it('handles external API CMS collections with server-side fetch', () => {

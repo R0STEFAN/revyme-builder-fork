@@ -712,7 +712,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   }, [form, bindings, expressions, writeMeta, isDefaultLocale, activeLocale, page.filePath, baseMeta]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-36">
       {exprError && (
         <div className="p-3 text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded flex items-center justify-between">
           <span>{exprError}</span>
