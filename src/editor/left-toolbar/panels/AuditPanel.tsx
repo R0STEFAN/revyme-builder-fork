@@ -253,7 +253,7 @@ export default function AuditPanel() {
         )}
 
         {/* Scope Pills */}
-        <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+        <div className="flex flex-wrap gap-1 items-center">
           {SCOPES.map((sc) => (
             <button
               key={sc.id}
