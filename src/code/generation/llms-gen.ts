@@ -163,9 +163,21 @@ export function generateLlmsRouteCode(input: LlmsGeneratorInput = {}): string {
 
   const code = `${imports.join('\n')}
 
-export async function GET(): Promise<Response> {
-  const rawBase = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com';
-  const baseUrl = rawBase.replace(/\\/+$/, '');
+export const dynamic = 'force-dynamic';
+
+export async function GET(request?: Request): Promise<Response> {
+  let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+  try {
+    const host = request?.headers?.get('x-forwarded-host') || request?.headers?.get('host') || '';
+    const proto = request?.headers?.get('x-forwarded-proto') || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    if (host) {
+      baseUrl = \`\${proto}://\${host}\`;
+    }
+  } catch {}
+  if (!baseUrl) {
+    baseUrl = 'http://localhost:3000';
+  }
+  baseUrl = baseUrl.replace(/\\/+$/, '');
 
   const sections: string[] = [];
 

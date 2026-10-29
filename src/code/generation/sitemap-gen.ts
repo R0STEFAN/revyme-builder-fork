@@ -31,6 +31,7 @@ export interface SitemapGeneratorInput {
   cmsCollections?: SitemapCmsCollection[];
   locales?: string[];
   defaultLocale?: string;
+  includeAlternates?: boolean;
 }
 
 function toValidIdentifier(name: string): string {
@@ -47,12 +48,16 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
     cmsCollections = [],
     locales = [],
     defaultLocale = 'en',
+    includeAlternates = false,
   } = input;
 
   const defaultLoc = defaultLocale || 'en';
   const otherLocales = locales.filter((l) => l && l !== defaultLoc);
 
-  const imports: string[] = ["import type { MetadataRoute } from 'next';"];
+  const imports: string[] = [
+    "import type { MetadataRoute } from 'next';",
+    "import { headers } from 'next/headers';",
+  ];
   const collectionProcessors: string[] = [];
   const importedCollections = new Set<string>();
 
@@ -82,19 +87,26 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
 
     let alternatesExpr = '';
     let otherPushSnippets = '';
-    if (otherLocales.length > 0) {
+    if (includeAlternates && otherLocales.length > 0) {
       const langs = [`${JSON.stringify(defaultLoc)}: \`\${baseUrl}${prefix}/\${encodeURIComponent(String(slug))}\``];
       for (const loc of otherLocales) {
         langs.push(`${JSON.stringify(loc)}: \`\${baseUrl}/${loc}${prefix}/\${encodeURIComponent(String(slug))}\``);
       }
       alternatesExpr = `,\n      alternates: {\n        languages: { ${langs.join(', ')} },\n      }`;
-      otherPushSnippets = otherLocales.map((loc) => `
+    }
+
+    if (otherLocales.length > 0) {
+      otherPushSnippets = otherLocales
+        .map(
+          (loc) => `
     ${urlsVar}.push({
       url: \`\${baseUrl}/${loc}${prefix}/\${encodeURIComponent(String(slug))}\`,
       lastModified: dateVal ? new Date(dateVal) : new Date(),
       changeFrequency: ${freq},
       priority: ${priority}${alternatesExpr}
-    });`).join('');
+    });`,
+        )
+        .join('');
     }
 
     if (!col.apiConfig?.endpoint) {
@@ -162,7 +174,7 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
     const priority = r.priority !== undefined ? r.priority : path === '/' ? 1.0 : 0.8;
 
     let alternatesSnippet = '';
-    if (otherLocales.length > 0) {
+    if (includeAlternates && otherLocales.length > 0) {
       const langs = [`${JSON.stringify(defaultLoc)}: \`\${baseUrl}${cleanPath || '/'}\``];
       for (const loc of otherLocales) {
         langs.push(`${JSON.stringify(loc)}: \`\${baseUrl}/${loc}${cleanPath}\``);
@@ -191,9 +203,22 @@ export function generateSitemapCode(input: SitemapGeneratorInput): string {
 
   const code = `${imports.join('\n')}
 
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const rawBase = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com';
-  const baseUrl = rawBase.replace(/\\/+$/, '');
+  let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+  try {
+    const reqHeaders = await headers();
+    const host = reqHeaders.get('x-forwarded-host') || reqHeaders.get('host') || '';
+    const proto = reqHeaders.get('x-forwarded-proto') || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    if (host) {
+      baseUrl = \`\${proto}://\${host}\`;
+    }
+  } catch {}
+  if (!baseUrl) {
+    baseUrl = 'http://localhost:3000';
+  }
+  baseUrl = baseUrl.replace(/\\/+$/, '');
 
   const staticUrls: MetadataRoute.Sitemap = [
 ${staticItems.join(',\n')}

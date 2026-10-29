@@ -100,10 +100,24 @@ export function generateRobotsCode(input: RobotsGeneratorInput = {}): string {
     : '';
 
   const code = `import type { MetadataRoute } from 'next';
+import { headers } from 'next/headers';
 
-export default function robots(): MetadataRoute.Robots {
-  const rawBase = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com';
-  const baseUrl = rawBase.replace(/\\/+$/, '');
+export const dynamic = 'force-dynamic';
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+  try {
+    const reqHeaders = await headers();
+    const host = reqHeaders.get('x-forwarded-host') || reqHeaders.get('host') || '';
+    const proto = reqHeaders.get('x-forwarded-proto') || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    if (host) {
+      baseUrl = \`\${proto}://\${host}\`;
+    }
+  } catch {}
+  if (!baseUrl) {
+    baseUrl = 'http://localhost:3000';
+  }
+  baseUrl = baseUrl.replace(/\\/+$/, '');
 
   return {
     rules: ${rulesLiteral},${sitemapLine}

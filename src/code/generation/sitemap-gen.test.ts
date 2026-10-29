@@ -40,7 +40,7 @@ describe('sitemap-gen', () => {
     expect(code).toContain('return [...staticUrls, ...postsItemsUrls];');
   });
 
-  it('generates localized entries and hreflang alternates for multilingual sites', () => {
+  it('generates localized entries and optional hreflang alternates for multilingual sites', () => {
     const code = generateSitemapCode({
       staticRoutes: [{ url: '/' }, { url: '/about' }],
       cmsCollections: [
@@ -52,6 +52,7 @@ describe('sitemap-gen', () => {
       ],
       locales: ['uk', 'en'],
       defaultLocale: 'uk',
+      includeAlternates: true,
     });
 
     expect(moduleParses(code)).toBe(true);

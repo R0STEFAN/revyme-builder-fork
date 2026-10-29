@@ -8,7 +8,7 @@ describe('robots-gen', () => {
 
     expect(moduleParses(code)).toBe(true);
     expect(code).toContain("import type { MetadataRoute } from 'next';");
-    expect(code).toContain('export default function robots()');
+    expect(code).toContain('export default async function robots()');
     expect(code).toContain('"userAgent": "*"');
     expect(code).toContain('sitemap: `${baseUrl}/sitemap.xml`');
   });

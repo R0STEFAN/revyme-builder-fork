@@ -15,7 +15,7 @@ describe('llms-gen', () => {
     });
 
     expect(moduleParses(code)).toBe(true);
-    expect(code).toContain('export async function GET()');
+    expect(code).toContain('export async function GET(');
     expect(code).toContain('# Revyme Blog');
     expect(code).toContain('> Web design, dev, and builder tutorials');
     expect(code).toContain('## Pages');
