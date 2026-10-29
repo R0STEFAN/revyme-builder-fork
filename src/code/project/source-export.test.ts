@@ -55,7 +55,20 @@ export default withResponsiveProps(Navbar);`, 'trigger', 'menu', {
       'cms/posts.json': '[]',
     }, { name: 'Halden Studio', runtimeRange: '^0.0.28', now: NOW, fetchImpl: async () => { throw new Error('no network'); } });
     expect(Object.keys(out.files).sort()).toEqual([
-      '.gitignore', 'README.md', 'app/page.client.tsx', 'app/page.tsx', 'cms/posts.json', 'lib/image-utils.ts', 'next.config.mjs', 'package.json', 'scripts/optimize-images.mjs', 'tsconfig.json',
+      '.gitignore',
+      'README.md',
+      'app/llms-full.txt/route.ts',
+      'app/llms.txt/route.ts',
+      'app/page.client.tsx',
+      'app/page.tsx',
+      'app/robots.ts',
+      'app/sitemap.ts',
+      'cms/posts.json',
+      'lib/image-utils.ts',
+      'next.config.mjs',
+      'package.json',
+      'scripts/optimize-images.mjs',
+      'tsconfig.json',
     ]);
     expect(out.filename).toBe('halden-studio.zip');
     const pkg = JSON.parse(out.files['package.json']);
@@ -335,6 +348,58 @@ export { default } from '@/app/articles/[slug]/page';
       expect(ssg.files['scripts/optimize-images.mjs']).toContain('sharp');
       expect(ssg.files['app/articles/[slug]/page.client.tsx']).toContain('srcSet="/api/uploads/photo-320w.webp 320w');
       expect(JSON.parse(ssg.files['package.json']).devDependencies.sharp).toBe('^0.35.5');
+    });
+  });
+
+  describe('ensureSeoAndAiDiscoveryFiles', () => {
+    it('automatically generates sitemap, robots, and llms route files from project files', async () => {
+      const files = {
+        'app/page.tsx': "export default function Page() { return <div>Home</div>; }",
+        'app/about/page.tsx': "export default function About() { return <div>About</div>; }",
+        'app/blog/[slug]/page.tsx': "import posts from '@/cms/posts.json';\nexport default function Blog() { return <div>Post</div>; }",
+        'cms/posts.json': JSON.stringify([{ slug: 'hello-world', title: 'Hello World', excerpt: 'My first post' }]),
+        '_meta/robots.json': JSON.stringify({ mode: 'allow_all', aiBots: { gptBot: false, claudeBot: true } }),
+      };
+
+      const out = await buildSourceExport(files, { name: 'SEO Site', runtimeRange: '^1', now: NOW });
+
+      // 1. Sitemap
+      expect(out.files['app/sitemap.ts']).toBeDefined();
+      expect(out.files['app/sitemap.ts']).toContain("import type { MetadataRoute } from 'next';");
+      expect(out.files['app/sitemap.ts']).toContain("import postsItems from '@/cms/posts.json';");
+      expect(out.files['app/sitemap.ts']).toContain('${baseUrl}/about');
+      expect(out.files['app/sitemap.ts']).toContain('${baseUrl}/blog/');
+
+      // 2. Robots
+      expect(out.files['app/robots.ts']).toBeDefined();
+      expect(out.files['app/robots.ts']).toContain("import type { MetadataRoute } from 'next';");
+      expect(out.files['app/robots.ts']).toContain('GPTBot');
+      expect(out.files['app/robots.ts']).toContain('"userAgent": "GPTBot"');
+      expect(out.files['app/robots.ts']).toContain('"disallow": "/"');
+
+      // 3. LLMs.txt
+      expect(out.files['app/llms.txt/route.ts']).toBeDefined();
+      expect(out.files['app/llms.txt/route.ts']).toContain("import postsItems from '@/cms/posts.json';");
+      expect(out.files['app/llms.txt/route.ts']).toContain('## Posts');
+
+      // 4. LLMs-full.txt
+      expect(out.files['app/llms-full.txt/route.ts']).toBeDefined();
+      expect(out.files['app/llms-full.txt/route.ts']).toContain('postsItemsFullBlocks');
+    });
+
+    it('does not overwrite existing custom sitemap.ts or robots.ts', async () => {
+      const customSitemap = "// custom sitemap\nexport default function sitemap() { return []; }";
+      const customRobots = "// custom robots\nexport default function robots() { return {}; }";
+
+      const files = {
+        'app/page.tsx': "export default function Page() { return <div>Home</div>; }",
+        'app/sitemap.ts': customSitemap,
+        'app/robots.ts': customRobots,
+      };
+
+      const out = await buildSourceExport(files, { name: 'Custom SEO Site', runtimeRange: '^1', now: NOW });
+      expect(out.files['app/sitemap.ts']).toBe(customSitemap);
+      expect(out.files['app/robots.ts']).toBe(customRobots);
     });
   });
 });

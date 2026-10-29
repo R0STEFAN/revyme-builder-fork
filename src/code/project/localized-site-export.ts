@@ -32,7 +32,9 @@ function shouldMoveToLangTree(path: string): boolean {
     path === 'app/sitemap.xml' ||
     path === 'app/manifest.ts' ||
     path === 'app/manifest.json' ||
-    path === 'app/favicon.ico'
+    path === 'app/favicon.ico' ||
+    path.startsWith('app/llms.txt/') ||
+    path.startsWith('app/llms-full.txt/')
   ) {
     return false;
   }

@@ -50,6 +50,16 @@ import { loadCmsProjectConfig, type ApiCollectionConfig, type CmsImageOptimizati
 import { isLocaleRouteFile } from './locale-route-ops';
 import { prepareLocalizedSiteFiles } from './localized-site-export';
 import { escapeRegExp } from '@/shared/regex-utils';
+import { generateSitemapCode, type SitemapRoute, type SitemapCmsCollection } from '../generation/sitemap-gen';
+import { generateRobotsCode, type RobotsGeneratorInput } from '../generation/robots-gen';
+import {
+  generateLlmsRouteCode,
+  generateLlmsFullRouteCode,
+  type LlmsPageItem,
+  type LlmsCmsCollection,
+  type LlmsRouteGeneratorInput,
+} from '../generation/llms-gen';
+import { parseMetadataFromCode } from '../generation/metadata-gen';
 
 export {
   getUploadSrcSet,
@@ -1026,6 +1036,280 @@ export function injectDifferentiatedLinkPrefetch(code: string, filePath: string)
   }
 }
 
+/**
+ * Automatically discovers static routes and CMS dynamic collections, and ensures
+ * zero-config `app/sitemap.ts`, `app/robots.ts`, `app/llms.txt/route.ts`,
+ * and `app/llms-full.txt/route.ts` are present.
+ */
+export function ensureSeoAndAiDiscoveryFiles(
+  files: Record<string, string>,
+  apiConfigs: Record<string, ApiCollectionConfig> = {},
+): Record<string, string> {
+  const result = { ...files };
+
+  // 1. Gather locales if i18n/config.json exists
+  let locales: string[] = [];
+  let defaultLocale = 'en';
+  if (files['i18n/config.json']) {
+    try {
+      const parsed = JSON.parse(files['i18n/config.json']);
+      if (Array.isArray(parsed.locales)) {
+        locales = parsed.locales
+          .map((l: any) => (typeof l === 'string' ? l : l.code))
+          .filter(Boolean);
+      }
+      if (parsed.defaultLocale) defaultLocale = parsed.defaultLocale;
+    } catch {}
+  }
+
+  // 2. Discover static and dynamic routes from app/**/page.client.tsx and app/**/page.tsx
+  const routeDirs = new Set<string>();
+  for (const p of Object.keys(files)) {
+    if (
+      p.startsWith('app/') &&
+      !p.startsWith('app/api/') &&
+      !p.startsWith('app/llms') &&
+      !p.startsWith('app/[lang]/')
+    ) {
+      if (isLocaleRouteFile(p, files[p])) continue;
+      if (
+        p.endsWith('/page.client.tsx') ||
+        p.endsWith('/page.client.jsx') ||
+        p === 'app/page.client.tsx' ||
+        p === 'app/page.client.jsx' ||
+        p.endsWith('/page.tsx') ||
+        p === 'app/page.tsx'
+      ) {
+        const dir = p.replace(/^app\//, '').replace(/\/?page(\.client)?\.(tsx|jsx)$/, '');
+        routeDirs.add(dir);
+      }
+    }
+  }
+
+  // Find site title & description from app/layout.tsx
+  let siteTitle = 'Revyme Site';
+  let siteDescription = 'Built with Revyme Website Builder';
+  const layoutCode = files['app/layout.tsx'] || files['app/layout.jsx'] || '';
+  if (layoutCode) {
+    const tMatch = layoutCode.match(/title:\s*['"`]([^'"`]+)['"`]/);
+    if (tMatch) siteTitle = tMatch[1];
+    const dMatch = layoutCode.match(/description:\s*['"`]([^'"`]+)['"`]/);
+    if (dMatch) siteDescription = dMatch[1];
+  }
+
+  // Available local collections & api collections
+  const localCollections = new Set<string>();
+  for (const p of Object.keys(files)) {
+    if (p.startsWith('cms/') && p.endsWith('.json') && !p.endsWith('.schema.json')) {
+      localCollections.add(p.replace(/^cms\//, '').replace(/\.json$/, ''));
+    }
+  }
+  const allCollectionSlugs = new Set([...localCollections, ...Object.keys(apiConfigs)]);
+
+  const staticRoutes: SitemapRoute[] = [];
+  const cmsCollections: SitemapCmsCollection[] = [];
+  const keyPages: LlmsPageItem[] = [];
+  const llmsCollections: LlmsCmsCollection[] = [];
+
+  for (const dir of Array.from(routeDirs).sort()) {
+    const rawSegments = dir ? dir.split('/') : [];
+    // Ignore route groups like (main) or (auth)
+    const cleanSegments = rawSegments.filter((s) => Boolean(s) && !/^\(.*\)$/.test(s));
+    const isDynamic = cleanSegments.some((s) => /^\[.*\]$/.test(s));
+
+    if (!isDynamic) {
+      const urlPath = '/' + cleanSegments.join('/');
+      const formattedUrl = urlPath === '/' ? '/' : urlPath;
+
+      // Check noindex in server or client code
+      const serverCode = files[`app/${dir ? dir + '/' : ''}page.tsx`] || '';
+      const clientCode = files[`app/${dir ? dir + '/' : ''}page.client.tsx`] || '';
+      const isNoIndex =
+        /robots:\s*\{\s*index:\s*false/.test(serverCode) ||
+        /noindex:\s*true/.test(serverCode) ||
+        /robots:\s*\{\s*index:\s*false/.test(clientCode);
+
+      if (!isNoIndex) {
+        staticRoutes.push({
+          url: formattedUrl,
+          priority: formattedUrl === '/' ? 1.0 : 0.8,
+          changeFrequency: formattedUrl === '/' ? 'daily' : 'monthly',
+        });
+      }
+
+      const pageTitle =
+        formattedUrl === '/'
+          ? siteTitle
+          : cleanSegments[cleanSegments.length - 1]
+              .replace(/[-_]/g, ' ')
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+
+      keyPages.push({
+        title: pageTitle,
+        path: formattedUrl,
+      });
+    } else {
+      // Dynamic route, e.g. blog/[slug] or category/[category]
+      const prefixSegments = cleanSegments.slice(0, cleanSegments.length - 1);
+      const routePrefix = '/' + prefixSegments.join('/');
+      const lastSeg = cleanSegments[cleanSegments.length - 1];
+      const paramName = lastSeg.replace(/^\[+/, '').replace(/\]+$/, '');
+
+      // Identify corresponding collection
+      const serverCode = files[`app/${dir ? dir + '/' : ''}page.tsx`] || '';
+      const clientCode = files[`app/${dir ? dir + '/' : ''}page.client.tsx`] || '';
+
+      let matchedCol: string | null = null;
+
+      // 1. Check code for import or mention of @/cms/<col>.json
+      for (const col of allCollectionSlugs) {
+        if (
+          serverCode.includes(`cms/${col}.json`) ||
+          clientCode.includes(`cms/${col}.json`) ||
+          serverCode.includes(`apiCollections['${col}']`) ||
+          clientCode.includes(`apiCollections['${col}']`)
+        ) {
+          matchedCol = col;
+          break;
+        }
+      }
+
+      // 2. Check parent segment or param name
+      if (!matchedCol) {
+        const candidates = [
+          paramName,
+          paramName + 's',
+          paramName + 'es',
+          paramName.endsWith('y') ? paramName.slice(0, -1) + 'ies' : null,
+          prefixSegments[prefixSegments.length - 1],
+          prefixSegments[prefixSegments.length - 1]
+            ? prefixSegments[prefixSegments.length - 1] + 's'
+            : null,
+          prefixSegments[prefixSegments.length - 1]
+            ? prefixSegments[prefixSegments.length - 1] + 'es'
+            : null,
+          prefixSegments[prefixSegments.length - 1] &&
+          prefixSegments[prefixSegments.length - 1].endsWith('y')
+            ? prefixSegments[prefixSegments.length - 1].slice(0, -1) + 'ies'
+            : null,
+        ].filter(Boolean) as string[];
+
+        for (const cand of candidates) {
+          if (allCollectionSlugs.has(cand)) {
+            matchedCol = cand;
+            break;
+          }
+        }
+      }
+
+      // 3. Fallback: if only 1 collection exists, match it
+      if (!matchedCol && allCollectionSlugs.size === 1) {
+        matchedCol = Array.from(allCollectionSlugs)[0];
+      }
+
+      if (matchedCol) {
+        const alreadyAdded = cmsCollections.some(
+          (c) => c.collection === matchedCol && c.routePrefix === routePrefix,
+        );
+        if (!alreadyAdded) {
+          const apiConfig = apiConfigs[matchedCol];
+          cmsCollections.push({
+            collection: matchedCol,
+            routePrefix: routePrefix || '/',
+            paramName,
+            slugField: 'slug',
+            priority: 0.7,
+            changeFrequency: 'weekly',
+            apiConfig: apiConfig
+              ? {
+                  endpoint: apiConfig.url,
+                  itemsPath: apiConfig.itemsKey,
+                  headers: apiConfig.headers,
+                }
+              : undefined,
+          });
+
+          llmsCollections.push({
+            collectionSlug: matchedCol,
+            routePrefix: routePrefix || '/',
+            titleField: 'title',
+            descriptionField: 'excerpt',
+            slugField: 'slug',
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Ensure app/sitemap.ts exists
+  if (!result['app/sitemap.ts'] && !result['app/sitemap.js']) {
+    if (!staticRoutes.some((r) => r.url === '/')) {
+      staticRoutes.unshift({ url: '/', priority: 1.0, changeFrequency: 'daily' });
+    }
+    result['app/sitemap.ts'] = generateSitemapCode({
+      staticRoutes,
+      cmsCollections,
+      locales,
+      defaultLocale,
+    });
+  }
+
+  // 4. Ensure app/robots.ts exists
+  if (!result['app/robots.ts'] && !result['app/robots.js'] && !result['public/robots.txt']) {
+    let robotsConfig: RobotsGeneratorInput = {
+      mode: 'allow_all',
+      aiBots: {
+        gptBot: true,
+        claudeBot: true,
+        perplexityBot: true,
+        googleExtended: true,
+      },
+    };
+    if (result['_meta/robots.json']) {
+      try {
+        const parsed = JSON.parse(result['_meta/robots.json']);
+        robotsConfig = { ...robotsConfig, ...parsed };
+      } catch {}
+    }
+    result['app/robots.ts'] = generateRobotsCode(robotsConfig);
+  }
+
+  // 5. Ensure app/llms.txt/route.ts and app/llms-full.txt/route.ts exist
+  if (!result['app/llms.txt/route.ts']) {
+    let llmsConfig: LlmsRouteGeneratorInput = {
+      siteTitle,
+      siteDescription,
+      keyPages,
+      cmsCollections: llmsCollections,
+    };
+    if (result['_meta/llms.json']) {
+      try {
+        const parsed = JSON.parse(result['_meta/llms.json']);
+        llmsConfig = { ...llmsConfig, ...parsed };
+      } catch {}
+    }
+    result['app/llms.txt/route.ts'] = generateLlmsRouteCode(llmsConfig);
+  }
+
+  if (!result['app/llms-full.txt/route.ts']) {
+    let llmsConfig: LlmsRouteGeneratorInput = {
+      siteTitle,
+      siteDescription,
+      keyPages,
+      cmsCollections: llmsCollections,
+    };
+    if (result['_meta/llms.json']) {
+      try {
+        const parsed = JSON.parse(result['_meta/llms.json']);
+        llmsConfig = { ...llmsConfig, ...parsed };
+      } catch {}
+    }
+    result['app/llms-full.txt/route.ts'] = generateLlmsFullRouteCode(llmsConfig);
+  }
+
+  return result;
+}
+
 export interface PrepareSiteFilesOptions {
   ssg?: boolean;
   buildMode?: 'dynamic' | 'hybrid' | 'static' | 'ssg';
@@ -1185,6 +1469,9 @@ export function prepareSiteFiles(
 
   // Transform Google Fonts @import into next/font/google loaders
   files = transformSiteFilesForNextFonts(files);
+
+  // Ensure SEO (sitemap, robots) and AI discovery (llms.txt) files exist
+  files = ensureSeoAndAiDiscoveryFiles(files, apiConfigs);
 
   // Deterministic publish-time localization pass
   files = prepareLocalizedSiteFiles(files);

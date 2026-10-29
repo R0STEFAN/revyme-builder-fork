@@ -193,4 +193,37 @@ export default function Page() {
     const ukJson = JSON.parse(fsStore.get('messages/uk.json') ?? '{}');
     expect(ukJson['LayoutClient.tsx']?._seo).toEqual({ title: 'Template SEO' });
   });
+
+  it('configures Schema.org preset and writes JSON-LD script to page.tsx', async () => {
+    store.set(activeLocaleAtom, 'uk');
+
+    const { container } = render(
+      <Provider store={store}>
+        <PagesSeoSection />
+      </Provider>
+    );
+
+    const schemaTrigger = container.querySelector('#schema-type') as HTMLButtonElement;
+    expect(schemaTrigger).toBeTruthy();
+
+    // Click trigger to open RowSelect options
+    fireEvent.click(schemaTrigger);
+
+    // Click Article option
+    const articleOption = screen.getByRole('button', { name: /Article \/ Blog post/i });
+    fireEvent.click(articleOption);
+
+    // Fill headline static field
+    const headlineInput = container.querySelector('#schema-headline') as HTMLInputElement;
+    expect(headlineInput).toBeTruthy();
+    fireEvent.change(headlineInput, { target: { value: 'Галерея Мистецтв' } });
+
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    fireEvent.click(saveButton);
+
+    const updatedCode = fsStore.get('app/gallery/page.tsx')!;
+    expect(updatedCode).toContain('application/ld+json');
+    expect(updatedCode).toContain('Article');
+    expect(updatedCode).toContain('Галерея Мистецтв');
+  });
 });

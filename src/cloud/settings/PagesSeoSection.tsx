@@ -42,6 +42,7 @@ import {
   type CmsSeoSlot,
   type CmsSeoBindings,
   type CmsSeoExpressions,
+  type SchemaOrgConfig,
   bindableFields,
   buildCmsDetailServerWrapper,
   buildStandardPageServerWrapper,
@@ -49,7 +50,38 @@ import {
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
   parseCmsSeoExpressions,
+  parseCmsSchemaOrg,
 } from '@/code/project/cms-seo';
+
+const SCHEMA_PRESET_FIELDS: Record<string, Array<{ key: string; label: string; type?: 'text' | 'src' }>> = {
+  Article: [
+    { key: 'headline', label: 'Headline / Title', type: 'text' },
+    { key: 'description', label: 'Description', type: 'text' },
+    { key: 'image', label: 'Image URL', type: 'src' },
+    { key: 'datePublished', label: 'Date Published', type: 'text' },
+    { key: 'dateModified', label: 'Date Modified', type: 'text' },
+    { key: 'authorName', label: 'Author Name', type: 'text' },
+  ],
+  Product: [
+    { key: 'name', label: 'Product Name', type: 'text' },
+    { key: 'description', label: 'Description', type: 'text' },
+    { key: 'image', label: 'Image URL', type: 'src' },
+    { key: 'sku', label: 'SKU', type: 'text' },
+    { key: 'price', label: 'Price', type: 'text' },
+    { key: 'priceCurrency', label: 'Currency (e.g. USD)', type: 'text' },
+    { key: 'availability', label: 'Availability (e.g. InStock)', type: 'text' },
+  ],
+  Organization: [
+    { key: 'name', label: 'Organization Name', type: 'text' },
+    { key: 'url', label: 'Website URL', type: 'text' },
+    { key: 'logo', label: 'Logo URL', type: 'src' },
+    { key: 'description', label: 'Description', type: 'text' },
+  ],
+  FAQPage: [
+    { key: 'headline', label: 'FAQ Topic / Headline', type: 'text' },
+    { key: 'description', label: 'Description', type: 'text' },
+  ],
+};
 
 // ─── Page list helpers ──────────────────────────────────────────────────────
 
@@ -426,6 +458,14 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   const [expressions, setExpressions] = useState<CmsSeoExpressions>(initialExpressions);
   useEffect(() => { setExpressions(initialExpressions); }, [initialExpressions]);
 
+  const initialSchemaOrg = useMemo<SchemaOrgConfig | null>(() => {
+    void version;
+    return parseCmsSchemaOrg(projectFS.readFile(metadataPath) ?? '');
+  }, [metadataPath, version]);
+
+  const [schemaOrg, setSchemaOrg] = useState<SchemaOrgConfig | null>(initialSchemaOrg);
+  useEffect(() => { setSchemaOrg(initialSchemaOrg); }, [initialSchemaOrg]);
+
   const [activeExprSlot, setActiveExprSlot] = useState<{
     slot: string;
     targetProperty: 'text' | 'src' | 'href';
@@ -442,9 +482,10 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     () => isDefaultLocale
       ? (JSON.stringify(form) !== JSON.stringify(initial)
          || JSON.stringify(bindings) !== JSON.stringify(initialBindings)
-         || JSON.stringify(expressions) !== JSON.stringify(initialExpressions))
+         || JSON.stringify(expressions) !== JSON.stringify(initialExpressions)
+         || JSON.stringify(schemaOrg) !== JSON.stringify(initialSchemaOrg))
       : JSON.stringify(form) !== JSON.stringify(initial),
-    [isDefaultLocale, form, initial, bindings, initialBindings, expressions, initialExpressions],
+    [isDefaultLocale, form, initial, bindings, initialBindings, expressions, initialExpressions, schemaOrg, initialSchemaOrg],
   );
 
   // One writer per page kind. A bound wrapper is REGENERATED whole rather
@@ -452,13 +493,22 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
   // `export const metadata`, which Next.js rejects outright and vinext
   // silently ignores in favour of `generateMetadata` — the edit would look
   // saved and never render.
-  const writeMeta = useCallback((next: PageMeta, nextBindings: CmsSeoBindings, nextExpressions: CmsSeoExpressions) => {
+  const writeMeta = useCallback((
+    next: PageMeta,
+    nextBindings: CmsSeoBindings,
+    nextExpressions: CmsSeoExpressions,
+    nextSchemaOrg?: SchemaOrgConfig | null,
+  ) => {
     if (!projectFS.exists(metadataPath)) {
       projectFS.writeFile(
         metadataPath,
         `import PageClient from './page.client';\n\nexport const metadata = {};\n\nexport default function Page() {\n  return <PageClient />;\n}\n`,
       );
     }
+    const schemaToSave = nextSchemaOrg !== undefined
+      ? (nextSchemaOrg?.type ? nextSchemaOrg : undefined)
+      : (schemaOrg?.type ? schemaOrg : undefined);
+
     if (cms) {
       modifyProjectFile(metadataPath, () =>
         buildCmsDetailServerWrapper({
@@ -466,6 +516,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
           defaults: next as unknown as Record<string, unknown>,
           bindings: nextBindings,
           expressions: nextExpressions,
+          schemaOrg: schemaToSave,
         }));
       return;
     }
@@ -473,15 +524,16 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
       buildStandardPageServerWrapper({
         defaults: next as unknown as Record<string, unknown>,
         expressions: nextExpressions,
+        schemaOrg: schemaToSave,
         existingCode: code,
       }));
-  }, [cms, metadataPath]);
+  }, [cms, metadataPath, schemaOrg]);
 
   const save = useCallback(() => {
     if (!dirty) return;
     if (isDefaultLocale) {
-      trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings, expressions });
-      writeMeta(form, bindings, expressions);
+      trace.action('pages-seo:save', { metadataPath, filePath: page.filePath, cms: cms?.collection, bindings, expressions, schemaOrg });
+      writeMeta(form, bindings, expressions, schemaOrg);
     } else {
       const cleanOverrides: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(form)) {
@@ -495,7 +547,7 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
       trace.action('pages-seo:save-locale-override', { filePath: page.filePath, activeLocale, overrides: toWrite });
       writeSeoOverrides(page.filePath, activeLocale, toWrite);
     }
-  }, [dirty, isDefaultLocale, form, bindings, expressions, metadataPath, page.filePath, cms, writeMeta, activeLocale, baseMeta]);
+  }, [dirty, isDefaultLocale, form, bindings, expressions, schemaOrg, metadataPath, page.filePath, cms, writeMeta, activeLocale, baseMeta]);
 
   // Binding changes are discrete picks, like the image fields — commit them
   // straight away so a pick can't be lost by forgetting Save. Any in-flight
@@ -505,8 +557,8 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     if (fieldId) next[slot] = fieldId; else delete next[slot];
     setBindings(next);
     trace.action('pages-seo:bind', { slot, fieldId, collection: cms?.collection });
-    writeMeta(form, next, expressions);
-  }, [bindings, form, expressions, cms, writeMeta]);
+    writeMeta(form, next, expressions, schemaOrg);
+  }, [bindings, form, expressions, schemaOrg, cms, writeMeta]);
 
   const updateExpression = useCallback((slot: string, expr: string) => {
     if (expr) {
@@ -525,8 +577,55 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
     }
     setExpressions(next);
     trace.action('pages-seo:set-expression', { slot, expr, collection: cms?.collection });
-    writeMeta(form, bindings, next);
-  }, [expressions, form, bindings, cms, writeMeta]);
+    writeMeta(form, bindings, next, schemaOrg);
+  }, [expressions, form, bindings, schemaOrg, cms, writeMeta]);
+
+  const updateSchemaType = useCallback((type: string) => {
+    if (!type) {
+      setSchemaOrg(null);
+      writeMeta(form, bindings, expressions, null);
+      return;
+    }
+    const next: SchemaOrgConfig = {
+      type,
+      bindings: schemaOrg?.bindings || {},
+      expressions: schemaOrg?.expressions || {},
+      staticValues: schemaOrg?.staticValues || {},
+      rawJsonLd: schemaOrg?.rawJsonLd || '',
+    };
+    setSchemaOrg(next);
+    writeMeta(form, bindings, expressions, next);
+  }, [schemaOrg, form, bindings, expressions, writeMeta]);
+
+  const updateSchemaStatic = useCallback((key: string, val: string) => {
+    const next: SchemaOrgConfig = {
+      ...(schemaOrg || { type: 'Article' }),
+      staticValues: { ...(schemaOrg?.staticValues || {}), [key]: val },
+    };
+    setSchemaOrg(next);
+  }, [schemaOrg]);
+
+  const updateSchemaBinding = useCallback((key: string, fieldId: string) => {
+    const nextBindings = { ...(schemaOrg?.bindings || {}) };
+    if (fieldId) nextBindings[key] = fieldId; else delete nextBindings[key];
+    const next: SchemaOrgConfig = {
+      ...(schemaOrg || { type: 'Article' }),
+      bindings: nextBindings,
+    };
+    setSchemaOrg(next);
+    writeMeta(form, bindings, expressions, next);
+  }, [schemaOrg, form, bindings, expressions, writeMeta]);
+
+  const updateSchemaExpression = useCallback((key: string, expr: string) => {
+    const nextExprs = { ...(schemaOrg?.expressions || {}) };
+    if (expr) nextExprs[key] = expr; else delete nextExprs[key];
+    const next: SchemaOrgConfig = {
+      ...(schemaOrg || { type: 'Article' }),
+      expressions: nextExprs,
+    };
+    setSchemaOrg(next);
+    writeMeta(form, bindings, expressions, next);
+  }, [schemaOrg, form, bindings, expressions, writeMeta]);
 
   const update = <K extends keyof PageMeta>(key: K, value: PageMeta[K]) => {
     setForm((cur) => ({ ...cur, [key]: value }));
@@ -828,26 +927,154 @@ function PageSeoForm({ page }: { page: PageEntry }): React.ReactElement {
         </SettingsRow>
       </SettingsGroup>
 
+      <SettingsGroup
+        title="Structured Data (Schema.org)"
+        action={
+          schemaOrg?.type ? (
+            <span className="text-[11px] font-medium text-[var(--text-tertiary)] bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 rounded cut-corners">
+              JSON-LD Active
+            </span>
+          ) : undefined
+        }
+      >
+        <SettingsRow label="Schema preset" htmlFor="schema-type">
+          <RowSelect
+            id="schema-type"
+            value={schemaOrg?.type || ''}
+            options={[
+              { value: '', label: 'None (Disabled)' },
+              { value: 'Article', label: 'Article / Blog post' },
+              { value: 'Product', label: 'Product' },
+              { value: 'Organization', label: 'Organization / Company' },
+              { value: 'FAQPage', label: 'FAQ Page' },
+              { value: 'Custom', label: 'Custom JSON-LD' },
+            ]}
+            onChange={updateSchemaType}
+          />
+        </SettingsRow>
+
+        {schemaOrg?.type && schemaOrg.type !== 'Custom' && (
+          <>
+            {(SCHEMA_PRESET_FIELDS[schemaOrg.type] || []).map((f) => {
+              const expr = schemaOrg.expressions?.[f.key];
+              const binding = schemaOrg.bindings?.[f.key];
+              const staticVal = String(schemaOrg.staticValues?.[f.key] ?? '');
+
+              return (
+                <SettingsRow key={f.key} label={f.label} htmlFor={`schema-${f.key}`}>
+                  {expr ? (
+                    <ExpressionBoundPill
+                      expression={expr}
+                      onEdit={() =>
+                        setActiveExprSlot({
+                          slot: `schema:${f.key}`,
+                          targetProperty: f.type || 'text',
+                          label: `${schemaOrg.type} · ${f.label}`,
+                        })
+                      }
+                      onClear={() => updateSchemaExpression(f.key, '')}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 w-full">
+                      {cms && cms.schema ? (
+                        <div className="max-w-[200px]">
+                          <ToolSelect
+                            value={binding ?? CUSTOM_TEXT}
+                            options={[
+                              { value: CUSTOM_TEXT, label: 'Custom text' },
+                              ...bindableFields(cms.schema, (f.type === 'src' ? 'ogImage' : 'title') as CmsSeoSlot).map((field) => ({
+                                value: field.id,
+                                label: field.name || field.id,
+                              })),
+                            ]}
+                            onChange={(v) => updateSchemaBinding(f.key, v === CUSTOM_TEXT ? '' : v)}
+                            className={`schema-bind-${f.key}`}
+                          />
+                        </div>
+                      ) : null}
+
+                      {(!cms || !binding) && (
+                        <input
+                          id={`schema-${f.key}`}
+                          type="text"
+                          value={staticVal}
+                          onChange={(e) => updateSchemaStatic(f.key, e.target.value)}
+                          className={ROW_INPUT_CLS}
+                          placeholder={`Enter ${f.label.toLowerCase()} or use fx`}
+                        />
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveExprSlot({
+                            slot: `schema:${f.key}`,
+                            targetProperty: f.type || 'text',
+                            label: `${schemaOrg.type} · ${f.label}`,
+                          })
+                        }
+                        title="Bind dynamic expression (fx)"
+                        className="px-2 py-1 cut-corners text-[11px] font-mono font-bold text-amber-500 hover:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors shrink-0 cursor-pointer"
+                      >
+                        fx
+                      </button>
+                    </div>
+                  )}
+                </SettingsRow>
+              );
+            })}
+          </>
+        )}
+
+        {schemaOrg?.type === 'Custom' && (
+          <SettingsRow label="Custom JSON-LD" htmlFor="schema-custom" align="top">
+            <textarea
+              id="schema-custom"
+              rows={6}
+              value={schemaOrg.rawJsonLd || ''}
+              onChange={(e) => {
+                const next: SchemaOrgConfig = { ...(schemaOrg || { type: 'Custom' }), rawJsonLd: e.target.value };
+                setSchemaOrg(next);
+              }}
+              className={`${ROW_INPUT_CLS} resize-none font-mono text-xs min-h-[120px]`}
+              placeholder={`{\n  "@context": "https://schema.org",\n  "@type": "WebPage",\n  "name": "Custom Schema"\n}`}
+            />
+          </SettingsRow>
+        )}
+      </SettingsGroup>
+
       {activeExprSlot && (
         <ExpressionEditorPopup
           isOpen={true}
           onClose={() => setActiveExprSlot(null)}
           onApply={(expr) => {
-            updateExpression(activeExprSlot.slot, expr);
+            if (activeExprSlot.slot.startsWith('schema:')) {
+              const fieldKey = activeExprSlot.slot.replace(/^schema:/, '');
+              updateSchemaExpression(fieldKey, expr);
+            } else {
+              updateExpression(activeExprSlot.slot, expr);
+            }
             setActiveExprSlot(null);
           }}
           initialExpression={
-            expressions[activeExprSlot.slot] ||
-            (bindings[activeExprSlot.slot as CmsSeoSlot]
-              ? `item.${bindings[activeExprSlot.slot as CmsSeoSlot]}`
-              : (form as any)[activeExprSlot.slot]
-                ? (typeof (form as any)[activeExprSlot.slot] === 'string' &&
-                   ((form as any)[activeExprSlot.slot].startsWith('`') ||
-                    (form as any)[activeExprSlot.slot].startsWith('"') ||
-                    (form as any)[activeExprSlot.slot].startsWith("'"))
-                    ? (form as any)[activeExprSlot.slot]
-                    : JSON.stringify(String((form as any)[activeExprSlot.slot])))
-                : '')
+            activeExprSlot.slot.startsWith('schema:')
+              ? (schemaOrg?.expressions?.[activeExprSlot.slot.replace(/^schema:/, '')] ||
+                 (schemaOrg?.bindings?.[activeExprSlot.slot.replace(/^schema:/, '')]
+                   ? `item.${schemaOrg.bindings[activeExprSlot.slot.replace(/^schema:/, '')]}`
+                   : schemaOrg?.staticValues?.[activeExprSlot.slot.replace(/^schema:/, '')]
+                     ? JSON.stringify(schemaOrg.staticValues[activeExprSlot.slot.replace(/^schema:/, '')])
+                     : ''))
+              : (expressions[activeExprSlot.slot] ||
+                (bindings[activeExprSlot.slot as CmsSeoSlot]
+                  ? `item.${bindings[activeExprSlot.slot as CmsSeoSlot]}`
+                  : (form as any)[activeExprSlot.slot]
+                    ? (typeof (form as any)[activeExprSlot.slot] === 'string' &&
+                       ((form as any)[activeExprSlot.slot].startsWith('`') ||
+                        (form as any)[activeExprSlot.slot].startsWith('"') ||
+                        (form as any)[activeExprSlot.slot].startsWith("'"))
+                        ? (form as any)[activeExprSlot.slot]
+                        : JSON.stringify(String((form as any)[activeExprSlot.slot])))
+                    : ''))
           }
           targetProperty={activeExprSlot.targetProperty}
           collectionSlug={cms?.collection}

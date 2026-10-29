@@ -6,6 +6,7 @@ import {
   parseCmsSeoBindings,
   parseCmsSeoDefaults,
   parseCmsSeoExpressions,
+  parseCmsSchemaOrg,
   discoverDynamicRouteParams,
   MAX_PRERENDER_COMBINATIONS,
   hasCmsSeo,
@@ -496,6 +497,40 @@ describe('buildCmsDetailServerWrapper with localized _i18n items', () => {
     expect(serverMergeUk.excerpt).toBe('Base description in English');
   });
 });
+
+describe('buildCmsDetailServerWrapper with Schema.org JSON-LD', () => {
+  it('emits schemaOrg and injects jsonLd script in Page component', () => {
+    const src = buildCmsDetailServerWrapper({
+      collection: 'articles',
+      schemaOrg: {
+        type: 'Article',
+        bindings: {
+          headline: 'name',
+          description: 'excerpt',
+        },
+        expressions: {
+          image: "item.cover || 'https://example.com/default.png'",
+        },
+        staticValues: {
+          inLanguage: 'en',
+        },
+      },
+    });
+
+    expect(src).toContain('const schemaOrg =');
+    expect(src).toContain('"type": "Article"');
+    expect(src).toContain('type="application/ld+json"');
+    expect(src).toContain('<PageClient item={item || raw} />');
+
+    const parsed = parseCmsSchemaOrg(src);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.type).toBe('Article');
+    expect(parsed?.bindings?.headline).toBe('name');
+    expect(parsed?.expressions?.image).toBe("item.cover || 'https://example.com/default.png'");
+    expect(parsed?.staticValues?.inLanguage).toBe('en');
+  });
+});
+
 
 
 

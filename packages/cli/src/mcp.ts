@@ -334,7 +334,7 @@ export function createMcpServer(options: McpServerOptions): Server {
       signal: extra.signal || new AbortController().signal,
       trace,
       adapters: {
-        screenshotService: createBridgeScreenshotService(config?.apiUrl),
+        screenshotService: createBridgeScreenshotService(),
         auditSnapshotService: createBridgeAuditSnapshotService(),
       },
     };

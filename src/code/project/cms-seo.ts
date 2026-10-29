@@ -127,6 +127,26 @@ export function parseCmsSeoDefaults(serverCode: string): Record<string, any> {
 
 export type CmsSeoExpressions = Partial<Record<string, string>>;
 
+export interface SchemaOrgConfig {
+  type?: string; // 'Article' | 'Product' | 'Organization' | 'LocalBusiness' | 'FAQPage' | 'Custom'
+  bindings?: Record<string, string>;
+  expressions?: Record<string, string>;
+  staticValues?: Record<string, unknown>;
+  rawJsonLd?: string;
+}
+
+export function parseCmsSchemaOrg(serverCode: string): SchemaOrgConfig | null {
+  const raw = parseLocalObjectFromCode(serverCode, 'schemaOrg');
+  if (!raw || Object.keys(raw).length === 0 || !raw.type) return null;
+  return {
+    type: typeof raw.type === 'string' ? raw.type : undefined,
+    bindings: typeof raw.bindings === 'object' && raw.bindings !== null ? raw.bindings : {},
+    expressions: typeof raw.expressions === 'object' && raw.expressions !== null ? raw.expressions : {},
+    staticValues: typeof raw.staticValues === 'object' && raw.staticValues !== null ? raw.staticValues : {},
+    rawJsonLd: typeof raw.rawJsonLd === 'string' ? raw.rawJsonLd : undefined,
+  };
+}
+
 export function parseCmsSeoExpressions(serverCode: string): CmsSeoExpressions {
   const raw = parseLocalObjectFromCode(serverCode, 'seoExpressions');
   const out: CmsSeoExpressions = {};
@@ -192,6 +212,7 @@ export interface BuildDetailWrapperInput {
   expressions?: CmsSeoExpressions;
   includeStaticParams?: boolean;
   apiConfig?: ApiCollectionConfig | null;
+  schemaOrg?: SchemaOrgConfig | null;
 }
 
 /**
@@ -210,6 +231,7 @@ export interface BuildDetailWrapperInput {
 export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): string {
   const { collection, defaults = {}, bindings = {}, expressions = {}, includeStaticParams } = input;
   const apiConfig = input.apiConfig !== undefined ? input.apiConfig : getApiCollection(collection);
+  const varName = importVarName(collection);
 
   const defaultsLiteral = inlineObject([
     ['title', defaults.title],
@@ -231,6 +253,10 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
     'twitterTitle', 'twitterDescription', 'twitterImage',
   ];
   const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
+  const schemaOrg = input.schemaOrg;
+  const schemaOrgLiteral = schemaOrg && schemaOrg.type
+    ? `\nconst schemaOrg = ${JSON.stringify(schemaOrg, null, 2)};\n`
+    : '';
 
   const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
     ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
@@ -332,7 +358,62 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
 }\n`
       : '';
 
-    return `import PageClient from './page.client';
+    const pageReturn = schemaOrg && schemaOrg.type
+    ? `  const buildJsonLd = (itm: any) => {
+    if (!schemaOrg || !schemaOrg.type) return null;
+    if (schemaOrg.type === 'Custom' && schemaOrg.rawJsonLd) {
+      try {
+        return typeof schemaOrg.rawJsonLd === 'string' ? JSON.parse(schemaOrg.rawJsonLd) : schemaOrg.rawJsonLd;
+      } catch { return null; }
+    }
+    const evalFieldExpr = (expr: string) => {
+      try {
+        const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+        const fn = new Function('item', 'params', '${varName}', \`return (\${unwrapped});\`);
+        const val = fn(itm, { slug: slugVal, ...(resolved || {}) }, ${varName});
+        if (val === undefined || val === null) return undefined;
+        return typeof val === 'object' ? val : String(val);
+      } catch {
+        return undefined;
+      }
+    };
+    const data: Record<string, any> = {
+      '@context': 'https://schema.org',
+      '@type': schemaOrg.type,
+    };
+    const staticVals = (schemaOrg.staticValues as Record<string, any>) || {};
+    const bindings = (schemaOrg.bindings as Record<string, string>) || {};
+    const expressions = (schemaOrg.expressions as Record<string, string>) || {};
+    const allKeys = Array.from(new Set([...Object.keys(staticVals), ...Object.keys(bindings), ...Object.keys(expressions)]));
+    for (const k of allKeys) {
+      if (expressions[k]) {
+        const v = evalFieldExpr(expressions[k]);
+        if (v !== undefined && v !== '') data[k] = v;
+      } else if (bindings[k] && itm) {
+        const field = bindings[k];
+        const val = field.includes('.') ? field.split('.').reduce((acc: any, part: string) => acc?.[part], itm) : itm[field];
+        if (val !== undefined && val !== null && val !== '') data[k] = val;
+      } else if (staticVals[k] !== undefined && staticVals[k] !== '') {
+        data[k] = staticVals[k];
+      }
+    }
+    return data;
+  };
+  const jsonLd = buildJsonLd(item || raw);
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <PageClient item={item || raw} />
+    </>
+  );`
+    : `  return <PageClient item={item || raw} />;`;
+
+  return `import PageClient from './page.client';
 import { notFound } from 'next/navigation';
 
 const seoDefaults = ${defaultsLiteral};
@@ -445,8 +526,6 @@ export default async function Page({ params }: { params: Promise<{ slug: string;
 `;
   }
 
-  const varName = importVarName(collection);
-
   const staticParams = includeStaticParams
     ? `\nexport async function generateStaticParams() {
   const items = Array.isArray(${varName}) ? ${varName} : [];
@@ -455,6 +534,61 @@ export default async function Page({ params }: { params: Promise<{ slug: string;
     .map((i) => ({ slug: String(i._slug) }));
 }\n`
     : '';
+
+  const pageReturn = schemaOrg && schemaOrg.type
+    ? `  const buildJsonLd = (itm: any) => {
+    if (!schemaOrg || !schemaOrg.type) return null;
+    if (schemaOrg.type === 'Custom' && schemaOrg.rawJsonLd) {
+      try {
+        return typeof schemaOrg.rawJsonLd === 'string' ? JSON.parse(schemaOrg.rawJsonLd) : schemaOrg.rawJsonLd;
+      } catch { return null; }
+    }
+    const evalFieldExpr = (expr: string) => {
+      try {
+        const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+        const fn = new Function('item', 'params', '${varName}', \`return (\${unwrapped});\`);
+        const val = fn(itm, { slug: slugVal, ...(resolved || {}) }, ${varName});
+        if (val === undefined || val === null) return undefined;
+        return typeof val === 'object' ? val : String(val);
+      } catch {
+        return undefined;
+      }
+    };
+    const data: Record<string, any> = {
+      '@context': 'https://schema.org',
+      '@type': schemaOrg.type,
+    };
+    const staticVals = (schemaOrg.staticValues as Record<string, any>) || {};
+    const bindings = (schemaOrg.bindings as Record<string, string>) || {};
+    const expressions = (schemaOrg.expressions as Record<string, string>) || {};
+    const allKeys = Array.from(new Set([...Object.keys(staticVals), ...Object.keys(bindings), ...Object.keys(expressions)]));
+    for (const k of allKeys) {
+      if (expressions[k]) {
+        const v = evalFieldExpr(expressions[k]);
+        if (v !== undefined && v !== '') data[k] = v;
+      } else if (bindings[k] && itm) {
+        const field = bindings[k];
+        const val = field.includes('.') ? field.split('.').reduce((acc: any, part: string) => acc?.[part], itm) : itm[field];
+        if (val !== undefined && val !== null && val !== '') data[k] = val;
+      } else if (staticVals[k] !== undefined && staticVals[k] !== '') {
+        data[k] = staticVals[k];
+      }
+    }
+    return data;
+  };
+  const jsonLd = buildJsonLd(item || raw);
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <PageClient item={item || raw} />
+    </>
+  );`
+    : `  return <PageClient item={item || raw} />;`;
 
   return `import PageClient from './page.client';
 import ${varName} from '@/cms/${collection}.json';
@@ -465,7 +599,7 @@ const seoDefaults = ${defaultsLiteral};
 const seoBindings = ${bindingsLiteral};
 
 const seoExpressions = ${expressionsLiteral};
-
+${schemaOrgLiteral}
 export async function generateMetadata({ params }) {
   const resolved = await params;
   const items = Array.isArray(${varName}) ? ${varName} : [];
@@ -545,7 +679,7 @@ export default async function Page({ params }: { params?: Promise<Record<string,
   const item = (raw && lang && raw._i18n?.[lang])
     ? { ...raw, ...Object.fromEntries(Object.entries(raw._i18n[lang]).filter(([, v]) => typeof v === 'string' && v !== '')) }
     : raw;
-  return <PageClient item={item || raw} />;
+${pageReturn}
 }
 `;
 }
@@ -559,6 +693,7 @@ export function stripGenerateMetadataFromCode(code: string): string {
   cleaned = cleaned.replace(/(?:export\s+)?const\s+seoDefaults(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
   cleaned = cleaned.replace(/(?:export\s+)?const\s+seoBindings(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
   cleaned = cleaned.replace(/(?:export\s+)?const\s+seoExpressions(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
+  cleaned = cleaned.replace(/(?:export\s+)?const\s+schemaOrg(?:\s*:\s*[\w<>,.\[\]\s]+?)?\s*=\s*\{[\s\S]*?\};\s*\n*/g, '');
 
   const genMetaIdx = cleaned.indexOf('export async function generateMetadata');
   if (genMetaIdx !== -1) {
@@ -633,6 +768,7 @@ export interface BuildStandardWrapperInput {
   defaults?: Record<string, unknown>;
   expressions?: CmsSeoExpressions;
   existingCode?: string;
+  schemaOrg?: SchemaOrgConfig | null;
 }
 
 /**
@@ -645,38 +781,15 @@ export interface BuildStandardWrapperInput {
 export function buildStandardPageServerWrapper(input: BuildStandardWrapperInput): string {
   const { defaults = {}, expressions = {}, existingCode = '' } = input;
   const hasExprs = Object.values(expressions).some((v) => typeof v === 'string' && v.trim().length > 0);
+  const schemaOrg = input.schemaOrg;
+  const hasSchema = Boolean(schemaOrg && schemaOrg.type);
 
-  if (!hasExprs) {
+  if (!hasExprs && !hasSchema) {
     const siteMeta = formToSiteMetadata(defaults);
     const cleaned = stripGenerateMetadataFromCode(existingCode);
     const fallbackWrapper = `import PageClient from './page.client';\n\nexport const metadata = {};\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
     return updateMetadataInCode(cleaned.trim().length > 0 ? cleaned : fallbackWrapper, siteMeta);
   }
-
-  // Dynamic expressions present: emit generateMetadata
-  const defaultsLiteral = inlineObject([
-    ['title', defaults.title],
-    ['description', defaults.description],
-    ['ogTitle', defaults.ogTitle],
-    ['ogDescription', defaults.ogDescription],
-    ['ogImage', defaults.ogImage],
-    ['twitterCard', defaults.twitterCard],
-    ['twitterTitle', defaults.twitterTitle],
-    ['twitterDescription', defaults.twitterDescription],
-    ['twitterImage', defaults.twitterImage],
-    ['canonical', defaults.canonical],
-  ]);
-
-  const allExpressionSlots = [
-    'title', 'description', 'canonical',
-    'ogTitle', 'ogDescription', 'ogImage',
-    'twitterTitle', 'twitterDescription', 'twitterImage',
-  ];
-  const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
-
-  const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
-    ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
-    : '';
 
   // Clean existing code: remove export const metadata and any existing generateMetadata
   let base = existingCode;
@@ -685,8 +798,40 @@ export function buildStandardPageServerWrapper(input: BuildStandardWrapperInput)
     base = base.slice(0, metaBlock.start) + base.slice(metaBlock.end);
   }
   base = stripGenerateMetadataFromCode(base);
+  base = base.replace(/const\s+schemaOrg\s*=\s*\{[\s\S]*?\n\};\n?/g, '');
+  base = base.replace(/const\s+seoDefaults\s*=\s*\{[\s\S]*?\n\};\n?/g, '');
+  base = base.replace(/const\s+seoExpressions\s*=\s*\{[\s\S]*?\n\};\n?/g, '');
 
-  const dynBlock = `const seoDefaults = ${defaultsLiteral};
+  if (!base.trim()) {
+    base = `import PageClient from './page.client';\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
+  }
+
+  let metadataSnippet = '';
+  if (hasExprs) {
+    const defaultsLiteral = inlineObject([
+      ['title', defaults.title],
+      ['description', defaults.description],
+      ['ogTitle', defaults.ogTitle],
+      ['ogDescription', defaults.ogDescription],
+      ['ogImage', defaults.ogImage],
+      ['twitterCard', defaults.twitterCard],
+      ['twitterTitle', defaults.twitterTitle],
+      ['twitterDescription', defaults.twitterDescription],
+      ['twitterImage', defaults.twitterImage],
+      ['canonical', defaults.canonical],
+    ]);
+
+    const allExpressionSlots = [
+      'title', 'description', 'canonical',
+      'ogTitle', 'ogDescription', 'ogImage',
+      'twitterTitle', 'twitterDescription', 'twitterImage',
+    ];
+    const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
+    const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
+      ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
+      : '';
+
+    metadataSnippet = `const seoDefaults = ${defaultsLiteral};
 
 const seoExpressions = ${expressionsLiteral};
 
@@ -739,14 +884,138 @@ export async function generateMetadata({ params }) {
     alternates: { canonical: canonical || seoDefaults.canonical || undefined },${robots}
   };
 }`;
+  } else {
+    const siteMeta = formToSiteMetadata(defaults);
+    const metaCode = updateMetadataInCode(`export const metadata = {};`, siteMeta);
+    metadataSnippet = metaCode.trim();
+  }
+
+  const schemaOrgLiteral = hasSchema
+    ? `\nconst schemaOrg = ${JSON.stringify(schemaOrg, null, 2)};\n`
+    : '';
 
   if (base.includes('export default')) {
     const defIdx = base.indexOf('export default');
-    const out = base.slice(0, defIdx).trimEnd() + '\n\n' + dynBlock + '\n\n' + base.slice(defIdx).trimStart();
+    const importsAndTop = base.slice(0, defIdx).trimEnd();
+    let exportDefaultPart = base.slice(defIdx);
+
+    if (hasSchema) {
+      if (!exportDefaultPart.includes('application/ld+json')) {
+        const buildHelper = `  const buildJsonLd = () => {
+    if (!schemaOrg || !schemaOrg.type) return null;
+    if (schemaOrg.type === 'Custom' && schemaOrg.rawJsonLd) {
+      try {
+        return typeof schemaOrg.rawJsonLd === 'string' ? JSON.parse(schemaOrg.rawJsonLd) : schemaOrg.rawJsonLd;
+      } catch { return null; }
+    }
+    const evalFieldExpr = (expr) => {
+      try {
+        const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+        const fn = new Function('params', \`return (\${unwrapped});\`);
+        const val = fn({});
+        if (val === undefined || val === null) return undefined;
+        return typeof val === 'object' ? val : String(val);
+      } catch {
+        return undefined;
+      }
+    };
+    const data = {
+      '@context': 'https://schema.org',
+      '@type': schemaOrg.type,
+    };
+    const staticVals = schemaOrg.staticValues || {};
+    const exprs = schemaOrg.expressions || {};
+    const allKeys = Array.from(new Set([...Object.keys(staticVals), ...Object.keys(exprs)]));
+    for (const k of allKeys) {
+      if (exprs[k]) {
+        const v = evalFieldExpr(exprs[k]);
+        if (v !== undefined && v !== '') data[k] = v;
+      } else if (staticVals[k] !== undefined && staticVals[k] !== '') {
+        data[k] = staticVals[k];
+      }
+    }
+    return data;
+  };
+  const jsonLd = buildJsonLd();\n`;
+
+        if (/return\s+<PageClient\b([^>]*)\/>;/.test(exportDefaultPart)) {
+          exportDefaultPart = exportDefaultPart.replace(
+            /return\s+<PageClient\b([^>]*)\/>;/,
+            `${buildHelper}  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <PageClient$1/>
+    </>
+  );`,
+          );
+        }
+      }
+    }
+
+    const out = `${importsAndTop}\n\n${metadataSnippet}${schemaOrgLiteral}\n${exportDefaultPart}`;
     if (moduleParses(out)) return out;
   }
 
-  return `import PageClient from './page.client';\n\n${dynBlock}\n\nexport default function Page() {\n  return <PageClient />;\n}\n`;
+  const pageComponent = hasSchema
+    ? `export default function Page() {
+  const buildJsonLd = () => {
+    if (!schemaOrg || !schemaOrg.type) return null;
+    if (schemaOrg.type === 'Custom' && schemaOrg.rawJsonLd) {
+      try {
+        return typeof schemaOrg.rawJsonLd === 'string' ? JSON.parse(schemaOrg.rawJsonLd) : schemaOrg.rawJsonLd;
+      } catch { return null; }
+    }
+    const evalFieldExpr = (expr) => {
+      try {
+        const unwrapped = expr.startsWith('{') && expr.endsWith('}') ? expr.slice(1, -1).trim() : expr;
+        const fn = new Function('params', \`return (\${unwrapped});\`);
+        const val = fn({});
+        if (val === undefined || val === null) return undefined;
+        return typeof val === 'object' ? val : String(val);
+      } catch {
+        return undefined;
+      }
+    };
+    const data = {
+      '@context': 'https://schema.org',
+      '@type': schemaOrg.type,
+    };
+    const staticVals = schemaOrg.staticValues || {};
+    const exprs = schemaOrg.expressions || {};
+    const allKeys = Array.from(new Set([...Object.keys(staticVals), ...Object.keys(exprs)]));
+    for (const k of allKeys) {
+      if (exprs[k]) {
+        const v = evalFieldExpr(exprs[k]);
+        if (v !== undefined && v !== '') data[k] = v;
+      } else if (staticVals[k] !== undefined && staticVals[k] !== '') {
+        data[k] = staticVals[k];
+      }
+    }
+    return data;
+  };
+  const jsonLd = buildJsonLd();
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <PageClient />
+    </>
+  );
+}`
+    : `export default function Page() {
+  return <PageClient />;
+}`;
+
+  return `import PageClient from './page.client';\n\n${metadataSnippet}\n${schemaOrgLiteral}\n${pageComponent}\n`;
 }
 
 /** The collection a detail page's wrapper imports, when it has per-item SEO. */

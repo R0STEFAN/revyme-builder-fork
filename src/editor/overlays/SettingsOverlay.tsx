@@ -27,6 +27,9 @@ import { pageFilePathToSlug, pageSlugToFilePath } from '@/code/project/page-slug
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getProjectId } from '@/backend/project-id';
 import { trace } from '@/shared/debug-trace';
+import { modifyProjectFile } from '@/code/project/modify-file';
+import { generateRobotsCode, type RobotsGeneratorInput } from '@/code/generation/robots-gen';
+import { generateLlmsRouteCode, generateLlmsFullRouteCode } from '@/code/generation/llms-gen';
 import {
   SettingsGroup,
   SettingsRow,
@@ -244,6 +247,41 @@ export default function SettingsOverlay() {
   const [customCodeHead, setCustomCodeHead] = useState(websiteSettings.customCodeHead || '');
   const [customCodeBody, setCustomCodeBody] = useState(websiteSettings.customCodeBody || '');
   const [defaultTheme, setDefaultTheme] = useState<'light' | 'dark' | 'system'>(websiteSettings.defaultTheme || 'light');
+
+  // ─── Robots & LLMs configuration state ─────────────────────────────
+  const [robotsMode, setRobotsMode] = useState<'allow_all' | 'disallow_all' | 'custom'>('allow_all');
+  const [robotsDisallow, setRobotsDisallow] = useState<string>('/api/');
+  const [aiBots, setAiBots] = useState({
+    gptBot: true,
+    claudeBot: true,
+    perplexityBot: true,
+    googleExtended: true,
+  });
+  const [hasRobotsChanges, setHasRobotsChanges] = useState(false);
+
+  const [llmsEnabled, setLlmsEnabled] = useState(true);
+  const [llmsNotes, setLlmsNotes] = useState('');
+  const [hasLlmsChanges, setHasLlmsChanges] = useState(false);
+
+  useEffect(() => {
+    const rawRobots = projectFS.readFile('_meta/robots.json');
+    if (rawRobots) {
+      try {
+        const parsed = JSON.parse(rawRobots);
+        if (parsed.mode) setRobotsMode(parsed.mode);
+        if (Array.isArray(parsed.disallowPaths)) setRobotsDisallow(parsed.disallowPaths.join(', '));
+        if (parsed.aiBots) setAiBots((prev) => ({ ...prev, ...parsed.aiBots }));
+      } catch {}
+    }
+    const rawLlms = projectFS.readFile('_meta/llms.json');
+    if (rawLlms) {
+      try {
+        const parsed = JSON.parse(rawLlms);
+        if (parsed.enabled !== undefined) setLlmsEnabled(parsed.enabled);
+        if (parsed.notes) setLlmsNotes(parsed.notes);
+      } catch {}
+    }
+  }, []);
 
   // ─── "Made in Revyme" badge opt-out ─────────────────────────────────
   // Available on EVERY plan (2026-08-19) — the badge is a user choice, not
@@ -590,6 +628,51 @@ export default function SettingsOverlay() {
     queueMutation({ type: 'updateSiteConfig', config: { theme: defaultTheme } });
     setHasThemeChanges(false);
   }, [hasThemeChanges, defaultTheme, websiteSettings, setWebsiteSettings]);
+
+  const handleSaveRobots = useCallback(() => {
+    const paths = robotsDisallow
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const config: RobotsGeneratorInput = {
+      mode: robotsMode,
+      disallowPaths: paths,
+      aiBots,
+    };
+
+    trace.action('settings:save-robots', config);
+    modifyProjectFile('_meta/robots.json', () => JSON.stringify(config, null, 2));
+    modifyProjectFile('app/robots.ts', () => generateRobotsCode(config));
+    setHasRobotsChanges(false);
+  }, [robotsMode, robotsDisallow, aiBots]);
+
+  const handleSaveLlms = useCallback(() => {
+    const config = {
+      enabled: llmsEnabled,
+      notes: llmsNotes,
+    };
+
+    trace.action('settings:save-llms', config);
+    modifyProjectFile('_meta/llms.json', () => JSON.stringify(config, null, 2));
+    if (llmsEnabled) {
+      modifyProjectFile('app/llms.txt/route.ts', () =>
+        generateLlmsRouteCode({
+          siteTitle: siteName || 'Revyme Website',
+          siteDescription: siteDescription || '',
+          notes: llmsNotes,
+        }),
+      );
+      modifyProjectFile('app/llms-full.txt/route.ts', () =>
+        generateLlmsFullRouteCode({
+          siteTitle: siteName || 'Revyme Website',
+          siteDescription: siteDescription || '',
+          notes: llmsNotes,
+        }),
+      );
+    }
+    setHasLlmsChanges(false);
+  }, [llmsEnabled, llmsNotes, siteName, siteDescription]);
 
   // ─── Upload handler ────────────────────────────────────────────────
 
@@ -940,6 +1023,153 @@ export default function SettingsOverlay() {
                 onChange={(e) => setCustomCodeBody(e.target.value)}
                 className={`${ROW_INPUT_CLS} resize-none font-mono text-xs min-h-[80px]`}
                 placeholder={`<!-- Scripts, tracking codes -->\n<script>\n  // Your custom code here\n</script>`}
+              />
+            </SettingsRow>
+          </SettingsGroup>
+
+          {/* ─── Robots & Crawlers ─── */}
+          <SettingsGroup
+            title="Search engine robots (robots.txt)"
+            action={
+              <SaveButton
+                onClick={handleSaveRobots}
+                saving={false}
+                dirty={hasRobotsChanges}
+              />
+            }
+          >
+            <SettingsRow label="Indexing policy" htmlFor="robots-mode" align="top">
+              <div className="flex flex-col gap-1.5">
+                <RowSelect
+                  id="robots-mode"
+                  value={robotsMode}
+                  options={[
+                    { value: 'allow_all', label: 'Live & Public (Allow search engines)' },
+                    { value: 'disallow_all', label: 'Staging & Private (Block all crawlers)' },
+                    { value: 'custom', label: 'Custom rules' },
+                  ]}
+                  onChange={(v) => {
+                    setRobotsMode(v as any);
+                    setHasRobotsChanges(true);
+                  }}
+                />
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {robotsMode === 'disallow_all'
+                    ? 'Adds Disallow: / to prevent search engines from indexing this site.'
+                    : 'Search engines are allowed to crawl and index public pages.'}
+                </p>
+              </div>
+            </SettingsRow>
+
+            <SettingsRow label="Disallow paths" htmlFor="robots-disallow" align="top">
+              <input
+                id="robots-disallow"
+                type="text"
+                value={robotsDisallow}
+                onChange={(e) => {
+                  setRobotsDisallow(e.target.value);
+                  setHasRobotsChanges(true);
+                }}
+                className={ROW_INPUT_CLS}
+                placeholder="/api/, /admin/, /private/"
+              />
+            </SettingsRow>
+
+            <SettingsRow label="AI crawler permissions" align="top">
+              <div className="space-y-3 py-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text-primary)]">GPTBot (OpenAI)</div>
+                    <div className="text-[11px] text-[var(--text-tertiary)]">ChatGPT web browser and search crawler</div>
+                  </div>
+                  <Toggle
+                    value={aiBots.gptBot ?? true}
+                    onChange={(v) => {
+                      setAiBots((prev) => ({ ...prev, gptBot: v }));
+                      setHasRobotsChanges(true);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text-primary)]">ClaudeBot (Anthropic)</div>
+                    <div className="text-[11px] text-[var(--text-tertiary)]">Claude web search & retrieval crawler</div>
+                  </div>
+                  <Toggle
+                    value={aiBots.claudeBot ?? true}
+                    onChange={(v) => {
+                      setAiBots((prev) => ({ ...prev, claudeBot: v }));
+                      setHasRobotsChanges(true);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text-primary)]">PerplexityBot</div>
+                    <div className="text-[11px] text-[var(--text-tertiary)]">Perplexity AI answer engine crawler</div>
+                  </div>
+                  <Toggle
+                    value={aiBots.perplexityBot ?? true}
+                    onChange={(v) => {
+                      setAiBots((prev) => ({ ...prev, perplexityBot: v }));
+                      setHasRobotsChanges(true);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text-primary)]">Google-Extended</div>
+                    <div className="text-[11px] text-[var(--text-tertiary)]">Gemini & Vertex AI training crawler</div>
+                  </div>
+                  <Toggle
+                    value={aiBots.googleExtended ?? true}
+                    onChange={(v) => {
+                      setAiBots((prev) => ({ ...prev, googleExtended: v }));
+                      setHasRobotsChanges(true);
+                    }}
+                  />
+                </div>
+              </div>
+            </SettingsRow>
+          </SettingsGroup>
+
+          {/* ─── AI Discovery (llms.txt) ─── */}
+          <SettingsGroup
+            title="AI Search & LLM Discovery (/llms.txt)"
+            action={
+              <SaveButton
+                onClick={handleSaveLlms}
+                saving={false}
+                dirty={hasLlmsChanges}
+              />
+            }
+          >
+            <SettingsRow label="Enable llms.txt protocol">
+              <div className="flex items-center justify-between gap-3 py-1">
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Provides structured Markdown feeds at /llms.txt and /llms-full.txt for Cursor, ChatGPT, and AI agents.
+                </p>
+                <Toggle
+                  value={llmsEnabled}
+                  onChange={(v) => {
+                    setLlmsEnabled(v);
+                    setHasLlmsChanges(true);
+                  }}
+                />
+              </div>
+            </SettingsRow>
+
+            <SettingsRow label="Context & notes for LLMs" htmlFor="llms-notes" align="top">
+              <textarea
+                id="llms-notes"
+                rows={4}
+                value={llmsNotes}
+                onChange={(e) => {
+                  setLlmsNotes(e.target.value);
+                  setHasLlmsChanges(true);
+                }}
+                className={`${ROW_INPUT_CLS} resize-none min-h-[70px]`}
+                placeholder="Special guidelines, business overview, or key facts for AI agents visiting your site..."
               />
             </SettingsRow>
           </SettingsGroup>

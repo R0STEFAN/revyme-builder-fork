@@ -145,6 +145,12 @@ dot-name such as `pages.list`.
 - `publish.preflight` performs pre-deployment linting across all pages. Note that Next.js server entry
   wrappers (`app/**/page.tsx`) that delegate to client components (`page.client.tsx`) are automatically
   recognized as server entrypoints and verified without client-only Oracle false positives.
+- **SEO, Robots, LLMs.txt & Schema.org**:
+  - `seo.audit` / `get_seo_audit`: Performs a complete audit of site-wide and per-page SEO health, title and description length compliance (50-160 chars), social share images, robots.txt policies, zero-config sitemap generation, and Schema.org structured data coverage.
+  - `seo.setRobots` / `set_robots_config`: Configures `_meta/robots.json` and updates `app/robots.ts` with indexing policies (`allow_all`, `disallow_all`, `custom`), custom disallow paths (`/api/`, `/admin/`), and granular permissions for AI search crawlers (`GPTBot`, `ClaudeBot`, `PerplexityBot`, `Google-Extended`).
+  - `seo.configureLlms` / `configure_llms_txt`: Configures AI discovery feeds at `/llms.txt` and `/llms-full.txt` (stored in `_meta/llms.json`). Generates App Router route handlers with site summaries, core page guides, published CMS items, and custom developer/agent guidelines.
+  - `seo.setSchemaOrg` / `set_page_schema_org`: Attaches structured data (`Article`, `Product`, `Organization`, `FAQPage`, `Custom`) to standard pages or CMS detail pages. Fully supports static values and dynamic `fx` expression bindings (e.g. `item.title`, `item.cover?.url || "https://..."`) evaluated safely on the server and injected via `<script type="application/ld+json">`.
+  - `seo.syncSitemap` / `sync_sitemap`: Triggers discovery across static routes (`app/**/page.client.tsx`) and dynamic CMS collections (`[slug]`, `[category]`), generating `app/sitemap.ts` implementing `MetadataRoute.Sitemap` with automatic draft and noindex filtering.
 
 ---
 

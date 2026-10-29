@@ -67,7 +67,7 @@ export function isSystemOrAssetPath(pathname: string): boolean {
   if (!pathname || pathname === '/') return false;
   if (pathname.startsWith('/api/') || pathname === '/api') return true;
   if (pathname.startsWith('/_next/') || pathname === '/_next') return true;
-  if (pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/favicon.ico') return true;
+  if (pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/favicon.ico' || pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
 
   // File extension check: only if last segment has a known asset extension
   const lastSlash = pathname.lastIndexOf('/');
