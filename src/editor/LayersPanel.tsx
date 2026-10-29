@@ -593,6 +593,87 @@ export default function LayersPanel() {
     return () => { el.removeEventListener('scroll', sync); ro.disconnect(); };
   }, [displayLayers]);
 
+  // Middle-mouse drag (wheel button) to pan horizontally and vertically, matching canvas pan
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    let panState: { startX: number; startY: number; pointerId: number } | null = null;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      panState = { startX: e.clientX, startY: e.clientY, pointerId: e.pointerId };
+      el.style.cursor = 'grabbing';
+      el.style.userSelect = 'none';
+      trace.action('layers:middle-pan-start', { pointerId: e.pointerId });
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!panState || panState.pointerId !== e.pointerId) return;
+      const dx = e.clientX - panState.startX;
+      const dy = e.clientY - panState.startY;
+      panState.startX = e.clientX;
+      panState.startY = e.clientY;
+      el.scrollLeft -= dx;
+      el.scrollTop -= dy;
+    };
+
+    const cleanupPan = (pointerId: number) => {
+      if (!panState || panState.pointerId !== pointerId) return;
+      try {
+        el.releasePointerCapture(pointerId);
+      } catch {
+        /* ignore */
+      }
+      panState = null;
+      el.style.cursor = '';
+      el.style.userSelect = '';
+      trace.action('layers:middle-pan-end');
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (panState && (e.button === 1 || e.pointerId === panState.pointerId)) {
+        cleanupPan(e.pointerId);
+      }
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      if (panState) cleanupPan(e.pointerId);
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
+
+    const preventAux = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
+
+    el.addEventListener('pointerdown', onPointerDown, true);
+    el.addEventListener('pointermove', onPointerMove, true);
+    el.addEventListener('pointerup', onPointerUp, true);
+    el.addEventListener('pointercancel', onPointerCancel, true);
+    el.addEventListener('mousedown', onMouseDown, true);
+    el.addEventListener('auxclick', preventAux, true);
+
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown, true);
+      el.removeEventListener('pointermove', onPointerMove, true);
+      el.removeEventListener('pointerup', onPointerUp, true);
+      el.removeEventListener('pointercancel', onPointerCancel, true);
+      el.removeEventListener('mousedown', onMouseDown, true);
+      el.removeEventListener('auxclick', preventAux, true);
+      el.style.cursor = '';
+      el.style.userSelect = '';
+    };
+  }, [displayLayers]);
+
   // Which viewport+node combo is selected in the layers panel
   // Format: "desktop:nodeId" or null. When selecting from canvas, we pick the
   // interacting viewport. When selecting from layers, we set it directly.
@@ -1133,23 +1214,14 @@ export default function LayersPanel() {
       /* Tree */
       <div
         ref={listRef}
-        className="flex-1 px-2 overflow-y-auto overflow-x-auto scrollbar-hide"
-        // Hard-cut the scrolling content at the 8px left inset (matching the
-        // selection pill's inset) so names never bleed into the left margin /
-        // over the toolbar as the tree scrolls. The mask is fixed to the
-        // viewport, so the inset stays clean at every scroll position.
-        style={{
-          minHeight: 0,
-          WebkitMaskImage: 'linear-gradient(to right, transparent 8px, #000 8px)',
-          maskImage: 'linear-gradient(to right, transparent 8px, #000 8px)',
-        }}
+        className="flex-1 px-2 overflow-y-auto overflow-x-auto layers-scrollbar"
+        style={{ minHeight: 0 }}
         data-layers-scroll
       >
-        {/* min-w-max so the column grows to the WIDEST row; each row below is
-            width:100% of this wrapper, so every selection/hover background
-            shares one flush right edge regardless of nesting depth or how far
-            the tree is scrolled horizontally. */}
-        <div className="min-w-max">
+        {/* min-w-full and w-max so the column is at least full panel width but grows
+            to the WIDEST row when deeply nested; pb-3 gives clean space for the
+            horizontal scrollbar at the bottom. */}
+        <div className="min-w-full w-max pb-3">
         {displayLayers.map((layer) => {
           // Resolve per-viewport hidden state for THIS row. Skips viewport
           // header rows (no nodeId). For node rows on a non-primary

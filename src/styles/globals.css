@@ -484,6 +484,44 @@ html.theme-transition *::after {
   }
 }
 
+@utility layers-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+  &::-webkit-scrollbar {
+    height: 6px;
+    width: 0px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+  }
+}
+
+.layers-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+.layers-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 0px;
+}
+.layers-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.layers-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+.layers-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
 /* Cut-corner chrome — the angular button treatment: top-left and
  * bottom-right corners sliced diagonally. THE central definition; apply the
  * class anywhere a button/chip should read angular. Tune the slice size

@@ -869,19 +869,8 @@ export const LayerRow = React.memo(function LayerRow({
          *  Previously omitted; user reported that nested leaves landed
          *  flush against their parent's icon and asked for "one slot
          *  further" — adding the placeholder gives that slot back. */}
-        {/* Leading cluster (chevron + type icon). On deeply-nested rows the
-            indent would push it off the right edge, so we clamp it with a
-            scroll-driven translateX: it never moves past (visible-right -
-            reserve), so all the clamped rows' icons line up on one vertical
-            line; as you scroll right the clamp relaxes and each cluster
-            "dominoes" back to its true indent. `sticky` doesn't engage for a
-            mid-row flex item here, hence the explicit transform. The constant
-            = px-2(16) + lock/eye reserve(56) + cluster width(~42) + this row's
-            indent(12 + depth*20). */}
-        <div
-          className="flex items-center gap-2 shrink-0 relative z-10"
-          style={{ transform: `translateX(min(0px, calc(var(--layers-sx, 0px) + var(--layers-vw, 9999px) - ${72 + depth * 20}px)))` }}
-        >
+        {/* Leading cluster (chevron + type icon). Clean hierarchy matching the row's indent. */}
+        <div className="flex items-center gap-2 shrink-0 relative z-10">
         {hasChildren ? (
           <button
             draggable={false}
@@ -1005,12 +994,12 @@ export const LayerRow = React.memo(function LayerRow({
             style={{
               color: isSelected ? selFg : isChildOfSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
               opacity: node.fromLayout ? 0.5 : (isVpHeader && layer.isVpHidden ? 0.45 : 1),
-              // Always fit the visible width (sx + vw) minus this text's indent
-              // and a reserve for the sticky lock/eye icons + edge padding.
-              // Updates on horizontal scroll purely via the CSS vars → the name
-              // expands as you scroll right and never overflows the edge.
+              // Reserve room for sticky lock/eye icons while scrolling right.
+              // Floored at 120px with minWidth 60px so deeply-nested rows never crush
+              // their text to 0px, activating the horizontal scroll container.
+              minWidth: '60px',
               maxWidth: textIndent != null
-                ? `calc(var(--layers-sx, 0px) + var(--layers-vw, 100%) - ${Math.max(0, Math.round(textIndent) + 60)}px)`
+                ? `max(120px, calc(var(--layers-sx, 0px) + var(--layers-vw, 100%) - ${Math.max(0, Math.round(textIndent) + 60)}px))`
                 : undefined,
             }}
           >
