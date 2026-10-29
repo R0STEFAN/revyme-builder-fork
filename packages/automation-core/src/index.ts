@@ -73,4 +73,5 @@ export * from './operations/observe';
 export * from './operations/verify';
 export * from './operations/diagnostics';
 export * from './operations/seo';
+export * from './operations/site-audit';
 

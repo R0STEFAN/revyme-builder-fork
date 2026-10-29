@@ -341,6 +341,13 @@ export default function LeftMenu() {
           <BranchIcon size={18} />
         </MenuButton>
 
+        {/* Site Audit & Diagnostics */}
+        <MenuButton panelId="audit" isActive={activePanel === 'audit'} onToggle={togglePanel} title="Site Audit" tooltip={tooltipHandlers} disabled={isViewerRole} dataTutorial="audit-button">
+          <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+        </MenuButton>
+
         {/* Code — opens floating popup instead of left panel. HIDDEN
             entirely on a closed-source template remix: the template author
             chose not to expose the source, so the affordance doesn't render
