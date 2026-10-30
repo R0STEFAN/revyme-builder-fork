@@ -339,6 +339,8 @@ const MODULE_MAP: Record<string, any> = {
     // Preview-adapted SplitText that measures host.parentElement when host has
     // display: contents, preventing Layer in View from premature 0ms triggering.
     RevymeSplitText: PreviewRevymeSplitText,
+    // Ticker effect — `<RevymeTicker …>` around a layout frame (ticker-gen.ts).
+    RevymeTicker: RevymeRuntime.RevymeTicker,
     // Collection-list locale resolution — a localized list's source is
     // `localizeRows(slug, __activeLocale)`, so the preview needs it or the
     // page throws "localizeRows is not a function" and renders nothing.

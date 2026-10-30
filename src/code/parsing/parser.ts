@@ -8,6 +8,7 @@ import { isTruthy } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
 import { isSvgTag, isCustomDataAttr } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
+import { tickerFromJsxAttributes, type TickerConfig } from '@/shared/ticker-config';
 import { formattedBranchesOfDangerAttr, type FormattedBranches } from '@/shared/rich-message';
 import { parsePageVariables } from '../features/page-variables';
 import { projectFS } from '@/code/project/project-fs';
@@ -469,6 +470,9 @@ export interface CanvasNode {
    *  this element — the identifiers in `with`, innermost first. The wrapper
    *  itself is transparent (no node); see runtime `code-override.tsx`. */
   codeOverrides?: string[];
+  /** Ticker effect from a `<RevymeTicker …>` wrapper around this (layout)
+   *  frame. The wrapper is transparent (no node); see ticker-gen.ts. */
+  ticker?: TickerConfig;
   // motion direct animation props (whileHover, whileTap, etc.)
   motionProps: {
     whileHover?: Record<string, string>;
@@ -629,6 +633,8 @@ interface ParseCtx {
   pendingVisibilityByInnerId: Map<string, Set<string>>;
   /** `<Override with={…}>` wrapper identifiers, keyed by the wrapped element's data-id. */
   pendingOverridesByInnerId: Map<string, string[]>;
+  /** `<RevymeTicker …>` settings, keyed by the wrapped element's data-id. */
+  pendingTickersByInnerId: Map<string, TickerConfig>;
   /** The file's `const variantConfig = [...]`, parsed once up front. */
   currentVariantConfig: { name: string }[];
   /** Page-variable defaults, needed EARLY (before the node loop) — see the
@@ -1760,6 +1766,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
     detailPageContext: null,
     pendingVisibilityByInnerId: new Map(),
     pendingOverridesByInnerId: new Map(),
+    pendingTickersByInnerId: new Map(),
     currentVariantConfig: [],
     earlyPageVarDefaults: {},
   };
@@ -2011,6 +2018,20 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           }
           return;
         }
+        // Ticker-effect wrapper: transparent the same way. Its frame may itself
+        // carry an `<Override>` (written inside the ticker).
+        if (tagName === 'RevymeTicker') {
+          const ticker = tickerFromOpening(opening);
+          for (const child of el.children) {
+            if (child.type !== 'JSXElement') continue;
+            const frameEl = resolveTagName(child.openingElement) === 'Override'
+              ? (child.children.find((c: any) => c.type === 'JSXElement') as JSXElement | undefined)
+              : child;
+            const innerId = frameEl ? getAttr(frameEl.openingElement.attributes, 'data-id') : null;
+            if (innerId) ctx.pendingTickersByInnerId.set(innerId, ticker);
+          }
+          return;
+        }
         if (tagName === 'AnimatePresence') {
           for (const child of el.children) {
             if (child.type !== 'JSXExpressionContainer') continue;
@@ -2018,12 +2039,17 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             if (expr.type !== 'LogicalExpression' || expr.operator !== '&&') continue;
             if (expr.right.type !== 'JSXElement') continue;
             let innerEl = expr.right;
-            // `{cond && <Override with={…}><El data-id/></Override>}` — look through the override wrapper.
-            if (resolveTagName(innerEl.openingElement) === 'Override') {
+            // `{cond && <Override with={…}><El data-id/></Override>}` — look through the
+            // override wrapper (and a ticker wrapper outside it).
+            let wrapperTag = resolveTagName(innerEl.openingElement);
+            let lost = false;
+            while (wrapperTag === 'RevymeTicker' || wrapperTag === 'Override') {
               const wrapped = innerEl.children.find((c: any) => c.type === 'JSXElement');
-              if (!wrapped) continue;
+              if (!wrapped) { lost = true; break; }
               innerEl = wrapped as typeof innerEl;
+              wrapperTag = resolveTagName(innerEl.openingElement);
             }
+            if (lost) continue;
             const innerOpening = innerEl.openingElement;
             const innerId = getAttr(innerOpening.attributes, 'data-id');
             if (!innerId) continue;
@@ -2700,6 +2726,11 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
           node.codeOverrides = pendingOverrides;
           ctx.pendingOverridesByInnerId.delete(id);
         }
+        const pendingTicker = ctx.pendingTickersByInnerId.get(id);
+        if (pendingTicker) {
+          node.ticker = pendingTicker;
+          ctx.pendingTickersByInnerId.delete(id);
+        }
 
         const pendingHidden = ctx.pendingVisibilityByInnerId.get(id);
         if (pendingHidden && pendingHidden.size > 0) {
@@ -2762,7 +2793,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (tagName === 'AnimatePresence' || tagName === 'LayoutGroup'
             || tagName === 'MotionConfig' || tagName === 'Fragment'
             || tagName === 'style' || tagName === 'PageTransitions'
-            || tagName === 'Override' || tagName === 'RevymeSplitText') {
+            || tagName === 'Override' || tagName === 'RevymeTicker' || tagName === 'RevymeSplitText') {
           return;
         }
         // Glide wrappers (`<motion.div data-glide-item>`) are skipped on enter
@@ -3139,6 +3170,14 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       if (tagName === 'style' || tagName === 'MotionConfig' || tagName === 'LayoutGroup' || tagName === 'PageTransitions') {
         return;
       }
+      // Element wrappers (code override, Ticker effect) are transparent: their
+      // one element parents to the wrapper's parent, as in the main walker.
+      if (tagName === 'Override' || tagName === 'RevymeTicker') {
+        for (const child of el.children) {
+          if (child.type === 'JSXElement') visitCanvasJSXElement(child);
+        }
+        return;
+      }
 
       const id = resolveElementId(opening.attributes, ctx);
 
@@ -3358,6 +3397,10 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       // `existingCanvasNode`): keep the detected collectionList + inline data and
       // the template child(ren) it linked, so the canvas collection list resolves
       // its ghost rows exactly like one inside a viewport.
+      // Wrapper-derived fields the main pass attached (this walker never sees
+      // the wrapper's attributes itself).
+      if (existingCanvasNode?.ticker) node.ticker = existingCanvasNode.ticker;
+      if (existingCanvasNode?.codeOverrides) node.codeOverrides = existingCanvasNode.codeOverrides;
       if (existingCanvasNode?.collectionList) {
         node.collectionList = existingCanvasNode.collectionList;
         node.children = [...existingCanvasNode.children];
@@ -5043,6 +5086,12 @@ function walkVariantConditionalProp(expr: any, varDefaults?: Record<string, stri
   map['default'] = fallback;
 
   return Object.keys(map).length > 0 ? { map, varRefs } : null;
+}
+
+/** The Ticker settings a `<RevymeTicker …>` opening tag spells (literals only;
+ *  anything unreadable falls back to the default). */
+function tickerFromOpening(opening: any): TickerConfig {
+  return tickerFromJsxAttributes(opening.attributes as any[]);
 }
 
 /** Identifiers in an `<Override with={withX}>` / `with={[withA, withB]}` opening tag. */

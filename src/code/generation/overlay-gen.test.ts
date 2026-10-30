@@ -95,7 +95,7 @@ describe('createOverlayInCode', () => {
       makeOverlayConfig(),
       makeTriggerConfig(),
     );
-    expect(result).toContain('const [dropdown1Open, setDropdown1Open] = React.useState(false)');
+    expect(result).toContain('const [dropdown1Open, setDropdown1Open] = useState(false)');
   });
 
   test('creates useLayoutEffect for positioning', () => {
@@ -110,8 +110,12 @@ describe('createOverlayInCode', () => {
     expect(result).toContain('[data-id="dropdown1"]');
     expect(result).toContain('[dropdown1Open]');
     expect(result).toContain('getBoundingClientRect');
-    expect(result).toContain("addEventListener('resize'");
-    expect(result).toContain("addEventListener('scroll'");
+    // Follows the trigger every frame (scroll, resize, an ancestor sliding
+    // away) and lifts the open overlay into the top layer.
+    expect(result).toContain('requestAnimationFrame(function follow()');
+    expect(result).toContain('cancelAnimationFrame(raf)');
+    expect(result).toContain("setAttribute('popover', 'manual')");
+    expect(result).toContain('showPopover()');
   });
 
   test('adds data-overlay-trigger attr to trigger element', () => {
@@ -450,7 +454,7 @@ export default withResponsiveProps(MyComp);`;
       makeOverlayConfig(), makeTriggerConfig());
     expectParses(result);
     // Runtime landed INSIDE MyComp (not lost), and the conditional references it.
-    expect(result).toContain('const [dropdown1Open, setDropdown1Open] = React.useState(false)');
+    expect(result).toContain('const [dropdown1Open, setDropdown1Open] = useState(false)');
     expect(result).toContain('useLayoutEffect(()');
     expect(result).toContain('{dropdown1Open &&');
     expect(result).toContain('<AnimatePresence>');
@@ -483,7 +487,7 @@ export default function Page() {
 }`;
     const result = healDanglingOverlayState(code);
     expectParses(result);
-    expect(result).toContain('const [dropOpen, setDropOpen] = React.useState(false)');
+    expect(result).toContain('const [dropOpen, setDropOpen] = useState(false)');
     const sIdx = result.indexOf('const [dropOpen');
     const rIdx = result.indexOf('return (');
     expect(sIdx).toBeGreaterThan(-1);
@@ -1266,7 +1270,7 @@ const canvasNodes = (<>
     expect(rehydrated).not.toMatch(/\/\s+onClick/);
     expect(rehydrated).toMatch(/onClick=\{\(\) => setDropdown1Open\(!dropdown1Open\)\}\s*\/>/);
     // Full runtime restored: state + conditional overlay as a live node.
-    expect(rehydrated).toContain('const [dropdown1Open, setDropdown1Open] = React.useState(false);');
+    expect(rehydrated).toContain('const [dropdown1Open, setDropdown1Open] = useState(false);');
     expect(rehydrated).toContain('<AnimatePresence>');
   });
 
@@ -1343,7 +1347,7 @@ describe('rehydrateOverlayFromCanvasInCode', () => {
     const round = rehydrateOverlayFromCanvasInCode(extractOverlayToCanvasInCode(original, 'card1', 40, 200), 'card1');
     expectParses(round);
     // Same runtime shape as a freshly-created viewport overlay.
-    expect(round).toContain('const [dropdown1Open, setDropdown1Open] = React.useState(false)');
+    expect(round).toContain('const [dropdown1Open, setDropdown1Open] = useState(false)');
     expect(round).toContain('data-overlay-trigger=');
   });
 
@@ -1405,7 +1409,7 @@ const canvasNodes = (<>
     expect(condIdx).toBeGreaterThan(-1);
     expect(condIdx).toBeLessThan(canvasIdx);
     // useState declared so the conditional identifier is defined.
-    expect(result).toContain('const [box1OverlayOpen, setBox1OverlayOpen] = React.useState(false)');
+    expect(result).toContain('const [box1OverlayOpen, setBox1OverlayOpen] = useState(false)');
   });
 
   test('already a live viewport overlay → unchanged (no double-wrap)', () => {
@@ -1444,7 +1448,7 @@ const canvasNodes = <>
     const result = rehydrateOverlayFromCanvasInCode(code, 'trig1');
     expectParses(result);
     // The useState MUST be declared (the conditional + posEffect reference it).
-    expect(result).toContain('const [trig1OverlayOpen, setTrig1OverlayOpen] = React.useState(false)');
+    expect(result).toContain('const [trig1OverlayOpen, setTrig1OverlayOpen] = useState(false)');
     expect(result).toContain('{trig1OverlayOpen &&');
     expect(result).toContain('onClick={() => setTrig1OverlayOpen(!trig1OverlayOpen)}');
     // useState sits inside the component, before the return.
@@ -1809,7 +1813,7 @@ describe('healMissingOverlayEffectsInCode — restores a dropped positioner', ()
     const healed = healMissingOverlayEffectsInCode(corrupted);
     expectParses(healed);
     expect(healed).toContain(', [ov1Open]);');             // positioner restored
-    expect(healed).toContain('overlay.style.top = top');   // it's the real positioner
+    expect(healed).toContain('overlay.style.top = t;');   // it's the real positioner
   });
 
   test('no-op when every overlay already has its effect', () => {
@@ -1833,7 +1837,7 @@ describe('healMissingOverlayEffectsInCode — restores a dropped positioner', ()
 
   test('a legacy document capture handler closes only on Yes when a link is clicked without navigation', () => {
     const effect = buildRelativeOverlayPosEffect('ov1', true);
-    const listener = new Function('React', 'ov1Open', 'ovFind', 'window', 'document', 'setOv1Open', effect);
+    const listener = new Function('React', 'ov1Open', 'ovFind', 'window', 'document', 'setOv1Open', (effect.includes('React.useLayoutEffect') ? '' : 'const useLayoutEffect = React.useLayoutEffect;\n') + effect);
     const overlay = document.createElement('div');
     overlay.setAttribute('data-id', 'ov1');
     overlay.setAttribute('data-overlay', JSON.stringify({ triggerId: 'trigger', closeOnLink: true }));
@@ -2065,7 +2069,7 @@ export default function Page() {
     expectParses(r.componentCode);
     expectParses(r.instancePageCode);
     // MASTER gained the state + positioner.
-    expect(r.componentCode).toContain('const [ovcOpen, setOvcOpen] = React.useState(false)');
+    expect(r.componentCode).toContain('const [ovcOpen, setOvcOpen] = useState(false)');
     expect(r.componentCode).toContain(', [ovcOpen]);');
     expect(r.componentCode).toContain('overlay.style.top'); // the real positioner
     expect(r.componentCode).toContain('data-id="ovc"');     // element kept
@@ -2128,7 +2132,7 @@ const canvasNodes = <>
     expectParses(r.componentCode);
     expectParses(r.instancePageCode);
     // MASTER: full runtime overlay now exists.
-    expect(r.componentCode).toContain('const [ovcOpen, setOvcOpen] = React.useState(false)');
+    expect(r.componentCode).toContain('const [ovcOpen, setOvcOpen] = useState(false)');
     expect(r.componentCode).toContain(', [ovcOpen]);');           // positioner effect
     expect(r.componentCode).toMatch(/<AnimatePresence>\{ovcOpen &&/); // runtime conditional
     expect(r.componentCode).toContain('data-id="ovc"');            // element present
@@ -2163,7 +2167,7 @@ export default function Page() {
   test('runtime: rebuilds the full overlay machine and parses', () => {
     const r = reattachPastedOverlayInCode(POST_PASTE, 'trig2', 'ovl2', PASTED_OVERLAY_CFG, PASTED_TRIGGER_CFG);
     expectParses(r);
-    expect(r).toContain('const [ovl2Open, setOvl2Open] = React.useState(false)');
+    expect(r).toContain('const [ovl2Open, setOvl2Open] = useState(false)');
     expect(r).toContain('<AnimatePresence>{ovl2Open &&');
     expect(r).toContain('useLayoutEffect(');
     expect(r).toContain('[ovl2Open]');
@@ -2217,7 +2221,7 @@ export default function Page() {
   test('fixed: preserves modal CHILDREN and wires a self-closing event trigger', () => {
     const r = reattachPastedOverlayInCode(POST_PASTE_FIXED, 'trig2', 'ovl2', FIXED_OVERLAY_CFG, FIXED_TRIGGER_CFG);
     expectParses(r);
-    expect(r).toContain('const [ovl2Open, setOvl2Open] = React.useState(false)');
+    expect(r).toContain('const [ovl2Open, setOvl2Open] = useState(false)');
     expect(r).toContain('data-id="modal-card"');         // child preserved
     expect(r).toContain('event1={() => setOvl2Open(!ovl2Open)}'); // event-trigger handler (toggle)
     expect(parseOverlayCalls(r)[0].config.type).toBe('fixed');
@@ -2521,7 +2525,7 @@ describe('createOverlayInCode — page that already has an overlay', () => {
     );
     expectParses(out); // the crash was a hard SyntaxError here
     // The declaration must come BEFORE the render return, never after `style={{`.
-    const declIdx = out.indexOf('const [bOpen, setBOpen] = React.useState(false)');
+    const declIdx = out.indexOf('const [bOpen, setBOpen] = useState(false)');
     expect(declIdx).toBeGreaterThan(-1);
     expect(declIdx).toBeLessThan(out.indexOf('<div data-id="root"'));
     // Both overlays' runtime survives, exactly once each.
@@ -2548,7 +2552,7 @@ describe('createOverlayInCode — page that already has an overlay', () => {
       out, 'hero', 'c',
       makeOverlayConfig({ type: 'fixed', triggerId: 'hero' }), makeTriggerConfig({ targetId: 'c' }));
     expectParses(out);
-    expect(out.indexOf('const [cOpen, setCOpen] = React.useState(false)')).toBeLessThan(out.indexOf('<div data-id="root"'));
+    expect(out.indexOf('const [cOpen, setCOpen] = useState(false)')).toBeLessThan(out.indexOf('<div data-id="root"'));
   });
 });
 

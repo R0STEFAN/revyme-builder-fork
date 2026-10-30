@@ -21,6 +21,7 @@ import { ensureLayoutFile } from '@/code/generation/metadata-gen';
 import { DIRECTUS_SYNC_PLUGIN_SOURCE } from './default-plugins/DirectusSync';
 import { healSectionOffsets } from '@/code/generation/generator-motion-scroll';
 import { healEventOverlayToggle } from '@/code/generation/event-overlay-heal';
+import { healOverlayTopLayerInCode } from '@/code/generation/overlay-runtime-effects';
 import { healDuplicateJsxAttributes } from '@/code/generation/duplicate-attr-heal';
 import { healGlideItemWrappers } from '@/code/generation/glide-gen';
 import { formatOverrideSource } from '@/code/generation/format-override-source';
@@ -568,6 +569,18 @@ export class InMemoryProjectFS implements ProjectFS {
       if (healed !== src) {
         this.activeFiles().set(path, healed);
         trace.action('project-fs:migrated-event-overlay-toggle', { path });
+      }
+    }
+    // Overlay top-layer heal: generated overlay effects from before 2026-10-21
+    // rendered the overlay in place, where a perf-isolated component root
+    // (contain + willChange) clipped it on the live site. Swap them for the
+    // current builder output, which lifts the open overlay into the top layer.
+    for (const [path, src] of this.files) {
+      if (!path.endsWith('.tsx')) continue;
+      const healed = healOverlayTopLayerInCode(src);
+      if (healed !== src) {
+        this.activeFiles().set(path, healed);
+        trace.action('project-fs:migrated-overlay-top-layer', { path });
       }
     }
     // Duplicate JSX attribute heal: `<Hero layout="a" layout={b} />` renders

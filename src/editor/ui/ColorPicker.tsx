@@ -2,8 +2,11 @@
 // hex/rgb/hsl input modes, eyedropper, and clipboard copy.
 // Uses pointer events for drag (per lesson 01). No third-party dependencies.
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { useSetAtom } from 'jotai';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { presetTokensAtom } from '@/code/stores/preset-store';
+import { usePresetRowMenu } from '@/editor/hooks/usePresetRowMenu';
+import type { PresetToken } from '@/shared/types';
 import { useScrubInteracting } from '@/editor/hooks/useScrubInteracting';
 import { colorPickerOpenAtom } from '@/code/stores/editor-store';
 import { trace } from '@/shared/debug-trace';
@@ -599,49 +602,95 @@ export default function ColorPicker({ value, onChange, onChangeEnd, showAlpha = 
             </button>
           )}
 
-          {/* Preset list — name on left, swatch on right, Edit on hover */}
-          {colorPresets && colorPresets.length > 0 && (
-            <div className="flex flex-col max-h-[200px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {colorPresets.map(preset => {
-                const displayName = preset.label || preset.name.replace(/^color-/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                const isActive = activePresetName === preset.name;
-                return (
-                  <div
-                    key={preset.name}
-                    className={`group flex items-center gap-2 px-1 py-1.5 cut-corners cursor-pointer transition-colors ${
-                      isActive ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
-                    }`}
-                    onClick={() => {
-                      if (onApplyPreset) {
-                        onApplyPreset(`var(--${preset.name})`);
-                      } else {
-                        onChange(preset.value);
-                      }
-                      trace.action('color-picker:apply-preset', { name: preset.name, value: preset.value });
-                    }}
-                  >
-                    <span className={`flex-1 text-xs font-medium truncate ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{displayName}</span>
-                    {onEditPreset && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditPreset(preset.name);
-                          trace.action('color-picker:edit-preset', { name: preset.name });
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] cut-corners cut-border px-2 py-0.5 transition-all cursor-pointer"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <ColorSwatch style={{ backgroundColor: preset.value }} />
-                  </div>
-                );
-              })}
-            </div>
+          {/* Preset list — name on left, swatch on right, Edit on hover,
+              right-click for the Presets panel's Edit / Rename / Delete. */}
+          {colorPresets && (
+            <ColorPresetList
+              activePresetName={activePresetName}
+              onApply={(preset) => {
+                if (onApplyPreset) {
+                  onApplyPreset(`var(--${preset.name})`);
+                } else {
+                  onChange(preset.value);
+                }
+                trace.action('color-picker:apply-preset', { name: preset.name, value: preset.value });
+              }}
+              onEditPreset={onEditPreset}
+            />
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Display name of a colour preset row (label, else the name minus `color-`). */
+function presetDisplayName(preset: { name: string; label?: string }): string {
+  return preset.label || preset.name.replace(/^color-/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+/** The picker's preset rows. Reads the presets LIVE from the store — every
+ *  caller passes the colour tokens of presetTokensAtom anyway, but a picker
+ *  pushed into a ToolPopup panel is not re-rendered by its caller when only
+ *  globals.css changes, so a delete / rename from the row menu would leave a
+ *  stale list. The store lists them in the Presets panel's order. Right-click
+ *  = the Presets panel's row menu (Edit / Rename / Duplicate / Delete) through
+ *  the shared usePresetRowMenu. */
+function ColorPresetList({ activePresetName, onApply, onEditPreset }: {
+  activePresetName?: string;
+  onApply: (preset: PresetToken) => void;
+  onEditPreset?: (presetName: string) => void;
+}) {
+  const tokens = useAtomValue(presetTokensAtom);
+  const presets = useMemo(() => tokens.filter(t => t.category === 'color'), [tokens]);
+  const rowMenu = usePresetRowMenu({
+    kind: 'token',
+    labelFor: (name) => presetDisplayName(presets.find(p => p.name === name) ?? { name }),
+    onEdit: onEditPreset,
+    traceTag: 'color-picker:preset',
+  });
+
+  if (presets.length === 0) return null;
+  return (
+    <div className="flex flex-col max-h-[200px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {presets.map(preset => {
+        const isActive = activePresetName === preset.name;
+        if (rowMenu.renamingId === preset.name) {
+          return (
+            <div key={preset.name} className="flex items-center gap-2 px-1 py-1.5 cut-corners bg-[var(--bg-hover)]">
+              {rowMenu.renameInput('flex-1 min-w-0 bg-transparent text-xs font-medium text-[var(--text-primary)] outline-none border-b border-[var(--accent)]')}
+              <ColorSwatch style={{ backgroundColor: preset.value }} />
+            </div>
+          );
+        }
+        return (
+          <div
+            key={preset.name}
+            className={`group flex items-center gap-2 px-1 py-1.5 cut-corners cursor-pointer transition-colors ${
+              isActive || rowMenu.menuId === preset.name ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => onApply(preset)}
+            onContextMenu={(e) => rowMenu.openMenu(preset.name, e)}
+          >
+            <span className={`flex-1 text-xs font-medium truncate ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{presetDisplayName(preset)}</span>
+            {onEditPreset && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditPreset(preset.name);
+                  trace.action('color-picker:edit-preset', { name: preset.name });
+                }}
+                className="opacity-0 group-hover:opacity-100 text-[10px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] cut-corners cut-border px-2 py-0.5 transition-all cursor-pointer"
+              >
+                Edit
+              </button>
+            )}
+            <ColorSwatch style={{ backgroundColor: preset.value }} />
+          </div>
+        );
+      })}
+      {rowMenu.menuElement}
     </div>
   );
 }

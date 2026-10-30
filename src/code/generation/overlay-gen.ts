@@ -11,7 +11,16 @@ import { parseOverlayCalls, parseOverlayTriggerCalls, resolveOverlayConfig } fro
 import { findCanvasNodesFragmentClose, findExportDefaultEndIdx } from './generator-crud';
 import { splitStyleProps } from '@/shared/css-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
-import { nodeIdToVarName } from '@/shared/id-utils';
+import {
+  stateVarName, findJs, findLitJs, buildFixedOverlayRuntimeEffect, buildRelativeOverlayPosEffect,
+} from './overlay-runtime-effects';
+
+// The runtime effects + their top-layer heal live in a leaf module (project-fs
+// imports the heal); re-exported so existing importers keep one entry point.
+export {
+  stateVarName, buildFixedOverlayRuntimeEffect, buildRelativeOverlayPosEffect,
+  healOverlayTopLayerInCode, OVERLAY_TOP_LAYER_CSS, OVERLAY_TOP_LAYER_STYLE_ID,
+} from './overlay-runtime-effects';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -152,10 +161,6 @@ function removeOverlayConditionalBlock(code: string, overlayId: string, varName:
   if (!span) return code;
   trace.action('overlay-gen:remove:block', { overlayId, start: span.start, end: span.end });
   return code.slice(0, span.start) + code.slice(span.end);
-}
-
-export function stateVarName(overlayId: string): string {
-  return `${nodeIdToVarName(overlayId)}Open`;
 }
 
 function ensureReactDefaultImport(code: string): string {
@@ -411,17 +416,6 @@ export function isMasterCode(code: string): boolean {
   return code.includes('{...rest}');
 }
 
-/** JS expression that resolves the element for `idExpr` (a JS expression). */
-function findJs(idExpr: string, scoped: boolean): string {
-  return scoped
-    ? `ovFind(${idExpr})`
-    : `document.querySelector('[data-id="' + ${idExpr} + '"]')`;
-}
-/** Same for a LITERAL id — the page form keeps the historical single string. */
-function findLitJs(id: string, scoped: boolean): string {
-  return scoped ? `ovFind('${id}')` : `document.querySelector('[data-id="${id}"]')`;
-}
-
 const MASTER_SCOPE_DECL = `  const ovRootRef = React.useRef(null);
   const ovGrace = React.useRef({});
   const ovFind = (id) => { const r = ovRootRef.current; if (!r) return document.querySelector('[data-id="' + id + '"]'); if (r.getAttribute('data-mroot') === id || r.getAttribute('data-id') === id) return r; return r.querySelector('[data-id="' + id + '"]'); };
@@ -495,163 +489,6 @@ function buildOverlayHoverMirrorAttr(triggerConfig: OverlayTriggerConfig, overla
   // — entering the overlay cancels the trigger's pending close, and leaving
   // it back across the gap toward the trigger must not insta-close either.
   return ` onMouseEnter={() => { ${graceCancelJs(overlayId, scoped)} ${setVarName}(true); }} onMouseLeave={(e) => { const tr = ${findLitJs(triggerId, scoped)}; if (tr && e.relatedTarget && tr.contains(e.relatedTarget)) return; ${graceArmJs(overlayId, setVarName, scoped)} }}`;
-}
-
-/** The useEffect that powers a FIXED overlay (modal) at runtime. Reads its
- *  CONFIG from `data-overlay` (so panel edits to dismissible/pageScroll propagate
- *  without rewriting this effect) and: (a) closes on backdrop press when
- *  `dismissible !== false`, (b) locks body scroll while open unless
- *  `pageScroll === 'auto'`. Backdrop = a press whose target is the overlay
- *  element itself (not its content). fill/zIndex live in the element style
- *  (config-baked at create; the editor Renderer also applies them live). */
-export function buildFixedOverlayRuntimeEffect(overlayId: string, scoped: boolean | string = false): string {
-  const isScoped = scoped === true || scoped === 'scoped';
-  const varName = (typeof scoped === 'string' && scoped !== 'scoped') ? scoped : stateVarName(overlayId);
-  const setVarName = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
-  const esc = escapeRegExp(overlayId);
-  void esc;
-  return `  React.useEffect(() => {
-    if (!${varName}) return;
-    const overlay = ${findLitJs(overlayId, isScoped)};
-    if (!overlay) return;
-    try {
-      const links = overlay.querySelectorAll('a[href^="/"]');
-      const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
-      links.forEach((a) => {
-        const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
-        if (mode === 'off') return;
-        const href = a.getAttribute('href');
-        if (href && router && router.prefetch) router.prefetch(href, { kind: 'full' });
-      });
-    } catch {}
-    const cfg = JSON.parse(overlay.getAttribute('data-overlay') || '{}');
-    if (cfg.fill) overlay.style.backgroundColor = cfg.fill;
-    if (cfg.zIndex != null) overlay.style.zIndex = String(cfg.zIndex);
-    const onBackdrop = (e) => { if (e.target === overlay && cfg.dismissible !== false) ${setVarName}(false); };
-    const onOverlayClick = (e) => {
-      if (cfg.closeOnLink !== false) {
-        const link = e.target && e.target.closest && e.target.closest('a[href], a, [data-link], [data-cms-nav], [data-cms-link], button, [role="button"]');
-        if (link && overlay.contains(link)) ${setVarName}(false);
-      }
-    };
-    overlay.addEventListener('mousedown', onBackdrop);
-    overlay.addEventListener('click', onOverlayClick, true);
-    const prevOverflow = document.body.style.overflow;
-    if (cfg.pageScroll !== 'auto') document.body.style.overflow = 'hidden';
-    return () => {
-      overlay.removeEventListener('mousedown', onBackdrop);
-      overlay.removeEventListener('click', onOverlayClick, true);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [${varName}]);
-`;
-}
-
-/** The useLayoutEffect that positions a RELATIVE overlay from its trigger at
- *  runtime (responsive-aware). Shared by create (fresh) and rehydrate (trigger
- *  dragged back into a viewport) so both emit byte-identical runtime. */
-/* The emitted dismiss handler carries NO comments on purpose: prose comments in
- * a page bounce the oracle's NO_COMMENTS_IN_GENERATED_CODE (the fast-path
- * generators splice JSX by character position, so an unexpected comment shifts
- * every offset). Documenting the behaviour HERE keeps the explanation without
- * shipping it into the user's file — a live page carried 3 of these
- * (user report 2026-07-26).
- *
- * What it does: pressing anywhere on the page closes the overlay, not only the
- * source. Trigger presses are ignored (the trigger's own handler toggles);
- * presses inside the overlay keep it open. */
-export function buildRelativeOverlayPosEffect(overlayId: string, scoped = false): string {
-  const varName = stateVarName(overlayId);
-  const setter = `set${varName.charAt(0).toUpperCase() + varName.slice(1)}`;
-  return `  React.useLayoutEffect(() => {
-    if (!${varName}) return;
-    const position = () => {
-      const overlay = ${findLitJs(overlayId, scoped)};
-      if (!overlay) return;
-      try {
-        const links = overlay.querySelectorAll('a[href^="/"]');
-        const router = typeof window !== 'undefined' ? (window['__revyme_router'] || window['__next_router'] || (window['next'] && window['next']['router']) || window['router']) : null;
-        links.forEach((a) => {
-          const mode = (typeof window !== 'undefined' && window.innerWidth < 810 && a.getAttribute('data-prefetch-mobile')) || (typeof window !== 'undefined' && window.innerWidth < 1200 && a.getAttribute('data-prefetch-tablet')) || a.getAttribute('data-prefetch');
-          if (mode === 'off') return;
-          const href = a.getAttribute('href');
-          if (href && router && router.prefetch) router.prefetch(href, { kind: 'full' });
-        });
-      } catch {}
-      const raw = JSON.parse(overlay.getAttribute('data-overlay') || '{}');
-      let cfg = raw;
-      if (raw.responsive) {
-        const ww = window.innerWidth;
-        const bps = raw.responsiveBp;
-        const owning = (bps && bps.length)
-          ? bps.filter(b => ww <= b).sort((a, b) => a - b)[0]
-          : Object.keys(raw.responsive).map(Number).filter(n => ww <= n).sort((a, b) => a - b)[0];
-        if (owning !== undefined && raw.responsive[owning]) cfg = { ...raw, ...raw.responsive[owning] };
-      }
-      const trigger = ${findJs('cfg.triggerId', scoped)};
-      if (!trigger) return;
-      const r = trigger.getBoundingClientRect();
-      const w = overlay.offsetWidth, h = overlay.offsetHeight;
-      const g = 8, ox = cfg.offsetX || 0, oy = cfg.offsetY || 0;
-      let top, left;
-      switch (cfg.side || 'bottom') {
-        case 'top': top = r.top - h - g + oy; break;
-        case 'left': top = r.top + oy; left = r.left - w - g + ox; break;
-        case 'right': top = r.top + oy; left = r.right + g + ox; break;
-        default: top = r.bottom + g + oy;
-      }
-      if (left === undefined) {
-        if (cfg.align === 'center') left = r.left + r.width / 2 - w / 2 + ox;
-        else if (cfg.align === 'end') left = r.right - w + ox;
-        else left = r.left + ox;
-      } else if (cfg.align === 'center') top = r.top + r.height / 2 - h / 2 + oy;
-      else if (cfg.align === 'end') top = r.bottom - h + oy;
-      if (cfg.collision !== 'none') {
-        const pad = cfg.collisionPadding ?? 20;
-        left = Math.min(Math.max(left, pad), window.innerWidth - w - pad);
-        top = Math.min(Math.max(top, pad), window.innerHeight - h - pad);
-      }
-      overlay.style.top = top + 'px';
-      overlay.style.left = left + 'px';
-    };
-    const onOutside = (e) => {
-      const ov = ${findLitJs(overlayId, scoped)};
-      if (ov && ov.contains(e.target)) return;
-      const tid = ov ? (JSON.parse(ov.getAttribute('data-overlay') || '{}').triggerId) : null;
-      const tr = tid ? ${findJs('tid', scoped)} : null;
-      if (tr && tr.contains(e.target)) return;
-      ${setter}(false);
-    };
-    const onOverlayClick = (e) => {
-      const ov = ${findLitJs(overlayId, scoped)};
-      if (!ov || !ov.contains(e.target)) return;
-      const raw = JSON.parse(ov.getAttribute('data-overlay') || '{}');
-      let cfg = raw;
-      if (raw.responsive) {
-        const ww = window.innerWidth;
-        const bps = raw.responsiveBp;
-        const owning = (bps && bps.length)
-          ? bps.filter(b => ww <= b).sort((a, b) => a - b)[0]
-          : Object.keys(raw.responsive).map(Number).filter(n => ww <= n).sort((a, b) => a - b)[0];
-        if (owning !== undefined && raw.responsive[owning]) cfg = { ...raw, ...raw.responsive[owning] };
-      }
-      if (cfg.closeOnLink !== false) {
-        const link = e.target && e.target.closest && e.target.closest('a[href], a, [data-link], [data-cms-nav], [data-cms-link], button, [role="button"]');
-        if (link && ov.contains(link)) ${setter}(false);
-      }
-    };
-    position();
-    window.addEventListener('resize', position);
-    window.addEventListener('scroll', position, true);
-    document.addEventListener('mousedown', onOutside);
-    document.addEventListener('click', onOverlayClick, true);
-    return () => {
-      window.removeEventListener('resize', position);
-      window.removeEventListener('scroll', position, true);
-      document.removeEventListener('mousedown', onOutside);
-      document.removeEventListener('click', onOverlayClick, true);
-    };
-  }, [${varName}]);\n`;
 }
 
 /** Insert an overlay's conditional JSX block as the LAST child of the page root
@@ -851,7 +688,7 @@ export function createOverlayInCode(
   // tag and the layer row read "div".
   const overlayContent = `\n${indent}<AnimatePresence>{${varName} && (\n${indent}  <motion.div key="${overlayId}" data-id="${overlayId}" data-name="Overlay" data-overlay='${JSON.stringify(overlayConfig)}' ${appearAttrs}${hoverMirror} ${formatStyleAttr(elementStyles, indent)}>${innerJsx}</motion.div>\n${indent})}</AnimatePresence>`;
 
-  const stateDecl = `  const [${varName}, ${setVarName}] = React.useState(false);\n`;
+  const stateDecl = `  const [${varName}, ${setVarName}] = useState(false);\n`;
 
   // --- Step 3: Apply changes bottom-to-top (so positions don't shift) ---
   trace.action('overlay-gen:create:positions', { tagStart, tagClosePos, elementEndPos, statePos, selfClosing: result[tagClosePos - 1] === '/' });
@@ -923,6 +760,8 @@ export function createOverlayInCode(
   // Master: instance-scoped lookups need the root ref + finder (idempotent).
   if (scoped) result = ensureMasterOverlayScope(result);
 
+  const hooks = overlayConfig.type === 'fixed' ? ['useState', 'useEffect'] : ['useState', 'useLayoutEffect'];
+  result = ensureNamedImport(result, 'react', hooks);
   result = ensureReactDefaultImport(result);
   result = ensureNamedImport(result, 'framer-motion', ['motion', 'AnimatePresence']);
 
@@ -1821,6 +1660,15 @@ export function removeOverlayInCode(code: string, overlayId: string, triggerId: 
   // removal ("References undefined identifier … would crash at runtime").
   result = revertOverlayOpenVariantInCode(result, triggerId, varName);
 
+  if (!result.includes('useEffect(')) {
+    result = result.replace(/(\bimport\s+[^;]*?)\buseEffect\s*,\s*/g, '$1')
+      .replace(/(\bimport\s+[^;]*?),\s*\buseEffect\b/g, '$1');
+  }
+  if (!result.includes('useLayoutEffect(')) {
+    result = result.replace(/(\bimport\s+[^;]*?)\buseLayoutEffect\s*,\s*/g, '$1')
+      .replace(/(\bimport\s+[^;]*?),\s*\buseLayoutEffect\b/g, '$1');
+  }
+
   trace.action('overlay-gen:remove:done', { overlayId, triggerId });
   return result;
 }
@@ -1980,7 +1828,7 @@ export function transferDescendantOverlaysToMasterInCode(
       if (!cc.includes(`const [${varName},`)) {
         const statePos = findStateInsertPos(cc);
         if (statePos >= 0) {
-          const stateDecl = `  const [${varName}, ${setVarName}] = React.useState(false);\n`;
+          const stateDecl = `  const [${varName}, ${setVarName}] = useState(false);\n`;
           const effect = ov.config.type === 'fixed'
             ? buildFixedOverlayRuntimeEffect(overlayId, true)
             : buildRelativeOverlayPosEffect(overlayId, true);
@@ -2415,7 +2263,7 @@ export function rehydrateOverlayFromCanvasInCode(code: string, triggerId: string
   const varName = stateVarName(overlayId);
   const indent = '      ';
   const overlayContent = `\n${indent}<AnimatePresence>{${varName} && (\n${indent}  ${markup.replace(/\n/g, `\n${indent}  `)}\n${indent})}</AnimatePresence>`;
-  const stateDecl = `  const [${varName}, set${varName.charAt(0).toUpperCase() + varName.slice(1)}] = React.useState(false);\n`;
+  const stateDecl = `  const [${varName}, set${varName.charAt(0).toUpperCase() + varName.slice(1)}] = useState(false);\n`;
 
   // 5a. Conditional overlay block as last child of root (fallback = right after
   //     the trigger element — both are AFTER tClose, so 5b stays valid).
@@ -2494,7 +2342,7 @@ export function healDanglingOverlayState(code: string): string {
       continue;
     }
     const before = result;
-    result = insertOverlayStateDecl(result, varName, `  const [${varName}, ${setter}] = React.useState(false);\n`);
+    result = insertOverlayStateDecl(result, varName, `  const [${varName}, ${setter}] = useState(false);\n`);
     if (result !== before) added++;
   }
   // Pages already written with the state BELOW its effect (the pre-2026-10-06

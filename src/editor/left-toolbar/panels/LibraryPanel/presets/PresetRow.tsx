@@ -24,6 +24,8 @@ interface PresetRowProps {
   onStartRename: (name: string) => void;
   /** Delete this token (routed to the section's deletePresetById). */
   onDelete: (name: string) => void;
+  /** Duplicate this token (routed to the section's duplicatePresetById). */
+  onDuplicate?: (name: string) => void;
   /** Project-wide consumers of this preset — drives the count badge. */
   usages: PresetUsage[];
   /** Shift+click handler for the shared multi-select set (see
@@ -41,7 +43,7 @@ interface PresetRowProps {
   menuOverride?: DropdownMenuEntry[];
 }
 
-export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameChange, onRenameSubmit, onRenameCancel, onEdit, onStartRename, onDelete, usages, onShiftClick, isMultiSelected, menuOverride }: PresetRowProps) {
+export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameChange, onRenameSubmit, onRenameCancel, onEdit, onStartRename, onDelete, onDuplicate = () => {}, usages, onShiftClick, isMultiSelected, menuOverride }: PresetRowProps) {
   const displayLabel = token.label ?? formatTokenLabel(token.name);
   const numericValue = getPresetNumericValue(token);
 
@@ -50,6 +52,7 @@ export function PresetRow({ token, isEditing, isRenaming, renameValue, onRenameC
   const menuItems: DropdownMenuEntry[] = menuOverride ?? [
     { id: 'edit', label: 'Edit', onClick: () => onEdit(token.name) },
     { id: 'rename', label: 'Rename', onClick: () => onStartRename(token.name) },
+    { id: 'duplicate', label: 'Duplicate', onClick: () => onDuplicate(token.name) },
     { type: 'separator' },
     { id: 'delete', label: 'Delete', onClick: () => onDelete(token.name) },
   ];

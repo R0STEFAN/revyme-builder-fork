@@ -18,6 +18,7 @@ import { getCanvasBridge } from '@/canvas/canvas-bridge';
 import { queueMutation, setForceRender, flushNow } from '@/code/mutation/mutation-queue';
 import { projectVersionAtom } from '@/code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
+import { usePresetRowMenu } from '@/editor/hooks/usePresetRowMenu';
 import {
   RESPONSIVE_PROPS,
   presetApplyStyles,
@@ -46,8 +47,7 @@ function presetDetail(g: TypoGroup): string {
 
 // ─── Preset List Panel ────────────────────────────────────────────────────────
 
-function TypoPresetListPanel({ groups, activeGroupName, onApply, onEdit, onCreate }: {
-  groups: TypoGroup[];
+function TypoPresetListPanel({ activeGroupName, onApply, onEdit, onCreate }: {
   activeGroupName: string | null;
   onApply: (group: TypoGroup) => void;
   onEdit: (group: TypoGroup) => void;
@@ -57,6 +57,20 @@ function TypoPresetListPanel({ groups, activeGroupName, onApply, onEdit, onCreat
   // (the reference's Text Styles behavior). Seeded from the currently-applied preset so opening the popup
   // auto-selects it. The pushed panel stays mounted, so this state persists across clicks.
   const [selected, setSelected] = useState<string | null>(activeGroupName);
+  // Groups are read LIVE: this panel is pushed into the ToolPopup once, and a delete from the
+  // row menu only changes globals.css, which never re-renders the caller that pushed it.
+  const tokens = useAtomValue(presetTokensAtom);
+  const groups = useMemo(() => groupTypoTokens(tokens), [tokens]);
+  // Right-click = the Presets panel's typography row menu (Edit / Rename / Duplicate / Delete), through
+  // the shared usePresetRowMenu. Rename / Duplicate cover every `typo-<name>-*` token of the group.
+  const rowMenu = usePresetRowMenu({
+    kind: 'typography',
+    labelFor: (name) => groups.find(g => g.name === name)?.label ?? name,
+    onEdit: (name) => { const g = groups.find(x => x.name === name); if (g) onEdit(g); },
+    onRenamed: (from, to) => setSelected(sel => (sel === from ? to : sel)),
+    onDeleted: (name) => setSelected(sel => (sel === name ? null : sel)),
+    traceTag: 'typo-preset',
+  });
   return (
     <div className="flex flex-col gap-0.5">
       {/* Create new — top button (compact, matches color picker) */}
@@ -75,14 +89,23 @@ function TypoPresetListPanel({ groups, activeGroupName, onApply, onEdit, onCreat
       {groups.map(g => {
         const isActive = g.name === selected;
         const detail = presetDetail(g);
+        if (rowMenu.renamingId === g.name) {
+          return (
+            <div key={g.name} className="flex items-center gap-2 px-2 py-1.5 cut-corners bg-[var(--bg-hover)]" style={{ minHeight: '32px', boxSizing: 'border-box' }}>
+              <TypoTagBadge tag={getTypoTag(g)} active={isActive} />
+              {rowMenu.renameInput('flex-1 min-w-0 bg-transparent text-[11px] font-medium text-[var(--text-primary)] outline-none border-b border-[var(--accent)]')}
+            </div>
+          );
+        }
         return (
           <div
             key={g.name}
             className={`group flex items-center gap-2 px-2 py-1.5 cut-corners cursor-pointer transition-colors select-none ${
-              isActive ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
+              isActive || rowMenu.menuId === g.name ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
             }`}
             style={{ minHeight: '32px', boxSizing: 'border-box' }}
             onClick={() => { setSelected(g.name); onApply(g); }}
+            onContextMenu={(e) => rowMenu.openMenu(g.name, e)}
           >
             <TypoTagBadge tag={getTypoTag(g)} active={isActive} />
             <span
@@ -114,6 +137,7 @@ function TypoPresetListPanel({ groups, activeGroupName, onApply, onEdit, onCreat
           No typography presets yet
         </div>
       )}
+      {rowMenu.menuElement}
     </div>
   );
 }
@@ -291,8 +315,7 @@ function EditTypoPresetPanel({ group, nodeId, onClose }: { group: TypoGroup; nod
 // ─── Main Control ─────────────────────────────────────────────────────────────
 
 /** Standalone panel content — wraps TypoPresetListPanel inside ToolPopup context */
-function StandalonePresetPanel({ groups, activeGroupName, nodeId, onApply, onClose }: {
-  groups: TypoGroup[];
+function StandalonePresetPanel({ activeGroupName, nodeId, onApply, onClose }: {
   activeGroupName: string | null;
   nodeId?: string;
   onApply: (group: TypoGroup) => void;
@@ -324,7 +347,6 @@ function StandalonePresetPanel({ groups, activeGroupName, nodeId, onApply, onClo
 
   return (
     <TypoPresetListPanel
-      groups={groups}
       activeGroupName={activeGroupName}
       onApply={handleApply}
       onEdit={handleEdit}
@@ -454,7 +476,6 @@ export function TypographyPresetControl() {
 
       popupCtx.pushPanel('Typography Preset', (
         <TypoPresetListPanel
-          groups={typoGroups}
           activeGroupName={activeGroup?.name ?? null}
           onApply={handleApply}
           onEdit={handleEdit}
@@ -495,7 +516,6 @@ export function TypographyPresetControl() {
       {!popupCtx && (
         <ToolPopup isOpen={isOpen} onClose={() => setIsOpen(false)} title="Typography Preset" anchorRef={rowRef}>
           <StandalonePresetPanel
-            groups={typoGroups}
             activeGroupName={activeGroup?.name ?? null}
             nodeId={selectedIds[0]}
             onApply={applyPreset}

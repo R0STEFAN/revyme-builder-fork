@@ -17,10 +17,18 @@ import { UsageBadge } from './UsagePopup';
 interface TypographyGroupRowProps {
   group: TypographyGroup;
   isEditing: boolean;
+  /** The row shows SidebarRow's inline rename input. */
+  isRenaming: boolean;
+  onStartRename: () => void;
+  /** Renames the WHOLE group — every `typo-<name>-*` token and every
+   *  reference to one (renamePresetGroup). */
+  onRenameCommit: (input: string) => void;
   onEdit: () => void;
   /** Deletes the WHOLE group (every constituent token) — wired to the
    *  section's deletePresetById(`typo-group:<name>`). */
   onDelete: () => void;
+  /** Duplicates the WHOLE group under `<name>-copy`. */
+  onDuplicate: () => void;
   /** Aggregated consumers across every constituent token in the group
    *  (deduped by node id), since typography presets are compound. */
   usages: PresetUsage[];
@@ -34,11 +42,11 @@ interface TypographyGroupRowProps {
   menuOverride?: DropdownMenuEntry[];
 }
 
-export function TypographyGroupRow({ group, isEditing, onEdit, onDelete, usages, onShiftClick, isMultiSelected, menuOverride }: TypographyGroupRowProps) {
-  // No Rename entry: group rename was never functional (a group is a token
-  // PREFIX — renaming needs a prefix rewrite across all tokens + usages).
+export function TypographyGroupRow({ group, isEditing, isRenaming, onStartRename, onRenameCommit, onEdit, onDelete, onDuplicate, usages, onShiftClick, isMultiSelected, menuOverride }: TypographyGroupRowProps) {
   const menuItems: DropdownMenuEntry[] = menuOverride ?? [
     { id: 'edit', label: 'Edit', onClick: onEdit },
+    { id: 'rename', label: 'Rename', onClick: onStartRename },
+    { id: 'duplicate', label: 'Duplicate', onClick: onDuplicate },
     { type: 'separator' },
     { id: 'delete', label: 'Delete', onClick: onDelete },
   ];
@@ -61,10 +69,12 @@ export function TypographyGroupRow({ group, isEditing, onEdit, onDelete, usages,
       <SidebarRow
         icon={<TypoTagBadge tag={getTypoTag(group)} active={isEditing} />}
         label={group.label}
+        inlineEdit={isRenaming ? { initialValue: group.label, onCommit: onRenameCommit } : undefined}
         isActive={isEditing}
         iconColor="inherit"
         menuItems={menuItems}
         onClick={(e: React.MouseEvent) => {
+          if (isRenaming) return;
           // Shift+click → toggle in the shared multi-select set instead of edit.
           if (e.shiftKey && onShiftClick) {
             e.preventDefault();

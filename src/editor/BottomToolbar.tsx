@@ -25,6 +25,7 @@ import {
 import { usePaletteToggle } from '@/editor/command-palette/CommandPalette';
 import { trace } from '@/shared/debug-trace';
 import { useIsViewer, useIsOffline } from '@/code/stores/viewer-mode-store';
+import { isShortcutKey } from '@/shared/shortcut-key';
 import SaveButton from './header/SaveButton';
 import HistoryButton from './header/HistoryButton';
 
@@ -553,7 +554,7 @@ export default function BottomToolbar() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
-      if (e.key.toLowerCase() !== 'c') return;
+      if (!isShortcutKey(e, 'c')) return;
       const target = e.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
       e.preventDefault();

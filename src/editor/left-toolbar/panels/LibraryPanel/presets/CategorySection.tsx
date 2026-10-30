@@ -18,6 +18,7 @@ import {
   getPresetFolderOps,
   isPresetFolderId,
 } from '@/code/project/preset-folder-ops';
+import { effectivePresetRootOrder } from '@/code/project/preset-order';
 import { type PresetUsage } from '@/code/stores/preset-store';
 import { groupBorderTokens, type BorderGroup } from '@/editor/ui/border-preset-utils';
 import type { PresetToken } from '@/shared/types';
@@ -67,11 +68,17 @@ interface CategorySectionProps {
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
   onEdit: (name: string) => void;
-  /** Start the inline rename for a simple token row. */
-  onStartRename: (name: string) => void;
+  /** Start the inline rename — a token name, or `typo-group:x` /
+   *  `border-group:x` for a compound group row. */
+  onStartRename: (id: string) => void;
+  /** Finish a group row's inline rename with the typed name (group rows use
+   *  SidebarRow's own rename input, which hands the value back directly). */
+  onRenameCommit?: (id: string, input: string) => void;
   /** Delete by multi-select id (token name / `typo-group:x` / `border-group:x`)
    *  — the section's deletePresetById expands compound groups. */
   onDeletePreset: (id: string) => void;
+  /** Duplicate by the same id scheme — a group duplicates every token. */
+  onDuplicatePreset?: (id: string) => void;
   creating: boolean;
   onStartCreate: () => void;
   onCancelCreate: () => void;
@@ -91,7 +98,7 @@ interface CategorySectionProps {
 export function CategorySection({
   config, tokens, typoGroups, editingName, renamingName, renameValue,
   onRenameChange, onRenameSubmit, onRenameCancel,
-  onEdit, onStartRename, onDeletePreset,
+  onEdit, onStartRename, onRenameCommit = () => {}, onDeletePreset, onDuplicatePreset = () => {},
   creating, onStartCreate, onCancelCreate, onSubmitCreate,
   collapsed, onToggleCollapse, usageMap, multiSelect,
 }: CategorySectionProps) {
@@ -130,18 +137,12 @@ export function CategorySection({
   const allItemIds = useMemo(() => new Set(itemIds), [itemIds]);
 
   const persistedRootOrder = useMemo(() => folderOps.getRootOrder(), [folderOps, version]);
+  // Drift fallback — any item / folder not referenced anywhere is appended at
+  // the root tail. Shared with presetTokensAtom's ordering (preset-order), so
+  // every picker lists presets exactly as this panel does.
   const effectiveRootOrder = useMemo(() => {
-    const out = persistedRootOrder.filter(id => folderById.has(id) || allItemIds.has(id));
-    const referenced = new Set<string>([...out]);
-    for (const f of userFolders) for (const c of f.children) referenced.add(c);
-    // Drift fallback — any item / folder not referenced anywhere
-    // gets appended at the root tail.
-    for (const id of itemIds) if (!referenced.has(id)) out.push(id);
-    for (const f of userFolders) {
-      if (!referenced.has(f.id) && f.parentId === null) out.push(f.id);
-    }
-    return out;
-  }, [persistedRootOrder, folderById, userFolders, itemIds, allItemIds]);
+    return effectivePresetRootOrder(persistedRootOrder, userFolders, itemIds);
+  }, [persistedRootOrder, userFolders, itemIds]);
 
   // Folder rename / pending-creation state — same UX as Templates.
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -260,8 +261,12 @@ export function CategorySection({
         <TypographyGroupRow
           group={group}
           isEditing={editingName === `typo-group:${group.name}`}
+          isRenaming={renamingName === `typo-group:${group.name}`}
+          onStartRename={() => onStartRename(`typo-group:${group.name}`)}
+          onRenameCommit={(input) => onRenameCommit(`typo-group:${group.name}`, input)}
           onEdit={() => editClearingSelection(`typo-group:${group.name}`)}
           onDelete={() => onDeletePreset(`typo-group:${group.name}`)}
+          onDuplicate={() => onDuplicatePreset(`typo-group:${group.name}`)}
           usages={groupUsages}
           onShiftClick={multiSelect.togglePath}
           isMultiSelected={multiSelect.isMultiSelected(`typo-group:${group.name}`)}
@@ -336,6 +341,7 @@ export function CategorySection({
         onEdit={editClearingSelection}
         onStartRename={onStartRename}
         onDelete={onDeletePreset}
+        onDuplicate={onDuplicatePreset}
         usages={usageMap.get(token.name) ?? []}
         onShiftClick={multiSelect.togglePath}
         isMultiSelected={multiSelect.isMultiSelected(token.name)}
@@ -347,7 +353,7 @@ export function CategorySection({
     typoGroupByName, borderGroupByName, dimensionGroupByBaseName, tokenByName,
     editingName, renamingName, renameValue,
     onRenameChange, onRenameSubmit, onRenameCancel,
-    editClearingSelection, onStartRename, onDeletePreset, usageMap,
+    editClearingSelection, onStartRename, onRenameCommit, onDeletePreset, onDuplicatePreset, usageMap,
     multiSelect, inBulk, bulkItems,
   ]);
 
