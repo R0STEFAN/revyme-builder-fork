@@ -121,3 +121,15 @@ export function setTickerInCode(code: string, nodeId: string, config: TickerConf
 export function ensureRuntimeTickerImport(code: string): string {
   return ensureRuntimeWrapperImport(code, TICKER_TAG);
 }
+
+/** Sweep empty `<RevymeTicker …></RevymeTicker>` wrappers left after child deletion. */
+export function sweepEmptyTickerWrappers(code: string): string {
+  const swept = code.replace(/<RevymeTicker\b[^>]*>\s*<\/RevymeTicker>/g, '');
+  if (!swept.includes('<RevymeTicker')) {
+    return swept.replace(/import\s*\{([^}]*)\bRevymeTicker\b,?\s*([^}]*)\}\s*from\s*['"]@revyme\/runtime['"];?/g, (_m, pre, post) => {
+      const remaining = (pre + post).split(',').map((s: string) => s.trim()).filter(Boolean);
+      return remaining.length > 0 ? `import { ${remaining.join(', ')} } from '@revyme/runtime';` : '';
+    });
+  }
+  return swept;
+}

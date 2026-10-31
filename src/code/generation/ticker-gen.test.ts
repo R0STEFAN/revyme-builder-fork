@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   setTickerInCode, readTicker, parseTickerOpenTag, tickerOpenTag, liftTickers, restoreTickers,
-  normalizeTicker, TICKER_DEFAULTS,
+  normalizeTicker, TICKER_DEFAULTS, sweepEmptyTickerWrappers,
 } from './ticker-gen';
+import { removeNodeInCode } from './generator-crud';
 import { findSubtreeRange } from './generator-utils';
 import { setTickerScoped } from '@/shared/ticker-config';
 import { rewriteAnimationBreakpoints } from '@/code/animations/animation-scope';
@@ -123,6 +124,14 @@ ${frame}`);
       // Tablet 1199 → 1100 (desktop 1440, mobile 767): the band follows.
       const resized = rewriteAnimationBreakpoints(on, 1199, 1100, [1440, 1100, 767]);
       expect(readTicker(resized, 'logos')?.responsive?.[0].scope).toEqual({ query: '(max-width: 1100px) and (min-width: 767.02px)' });
+    });
+
+    it('sweeps empty RevymeTicker wrapper when deleting sole child frame with removeNodeInCode', () => {
+      const on = setTickerInCode(page(frame), 'logos', TICKER_DEFAULTS);
+      expect(on).toContain('<RevymeTicker');
+      const removed = removeNodeInCode(on, 'logos');
+      expect(removed).not.toContain('<RevymeTicker');
+      expect(removed).not.toContain("import { RevymeTicker } from '@revyme/runtime';");
     });
   });
 });

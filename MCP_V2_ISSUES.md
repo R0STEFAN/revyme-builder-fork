@@ -1,5 +1,21 @@
 # MCP v2 issue log
 
+## 2026-10-31 — deleting node wrapped in RevymeTicker left orphaned empty wrapper, failing TICKER_CHILD_COUNT
+
+**Status:** fixed, verified via `src/code/generation/ticker-gen.test.ts` (13 tests) and live CLI operation, and committed.
+
+**Symptom:**
+Calling `nodes.remove` on a layout node wrapped in a `<RevymeTicker speed={…} direction="…">` effect failed with `PLAN_VALIDATION_FAILED: [TICKER_CHILD_COUNT] <RevymeTicker> must wrap exactly ONE layout frame (found 0 element(s))`, preventing deletion of ticker-wrapped sections.
+
+**Cause:**
+`removeNodeInCode` in `src/code/generation/generator-crud.ts` removed the matched JSX element inside the ticker, but did not sweep the enclosing transparent `<RevymeTicker …></RevymeTicker>` wrapper or its `@revyme/runtime` import when the wrapped element was deleted outside the editor's live wrapper lift/restore queue.
+
+**Fix and regression guard:**
+In `src/code/generation/ticker-gen.ts`, added `sweepEmptyTickerWrappers(code)` which strips empty `<RevymeTicker\b[^>]*>\s*<\/RevymeTicker>` wrappers and prunes the runtime `RevymeTicker` import when no ticker elements remain in the file. Integrated into all completion paths of `removeNodeInCode` in `src/code/generation/generator-crud.ts`. Added unit test in `src/code/generation/ticker-gen.test.ts`. Rebuilt CLI.
+
+**Verification:**
+`src/code/generation/ticker-gen.test.ts` passed (13/13 tests). Live `nodes.remove` successfully removed the ticker-wrapped section and swept the wrapper cleanly.
+
 ## 2026-10-31 — unescaped less-than in textContent crashed Babel JSX parser
 
 **Status:** fixed, verified via `src/shared/css-utils.test.ts` (64 tests) and `packages/cli/test/` (42 tests), and committed.

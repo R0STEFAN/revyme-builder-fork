@@ -15,6 +15,7 @@ import { trace } from '@/shared/debug-trace';
 import { flattenPastedRichHtml } from '@/shared/rich-message';
 import { findVariantRootId } from '@/shared/variant-root';
 import { sweepEmptyGlideWrappers, syncEnclosingGlideItem } from './glide-gen';
+import { sweepEmptyTickerWrappers } from './ticker-gen';
 import { generate, findTagClose, findJSXDataIdIndex, quoteStyleValue, serializeJSXAttr, findMatchingCloseTagIndex, findStyleObjectEnd, ensureNamedImport } from './generator-utils';
 import { moveNodeIntoParentFast } from './move-fast';
 import { clearContainerStylesForNode, removeHoverStyleInCode, removeBorderOverlayStyle, removePseudoStyleInCode, removeSelectCaretRuleInCode, removeScopedChildRulesInCode, findBandedOrderWidths, stripBandedOrderForNode } from './generator-styles';
@@ -4016,7 +4017,7 @@ export function removeNodeInCode(code: string, nodeId: string): string {
           result = removeSelectCaretRuleInCode(result, nodeId);
           result = removeScopedChildRulesInCode(result, nodeId);
           trace.action('generator:removeNode-empty-map-template', { nodeId });
-          return sweepEmptyGlideWrappers(removeOrphanedVariantConsts(result));
+          return sweepEmptyTickerWrappers(sweepEmptyGlideWrappers(removeOrphanedVariantConsts(result)));
         } catch (err) {
           trace.error('generator:removeNode-map-template-generate-failed', { nodeId, error: err instanceof Error ? err.message : String(err) });
           // fall through to the string path (it will bounce in validation
@@ -4082,7 +4083,7 @@ export function removeNodeInCode(code: string, nodeId: string): string {
     selfClosed = removePseudoStyleInCode(selfClosed, nodeId, 'before');
     selfClosed = removeSelectCaretRuleInCode(selfClosed, nodeId);
     selfClosed = removeScopedChildRulesInCode(selfClosed, nodeId);
-    return sweepEmptyGlideWrappers(removeOrphanedVariantConsts(selfClosed));
+    return sweepEmptyTickerWrappers(sweepEmptyGlideWrappers(removeOrphanedVariantConsts(selfClosed)));
   }
 
   // Find matching closing tag </tagName> — the shared depth matcher SKIPS
@@ -4109,7 +4110,7 @@ export function removeNodeInCode(code: string, nodeId: string): string {
     result = removeSelectCaretRuleInCode(result, nodeId);
     result = removeScopedChildRulesInCode(result, nodeId);
     // Garbage-collect the deleted element's now-orphaned variant object(s).
-    result = sweepEmptyGlideWrappers(removeOrphanedVariantConsts(result));
+    result = sweepEmptyTickerWrappers(sweepEmptyGlideWrappers(removeOrphanedVariantConsts(result)));
     return result;
   }
 
