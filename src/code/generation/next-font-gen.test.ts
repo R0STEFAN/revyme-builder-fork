@@ -64,6 +64,14 @@ describe('next-font-gen', () => {
       expect(fonts[0]?.weights).not.toContain('300');
     });
 
+    it('preserves bold and semi-bold weights for catalog fonts with truncated variants (JetBrains Mono, Inter)', () => {
+      const css = "@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');";
+      const fonts = extractGoogleFontsFromCSS(css);
+      expect(fonts).toHaveLength(1);
+      expect(fonts[0]?.family).toBe('JetBrains Mono');
+      expect(fonts[0]?.weights).toEqual(['400', '500', '600', '700']);
+    });
+
     it('returns empty array if no Google Fonts are imported', () => {
       const css = ':root { --color: red; }';
       expect(extractGoogleFontsFromCSS(css)).toEqual([]);

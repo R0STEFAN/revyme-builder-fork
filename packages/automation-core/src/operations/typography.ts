@@ -323,20 +323,41 @@ export const typographySetOperation: Operation<
       'min-md': '600',
     };
 
+    const propertyAliasMap: Record<string, string> = {
+      fontFamily: 'font',
+      fontSize: 'size',
+      fontWeight: 'weight',
+      letterSpacing: 'spacing',
+      lineHeight: 'line-height',
+      textTransform: 'transform',
+      textDecoration: 'decoration',
+      textShadow: 'shadow',
+    };
+
+    const normalizedInputValues: Record<string, string> = {};
+    if (input.values) {
+      for (const [k, v] of Object.entries(input.values)) {
+        const canonicalKey = propertyAliasMap[k] || k;
+        normalizedInputValues[canonicalKey] = v;
+      }
+    }
+
     const mergedValues: Record<string, string> = {
       ...defaultTokens,
-      ...(input.values ?? {}),
+      ...normalizedInputValues,
       tag,
     };
 
     if (input.responsiveTiers?.md) {
       for (const [k, v] of Object.entries(input.responsiveTiers.md)) {
-        mergedValues[`${k}-md`] = v;
+        const canonicalKey = propertyAliasMap[k] || k;
+        mergedValues[`${canonicalKey}-md`] = v;
       }
     }
     if (input.responsiveTiers?.sm) {
       for (const [k, v] of Object.entries(input.responsiveTiers.sm)) {
-        mergedValues[`${k}-sm`] = v;
+        const canonicalKey = propertyAliasMap[k] || k;
+        mergedValues[`${canonicalKey}-sm`] = v;
       }
     }
 

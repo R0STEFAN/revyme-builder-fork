@@ -129,15 +129,13 @@ export const fontsImportOperation: Operation<
       return '';
     });
 
-    const escapedName = cleanFamily.replace(/ /g, '\\+');
-    const existingIdx = existingImportLines.findIndex((line) => line.includes(escapedName));
-    if (existingIdx !== -1) {
-      existingImportLines[existingIdx] = importLine;
-    } else {
-      existingImportLines.push(importLine);
-    }
+    const urlFamilyName = cleanFamily.replace(/ /g, '+');
+    const remainingImportLines = existingImportLines.filter(
+      (line) => !line.includes(urlFamilyName) && !line.includes(cleanFamily)
+    );
+    remainingImportLines.push(importLine);
 
-    const nextCss = existingImportLines.join('\n') + '\n' + cssWithoutImports;
+    const nextCss = remainingImportLines.join('\n') + '\n' + cssWithoutImports;
 
     return {
       changes: [
