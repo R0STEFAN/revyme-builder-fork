@@ -135,6 +135,7 @@ const TEXT_EFFECTS_ITEMS: InsertItem[] = [
   { id: 'cs-spinningText',  name: 'Spinning Text',  iconKey: 'creativeSpinningText',   gradientColors: ['#F59E0B', '#D97706'], description: 'Arranges characters in a rotating circle, speeding up on hover.' },
   { id: 'cs-typingText',    name: 'Typing Text',    iconKey: 'creativeTypingText',     gradientColors: ['#10B981', '#059669'], description: 'Types out words one character at a time with a blinking cursor.' },
   { id: 'cs-textPressure',  name: 'Text Pressure',  iconKey: 'creativeTextPressure',   gradientColors: ['#A855F7', '#9333EA'], description: 'Characters dynamically increase weight and width as cursor nears.' },
+  { id: 'cs-rollingText',   name: 'Rolling Text',   iconKey: 'creativeRollingText',    gradientColors: ['#3B82F6', '#8B5CF6'], description: 'Staggered rolling flip on hover with custom easing, speed, and font.' },
   { id: 'cs-hangingCurved', name: 'Hanging Curved', iconKey: 'creativeHangingCurved',  gradientColors: ['#10B981', '#059669'], description: 'Text follows a curved SVG path with continuous scrolling motion.' },
   { id: 'cs-magneticText',  name: 'Magnetic Text',  iconKey: 'creativeMagneticText',   gradientColors: ['#00FFEE', '#06B6D4'], description: 'Letterforms magnetically attract toward the mouse cursor on hover.' },
   { id: 'cs-rotatingText',  name: 'Rotating 3D',    iconKey: 'creativeRotatingText3D', gradientColors: ['#EC4899', '#DB2777'], description: '3D cylinder of words that rotates continuously or with page scroll.' },

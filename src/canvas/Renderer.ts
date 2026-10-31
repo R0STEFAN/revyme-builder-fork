@@ -1431,7 +1431,7 @@ export function renderNodes(
       if (isComponentMaster && variantName !== undefined) {
         const rwv = resolveVariantStyles(rootNode, variantName, tileWidth).width ?? rootNode.styles?.width;
         masterFitWidth = isFitSize(rwv);
-        masterHugWidth = !rwv || rwv === 'auto';
+        masterHugWidth = !rwv || isFitSize(rwv);
       }
       // Viewport-drag pin: while THIS tile's width is being dragged, its
       // container queries are silenced (containerType normal) so foreign
@@ -1475,6 +1475,12 @@ export function renderNodes(
           rootEl.style.height = `${vp.height}px`;
         } else {
           rootEl.style.height = '';
+        }
+        // When a page has no children (e.g. empty project / blank canvas), an auto
+        // height collapses rootEl to 0px — visible as a squashed/flat line on the canvas.
+        // Provide a canvas-only min-height floor so the artboard remains an accessible landing surface.
+        if (rootNode.children.length === 0 && !rootNode.styles?.minHeight) {
+          rootEl.style.minHeight = '800px';
         }
       }
       // Component master wrapper sizing — when the master root has

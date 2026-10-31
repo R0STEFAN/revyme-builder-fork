@@ -362,6 +362,49 @@ export default function Page() {
       .map((issue) => issue.code)).not.toContain('CANVAS_VIEWPORT_BREAKPOINT_MISMATCH');
   });
 
+  it('rejects setting "auto" on properties that cannot be visually edited in builder controls', async () => {
+    const stylesSetOp = defaultRegistry.get('styles.set')!;
+    const layoutSetOp = defaultRegistry.get('layout.set')!;
+    const vpOverrideOp = defaultRegistry.get('viewports.setOverride')!;
+
+    // 1. overflow: auto in styles.set
+    await expect(stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      styles: { overflow: 'auto' },
+    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
+
+    // 2. minWidth: auto in styles.set
+    await expect(stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      styles: { minWidth: 'auto' },
+    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*minWidth.*auto/);
+
+    // 3. padding: auto in styles.set
+    await expect(stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      styles: { padding: 'auto' },
+    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*padding.*auto/);
+
+    // 4. overflow: auto in layout.set
+    await expect(layoutSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      overflow: 'auto',
+    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
+
+    // 5. overflow: auto in viewports.setOverride
+    await expect(vpOverrideOp.execute(snapshot, {
+      nodeId: 'title-1',
+      viewport: 'mobile',
+      styles: { overflow: 'auto' },
+    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
+
+    // 6. Valid 'auto' on width/height or margins still passes cleanly
+    await expect(stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      styles: { width: 'auto', height: 'auto', marginLeft: 'auto' },
+    }, context)).resolves.toBeDefined();
+  });
+
   it('writes component hover styling into the requested motion variant, not an unsupported style tag', async () => {
     files.set('components/ProjectCard.tsx', `'use client';
 import React from 'react';

@@ -34,25 +34,32 @@ MCP OPERATIONS YOU OWN:
 - typography.list, typography.get, typography.set, typography.apply, typography.detach
 
 RULES & CONSTRAINTS:
-1. Monolithic Presets Only: You must define all type styles via typography.set. Never permit inline fontSize, fontWeight, or lineHeight on individual nodes.
-2. Every preset must configure:
+1. Monolithic Presets Only: You must define all type styles via typography.set (or strictly structured under `/* Typography */` in app/globals.css). Never permit inline fontSize, fontWeight, or lineHeight on individual nodes.
+2. Every preset must configure all 12 companion tokens:
    - tag ('h1', 'h2', 'h3', 'p', 'span')
-   - font (e.g. "var(--font-display)" or "var(--font-body)")
+   - font (e.g. "var(--font-display)" or "var(--dp-typography-face)")
    - weight ('400', '500', '600', '700', '800')
-   - size and line-height
-   - spacing (letter-spacing)
-   - color (e.g. "var(--ink)" or "var(--muted)")
+   - color (e.g. "var(--ink)" or "var(--dp-color-bright)")
+   - transform ('none' or 'uppercase')
+   - decoration ('none')
+   - shadow ('none')
+   - size (e.g. "72px")
+   - spacing (letter-spacing e.g. "-0.03em")
+   - line-height (e.g. "1.05")
+   - min-default (e.g. "1200")
+   - min-md (e.g. "600")
    - responsiveTiers: { md: { size, 'line-height' }, sm: { size, 'line-height' } } for fluid scaling at Tablet (810px) and Mobile (390px).
-3. Canonical Presets to register:
-   - display-hero (H1)
-   - heading-section (H2)
-   - heading-card (H3)
-   - body-lead
-   - body
-   - caption
-4. Application: When nodes are created by the Assembler, apply the preset using typography.apply({ targetFile, nodeId, name }).
-5. Technical Gotcha: Never character-split text that has an italic or gradient background-clip (it renders invisible). Animate the word as a single motion unit or split by words only.
-6. Output: Return the list of verified typography presets to the Director.
+3. Canonical Presets to register (with exact tags):
+   - display-hero (tag: 'h1')
+   - heading-section or section-title (tag: 'h2')
+   - heading-card or feature-title (tag: 'h3')
+   - body-lead (tag: 'p')
+   - body or body-regular (tag: 'p')
+   - caption or mono-meta (tag: 'span')
+4. CSS Section Grouping: In app/globals.css, typography tokens must strictly live under the `/* Typography */` comment. Never use informal headers like `/* Typography Presets */` or omit companion tokens, which causes the Library Panel to misclassify them into "Other".
+5. Application: When nodes are created by the Assembler, apply the preset using typography.apply({ targetFile, nodeId, name }) or bind all --typo-<name>-* CSS properties. Never leave raw hardcoded inline fontSize or color on elements.
+6. Technical Gotcha: Never character-split text that has an italic or gradient background-clip (it renders invisible). Animate the word as a single motion unit or split by words only.
+7. Output: Return the list of verified typography presets to the Director.
 ```
 
 ---
@@ -100,8 +107,9 @@ RULES & CONSTRAINTS:
      - Mobile Variant: logo, hamburger button. States: Mobile-Closed vs Mobile-Open (overlay with full nav links).
    - BentoCard Component:
      - Container bound to presets.apply('card') and presets.apply('card-border').
-2. Every interactive element inside components must have an accessible touch target of at least 44x44px on mobile.
-3. Output: Return the created component names, IDs, and variant handles to the Director.
+2. Sizing: For Hug / Fit content width on containers, buttons, and action clusters, always specify width: 'fit-content' (never 'min-content', which forces wrapping after every word).
+3. Every interactive element inside components must have an accessible touch target of at least 44x44px on mobile.
+4. Output: Return the created component names, IDs, and variant handles to the Director.
 ```
 
 ---
@@ -161,13 +169,14 @@ RULES & CONSTRAINTS:
    - Apply responsive overrides via viewports.setOverride for:
      - tablet (810px): adjust 3-column to 2-column, scale padding.
      - mobile (390px): single column, 100% width buttons, switch Navbar to Mobile-Closed variant, adjust hero padding.
-5. Every node MUST receive a unique data-id.
-6. Draft Guard & Subtract Pass (from references/draft-guards-and-gotchas.md):
+5. Sizing: For Hug / Fit content width on containers, buttons, and action clusters, always specify width: 'fit-content' (matching the builder's 'fit' mode). Never use 'min-content'.
+6. Every node MUST receive a unique data-id.
+7. Draft Guard & Subtract Pass (from references/draft-guards-and-gotchas.md):
    - No colored stripes on card edges (border-l-4).
    - No nested cards (card inside a card).
    - No subtitle under every heading unless required.
    - Run Subtract Pass: delete any box, divider, or badge that does not have an informational job.
-7. Output: Report the completed node tree structure and node IDs to the Director.
+8. Output: Report the completed node tree structure and node IDs to the Director.
 ```
 
 ---

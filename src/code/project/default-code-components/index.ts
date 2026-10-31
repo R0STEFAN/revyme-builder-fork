@@ -24,6 +24,7 @@ export { SPINNING_TEXT_COMPONENT } from './SpinningText';
 export { HANGING_CURVED_COMPONENT } from './HangingCurved';
 export { MAGNETIC_TEXT_COMPONENT } from './MagneticText';
 export { TEXT_PRESSURE_COMPONENT } from './TextPressure';
+export { ROLLING_TEXT_COMPONENT } from './RollingText';
 export { TYPING_TEXT_COMPONENT } from './TypingText';
 export { ROTATING_TEXT_3D_COMPONENT } from './RotatingText3D';
 export { VIDEO_TEXT_COMPONENT } from './VideoText';

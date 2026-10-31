@@ -5,6 +5,7 @@ import { defaultRegistry } from '../registry';
 import { updateContainerQueryStyle } from '@/code/generation/generator-styles';
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
 import { DEFAULT_BREAKPOINT_STARTS, VIEWPORT_GAP } from '@/shared/constants';
+import { validateStylesNotForbiddenAuto } from './styles';
 
 export interface ViewportDefinition {
   id: string;
@@ -83,6 +84,7 @@ export const viewportsSetOverrideOperation: Operation<
     styles: z.record(z.string(), z.string()),
   }),
   async execute(snapshot, input) {
+    validateStylesNotForbiddenAuto(input.styles);
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let width: number;
 

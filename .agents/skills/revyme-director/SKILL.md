@@ -18,7 +18,7 @@ You **never** write raw HTML or code directly into page files yourself. Instead,
 ### A. Revyme Architecture Invariants
 1. **The Source Code is the Truth**: The builder operates on live `.tsx` source code in `app/`. No proprietary scene graph.
 2. **Oracle Gate Conformance**: Every element must have a `data-id`. Untracked CSS `transition` is strictly forbidden (Oracle blocks it); motion must use `motion.*`, `textEffects.*`, or `siteEffects.*`.
-3. **Compound Typography Presets are Mandatory**: Text styling is never scattered across inline CSS. Every heading, body, and caption must be declared as a compound preset via `typography.set` (with font, weight, size, line-height, spacing, color, and responsive tiers) and applied via `typography.apply`.
+3. **Compound Typography Presets are Mandatory**: Text styling is never scattered across inline CSS. Every heading, body, and caption must be declared as an authoritative compound preset via `typography.set` (with tag, font, weight, size, line-height, spacing, color, transform, decoration, shadow, and responsive tiers) or structured under `/* Typography */` in `app/globals.css`. Typography tokens must NEVER land in `Other` (which happens when non-standard comment headers are used or required tokens are omitted). Each preset requires all 12 companion tokens (`--typo-<name>-tag`, `font`, `weight`, `color`, `transform`, `decoration`, `shadow`, `size`, `spacing`, `line-height`, `min-default`, `min-md`) and must be bound to nodes via `typography.apply`.
 4. **Compound Design Presets for Uniformity**: Radii, shadows, and border groups must be defined via `presets.set` and applied via `presets.apply`.
 5. **Design Components vs Code Components**:
    - **Design Components** (`components.create`, `variants.*`): Visual canvas components with interactive states (Button with Hover/Pressed, Navbar with Desktop vs Mobile Hamburger Open/Closed).
@@ -88,7 +88,14 @@ Generate and write `DESIGN_MANIFEST.md` into the project root (or artifact direc
    - Create OKLCH tokens via `tokens.add` (`--bg`, `--ink`, `--accent`, `--surface`, `--muted`, `--border-subtle`).
    - Query `fonts.catalog` and connect display and body fonts via `fonts.transformNextFont`.
 2. Delegate to **`Typographer`**:
-   - Register compound typography presets via `typography.set`: `display-hero`, `heading-section`, `heading-card`, `body-lead`, `body`, `caption`. Include `responsiveTiers` (`md`, `sm`).
+   - Register compound typography presets via `typography.set` (or structured under `/* Typography */` in `app/globals.css`):
+     - `display-hero` (`tag: 'h1'`, `size: 72px`, leading 1.05, tracking -0.03em, `responsiveTiers: { md: { size: '48px', lineHeight: '1.1' }, sm: { size: '36px', lineHeight: '1.15' } }`).
+     - `heading-section` or `section-title` (`tag: 'h2'`, `size: 46px`, leading 1.1, tracking -0.025em, `responsiveTiers: { md: { size: '32px' }, sm: { size: '26px' } }`).
+     - `heading-card` or `feature-title` (`tag: 'h3'`, `size: 19px`, leading 1.3, weight 500).
+     - `body-lead` (`tag: 'p'`, `size: 16px`, leading 1.5).
+     - `body-regular` or `body` (`tag: 'p'`, `size: 14px`, leading 1.6).
+     - `caption` or `mono-meta` (`tag: 'span'`, `font: var(--dp-typography-mono)`, `size: 11px`, tracking 0.06em).
+   - Ensure all 12 companion tokens exist for every preset so they are displayed correctly in the Revyme Library Panel Typography group, never falling into "Other".
 3. Delegate to **`PresetMaker`**:
    - Register design presets via `presets.set` (`radius-card`, `radius-button`, `shadow-elevation`, `border-card-border`).
 

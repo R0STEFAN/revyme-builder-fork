@@ -360,7 +360,10 @@ export function injectFlexLayoutOnFrame(
     // measureCssPx, not findNodeSize: the raw bridge rect is canvas-scaled,
     // so locking at 50% zoom froze half the true size (same class as the
     // auto-freeze zoom bug, 2026-07-29).
-    if (childNodeStyles.width && !isFitSize(childNodeStyles.width) && !childNodeStyles.width.endsWith('px')) {
+    // Preserve full-bleed children (width: '100%') in column flex containers (e.g. sections in page root)
+    // so locking to desktop px does not break tablet/mobile responsive viewports.
+    const isFullBleedInColumn = childNodeStyles.width === '100%' && (layoutStyles.flexDirection === 'column');
+    if (childNodeStyles.width && !isFitSize(childNodeStyles.width) && !childNodeStyles.width.endsWith('px') && !isFullBleedInColumn) {
       const px = measureCssPx(childId, vpId, 'width');
       if (px != null) childStyles.width = `${Math.round(px)}px`;
     }

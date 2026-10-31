@@ -273,11 +273,14 @@ export function renderCodeComponentDirect(
   // Carry per-variant style branches so the sandbox resolves the right size
   // per artboard tile (see the mount path) — a live prop edit on a master must
   // not collapse non-default tiles to the default-branch size.
-  if (node.conditionalStyles && Object.keys(node.conditionalStyles).length > 0) {
-    baseProps.__variantStyles = node.conditionalStyles;
-  }
-  if (node.attrConditional && Object.keys(node.attrConditional).length > 0) {
-    baseProps.__variantProps = node.attrConditional;
+  const isExpandedChild = node.id.includes(':') || !!node.componentInstanceId;
+  if (!isExpandedChild) {
+    if (node.conditionalStyles && Object.keys(node.conditionalStyles).length > 0) {
+      baseProps.__variantStyles = node.conditionalStyles;
+    }
+    if (node.attrConditional && Object.keys(node.attrConditional).length > 0) {
+      baseProps.__variantProps = node.attrConditional;
+    }
   }
   const slotKids = _mountedSlotChildren.get(codeComponentId);
   if (slotKids) baseProps.__slotChildren = slotKids;
@@ -591,16 +594,18 @@ export default function CodeComponentHost() {
           // otherwise mount at the default size — visible as a vector-set's inner
           // svg rendering at the wrong size on non-default variants. The sandbox
           // picks the branch for each tile's own [data-viewport] variant.
-          if (node.conditionalStyles && Object.keys(node.conditionalStyles).length > 0) {
-            props.__variantStyles = node.conditionalStyles;
-          }
-          // Same idea for per-variant PROP overrides (e.g. an icon-set's `name`
-          // selecting which vector to show — `name={variant === 'v' ? … : …}`,
-          // parsed into node.attrConditional). The sandbox resolves the branch
-          // for each tile's variant so a vector set can show a different icon per
-          // master variant, exactly like a design-component prop.
-          if (node.attrConditional && Object.keys(node.attrConditional).length > 0) {
-            props.__variantProps = node.attrConditional;
+          // On a page canvas, an expanded instance child (e.g. `hero-btn-secondary:RollingText...`)
+          // has its per-variant props already resolved for that instance's variant by project-parser.
+          // Forwarding __variantProps on a page causes sandbox resolveVariantProps to look up the
+          // viewport id ("desktop"), miss the component variant names, and clobber the resolved prop back to default.
+          const isExpandedInstanceChild = node.id.includes(':') || !!node.componentInstanceId;
+          if (!isExpandedInstanceChild) {
+            if (node.conditionalStyles && Object.keys(node.conditionalStyles).length > 0) {
+              props.__variantStyles = node.conditionalStyles;
+            }
+            if (node.attrConditional && Object.keys(node.attrConditional).length > 0) {
+              props.__variantProps = node.attrConditional;
+            }
           }
           // Slot system — canvas nodes connected into this component's
           // slot ride along as `__slotChildren` so the sandbox can render

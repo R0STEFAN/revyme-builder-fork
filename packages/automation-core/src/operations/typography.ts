@@ -482,6 +482,10 @@ export const typographyApplyOperation: Operation<
       if (rules.length > 0) {
         nextCode = upsertTypographyResponsiveBlock(nextCode, input.nodeId, rules.join('\n'));
       }
+    } else {
+      const styleId = `typography-responsive-${input.nodeId}`;
+      const styleRegex = new RegExp(`\\s*<style data-id="${styleId}"[^>]*>[\\s\\S]*?<\\/style>`, 'g');
+      nextCode = nextCode.replace(styleRegex, '');
     }
 
     return {

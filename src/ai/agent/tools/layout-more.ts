@@ -41,7 +41,8 @@ type Axis = 'width' | 'height';
  *          crossAxisFillPatch's spelling — `width: 100%` in a column, a stretch
  *          for a row's height (and, on a replica whose base was fill, the flex
  *          is pinned back so the two axes do not fight).
- *   fit    hug the content (`min-content`).
+ *   fit    hug the content (`fit-content`).
+ *   min    intrinsic minimum (`min-content`).
  *   a value with px / % / vw / vh — as given.
  *   ''     remove the size.
  */
@@ -56,6 +57,7 @@ export function sizeWrite(
   const v = value.trim();
   if (v === '') return { [axis]: '' };
   if (v === 'fit') return { [axis]: FIT_SIZE };
+  if (v === 'min') return { [axis]: 'min-content' };
   if (v === 'fill') {
     if (parent?.display !== 'flex' && parent?.display !== 'inline-flex') {
       return { error: `Fill needs a flex parent — this element's parent is not a layout. Give the parent a layout first (set_layout display:flex), or use "100%".` };
@@ -64,7 +66,7 @@ export function sizeWrite(
       ? { [axis]: '', flex: makeFillFlex(1) }
       : crossAxisFillPatch(axis, isReplica, currentFlex, currentAlignSelf);
   }
-  if (!SIZE_VALUE_RE.test(v)) return { error: `"${v}" is not a size. Use px, %, vw, vh, "fill", "fit", or "" to remove.` };
+  if (!SIZE_VALUE_RE.test(v)) return { error: `"${v}" is not a size. Use px, %, vw, vh, "fill", "fit", "min", or "" to remove.` };
   return { [axis]: v };
 }
 

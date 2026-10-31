@@ -69,7 +69,7 @@ export function groupTypoTokens(tokens: PresetToken[]): TypoGroup[] {
   trace.fn('groupTypoTokens', { tokenCount: tokens.length });
   const groups = new Map<string, PresetToken[]>();
   for (const token of tokens) {
-    if (token.category !== 'typography') continue;
+    if (token.category !== 'typography' && !token.name.startsWith('typo-')) continue;
     const withoutPrefix = token.name.replace(/^typo-/, '');
     let groupName = withoutPrefix;
     for (const suffix of TYPO_SUFFIXES) {

@@ -126,6 +126,26 @@ describe('parsePresetTokens', () => {
     expect(tokens.find(t => t.name === 'random-asset')!.category).toBe('image');
   });
 
+  test('detects typography and prefix categories even with complex or non-standard comments', () => {
+    const css = `:root {
+  /* Radii */
+  --dp-radius-panel: 6px;
+  /* Borders & Motion */
+  --dp-border-hairline: 1px;
+  /* Typography Presets */
+  --dp-typography-face: 'Geist', sans-serif;
+  --typo-display-hero-font: var(--dp-typography-face);
+  --typo-display-hero-size: 72px;
+}`;
+    const tokens = parsePresetTokens(css);
+
+    expect(tokens.find(t => t.name === 'dp-radius-panel')!.category).toBe('radius');
+    expect(tokens.find(t => t.name === 'dp-border-hairline')!.category).toBe('border');
+    expect(tokens.find(t => t.name === 'dp-typography-face')!.category).toBe('typography');
+    expect(tokens.find(t => t.name === 'typo-display-hero-font')!.category).toBe('typography');
+    expect(tokens.find(t => t.name === 'typo-display-hero-size')!.category).toBe('typography');
+  });
+
   test('returns empty array when no :root block', () => {
     expect(parsePresetTokens(NO_ROOT_CSS)).toEqual([]);
   });

@@ -13,6 +13,7 @@ const ALL_UNITS = [
   { value: 'vw', label: 'vw' },
   { value: 'vh', label: 'vh' },
   { value: 'auto', label: 'fit' },
+  { value: 'min', label: 'min' },
   { value: 'fill', label: 'fill' },
 ];
 
@@ -98,6 +99,12 @@ describe('DimensionRow — Smart Unit Typing', () => {
     const { typeValue, onUnitChange } = renderRow({ value: '200px' });
     typeValue('fit');
     expect(onUnitChange).toHaveBeenCalledWith('px', 'auto');
+  });
+
+  it('typing "min" calls onUnitChange to min', () => {
+    const { typeValue, onUnitChange } = renderRow({ value: '200px' });
+    typeValue('min');
+    expect(onUnitChange).toHaveBeenCalledWith('px', 'min');
   });
 
   it('typing "fill" calls onUnitChange to fill', () => {

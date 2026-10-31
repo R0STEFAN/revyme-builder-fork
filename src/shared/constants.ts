@@ -269,13 +269,12 @@ export function nodeAcceptsChildren(
 }
 
 // ─── "Fit" sizing (auto-size to content) ────────────────────────────────────
-// design-tool parity: the editor writes `min-content` for a "Fit" width/height, NOT
-// `auto`. `auto` does NOT shrink-to-content on a flex / framer-motion `layout`
-// container (every component-master root is one), but `min-content` does — with
-// `white-space: nowrap` text it resolves to the full single-line width.
+// design-tool parity: the editor writes `fit-content` for a "Fit" width/height.
+// `fit-content` hugs natural content width without collapsing wrappable text to
+// its longest word (which `min-content` does when `white-space: nowrap` is absent).
 //
 // The CSS value written for a Fit dimension.
-export const FIT_SIZE = 'min-content';
+export const FIT_SIZE = 'fit-content';
 
 /** True when a width/height value means "Fit" (auto-size to content). Accepts the
  *  current `min-content`, the legacy `auto`, and `fit-content` — use EVERYWHERE the

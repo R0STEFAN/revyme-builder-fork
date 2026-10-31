@@ -123,6 +123,7 @@ import {
   HANGING_CURVED_COMPONENT,
   MAGNETIC_TEXT_COMPONENT,
   TEXT_PRESSURE_COMPONENT,
+  ROLLING_TEXT_COMPONENT,
   TYPING_TEXT_COMPONENT,
   ROTATING_TEXT_3D_COMPONENT,
   VIDEO_TEXT_COMPONENT,
@@ -2588,6 +2589,7 @@ export const BUILT_IN_COMPONENTS: [string, string][] = [
   ['components/HangingCurved.tsx', HANGING_CURVED_COMPONENT],
   ['components/MagneticText.tsx', MAGNETIC_TEXT_COMPONENT],
   ['components/TextPressure.tsx', TEXT_PRESSURE_COMPONENT],
+  ['components/RollingText.tsx', ROLLING_TEXT_COMPONENT],
   // Port batch 2 — TypingText (multi-word cycle, distinct from the
   // single-string TypingEffect code component). RotatingText3D and VideoText
   // are full creative effects (3D cylinder + SVG-mask video clip).

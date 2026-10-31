@@ -748,6 +748,7 @@ All TSX files submitted or edited undergo strict AST validation in `src/code/ora
 | **13. `FIXED_DEPTH_AND_BLEND_MODE`** | Never put `position: 'fixed'` or `mixBlendMode: 'difference'` inside component masters | Use `position: 'sticky', top: 0` on the root header with explicit background color (e.g. `rgba(255,255,255,0.85)` + `backdropFilter: 'blur(16px)'`) | Inside component masters, `position: 'fixed'` is trapped by Framer Motion's `transform` containing block and becomes invisible or displaced on the canvas. `mixBlendMode: 'difference'` renders as invisible/black on canvas iframe transparent layers. |
 | **14. `RAW_STYLE_TAG_PROHIBITION`** | Raw `<style>` tags with `@media` in JSX are strictly forbidden | Use responsive dimension presets or `viewports.setOverride` with pixel values; fluid `clamp()` is allowed only in typography preset font-size | Raw `<style>` blocks bypass the visual inspector and cannot be edited by the builder panels. |
 | **15. `FORBIDDEN_INDIRECT_VARIANT_CHECK`** | Storing variant checks in boolean variables (e.g. `const isScrolled = initialVariant === 'scrolled'`) or using indirect boolean identifiers in style ternaries | Use DIRECT inline ternaries: `style={{ backgroundColor: initialVariant === 'scrolled' ? 'rgba(...)' : 'rgba(...)' }}` | Storing variant checks in intermediate variables breaks Revyme's parser (evaluates `conditionalStyles: null`) and style generators, causing variant visual styling to be lost in the editor and on canvas. |
+| **16. `FIT_CONTENT_VS_MIN_CONTENT`** | Using `min-content` for button or container auto-sizing | Use `width: 'fit-content'` (or `height: 'fit-content'`). Never write `min-content` for general hug sizing | In modern CSS and Revyme UI, **`fit`** writes `fit-content` (`min(max-content, available)`). `min-content` forces text wrapping at every word, collapsing buttons and badge clusters into single-word columns (~71px) unless `white-space: nowrap` is set. |
 
 ---
 
@@ -1641,7 +1642,32 @@ revyme_set_responsive_styles({ "node_id": "test", "viewport": "mobile", "styles"
 ## 8. The Complete Typography Presets Matrix (H1–H6 Semantic Tagging)
 
 Typography presets in Revyme represent complete text style families grouped in `globals.css`.
-When creating typography presets via `revyme_manage_presets` with `action: "set_typography"`, you MUST configure the **semantic `tag`** to match the element's role:
+Every preset requires the complete 12 companion CSS custom properties declared under the exact `/* Typography */` comment header in `app/globals.css`, or created via `typography.set`:
+
+```css
+/* Typography */
+--typo-<name>-tag: <tag>;
+--typo-<name>-font: <font>;
+--typo-<name>-weight: <weight>;
+--typo-<name>-color: <color>;
+--typo-<name>-transform: none;
+--typo-<name>-decoration: none;
+--typo-<name>-shadow: none;
+--typo-<name>-size: <size>;
+--typo-<name>-spacing: <spacing>;
+--typo-<name>-line-height: <line-height>;
+--typo-<name>-min-default: 1200;
+--typo-<name>-min-md: 600;
+```
+*(Optionally with responsive tier tokens: `--typo-<name>-size-md`, `--typo-<name>-line-height-md`, `--typo-<name>-size-sm`, etc.)*
+
+> **Critical Rule on Category Headers**: In `app/globals.css`, tokens must be grouped under standard category comments:
+> `/* Colors */`, `/* Typography */`, `/* Spacing */`, `/* Radius */`, `/* Border */`, `/* Shadows */`.
+> Do not use non-standard comments (such as `/* Radii */`, `/* Spatial Tokens */`, or `/* Typography Presets */`) which cause tokens to fall into the "Other" group in the Library Panel.
+>
+> **SSOT Rule for Elements**: Elements bound to typography presets must reference `var(--typo-<name>-font)`, `var(--typo-<name>-size)`, `var(--typo-<name>-weight)`, `var(--typo-<name>-color)`, etc. Do not leave raw hardcoded inline `fontSize` or `color` on text elements.
+
+When creating typography presets via `typography.set`, you MUST configure the **semantic `tag`** to match the element's role:
 
 | Preset Name | Semantic `tag` | Fluid `size` Scale | Unitless `line-height` | Intended Usage |
 |---|---|---|---|---|

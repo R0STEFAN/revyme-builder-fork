@@ -987,4 +987,25 @@ describe('canvas per-viewport clamp and fluid unit tokens', () => {
     // 5vw * 390 / 100 = 19.5px
     expect(el.style.getPropertyValue('--fluid-size')).toBe('clamp(1rem, 19.5px, 3rem)');
   });
+
+  test('stamps max-content on component master root with Fit width (min-content) to preserve paddings', () => {
+    const code = `const variantConfig = [{ name: 'default', label: 'Desktop', isPrimary: true }];
+export default function Navbar() {
+  return <div data-id="navbar-root" style={{ width: 'min-content' }}><span>Hi</span></div>;
+}`;
+    const rootNode: any = {
+      id: 'navbar-root',
+      type: 'div',
+      styles: { width: 'min-content' },
+      children: [],
+    };
+    const nodes = new Map([['navbar-root', rootNode]]);
+    const viewports: any = [{ id: 'desktop', label: 'Desktop', isPrimary: true, x: 0, y: 0, width: 0 }];
+
+    renderNodes(contentRoot, nodes, null, () => {}, viewports, code);
+
+    const rootEl = contentRoot.querySelector('[data-node-id="navbar-root"]') as HTMLElement;
+    expect(rootEl).toBeTruthy();
+    expect(rootEl.style.width).toBe('max-content');
+  });
 });

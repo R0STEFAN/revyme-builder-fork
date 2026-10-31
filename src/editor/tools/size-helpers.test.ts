@@ -26,8 +26,9 @@ describe('convertPxToDimUnit', () => {
   const VP_W = 1440;
   const VP_H = 900;
 
-  it('returns sentinel values for auto and fill', () => {
+  it('returns sentinel values for auto, min, and fill', () => {
     expect(convertPxToDimUnit(123, 'auto', PARENT_W, VP_W, VP_H)).toBe('auto');
+    expect(convertPxToDimUnit(123, 'min', PARENT_W, VP_W, VP_H)).toBe('min-content');
     expect(convertPxToDimUnit(123, 'fill', PARENT_W, VP_W, VP_H)).toBe('');
   });
 

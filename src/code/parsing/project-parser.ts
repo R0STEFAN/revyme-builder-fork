@@ -740,6 +740,38 @@ function expandComponent(
           if (cond[branchKey] != null) { if (!node.attrs) node.attrs = {}; node.attrs.initialVariant = cond[branchKey]; }
         }
       }
+      // Resolve any non-initialVariant conditional attribute on inner elements
+      // (e.g. `color={initialVariant === 'secondary' ? 'white' : 'black'}`)
+      // against the outer instance's resolved variant so the canvas matches React runtime.
+      if (node.attrConditional) {
+        for (const [attrName, condMap] of Object.entries(node.attrConditional)) {
+          if (attrName === 'initialVariant') continue;
+          const varRefs = node.attrConditionalVarRefs?.[attrName];
+          if (varRefs) {
+            for (const [bk, refName] of Object.entries(varRefs)) {
+              if (refName in instanceProps) condMap[bk] = stripQ(instanceProps[refName]);
+            }
+          }
+          const ov = attrInitialVariant ?? instanceProps.initialVariant ?? null;
+          if (ov != null) {
+            const branchKey = (ov in condMap) ? ov : 'default';
+            if (condMap[branchKey] != null) {
+              if (!node.attrs) node.attrs = {};
+              node.attrs[attrName] = condMap[branchKey];
+              if (node.componentProps && attrName in node.componentProps) {
+                node.componentProps[attrName] = condMap[branchKey];
+              }
+              // Delete from attrConditional on this expanded instance node so downstream
+              // sandbox resolveVariantProps (which runs on page viewports like "desktop")
+              // does not overwrite the resolved value back to default.
+              delete node.attrConditional[attrName];
+            }
+          }
+        }
+        if (Object.keys(node.attrConditional).length === 0) {
+          delete (node as any).attrConditional;
+        }
+      }
       // PER-VARIANT STYLE VARIABLE in a variant OBJECT (`logoNameVariants['variant-6'] = { color: color }`) —
       // the idiomatic framer-motion shape. The parser resolved it to the prop DEFAULT (motionVariants) and
       // recorded the prop (motionVariantVariables). Override with the INSTANCE's prop value (route/forward) so

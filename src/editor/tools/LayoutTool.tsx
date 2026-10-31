@@ -886,6 +886,14 @@ export default function LayoutTool({ styles, nodeId, onUpdate, onUpdateMultiple,
     const vpId = interactingVpId;
 
     if (hasLayout) {
+      // Step 0: Page root guard — the page root (<div data-id="root" data-name="Page">)
+      // is the document container for sections. Removing layout from it must never
+      // convert all sections into position: 'absolute', which collapses the page.
+      if (nodeId === 'root' || node.name === 'Page' || node.attrs?.['data-id'] === 'root') {
+        trace.action('layout:remove-blocked-on-page-root', { nodeId });
+        return;
+      }
+
       // ── Remove layout: children become absolute, preserving visual positions ──
       // Step 1: Capture parent's computed size BEFORE removing layout.
       // Only inject explicit px when width/height is `auto` (or missing) — those

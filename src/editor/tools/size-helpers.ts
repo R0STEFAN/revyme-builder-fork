@@ -11,6 +11,7 @@ export type DimUnit =
   | 'px'
   | '%'
   | 'auto'
+  | 'min'
   | 'rem'
   | 'em'
   | 'vw'
@@ -71,6 +72,7 @@ export function convertPxToDimUnit(
   rootFontSizePx = 16,
 ): string {
   if (toUnit === 'auto') return 'auto';
+  if (toUnit === 'min') return 'min-content';
   if (toUnit === 'fill') return ''; // fill is handled via flex property
   if (toUnit === 'px') return `${Math.round(px)}px`;
   if (toUnit === 'rem') {

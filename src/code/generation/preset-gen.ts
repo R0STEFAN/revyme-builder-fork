@@ -31,6 +31,7 @@ const PREFIX_MAP: [string, TokenCategory][] = [
   ['image-', 'image'],
   ['video-', 'video'],
   ['dp-color-', 'color'],
+  ['dp-typography-', 'typography'],
   ['dp-motion-', 'other'],
 ];
 
@@ -120,22 +121,22 @@ export function parsePresetTokens(css: string): PresetToken[] {
   for (const rawLine of body.split('\n')) {
     const line = rawLine.trim();
 
-    // Check for category comment: /* Category: color */ or /* Colors */
-    const commentMatch = line.match(/^\/\*\s*(?:Category:\s*)?(\w+)\s*\*\/$/i);
+    // Check for category comment: /* Category: color */ or /* Colors */ or /* Typography Presets */ or /* Radii */
+    const commentMatch = line.match(/^\/\*\s*(?:Category:\s*)?([a-zA-Z0-9_\s-]+?)\s*\*\/$/i);
     if (commentMatch) {
-      const hint = commentMatch[1].toLowerCase();
+      const hint = commentMatch[1].trim().toLowerCase();
       // Map comment text to category
       if (hint === 'colors' || hint === 'color') commentCategory = 'color';
-      else if (hint === 'typography') commentCategory = 'typography';
-      else if (hint === 'spacing') commentCategory = 'spacing';
+      else if (hint === 'typography' || hint.startsWith('typography') || hint === 'fonts' || hint === 'type') commentCategory = 'typography';
+      else if (hint === 'spacing' || hint === 'spacings' || hint === 'space' || hint.startsWith('spatial')) commentCategory = 'spacing';
       else if (hint === 'margin' || hint === 'margins') commentCategory = 'margin';
       else if (hint === 'border' || hint === 'borders') commentCategory = 'border';
-      else if (hint === 'radius') commentCategory = 'radius';
+      else if (hint === 'radius' || hint === 'radii') commentCategory = 'radius';
       else if (hint === 'shadows' || hint === 'shadow') commentCategory = 'shadow';
       else if (hint === 'images' || hint === 'image') commentCategory = 'image';
       else if (hint === 'videos' || hint === 'video') commentCategory = 'video';
       else if (hint === 'other' || hint === 'others') commentCategory = 'other';
-      else commentCategory = 'other';
+      else commentCategory = null;
       continue;
     }
 
@@ -145,7 +146,8 @@ export function parsePresetTokens(css: string): PresetToken[] {
 
     const name = varMatch[1];
     const value = varMatch[2];
-    const category = commentCategory ?? detectCategory(name, value);
+    const namePrefixCat = categoryFromName(name);
+    const category = namePrefixCat ?? commentCategory ?? detectCategory(name, value);
 
     tokens.push({ name, value, category });
   }

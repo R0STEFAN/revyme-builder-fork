@@ -68,6 +68,67 @@ export const stylesGetOperation: Operation<
 };
 
 // 2. styles.set
+export const FORBIDDEN_AUTO_STYLE_PROPS = new Set([
+  // Overflow controls: only 'visible', 'hidden', 'scroll', 'clip' are supported in UI
+  'overflow',
+  'overflowX',
+  'overflowY',
+  // Min/Max controls: only 'px' and '%' are supported; 'auto' has no UI slot and triggers MINMAX_SIZE_UNIT oracle error
+  'minWidth',
+  'maxWidth',
+  'minHeight',
+  'maxHeight',
+  // Padding controls: only numeric px lengths (padding cannot be 'auto' in CSS)
+  'padding',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  // Gap controls: only numeric px lengths
+  'gap',
+  'rowGap',
+  'columnGap',
+  // Radius controls: only numeric px
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomRightRadius',
+  'borderBottomLeftRadius',
+  // Border width controls: only numeric px
+  'borderWidth',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  // Opacity: numeric 0..1
+  'opacity',
+  // Typography controls: numeric lengths
+  'fontSize',
+  'lineHeight',
+  'letterSpacing',
+  // Color controls
+  'color',
+  'backgroundColor',
+  'borderColor',
+  // Enum layouts without auto option
+  'display',
+  'flexDirection',
+  'flexWrap',
+  'alignItems',
+  'justifyContent',
+  'position',
+]);
+
+export function validateStylesNotForbiddenAuto(styles: Record<string, string>): void {
+  for (const [key, value] of Object.entries(styles)) {
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'auto' && FORBIDDEN_AUTO_STYLE_PROPS.has(key)) {
+      throw new Error(
+        `DISALLOWED_STYLE_VALUE: Style property "${key}" cannot be set to "auto" because it cannot be visually edited in the builder controls.`
+      );
+    }
+  }
+}
+
 export const stylesSetOperation: Operation<
   {
     filePath?: string;
@@ -98,6 +159,7 @@ export const stylesSetOperation: Operation<
     variantName: z.string().min(1).optional(),
   }),
   async execute(snapshot, input) {
+    validateStylesNotForbiddenAuto(input.styles);
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let nextCode = code;
 

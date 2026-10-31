@@ -278,6 +278,39 @@ export function CreativeTextPressureIcon() {
   return <div ref={containerRef} className="w-full h-full flex items-center justify-center" style={{ letterSpacing: 2 }} />;
 }
 
+// ─── RollingText ───────────────────────────────────────────────────────────
+// Staggered vertical roll-up flip effect mirroring the rolling text hover.
+export function CreativeRollingTextIcon() {
+  const letters = ['R', 'O', 'L', 'L'];
+  return (
+    <div className="w-full h-full flex items-center justify-center font-bold text-[10px] tracking-wide overflow-hidden" style={{ color: TEXT_COLOR }}>
+      <span style={{ display: 'inline-flex', overflow: 'hidden', height: '14px', lineHeight: '14px' }}>
+        {letters.map((char, i) => (
+          <span
+            key={i}
+            style={{
+              position: 'relative',
+              display: 'inline-flex',
+              flexDirection: 'column',
+              animation: `rolling-icon-flip 2.4s infinite ease-in-out ${i * 0.12}s`,
+            }}
+          >
+            <span>{char}</span>
+            <span>{char}</span>
+          </span>
+        ))}
+      </span>
+      <style>{`
+        @keyframes rolling-icon-flip {
+          0%, 30% { transform: translateY(0); }
+          50%, 80% { transform: translateY(-50%); }
+          100% { transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── TypingText ────────────────────────────────────────────────────────────
 // Multi-word cycle: type forward → pause → delete → next word, with a
 // blinking cursor. Mirrors the code component's behaviour at panel-tile size.

@@ -33,7 +33,7 @@ function formatPresetLabel(name: string): string {
   }
 
   // Strip common prefixes
-  for (const prefix of ['color-', 'typo-', 'space-', 'spacing-', 'margin-', 'radius-', 'shadow-', 'border-', 'dp-spacing-', 'dp-radius-', 'dp-color-']) {
+  for (const prefix of ['color-', 'typo-', 'space-', 'spacing-', 'margin-', 'radius-', 'shadow-', 'border-', 'dp-spacing-', 'dp-radius-', 'dp-color-', 'dp-typography-', 'dp-border-', 'dp-shadow-']) {
     if (cleanName.startsWith(prefix)) {
       cleanName = cleanName.slice(prefix.length);
       break;

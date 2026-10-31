@@ -4,6 +4,7 @@ import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { updateNodeInCode } from '@/code/generation/generator-crud';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { validateStylesNotForbiddenAuto } from './styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -119,6 +120,8 @@ export const layoutSetOperation: Operation<
     if (input.bottom !== undefined) styleUpdates.bottom = input.bottom;
     if (input.zIndex !== undefined) styleUpdates.zIndex = String(input.zIndex);
     if (input.overflow !== undefined) styleUpdates.overflow = input.overflow;
+
+    validateStylesNotForbiddenAuto(styleUpdates);
 
     const nextCode = updateNodeInCode(code, input.nodeId, styleUpdates);
 

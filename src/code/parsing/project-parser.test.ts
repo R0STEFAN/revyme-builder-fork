@@ -1175,6 +1175,46 @@ export default withResponsiveProps(Parent);
     // viewport falls back to base styles (with variant-1 already baked in).
     expect(innerRoot!.motionVariants).toEqual({});
   });
+
+  it('resolves inner element attrConditional (e.g. color ternary) against the outer instance variant', () => {
+    const BUTTON_TSX = `
+import React from 'react';
+import CustomText from '@/components/CustomText';
+export const variantConfig = [
+  { name: 'default', label: 'Default', isPrimary: true },
+  { name: 'secondary', label: 'Secondary' },
+];
+export default function Button({ initialVariant = 'default' }) {
+  return (
+    <div data-id="btn-root">
+      <CustomText data-id="btn-text" color={initialVariant === 'secondary' ? '#ffffff' : '#000000'} />
+    </div>
+  );
+}
+`;
+    const PAGE_TSX = `
+import React from 'react';
+import Button from '@/components/Button';
+export default function Page() {
+  return (
+    <div data-id="root">
+      <Button data-id="btn-default" initialVariant="default" />
+      <Button data-id="btn-secondary" initialVariant="secondary" />
+    </div>
+  );
+}
+`;
+    const fs = new InMemoryProjectFS(new Map([
+      ['app/page.tsx', PAGE_TSX],
+      ['components/Button.tsx', BUTTON_TSX],
+      ['components/CustomText.tsx', 'export default function CustomText(props) { return <span {...props} />; }'],
+    ]));
+    const nodes = parseProjectFile('app/page.tsx', fs);
+    const defText = nodes.get('btn-default:btn-text');
+    const secText = nodes.get('btn-secondary:btn-text');
+    expect(defText?.attrs?.color).toBe('#000000');
+    expect(secText?.attrs?.color).toBe('#ffffff');
+  });
 });
 
 // Hoisted-variable forwarding — the canvas has to resolve the chain end-to-end

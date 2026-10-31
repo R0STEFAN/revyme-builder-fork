@@ -45,6 +45,7 @@ type DimUnit =
   | 'px'
   | '%'
   | 'auto'
+  | 'min'
   | 'rem'
   | 'em'
   | 'vw'
@@ -58,16 +59,20 @@ type DimUnit =
   | 'fill';
 
 function parseValue(raw: string): { num: number; unit: DimUnit } {
-  // The "auto" unit (shown as Fit) maps from the CSS Fit values — `min-content`
-  // (current), legacy `auto`, and `fit-content`/`max-content`.
-  if (!raw || isFitSize(raw)) return { num: 0, unit: 'auto' };
+  // 'min-content' maps to the explicit "min" unit selector.
+  // The "auto" unit (shown as Fit) maps from CSS Fit values — `fit-content`
+  // (current), legacy `auto`, and `max-content`.
+  if (!raw) return { num: 0, unit: 'auto' };
+  if (raw === 'min-content') return { num: 0, unit: 'min' };
+  if (isFitSize(raw)) return { num: 0, unit: 'auto' };
   const match = raw.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
   if (match) return { num: parseFloat(match[1]), unit: (match[2]?.toLowerCase() || 'px') as DimUnit };
   return { num: 0, unit: 'auto' };
 }
 
 function formatValue(num: number, unit: DimUnit): string {
-  if (unit === 'auto') return FIT_SIZE; // "Fit" → min-content (NOT auto — see constants)
+  if (unit === 'auto') return FIT_SIZE; // "Fit" → fit-content
+  if (unit === 'min') return 'min-content'; // "min" → min-content
   if (unit === 'fill') return ''; // fill is handled via flex property, not width/height
   return `${num}${unit}`;
 }
@@ -99,6 +104,7 @@ const UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'lvh', label: 'lvh' },
   { value: 'lvw', label: 'lvw' },
   { value: 'auto', label: 'fit' },
+  { value: 'min', label: 'min' },
 ];
 
 // ─── Dimension Row ──────────────────────────────────────────────────────────
@@ -155,13 +161,14 @@ export function DimensionRow({ label, property, value, onChange, onChangeLive, o
   const parsed = parseValue(value);
   const activeUnit = currentUnit ?? parsed.unit;
   const isAuto = activeUnit === 'auto';
+  const isMin = activeUnit === 'min';
   const isFill = activeUnit === 'fill';
   // Main-axis fill carries an `fr` multiplier; a cross-axis fill (stretch) has none.
   const isFillMultiplier = isFill && !fillCross;
-  // Rows whose number is the MEASURED size, not an authored one: Fit and cross-axis Fill.
-  const showsMeasured = isAuto || (isFill && !!fillCross);
+  // Rows whose number is the MEASURED size, not an authored one: Fit, Min and cross-axis Fill.
+  const showsMeasured = isAuto || isMin || (isFill && !!fillCross);
 
-  // Display value: computed size when auto/disabled/cross-fill, multiplier when main-axis fill,
+  // Display value: computed size when auto/min/disabled/cross-fill, multiplier when main-axis fill,
   // otherwise actual value
   const displayValue = disabled
     ? String(Math.round(computedSize) || 0)
@@ -181,6 +188,13 @@ export function DimensionRow({ label, property, value, onChange, onChangeLive, o
       const autoOpt = unitOptions.find(o => !o.disabled && (o.value === 'auto' || o.value === 'fit'));
       if (autoOpt) {
         onUnitChange(activeUnit, autoOpt.value as DimUnit);
+        return;
+      }
+    }
+    if (lower === 'min' || lower === 'min-content') {
+      const minOpt = unitOptions.find(o => !o.disabled && (o.value === 'min' || o.value === 'min-content'));
+      if (minOpt) {
+        onUnitChange(activeUnit, minOpt.value as DimUnit);
         return;
       }
     }
@@ -213,6 +227,10 @@ export function DimensionRow({ label, property, value, onChange, onChangeLive, o
 
           if (targetUnit === 'auto') {
             onUnitChange(activeUnit, 'auto');
+            return;
+          }
+          if (targetUnit === 'min') {
+            onUnitChange(activeUnit, 'min');
             return;
           }
           if (targetUnit === 'fill') {
@@ -904,7 +922,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // (Fill / Fit Content greyed). auto/vw/vh/fill are disabled.
     if (isFitSvgWrapper) return UNIT_OPTIONS.map(o => o.value === 'px' || o.value === '%' ? o : { ...o, disabled: true });
     if (isTopLevel) {
-      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || o.value === 'auto' ? o : { ...o, disabled: true }));
+      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || o.value === 'auto' || o.value === 'min' ? o : { ...o, disabled: true }));
     }
     if (!widthCanFill) return disableAutoForCode(UNIT_OPTIONS);
     return disableAutoForCode([...UNIT_OPTIONS, { value: 'fill', label: 'fill' }]);
@@ -920,7 +938,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
         .map(o => VECTOR_SET_DISABLED_UNITS.has(o.value) ? { ...o, disabled: true } : o);
     }
     if (isTopLevel) {
-      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || o.value === 'auto' ? o : { ...o, disabled: true }));
+      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || o.value === 'auto' || o.value === 'min' ? o : { ...o, disabled: true }));
     }
     if (!heightCanFill) return disableAutoForCode(UNIT_OPTIONS);
     return disableAutoForCode([...UNIT_OPTIONS, { value: 'fill', label: 'fill' }]);
@@ -930,7 +948,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
   // On a top-level node (a design-component variant root or a canvas node) a '%'
   // has no sizing parent to resolve against, so it's disabled there.
   const minMaxUnitOptions = useMemo(() => {
-    const base = UNIT_OPTIONS.filter(o => o.value !== 'auto');
+    const base = UNIT_OPTIONS.filter(o => o.value !== 'auto' && o.value !== 'min');
     if (isTopLevel) return base.map(o => o.value === 'px' ? o : { ...o, disabled: true });
     return base;
   }, [isTopLevel]);
@@ -1120,7 +1138,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // lockedDimensionWrite).
     if (aspectRatioNum && !inset.horizontalInset) {
       const trimmed = (v || '').trim().toLowerCase();
-      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill') {
+      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill' || trimmed === 'min') {
         // Auto/fill paths flow through the unit handler instead — fall
         // through to the normal write here to avoid double-handling.
         onUpdate('width', v);
@@ -1266,9 +1284,18 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
       }
       maybeInjectLayoutForAuto();
       freezeChildrenForAuto('width');
-      // "Fit" → min-content (sizes to content on flex/layout)
+      // "Fit" → fit-content (sizes to content on flex/layout)
       if (unfill) onUpdateMultiple({ width: FIT_SIZE, ...unfill });
       else onUpdate('width', FIT_SIZE);
+      trace.action('size:unit-change', { label: 'W', from: fromUnit, to: toUnit, value: 0, unfill: !!unfill });
+      return;
+    }
+    if (toUnit === 'min') {
+      const unfill = exitFillFlexPatch(widthIsMainAxis, flexVal);
+      maybeInjectLayoutForAuto();
+      freezeChildrenForAuto('width');
+      if (unfill) onUpdateMultiple({ width: 'min-content', ...unfill });
+      else onUpdate('width', 'min-content');
       trace.action('size:unit-change', { label: 'W', from: fromUnit, to: toUnit, value: 0, unfill: !!unfill });
       return;
     }
@@ -1323,7 +1350,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     //     old builder's delta-based math.
     if (aspectRatioNum && !inset.verticalInset) {
       const trimmed = (v || '').trim().toLowerCase();
-      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill') {
+      if (trimmed === '' || trimmed === 'auto' || trimmed === 'fit' || trimmed === 'fill' || trimmed === 'min') {
         onUpdate('height', v);
         return;
       }
@@ -1417,9 +1444,18 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
       }
       maybeInjectLayoutForAuto();
       freezeChildrenForAuto('height');
-      // "Fit" → min-content
+      // "Fit" → fit-content
       if (unfill) onUpdateMultiple({ height: FIT_SIZE, ...unfill });
       else onUpdate('height', FIT_SIZE);
+      trace.action('size:unit-change', { label: 'H', from: fromUnit, to: toUnit, value: 0, unfill: !!unfill });
+      return;
+    }
+    if (toUnit === 'min') {
+      const unfill = exitFillFlexPatch(heightIsMainAxis, flexVal);
+      maybeInjectLayoutForAuto();
+      freezeChildrenForAuto('height');
+      if (unfill) onUpdateMultiple({ height: 'min-content', ...unfill });
+      else onUpdate('height', 'min-content');
       trace.action('size:unit-change', { label: 'H', from: fromUnit, to: toUnit, value: 0, unfill: !!unfill });
       return;
     }

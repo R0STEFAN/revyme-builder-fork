@@ -599,6 +599,7 @@ const CODE_SNIPPET_TOOLBAR_ITEMS: Record<string, { tag: string; width: number; h
   'cs-hangingCurved':   { tag: 'HangingCurved',   width: 800, height: 200 },
   'cs-magneticText':    { tag: 'MagneticText',    width: 600, height: 120 },
   'cs-textPressure':    { tag: 'TextPressure',    width: 600, height: 160 },
+  'cs-rollingText':     { tag: 'RollingText',     width: 180, height: 40 },
   'cs-gradientText':    { tag: 'GradientText',    width: 600, height: 160 },
   // Port batch 2 — typing-cycle, 3D cylinder, video-masked text,
   // count-up number. `cs-counter` reuses the existing AnimatedCounter
