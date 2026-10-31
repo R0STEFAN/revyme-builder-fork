@@ -76,7 +76,7 @@ function CustomCursor(props: CustomCursorProps) {
         scale: scale,
         pointerEvents: 'none',
         zIndex: 99999,
-        transition: 'transform 0.08s ease-out, scale 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.2s ease',
+        transition: 'transform 0.08s ease-out, scale 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease',
         willChange: 'transform, scale',
         ...props.style,
       }}
