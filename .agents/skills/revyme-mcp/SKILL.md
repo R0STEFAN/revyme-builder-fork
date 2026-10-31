@@ -119,6 +119,25 @@ dot-name such as `pages.list`.
 - `codeFiles.submit` expects `{ path, code }` and validates source code against the Oracle before
   committing. Code Components authored via `codeFiles.submit` must NOT use `className` attributes
   (`CLASSNAME_STYLING`); use inline styles or scoped `<style>` blocks targeting `[data-id="..."]`.
+  **CRITICAL:** `codeFiles.submit` is strictly restricted to custom Code Components (components with
+  `@controls`) and non-canvas project assets/configs. It is FORBIDDEN for authoring page layouts or standard
+  UI sections. Use `fragments.insert` instead.
+
+### 2.1 Semantic Section Composition (`fragments.insert`)
+**The Canonical Operation for Building UI Sections & Layouts.**
+- **Signature:** `fragments.insert({ parentId, fragment, targetFile?, insertIndex? })`
+- **Behavior:**
+  1. Accepts a static or semi-static JSX fragment authored in natural syntax (HTML elements `<section>`, `<div>`, `<header>`, `<h2>`, `<p>`, `<a>`, `<button>` alongside Design Components like `<Button>`, `<Card>`).
+  2. Parses JSX with Babel, assigning deterministic, conflict-free `data-id`s to all elements without manual tracking.
+  3. Preserves inline styles, CSS custom properties / design tokens (`var(--bg-canvas)`, `var(--ink-primary)`), and automatically enforces Revyme positioning invariants (`position: 'relative'`, `data-pinned="true"` on absolute layers).
+  4. Resolves PascalCase tags as Design Components: checks `components/<Name>.tsx`, injects `import Name from '@/components/Name';` into the page automatically, and mounts the instance into the canvas tree.
+  5. Inserts native canvas nodes into ProjectFS, guaranteeing full visual editability in the canvas iframe.
+
+- **Design System as Single Source of Truth (SSOT) Workflow:**
+  1. **Phase 1: Design Tokens & Presets:** Define design variables with `tokens.set`, typography with `typography.set`, and style presets with `presets.set`.
+  2. **Phase 2: Master Design Components:** Author atomic, interactive UI masters (Buttons, Cards, Modals, Navbar) via `components.create` with variants and typed props.
+  3. **Phase 3: Compose Sections with `fragments.insert`:** Write semantic JSX sections referencing HTML tags, CSS tokens, and Design Components in a single tool call per section.
+  4. **Phase 4 (Only if needed): Bespoke Code Components:** For complex algorithmic or third-party visual canvas widgets (e.g. Three.js canvas, specialized WebGL canvas), author a Code Component with `@controls` via `codeFiles.submit`. Never use Code Components for standard text, layouts, or cards.
 - **CRITICAL: Never read raw files from disk paths like `data/builds/...`**: Always read project files
   through `codeFiles.read` via MCP CLI. Files in `data/builds/` contain internal build/export artifacts
   (such as auto-injected responsive `srcSet` stubs) and stale SSR caches that will corrupt the project

@@ -31,6 +31,7 @@ export * from './operations/overlays';
 export * from './operations/links';
 export * from './operations/catalog';
 export * from './operations/sections';
+export * from './operations/fragments';
 export * from './operations/slots';
 export * from './operations/assets';
 export * from './operations/media';
