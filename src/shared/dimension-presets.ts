@@ -259,12 +259,12 @@ export function buildDimensionPresetApplyPlan(
   const widths = [...new Set(Object.values(viewportWidths).filter((width) => Number.isFinite(width) && width > 0))]
     .sort((left, right) => right - left)
     .slice(1);
-  const tiers: DimensionPresetTier[] = ['md', 'sm'];
-
   return {
     baseStyles: { [property]: `var(--${baseName})` },
-    responsive: widths.slice(0, tiers.length).map((maxWidth, index) => {
-      const tierName = dimensionPresetTokenName(group.category, group.name, tiers[index]);
+    responsive: widths.map((maxWidth, index) => {
+      const isSmallest = index === widths.length - 1 && widths.length > 1;
+      const tier: DimensionPresetTier = isSmallest ? 'sm' : 'md';
+      const tierName = dimensionPresetTokenName(group.category, group.name, tier);
       return {
         maxWidth,
         styles: { [property]: `var(--${tierName}, var(--${baseName}))` },

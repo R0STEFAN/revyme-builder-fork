@@ -220,7 +220,7 @@ import { removeDanglingConnectionsInCode, healDriftedConnectionHandlersInCode } 
 import { setSketchAnimInCode, removeSketchAnimInCode } from '../sketch/sketch-anim-gen';
 import { projectFS, projectVersionAtom, installBuiltInCodeComponent } from '../project/project-fs';
 import { ensureDefaultImportInCode } from '../generation/cursor-gen';
-import { clearCanvasStyles } from '@/canvas/node-ops';
+import { clearCanvasStyles, refreshCanvasTokens } from '@/canvas/node-ops';
 import type { PresetToken } from '@/shared/types';
 
 function ensureComponentImportsForNode(code: string, node: any): string {
@@ -906,7 +906,10 @@ const GLOBALS_CSS_VALUE_TYPES = new Set<Mutation['type']>(['updatePresetToken', 
 let _globalsCssBumpTimer: ReturnType<typeof setTimeout> | null = null;
 
 function bumpVersionForGlobalsCssMutations(mutations: Mutation[]): void {
-  const bump = () => getDefaultStore().set(projectVersionAtom, (v) => v + 1);
+  const bump = () => {
+    getDefaultStore().set(projectVersionAtom, (v) => v + 1);
+    refreshCanvasTokens();
+  };
   if (mutations.some((m) => GLOBALS_CSS_ADD_REMOVE_TYPES.has(m.type))) {
     if (_globalsCssBumpTimer !== null) { clearTimeout(_globalsCssBumpTimer); _globalsCssBumpTimer = null; }
     trace.action('mutation-queue:globals-css-bump', { immediate: true });

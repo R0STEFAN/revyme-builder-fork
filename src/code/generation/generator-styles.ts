@@ -323,7 +323,7 @@ export function updateContainerQueryStyle(
   trace.fn('generator.updateContainerQueryStyle', { nodeId, maxWidth, styles });
 
   // Parse existing CSS rules using shared parser (no duplication with container-query-store)
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
 
   const lang = blockMatch ? extractLangRules(blockMatch[2]) : { css: '', topLevel: [], banded: new Map<number, string[]>() };
@@ -422,7 +422,44 @@ export function updateContainerQueryStyle(
       const trimmedBefore = before.replace(/\n[ \t]*$/, '\n');
       return trimmedBefore + after.replace(/^\s*\n/, '');
     }
-    return code.slice(0, blockMatch.index!) + prefix + newCss + suffix + code.slice(blockMatch.index! + fullMatch.length);
+    const updated = code.slice(0, blockMatch.index!) + prefix + newCss + suffix + code.slice(blockMatch.index! + fullMatch.length);
+    // If other style blocks also contain rules for this nodeId, clean them so they don't override the primary block
+    const secondaryStyleRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/g;
+    let matchCount = 0;
+    return updated.replace(secondaryStyleRegex, (secFull, secPre, secBody, secSuf) => {
+      matchCount++;
+      if (matchCount === 1) return secFull; // primary block, keep as updated
+      if (!secBody.includes(`[data-id="${nodeId}"]`)) return secFull;
+      const secLang = extractLangRules(secBody);
+      const secRules = parseContainerRules(secLang.css);
+      let removedFromSec = 0;
+      for (const [, selectorMap] of secRules) {
+        if (selectorMap.delete(nodeId)) removedFromSec++;
+      }
+      if (removedFromSec === 0) return secFull;
+      if (secRules.size === 0 && secLang.topLevel.length === 0 && secLang.banded.size === 0) return '';
+      const vpWidths = getSortedBreakpointWidths();
+      let resCss = '\n';
+      for (const rule of secLang.topLevel) resCss += `    ${rule}\n`;
+      const sWidths = [...secRules.keys()].sort((a, b) => b - a);
+      for (const width of sWidths) {
+        const selectors = secRules.get(width) ?? new Map<string, Map<string, string>>();
+        if (selectors.size === 0) continue;
+        const minW = getMinWidth(vpWidths, width);
+        const query = minW
+          ? `@media (max-width: ${width}px) and (min-width: ${minW + 0.02}px)`
+          : `@media (max-width: ${width}px)`;
+        resCss += `    ${query} {\n`;
+        for (const [id, props] of selectors) {
+          if (props.size === 0) continue;
+          const decls = [...props.entries()].map(([k, v]) => `${k}: ${v} !important;`).join(' ');
+          resCss += `      [data-id="${id}"] { ${decls} }\n`;
+        }
+        resCss += `    }\n`;
+      }
+      resCss += '  ';
+      return secPre + resCss + secSuf;
+    });
   } else {
     // No existing block, and there's nothing to write — leave the file alone.
     if (rules.size === 0 && lang.topLevel.length === 0 && lang.banded.size === 0) return code;
@@ -471,7 +508,7 @@ export const POSITIONAL_STYLE_KEYS = ['position', 'left', 'top', 'right', 'botto
  * declaration is still valid and is kept.
  */
 export function stripPositionalContainerStyles(code: string, nodeId: string): string {
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -665,58 +702,68 @@ export function stripBandedOrderForNode(code: string, nodeId: string): string {
 export function clearContainerStylesForNode(code: string, nodeId: string, includeScopedChildren = false): string {
   trace.fn('generator.clearContainerStylesForNode', { nodeId, includeScopedChildren });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
-  const blockMatch = styleBlockRegex.exec(code);
-  if (!blockMatch) return code;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/g;
+  let anyRemoved = false;
+  let totalCleared = 0;
 
-  // Same :lang preservation as updateContainerQueryStyle — this serializer
-  // would otherwise eat every locale rule in the block.
-  const lang = extractLangRules(blockMatch[2]);
-  const rules = parseContainerRules(lang.css);
+  const nextCode = code.replace(styleBlockRegex, (fullMatch, prefix, cssBody, suffix) => {
+    // Same :lang preservation as updateContainerQueryStyle — this serializer
+    // would otherwise eat every locale rule in the block.
+    const lang = extractLangRules(cssBody);
+    const rules = parseContainerRules(lang.css);
 
-  // Remove this node from every breakpoint
-  const scopePrefix = `${nodeId}:`;
-  let removed = 0;
-  for (const [, selectorMap] of rules) {
-    if (selectorMap.delete(nodeId)) removed++;
-    if (!includeScopedChildren) continue;
-    for (const id of [...selectorMap.keys()]) {
-      if (id.startsWith(scopePrefix) && selectorMap.delete(id)) removed++;
+    // Remove this node from every breakpoint
+    const scopePrefix = `${nodeId}:`;
+    let removed = 0;
+    for (const [, selectorMap] of rules) {
+      if (selectorMap.delete(nodeId)) removed++;
+      if (!includeScopedChildren) continue;
+      for (const id of [...selectorMap.keys()]) {
+        if (id.startsWith(scopePrefix) && selectorMap.delete(id)) removed++;
+      }
     }
-  }
 
-  if (removed === 0) return code; // nothing to clear
+    if (removed === 0) return fullMatch;
+    anyRemoved = true;
+    totalCleared += removed;
 
-  trace.action('generator.clearContainerStylesForNode:cleared', { nodeId, breakpointsCleared: removed });
-
-  // Re-serialize
-  const vpWidths = getSortedBreakpointWidths();
-
-  let newCss = '\n';
-  // Global :lang rules FIRST (banded :lang shares specificity; later wins).
-  for (const rule of lang.topLevel) newCss += `    ${rule}\n`;
-  const sortedWidths = [...rules.keys()].sort((a, b) => b - a);
-  for (const width of sortedWidths) {
-    const selectors = rules.get(width) ?? new Map<string, Map<string, string>>();
-    const langRules = lang.banded.get(width) ?? [];
-    if (selectors.size === 0 && langRules.length === 0) continue;
-    const minW = getMinWidth(vpWidths, width);
-    const query = minW
-      ? `@media (max-width: ${width}px) and (min-width: ${minW + 0.02}px)`
-      : `@media (max-width: ${width}px)`;
-    newCss += `    ${query} {\n`;
-    for (const [id, props] of selectors) {
-      if (props.size === 0) continue;
-      const decls = [...props.entries()].map(([k, v]) => `${k}: ${v} !important;`).join(' ');
-      newCss += `      [data-id="${id}"] { ${decls} }\n`;
+    if (rules.size === 0 && lang.topLevel.length === 0 && lang.banded.size === 0) {
+      // Entire block is now empty — drop the block
+      return '';
     }
-    for (const rule of langRules) newCss += `      ${rule}\n`;
-    newCss += `    }\n`;
-  }
-  newCss += '  ';
 
-  const [fullMatch, prefix, , suffix] = blockMatch;
-  return code.slice(0, blockMatch.index!) + prefix + newCss + suffix + code.slice(blockMatch.index! + fullMatch.length);
+    // Re-serialize
+    const vpWidths = getSortedBreakpointWidths();
+
+    let newCss = '\n';
+    // Global :lang rules FIRST (banded :lang shares specificity; later wins).
+    for (const rule of lang.topLevel) newCss += `    ${rule}\n`;
+    const sortedWidths = [...rules.keys()].sort((a, b) => b - a);
+    for (const width of sortedWidths) {
+      const selectors = rules.get(width) ?? new Map<string, Map<string, string>>();
+      const langRules = lang.banded.get(width) ?? [];
+      if (selectors.size === 0 && langRules.length === 0) continue;
+      const minW = getMinWidth(vpWidths, width);
+      const query = minW
+        ? `@media (max-width: ${width}px) and (min-width: ${minW + 0.02}px)`
+        : `@media (max-width: ${width}px)`;
+      newCss += `    ${query} {\n`;
+      for (const [id, props] of selectors) {
+        if (props.size === 0) continue;
+        const decls = [...props.entries()].map(([k, v]) => `${k}: ${v} !important;`).join(' ');
+        newCss += `      [data-id="${id}"] { ${decls} }\n`;
+      }
+      for (const rule of langRules) newCss += `      ${rule}\n`;
+      newCss += `    }\n`;
+    }
+    newCss += '  ';
+
+    return prefix + newCss + suffix;
+  });
+
+  if (!anyRemoved) return code;
+  trace.action('generator.clearContainerStylesForNode:cleared', { nodeId, breakpointsCleared: totalCleared });
+  return nextCode;
 }
 
 /**
@@ -758,7 +805,7 @@ export function clearContainerStylesInSubtree(code: string, nodeId: string): str
 export function clearContainerStylesForWidth(code: string, vpWidth: number): string {
   trace.fn('generator.clearContainerStylesForWidth', { vpWidth });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -826,7 +873,7 @@ export function rewriteContainerBreakpoints(
   // fallback for pages whose @canvas block is itself missing.
   code = normalizeResponsiveBandKeys(code);
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) { trace.action('rewriteBreakpoints:no-style-block'); return code; }
 
@@ -941,7 +988,7 @@ export function normalizeResponsiveBandKeys(code: string, opts?: { force?: boole
   if (nonPrimary.length === 0) return code;
   const vpSet = new Set(nonPrimary);
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -1233,7 +1280,7 @@ export function copyContainerRulesToNewWidth(
   trace.fn('generator.copyContainerRulesToNewWidth', { sourceWidth, newWidth });
   if (sourceWidth === newWidth) return code;
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -1328,7 +1375,7 @@ export function mergeDetachedStyleCSSIntoPage(pageCode: string, css: string): st
   if (!trimmed) return pageCode;
   trace.action('generator.mergeDetachedStyleCSSIntoPage', { cssLen: trimmed.length });
   const chunk = `\n    ${trimmed}\n  `;
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(pageCode);
   if (blockMatch) {
     const [fullMatch, prefix, body, suffix] = blockMatch;
@@ -1352,7 +1399,7 @@ export function mergeDetachedStyleCSSIntoPage(pageCode: string, css: string): st
  * master and the page code with those rules removed.
  */
 export function moveStyleRulesForIds(pageCode: string, isMovedId: (id: string) => boolean): { css: string; pageCode: string } {
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(pageCode);
   if (!blockMatch) return { css: '', pageCode };
   const body = blockMatch[2];
@@ -1409,7 +1456,7 @@ function borderOverlayVariantRuleRegex(nodeId: string, variant: string): RegExp 
 export function updateBorderOverlayStyle(code: string, nodeId: string, afterCSS: string, variant?: string | null): string {
   trace.fn('generator.updateBorderOverlayStyle', { nodeId, cssLen: afterCSS.length, variant: variant ?? null });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   // Target `data-id` — the attribute present in the SOURCE/preview/live output (the published runtime
   // never sets `data-node-id`, that's an editor-only stamp, so a `[data-node-id]::after` rule renders
@@ -1447,7 +1494,7 @@ export function updateBorderOverlayStyle(code: string, nodeId: string, afterCSS:
 export function removeBorderOverlayStyle(code: string, nodeId: string, variant?: string | null): string {
   trace.fn('generator.removeBorderOverlayStyle', { nodeId, variant: variant ?? null });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -1475,7 +1522,7 @@ export function removeBorderOverlayStyle(code: string, nodeId: string, variant?:
 export function updateHoverStyleInCode(code: string, nodeId: string, styles: Record<string, string>): string {
   trace.fn('generator.updateHoverStyleInCode', { nodeId, styleCount: Object.keys(styles).length });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   const selector = `[data-id="${nodeId}"]:hover`;
   const selectorEsc = escapeRegExp(selector);
@@ -1522,7 +1569,7 @@ export function updateHoverStyleInCode(code: string, nodeId: string, styles: Rec
 export function removeScopedChildRulesInCode(code: string, nodeId: string): string {
   trace.fn('generator.removeScopedChildRulesInCode', { nodeId });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -1546,7 +1593,7 @@ export function removeScopedChildRulesInCode(code: string, nodeId: string): stri
 export function removeHoverStyleInCode(code: string, nodeId: string): string {
   trace.fn('generator.removeHoverStyleInCode', { nodeId });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 
@@ -1587,7 +1634,7 @@ export function updatePseudoStyleInCode(
 ): string {
   trace.fn('generator.updatePseudoStyleInCode', { nodeId, pseudo, styleCount: Object.keys(styles).length });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   const selector = pseudoSelector(nodeId, pseudo);
   const selectorEsc = escapeRegExp(selector);
@@ -1634,7 +1681,7 @@ export function updateSelectCaretRuleInCode(code: string, nodeId: string, cssBod
   trace.fn('generator.updateSelectCaretRuleInCode', { nodeId, remove: cssBody == null });
   if (cssBody == null) return removeSelectCaretRuleInCode(code, nodeId);
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   const selector = `select[data-id="${nodeId}"]`;
   const selectorEsc = escapeRegExp(selector);
@@ -1656,7 +1703,7 @@ export function updateSelectCaretRuleInCode(code: string, nodeId: string, cssBod
 
 /** Remove the select caret rule for a node from the <style> block. */
 export function removeSelectCaretRuleInCode(code: string, nodeId: string): string {
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
   const selectorEsc = escapeRegExp(`select[data-id="${nodeId}"]`);
@@ -1672,7 +1719,7 @@ export function removeSelectCaretRuleInCode(code: string, nodeId: string): strin
 export function removePseudoStyleInCode(code: string, nodeId: string, pseudo: PseudoRuleKind): string {
   trace.fn('generator.removePseudoStyleInCode', { nodeId, pseudo });
 
-  const styleBlockRegex = /(<style>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
+  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
   const blockMatch = styleBlockRegex.exec(code);
   if (!blockMatch) return code;
 

@@ -4044,15 +4044,21 @@ export function removeNodeInCode(code: string, nodeId: string): string {
     openStart = code.lastIndexOf('<', idIdx);
     if (openStart === -1) { searchFrom = idIdx + idPattern.length; continue; }
 
-    // Extract tag name — valid JSX tags start with a letter after <
-    // Handles member expressions like motion.div, motion.p
-    const tagMatch = code.slice(openStart + 1, idIdx).match(/^(\w+(?:\.\w+)?)/);
-    if (tagMatch && tagMatch[1] !== 'style') {
-      tagName = tagMatch[1];
-      break; // Found a real JSX element, not a CSS selector
+    const between = code.slice(openStart, idIdx);
+    if (between.includes('>')) {
+      // idIdx is inside children/body (e.g. CSS text inside <style>), skip
+      searchFrom = idIdx + idPattern.length;
+      continue;
     }
 
-    // This occurrence is inside CSS — skip and look for the next one
+    // Extract tag name — valid JSX tags start with a letter after <
+    // Handles member expressions like motion.div, motion.p, and tags like style
+    const tagMatch = between.slice(1).match(/^(\w+(?:\.\w+)?)/);
+    if (tagMatch) {
+      tagName = tagMatch[1];
+      break; // Found a real JSX element
+    }
+
     searchFrom = idIdx + idPattern.length;
   }
 

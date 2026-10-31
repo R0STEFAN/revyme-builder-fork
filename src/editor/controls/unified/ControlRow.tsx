@@ -2,12 +2,16 @@
 // Shows UsedByRow if bound by animation, preset pill if preset ref, or normal control.
 
 import type { ReactNode } from 'react';
+import { useAtomValue } from 'jotai';
 import ControlLabel from '../ControlLabel';
 import { useControlContext } from './useControlContext';
 import { UsedByRow } from './UsedByRow';
 import { VariableBoundPill } from '../VariableBoundPill';
 import { useHoistMenuItem } from '../hoist-context';
 import { useLabelOverride } from '../label-override-context';
+import { isReplicaViewportAtom } from '@/code/stores/viewport-store';
+import { presetTokensAtom } from '@/code/stores/preset-store';
+import { resolveTokenValue } from '@/code/project/preset-ops';
 
 interface ControlRowProps {
   label: string;
@@ -40,7 +44,22 @@ function formatPresetLabel(name: string): string {
 
 /** Wraps atom content: label on left, control on right. Shows UsedByRow if bound, preset pill if preset ref. */
 export function ControlRow({ label, children, plain }: ControlRowProps) {
-  const { property, binding, mode, onChange, hasVariable, hideLabel } = useControlContext();
+  const { property, binding, mode, onChange, value, hasVariable, hideLabel } = useControlContext();
+  const isReplica = useAtomValue(isReplicaViewportAtom);
+  const presetTokens = useAtomValue(presetTokensAtom);
+
+  const handleRemovePreset = () => {
+    if (isReplica) {
+      // On a replica viewport, if this element is inheriting or has a preset,
+      // setting '' only clears the replica override which causes it to fall back to the base preset.
+      // To decouple this replica from the preset so it can be edited locally, set the override to
+      // the resolved concrete value.
+      const resolved = resolveTokenValue(value ?? '', presetTokens) || value || '0px';
+      onChange(resolved);
+    } else {
+      onChange('');
+    }
+  };
 
   // hideLabel (variableDefault mounts inside popups/modals): render the
   // control FULL-WIDTH — keeping the two-column grid left a 110px empty
@@ -97,7 +116,7 @@ export function ControlRow({ label, children, plain }: ControlRowProps) {
       ) : showPresetPill ? (
         <button
           className="w-full h-8 flex items-center justify-between px-2 bg-[var(--accent)] cut-corners text-xs font-medium text-[var(--accent-fg)] cursor-pointer transition-colors hover:opacity-90 truncate"
-          onClick={() => onChange('')}
+          onClick={handleRemovePreset}
           title={`Preset: ${formatPresetLabel(binding.presetRef!)} (${binding.presetRef}) — click to remove`}
         >
           <span className="truncate">{formatPresetLabel(binding.presetRef!)}</span>

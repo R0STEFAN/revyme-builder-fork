@@ -1,5 +1,35 @@
 # MCP v2 issue log
 
+## 2026-10-31 — Preset removal freeze on replica viewports, Card Padding responsiveness across breakpoints, and real-time canvas token refresh
+
+**Status:** fixed, verified via `src/shared/dimension-presets.test.ts` (12 tests), `src/editor/controls/ControlLabel.test.tsx` (10 tests), `src/code/generation/generator-styles.test.ts` (131 tests), `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8 tests), `npx tsc --noEmit` (0 errors), and live execution on project `proj-1793453710566-zr1d8a`, and committed.
+
+**Symptom:**
+1. Removing a preset on tablet or mobile viewports via the `×` button on the preset pill glitched, froze, and failed to remove ("заглючило і тепер не видаляється, намертво забінджено").
+2. Applying the `Card padding` preset showed no visual differences on tablet or mobile viewports.
+3. Editing preset token values in real-time in the editor panel or via automation did not reflect immediately on the canvas iframe.
+4. When `nodes.remove` was called on `<style data-id="...">` blocks, the operation reported success but skipped removing the tag from code.
+
+**Cause:**
+1. `generator-crud.ts` had a guard `if (tagMatch && tagMatch[1] !== 'style')` that skipped `<style>` tags when removing nodes by `data-id`.
+2. When secondary `<style data-id="...">` tags remained in the document, `generator-styles.ts` only read/wrote to the primary `<style>` block. Older rules in secondary style blocks took precedence in the cascade and were re-parsed by `extractStyleCSS`, making presets reappear and freeze permanently.
+3. In `ControlRow.tsx`, clicking `×` on replica viewports called `onChange('')`. For an element inheriting the base desktop preset, clearing the replica override caused CSS to fall back to the desktop preset, so `binding.presetRef` immediately re-evaluated as truthy.
+4. In `globals.css`, `--space-card-padding` lacked `-md` and `-sm` responsive tokens, causing `var(--space-card-padding-md, var(--space-card-padding))` and `var(--space-card-padding-sm, var(--space-card-padding))` to evaluate to the desktop value (32px) on all viewports.
+5. In `dimension-presets.ts`, `buildDimensionPresetApplyPlan` used `.slice(0, 2)`, dropping the smallest breakpoint when 3+ non-desktop viewports were configured.
+6. In `mutation-queue.ts` and `style-handlers.ts`, token mutations debounced without calling `refreshCanvasTokens()`, and `setCanvasTokensCSS` returned early if `[data-canvas-styles]` was absent in the iframe.
+
+**Fix and regression guard:**
+1. In `src/code/generation/generator-crud.ts`, updated `removeNodeInCode` to use `between.includes('>')` to properly identify `<style data-id="...">` tags and allow their removal.
+2. In `src/code/generation/generator-styles.ts`, updated all 17 `styleBlockRegex` occurrences to match `<style\b[^>]*>` and updated `clearContainerStylesForNode` and `updateContainerQueryStyle` to clean secondary style blocks.
+3. In `src/editor/controls/unified/ControlRow.tsx`, updated preset removal on replica viewports to decouple to `resolveTokenValue(value, presetTokens)`, clearing the preset pill and allowing local editing without affecting desktop.
+4. In `src/shared/dimension-presets.ts`, updated `buildDimensionPresetApplyPlan` so all intermediate viewports receive `'md'` and the smallest receives `'sm'`.
+5. In `src/code/mutation/mutation-queue.ts` and `src/canvas-sandbox/sandbox/style-handlers.ts`, ensured token mutations trigger `refreshCanvasTokens()`, and ensured `[data-canvas-styles]` is created if missing.
+6. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+7. Cleaned zombie typography style blocks from `proj-1793453710566-zr1d8a` and applied responsive card padding presets (`--space-card-padding: 32px`, `--space-card-padding-md: 22px`, `--space-card-padding-sm: 12px`).
+
+**Verification:**
+`src/shared/dimension-presets.test.ts` (12/12 passed), `src/editor/controls/ControlLabel.test.tsx` (10/10 passed), `src/code/generation/generator-styles.test.ts` (131/131 passed), `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8/8 passed). `npx tsc --noEmit` passed with 0 errors. Verified on `proj-1793453710566-zr1d8a`.
+
 ## 2026-10-31 — Presets panel Spacing/Other sections, global preset binding, tooltip/pill parsing, and responsive mobile breakpoint
 
 **Status:** fixed, verified via `src/shared/css-utils.test.ts` (65 tests), `src/shared/dimension-presets.test.ts` (12 tests), `src/code/generation/preset-gen.test.ts` (26 tests), `src/editor/controls/control-menu-items.test.ts` (56 tests), `npx tsc --noEmit` (0 errors), and live execution on project `proj-1793453710566-zr1d8a`, and committed.

@@ -464,8 +464,12 @@ export function loadFontInIframe(fontUrl: string): void {
 
 export function setCanvasTokensCSS(tokensCSS: string): void {
     if (!contentRoot) return;
-    const styleEl = contentRoot.querySelector('[data-canvas-styles]') as HTMLStyleElement | null;
-    if (!styleEl) return;
+    let styleEl = contentRoot.querySelector('[data-canvas-styles]') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.setAttribute('data-canvas-styles', 'true');
+      contentRoot.prepend(styleEl);
+    }
     const current = styleEl.textContent || '';
     const startMarker = '/* canvas-tokens-start */';
     const endMarker = '/* canvas-tokens-end */';
