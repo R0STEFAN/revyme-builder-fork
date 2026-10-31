@@ -49,6 +49,14 @@ describe('parseStyleString', () => {
 });
 
 describe('htmlToJSX', () => {
+  it('escapes stray less-than symbols that are not HTML/JSX tags', () => {
+    expect(htmlToJSX('LATENCY: < 45ms P99 E2E')).toBe('LATENCY: &lt; 45ms P99 E2E');
+    expect(htmlToJSX('LATENCY: <45ms')).toBe('LATENCY: &lt;45ms');
+    expect(htmlToJSX('5 < 10')).toBe('5 &lt; 10');
+    expect(htmlToJSX('<span>hello</span>')).toBe('<span>hello</span>');
+    expect(htmlToJSX('<>fragment</>')).toBe('<>fragment</>');
+  });
+
   it('converts br tags to self-closing', () => {
     expect(htmlToJSX('hello<br>world')).toBe('hello<br />world');
     expect(htmlToJSX('hello<br/>world')).toBe('hello<br />world');

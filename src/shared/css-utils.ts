@@ -232,6 +232,8 @@ export function htmlToJSX(html: string): string {
     return html
       .replace(/<br\s*\/?>/g, '<br />')
       .replace(/<hr(\s[^>]*)?>/g, '<hr$1 />')
+      // Escape stray '<' not part of an HTML/JSX tag, entity, or fragment to prevent JSX parse errors
+      .replace(/<(?![a-zA-Z\/!?_>])/g, '&lt;')
       // Convert style="..." to style={{...}} wherever it appears in a tag (any attribute order)
       .replace(/(<\w+[^>]*?)\s+style="([^"]*)"([^>]*>)/g, (_full: string, before: string, styleStr: string, after: string) => {
         // Decode the entities the serializer escapes (a quoted font family comes

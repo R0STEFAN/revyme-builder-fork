@@ -1,5 +1,21 @@
 # MCP v2 issue log
 
+## 2026-10-31 — unescaped less-than in textContent crashed Babel JSX parser
+
+**Status:** fixed, verified via `src/shared/css-utils.test.ts` (64 tests) and `packages/cli/test/` (42 tests), and committed.
+
+**Symptom:**
+Calling `nodes.create` or setting textContent containing raw less-than symbols (e.g. `LATENCY: < 45ms P99 E2E`) resulted in `SYNTAX_ERROR: This experimental syntax requires enabling the parser plugin: "decimal"` during plan AST validation, rejecting the operation.
+
+**Cause:**
+`buildNodeJSX` in `src/code/generation/generator-crud.ts` routes node text through `htmlToJSX(node.textContent)`. In `src/shared/css-utils.ts`, `htmlToJSX` converted string style attributes and `<br>` tags, but left raw `<` characters intact. In JSX syntax, `<` followed by a space or digit is not a valid HTML/JSX tag and causes Babel parser syntax errors.
+
+**Fix and regression guard:**
+In `src/shared/css-utils.ts`, `htmlToJSX` now automatically escapes stray `<` characters that are not part of an HTML/JSX tag, entity, or fragment using the lookahead `/<(?![a-zA-Z\/!?_>])/g` to `&lt;`. Added unit test in `src/shared/css-utils.test.ts` covering expressions with less-than, numbers, spans, and fragments. Rebuilt CLI bundle and verified all test suites.
+
+**Verification:**
+`src/shared/css-utils.test.ts` passed (64/64 tests). `packages/cli/test/` passed (6 test files, 42/42 tests including `pack.test.ts`).
+
 ## 2026-10-31 — esbuild ESM bundle broke with duplicate createRequire declaration and CLI rejected positional JSON arguments
 
 **Status:** fixed, verified via `packages/cli/test/` (including `pack.test.ts`), and committed.
