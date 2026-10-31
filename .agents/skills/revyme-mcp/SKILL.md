@@ -9,6 +9,8 @@ description: >-
 
 This skill guides the AI agent on how to interact with the **Revyme Website Builder** running in the browser via its local **MCP Bridge Server**.
 
+> **Architecture & Multi-Agent Orchestration:** For building entire pages, studio-grade landing pages, reconstructing designs from reference screenshots, or running multi-agent `/goal` tasks, route to the executive orchestrator skill **`revyme-director`** (`.agents/skills/revyme-director/SKILL.md`). This document serves as the low-level technical API reference and operation registry for individual Revyme MCP v2 calls.
+
 > **MCP v2 source of truth:** use the live `mcp__revyme_v2` tool schemas provided by the current session. The legacy `revyme_*` tool names and JSON examples below are historical and are not executable MCP v2 calls. Prefer the typed dot-named operations such as `pages.list`, `pages.create`, `templates.create`, and `siteEffects.pageTransition.set`; do not guess from old examples when an operation schema is available.
 
 ## 1. MCP Configuration & Prerequisites
