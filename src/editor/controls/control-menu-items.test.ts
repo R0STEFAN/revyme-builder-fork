@@ -325,6 +325,24 @@ describe('getPresetMenuItems — responsive dimension groups', () => {
     })).find((item) => item.label === 'Presets')!;
     expect(presets.submenuItems?.map((item) => item.label)).toEqual(['Card Margin']);
   });
+
+  it('offers category submenus for size properties like width and binds token on click', () => {
+    const updateStyle = vi.fn();
+    const presets = getAllMenuItems(makeCtx({
+      property: 'width',
+      updateStyle,
+      presetTokens: [
+        { name: 'dp-spacing-max', value: '1360px', category: 'spacing', label: 'Max Width' },
+        { name: 'radius-card', value: '16px', category: 'radius', label: 'Card' },
+      ],
+    } as Partial<MenuContext>)).find((item) => item.label === 'Presets')!;
+
+    expect(presets.submenuItems?.map((item) => item.label)).toEqual(['Spacing', 'Radius']);
+    const spacingSubmenu = presets.submenuItems![0].submenuItems;
+    expect(spacingSubmenu?.map((item) => item.label)).toEqual(['Max Width']);
+    spacingSubmenu![0].onClick();
+    expect(updateStyle).toHaveBeenCalledWith('width', 'var(--dp-spacing-max)');
+  });
 });
 
 describe('getVariableMenuItems — component "Set Variable" submenu (bind to existing prop)', () => {

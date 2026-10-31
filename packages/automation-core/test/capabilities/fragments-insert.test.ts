@@ -347,6 +347,6 @@ export default function Button({
 
     // 5. Oracle check verifies code is 100% valid
     const violations = checkFile(updatedCode, { kind: 'page' });
-    expect(violations.filter((v) => v.level === 3)).toHaveLength(0);
+    expect(violations.filter((v) => v.tier === 3)).toHaveLength(0);
   });
 });

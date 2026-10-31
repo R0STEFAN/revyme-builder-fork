@@ -19,12 +19,19 @@ const PREFIX_MAP: [string, TokenCategory][] = [
   ['color-', 'color'],
   ['typo-', 'typography'],
   ['space-', 'spacing'],
+  ['spacing-', 'spacing'],
+  ['dp-spacing-', 'spacing'],
   ['margin-', 'margin'],
   ['radius-', 'radius'],
+  ['dp-radius-', 'radius'],
   ['shadow-', 'shadow'],
+  ['dp-shadow-', 'shadow'],
   ['border-', 'border'],
+  ['dp-border-', 'border'],
   ['image-', 'image'],
   ['video-', 'video'],
+  ['dp-color-', 'color'],
+  ['dp-motion-', 'other'],
 ];
 
 /** Detect category from the variable name prefix (without --). */
@@ -127,7 +134,8 @@ export function parsePresetTokens(css: string): PresetToken[] {
       else if (hint === 'shadows' || hint === 'shadow') commentCategory = 'shadow';
       else if (hint === 'images' || hint === 'image') commentCategory = 'image';
       else if (hint === 'videos' || hint === 'video') commentCategory = 'video';
-      else commentCategory = null;
+      else if (hint === 'other' || hint === 'others') commentCategory = 'other';
+      else commentCategory = 'other';
       continue;
     }
 

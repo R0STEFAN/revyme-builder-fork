@@ -16,14 +16,26 @@ interface ControlRowProps {
   plain?: boolean;
 }
 
-/** Format a token name for display: "color-brand-light" → "Brand Light" */
+/** Format a token name for display: "color-brand-light" → "Brand Light", "space-gap-sm" → "Gap (Mobile)" */
 function formatPresetLabel(name: string): string {
-  // Strip common prefixes
-  let display = name;
-  for (const prefix of ['color-', 'typo-', 'space-', 'radius-', 'shadow-']) {
-    if (display.startsWith(prefix)) { display = display.slice(prefix.length); break; }
+  let tier = '';
+  let cleanName = name;
+  if (cleanName.endsWith('-sm')) {
+    tier = ' (Mobile)';
+    cleanName = cleanName.slice(0, -3);
+  } else if (cleanName.endsWith('-md')) {
+    tier = ' (Tablet)';
+    cleanName = cleanName.slice(0, -3);
   }
-  return display.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  // Strip common prefixes
+  for (const prefix of ['color-', 'typo-', 'space-', 'spacing-', 'margin-', 'radius-', 'shadow-', 'border-', 'dp-spacing-', 'dp-radius-', 'dp-color-']) {
+    if (cleanName.startsWith(prefix)) {
+      cleanName = cleanName.slice(prefix.length);
+      break;
+    }
+  }
+  return cleanName.split(/[-_]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') + tier;
 }
 
 /** Wraps atom content: label on left, control on right. Shows UsedByRow if bound, preset pill if preset ref. */
@@ -86,7 +98,7 @@ export function ControlRow({ label, children, plain }: ControlRowProps) {
         <button
           className="w-full h-8 flex items-center justify-between px-2 bg-[var(--accent)] cut-corners text-xs font-medium text-[var(--accent-fg)] cursor-pointer transition-colors hover:opacity-90 truncate"
           onClick={() => onChange('')}
-          title={`Preset: ${binding.presetRef} — click to remove`}
+          title={`Preset: ${formatPresetLabel(binding.presetRef!)} (${binding.presetRef}) — click to remove`}
         >
           <span className="truncate">{formatPresetLabel(binding.presetRef!)}</span>
           <span className="ml-1 text-[var(--accent-fg)]/70 hover:text-[var(--accent-fg)] text-sm">×</span>

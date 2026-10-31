@@ -1,5 +1,41 @@
 # MCP v2 issue log
 
+## 2026-10-31 — Presets panel Spacing/Other sections, global preset binding, tooltip/pill parsing, and responsive mobile breakpoint
+
+**Status:** fixed, verified via `src/shared/css-utils.test.ts` (65 tests), `src/shared/dimension-presets.test.ts` (12 tests), `src/code/generation/preset-gen.test.ts` (26 tests), `src/editor/controls/control-menu-items.test.ts` (56 tests), `npx tsc --noEmit` (0 errors), and live execution on project `proj-1793453710566-zr1d8a`, and committed.
+
+**Symptom:**
+1. The Presets panel in the visual editor lacked a dedicated `Spacing` category (it was hardcoded to display as `Padding` with strict prefix `space-`). Custom design tokens like `--dp-spacing-gutter`, `--dp-spacing-gap`, `--dp-spacing-max` did not appear on the Presets panel at all.
+2. The Presets panel lacked an `Other` section to inspect and edit ungrouped custom tokens/variables (e.g. `--dp-motion-duration`, `--dp-motion-ease`).
+3. In the Style panel, properties like `width`, `minWidth`, `maxWidth`, `height`, `minHeight`, `maxHeight` completely blocked the "Presets" menu item, preventing users from visually binding variables/tokens to dimension properties.
+4. When a responsive dimension token fallback was active (e.g. `var(--space-gap-sm, var(--space-gap))`), the blue preset pill button in `ControlRow` rendered a mangled string `Gap Sm, var( Sp...` and the tooltip displayed `Preset: space-gap-sm, var(--space-gap — click to remove` instead of clean human-readable labels.
+5. In responsive design, configuring desktop, tablet, and mobile padding presets resulted in `@media (max-width: 390px)` on mobile. Real smartphones (iPhone 12-16 at 393px, Plus/Max at 430px, Android at 412px) exceeded 390px and matched the tablet media query (`max-width: 810px and min-width: 390.02px`), causing mobile devices to get the tablet padding rather than the mobile padding preset.
+
+**Cause:**
+1. In `src/code/generation/preset-gen.ts`, `PREFIX_MAP` only checked `space-` and lacked `spacing-`, `dp-spacing-`, `dp-radius-`, `dp-color-`, `dp-shadow-`, `dp-border-`. Comment hint parsing lacked `/* Other */`.
+2. In `src/editor/left-toolbar/panels/LibraryPanel/shared/constants.ts`, `spacing` was hardcoded with label `'Padding'` and `DATA_CATEGORIES`/`ALL_CATEGORIES` lacked `{ key: 'other', label: 'Other', prefix: 'other', defaultValue: '' }`.
+3. In `src/shared/dimension-presets.ts`, `groupDimensionTokens` filtered tokens strictly by `startsWith('space-')`, dropping all tokens with prefixes `spacing-` or `dp-spacing-`.
+4. In `src/editor/controls/control-menu-items.ts`, `PROPERTY_CATEGORY_MAP` intentionally omitted size properties (`width`, `height`, `maxWidth`, etc.) and lacked a category tree to browse and bind presets globally.
+5. In `src/editor/controls/ControlLabel.tsx`, cascading submenus only supported one level (`submenuOpen`), preventing hierarchical selection of categories and presets.
+6. In `src/shared/css-utils.ts`, `parseVarRef` used `/var\(--([^)]+)\)/` which stopped at the first closing parenthesis in nested expressions `var(--space-gap-sm, var(--space-gap))`, returning `"space-gap-sm, var(--space-gap"`. `formatPresetLabel` did not format tier suffixes (`-sm` → `(Mobile)`, `-md` → `(Tablet)`).
+7. In the canvas configuration and responsive styles, the mobile viewport was treated with an upper cutoff of `390px` rather than standard mobile screen thresholds (`600px`), causing real phones to land in the tablet band.
+
+**Fix and regression guard:**
+1. In `src/shared/css-utils.ts`, updated `parseVarRef` to regex `/var\(\s*--([a-zA-Z0-9_-]+)/`, cleanly extracting the primary custom property identifier without trailing fallback noise. Added test in `css-utils.test.ts`.
+2. In `src/editor/controls/unified/ControlRow.tsx`, updated `formatPresetLabel` to strip prefix families (`color-`, `typo-`, `space-`, `spacing-`, `margin-`, `radius-`, `shadow-`, `border-`, `dp-*`) and format tier suffixes (`-sm` → ` (Mobile)`, `-md` → ` (Tablet)`), and updated the tooltip to `Preset: ${formatPresetLabel(binding.presetRef!)} (${binding.presetRef}) — click to remove`.
+3. In `src/code/generation/preset-gen.ts`, expanded `PREFIX_MAP` with `spacing-`, `dp-spacing-`, `dp-radius-`, `dp-color-`, `dp-shadow-`, `dp-border-`, `dp-motion-`, and added comment support for `/* Other */` / arbitrary comment headers.
+4. In `src/editor/left-toolbar/panels/LibraryPanel/shared/constants.ts`, renamed category label to `'Spacing'` and registered the `'other'` category in `DATA_CATEGORIES` and `ALL_CATEGORIES`.
+5. In `src/shared/dimension-presets.ts`, added `CATEGORY_PREFIXES` supporting `space-`, `spacing-`, `dp-spacing-`, `margin-`, `dp-margin-`, `radius-`, `dp-radius-`. Updated `groupDimensionTokens` so that all tokens in the category are grouped and none are lost.
+6. In `src/editor/controls/control-menu-items.ts`, added size properties (`width`, `minWidth`, `maxWidth`, `height`, `minHeight`, `maxHeight`, `inset`) to `PROPERTY_CATEGORY_MAP`, and implemented `buildCategoryTree` so users can browse all design preset categories (`Spacing`, `Radius`, `Shadow`, `Border`, `Color`, `Other`) and bind any token.
+7. In `src/editor/controls/ControlLabel.tsx`, added support for second-level cascading submenus (`nestedSubmenuOpen`) so category trees cascade seamlessly.
+8. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+9. In project `proj-1793453710566-zr1d8a`, updated responsive styles using `viewports.setOverride` so mobile overrides apply up to 600px, ensuring real phones apply mobile presets accurately.
+
+**Verification:**
+`src/shared/css-utils.test.ts` (65 tests passed). `src/shared/dimension-presets.test.ts` (12 tests passed). `src/code/generation/preset-gen.test.ts` (26 tests passed). `src/editor/controls/control-menu-items.test.ts` (56 tests passed). `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8 tests passed). `packages/automation-core/test/capabilities/fragments-insert.test.ts` (8 tests passed). `npx tsc --noEmit` passed with 0 errors. `diagnostics.projectCheck` verified 100% clean on `proj-1793453710566-zr1d8a`.
+
+
+
 ## 2026-10-31 — fragments.insert omitted typography preset binding, leaving hardcoded inline font/color overrides and Preset: None in editor
 
 **Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (8 tests), `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8 tests), `src/code/generation/next-font-gen.test.ts` (10 tests), and live execution on project `proj-1793453710566-zr1d8a`, and committed.

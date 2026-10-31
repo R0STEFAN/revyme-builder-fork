@@ -204,6 +204,11 @@ describe('parseVarRef', () => {
     expect(parseVarRef('1px solid var(--brand)')).toBe('brand');
   });
 
+  it('extracts token name cleanly from nested fallback expressions', () => {
+    expect(parseVarRef('var(--space-gap-sm, var(--space-gap))')).toBe('space-gap-sm');
+    expect(parseVarRef('var(--color-primary, #ff0000)')).toBe('color-primary');
+  });
+
   it('returns null when there is no var() reference', () => {
     expect(parseVarRef('#ff0000')).toBeNull();
     expect(parseVarRef('')).toBeNull();

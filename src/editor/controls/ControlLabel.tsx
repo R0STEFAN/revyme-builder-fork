@@ -356,8 +356,10 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   // even if a future change wraps the parent in a stacking-context-creating
   // ancestor.
   const [submenuOpen, setSubmenuOpen] = useState<{ items: MenuItem[]; pos: { x: number; y: number } } | null>(null);
+  const [nestedSubmenuOpen, setNestedSubmenuOpen] = useState<{ items: MenuItem[]; pos: { x: number; y: number } } | null>(null);
   const menuPortalRef = useRef<HTMLDivElement>(null);
   const submenuPortalRef = useRef<HTMLDivElement>(null);
+  const nestedSubmenuPortalRef = useRef<HTMLDivElement>(null);
 
   // textContent is sourced from node.textContent, not node.styles. Treat it
   // here so the variable modal opens with the actual text as its default
@@ -830,6 +832,7 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     setSubmenuOpen(null);
+    setNestedSubmenuOpen(null);
   }, []);
 
   /** Open the cascading submenu next to a hovered parent item. Same flip
@@ -843,6 +846,7 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
    *  attached to the item even when it grows upward. X still uses the parent
    *  menu rect so it sits beside the whole panel. */
   const openSubmenu = useCallback((items: MenuItem[], itemEl: HTMLElement) => {
+    setNestedSubmenuOpen(null);
     const portal = menuPortalRef.current;
     if (!portal) return;
     const portalRect = portal.getBoundingClientRect();
@@ -853,6 +857,17 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
     // row sits at the same y as the hovered item (not one pad-height below it).
     const y = chooseVertical(itemRect.top - MENU_PADDING / 2, itemRect.bottom + MENU_PADDING / 2, submenuHeight);
     setSubmenuOpen({ items, pos: { x, y } });
+  }, [chooseHorizontal, chooseVertical]);
+
+  const openNestedSubmenu = useCallback((items: MenuItem[], itemEl: HTMLElement) => {
+    const portal = submenuPortalRef.current;
+    if (!portal) return;
+    const portalRect = portal.getBoundingClientRect();
+    const itemRect = itemEl.getBoundingClientRect();
+    const submenuHeight = Math.min(items.length * ITEM_HEIGHT + MENU_PADDING, MAX_HEIGHT);
+    const x = chooseHorizontal(portalRect, SUB_WIDTH, SUBMENU_GAP);
+    const y = chooseVertical(itemRect.top - MENU_PADDING / 2, itemRect.bottom + MENU_PADDING / 2, submenuHeight);
+    setNestedSubmenuOpen({ items, pos: { x, y } });
   }, [chooseHorizontal, chooseVertical]);
 
   // Close on Escape
@@ -1143,13 +1158,63 @@ export default function ControlLabel({ label, property, plain, forceShow, hideCr
               ref={submenuPortalRef}
               className="fixed bg-[var(--dropdown-bg)] shadow-[var(--shadow-lg)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] py-1.5 z-[100042] min-w-[200px] max-h-[320px] overflow-y-auto border border-[var(--border-light)] space-y-0.5"
               style={{ left: submenuOpen.pos.x, top: submenuOpen.pos.y }}
-              onMouseLeave={() => setSubmenuOpen(null)}
+              onMouseLeave={() => {
+                // If cursor is not in nested submenu, close it
+              }}
             >
               {submenuOpen.items.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-[var(--text-disabled)]">
                   No matching presets
                 </div>
-              ) : submenuOpen.items.map((sub, i) => (
+              ) : submenuOpen.items.map((sub, i) => {
+                const hasNested = !!(sub.submenuItems && sub.submenuItems.length > 0);
+                return (
+                  <div key={i}>
+                    {sub.separator && i > 0 && (
+                      <div className="h-px bg-white/10 mx-2 my-1" />
+                    )}
+                    <button
+                      onMouseEnter={(e) => {
+                        if (hasNested) openNestedSubmenu(sub.submenuItems!, e.currentTarget);
+                        else setNestedSubmenuOpen(null);
+                      }}
+                      onClick={() => {
+                        if (hasNested) return;
+                        sub.onClick();
+                        closeMenu();
+                      }}
+                      className="group flex items-center justify-between mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer hover:bg-[var(--accent)] transition-colors"
+                    >
+                      <span className="text-xs font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-fg)] truncate flex-1">
+                        {sub.label}
+                      </span>
+                      {hasNested && (
+                        <span className="text-[var(--text-secondary)] group-hover:text-[var(--accent-fg)] flex-shrink-0 ml-1">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Nested cascading submenu portal — renders above the submenu at z+2. */}
+          {nestedSubmenuOpen && (
+            <div
+              ref={nestedSubmenuPortalRef}
+              className="fixed bg-[var(--dropdown-bg)] shadow-[var(--shadow-lg)] cut-corners cut-lg cut-border [--cut-border-color:var(--border-light)] py-1.5 z-[100043] min-w-[200px] max-h-[320px] overflow-y-auto border border-[var(--border-light)] space-y-0.5"
+              style={{ left: nestedSubmenuOpen.pos.x, top: nestedSubmenuOpen.pos.y }}
+              onMouseLeave={() => setNestedSubmenuOpen(null)}
+            >
+              {nestedSubmenuOpen.items.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-[var(--text-disabled)]">
+                  No matching presets
+                </div>
+              ) : nestedSubmenuOpen.items.map((sub, i) => (
                 <div key={i}>
                   {sub.separator && i > 0 && (
                     <div className="h-px bg-white/10 mx-2 my-1" />

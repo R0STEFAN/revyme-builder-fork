@@ -31,15 +31,25 @@ const CATEGORY_PREFIX: Record<DimensionPresetCategory, string> = {
   radius: 'radius',
 };
 
+const CATEGORY_PREFIXES: Record<DimensionPresetCategory, string[]> = {
+  spacing: ['space-', 'spacing-', 'dp-spacing-'],
+  margin: ['margin-', 'dp-margin-'],
+  radius: ['radius-', 'dp-radius-'],
+};
+
 const TIER_SUFFIXES = ['-md', '-sm'] as const;
 
 function tokenSlug(tokenName: string, category: DimensionPresetCategory): string | null {
-  const prefix = `${CATEGORY_PREFIX[category]}-`;
-  return tokenName.startsWith(prefix) ? tokenName.slice(prefix.length) : null;
+  const prefixes = CATEGORY_PREFIXES[category] ?? [`${CATEGORY_PREFIX[category]}-`];
+  for (const prefix of prefixes) {
+    if (tokenName.startsWith(prefix)) return tokenName.slice(prefix.length);
+  }
+  return tokenName;
 }
 
 function displayName(name: string): string {
   return name
+    .replace(/^dp[-_]/i, '')
     .replace(/[-_]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -76,13 +86,16 @@ export function dimensionPresetTokenName(
   tier: DimensionPresetTier,
 ): string {
   const suffix = tier === 'base' ? '' : `-${tier}`;
-  return `${CATEGORY_PREFIX[category]}-${name}${suffix}`;
+  const prefixes = CATEGORY_PREFIXES[category] ?? [`${CATEGORY_PREFIX[category]}-`];
+  const matched = prefixes.find(p => name.startsWith(p));
+  if (matched) return `${name}${suffix}`;
+  return `${prefixes[0]}${name}${suffix}`;
 }
 
 export function dimensionCategoryFromToken(name: string): DimensionPresetCategory | null {
-  if (name.startsWith('space-')) return 'spacing';
-  if (name.startsWith('margin-')) return 'margin';
-  if (name.startsWith('radius-')) return 'radius';
+  for (const [cat, prefixes] of Object.entries(CATEGORY_PREFIXES) as [DimensionPresetCategory, string[]][]) {
+    if (prefixes.some(p => name.startsWith(p))) return cat;
+  }
   return null;
 }
 
@@ -120,26 +133,28 @@ export function groupDimensionTokens(
   tokens: PresetToken[],
   category: DimensionPresetCategory,
 ): DimensionPresetGroup[] {
-  const prefix = `${CATEGORY_PREFIX[category]}-`;
-  const categoryTokens = tokens.filter((token) => token.category === category && token.name.startsWith(prefix));
+  const categoryTokens = tokens.filter((token) => {
+    if (token.category) return token.category === category;
+    return dimensionCategoryFromToken(token.name) === category;
+  });
   const tokenByName = new Map(categoryTokens.map((token) => [token.name, token]));
   const roots = new Map<string, PresetToken>();
 
   for (const token of categoryTokens) {
-    const slug = tokenSlug(token.name, category)!;
-    const suffix = matchingTierBaseName(token.name);
-    if (suffix && tokenByName.has(suffix)) continue;
-    roots.set(slug, token);
+    const baseName = matchingTierBaseName(token.name);
+    if (baseName && tokenByName.has(baseName)) continue;
+    roots.set(baseName ?? token.name, tokenByName.get(baseName ?? token.name) ?? token);
   }
 
-  const groups = [...roots.entries()].map(([name, base]) => {
-    const md = tokenByName.get(dimensionPresetTokenName(category, name, 'md'));
-    const sm = tokenByName.get(dimensionPresetTokenName(category, name, 'sm'));
+  const groups = [...roots.entries()].map(([baseName, base]) => {
+    const slug = tokenSlug(base.name, category) || base.name;
+    const md = tokenByName.get(`${base.name}-md`);
+    const sm = tokenByName.get(`${base.name}-sm`);
     const siblings = [base, md, sm].filter((item): item is PresetToken => item !== undefined);
     return {
-      name,
+      name: slug,
       category,
-      label: base.label?.trim() || displayName(name),
+      label: base.label?.trim() || displayName(slug),
       tokens: siblings,
       base,
       ...(md ? { md } : {}),

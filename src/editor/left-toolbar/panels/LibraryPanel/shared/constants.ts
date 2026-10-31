@@ -10,10 +10,11 @@ export const DATA_CATEGORIES: CategoryConfig[] = [
   { key: 'image', label: 'Image', prefix: 'image', defaultValue: '' },
   { key: 'video', label: 'Video', prefix: 'video', defaultValue: '' },
   { key: 'radius', label: 'Radius', prefix: 'radius', defaultValue: '8px' },
-  { key: 'spacing', label: 'Padding', prefix: 'space', defaultValue: '16px' },
+  { key: 'spacing', label: 'Spacing', prefix: 'space', defaultValue: '16px' },
   { key: 'margin', label: 'Margin', prefix: 'margin', defaultValue: '16px' },
   { key: 'shadow', label: 'Shadow', prefix: 'shadow', defaultValue: '0 2px 4px rgba(0,0,0,0.1)' },
   { key: 'border', label: 'Border', prefix: 'border', defaultValue: '1px solid #000000' },
+  { key: 'other', label: 'Other', prefix: 'other', defaultValue: '' },
 ];
 
 export const DISPLAY_ONLY_CATEGORIES: DisplayCategory[] = [];
@@ -24,10 +25,11 @@ export const ALL_CATEGORIES: AnyCategory[] = [
   DATA_CATEGORIES.find(c => c.key === 'image')!,
   DATA_CATEGORIES.find(c => c.key === 'video')!,
   DATA_CATEGORIES.find(c => c.key === 'radius')!,
-  DATA_CATEGORIES.find(c => c.key === 'spacing')!, // shows as "Padding"
+  DATA_CATEGORIES.find(c => c.key === 'spacing')!,
   DATA_CATEGORIES.find(c => c.key === 'margin')!,
   DATA_CATEGORIES.find(c => c.key === 'border')!,
   DATA_CATEGORIES.find(c => c.key === 'shadow')!,
+  DATA_CATEGORIES.find(c => c.key === 'other')!,
 ];
 
 /** Pixels of cursor movement before a library-row pointerdown is treated

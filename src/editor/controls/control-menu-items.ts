@@ -547,6 +547,10 @@ function getLocaleMenuItems(ctx: MenuContext): MenuItem[] {
  *  first (per-property bundle filtering for typography, distinguishing
  *  the dropdown surface from the picker's surface for color).
  */
+const GLOBAL_SIZE_PROPERTIES = new Set([
+  'width', 'minWidth', 'maxWidth', 'height', 'minHeight', 'maxHeight', 'inset',
+]);
+
 const PROPERTY_CATEGORY_MAP: Record<string, PresetToken['category'][]> = {
   // spacing/margin
   padding: ['spacing'], paddingTop: ['spacing'], paddingRight: ['spacing'],
@@ -556,14 +560,9 @@ const PROPERTY_CATEGORY_MAP: Record<string, PresetToken['category'][]> = {
   marginLeft: ['margin'],
   gap: ['spacing'], rowGap: ['spacing'], columnGap: ['spacing'],
   top: ['spacing'], left: ['spacing'], right: ['spacing'], bottom: ['spacing'],
-  // Intentionally NOT mapped: width / height / minWidth / minHeight /
-  // maxWidth / maxHeight. The 'spacing' category is for padding / gap /
-  // inset distances — sharing it with width/height made the Apply Preset
-  // dropdown surface "Card Padding" / "Section Y" etc. on size rows,
-  // which isn't a useful binding (a card's height = section padding-y is
-  // coincidence, not a design token relationship). Leaving them off the
-  // map means no presets surface for size, and the "Create preset" entry
-  // is hidden for those rows too — same behaviour as opacity/cursor.
+  width: ['spacing', 'other'], minWidth: ['spacing', 'other'], maxWidth: ['spacing', 'other'],
+  height: ['spacing', 'other'], minHeight: ['spacing', 'other'], maxHeight: ['spacing', 'other'],
+  inset: ['spacing', 'other'],
   // radius
   borderRadius: ['radius'],
   borderTopLeftRadius: ['radius'], borderTopRightRadius: ['radius'],
@@ -626,6 +625,90 @@ function presetDisplayLabel(token: PresetToken): string {
     .join(' ');
 }
 
+const CATEGORY_NAMES: Record<PresetToken['category'], string> = {
+  spacing: 'Spacing',
+  radius: 'Radius',
+  shadow: 'Shadow',
+  border: 'Border',
+  color: 'Color',
+  typography: 'Typography',
+  image: 'Image',
+  video: 'Video',
+  margin: 'Margin',
+  other: 'Other',
+};
+
+const CATEGORY_BROWSE_ORDER: PresetToken['category'][] = [
+  'spacing', 'radius', 'shadow', 'border', 'color', 'typography', 'margin', 'image', 'video', 'other',
+];
+
+function buildItemsForCategory(
+  category: PresetToken['category'],
+  tokens: PresetToken[],
+  ctx: MenuContext,
+): MenuItem[] {
+  const categoryTokens = tokens.filter(t => t.category === category);
+  if (categoryTokens.length === 0) return [];
+
+  if (category === 'border') {
+    return groupBorderTokens(categoryTokens).map(group => ({
+      label: group.label,
+      show: true,
+      onClick: () => {
+        const styles = buildBorderApplyStyles(group);
+        if (ctx.updateStyles) ctx.updateStyles(styles);
+        else for (const [k, v] of Object.entries(styles)) ctx.updateStyle(k, v);
+        trace.action('control-menu:apply-border-preset', { property: ctx.property, group: group.name });
+      },
+    }));
+  }
+
+  if (category === 'spacing' || category === 'margin' || category === 'radius') {
+    const dimCat = category as DimensionPresetCategory;
+    const groups = groupDimensionTokens(categoryTokens, dimCat);
+    return groups.map(group => ({
+      label: group.label,
+      show: true,
+      onClick: () => {
+        const propCat = dimensionCategoryForProperty(ctx.property);
+        if (propCat === dimCat && ctx.applyDimensionPreset) {
+          ctx.applyDimensionPreset(group, ctx.property);
+        } else {
+          ctx.updateStyle(ctx.property, `var(--${group.base.name})`);
+        }
+        trace.action('control-menu:apply-dimension-preset', {
+          property: ctx.property, category: group.category, group: group.name,
+        });
+      },
+    }));
+  }
+
+  return categoryTokens.map(token => ({
+    label: presetDisplayLabel(token),
+    show: true,
+    onClick: () => {
+      ctx.updateStyle(ctx.property, `var(--${token.name})`);
+      trace.action('control-menu:apply-preset', { property: ctx.property, token: token.name });
+    },
+  }));
+}
+
+function buildCategoryTree(tokens: PresetToken[], ctx: MenuContext): MenuItem[] {
+  const tree: MenuItem[] = [];
+  for (const cat of CATEGORY_BROWSE_ORDER) {
+    const subItems = buildItemsForCategory(cat, tokens, ctx);
+    if (subItems.length > 0) {
+      tree.push({
+        label: CATEGORY_NAMES[cat] || cat,
+        show: true,
+        onClick: () => {},
+        submenuItems: subItems,
+      });
+    }
+  }
+  return tree;
+}
+
 function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
   const items: MenuItem[] = [];
 
@@ -650,61 +733,63 @@ function getPresetMenuItems(ctx: MenuContext): MenuItem[] {
   // Falls back to the legacy onOpenPresetPicker only when no tokens fit (so
   // the user can still create one from scratch via the existing flow).
   if (ctx.presetTokens && ctx.presetTokens.length > 0) {
-    const categories = matchingCategoriesFor(ctx.property);
-    const compatible = ctx.presetTokens.filter(t => categories.has(t.category));
-    const dimensionCategories = (['spacing', 'margin', 'radius'] as const)
-      .filter((category) => categories.has(category)) as DimensionPresetCategory[];
-    const dimensionTokens = compatible.filter((token) => dimensionCategories.includes(token.category as DimensionPresetCategory));
-    const dimensionItems = dimensionCategories.flatMap((category) => groupDimensionTokens(dimensionTokens, category))
-      .map((group) => ({
-        label: group.label,
-        show: true,
-        onClick: () => {
-          if (ctx.applyDimensionPreset) ctx.applyDimensionPreset(group, ctx.property);
-          else ctx.updateStyle(ctx.property, `var(--${group.base.name})`);
-          trace.action('control-menu:apply-dimension-preset', {
-            property: ctx.property, category: group.category, group: group.name,
-          });
-        },
-      }));
+    let submenuItems: MenuItem[] = [];
 
-    // Special case: border presets are *compound* — one preset = a group of
-    // 3+ tokens (width/style/color OR width/image-source/image-slice). Show
-    // one submenu entry per GROUP, and apply by writing all the longhand
-    // var() refs in a single updateStyles call.
-    const isBorderProperty = categories.has('border');
-    const ordinaryItems: MenuItem[] = isBorderProperty
-      ? groupBorderTokens(compatible).map(group => ({
+    if (GLOBAL_SIZE_PROPERTIES.has(ctx.property)) {
+      submenuItems = buildCategoryTree(ctx.presetTokens, ctx);
+    } else {
+      const categories = matchingCategoriesFor(ctx.property);
+      const compatible = ctx.presetTokens.filter(t => categories.has(t.category));
+      const dimensionCategories = (['spacing', 'margin', 'radius'] as const)
+        .filter((category) => categories.has(category)) as DimensionPresetCategory[];
+      const dimensionTokens = compatible.filter((token) => dimensionCategories.includes(token.category as DimensionPresetCategory));
+      const dimensionItems = dimensionCategories.flatMap((category) => groupDimensionTokens(dimensionTokens, category))
+        .map((group) => ({
           label: group.label,
           show: true,
           onClick: () => {
-            const styles = buildBorderApplyStyles(group);
-            if (ctx.updateStyles) {
-              ctx.updateStyles(styles);
-            } else {
-              for (const [k, v] of Object.entries(styles)) ctx.updateStyle(k, v);
-            }
-            trace.action('control-menu:apply-border-preset', { property: ctx.property, group: group.name, flavor: group.flavor });
-          },
-        }))
-      : compatible.filter((token) => !dimensionCategories.includes(token.category as DimensionPresetCategory)).map(token => ({
-          label: presetDisplayLabel(token),
-          show: true,
-          onClick: () => {
-            ctx.updateStyle(ctx.property, `var(--${token.name})`);
-            trace.action('control-menu:apply-preset', { property: ctx.property, token: token.name });
+            if (ctx.applyDimensionPreset) ctx.applyDimensionPreset(group, ctx.property);
+            else ctx.updateStyle(ctx.property, `var(--${group.base.name})`);
+            trace.action('control-menu:apply-dimension-preset', {
+              property: ctx.property, category: group.category, group: group.name,
+            });
           },
         }));
-    const submenuItems: MenuItem[] = isBorderProperty
-      ? ordinaryItems
-      : [...dimensionItems, ...ordinaryItems];
+
+      // Special case: border presets are *compound* — one preset = a group of
+      // 3+ tokens (width/style/color OR width/image-source/image-slice). Show
+      // one submenu entry per GROUP, and apply by writing all the longhand
+      // var() refs in a single updateStyles call.
+      const isBorderProperty = categories.has('border');
+      const ordinaryItems: MenuItem[] = isBorderProperty
+        ? groupBorderTokens(compatible).map(group => ({
+            label: group.label,
+            show: true,
+            onClick: () => {
+              const styles = buildBorderApplyStyles(group);
+              if (ctx.updateStyles) {
+                ctx.updateStyles(styles);
+              } else {
+                for (const [k, v] of Object.entries(styles)) ctx.updateStyle(k, v);
+              }
+              trace.action('control-menu:apply-border-preset', { property: ctx.property, group: group.name, flavor: group.flavor });
+            },
+          }))
+        : compatible.filter((token) => !dimensionCategories.includes(token.category as DimensionPresetCategory)).map(token => ({
+            label: presetDisplayLabel(token),
+            show: true,
+            onClick: () => {
+              ctx.updateStyle(ctx.property, `var(--${token.name})`);
+              trace.action('control-menu:apply-preset', { property: ctx.property, token: token.name });
+            },
+          }));
+      submenuItems = isBorderProperty
+        ? ordinaryItems
+        : [...dimensionItems, ...ordinaryItems];
+    }
 
     // Category-aware "Create … preset" entry. Only shown when the property
-    // maps to a concrete category (color, typography, spacing, …). The old
-    // `onOpenPresetPicker` fallback used to add a generic "Create new preset"
-    // entry on EVERY property — which is what the user complained about
-    // ("Apply Preset on basically every single style"). Dropped: properties
-    // without a mapping get no preset menu at all.
+    // maps to a concrete category (color, typography, spacing, …).
     const createCategory = primaryCategoryFor(ctx.property);
     if (createCategory && ctx.onCreatePreset) {
       submenuItems.push({

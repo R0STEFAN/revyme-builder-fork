@@ -64,8 +64,11 @@ describe('dimension preset groups', () => {
 
   it('maps dimension categories and token prefixes', () => {
     expect(dimensionCategoryFromToken('space-card')).toBe('spacing');
+    expect(dimensionCategoryFromToken('spacing-gap')).toBe('spacing');
+    expect(dimensionCategoryFromToken('dp-spacing-gutter')).toBe('spacing');
     expect(dimensionCategoryFromToken('margin-card-md')).toBe('margin');
     expect(dimensionCategoryFromToken('radius-pill-sm')).toBe('radius');
+    expect(dimensionCategoryFromToken('dp-radius-panel')).toBe('radius');
     expect(dimensionCategoryFromToken('color-brand')).toBeNull();
 
     expect(dimensionPresetTokenName('spacing', 'card', 'base')).toBe('space-card');

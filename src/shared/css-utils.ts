@@ -161,7 +161,7 @@ export function splitStyleProps(str: string, separator: string = ','): string[] 
  * value contains no var() reference.
  */
 export function parseVarRef(value: string): string | null {
-  const m = value.match(/var\(--([^)]+)\)/);
+  const m = value.match(/var\(\s*--([a-zA-Z0-9_-]+)/);
   return m ? m[1] : null;
 }
 
