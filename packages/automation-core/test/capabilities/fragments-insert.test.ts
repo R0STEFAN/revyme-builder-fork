@@ -272,4 +272,81 @@ export default function Button({
       }, context)
     ).rejects.toThrow('INVALID_FRAGMENT');
   });
+
+  it('binds typography presets (SSOT), stripping redundant inline styles and injecting responsive rules', async () => {
+    // Add globals.css with custom typography preset
+    files.set(
+      'app/globals.css',
+      `:root {
+  --dp-color-bright: #f2f2f2;
+  --dp-color-read: #a6a9ad;
+  --dp-typography-face: 'Geist', sans-serif;
+  --typo-display-statement-tag: h1;
+  --typo-display-statement-font: var(--dp-typography-face);
+  --typo-display-statement-weight: 400;
+  --typo-display-statement-color: var(--dp-color-bright);
+  --typo-display-statement-size: 72px;
+  --typo-display-statement-spacing: -0.035em;
+  --typo-display-statement-line-height: 1.02;
+  --typo-display-statement-min-default: 1200;
+  --typo-display-statement-min-md: 600;
+  --typo-display-statement-size-md: 54px;
+  --typo-display-statement-size-sm: 38px;
+  --typo-section-title-tag: h2;
+  --typo-section-title-font: var(--dp-typography-face);
+  --typo-section-title-weight: 400;
+  --typo-section-title-color: var(--dp-color-bright);
+  --typo-section-title-size: 36px;
+  --typo-section-title-line-height: 1.2;
+}
+`
+    );
+
+    const fragment = `
+      <section data-id="sec-hero">
+        <h1 preset="display-statement" data-id="h1-hero">Hero Statement</h1>
+        <h2 data-id="h2-sub">Sub Heading</h2>
+      </section>
+    `;
+
+    const op = defaultRegistry.get('fragments.insert')!;
+    const res = await op.execute(
+      snapshot,
+      {
+        parentId: 'root',
+        fragment,
+      },
+      context
+    );
+
+    applyChanges(res.changes);
+    const updatedCode = files.get('app/page.client.tsx')!;
+    const nodes = parseJSXToNodes(updatedCode);
+
+    const h1Node = nodes.get('h1-hero');
+    expect(h1Node).toBeDefined();
+    // 1. Font family and color reference preset variables, NOT hardcoded literals
+    expect(h1Node?.styles.fontFamily).toBe('var(--typo-display-statement-font)');
+    expect(h1Node?.styles.color).toBe('var(--typo-display-statement-color)');
+    expect(h1Node?.styles.fontSize).toBe('var(--typo-display-statement-size)');
+    expect(h1Node?.styles.lineHeight).toBe('var(--typo-display-statement-line-height)');
+    // 2. Preset attribute was stripped from DOM attrs
+    expect(h1Node?.attrs?.['preset']).toBeUndefined();
+
+    // 3. Smart tag matching bound h2 to section-title
+    const h2Node = nodes.get('h2-sub');
+    expect(h2Node).toBeDefined();
+    expect(h2Node?.styles.fontFamily).toBe('var(--typo-section-title-font)');
+    expect(h2Node?.styles.color).toBe('var(--typo-section-title-color)');
+
+    // 4. Responsive rule was injected for display-statement (has md/sm tiers)
+    expect(updatedCode).toContain('@media (max-width: 1199px)');
+    expect(updatedCode).toContain('font-size: var(--typo-display-statement-size-md) !important');
+    expect(updatedCode).toContain('@media (max-width: 599px)');
+    expect(updatedCode).toContain('font-size: var(--typo-display-statement-size-sm) !important');
+
+    // 5. Oracle check verifies code is 100% valid
+    const violations = checkFile(updatedCode, { kind: 'page' });
+    expect(violations.filter((v) => v.level === 3)).toHaveLength(0);
+  });
 });

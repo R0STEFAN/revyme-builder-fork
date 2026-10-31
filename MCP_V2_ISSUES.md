@@ -1,5 +1,38 @@
 # MCP v2 issue log
 
+## 2026-10-31 — fragments.insert omitted typography preset binding, leaving hardcoded inline font/color overrides and Preset: None in editor
+
+**Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (8 tests), `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8 tests), `src/code/generation/next-font-gen.test.ts` (10 tests), and live execution on project `proj-1793453710566-zr1d8a`, and committed.
+
+**Symptom:**
+1. Text nodes (`<h1>`, `<h2>`, `<p>`, `<span>`) inserted via `fragments.insert` carried hardcoded inline typography styles (`fontFamily`, `fontSize`, `fontWeight`, `letterSpacing`, `lineHeight`, `color`) instead of referencing the design system's typography presets (`var(--typo-<name>-*)`).
+2. When selecting text elements in the Revyme visual editor, the Text panel displayed `Preset: None` because the active preset detector (`detectActivePreset`) keys strictly off `fontFamily: var(--typo-<name>-font)`.
+3. In addition, the Text panel displayed a redundant `Color` preset override pill (e.g. `Dp Color Bright`) because `color` was explicitly hardcoded on the element rather than being governed by the typography preset's own `--typo-<name>-color` token.
+
+**Cause:**
+`packages/automation-core/src/operations/fragments.ts` had no awareness of typography presets:
+- It did not parse or recognize `preset="<name>"` or `data-typography-preset="<name>"` attributes on incoming JSX elements.
+- It did not auto-infer matching custom presets from `app/globals.css` for semantic text tags (`h1`, `h2`, `p`, `span`).
+- It did not substitute the typography preset CSS custom properties (`var(--typo-<name>-font)`, `var(--typo-<name>-color)`, etc.) or strip redundant inline styles that conflict with the preset.
+- It did not inject responsive `@media` rules for typography presets with responsive breakpoint tiers (`min-default`, `min-md`, `size-md`, `size-sm`).
+
+**Fix and regression guard:**
+1. In `packages/automation-core/src/operations/typography.ts`, exported `upsertTypographyResponsiveBlock` and `TypoPreset`.
+2. In `packages/automation-core/src/operations/fragments.ts`, added `resolvePresetForNode(node, attrs, styles, presets)` which:
+   - Recognizes explicit preset attributes (`preset`, `data-typography-preset`, `typographyPreset`, `typography`).
+   - Checks if styles already reference `var(--typo-<name>-font)`.
+   - Inferred matching custom presets from `app/globals.css` by semantic tag (`h1` -> heading preset, `h2` -> section title preset, `p` -> body preset, `span` with mono/uppercase -> mono telemetry preset).
+3. In `ingestedToNodeDef`, bound all `--typo-<name>-*` CSS variables to the node, stripped temporary preset attributes, and collected responsive `@media` rules for responsive tiers.
+4. In `fragmentsInsertOperation.execute`, automatically injected responsive styles using `upsertTypographyResponsiveBlock`.
+5. In `src/code/generation/next-font-gen.ts`, adjusted the truncated Google fonts catalog heuristic so it only applies when catalog entries start at low weights without higher weights, preserving strict weight catalog matching for fonts like Playfair Display.
+6. Updated `.agents/skills/revyme-mcp/SKILL.md` to document the SSOT Typography Preset requirement and usage in `fragments.insert`.
+7. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+8. Applied typography presets across all 89 text nodes in `app/page.client.tsx` and all design components (`FactStatItem`, `GraphiteCard`, `LiveSignalBadge`, `PillButton`) on `proj-1793453710566-zr1d8a`.
+
+**Verification:**
+`packages/automation-core/test/capabilities/fragments-insert.test.ts` passed (8/8 tests). `T08-design-system.test.ts` passed (8/8 tests). `src/code/generation/next-font-gen.test.ts` passed (10/10 tests). `diagnostics.projectCheck` verified clean (9/9 files, 0 violations). All elements verified in `proj-1793453710566-zr1d8a` with exact `--typo-<name>-*` preset references.
+
+
 ## 2026-10-31 — fragments.insert rejected Next.js framework components and raw navigating anchor tags
 
 **Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (7 tests) and live execution on project `proj-1793453710566-zr1d8a`, and committed.

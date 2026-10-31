@@ -12,6 +12,8 @@ import { IngestionReporter } from '../ingestion/report';
 import type { IngestedNode } from '../ingestion/tree';
 import { ensureComponentImport } from './components';
 import { BUILT_IN_COMPONENTS } from '@/code/project/project-fs';
+import { parsePresetTokens } from '@/code/generation/preset-gen';
+import { groupTypographyPresets, upsertTypographyResponsiveBlock, type TypoPreset } from './typography';
 
 const FRAMEWORK_COMPONENTS: Record<string, { module: string; defaultSpec: string }> = {
   Link: { module: 'next/link', defaultSpec: 'Link' },
@@ -89,8 +91,76 @@ function collectComponentTags(nodes: IngestedNode[]): Set<string> {
   return componentTags;
 }
 
+function resolvePresetForNode(
+  node: IngestedNode,
+  attrs: Record<string, string>,
+  styles: Record<string, string>,
+  presets: TypoPreset[]
+): TypoPreset | null {
+  if (presets.length === 0) return null;
+
+  // 1. Explicit preset attributes: preset="...", data-typography-preset="...", typographyPreset="...", typography="..."
+  const explicit =
+    attrs['preset'] ||
+    attrs['data-typography-preset'] ||
+    attrs['typographyPreset'] ||
+    attrs['typography'];
+  if (explicit) {
+    if (explicit.toLowerCase() === 'none') return null;
+    const clean = explicit.replace(/^--/, '').replace(/^typo-/, '').trim();
+    const found = presets.find((p) => p.name === clean);
+    if (found) return found;
+  }
+
+  // 2. Check if styles already reference a preset var (--typo-<name>-font)
+  const ff = styles.fontFamily || '';
+  const match = ff.match(/var\(--typo-([a-zA-Z0-9_-]+)-font\)/);
+  if (match) {
+    const found = presets.find((p) => p.name === match[1]);
+    if (found) return found;
+  }
+
+  // 3. Smart SSOT inference for semantic text tags when custom presets exist
+  const tag = node.tag.toLowerCase();
+  const TEXT_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span']);
+  if (TEXT_TAGS.has(tag)) {
+    // Prefer custom presets over generic starter presets ('heading', 'body')
+    const customPresets = presets.filter((p) => p.name !== 'heading' && p.name !== 'body');
+    const candidatePool = customPresets.length > 0 ? customPresets : presets;
+
+    // Spans with mono font or uppercase telemetry
+    if (tag === 'span' && (styles.fontFamily?.includes('mono') || styles.textTransform === 'uppercase')) {
+      const monoPreset = candidatePool.find(
+        (p) => p.name.includes('mono') || p.name.includes('telemetry') || p.tag === 'span'
+      );
+      if (monoPreset) return monoPreset;
+    }
+
+    // Match by tag
+    const tagMatches = candidatePool.filter((p) => p.tag === tag);
+    if (tagMatches.length === 1) {
+      return tagMatches[0];
+    }
+    if (tagMatches.length > 1) {
+      if (styles.fontFamily) {
+        const fontMatch = tagMatches.find(
+          (p) => p.values.font === styles.fontFamily || styles.fontFamily.includes(p.name)
+        );
+        if (fontMatch) return fontMatch;
+      }
+      return tagMatches[0];
+    }
+  }
+
+  return null;
+}
+
 /** Convert IngestedNode to generator AddNodeDef recursively */
-function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
+function ingestedToNodeDef(
+  node: IngestedNode,
+  presets: TypoPreset[] = [],
+  responsiveRulesMap: Map<string, string[]> = new Map()
+): AddNodeDef {
   const styles: Record<string, string> = {};
   if (node.styles) {
     for (const [k, v] of Object.entries(node.styles)) {
@@ -120,6 +190,53 @@ function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
     }
   }
 
+  // Resolve and bind typography preset (SSOT)
+  const matchedPreset = resolvePresetForNode(node, attrs, styles, presets);
+  if (matchedPreset) {
+    // Strip temporary preset attributes from node attrs
+    delete attrs['preset'];
+    delete attrs['data-typography-preset'];
+    delete attrs['typographyPreset'];
+    delete attrs['typography'];
+
+    const cleanName = matchedPreset.name;
+    styles.fontFamily = `var(--typo-${cleanName}-font)`;
+    styles.fontSize = `var(--typo-${cleanName}-size)`;
+    styles.fontWeight = `var(--typo-${cleanName}-weight)`;
+    styles.color = `var(--typo-${cleanName}-color)`;
+    styles.lineHeight = `var(--typo-${cleanName}-line-height)`;
+    styles.letterSpacing = `var(--typo-${cleanName}-spacing)`;
+    styles.textTransform = `var(--typo-${cleanName}-transform)`;
+    styles.textDecoration = `var(--typo-${cleanName}-decoration)`;
+    styles.textShadow = `var(--typo-${cleanName}-shadow)`;
+
+    if (matchedPreset.values['stroke-width']) {
+      styles.WebkitTextStrokeWidth = `var(--typo-${cleanName}-stroke-width)`;
+      styles.WebkitTextStrokeColor = `var(--typo-${cleanName}-stroke-color)`;
+      delete styles.WebkitTextStroke;
+    }
+
+    // Collect responsive tiers if present
+    if (matchedPreset.responsiveTiers.md?.size || matchedPreset.responsiveTiers.sm?.size) {
+      const minDefault = Number(matchedPreset.values['min-default'] || 1200);
+      const minMd = Number(matchedPreset.values['min-md'] || 600);
+      const rules: string[] = [];
+      if (matchedPreset.responsiveTiers.md?.size) {
+        rules.push(
+          `@media (max-width: ${minDefault - 1}px) { [data-id="${node.id}"] { font-size: var(--typo-${cleanName}-size-md) !important; } }`
+        );
+      }
+      if (matchedPreset.responsiveTiers.sm?.size) {
+        rules.push(
+          `@media (max-width: ${minMd - 1}px) { [data-id="${node.id}"] { font-size: var(--typo-${cleanName}-size-sm) !important; } }`
+        );
+      }
+      if (rules.length > 0) {
+        responsiveRulesMap.set(node.id, rules);
+      }
+    }
+  }
+
   // Pin absolute nodes explicitly per Oracle rule PIN_ABSOLUTE_NODE
   if (styles.position === 'absolute' && !attrs['data-pinned']) {
     attrs['data-pinned'] = 'true';
@@ -134,7 +251,7 @@ function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
   const children: AddNodeDef[] = [];
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
-      children.push(ingestedToNodeDef(child));
+      children.push(ingestedToNodeDef(child, presets, responsiveRulesMap));
     }
   }
 
@@ -245,10 +362,14 @@ export const fragmentsInsertOperation: Operation<
       targetCode = ensureNamedImport(targetCode, 'framer-motion', ['motion']);
     }
 
+    const globalsCSS = snapshot.files.get('app/globals.css') ?? '';
+    const typographyPresets = groupTypographyPresets(parsePresetTokens(globalsCSS));
+    const responsiveRulesMap = new Map<string, string[]>();
+
     // Insert nodes sequentially into parent
     let currentIndex = input.insertIndex;
     for (const node of ingestedNodes) {
-      const nodeDef = ingestedToNodeDef(node);
+      const nodeDef = ingestedToNodeDef(node, typographyPresets, responsiveRulesMap);
       targetCode = addNodeInCode(targetCode, input.parentId, nodeDef, currentIndex);
       if (currentIndex !== undefined) {
         currentIndex++;
@@ -256,6 +377,12 @@ export const fragmentsInsertOperation: Operation<
     }
 
     targetCode = ensureFlowChildOrder(targetCode, input.parentId);
+
+    if (responsiveRulesMap.size > 0) {
+      for (const [nodeId, rules] of responsiveRulesMap.entries()) {
+        targetCode = upsertTypographyResponsiveBlock(targetCode, nodeId, rules.join('\n'));
+      }
+    }
 
     changes.unshift({
       path,

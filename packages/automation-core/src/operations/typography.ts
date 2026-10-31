@@ -118,7 +118,7 @@ export interface TypoPreset {
   };
 }
 
-function upsertTypographyResponsiveBlock(code: string, nodeId: string, rules: string): string {
+export function upsertTypographyResponsiveBlock(code: string, nodeId: string, rules: string): string {
   const styleId = `typography-responsive-${nodeId}`;
   const marker = `data-id="${styleId}"`;
   const markerIndex = code.indexOf(marker);

@@ -51,13 +51,15 @@ export function getSupportedWeightsForFont(family: string, requestedWeights?: st
 
   if (supported.size === 0) return undefined;
 
-  // If the catalog entry was capped at 8 items and contains italic variants,
-  // higher numeric weights (500, 600, 700, 800, 900) were truncated from the catalog.
-  // For standard variable/multi-weight families (e.g. Inter, JetBrains Mono, Plus Jakarta Sans),
-  // allow standard Google Font weights if requested.
-  const isTruncatedCatalog = entry.variants.length >= 8 && entry.variants.some((v) => v.endsWith('i'));
+  // If the catalog entry was capped at 8 items and starts with low weights (100..300)
+  // ending at regular/italic without higher weights (500, 600, 700, etc.),
+  // then higher numeric weights were truncated from the catalog (e.g. JetBrains Mono).
+  const isTruncatedCatalog =
+    entry.variants.length >= 8 &&
+    entry.variants[0] === '100' &&
+    !entry.variants.includes('700');
   if (isTruncatedCatalog) {
-    for (const w of ['100', '200', '300', '400', '500', '600', '700', '800', '900']) {
+    for (const w of ['400', '500', '600', '700', '800']) {
       supported.add(w);
     }
   }
