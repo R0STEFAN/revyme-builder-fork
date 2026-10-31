@@ -11,7 +11,7 @@ try {
     format: 'esm',
     target: 'node22',
     banner: {
-      js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+      js: "import { createRequire as __revymeCreateRequire } from 'node:module'; const require = __revymeCreateRequire(import.meta.url);",
     },
     footer: {
       js: `if (!globalThis.__REVYME_CLI_RAN__ && process.argv[1]) {

@@ -190,7 +190,7 @@ describe('T05: Revyme CLI Command Line Interface', () => {
         { projectId: 'test-project', branchId: 'main' },
         'diagnostics.projectCheck',
         { strict: true, targetFile: 'components/SiteNavbar.tsx' },
-        { dryRun: false },
+        expect.objectContaining({ dryRun: false }),
       );
 
       execute.mockClear();
@@ -209,7 +209,7 @@ describe('T05: Revyme CLI Command Line Interface', () => {
         { projectId: 'test-project', branchId: 'main' },
         'codeFiles.read',
         { path: 'components/SiteNavbar.tsx', toLine: 120 },
-        { dryRun: false },
+        expect.objectContaining({ dryRun: false }),
       );
     } finally {
       execute.mockRestore();
@@ -286,7 +286,7 @@ describe('T05: Revyme CLI Command Line Interface', () => {
           encoding: 'utf-8',
           folder: 'public/assets',
         },
-        { dryRun: false },
+        expect.objectContaining({ dryRun: false }),
       );
     } finally {
       execute.mockRestore();
@@ -324,7 +324,49 @@ describe('T05: Revyme CLI Command Line Interface', () => {
           viewport: 'tablet',
           styles: { fontSize: '42px' },
         },
-        { dryRun: false },
+        expect.objectContaining({ dryRun: false }),
+      );
+    } finally {
+      execute.mockRestore();
+    }
+  });
+
+  it('accepts tool arguments via raw JSON positional argument', async () => {
+    const outputs: string[] = [];
+    const execute = vi.spyOn(AutomationClient.prototype, 'execute').mockResolvedValue({
+      ok: true,
+      data: { success: true },
+      meta: { commitStatus: 'committed', revision: 5 },
+    } as any);
+
+    try {
+      const code = await runCli({
+        argv: [
+          'assets.upload',
+          '--project-id', 'test-project',
+          '--branch-id', 'main',
+          '--api', 'http://localhost:3333',
+          JSON.stringify({
+            fileName: 'positional.svg',
+            content: '<svg></svg>',
+            encoding: 'utf-8',
+            folder: 'public/assets',
+          }),
+        ],
+        stdout: (msg) => outputs.push(msg),
+      });
+
+      expect(code).toBe(0);
+      expect(execute).toHaveBeenCalledWith(
+        { projectId: 'test-project', branchId: 'main' },
+        'assets.upload',
+        {
+          fileName: 'positional.svg',
+          content: '<svg></svg>',
+          encoding: 'utf-8',
+          folder: 'public/assets',
+        },
+        expect.objectContaining({ dryRun: false }),
       );
     } finally {
       execute.mockRestore();

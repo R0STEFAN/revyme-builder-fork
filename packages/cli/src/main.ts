@@ -243,7 +243,7 @@ EXAMPLES:
   const toolName = firstArg;
   const toolArgs = argv.slice(1);
 
-  const { flags } = parseCliTokens(toolArgs);
+  const { flags, positionals } = parseCliTokens(toolArgs);
 
   const config = loadConfig(undefined, {
     projectId: flags['project-id'],
@@ -328,6 +328,27 @@ EXAMPLES:
               code: 'INVALID_JSON_INPUT',
               message: `Failed to parse input file JSON: ${err.message}`,
               issues: [{ code: 'JSON_SYNTAX_ERROR', path: ['input-file'], message: err.message }],
+            },
+            meta: { commitStatus: 'not_committed', revision: 0 },
+          },
+          null,
+          2
+        )
+      );
+      return 1;
+    }
+  } else if (positionals.length > 0 && positionals[0].trim().startsWith('{')) {
+    try {
+      inputData = JSON.parse(positionals[0].trim());
+    } catch (err: any) {
+      printErr(
+        JSON.stringify(
+          {
+            ok: false,
+            error: {
+              code: 'INVALID_JSON_INPUT',
+              message: `Failed to parse positional JSON: ${err.message}`,
+              issues: [{ code: 'JSON_SYNTAX_ERROR', path: ['positional'], message: err.message }],
             },
             meta: { commitStatus: 'not_committed', revision: 0 },
           },

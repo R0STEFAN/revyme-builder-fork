@@ -1,5 +1,26 @@
 # MCP v2 issue log
 
+## 2026-10-31 — esbuild ESM bundle broke with duplicate createRequire declaration and CLI rejected positional JSON arguments
+
+**Status:** fixed, verified via `packages/cli/test/` (including `pack.test.ts`), and committed.
+
+**Symptom:**
+1. Running packed CLI binary (`revyme-cli`) failed with `SyntaxError: Identifier 'createRequire' has already been declared` in `dist/main.js`.
+2. Running operations via CLI with raw positional JSON arguments (e.g. `revyme <tool> '{"..."}'`) failed with `SCHEMA_VALIDATION_FAILED: expected string, received undefined` because positional JSON was ignored unless piped via stdin or `--input-file`.
+3. In `cli.test.ts`, assertions failed because `client.execute` was called with screenshot service context adapter.
+
+**Cause:**
+1. `packages/cli/build.cjs` declared `import { createRequire } from 'node:module'` in its banner, which conflicted with esbuild's internal generated `import { createRequire } from "module"` in the bundled ESM output.
+2. `packages/cli/src/main.ts` parsed tokens into `flags` and `positionals`, but when collecting `inputData`, it only inspected flags and stdin, ignoring `positionals[0]` even when it was a valid JSON object string.
+
+**Fix and regression guard:**
+1. In `packages/cli/build.cjs`, scoped banner import alias as `import { createRequire as __revymeCreateRequire } from 'node:module'`.
+2. In `packages/cli/src/main.ts`, added positional JSON parsing for `positionals[0]` starting with `{`.
+3. Updated `cli.test.ts` expectations with `expect.objectContaining({ dryRun: false })` and added a regression test for positional JSON arguments.
+
+**Verification:**
+All test files in `packages/cli/test/` passed, including `pack.test.ts` (real `npm pack` smoke test with stdio and HTTP).
+
 ## 2026-10-24 — generated page-transition controller rejected as an editable page
 
 **Status:** fixed and verified through an independently launched MCP stdio
