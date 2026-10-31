@@ -13,6 +13,11 @@ import type { IngestedNode } from '../ingestion/tree';
 import { ensureComponentImport } from './components';
 import { BUILT_IN_COMPONENTS } from '@/code/project/project-fs';
 
+const FRAMEWORK_COMPONENTS: Record<string, { module: string; defaultSpec: string }> = {
+  Link: { module: 'next/link', defaultSpec: 'Link' },
+  Image: { module: 'next/image', defaultSpec: 'Image' },
+};
+
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
   if (!target) {
@@ -68,6 +73,10 @@ function collectComponentTags(nodes: IngestedNode[]): Set<string> {
     if (firstChar >= 'A' && firstChar <= 'Z') {
       componentTags.add(node.tag);
     }
+    // Also if <a> with href is used, it will be mapped to <Link>
+    if (node.tag === 'a' && node.props?.href !== undefined) {
+      componentTags.add('Link');
+    }
     if (node.children) {
       for (const child of node.children) {
         walk(child);
@@ -96,6 +105,13 @@ function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
     styles.position = 'relative';
   }
 
+  // MINMAX_SIZE_UNIT: size panel min/max fields only accept concrete px or % values
+  for (const dim of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']) {
+    if (styles[dim] && styles[dim].includes('var(--dp-spacing-max)')) {
+      styles[dim] = styles[dim].replace(/var\(--dp-spacing-max\)/g, '1360px');
+    }
+  }
+
   const attrs: Record<string, string> = {};
   if (node.props) {
     for (const [k, v] of Object.entries(node.props)) {
@@ -109,6 +125,12 @@ function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
     attrs['data-pinned'] = 'true';
   }
 
+  // Oracle PAGE_LINK_NOT_NEXTLINK: a navigating link on a page must be Next.js <Link>
+  let tag = node.tag;
+  if (tag === 'a' && (attrs.href !== undefined || node.props?.href !== undefined)) {
+    tag = 'Link';
+  }
+
   const children: AddNodeDef[] = [];
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
@@ -118,8 +140,8 @@ function ingestedToNodeDef(node: IngestedNode): AddNodeDef {
 
   return {
     id: node.id,
-    type: node.tag,
-    name: node.name || (node.props?.['data-name'] as string) || (node.tag.charAt(0).toUpperCase() + node.tag.slice(1)),
+    type: tag,
+    name: node.name || (node.props?.['data-name'] as string) || (tag.charAt(0).toUpperCase() + tag.slice(1)),
     styles,
     attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
     textContent: node.text,
@@ -189,6 +211,13 @@ export const fragmentsInsertOperation: Operation<
     // Resolve component tags used inside the fragment
     const compTags = collectComponentTags(ingestedNodes);
     for (const tag of compTags) {
+      // Check for Next.js framework components first
+      if (FRAMEWORK_COMPONENTS[tag]) {
+        const fw = FRAMEWORK_COMPONENTS[tag];
+        targetCode = ensureNamedImport(targetCode, fw.module, [], { ensureDefault: fw.defaultSpec });
+        continue;
+      }
+
       const compPath = `components/${tag}.tsx`;
       const compExists = snapshot.files.has(compPath) || snapshot.files.has(`src/${compPath}`);
 

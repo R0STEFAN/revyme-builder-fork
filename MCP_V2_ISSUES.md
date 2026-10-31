@@ -1,5 +1,26 @@
 # MCP v2 issue log
 
+## 2026-10-31 — fragments.insert rejected Next.js framework components and raw navigating anchor tags
+
+**Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (7 tests) and live execution on project `proj-1793453710566-zr1d8a`, and committed.
+
+**Symptom:**
+1. Inserting JSX fragments containing `<Link href="...">` or `<Image ...>` failed with `COMPONENT_NOT_FOUND: Component "<Link>" referenced in JSX fragment was not found in "components/"` because the component resolver assumed all PascalCase tags must be user-authored design components in `components/`.
+2. Inserting standard `<a href="...">` anchor tags failed plan validation with `PAGE_LINK_NOT_NEXTLINK` and `NEXTLINK_IMPORT_MISSING`, requiring Next.js `<Link>` instead.
+3. Placing CSS variable tokens such as `maxWidth: 'var(--dp-spacing-max)'` on container frames failed plan validation with `MINMAX_SIZE_UNIT` because the Size panel min/max fields only accept concrete `px` or `%` values.
+
+**Cause:**
+`packages/automation-core/src/operations/fragments.ts` collected all uppercase tags for resolution against `components/`, without recognizing built-in Next.js framework components (`Link`, `Image`), and did not normalize HTML links to Next.js `<Link>` or resolve variable min/max sizes to concrete dimensions.
+
+**Fix and regression guard:**
+1. In `packages/automation-core/src/operations/fragments.ts`, added `FRAMEWORK_COMPONENTS = { Link: { module: 'next/link', defaultSpec: 'Link' }, Image: { module: 'next/image', defaultSpec: 'Image' } }`. When encountered, the operation automatically injects `import Link from 'next/link';` or `import Image from 'next/image';` into the page rather than failing on `components/`.
+2. In `ingestedToNodeDef`, automatically transformed `<a href="...">` to Next.js `<Link href="...">` and registered `Link` for auto-import.
+3. Added concrete value normalization for `var(--dp-spacing-max)` in `minWidth`, `maxWidth`, `minHeight`, `maxHeight` properties to `'1360px'`.
+4. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+
+**Verification:**
+`packages/automation-core/test/capabilities/fragments-insert.test.ts` passed (7/7 tests). `diagnostics.projectCheck` verified clean (9/9 files, 0 violations). `impeccable_detect` verified with 0 findings ("Clean craft"). Live execution successfully composed all 7 sections of `proj-1793453710566-zr1d8a`.
+
 ## 2026-10-31 — deleting node wrapped in RevymeTicker left orphaned empty wrapper, failing TICKER_CHILD_COUNT
 
 **Status:** fixed, verified via `src/code/generation/ticker-gen.test.ts` (13 tests) and live CLI operation, and committed.
