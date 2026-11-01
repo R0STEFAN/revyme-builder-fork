@@ -1,0 +1,37 @@
+[
+  {
+    "_id": "srv_ay_wwRULr",
+    "_slug": "brand-strategy",
+    "_status": "published",
+    "name": "Brand Strategy",
+    "slug": "brand-strategy"
+  },
+  {
+    "_id": "srv_Vwnmd_UOc",
+    "_slug": "brand-identity",
+    "_status": "published",
+    "name": "Brand Identity",
+    "slug": "brand-identity"
+  },
+  {
+    "_id": "srv_eGDaF2hxU",
+    "_slug": "brand-guidelines",
+    "_status": "published",
+    "name": "Brand Guidelines",
+    "slug": "brand-guidelines"
+  },
+  {
+    "_id": "srv_Cp9Y6paSe",
+    "_slug": "development",
+    "_status": "published",
+    "name": "Development",
+    "slug": "development"
+  },
+  {
+    "_id": "srv_jDFcWofTg",
+    "_slug": "web-design",
+    "_status": "published",
+    "name": "Web Design",
+    "slug": "web-design"
+  }
+]

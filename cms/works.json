@@ -1,0 +1,69 @@
+[
+  {
+    "_id": "item_fs5QgFoEu",
+    "_slug": "broken-alternatives",
+    "_status": "published",
+    "client": "Broken Alternatives",
+    "slug": "broken-alternatives",
+    "featured": true,
+    "category": "Branding",
+    "image": "https://framerusercontent.com/images/dUKUMciUr5Py8VFQc6n4vMHFEvs.png",
+    "year": "2025"
+  },
+  {
+    "_id": "item_geJLAZeyl",
+    "_slug": "elevated-people",
+    "_status": "published",
+    "client": "Elevated People",
+    "slug": "elevated-people",
+    "featured": true,
+    "category": "Motion",
+    "image": "https://framerusercontent.com/images/lZIQemQvBzCyCuRZpam5v9A4.png",
+    "year": "2025"
+  },
+  {
+    "_id": "item_OvuwTB1KS",
+    "_slug": "studio-altera",
+    "_status": "published",
+    "client": "Studio Altera",
+    "slug": "studio-altera",
+    "featured": true,
+    "category": "Digital Experience",
+    "image": "https://framerusercontent.com/images/zp1mTd4w5cRNdOGQ0R8WSyhCHg0.jpg",
+    "video": "https://framerusercontent.com/assets/1Iak57fVrPvztHe5y74h02py8.mp4",
+    "year": "2025"
+  },
+  {
+    "_id": "item_Dz4jx2LXq",
+    "_slug": "high-society-club",
+    "_status": "published",
+    "client": "High Society Club",
+    "slug": "high-society-club",
+    "featured": true,
+    "category": "Digital Experience",
+    "image": "https://framerusercontent.com/images/dCsHM5QpzSbDj5cTTLuoVxkn64.jpg",
+    "year": "2025"
+  },
+  {
+    "_id": "item_NgiBbChos",
+    "_slug": "statement",
+    "_status": "published",
+    "client": "Statement",
+    "slug": "statement",
+    "featured": false,
+    "category": "Packaging",
+    "image": "https://framerusercontent.com/images/jCyw5WbcElagU0GSzMQmJwMPQo.jpg",
+    "year": "2024"
+  },
+  {
+    "_id": "item_t5AxDMwzy",
+    "_slug": "hidden-culture",
+    "_status": "published",
+    "client": "Hidden Culture",
+    "slug": "hidden-culture",
+    "featured": false,
+    "category": "Digital Experience",
+    "image": "https://framerusercontent.com/images/52WZ3UPlq43IB7wCQj4pQbEGd8.jpg",
+    "year": "2024"
+  }
+]

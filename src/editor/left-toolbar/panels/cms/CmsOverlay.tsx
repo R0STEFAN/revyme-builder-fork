@@ -345,18 +345,21 @@ export default function CmsOverlay() {
           {filteredItems.length === 0 ? (
             <EmptyState hasSearch={!!searchQuery.trim()} query={searchQuery} />
           ) : (
-            filteredItems.map(item => (
-              <ItemRow
-                key={item._id}
-                item={item}
-                schema={schema!}
-                allItems={items}
-                isExpanded={expandedItemId === item._id}
-                onToggle={() => handleToggleItem(item._id)}
-                onSave={handleSaveItem}
-                onDelete={() => handleDeleteItem(item._id)}
-              />
-            ))
+            filteredItems.map(item => {
+              const itemId = item._id || (item as any).id;
+              return (
+                <ItemRow
+                  key={itemId}
+                  item={item}
+                  schema={schema!}
+                  allItems={items}
+                  isExpanded={expandedItemId === itemId}
+                  onToggle={() => handleToggleItem(itemId)}
+                  onSave={handleSaveItem}
+                  onDelete={() => handleDeleteItem(itemId)}
+                />
+              );
+            })
           )}
         </div>
 

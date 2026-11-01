@@ -1,0 +1,19 @@
+{
+  "id": "services",
+  "name": "Services",
+  "slug": "services",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "slug",
+      "name": "Slug",
+      "type": "slug",
+      "required": true
+    }
+  ]
+}

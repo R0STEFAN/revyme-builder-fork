@@ -1,0 +1,44 @@
+{
+  "id": "works",
+  "name": "Works",
+  "slug": "works",
+  "fields": [
+    {
+      "id": "client",
+      "name": "Client",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "slug",
+      "name": "Slug",
+      "type": "slug",
+      "required": true
+    },
+    {
+      "id": "featured",
+      "name": "Featured on Homepage",
+      "type": "boolean"
+    },
+    {
+      "id": "category",
+      "name": "Category",
+      "type": "text"
+    },
+    {
+      "id": "image",
+      "name": "Thumbnail Image",
+      "type": "image"
+    },
+    {
+      "id": "video",
+      "name": "Thumbnail Video",
+      "type": "file"
+    },
+    {
+      "id": "year",
+      "name": "Year",
+      "type": "text"
+    }
+  ]
+}

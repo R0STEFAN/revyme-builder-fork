@@ -1,0 +1,44 @@
+[
+  {
+    "_id": "cat_XaylqbtW8",
+    "_slug": "brand-identity",
+    "_status": "published",
+    "name": "Branding",
+    "slug": "brand-identity"
+  },
+  {
+    "_id": "cat_Sr2oIH_5F",
+    "_slug": "motion",
+    "_status": "published",
+    "name": "Motion",
+    "slug": "motion"
+  },
+  {
+    "_id": "cat_wEYxRC3qB",
+    "_slug": "digital",
+    "_status": "published",
+    "name": "Digital Experience",
+    "slug": "digital"
+  },
+  {
+    "_id": "cat_ngKmQpKBG",
+    "_slug": "packaging",
+    "_status": "published",
+    "name": "Packaging",
+    "slug": "packaging"
+  },
+  {
+    "_id": "cat_n_t7FmnKL",
+    "_slug": "print",
+    "_status": "published",
+    "name": "Print",
+    "slug": "print"
+  },
+  {
+    "_id": "cat_S9bzWPpMo",
+    "_slug": "direction",
+    "_status": "published",
+    "name": "Direction",
+    "slug": "direction"
+  }
+]

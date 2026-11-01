@@ -576,22 +576,25 @@ function CollectionSpreadsheetView({ slug }: { slug: string }) {
             No items yet
           </div>
         ) : (
-          items.map(item => (
-            <div
-              key={item._id}
-              onClick={() => handleClickRow(item._id)}
-              className="flex items-center px-3 py-2 border-b border-[var(--border-light)] cursor-pointer hover:bg-[var(--grid-line)] transition-colors group"
-            >
-              {visibleFields.map(f => (
-                <span key={f.id} className="flex-1 text-xs text-[var(--text-primary)] truncate pr-2">
-                  {renderCellValue(item[f.id], f)}
+          items.map(item => {
+            const itemId = item._id || (item as any).id;
+            return (
+              <div
+                key={itemId}
+                onClick={() => handleClickRow(itemId)}
+                className="flex items-center px-3 py-2 border-b border-[var(--border-light)] cursor-pointer hover:bg-[var(--grid-line)] transition-colors group"
+              >
+                {visibleFields.map(f => (
+                  <span key={f.id} className="flex-1 text-xs text-[var(--text-primary)] truncate pr-2">
+                    {renderCellValue(item[f.id], f)}
+                  </span>
+                ))}
+                <span className="w-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <RemoveButton onClick={(e) => handleDeleteItem(itemId, e)} />
                 </span>
-              ))}
-              <span className="w-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <RemoveButton onClick={(e) => handleDeleteItem(item._id, e)} />
-              </span>
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -631,7 +634,7 @@ function ItemDetailView({ slug, itemId }: { slug: string; itemId: string }) {
 
   const schema = schemas.get(slug);
   const items = data.get(slug) ?? [];
-  const item = items.find(i => i._id === itemId);
+  const item = items.find(i => i._id === itemId || (i as any).id === itemId);
 
   trace.fn('CmsPanel:ItemDetailView.render', { slug, itemId, found: !!item });
 

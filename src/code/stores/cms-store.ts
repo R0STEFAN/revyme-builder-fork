@@ -48,12 +48,33 @@ export const collectionDataAtom = atom<Map<string, CollectionItem[]>>((get) => {
   get(projectVersionAtom);
   const data = new Map<string, CollectionItem[]>();
   const files = projectFS.listFiles('cms/');
+  const now = new Date().toISOString();
   for (const f of files) {
     if (!f.endsWith('.json') || f.endsWith('.schema.json')) continue;
     const slug = f.replace('cms/', '').replace('.json', '');
     const raw = projectFS.readFile(f);
     if (raw) {
-      try { data.set(slug, JSON.parse(raw)); } catch { /* skip corrupt */ }
+      try {
+        const rawItems = JSON.parse(raw);
+        if (Array.isArray(rawItems)) {
+          const items: CollectionItem[] = rawItems.map((it: any, idx: number) => {
+            if (it._id && it._slug && it._status && it._createdAt && it._updatedAt) {
+              return it;
+            }
+            const id = it._id || it.id || `item_${idx}`;
+            const itSlug = it._slug || it.slug || (it.title ? String(it.title).toLowerCase().replace(/[^a-z0-9]/g, '-') : `item-${idx + 1}`);
+            return {
+              ...it,
+              _id: id,
+              _slug: itSlug,
+              _status: it._status || 'published',
+              _createdAt: it._createdAt || now,
+              _updatedAt: it._updatedAt || now,
+            };
+          });
+          data.set(slug, items);
+        }
+      } catch { /* skip corrupt */ }
     }
   }
   return data;

@@ -1,0 +1,19 @@
+{
+  "id": "category",
+  "name": "Category",
+  "slug": "category",
+  "fields": [
+    {
+      "id": "name",
+      "name": "Name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "slug",
+      "name": "Slug",
+      "type": "slug",
+      "required": true
+    }
+  ]
+}

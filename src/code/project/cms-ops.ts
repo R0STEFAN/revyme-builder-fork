@@ -368,7 +368,29 @@ export function getCollectionData(slug: string): CollectionItem[] {
     return [];
   }
   try {
-    const items = JSON.parse(raw) as CollectionItem[];
+    const rawItems = JSON.parse(raw);
+    if (!Array.isArray(rawItems)) return [];
+    const now = new Date().toISOString();
+    let changed = false;
+    const items: CollectionItem[] = rawItems.map((it: any, idx: number) => {
+      if (it._id && it._slug && it._status && it._createdAt && it._updatedAt) {
+        return it;
+      }
+      changed = true;
+      const id = it._id || it.id || `item_${Date.now().toString(36)}_${idx}`;
+      const s = it._slug || it.slug || (it.title ? String(it.title).toLowerCase().replace(/[^a-z0-9]/g, '-') : `item-${idx + 1}`);
+      return {
+        ...it,
+        _id: id,
+        _slug: s,
+        _status: it._status || 'published',
+        _createdAt: it._createdAt || now,
+        _updatedAt: it._updatedAt || now,
+      };
+    });
+    if (changed) {
+      projectFS.writeFile(`cms/${slug}.json`, JSON.stringify(items, null, 2));
+    }
     trace.fn('cms-ops:getCollectionData', { slug, found: true, itemCount: items.length });
     return items;
   } catch (err) {
