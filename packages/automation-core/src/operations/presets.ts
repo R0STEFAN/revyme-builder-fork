@@ -10,6 +10,7 @@ import {
 import { updateNodeInCode } from '@/code/generation/generator-crud';
 import type { PresetToken } from '@/shared/types';
 
+import { typographySetOperation } from './typography';
 export interface FolderNode {
   id: string;
   name: string;
@@ -385,9 +386,188 @@ export const presetsFoldersCreateOperation: Operation<
   },
 };
 
+// 6. presets.batchSet
+export const presetsBatchSetOperation: Operation<
+  {
+    targetFile?: string;
+    presets?: Array<{
+      category: 'border' | 'shadow' | 'radius' | 'spacing' | 'color' | 'other';
+      name: string;
+      values: Record<string, string>;
+      folderId?: string;
+    }>;
+    tokens?: Array<{
+      name: string;
+      value: string;
+      category?: 'border' | 'shadow' | 'radius' | 'spacing' | 'color' | 'other';
+    }>;
+    typography?: Array<{
+      name: string;
+      tag?: string;
+      values?: Record<string, string>;
+      responsiveTiers?: {
+        md?: Record<string, string>;
+        sm?: Record<string, string>;
+      };
+    }>;
+  },
+  {
+    changes: FileChange[];
+    createdTokens: string[];
+    createdTypographyCount: number;
+  }
+> = {
+  name: 'presets.batchSet',
+  description: 'Create or update multiple design presets, tokens, and compound fluid typography presets in one atomic operation',
+  category: 'presets',
+  kind: 'mutation',
+  permit: 'write',
+  environment: 'headless',
+  ownerTask: 'T08',
+  inputSchema: z.object({
+    targetFile: z.string().optional().default('app/globals.css'),
+    presets: z
+      .array(
+        z.object({
+          category: z.enum(['border', 'shadow', 'radius', 'spacing', 'color', 'other']),
+          name: z.string().min(1),
+          values: z.record(z.string(), z.string()),
+          folderId: z.string().optional(),
+        })
+      )
+      .optional(),
+    tokens: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          value: z.string(),
+          category: z.enum(['border', 'shadow', 'radius', 'spacing', 'color', 'other']).optional(),
+        })
+      )
+      .optional(),
+    typography: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          tag: z.string().optional(),
+          values: z.record(z.string(), z.string()).optional(),
+          responsiveTiers: z
+            .object({
+              md: z.record(z.string(), z.string()).optional(),
+              sm: z.record(z.string(), z.string()).optional(),
+            })
+            .optional(),
+        })
+      )
+      .optional(),
+  }),
+  async execute(snapshot, input, context) {
+    const targetFile = input.targetFile || 'app/globals.css';
+    let currentCss = snapshot.files.get(targetFile) ?? ':root {\n}\n';
+    const createdTokens: string[] = [];
+    let createdTypographyCount = 0;
+
+    // Working memory file changes
+    const changes: FileChange[] = [];
+
+    // 1. Process plain tokens
+    if (input.tokens) {
+      for (const tok of input.tokens) {
+        const cleanName = tok.name.replace(/^--/, '').trim();
+        const cat = tok.category || 'other';
+        createdTokens.push(cleanName);
+        currentCss = addPresetTokenToCSS(currentCss, {
+          name: cleanName,
+          value: tok.value,
+          category: cat as PresetToken['category'],
+        });
+      }
+    }
+
+    // 2. Process compound presets (border, radius, shadow, etc.)
+    if (input.presets) {
+      for (const p of input.presets) {
+        const cleanName = p.name.replace(/^--/, '').trim();
+        if (p.category === 'border') {
+          for (const [suffix, val] of Object.entries(p.values)) {
+            const tokenName = `border-${cleanName}-${suffix}`;
+            createdTokens.push(tokenName);
+            currentCss = addPresetTokenToCSS(currentCss, {
+              name: tokenName,
+              value: val,
+              category: 'border',
+            });
+          }
+        } else {
+          for (const [key, val] of Object.entries(p.values)) {
+            const prefix = p.category === 'other' ? '' : `${p.category}-`;
+            const tokenName = key.startsWith(prefix) ? key : `${prefix}${cleanName}`;
+            createdTokens.push(tokenName);
+            currentCss = addPresetTokenToCSS(currentCss, {
+              name: tokenName,
+              value: val,
+              category: p.category as PresetToken['category'],
+            });
+          }
+        }
+      }
+    }
+
+    // Update snapshot with latest CSS before running typography
+    const updatedFiles = new Map(snapshot.files);
+    updatedFiles.set(targetFile, currentCss);
+    let intermediateSnapshot: Snapshot = {
+      ...snapshot,
+      files: updatedFiles,
+    };
+
+    // 3. Process compound typography presets
+    if (input.typography) {
+      for (const typo of input.typography) {
+        const res = await typographySetOperation.execute(
+          intermediateSnapshot,
+          {
+            name: typo.name,
+            tag: typo.tag,
+            values: typo.values,
+            responsiveTiers: typo.responsiveTiers,
+            targetFile,
+          },
+          context
+        );
+        createdTokens.push(...res.createdTokens);
+        createdTypographyCount++;
+        const changedFile = res.changes.find((c) => c.path === targetFile);
+        if (changedFile) {
+          currentCss = changedFile.content;
+          intermediateSnapshot = {
+            ...intermediateSnapshot,
+            files: new Map(intermediateSnapshot.files).set(targetFile, currentCss),
+          };
+        }
+      }
+    }
+
+    changes.push({
+      path: targetFile,
+      beforeHash: null,
+      content: currentCss,
+    });
+
+    return {
+      changes,
+      createdTokens,
+      createdTypographyCount,
+    };
+  },
+};
+
 // Register preset operations
 defaultRegistry.register(presetsListOperation);
 defaultRegistry.register(presetsSetOperation);
 defaultRegistry.register(presetsApplyOperation);
 defaultRegistry.register(presetsFoldersListOperation);
 defaultRegistry.register(presetsFoldersCreateOperation);
+defaultRegistry.register(presetsBatchSetOperation);
+defaultRegistry.registerAlias('presets.batch_set', 'presets.batchSet');
+defaultRegistry.registerAlias('presets.setBatch', 'presets.batchSet');

@@ -15,6 +15,9 @@ import { BUILT_IN_COMPONENTS } from '@/code/project/project-fs';
 import { parsePresetTokens } from '@/code/generation/preset-gen';
 import { groupTypographyPresets, upsertTypographyResponsiveBlock, type TypoPreset } from './typography';
 
+import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
+import { DEFAULT_VIEWPORTS } from './viewports';
+import { VIEWPORT_GAP } from '@/shared/constants';
 const FRAMEWORK_COMPONENTS: Record<string, { module: string; defaultSpec: string }> = {
   Link: { module: 'next/link', defaultSpec: 'Link' },
   Image: { module: 'next/image', defaultSpec: 'Image' },
@@ -283,7 +286,7 @@ export const fragmentsInsertInputSchema = z.object({
   targetFile: z.string().optional().describe('Target page file path (defaults to page.client.tsx or primary page)'),
   filePath: z.string().optional().describe('Alias for targetFile'),
   parentId: z.string().min(1).describe('Parent node data-id to insert fragment into (e.g. "root")'),
-  fragment: z.string().min(1).describe('JSX fragment string containing HTML tags and/or Design Components'),
+  fragment: z.string().min(1).describe('JSX fragment string containing HTML tags and/or Design Components. IMPORTANT: padding, margin, gap, and borderRadius MUST use explicit px values (e.g. "16px", "24px 48px", "9999px") or px tokens. Non-px units like %, rem/em, vh/vw, calc(), and clamp() are rejected by the builder controls.'),
   insertIndex: z.number().int().nonnegative().optional().describe('Zero-based child index to insert at (appends at end if omitted)'),
 });
 
@@ -297,7 +300,7 @@ export const fragmentsInsertOperation: Operation<
   }
 > = {
   name: 'fragments.insert',
-  description: 'Insert a semantic JSX fragment (HTML elements and/or Design Components) into a parent container on the canvas',
+  description: 'Insert a semantic JSX fragment (HTML elements and/or Design Components) into a parent container on the canvas. Note: spacing/radius (padding, margin, gap, borderRadius) MUST use explicit px units or design tokens, as builder controls are px-only.',
   category: 'fragments',
   kind: 'mutation',
   permit: 'write',
@@ -381,6 +384,49 @@ export const fragmentsInsertOperation: Operation<
     if (responsiveRulesMap.size > 0) {
       for (const [nodeId, rules] of responsiveRulesMap.entries()) {
         targetCode = upsertTypographyResponsiveBlock(targetCode, nodeId, rules.join('\n'));
+      }
+    }
+
+    // Ensure canvas declared viewports cover standard responsive breakpoints (tablet 810, mobile 390)
+    // if the page includes responsive styles/rules.
+    const canvas = parseCanvasConfig(targetCode);
+    if (canvas && canvas.viewports && canvas.viewports.length > 0) {
+      let viewports = [...canvas.viewports];
+      let positions = { ...canvas.positions };
+      let changed = false;
+
+      for (const stdVp of DEFAULT_VIEWPORTS) {
+        const exists = viewports.some(
+          (v) =>
+            v.id.toLowerCase() === stdVp.id.toLowerCase() ||
+            v.label.toLowerCase() === stdVp.name.toLowerCase() ||
+            v.width === stdVp.width ||
+            v.designWidth === stdVp.width
+        );
+        if (!exists) {
+          const rightmost = viewports.reduce((right, v) => {
+            const pos = positions[v.id] ?? { x: 0, y: 0 };
+            const renderedW = v.designWidth ?? v.width;
+            return Math.max(right, pos.x + renderedW);
+          }, 0);
+
+          const added = {
+            id: stdVp.id,
+            label: stdVp.name,
+            width: stdVp.width,
+            isPrimary: false,
+            order: Math.max(-1, ...viewports.map((v) => v.order ?? 0)) + 1,
+            x: rightmost + VIEWPORT_GAP,
+            y: 0,
+          };
+          viewports.push(added);
+          positions[stdVp.id] = { x: added.x, y: added.y };
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        targetCode = updateCanvasConfigInCode(targetCode, { viewports, positions });
       }
     }
 

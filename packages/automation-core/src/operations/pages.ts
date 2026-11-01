@@ -332,7 +332,18 @@ export default function Page() {
 
     const clientCode = `'use client';
 
-/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 } ], "positions": { "desktop": { "x": 0, "y": 0 } } } */
+/** @canvas {
+  "viewports": [
+    { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 },
+    { "id": "tablet", "label": "Tablet", "width": 810, "height": "auto", "isPrimary": false, "order": 1 },
+    { "id": "mobile", "label": "Mobile", "width": 390, "height": "auto", "isPrimary": false, "order": 2 }
+  ],
+  "positions": {
+    "desktop": { "x": 0, "y": 0 },
+    "tablet": { "x": 1260, "y": 0 },
+    "mobile": { "x": 2130, "y": 0 }
+  }
+} */
 
 import React from 'react';
 

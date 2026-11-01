@@ -239,7 +239,21 @@ export class OperationRegistry {
         ],
       };
     }
-    const result = op.inputSchema.safeParse(input);
+
+    // Normalize path parameter aliases (filePath, targetFile, path) across all operations
+    let normalizedInput = input;
+    if (input && typeof input === 'object' && !Array.isArray(input)) {
+      const obj = { ...(input as Record<string, unknown>) };
+      const pathVal = obj.filePath ?? obj.targetFile ?? obj.path;
+      if (typeof pathVal === 'string' && pathVal.length > 0) {
+        if (obj.filePath === undefined) obj.filePath = pathVal;
+        if (obj.targetFile === undefined) obj.targetFile = pathVal;
+        if (obj.path === undefined) obj.path = pathVal;
+      }
+      normalizedInput = obj;
+    }
+
+    const result = op.inputSchema.safeParse(normalizedInput);
     if (!result.success) {
       const issues: Issue[] = result.error.issues.map((err) => ({
         code: err.code,

@@ -43,6 +43,17 @@ export function normalizeStyles(
     }
 
     const lowered = lowerUnits(trimmed, context, reporter, `${target}.${camelKey}`);
+    // Auto-normalize alignItems: 'baseline' to 'flex-start' for builder align-control compliance
+    if (camelKey === 'alignItems' && String(lowered).trim().toLowerCase() === 'baseline') {
+      reporter?.recordNormalization(
+        'ALIGN_ITEMS_BASELINE_NORMALIZED',
+        `${target}.${camelKey}`,
+        String(lowered),
+        'flex-start'
+      );
+      normalized[camelKey] = 'flex-start';
+      continue;
+    }
     normalized[camelKey] = lowered;
   }
 

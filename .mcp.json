@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "revyme-builder": {
+      "command": "node",
+      "args": [
+        "packages/cli/dist/main.js",
+        "mcp"
+      ],
+      "cwd": "/home/rost/Документи/revyme/revyme-builder-fork"
+    }
+  }
+}
