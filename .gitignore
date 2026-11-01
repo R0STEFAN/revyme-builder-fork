@@ -8,6 +8,7 @@ debug_output/
 data/
 scripts/*
 !scripts/automation-inventory.cjs
+!scripts/build-framer-native-extension.mjs
 
 # generated / local
 debug-code-before.jsx

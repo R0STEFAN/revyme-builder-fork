@@ -1,0 +1,19 @@
+{
+  "origin": "New live editor source capture, 2026-11-01; component-scope projection. No previous converter output used.",
+  "editorBuild": "https://app.framerstatic.com/web.D7IYYINP.mjs",
+  "sourceCaptureSha256": "fbf4f4456b747d7b2dc3fdde4fbdd668b07ad42a38ee340f6797aab8770402ed",
+  "fixtures": [
+    {
+      "file": "captured-underline.json",
+      "sha256": "e36aab73ad1c315f7a591a35f5c4df674b31f071b95842cbe086a70ad4ae5192",
+      "redactions": [
+        "Source project ID replaced; unrelated definitions and assets excluded."
+      ],
+      "expected": {
+        "variables": 5,
+        "variants": 6,
+        "replicas": 5
+      }
+    }
+  ]
+}

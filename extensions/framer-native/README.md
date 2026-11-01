@@ -1,0 +1,38 @@
+# Framer Native → Revyme — source reader 0.1.0
+
+Це перша діагностична частина нового імпортера. Вона захоплює оригінальну модель
+редактора; конвертація й вставка в Revyme ще не підключені.
+
+## Збирання
+
+З кореня репозиторію:
+
+```sh
+node scripts/build-framer-native-extension.mjs /absolute/path/framer-native-reader
+node --test extensions/framer-native/test/*.test.mjs
+npx vitest run src/shared/framer-transfer-envelope.test.ts
+```
+
+## Встановлення і перший доказ
+
+1. У Chrome відкрий сторінку керування розширеннями та увімкни Developer mode.
+2. Обери Load unpacked і вкажи зібрану директорію з `manifest.json`.
+3. Відкрий свій Framer project у цьому Chrome та онови вкладку після встановлення.
+4. Відкрий потрібну сторінку або визначення компонента.
+5. У popup нового розширення обери потрібний scope і натисни «Захопити дерево».
+6. Збережи JSON. Перевірка повноти та перелік діагностик містяться в самому файлі.
+
+Браузер надає доступ тільки поточній вкладці через activeTab. Reader читає вже
+завантажений engine редактора і може штатно завантажувати інші source scopes.
+Він не змінює шари, не публікує сайт і не читає cookies, токени або історію браузера.
+Captured definitions включають повні declarations проєкту; `rootIds` окремо
+визначає обрані render roots для майбутнього конвертера.
+
+Перший adapter прив'язаний до спостереженого editor entrypoint
+`https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.
+Невідома версія завершується явною помилкою. Успішні unit tests не є доказом,
+що цей adapter уже перевірено наживо: наступний обов'язковий крок — live capture
+і порівняння з незалежним native clipboard.
+
+У поточній діагностичній версії JSON не містить згенерованого Revyme-коду.
+Не вставляй його через старий Framer import handler.

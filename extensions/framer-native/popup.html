@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Framer → Revyme</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>Framer → Revyme</h1>
+      <p class="intro">Перевірка оригінального дерева редактора. Конвертація ще не підключена.</p>
+      <label for="scope">Що захопити</label>
+      <select id="scope">
+        <option value="component">Відкритий компонент</option>
+        <option value="page">Відкриту сторінку</option>
+        <option value="selection">Вибрані шари</option>
+        <option value="project">Увесь проєкт</option>
+      </select>
+      <button id="capture" type="button" class="primary">Захопити дерево</button>
+      <p id="status" role="status" aria-live="polite">Відкрий потрібний проєкт у Framer.</p>
+      <dl id="summary" hidden></dl>
+      <div class="actions">
+        <button id="download" type="button" disabled>Зберегти JSON</button>
+        <button id="copy" type="button" disabled>Копіювати JSON</button>
+      </div>
+      <p class="note">Дані залишаються локально. Reader читає source та завантажує його залежності без редагування документа.</p>
+    </main>
+    <script type="module" src="popup.mjs"></script>
+  </body>
+</html>
