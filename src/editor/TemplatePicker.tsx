@@ -489,9 +489,15 @@ export default function TemplatePicker() {
   // group with no LayoutClient (stale state — template was deleted but
   // the page is still in its folder), surface that name so the user can
   // see the assignment and move out via `-`.
-  const options: Array<{ value: string; label: string }> = templates.map(t => ({
-    value: t.name, label: t.name,
-  }));
+  const options: Array<{ value: string; label: string }> = templates.map(t => {
+    let label = t.name;
+    const code = projectFS.readFile(t.clientPath);
+    if (code) {
+      const match = code.match(/\/\*\*\s*@name\s+"([^"]+)"\s*\*\//);
+      if (match) label = match[1];
+    }
+    return { value: t.name, label };
+  });
   if (currentTemplate && !templates.some(t => t.name === currentTemplate)) {
     options.push({ value: currentTemplate, label: `${currentTemplate} (no layout)` });
   }
