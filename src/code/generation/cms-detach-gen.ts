@@ -19,6 +19,9 @@ import { getEnclosingMapIteratorForNode } from './map-gen';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { getCollectionSchema } from '@/code/project/cms-ops';
 import { trace } from '@/shared/debug-trace';
+import { applyCmsPropBinding, cmsPropBindingExpression, parseCmsPropBindingStash, serializeCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop-bindings';
+import { findFirstElementByDataId, parseJSX } from '../parsing/ast-utils';
+import { readCmsPropBindingExpression } from '../parsing/cms-prop-binding';
 
 const CMS_ORPHAN_ATTR = 'data-cms-orphan';
 
@@ -26,31 +29,15 @@ const CMS_ORPHAN_ATTR = 'data-cms-orphan';
  *  A `:url` third segment marks a WHOLE-VALUE image binding (the instance wraps
  *  the plain-URL field in url() — `prop={`url(${item.field})`}`) so re-entry
  *  re-wraps: `"coverImage:coverImage:url"` → `{…, urlWrap: true}`. */
-export function parseOrphanBindings(value: string): Array<{ prop: string; field: string; urlWrap?: boolean }> {
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const parts = pair.split(':');
-      if (parts.length < 2) return null;
-      const entry: { prop: string; field: string; urlWrap?: boolean } = { prop: parts[0], field: parts[1] };
-      if (parts[2] === 'url') entry.urlWrap = true;
-      return entry;
-    })
-    .filter(Boolean) as Array<{ prop: string; field: string; urlWrap?: boolean }>;
-}
-
-function serializeOrphanBindings(entries: Array<{ prop: string; field: string; urlWrap?: boolean }>): string {
-  return entries.map((e) => `${e.prop}:${e.field}${e.urlWrap ? ':url' : ''}`).join(',');
-}
+export const parseOrphanBindings = parseCmsPropBindingStash;
+const serializeOrphanBindings = serializeCmsPropBindingStash;
 
 /** Locate `[tagStart, tagEnd]` (the `<` and `>`) of nodeId's opening tag. */
 function findOpeningTag(code: string, nodeId: string): { tagStart: number; tagEnd: number } | null {
   const idIdx = findJSXDataIdIndex(code, nodeId);
   if (idIdx === -1) return null;
   const tagStart = code.lastIndexOf('<', idIdx);
-  const tagEnd = code.indexOf('>', idIdx);
+  const tagEnd = findTagClose(code, tagStart);
   if (tagStart === -1 || tagEnd === -1) return null;
   return { tagStart, tagEnd };
 }
@@ -110,7 +97,7 @@ export function dormantizeCmsBindings(code: string, nodeId: string, iterVar: str
   // 1) Stash + strip simple CMS DATA bindings `prop={iterVar.field}` (image,
   //    name, …) → "Missing" pills (generator writes no inner spaces; tolerate them).
   const bindRe = new RegExp(`\\s([a-zA-Z_$][\\w$]*)=\\{\\s*${iterVar}\\.([a-zA-Z_$][\\w$]*)\\s*\\}`, 'g');
-  const found: Array<{ prop: string; field: string; urlWrap?: boolean }> = [];
+  const found: CmsPropBinding[] = [];
   let m: RegExpExecArray | null;
   while ((m = bindRe.exec(openTag)) !== null) found.push({ prop: m[1], field: m[2] });
   openTag = openTag.replace(bindRe, '');
@@ -122,6 +109,19 @@ export function dormantizeCmsBindings(code: string, nodeId: string, iterVar: str
   const wrapRe = new RegExp(`\\s([a-zA-Z_$][\\w$]*)=\\{\`url\\(\\$\\{\\s*${iterVar}\\.([a-zA-Z_$][\\w$]*)\\s*\\}\\)\`\\}`, 'g');
   while ((m = wrapRe.exec(openTag)) !== null) found.push({ prop: m[1], field: m[2], urlWrap: true });
   openTag = openTag.replace(wrapRe, '');
+
+  // Computed presence props retain their expression intent on detach, rather
+  // than being dropped by the dangling-iterator cleanup below.
+  const ast = parseJSX(code);
+  if (ast) findFirstElementByDataId(ast, nodeId, (_path, element) => {
+    for (const attr of element.openingElement.attributes) {
+      if (attr.type !== 'JSXAttribute' || attr.name.type !== 'JSXIdentifier' || attr.value?.type !== 'JSXExpressionContainer') continue;
+      const binding = readCmsPropBindingExpression(attr.value.expression, iterVar);
+      if (!binding?.transform || attr.start == null || attr.end == null) continue;
+      found.push({ prop: attr.name.name, ...binding });
+      openTag = openTag.replace(code.slice(attr.start, attr.end), '');
+    }
+  });
   if (found.length > 0) {
     // Merge into any existing orphan stash (detach → re-enter → detach keeps the union).
     const existing = openTag.match(new RegExp(`\\s${CMS_ORPHAN_ATTR}="([^"]*)"`));
@@ -235,12 +235,12 @@ export function dormantizeCloneStyleBindings(
  *  the re-bind. */
 export function dormantizeCloneAttrBindings(
   attrBindings: Array<{ property: string; field: string }> | undefined,
-  propBindings: Array<{ prop: string; field: string; urlWrap?: boolean }> | undefined,
+  propBindings: CmsPropBinding[] | undefined,
   attrs: Record<string, string> | undefined,
 ): Record<string, string> | undefined {
-  const entries: Array<{ prop: string; field: string; urlWrap?: boolean }> = [
+  const entries: CmsPropBinding[] = [
     ...(attrBindings ?? []).map((b) => ({ prop: b.property, field: b.field })),
-    ...(propBindings ?? []).map((b) => ({ prop: b.prop, field: b.field, urlWrap: b.urlWrap })),
+    ...(propBindings ?? []).map((b) => ({ ...b })),
   ];
   if (entries.length === 0) return attrs;
 
@@ -280,7 +280,7 @@ export function dormantizeCloneBindings(input: {
   textField?: string;
   attrBindings?: Array<{ property: string; field: string }>;
   styleBindings?: Array<{ styleProp: string; field: string }>;
-  propBindings?: Array<{ prop: string; field: string; urlWrap?: boolean }>;
+  propBindings?: CmsPropBinding[];
 }): { textContent: string | undefined; styles: Record<string, string>; attrs: Record<string, string> | undefined } {
   const t = dormantizeCloneTextBinding(input.textContent, input.attrs, input.textField);
   const s = dormantizeCloneStyleBindings(input.styleBindings, input.styles, t.attrs);
@@ -411,6 +411,14 @@ export function bakeCmsOrphanValuesInCode(code: string, nodeId: string, row: Rec
   let baked = 0;
   for (const e of parseOrphanBindings(stashM[1])) {
     const raw = row[e.field];
+    if (e.transform) {
+      const literal = String(applyCmsPropBinding(raw, e));
+      if (!new RegExp(`\\s${e.prop}=`).test(openTag)) {
+        openTag = openTag.replace(/(data-id="[^"]*")/, `$1 ${e.prop}={${literal}}`);
+        baked++;
+      }
+      continue;
+    }
     if (raw == null || raw === '') continue;
     const val = String(raw);
     if (e.prop === '__text') { textField = e.field; continue; } // after tag write-back
@@ -706,9 +714,7 @@ export function rehydrateCmsBindings(code: string, nodeId: string): string {
   for (const o of orphans) {
     if (o.prop.startsWith('__')) continue; // `__text` / `__style.*` handled below (not attrs)
     // urlWrap = whole-value image binding — re-wrap the plain-URL field in url().
-    const bound = o.urlWrap
-      ? `${o.prop}={\`url(\${${dstIter}.${o.field}})\`}`
-      : `${o.prop}={${dstIter}.${o.field}}`;
+    const bound = `${o.prop}={${cmsPropBindingExpression(dstIter, o)}}`;
     // `prop="literal"` or `prop={expr}` — replace in place, else insert.
     const existing = new RegExp(`\\s${o.prop}=(?:"[^"]*"|\\{[^}]*\\})`);
     if (existing.test(openTag)) openTag = openTag.replace(existing, ` ${bound}`);

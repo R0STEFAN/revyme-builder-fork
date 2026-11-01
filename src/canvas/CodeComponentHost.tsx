@@ -80,7 +80,7 @@ export function extractCodeComponentProps(node: CanvasNode): Record<string, any>
       const cmsValues = resolveCmsRowValues(node, _codeComponentNodes);
       for (const b of node.propBindings) {
         if (cmsValues[b.prop] !== undefined) {
-          props[b.prop] = cmsValues[b.prop];
+          props[b.prop] = b.transform ? coerceValue(cmsValues[b.prop]) : cmsValues[b.prop];
         }
       }
     } catch {}

@@ -257,7 +257,7 @@ export function collectionBindingSignature(
   if (templateNode.binding) parts.push(`${templateNode.binding.property}=${templateNode.binding.field}`);
   for (const b of templateNode.attrBindings ?? []) parts.push(`${b.property}=${b.field}`);
   for (const b of templateNode.styleBindings ?? []) parts.push(`__style.${b.styleProp}=${b.field}`);
-  for (const b of templateNode.propBindings ?? []) parts.push(`${b.prop}=${b.field}`);
+  for (const b of templateNode.propBindings ?? []) parts.push(`${b.prop}=${b.field}:${b.transform ?? ""}:${b.urlWrap ? "url" : ""}`);
   // Per-viewport / per-variant rebinds change the painted value too.
   if (templateNode.responsiveBindings) parts.push(`rb:${JSON.stringify(templateNode.responsiveBindings)}`);
   if (templateNode.variantBindings) parts.push(`vb:${JSON.stringify(templateNode.variantBindings)}`);

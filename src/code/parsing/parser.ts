@@ -6,6 +6,8 @@ import _traverse from '@babel/traverse';
 import type { JSXElement, JSXAttribute, JSXExpressionContainer, ObjectExpression, ObjectProperty, StringLiteral, NumericLiteral, JSXText } from '@babel/types';
 import { isTruthy } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
+import { parseCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop-bindings';
+import { readCmsPropBindingExpression } from './cms-prop-binding';
 import { isSvgTag, isCustomDataAttr } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
 import { tickerFromJsxAttributes, type TickerConfig } from '@/shared/ticker-config';
@@ -530,24 +532,9 @@ export interface CanvasNode {
     field: string;            // data field name ('bgColor', 'radius')
   }>;
   // Prop bindings: component props bound to map data fields (e.g. endValue={item.value})
-  propBindings?: Array<{
-    prop: string;             // component prop name ('endValue', 'title')
-    field: string;            // data field name ('value', 'cardTitle')
-    // WHOLE-VALUE image binding — the instance wraps the plain-URL CMS value in
-    // url() at the binding site (`coverImage={`url(${item.coverImage})`}`) because
-    // the master uses the bare `backgroundImage: coverImage` convention. Consumers
-    // that pass the RAW field value into the prop must re-apply the wrap.
-    urlWrap?: boolean;
-  }>;
-  // Orphaned CMS prop bindings: remembered after the instance was dragged OUT
-  // of a collection list (`data-cms-orphan="prop:field,…"`). The live binding is
-  // stripped so it doesn't crash; this records the intent so the panel shows a
-  // "Missing" pill and a re-entry into a collection can re-bind. See cms-detach-gen.
-  orphanBindings?: Array<{
-    prop: string;             // component prop name ('content', 'ergerg')
-    field: string;            // remembered CMS field name ('title', 'untitled')
-    urlWrap?: boolean;        // whole-value image binding (`:url` stash marker) — re-entry re-wraps
-  }>;
+  propBindings?: CmsPropBinding[];
+  // Detached prop bindings retain their transform for re-entry into a list.
+  orphanBindings?: CmsPropBinding[];
   // Orphaned COMPONENT-VARIABLE bindings: remembered after a node was dragged OUT
   // of the component render onto module-scope `canvasNodes` (`data-var-orphan=
   // "content:bio,style.backgroundImage:image,attr.href:emailHref"`). The live
@@ -1298,24 +1285,11 @@ function isAllInlineMixedContent(el: any): boolean {
  * mirrors cms-detach-gen's serializeOrphanBindings. Returns null when the
  * attr is absent or empty.
  */
-function parseCmsOrphanBindings(attributes: any[]): Array<{ prop: string; field: string; urlWrap?: boolean }> | null {
-  const orphanAttr = attributes.find(
-    (a: any) => a.type === 'JSXAttribute' && a.name?.name === 'data-cms-orphan'
-      && a.value?.type === 'StringLiteral',
-  ) as any;
-  if (!orphanAttr) return null;
-  // A `:url` third segment marks a WHOLE-VALUE image binding (see cms-detach-gen).
-  const orphanBindings = (orphanAttr.value.value as string)
-    .split(',').map((s) => s.trim()).filter(Boolean)
-    .map((pair) => {
-      const parts = pair.split(':');
-      if (parts.length < 2) return null;
-      const entry: { prop: string; field: string; urlWrap?: boolean } = { prop: parts[0], field: parts[1] };
-      if (parts[2] === 'url') entry.urlWrap = true;
-      return entry;
-    })
-    .filter(Boolean) as Array<{ prop: string; field: string; urlWrap?: boolean }>;
-  return orphanBindings.length > 0 ? orphanBindings : null;
+function parseCmsOrphanBindings(attributes: any[]): CmsPropBinding[] | null {
+  const attr = attributes.find((a: any) => a.type === 'JSXAttribute' && a.name?.name === 'data-cms-orphan' && a.value?.type === 'StringLiteral');
+  if (!attr) return null;
+  const bindings = parseCmsPropBindingStash(attr.value.value);
+  return bindings.length ? bindings : null;
 }
 
 /** Register `id` under `parentId`'s children and return this element's order index. */
@@ -4712,37 +4686,15 @@ function extractVariantStyleBindings(
 }
 
 /** Detect item.field references in component props: prop={item.field} */
-function extractPropBindings(attrs: (JSXAttribute | any)[], itemVar: string): Array<{ prop: string; field: string; urlWrap?: boolean }> {
-  const bindings: Array<{ prop: string; field: string; urlWrap?: boolean }> = [];
+function extractPropBindings(attrs: (JSXAttribute | any)[], itemVar: string): CmsPropBinding[] {
+  const bindings: CmsPropBinding[] = [];
   const skipAttrs = new Set(['data-id', 'data-name', 'style', 'className', 'key', 'ref']);
   for (const attr of attrs) {
-    if (attr.type !== 'JSXAttribute' || !attr.name || attr.name.type !== 'JSXIdentifier') continue;
-    const propName = attr.name.name as string;
-    if (skipAttrs.has(propName) || propName.startsWith('data-')) continue;
-    if (attr.value?.type !== 'JSXExpressionContainer') continue;
-    const expr = attr.value.expression;
-    // Detect item.fieldName or nested item.a.b
-    const propPath = extractItemMemberPath(expr, itemVar);
-    if (propPath) {
-      bindings.push({ prop: propName, field: propPath });
-      continue;
-    }
-    // WHOLE-VALUE image binding: prop={`url(${item.field})`} — a Make Component /
-    // panel-bind on an image prop whose master uses the bare `backgroundImage: prop`
-    // convention (image values carry the url() wrap; the CMS field holds a plain URL,
-    // so the instance wraps at the binding site). Mirrors the master-side `urlvar:`
-    // detection in extractStyles. Recorded with `urlWrap` so consumers that pass the
-    // RAW field value to the prop (CodeComponentHost ghosts) re-apply the wrap.
-    if (expr.type === 'TemplateLiteral'
-        && expr.expressions?.length === 1) {
-      const innerPath = extractItemMemberPath(expr.expressions[0], itemVar);
-      if (innerPath
-          && String(expr.quasis?.[0]?.value?.raw ?? '').trimStart().toLowerCase().startsWith('url(')
-          && String(expr.quasis?.[1]?.value?.raw ?? '').trimEnd() === ')') {
-        bindings.push({ prop: propName, field: innerPath, urlWrap: true });
-        trace.action('parser:prop-binding-urlwrap', { prop: propName, field: innerPath });
-      }
-    }
+    if (attr.type !== 'JSXAttribute' || attr.name?.type !== 'JSXIdentifier') continue;
+    const prop = attr.name.name;
+    if (skipAttrs.has(prop) || prop.startsWith('data-') || attr.value?.type !== 'JSXExpressionContainer') continue;
+    const binding = readCmsPropBindingExpression(attr.value.expression, itemVar);
+    if (binding) bindings.push({ prop, ...binding });
   }
   return bindings;
 }

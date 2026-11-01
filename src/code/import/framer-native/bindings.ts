@@ -1,6 +1,8 @@
 import { trace } from '../../../shared/debug-trace';
 import { nodeIdToVarNameCapitalised } from '../../../shared/id-utils';
 import type { SortConfig } from '../../../shared/types';
+import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
+import { setTagAttr } from '../../generation/generator-utils';
 import { nativePropName } from './components';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { sourceRecord, sourceVariables } from './source-graph';
@@ -105,6 +107,27 @@ export function resolveSourceBinding(value: unknown, context: BindingContext): N
     return { kind: 'reference', collectionId, rowId: value === null || value === '' ? value : Array.isArray(value) ? value.map(map) : map(value) };
   }
   return { kind: 'literal', value };
+}
+
+/** Emit supported native component-prop bindings, keeping CMS values live. */
+export function bindSourcePropInCode(code: string, nodeId: string, prop: string, value: unknown, context: BindingContext): string {
+  trace.fn('framer-native.bindSourceProp', { nodeId, prop });
+  if (!/^[A-Za-z_$][\w$]*$/.test(prop)) throw new Error(`Invalid native prop ${prop}`);
+  const binding = resolveSourceBinding(value, context);
+  let expression: string;
+  if (binding.kind === 'field') expression = cmsPropBindingExpression(binding.itemVar, { field: binding.fieldId });
+  else if (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field') {
+    expression = cmsPropBindingExpression(binding.input.itemVar, { field: binding.input.fieldId, transform: 'isSet' });
+  } else if (binding.kind === 'variable') expression = binding.name;
+  else if (binding.kind === 'reference') expression = JSON.stringify(binding.rowId);
+  else if (binding.kind === 'literal') {
+    if (binding.value === undefined) return setTagAttr(code, nodeId, prop, null);
+    if (typeof binding.value === 'string' && binding.value.startsWith('data:framer/asset-reference,')) throw new Error('Source asset must be resolved by its asset adapter');
+    const json = JSON.stringify(binding.value);
+    if (json === undefined) throw new Error(`Unsupported literal for ${prop}`);
+    expression = json;
+  } else throw new Error(`A native computed-prop binding adapter is required for ${binding.kind}`);
+  return setTagAttr(code, nodeId, prop, `{${expression}}`);
 }
 
 export function resolveSourceQuery(providerId: string, context: BindingContext): NativeSourceQuery {

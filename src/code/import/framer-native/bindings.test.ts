@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import cms from './fixtures/captured-cms.json';
 import components from './fixtures/captured-components.json';
 import { allocateTargetIdentity, buildSourceGraph, sourceVariableKey } from './source-graph';
-import { resolveSourceBinding, resolveSourceQuery } from './bindings';
+import { bindSourcePropInCode, resolveSourceBinding, resolveSourceQuery } from './bindings';
+import { parseJSXToNodes } from '../../parsing/parser';
+import { dormantizeCmsBindings, rehydrateCmsBindings } from '../../generation/cms-detach-gen';
 import { nativePropName } from './components';
 
 function context(extraDefinitions: { id: string; kind: string; data: Record<string, unknown> }[] = []) {
@@ -28,6 +30,24 @@ describe('source data bindings', () => {
     const ctx = context([provider('list', 'E5RT5hQRC')]);
     const binding = resolveSourceBinding({ type: 'computedValue', outputType: 'boolean', startValue: { type: 'variableReference', providerId: 'list', id: 'rzoGppeEU' }, transforms: [{ type: 'valueTransform', name: 'isSet' }] }, ctx);
     expect(binding).toMatchObject({ kind: 'transform', name: 'isSet', input: { kind: 'field', valueType: 'file', fieldId: ctx.identity[sourceVariableKey('E5RT5hQRC', 'rzoGppeEU')] } });
+  });
+  it('automatically emits a live computed prop from source and retains its native binding after an edit', () => {
+    const ctx = context([provider('list', 'E5RT5hQRC')]);
+    const raw = { type: 'computedValue', outputType: 'boolean', startValue: { type: 'variableReference', providerId: 'list', id: 'rzoGppeEU' }, transforms: [{ type: 'valueTransform', name: 'isSet' }] };
+    const binding = resolveSourceBinding(raw.startValue, ctx);
+    if (binding.kind !== 'field') throw new Error('Expected source field');
+    const code = `import rows from '@/cms/works.json'; export default function Page(){ return <div data-id="root">{rows.map(${binding.itemVar} => <Card data-id="card" />)}</div>; }`;
+    const emitted = bindSourcePropInCode(code, 'card', 'videoVisible', raw, ctx);
+    expect(parseJSXToNodes(emitted).get('card')?.propBindings).toContainEqual({ prop: 'videoVisible', field: binding.fieldId, transform: 'isSet' });
+    const edited = rehydrateCmsBindings(dormantizeCmsBindings(emitted, 'card', binding.itemVar), 'card');
+    expect(parseJSXToNodes(edited).get('card')?.propBindings).toEqual(parseJSXToNodes(emitted).get('card')?.propBindings);
+    expect(emitted).not.toContain('rzoGppeEU');
+    expect(emitted).not.toContain('preview');
+  });
+  it('rejects an unresolved literal asset or a computed prop with no native parsing surface', () => {
+    const code = '<Card data-id="card" />';
+    expect(() => bindSourcePropInCode(code, 'card', 'image', 'data:framer/asset-reference,missing.jpg', context())).toThrow(/asset/i);
+    expect(() => bindSourcePropInCode(code, 'card', 'shown', { type: 'computedValue', startValue: 1, transforms: [{ name: 'isSet' }] }, context())).toThrow(/native.*binding/i);
   });
   it('maps the featured boolean filter and the dynamic category filter to separate native predicates', () => {
     const ctx = context([provider('featured', 'E5RT5hQRC', { collectionFilters: { filters: [{ itemKey: 'DBADIc0Pr', transforms: [] }] }, collectionLimit: 2 })]);

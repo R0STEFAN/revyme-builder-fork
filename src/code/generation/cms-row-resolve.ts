@@ -21,6 +21,7 @@ import { cmsPageMetaAtom, activePreviewItemAtom } from '@/code/stores/cms-page-s
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import type { CanvasNode } from '@/code/parsing/parser';
 import { trace } from '@/shared/debug-trace';
+import { applyCmsPropBinding, type CmsPropBinding } from '@/shared/cms-prop-bindings';
 
 /**
  * Resolved CMS field values for a node inside a collection-list `.map()`,
@@ -34,11 +35,11 @@ import { trace } from '@/shared/debug-trace';
  * template row renders the FIRST item the slice lets through, not items[0].
  */
 export function resolveCmsRowValues(node: CanvasNode, nodes: Map<string, CanvasNode>): Record<string, string> {
-  const bindings: Array<{ prop: string; field: string }> = [
+  const bindings: CmsPropBinding[] = [
     ...(node.binding?.property === 'text' ? [{ prop: '__text', field: node.binding.field }] : []),
     ...(node.attrBindings ?? []).map(b => ({ prop: b.property, field: b.field })),
     ...(node.styleBindings ?? []).map(b => ({ prop: `__style.${b.styleProp}`, field: b.field })),
-    ...(node.propBindings ?? []).map(b => ({ prop: b.prop, field: b.field })),
+    ...(node.propBindings ?? []),
   ];
   if (bindings.length === 0) return {};
 
@@ -81,7 +82,7 @@ export function resolveCmsRowValues(node: CanvasNode, nodes: Map<string, CanvasN
 
   const values: Record<string, string> = {};
   for (const b of bindings) {
-    const v = row[b.field];
+    const v = applyCmsPropBinding(row[b.field], b);
     if (v != null && v !== '') values[b.prop] = String(v);
   }
   trace.action('cms-detach:row-values-resolved', { nodeId: node.id, source: source ?? 'detail-page', props: Object.keys(values) });
