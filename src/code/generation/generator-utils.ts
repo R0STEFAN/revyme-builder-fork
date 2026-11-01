@@ -152,6 +152,11 @@ export function extractObjectEntryBalanced(src: string, key: string): string | n
  *  unbalanced. String-aware so a brace inside a quoted value can't skew the
  *  depth count. */
 export function findBalancedBraceEnd(src: string, openIdx: number): number {
+  return findBalancedDelimiterEnd(src, openIdx, '{', '}');
+}
+
+/** String-aware delimiter scan, also usable for serialized metadata arrays. */
+export function findBalancedDelimiterEnd(src: string, openIdx: number, open: string, close: string): number {
   let depth = 0;
   let inStr = '';
   for (let i = openIdx; i < src.length; i++) {
@@ -162,8 +167,8 @@ export function findBalancedBraceEnd(src: string, openIdx: number): number {
       continue;
     }
     if (ch === "'" || ch === '"' || ch === '`') inStr = ch;
-    else if (ch === '{') depth++;
-    else if (ch === '}') { depth--; if (depth === 0) return i + 1; }
+    else if (ch === open) depth++;
+    else if (ch === close) { depth--; if (depth === 0) return i + 1; }
   }
   return -1;
 }
@@ -484,7 +489,7 @@ export function quoteStyleValue(v: unknown): string {
     const ident = s.slice(4);
     if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(ident)) return ident;
   }
-  return s.includes("'") ? JSON.stringify(s) : `'${s}'`;
+  return /['\\\r\n\u2028\u2029]/.test(s) ? JSON.stringify(s) : `'${s}'`;
 }
 // ─── Boolean HTML Attributes ────────────────────────────────────────────────
 export const BOOLEAN_HTML_ATTRS = new Set([

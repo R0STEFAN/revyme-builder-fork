@@ -75,6 +75,8 @@ export const CONTROLLED_STYLE_PROPS = new Set<string>([
   'pointerEvents', 'userSelect', 'cursor', 'visibility',
   // Typography (TextStyleTool — WHERE they may sit is TEXT_STYLE_ON_FRAME's business)
   'color', 'fontFamily', 'fontSize', 'fontStyle', 'fontWeight', 'letterSpacing', 'lineHeight',
+  // TextStyleTool's OpenType / Font axes rows read, edit and clear these.
+  'fontFeatureSettings', 'fontVariationSettings',
   'textAlign', 'textTransform', 'whiteSpace', 'textOverflow', 'writingMode', 'wordBreak',
   'overflowWrap',   // TextCreator + form-submit/cms-pagination generators emit it
   'textDecoration', 'textDecorationLine', 'textDecorationStyle', 'textDecorationColor',
@@ -205,6 +207,7 @@ export function checkStyleSurface(
 const FORM_CONTROL_TAGS = new Set(['input', 'textarea', 'select', 'option', 'optgroup']);
 
 const TEXT_STYLE_PROPS = new Set<string>([
+  'fontFeatureSettings', 'fontVariationSettings',
   'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing',
   'textTransform', 'textAlign', 'textDecoration', 'textDecorationLine', 'textDecorationStyle',
   'textDecorationColor', 'textDecorationThickness', 'textUnderlineOffset', 'textShadow',

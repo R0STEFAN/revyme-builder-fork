@@ -7,6 +7,9 @@
 // Stored as `const variantConfig = [...]` at the top of the component file.
 
 import { trace } from '@/shared/debug-trace';
+import { parseExpression } from '@babel/parser';
+import * as t from '@babel/types';
+import { findBalancedDelimiterEnd, quoteStyleValue } from '../generation/generator-utils';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,18 +45,29 @@ export function createDefaultVariantConfig(): VariantConfig[] {
  */
 export function parseVariantConfig(code: string): VariantConfig[] {
   // Match: const variantConfig = [...];
-  const match = code.match(/const\s+variantConfig\s*=\s*(\[[\s\S]*?\]);/);
+  const match = /const\s+variantConfig\s*=\s*(?=\[)/.exec(code);
   if (!match) {
     return createDefaultVariantConfig();
   }
 
   try {
-    const jsonStr = match[1]
-      .replace(/'/g, '"')
-      .replace(/(\w+)\s*:/g, '"$1":')
-      .replace(/,\s*([}\]])/g, '$1');
-
-    const parsed = JSON.parse(jsonStr) as Array<{
+    const start = match.index + match[0].length;
+    const end = findBalancedDelimiterEnd(code, start, '[', ']');
+    if (end < 0) return createDefaultVariantConfig();
+    const expression = parseExpression(code.slice(start, end));
+    if (!t.isArrayExpression(expression)) return createDefaultVariantConfig();
+    const parsed = expression.elements.map(element => {
+      if (!t.isObjectExpression(element)) throw new Error('Variant metadata must be literal objects');
+      return Object.fromEntries(element.properties.map(property => {
+        if (!t.isObjectProperty(property) || property.computed || !(t.isIdentifier(property.key) || t.isStringLiteral(property.key))) throw new Error('Variant metadata keys must be literal');
+        const value = property.value;
+        if (t.isUnaryExpression(value) && (value.operator === '-' || value.operator === '+') && t.isNumericLiteral(value.argument)) {
+          return [t.isIdentifier(property.key) ? property.key.name : property.key.value, value.operator === '-' ? -value.argument.value : value.argument.value];
+        }
+        if (!(t.isStringLiteral(value) || t.isNumericLiteral(value) || t.isBooleanLiteral(value))) throw new Error('Variant metadata values must be literal');
+        return [t.isIdentifier(property.key) ? property.key.name : property.key.value, value.value];
+      }));
+    }) as Array<{
       name: string;
       label?: string;
       x?: number;
@@ -87,8 +101,8 @@ export function parseVariantConfig(code: string): VariantConfig[] {
 export function serializeVariantConfig(variants: VariantConfig[]): string {
   const entries = variants.map(v => {
     const parts = [
-      `name: '${v.name}'`,
-      `label: '${v.label}'`,
+      `name: ${quoteStyleValue(v.name)}`,
+      `label: ${quoteStyleValue(v.label)}`,
       `x: ${Math.round(v.x)}`,
       `y: ${Math.round(v.y)}`,
     ];

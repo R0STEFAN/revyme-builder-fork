@@ -684,6 +684,9 @@ export function updateVariantTextInCode(
         const bt = variantBranchText(cursor, code);
         if (bt != null) literals['default'] = bt;
       }
+    } else if (only?.type === 'JSXExpressionContainer' && only.expression.type === 'Identifier') {
+      // A first override starts from a bound prop, before a ternary exists.
+      vars.default = only.expression.name;
     } else {
       // DEEP read — see collectDeepJsxText: span-wrapped text must not read
       // as '' or every non-edited variant's text is written empty. When the

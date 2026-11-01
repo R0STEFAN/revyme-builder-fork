@@ -32,6 +32,8 @@ export interface Connection {
   // When set, codegen places the handler on THAT element's JSX tag, so
   // only clicks on that specific child trigger the variant switch.
   sourceNode?: string;
+  /** Delayed auto-advance pauses its remaining time outside the viewport. */
+  pauseOffscreen?: boolean;
 }
 
 // ─── Parser ─────────────────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ export function serializeConnections(connections: Connection[]): string {
     ];
     if (c.delay) parts.push(`delay: ${c.delay}`);
     if (c.sourceNode) parts.push(`sourceNode: '${c.sourceNode}'`);
+    if (c.pauseOffscreen !== undefined) parts.push(`pauseOffscreen: ${c.pauseOffscreen}`);
     return `  { ${parts.join(', ')} }`;
   });
   return `const connections = [\n${entries.join(',\n')},\n];`;
@@ -231,7 +234,7 @@ export function rebuildConnections(code: string, connections: Connection[]): str
     // container's brace welded to the tag name: `<motion.div}`. The file no
     // longer parsed, the node map came back empty, and the canvas went blank —
     // "I delete variant 2 and it deletes the whole component" (2026-08-08).
-    for (const handler of ['onTap', 'onTapStart', 'onHoverStart', 'onHoverEnd', 'onViewportEnter']) {
+    for (const handler of ['onTap', 'onTapStart', 'onHoverStart', 'onHoverEnd', 'onViewportEnter', 'onViewportLeave']) {
       updated = stripAllTagAttrsBalanced(updated, handler);
     }
     // Remove useState + prevInitial state + sync adjustment + useEffect chain
@@ -239,7 +242,9 @@ export function rebuildConnections(code: string, connections: Connection[]): str
     updated = updated.replace(/\s*const \[prevInitial, setPrevInitial\] = useState\([^)]*\);\n?/g, '');
     updated = updated.replace(/\s*if\s*\(\s*(?:initialVariant|variant)\s*!==\s*prevInitial\s*\)\s*\{[\s\S]*?\}\n?/g, '');
     updated = updated.replace(/\s*const \[isInView, setIsInView\] = useState\(false\);\n?/g, '');
+    updated = updated.replace(/\s*const __afterDelayClock = useRef\(\{ variant: '', remaining: 0 \}\);\n?/g, '');
     updated = updated.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant, isInView\]\);\n?/g, '');
+    updated = updated.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant\]\);\n?/g, match => match.includes('__afterDelayChain') ? '' : match);
     // The legacy SYNC effect the add-path pairs with the useState
     // (`useEffect(() => { setVariant(initialVariant); }, [initialVariant]);`)
     // has deps `[initialVariant]`, so the inView-anchored regex above never
@@ -263,6 +268,7 @@ export function rebuildConnections(code: string, connections: Connection[]): str
     // `initialVariant`. Leaving a `variant !==` behind after the useState above
     // is stripped would be a ReferenceError that kills the whole component.
     updated = updated.replace(/\bvariant(\s*[!=]==\s*)(?!\s*prevInitial\b)/g, `initialVariant$1`);
+    updated = updated.replace(/data-variant=\{variant\}/g, 'data-variant={initialVariant}');
     // Restore the Collection List config's variant arg to `initialVariant` (mirror
     // of the add-path 2d rewrite). `variant` would be a ReferenceError once the
     // useState above is stripped. Anchored on the `const … =` assignment so the
@@ -458,6 +464,8 @@ export function generateConnectionCode(code: string, connections: Connection[]):
   // quote styles idempotently.
   const needsUseEffect = connections.some(c => c.trigger === 'inView' || c.trigger === 'afterDelay');
   result = ensureNamedImport(result, 'react', needsUseEffect ? ['useState', 'useEffect'] : ['useState']);
+  const pausesDelay = connections.some(c => c.trigger === 'afterDelay' && c.pauseOffscreen);
+  if (pausesDelay) result = ensureNamedImport(result, 'react', ['useRef']);
 
   // 2. Add useState(initialVariant) inside the COMPONENT function body if not
   // present. The component uses `function Name() {} + export default
@@ -528,6 +536,8 @@ export function generateConnectionCode(code: string, connections: Connection[]):
   // at variant-1. Mirrors the strip+regenerate pattern used for event
   // handlers below.
   result = result.replace(/\s*const \[isInView, setIsInView\] = useState\(false\);\n?/g, '');
+  result = result.replace(/\s*const __afterDelayClock = useRef\(\{ variant: '', remaining: 0 \}\);\n?/g, '');
+  result = result.replace(/\s+onViewportLeave=\{\(\) => setIsInView\(false\)\}/g, '');
   result = result.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant, isInView\]\);\n?/g, '');
 
   result = result.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant\]\);\n?/g, (m) =>
@@ -539,21 +549,32 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     if (anchor && anchor.index !== undefined) {
       const at = anchor.index + anchor[0].length;
       const entries = afterDelayConns.map(c =>
-        `    '${c.from}': { to: '${c.to}', delay: ${(c.delay ?? 0) * 1000} }`).join(',\n');
+        `    '${c.from}': { to: '${c.to}', delay: ${(c.delay ?? 0) * 1000}${pausesDelay ? `, pauseOffscreen: ${!!c.pauseOffscreen}` : ''} }`).join(',\n');
+      const clock = pausesDelay ? `
+  const __afterDelayClock = useRef({ variant: '', remaining: 0 });` : '';
+      const timer = pausesDelay ? `
+    const clock = __afterDelayClock.current;
+    if (clock.variant !== variant) { clock.variant = variant; clock.remaining = next.delay; }
+    if (next.pauseOffscreen && !isInView) return;
+    const started = performance.now();
+    const timer = setTimeout(() => setVariant(next.to), clock.remaining);
+    return () => { clearTimeout(timer); clock.remaining = Math.max(0, clock.remaining - (performance.now() - started)); };` : `
+    const timer = setTimeout(() => setVariant(next.to), next.delay);
+    return () => clearTimeout(timer);`;
       result = result.slice(0, at) + `
+${clock}
   useEffect(() => {
-    const __afterDelayChain: Record<string, { to: string; delay: number }> = {\n${entries}\n    };
+    const __afterDelayChain: Record<string, { to: string; delay: number${pausesDelay ? '; pauseOffscreen: boolean' : ''} }> = {\n${entries}\n    };
     const next = __afterDelayChain[variant];
     if (!next) return;
-    const timer = setTimeout(() => setVariant(next.to), next.delay);
-    return () => clearTimeout(timer);
-  }, [variant]);
+${timer}
+  }, [variant${pausesDelay ? ', isInView' : ''}]);
 ` + result.slice(at);
     }
   }
 
   const inViewConns = connections.filter(c => c.trigger === 'inView');
-  if (inViewConns.length > 0) {
+  if (inViewConns.length > 0 || pausesDelay) {
     // Find function body to insert after state block
     const funcMatch2 = result.match(/if\s*\(\s*(?:initialVariant\s*!==\s*prevInitial|prevInitial\s*!==\s*initialVariant)\s*\)\s*\{[\s\S]*?\}\n?/)
       || result.match(/const \[variant, setVariant\] = useState\(initialVariant\);/);
@@ -565,6 +586,7 @@ export function generateConnectionCode(code: string, connections: Connection[]):
       ).join(',\n');
       const chainCode = `
   const [isInView, setIsInView] = useState(false);
+${inViewConns.length ? `
   useEffect(() => {
     if (!isInView) return;
     const chain: Record<string, { to: string; delay: number }> = {\n${chainEntries}\n    };
@@ -572,7 +594,7 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     if (!next) return;
     const timer = setTimeout(() => setVariant(next.to), next.delay);
     return () => clearTimeout(timer);
-  }, [variant, isInView]);
+  }, [variant, isInView]);` : ''}
 `;
       result = result.slice(0, afterState) + chainCode + result.slice(afterState);
     }
@@ -756,6 +778,10 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     } else {
       result = insertPropOnMotionWithDataId(result, sourceKey, propName, handler);
     }
+  }
+  if (pausesDelay) {
+    result = insertPropOnRootMotion(result, 'onViewportEnter', '() => setIsInView(true)');
+    result = insertPropOnRootMotion(result, 'onViewportLeave', '() => setIsInView(false)');
   }
 
   trace.action('connection-config:generate-code', { connectionCount: connections.length });

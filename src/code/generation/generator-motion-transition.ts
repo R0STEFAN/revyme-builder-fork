@@ -84,7 +84,15 @@ export function formatTransitionObj(t: Record<string, string>): string {
   const numericKeys = new Set(['duration', 'delay', 'stiffness', 'damping', 'mass', 'bounce']);
   const parts = Object.entries(t)
     .filter(([, v]) => v !== '' && v !== undefined)
-    .map(([k, v]) => numericKeys.has(k) ? `${k}: ${v}` : `${k}: ${quoteStyleValue(v)}`);
+    .map(([k, v]) => {
+      if (k === 'ease' && /^\[\s*[-\d.eE+,\s]+\]$/.test(v)) {
+        try {
+          const tuple: unknown = JSON.parse(v);
+          if (Array.isArray(tuple) && tuple.length === 4 && tuple.every(value => typeof value === 'number' && Number.isFinite(value))) return `${k}: ${JSON.stringify(tuple)}`;
+        } catch { /* Non-numeric easing stays a quoted named easing. */ }
+      }
+      return numericKeys.has(k) ? `${k}: ${v}` : `${k}: ${quoteStyleValue(v)}`;
+    });
   return `{ ${parts.join(', ')} }`;
 }
 

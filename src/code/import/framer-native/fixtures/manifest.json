@@ -14,6 +14,17 @@
         "variants": 6,
         "replicas": 5
       }
+    },
+    {
+      "file": "captured-components.json",
+      "sha256": "e9ba4d58b529c69b6f797d3d330aa6761dd3525712792272bfe129fe1cb01829",
+      "redactions": [
+        "Source project ID replaced; unrelated definitions/assets excluded. Original component, typography, token and Category data retained."
+      ],
+      "expected": {
+        "components": 2,
+        "states": 11
+      }
     }
   ]
 }

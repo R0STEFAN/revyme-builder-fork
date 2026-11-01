@@ -48,7 +48,7 @@ describe('editable original rich text', () => {
   });
   it('preserves font variation axes, features and observed decoration styles', () => {
     const font = mapSourceTypography({ font: 'GF;Zalando Sans-variable-regularVF=IndkdGgiIDEwMCwgIndnaHQiIDQ1MA==', fontSize: '22px', lineHeight: [1.4, 'em'], letterSpacing: [-0.02, 'em'], openTypeFontFeatures: ['blwf', 'cv09'] });
-    expect(font).toMatchObject({ fontFamily: '"Zalando Sans"', fontSize: '22px', fontWeight: '450', fontVariationSettings: '"wdth" 100, "wght" 450', letterSpacing: '-0.02em', lineHeight: '1.4em', fontFeatureSettings: '"blwf", "cv09"' });
+    expect(font).toMatchObject({ fontFamily: '"Zalando Sans"', fontSize: '22px', fontWeight: '450', fontVariationSettings: '"wdth" 100', letterSpacing: '-0.02em', lineHeight: '1.4', fontFeatureSettings: '"blwf", "cv09"' });
     const c = context();
     expect(mapSourceText(node('<p style="--framer-text-decoration-thickness: 2px; --framer-font-open-type-features: &quot;cv09&quot;">Link</p>'), c).styles).toMatchObject({ textDecorationThickness: '2px', fontFeatureSettings: '"cv09"' });
     expect(c.diagnostics).toEqual([]);

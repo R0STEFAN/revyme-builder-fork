@@ -34,7 +34,7 @@ function readReferences(node: SourceNode): SourceReference[] {
     if (existing) existing.optional = existing.optional && optional;
     else result.push({ targetId, property, optional });
   };
-  const scan = (value: unknown, property: string) => {
+  const scan = (value: unknown, property: string, field = property) => {
     if (typeof value === 'string') {
       // A module identifier points to an original scope, never a compiled URL.
       const module = /^local-module:(canvasComponent|layoutTemplate|collection)\/([^:]+):/.exec(value);
@@ -42,10 +42,10 @@ function readReferences(node: SourceNode): SourceReference[] {
       const codeFile = /^local-module:(codeFile\/[^:]+):/.exec(value);
       if (codeFile) add(codeFile[1], property);
       for (const match of value.matchAll(/var\(--token-([^,\s)]+)\s*([,)])/g)) add(match[1], property, match[2] === ',');
-      if (property === 'baseVariantId') add(value, property);
-      if (property === 'html') for (const match of value.matchAll(/data-styles-preset=["']([^"']+)["']/g)) add(match[1], property);
+      if (field === 'baseVariantId') add(value, property);
+      if (field === 'html') for (const match of value.matchAll(/data-styles-preset=["']([^"']+)["']/g)) add(match[1], property);
     } else if (Array.isArray(value)) {
-      value.forEach(item => scan(item, property));
+      value.forEach(item => scan(item, property, field));
     } else {
       const object = sourceRecord(value);
       if (!object) return;
@@ -53,7 +53,7 @@ function readReferences(node: SourceNode): SourceReference[] {
       for (const [key, item] of Object.entries(object)) {
         if (key === 'children' || key === 'renamedIds') continue;
         if (property === 'replicaInfo' && (key === 'master' || key === 'inheritsFrom') && typeof item === 'string') add(item, `replicaInfo.${key}`);
-        scan(item, property || key);
+        scan(item, property ? `${property}.${key}` : key, key);
       }
     }
   };

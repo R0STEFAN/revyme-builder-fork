@@ -150,4 +150,9 @@ describe('original editor source graph', () => {
       expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING', sourceId: 'required' }),
     ]);
   });
+  it('includes typography dependencies introduced only inside replica overrides', () => {
+    const input = transfer(node('base'), node('large', { replicaInfo: { master: 'base', overrides: { base: { html: '<p data-styles-preset="heading">Large</p>' } } } }), node('heading', { __class: 'TextStylePresetNode' }));
+    input.rootIds = ['large'];
+    expect(buildSourceGraph(input).reachable.has('heading')).toBe(true);
+  });
 });

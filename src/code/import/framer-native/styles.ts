@@ -81,7 +81,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     const main = parent?.layout === 'stack' && (axis === 'width' ? parent.stackDirection === 'horizontal' : parent.stackDirection !== 'horizontal');
     if (type === 0) set(axis, px(size));
     else if (type === 1 && typeof size === 'number') result[axis] = `${size * 100}%`;
-    else if (type === 2) result[axis] = 'min-content';
+    else if (type === 2) result[axis] = axis === 'height' ? 'auto' : 'min-content';
     else if (type === 3 && typeof size === 'number') {
       if (main && !outOfFlow) {
         result.flexGrow = String(size); result.flexShrink = '1'; result.flexBasis = '0px';

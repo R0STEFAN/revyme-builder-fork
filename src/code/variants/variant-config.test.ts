@@ -1,6 +1,17 @@
 import { describe, test, expect } from 'vitest';
 import { parseVariantConfig, serializeVariantConfig, createDefaultVariantConfig, hasInteractionState, getInteractionStatesForVariant } from './variant-config';
 
+test('round trips quoted and non-Latin variant labels without evaluating expressions', () => {
+  const label = 'Кнопка \'A\' "B" \\ draft\nnext ];';
+  const configs = [{ name: 'default', label, x: 0, y: 0, isPrimary: true }];
+  expect(parseVariantConfig(serializeVariantConfig(configs))).toEqual(configs);
+  expect(parseVariantConfig('const variantConfig = [danger()];')).toEqual(createDefaultVariantConfig());
+});
+test('preserves negative variant canvas positions', () => {
+  const configs = [{ name: 'default', label: 'Left', x: -120, y: -40, isPrimary: true }];
+  expect(parseVariantConfig(serializeVariantConfig(configs))).toEqual(configs);
+});
+
 describe('variant-config', () => {
   test('createDefaultVariantConfig returns single primary variant', () => {
     const configs = createDefaultVariantConfig();

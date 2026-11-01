@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest';
+import capture from './fixtures/captured-components.json';
+import { parsePropMeta } from '../../components/prop-meta';
+import { updateNodeTextInCode } from '../../generation/generator-crud';
+import { updateVariantStyleInCode } from '../../generation/generator-styles';
+import { checkFile } from '../../oracle/check-file';
+import { parseJSXToNodes } from '../../parsing/parser';
+import { parseConnections } from '../../variants/connection-config';
+import { parseVariantConfig } from '../../variants/variant-config';
+import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
+import { emitNativeComponents } from './components';
+import { sourceStateNames } from './interactions';
+
+describe('editable native component emission', () => {
+  it('emits the real six-state component with five props and all eight connections', () => {
+    const graph = buildSourceGraph({ ...capture, rootIds: ['f03DgVEM5'] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toHaveLength(1);
+    const file = result.files[0];
+    expect(parseVariantConfig(file.code).map(state => state.label)).toEqual(['Regular', 'Regular - Line in', 'Regular - Reset', 'Large', 'Large - Line in', 'Large - Reset']);
+    expect(parseConnections(file.code)).toHaveLength(8);
+    expect(Object.values(parsePropMeta(file.code)).map(prop => prop.label)).toEqual(['Label', 'Color', 'Link', 'New Tab', 'Click']);
+    expect(Object.values(parsePropMeta(file.code)).map(prop => prop.type)).toEqual(['plainText', 'color', 'link', 'toggle', 'event']);
+    expect(file.code).toContain('[0.62,0.2,0.13,0.93]');
+    expect(file.code).not.toContain('local-module:');
+    expect(checkFile(file.code, { kind: 'component', path: file.path, projectFiles: new Set(result.files.map(f => f.path)) })).toEqual([]);
+    const nodes = parseJSXToNodes(file.code);
+    expect(nodes.has(identity.uLUi_cY4A)).toBe(true);
+    const edited = updateVariantStyleInCode(file.code, identity.TACvjFc6M, 'default', { width: '4px' });
+    expect(checkFile(edited, { kind: 'component', path: file.path })).toEqual([]);
+    expect(parseConnections(edited)).toHaveLength(8);
+  });
+  it('keeps nested components as imported instances and preserves a native content slot', () => {
+    const frame = (id: string, children: unknown[] = [], extra = {}) => ({ __class: 'FrameNode', id, children, width: id.endsWith('-base') ? 200 : 100, widthType: 0, heightType: 2, visible: true, ...extra });
+    const child = { __class: 'SmartComponentNode', id: 'child', name: 'Кнопка', baseVariantId: 'child-base', variables: [], children: [frame('child-base', [frame('slot', [], { __class: 'SlotNode' })])] };
+    const parent = { __class: 'SmartComponentNode', id: 'parent', name: 'Кнопка', baseVariantId: 'parent-base', variables: [], children: [frame('parent-base', [frame('instance', [], { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/child:default' }), frame('instance-two', [], { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/child:default' }), frame('label', [], { __class: 'RichTextNode', html: '<p>Literal {draft}</p>' })])] };
+    const graph = buildSourceGraph({ ...capture, rootIds: ['parent'], definitions: [parent, child].map(data => ({ id: data.id, kind: data.__class, data })) });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toHaveLength(2);
+    const parentFile = result.files.find(file => file.code.includes(`data-id="${identity.instance}"`))!;
+    expect(parentFile.code).toMatch(/import \w+ from ["']@\/components\//);
+    expect(result.files.some(file => file.code.includes('{children}'))).toBe(true);
+    for (const file of result.files) expect(checkFile(file.code, { kind: 'component', path: file.path, projectFiles: new Set(result.files.map(f => f.path)) })).toEqual([]);
+    expect(parseJSXToNodes(updateNodeTextInCode(parentFile.code, identity.label, 'Changed')).get(identity.label)?.textContent).toBe('Changed');
+  });
+  it('keeps unknown actions explicit and never reports a dropped component as successful', () => {
+    const copy = JSON.parse(JSON.stringify(capture));
+    copy.rootIds = ['f03DgVEM5'];
+    copy.definitions.find((d: { id: string }) => d.id === 'f03DgVEM5').data.children[0].onTap = [{ actionIdentifier: 'framer/unknown' }];
+    const graph = buildSourceGraph(copy);
+    const result = emitNativeComponents(graph, allocateTargetIdentity(graph, new Set()));
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: 'f03DgVEM5', code: 'SOURCE_COMPONENT_UNSUPPORTED' })]));
+  });
+  it('preserves authored opacity when creating per-state transition entries', () => {
+    const copy = JSON.parse(JSON.stringify(capture));
+    copy.rootIds = ['f03DgVEM5'];
+    const scope = copy.definitions.find((d: { id: string }) => d.id === 'f03DgVEM5').data;
+    scope.children[1].replicaInfo.overrides.q7dmakjiW.opacity = 0.2;
+    const graph = buildSourceGraph(copy), identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    const names = sourceStateNames({ graph, scopeId: scope.id }, identity);
+    expect(parseJSXToNodes(result.files[0].code).get(identity.q7dmakjiW)?.motionVariants?.[names.yre4NRiTU]?.opacity).toBe('0.2');
+  });
+  it('preserves a literal text override while keeping the primary text variable bound', () => {
+    const copy = JSON.parse(JSON.stringify(capture));
+    copy.rootIds = ['f03DgVEM5'];
+    const scope = copy.definitions.find((d: { id: string }) => d.id === 'f03DgVEM5').data;
+    scope.children[3].replicaInfo.overrides.uLUi_cY4A = { _deleted: ['textContent'], html: '<p dir="auto" data-styles-preset="NdIUbIEjR">Large &amp; {draft}</p>' };
+    const graph = buildSourceGraph(copy), identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    const names = sourceStateNames({ graph, scopeId: scope.id }, identity);
+    const text = parseJSXToNodes(result.files[0].code).get(identity.uLUi_cY4A)!;
+    expect(text.conditionalText?.[names.MUB6b9cRc]).toBe('Large & {draft}');
+    expect(text.conditionalTextVariable?.default).toBe('propGerVZF2pu');
+  });
+});

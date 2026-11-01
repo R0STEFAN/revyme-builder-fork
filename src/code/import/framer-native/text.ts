@@ -36,6 +36,9 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
     const value = p[key];
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'string') out[key] = `${value[0]}${value[1]}`;
   }
+  if (out.lineHeight?.endsWith('em')) out.lineHeight = out.lineHeight.slice(0, -2);
+  else if (out.lineHeight?.endsWith('%')) out.lineHeight = String(parseFloat(out.lineHeight) / 100);
+  else if (out.lineHeight?.endsWith('px') && out.fontSize?.endsWith('px') && parseFloat(out.fontSize) > 0) out.lineHeight = String(parseFloat(out.lineHeight) / parseFloat(out.fontSize));
   // The captured Google-font descriptor includes its explicit variation axes.
   if (typeof p.font === 'string' && p.font.startsWith('GF;') && p.font.includes('-variable-')) {
     out.fontFamily = JSON.stringify(p.font.slice(3).split('-variable-')[0]);
@@ -44,7 +47,8 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
       try {
         const axes = atob(encoded);
         if (/^"[a-zA-Z0-9]{4}" [-\d.]+(?:, "[a-zA-Z0-9]{4}" [-\d.]+)*$/.test(axes)) {
-          out.fontVariationSettings = axes;
+          const extraAxes = axes.split(', ').filter(axis => !axis.startsWith('"wght" '));
+          if (extraAxes.length) out.fontVariationSettings = extraAxes.join(', ');
           const weight = /"wght" ([-\d.]+)/.exec(axes);
           if (weight) out.fontWeight = weight[1];
         }
@@ -64,7 +68,10 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
   const attributeStyle = (element: DefaultTreeAdapterTypes.Element) => {
     const attrs = Object.fromEntries(element.attrs.map(attr => [attr.name, attr.value]));
     let styles: Record<string, string> = {};
-    if (attrs['data-styles-preset'] && context.graph?.nodes.has(attrs['data-styles-preset'])) styles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
+    if (attrs['data-styles-preset'] && context.graph) {
+      if (context.graph.nodes.has(attrs['data-styles-preset'])) styles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
+      else mappingDiagnostic(context, node, 'data-styles-preset', 'SOURCE_TYPOGRAPHY_MISSING');
+    }
     for (const [key, value] of Object.entries(parseStyleString(attrs.style ?? ''))) {
       const target = key.startsWith('--framer-') ? cssNames[key.slice(9)] : toCamel(key);
       if (target) {

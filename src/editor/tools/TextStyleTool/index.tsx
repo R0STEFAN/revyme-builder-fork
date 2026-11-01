@@ -63,6 +63,8 @@ export default function TextStyleTool() {
               <ElementPropertyControl property="whiteSpace" label="Whitespace" />
               <ElementPropertyControl property="textOverflow" label="Overflow" />
               <ElementPropertyControl property="writingMode" label="Mode" />
+              <ElementPropertyControl property="fontFeatureSettings" label="OpenType" />
+              <ElementPropertyControl property="fontVariationSettings" label="Font axes" />
               <DecorationControl />
               <ShadowControl />
               <StrokeControl />
