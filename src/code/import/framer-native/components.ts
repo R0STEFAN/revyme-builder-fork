@@ -19,7 +19,7 @@ import { forwardEventPropsToComponentRoot } from '../../variants/event-prop-forw
 import { parseVariantConfig, serializeVariantConfig, type VariantConfig } from '../../variants/variant-config';
 import { sourceStateNames } from './interactions';
 import { mapSourceConnections } from './interactions';
-import { resolveSourceNode, sourceRecord } from './source-graph';
+import { resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
@@ -28,16 +28,10 @@ export function nativeComponentName(identity: Record<string, string>, sourceId: 
   if (!identity[sourceId]) throw new Error(`Missing component identity ${sourceId}`);
   return nodeIdToVarNameCapitalised(identity[sourceId]).replace(/_/g, '');
 }
-export function nativePropName(id: string): string { return `prop${nodeIdToVarNameCapitalised(id)}`; }
-
-function scopeVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
-  const variables = graph.nodes.get(scopeId)?.raw.variables ?? [];
-  const items = Array.isArray(variables) ? variables : Object.values(sourceRecord(variables) ?? {});
-  return items.map(value => {
-    const variable = sourceRecord(value);
-    if (typeof variable?.id !== 'string') throw new Error(`Invalid variable on ${scopeId}`);
-    return variable;
-  });
+export function nativePropName(identity: Record<string, string>, scopeId: string, id: string): string {
+  const target = identity[sourceVariableKey(scopeId, id)];
+  if (!target) throw new Error(`Missing variable identity ${scopeId}:${id}`);
+  return `prop${nodeIdToVarNameCapitalised(target)}`;
 }
 
 function styleLiteral(styles: Record<string, string>): string {
@@ -74,7 +68,8 @@ function transitionSpec(value: unknown): Record<string, string> | undefined {
 /** Build the canonical shell, then use native transforms for states and links. */
 export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeComponents', { components: graph.byKind.get('SmartComponentNode')?.length ?? 0 });
-  const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [] };
+  const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
+  if (result.diagnostics.length) return result;
   for (const scopeId of graph.byKind.get('SmartComponentNode') ?? []) {
     if (!graph.reachable.has(scopeId)) continue;
     const componentDiagnostics: NativeCompileResult['diagnostics'] = [];
@@ -84,8 +79,8 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const names = sourceStateNames(model, identity);
       const primaryId = Object.keys(names).find(id => names[id] === 'default')!;
       const name = nativeComponentName(identity, scopeId);
-      const variables = scopeVariables(graph, scopeId);
-      const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(String(variable.id))}}`]));
+      const variables = sourceVariables(graph, scopeId);
+      const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(identity, scopeId, String(variable.id))}}`]));
       const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, ...options };
       const sourceIds: string[] = [];
       const nested = new Map<string, string>();
@@ -154,7 +149,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       for (const variable of variables) {
         const sourceType = String(variable.type), type = propTypes[sourceType];
         if (!type) throw new Error(`Variable ${String(variable.id)} type ${sourceType} requires a native data adapter`);
-        const prop = nativePropName(String(variable.id));
+        const prop = nativePropName(identity, scopeId, String(variable.id));
         let initial = variable.initialValue ?? (sourceType === 'boolean' ? false : sourceType === 'number' ? 0 : '');
         if ((sourceType === 'image' || sourceType === 'file') && typeof initial === 'string' && initial) {
           if (!options.assets?.[initial]) throw new Error(`Missing asset default for ${String(variable.id)}`);
@@ -183,7 +178,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
             if (!key.startsWith('$control__')) continue;
             const value = sourceRecord(control)?.value;
             const sourceProp = key.slice(10);
-            const attribute = sourceProp === 'variant' ? 'initialVariant' : nativePropName(sourceProp);
+            const attribute = sourceProp === 'variant' ? 'initialVariant' : nativePropName(identity, masterId, sourceProp);
             const expression = sourceProp === 'variant'
               ? t.stringLiteral(sourceStateNames({ graph, scopeId: masterId }, identity)[String(value)] ?? (() => { throw new Error(`Missing instance state ${String(value)}`); })())
               : sourceRecord(value)?.type === 'variableReference' ? t.identifier(valueExpression(value, resolveSourceNode(graph, id), context, key)) : t.valueToNode(value) as t.Expression;
@@ -193,7 +188,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       }
       code = generate(ast).code;
       for (const variable of variables) {
-        const prop = nativePropName(String(variable.id));
+        const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);
         code = setPropLabelInCode(code, prop, String(variable.name ?? variable.id));
       }
@@ -249,7 +244,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
             if (JSON.stringify(text.binding) === JSON.stringify(baseText.binding) && text.jsx === baseText.jsx) continue;
             if (text.binding) {
               const prop = valueExpression(text.binding, base, context, 'textContent');
-              const variable = variables.find(variable => nativePropName(String(variable.id)) === prop);
+              const variable = variables.find(variable => nativePropName(identity, scopeId, String(variable.id)) === prop);
               if (!variable || typeof variable.initialValue !== 'string') throw new Error(`Text binding ${prop} needs its native data adapter`);
               code = bindTextVariableForVariantInCode(code, identity[id], names[stateId], prop, variable.initialValue);
             } else code = updateVariantTextInCode(code, identity[id], names[stateId], text.jsx.includes('<') ? text.jsx : text.plainText);
@@ -269,7 +264,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         }
         if (callbackIds.size > 1) throw new Error(`Multiple exposed events on ${id} require a native event composition adapter`);
         for (const [callbackId, states] of callbackIds) {
-          const prop = nativePropName(callbackId);
+          const prop = nativePropName(identity, scopeId, callbackId);
           const expression = states.length === scope.children.length ? prop : `${states.map(state => `initialVariant === ${JSON.stringify(state)}`).join(' || ')} ? ${prop} : undefined`;
           code = setTagAttr(code, identity[id], 'onClick', `{${expression}}`);
         }
@@ -282,7 +277,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');
       result.files.push({ path: `components/${name}.tsx`, code });
-      result.createdIds.push(scopeId);
+      result.createdIds.push(identity[primaryId]);
     } catch (error) {
       result.diagnostics.push(...componentDiagnostics, { code: 'SOURCE_COMPONENT_UNSUPPORTED', sourceId: scopeId, message: error instanceof Error ? error.message : String(error) });
     }

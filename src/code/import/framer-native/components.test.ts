@@ -8,7 +8,7 @@ import { parseJSXToNodes } from '../../parsing/parser';
 import { parseConnections } from '../../variants/connection-config';
 import { parseVariantConfig } from '../../variants/variant-config';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
-import { emitNativeComponents } from './components';
+import { emitNativeComponents, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
 
 describe('editable native component emission', () => {
@@ -18,6 +18,7 @@ describe('editable native component emission', () => {
     const result = emitNativeComponents(graph, identity);
     expect(result.diagnostics).toEqual([]);
     expect(result.files).toHaveLength(1);
+    expect(result.createdIds).toEqual([identity.q7dmakjiW]);
     const file = result.files[0];
     expect(parseVariantConfig(file.code).map(state => state.label)).toEqual(['Regular', 'Regular - Line in', 'Regular - Reset', 'Large', 'Large - Line in', 'Large - Reset']);
     expect(parseConnections(file.code)).toHaveLength(8);
@@ -77,6 +78,21 @@ describe('editable native component emission', () => {
     const names = sourceStateNames({ graph, scopeId: scope.id }, identity);
     const text = parseJSXToNodes(result.files[0].code).get(identity.uLUi_cY4A)!;
     expect(text.conditionalText?.[names.MUB6b9cRc]).toBe('Large & {draft}');
-    expect(text.conditionalTextVariable?.default).toBe('propGerVZF2pu');
+    expect(text.conditionalTextVariable?.default).toBe(nativePropName(identity, scope.id, 'gerVZF2pu'));
+  });
+  it('never emits a master from an incomplete source capture', () => {
+    const graph = buildSourceGraph({ ...capture, rootIds: ['f03DgVEM5'], complete: false });
+    const result = emitNativeComponents(graph, allocateTargetIdentity(graph, new Set()));
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'SOURCE_CAPTURE_INCOMPLETE' })]));
+  });
+  it('normalizes a field map through the same identity rules as an array', () => {
+    const copy = JSON.parse(JSON.stringify(capture)); copy.rootIds = ['f03DgVEM5'];
+    const scope = copy.definitions.find((d: { id: string }) => d.id === 'f03DgVEM5').data;
+    scope.variables = Object.fromEntries(scope.variables.map(({ id, ...variable }: { id: string }) => [id, variable]));
+    const graph = buildSourceGraph(copy), identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    expect(Object.values(parsePropMeta(result.files[0].code)).map(prop => prop.label)).toEqual(['Label', 'Color', 'Link', 'New Tab', 'Click']);
   });
 });

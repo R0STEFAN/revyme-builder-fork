@@ -25,6 +25,18 @@
         "components": 2,
         "states": 11
       }
+    },
+    {
+      "file": "captured-cms.json",
+      "sha256": "472ca8b1ccbd59e40bea832e45d8306ea3791ba587f4af8f4797236d71e5be09",
+      "redactions": [
+        "Project ID replaced; only original CMS scopes/rows retained, including undeclared legacy control data."
+      ],
+      "expected": {
+        "collections": 3,
+        "rows": 20,
+        "references": 31
+      }
     }
   ]
 }

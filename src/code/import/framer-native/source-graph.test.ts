@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import capturedUnderline from './fixtures/captured-underline.json';
 import type { NativeTransfer } from '../../../shared/framer-transfer-envelope.mjs';
-import { allocateTargetIdentity, buildSourceGraph, resolveSourceNode } from './source-graph';
+import { allocateTargetIdentity, buildSourceGraph, resolveSourceNode, sourceVariableKey } from './source-graph';
 
 const node = (id: string, properties: Record<string, unknown> = {}) => ({
   id, __class: 'FrameNode', children: [], ...properties,
@@ -154,5 +154,14 @@ describe('original editor source graph', () => {
     const input = transfer(node('base'), node('large', { replicaInfo: { master: 'base', overrides: { base: { html: '<p data-styles-preset="heading">Large</p>' } } } }), node('heading', { __class: 'TextStylePresetNode' }));
     input.rootIds = ['large'];
     expect(buildSourceGraph(input).reachable.has('heading')).toBe(true);
+  });
+  it('allocates scoped field and prop identifiers centrally and maps a CMS slug to its native system field', () => {
+    const input = transfer(node('collection', { __class: 'CollectionNode', variables: [{ id: 'title', type: 'string' }, { id: 'slug', type: 'slug' }] }), node('component', { __class: 'SmartComponentNode', variables: [{ id: 'title', type: 'string' }] }));
+    input.rootIds.push('component');
+    const graph = buildSourceGraph(input), identity = allocateTargetIdentity(graph, new Set());
+    const field = identity[sourceVariableKey('collection', 'title')];
+    expect(field).toMatch(/^[a-zA-Z][a-zA-Z0-9_]*$/);
+    expect(identity[sourceVariableKey('component', 'title')]).not.toBe(field);
+    expect(identity[sourceVariableKey('collection', 'slug')]).toBe('_slug');
   });
 });

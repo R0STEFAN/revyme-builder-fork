@@ -20,6 +20,24 @@ export function sourceRecord(value: unknown): SourceProperties | undefined {
     ? value as SourceProperties : undefined;
 }
 
+/** Field IDs are scoped; a component and a collection may reuse a source ID. */
+export function sourceVariableKey(scopeId: string, id: string): string {
+  return JSON.stringify([scopeId, id]);
+}
+
+export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
+  const value = requiredNode(graph, scopeId).raw.variables ?? [];
+  const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
+  const seen = new Set<string>();
+  return entries.map(([key, item]) => {
+    const record = sourceRecord(item);
+    const id = record?.id ?? key;
+    if (!record || typeof id !== 'string' || !id || seen.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: invalid/duplicate variable in ${scopeId}`);
+    seen.add(id);
+    return { ...record, id };
+  });
+}
+
 function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSON).join(',')}]`;
   const object = sourceRecord(value);
@@ -203,10 +221,18 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
   const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
   const used = new Set([...existingPaths].map(path => normalize(path.split('/').pop()!.replace(/\.[^.]+$/, ''))));
   const identity: Record<string, string> = Object.create(null);
-  for (const id of [...graph.reachable].sort()) {
-    const stem = `framer-${simpleHash(`${graph.transfer.context.projectId}:${id}`).replace('-', 'n')}`;
+  const entries = [...graph.reachable].map(id => ({ id, field: false, slug: false }));
+  for (const scopeId of graph.reachable) for (const variable of sourceVariables(graph, scopeId)) {
+    const id = sourceVariableKey(scopeId, String(variable.id));
+    if (graph.nodes.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: field/node identity collision ${id}`);
+    entries.push({ id, field: true, slug: graph.nodes.get(scopeId)!.kind === 'CollectionNode' && variable.type === 'slug' });
+  }
+  for (const { id, field, slug } of entries.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
+    if (slug) { identity[id] = '_slug'; continue; }
+    const hash = simpleHash(`${graph.transfer.context.projectId}:${id}`).replace('-', 'n');
+    const stem = field ? `field${hash}` : `framer-${hash}`;
     let candidate = stem;
-    for (let suffix = 2; used.has(normalize(candidate)); suffix++) candidate = `${stem}-${suffix}`;
+    for (let suffix = 2; used.has(normalize(candidate)); suffix++) candidate = `${stem}${field ? '_' : '-'}${suffix}`;
     used.add(normalize(candidate));
     identity[id] = candidate;
   }
