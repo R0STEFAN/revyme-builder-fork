@@ -319,6 +319,7 @@ export function updateContainerQueryStyle(
   nodeId: string,
   maxWidth: number,
   styles: Record<string, string>,
+  options?: { viewportWidths: number[] },
 ): string {
   trace.fn('generator.updateContainerQueryStyle', { nodeId, maxWidth, styles });
 
@@ -356,7 +357,7 @@ export function updateContainerQueryStyle(
   // e.g. tablet (768px) → @media (max-width: 768px) and (min-width: 376px)
   //      mobile (375px) → @media (max-width: 375px)   (no min-width for smallest)
   // Uses getSortedBreakpointWidths() which reads the live (possibly resized) viewport widths.
-  const vpWidths = getSortedBreakpointWidths();
+  const vpWidths = options?.viewportWidths ?? getSortedBreakpointWidths();
   // A band that is OPEN in the file but about to be bounded loses the range it
   // was implicitly styling — carry its rules down first.
   seedBandLosingImplicitCoverage(code, rules, vpWidths);
