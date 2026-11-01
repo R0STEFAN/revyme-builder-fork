@@ -111,6 +111,7 @@ import { CanvasDragOrchestrator } from './drag/CanvasDragOrchestrator';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useCanvasCommandsBridge } from './hooks/useCanvasCommandsBridge';
 import { useInsertionBridge } from './hooks/useInsertionBridge';
+import { useFramerImportBridge } from './framer-paste';
 import { addViewport } from './helpers/addViewport';
 
 // TipTap was here. Editor now lives inside the sandbox iframe (see
@@ -1252,6 +1253,15 @@ export default function Canvas() {
   // imperative insert path) can route its node-creation through the
   // shared paste-rule engine and have the created ids auto-selected.
   useInsertionBridge({ setSelectedIds });
+
+  // ─── Framer Import Bridge ────────────────────────────────────────────────
+  // Exposes window.__REVYME_IMPORT_FRAMER__ and window message listeners
+  // for the Framer Chrome Extension to paste layers or replace page TSX.
+  useFramerImportBridge({
+    selectedIdRef, selectedIdsRef, nodesRef, contentRef,
+    setSelectedIds,
+    handleNodeMouseDown: (nodeId: string, e: MouseEvent) => mouseControllerRef.current?.handleNodeMouseDown(nodeId, e),
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────
 

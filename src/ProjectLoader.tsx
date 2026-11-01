@@ -544,6 +544,25 @@ export default function ProjectLoader() {
             });
           },
         };
+
+        // Framer Chrome Extension direct import hook
+        (window as any).__REVYME_IMPORT_FRAMER__ = async (payload: any) => {
+          const { handleFramerImport } = await import('@/canvas/framer-paste');
+          return handleFramerImport(payload);
+        };
+
+        const handleFramerMsg = (e: MessageEvent) => {
+          if (e.data?.type === 'REVYME_IMPORT_FRAMER') {
+            (window as any).__REVYME_IMPORT_FRAMER__?.(e.data.payload);
+          }
+        };
+        const handleFramerEvt = (e: any) => {
+          if (e.detail) {
+            (window as any).__REVYME_IMPORT_FRAMER__?.(e.detail);
+          }
+        };
+        window.addEventListener('message', handleFramerMsg);
+        window.addEventListener('revyme:import-framer', handleFramerEvt as EventListener);
       }
 
       setReady(true);

@@ -28,6 +28,7 @@ import {
 } from './image-paste';
 import { handleClipboardTextPaste } from './text-paste';
 import { readFigmaClipboard, handleFigmaPaste } from './figma-paste';
+import { readFramerClipboard, handleFramerPaste } from './framer-paste';
 import { readReshadersClipboard } from './reshaders-clipboard';
 import { hasClipboard as hasInternalClipboard, setExternalClipboardData } from '../code/features/paste-engine';
 import { parsePluginUrl } from '@/editor/command-palette/marketplace-client';
@@ -539,18 +540,26 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     });
 
     function tryFigmaThenText() {
-      // Figma "Import to Revyme" clipboard — the plugin copies a hidden
-      // text/html flavor carrying the design payload. Must be checked from
-      // the HTML flavor (the text/plain flavor is a single space).
-      readFigmaClipboard().then((figmaPayload) => {
-        if (figmaPayload) {
-          trace.action('figma-paste:detected-from-ctrl-v', { nodes: figmaPayload.nodes.length });
-          void handleFigmaPaste(figmaPayload);
+      // Framer clipboard import — checks text/html or text/plain
+      readFramerClipboard().then((framerPayload) => {
+        if (framerPayload) {
+          trace.action('framer-paste:detected-from-ctrl-v');
+          void handleFramerPaste(framerPayload);
           return;
         }
-        doTextPaste();
-      }).catch((err) => {
-        trace.error('figma-paste:ctrl-v-failed', err);
+        // Figma "Import to Revyme" clipboard
+        readFigmaClipboard().then((figmaPayload) => {
+          if (figmaPayload) {
+            trace.action('figma-paste:detected-from-ctrl-v', { nodes: figmaPayload.nodes.length });
+            void handleFigmaPaste(figmaPayload);
+            return;
+          }
+          doTextPaste();
+        }).catch((err) => {
+          trace.error('figma-paste:ctrl-v-failed', err);
+          doTextPaste();
+        });
+      }).catch(() => {
         doTextPaste();
       });
     }
@@ -594,13 +603,17 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
       //     (no sourceProjectId → same-project path).
       if (trimmed.startsWith('{') && trimmed.includes('"revymeClipboard"')) {
         try {
-          const payload = JSON.parse(trimmed);
+          let payload = JSON.parse(trimmed);
+          if (typeof payload['text/plain'] === 'string') {
+            try { payload = JSON.parse(payload['text/plain']); } catch {}
+          }
           if (payload && payload.revymeClipboard === 1 && setExternalClipboardData(payload.data)) {
             trace.action('reshaders-paste:detected-from-ctrl-v', {
               nodes: payload.data?.nodes?.length,
               components: payload.data?.components?.length,
             });
-            executePaste(nodesRef.current, contentRef.current, selectedIdRef.current, (id) => setSelectedIds(id ? [id] : []), handleNodeMouseDown);
+            const targetId = selectedIdRef.current || (nodesRef.current.has('root') ? 'root' : null);
+            executePaste(nodesRef.current, contentRef.current, targetId, (id) => setSelectedIds(id ? [id] : []), handleNodeMouseDown);
             return;
           }
         } catch { /* not a reshaders payload — fall through */ }
@@ -648,7 +661,8 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
       //    "Empty clipboard" error toast for what's actually a
       //    plain-text paste (handled at step 4).
       if (hasInternalClipboard()) {
-        executePaste(nodesRef.current, contentRef.current, selectedIdRef.current, (id) => setSelectedIds(id ? [id] : []), handleNodeMouseDown);
+        const targetId = selectedIdRef.current || (nodesRef.current.has('root') ? 'root' : null);
+        executePaste(nodesRef.current, contentRef.current, targetId, (id) => setSelectedIds(id ? [id] : []), handleNodeMouseDown);
         return;
       }
       // 4. Plain-text fallback — user copied real text from outside
