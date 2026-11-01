@@ -2299,7 +2299,7 @@ import React from 'react';
 export default function Page() {
   return (
 <div data-id="root" data-name="Page" style={{
-  position: 'relative', width: '100%', height: 'auto',
+  position: 'relative', width: '100%', height: 'auto', minHeight: '900px',
   backgroundColor: '#ffffff'
 }}>
 </div>

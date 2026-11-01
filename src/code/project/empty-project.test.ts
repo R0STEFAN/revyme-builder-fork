@@ -135,6 +135,7 @@ describe('createEmptyProject', () => {
     it('renders a single root <div> with no children', () => {
       expect(page).toContain('data-id="root"');
       expect(page).toContain("height: 'auto'");
+      expect(page).toContain("minHeight: '900px'");
       expect(page).toContain("backgroundColor: '#ffffff'");
       const rootBodyMatch = page.match(/<div data-id="root"[\s\S]*?>([\s\S]*?)<\/div>/);
       expect(rootBodyMatch).not.toBeNull();
