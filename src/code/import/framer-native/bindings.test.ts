@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import cms from './fixtures/captured-cms.json';
 import components from './fixtures/captured-components.json';
 import { allocateTargetIdentity, buildSourceGraph, sourceVariableKey } from './source-graph';
-import { bindSourcePropInCode, resolveSourceBinding, resolveSourceQuery } from './bindings';
+import { bindSourcePropInCode, emitSourceQueryInCode, resolveSourceBinding, resolveSourceQuery } from './bindings';
 import { parseJSXToNodes } from '../../parsing/parser';
 import { dormantizeCmsBindings, rehydrateCmsBindings } from '../../generation/cms-detach-gen';
 import { nativePropName } from './components';
@@ -53,6 +53,28 @@ describe('source data bindings', () => {
     const ctx = context([provider('featured', 'E5RT5hQRC', { collectionFilters: { filters: [{ itemKey: 'DBADIc0Pr', transforms: [] }] }, collectionLimit: 2 })]);
     expect(resolveSourceQuery('featured', ctx)).toMatchObject({ collectionId: 'E5RT5hQRC', limit: 2, predicates: [{ kind: 'transform', name: 'equals', input: { kind: 'field', fieldId: ctx.identity[sourceVariableKey('E5RT5hQRC', 'DBADIc0Pr')] }, argument: { kind: 'literal', value: true } }] });
     expect(resolveSourceQuery('xmUkU_AV5', ctx)).toMatchObject({ collectionId: 'DwP_tmnNO', predicates: [{ kind: 'transform', name: 'equals', input: { fieldId: '_id' }, argument: { kind: 'variable', providerId: 'ZfAw5qjTc' } }] });
+  });
+  it('emits the featured query using native list helpers with a lexical iterator and editable config', () => {
+    const ctx = context([provider('featured', 'E5RT5hQRC', { collectionFilters: { filters: [{ itemKey: 'DBADIc0Pr', transforms: [] }] }, collectionLimit: 2, collectionStartOffset: 1, collectionOrder: [{ itemKey: 'WzsCxsMgh', direction: 'desc' }] })]);
+    const query = resolveSourceQuery('featured', ctx);
+    const base = 'export default function Page(){return <div data-id="root"><div data-id="target"></div></div>; }';
+    const emitted = emitSourceQueryInCode(base, 'target', 'featured', `<p data-id="title" key={${query.itemVar}._id}>{${query.itemVar}.${ctx.identity[sourceVariableKey('E5RT5hQRC', 'WzsCxsMgh')]}}</p>`, ctx);
+    const nodes = parseJSXToNodes(emitted);
+    expect(nodes.get('target')?.collectionList).toMatchObject({ source: query.slug, itemVar: query.itemVar, limit: 2, offset: 1, sort: [{ field: ctx.identity[sourceVariableKey('E5RT5hQRC', 'WzsCxsMgh')], direction: 'desc' }], filterGroup: { combinator: 'and', filters: [{ field: ctx.identity[sourceVariableKey('E5RT5hQRC', 'DBADIc0Pr')], operator: 'equals', value: true }] } });
+    expect(nodes.get('title')?.binding?.field).toBe(ctx.identity[sourceVariableKey('E5RT5hQRC', 'WzsCxsMgh')]);
+  });
+  it('round-trips a static set of referenced records as a native in predicate', () => {
+    const ctx = context([provider('related', 'E5RT5hQRC', { collectionFilters: { filters: [{ itemKey: 'id', transforms: [{ name: 'isIncludedIn', value: [] }] }] } })]);
+    const works = ctx.graph.nodes.get('E5RT5hQRC')!;
+    // Use any real row from the source, so the test never invents a remapped ID.
+    const related = ctx.graph.nodes.get('related')!.raw;
+    (related.collectionFilters as { filters: { transforms: { value: string[] }[] }[] }).filters[0].transforms[0].value = [works.children[0]];
+    const emitted = emitSourceQueryInCode('export default function Page(){return <div data-id="target"></div>; }', 'target', 'related', '<Card data-id="card" />', ctx);
+    expect(parseJSXToNodes(emitted).get('target')?.collectionList?.filterGroup?.filters).toEqual([{ field: '_id', operator: 'in', value: [ctx.identity[works.children[0]]] }]);
+  });
+  it('rejects dynamic predicates or reverse/zero-limit cases until their full native round-trip exists', () => {
+    const ctx = context([provider('reversed', 'E5RT5hQRC', { collectionReverse: true }), provider('empty', 'E5RT5hQRC', { collectionLimit: 0 })]);
+    for (const id of ['xmUkU_AV5', 'reversed', 'empty']) expect(() => emitSourceQueryInCode('<div data-id="target"></div>', 'target', id, '<Card data-id="card"/>', ctx)).toThrow(/native.*query/i);
   });
   it('does not confuse nested repeaters or permit an out-of-scope provider', () => {
     const ctx = context([provider('outer', 'E5RT5hQRC', { children: [{ id: 'inner', __class: 'FrameNode', dataIdentifier: 'local-module:collection/DwP_tmnNO:default', parentid: 'outer', children: [{ id: 'leaf', __class: 'RichTextNode', parentid: 'inner', children: [] }] }] }), provider('unrelated', 'E5RT5hQRC')]);

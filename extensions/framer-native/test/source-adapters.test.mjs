@@ -73,3 +73,60 @@ test('rejects unsupported editor builds without importing a guessed module', asy
   await assert.rejects(resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.UNKNOWN.mjs'], href,
     importModule() { throw new Error('must not import'); } }), /EDITOR_BUILD_UNSUPPORTED/);
 });
+
+test('resolves asset URLs through the observed native helper rather than guessing a CDN', async () => {
+  const engine = makeEngine();
+  const calls = [];
+  const adapter = await resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.D7IYYINP.mjs'], href,
+    async importModule(url) {
+      calls.push(url);
+      if (url.endsWith('chunk-VNJKMZPM.mjs')) return { Fc: engine };
+      if (url.endsWith('chunk-ZNFBUDMT.mjs')) return { l: asset => `https://native.example/${asset.id}.png` };
+      throw new Error(`Unexpected module ${url}`);
+    },
+  });
+  assert.deepEqual(calls, ['https://app.framerstatic.com/chunk-VNJKMZPM.mjs', 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs']);
+  assert.equal((await adapter.readAssets())[0].url, 'https://native.example/image.png');
+});
+
+async function codeEngine() {
+  const engine = makeEngine();
+  await engine.loadScopesThenProcess([{ id: 'master' }]);
+  const codeNode = { id: 'codeFile/original', __class: 'LocalModuleNode', save: { type: 'codeFile', name: 'Original.tsx', moduleId: 'module-a', saveId: 'save-a' }, children: [] };
+  const originalSerialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => { const raw = originalSerialize(); raw.root.children.push(codeNode); return raw; };
+  engine.stores.modulesStore = {
+    getTransientSave() { return null; },
+    async getSourceContentForModuleSave(pointer) {
+      assert.deepEqual(pointer, { moduleId: 'module-a', saveId: 'save-a' });
+      return 'export function Original() { return null; }';
+    },
+  };
+  return engine;
+}
+
+test('captures original code-file text via its saved source accessor and keeps the raw tree unchanged', async () => {
+  const engine = await codeEngine();
+  const before = engine.tree.toJS();
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  assert.deepEqual(await adapter.readCodeFiles(), [{ sourceId: 'codeFile/original', path: 'Original.tsx', moduleId: 'module-a', saveId: 'save-a', code: 'export function Original() { return null; }' }]);
+  assert.deepEqual(engine.tree.toJS(), before);
+});
+
+test('does not substitute a compiled module or a stale saved file for unsaved code', async () => {
+  const engine = await codeEngine();
+  engine.stores.modulesStore.getTransientSave = () => ({ moduleId: 'module-a', saveId: 'unsaved' });
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await assert.rejects(adapter.readCodeFiles(), /SOURCE_CODE_UNSAVED/);
+});
+
+test('detects a code edit while original source is being fetched', async () => {
+  const engine = await codeEngine();
+  let dirty = false;
+  engine.stores.modulesStore.getTransientSave = () => dirty ? { saveId: 'unsaved' } : null;
+  engine.stores.modulesStore.getSourceContentForModuleSave = async () => { dirty = true; return 'original'; };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  const before = await adapter.readContext({ mode: 'project' });
+  await assert.rejects(adapter.readCodeFiles(), /SOURCE_CODE_UNSAVED/);
+  assert.notEqual((await adapter.readContext({ mode: 'project' })).revision, before.revision);
+});

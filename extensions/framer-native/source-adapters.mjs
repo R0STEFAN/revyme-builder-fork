@@ -2,6 +2,7 @@
 const EDITOR_BUILDS = Object.freeze({
   'https://app.framerstatic.com/web.D7IYYINP.mjs': {
     engineModule: 'https://app.framerstatic.com/chunk-VNJKMZPM.mjs', engineExport: 'Fc', treeVersion: 128,
+    assetModule: 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs', assetUrlExport: 'l',
   },
 });
 
@@ -10,10 +11,12 @@ export async function resolveEditorSourceAdapter({ scriptUrls, href, importModul
   if (!entry) throw new Error('EDITOR_BUILD_UNSUPPORTED: This Framer editor build has no verified source adapter.');
   const build = EDITOR_BUILDS[entry];
   const exports = await importModule(build.engineModule);
-  return createEngineSourceAdapter(exports[build.engineExport], { editorBuild: entry, href, treeVersion: build.treeVersion });
+  const assetExports = await importModule(build.assetModule);
+  if (typeof assetExports[build.assetUrlExport] !== 'function') throw new Error('ASSET_RESOLVER_UNAVAILABLE: The verified native URL helper is unavailable.');
+  return createEngineSourceAdapter(exports[build.engineExport], { editorBuild: entry, href, treeVersion: build.treeVersion, resolveAssetUrl: assetExports[build.assetUrlExport] });
 }
 
-export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersion = 128 }) {
+export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersion = 128, resolveAssetUrl }) {
   if (!engine?.stores?.projectStore || !engine?.stores?.treeStore || !engine?.stores?.scopeStore
     || typeof engine.tree?.toJS !== 'function' || typeof engine.tree?.get !== 'function'
     || typeof engine.loadScopesThenProcess !== 'function') {
@@ -28,8 +31,12 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
     }
   }
   checkProject();
+  let capturedCodeIds = [];
   const scopeIds = () => Array.from(engine.tree.root.children || [], node => node.id);
-  const revision = () => `${engine.stores.treeStore.remoteTreeVersion}:${engine.tree.root.update}`;
+  const revision = () => {
+    const dirty = capturedCodeIds.filter(id => engine.stores.modulesStore?.getTransientSave?.(id)).sort();
+    return `${engine.stores.treeStore.remoteTreeVersion}:${engine.tree.root.update}${dirty.length ? `:unsaved:${dirty.join(',')}` : ''}`;
+  };
   let cachedRevision, index;
   function sourceIndex() {
     const current = revision();
@@ -90,7 +97,26 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
       if (!map) return [];
       const values = typeof map.items === 'function' ? map.items()
         : map instanceof Map ? Array.from(map.values()) : Object.values(map);
-      return JSON.parse(JSON.stringify(values));
+      return JSON.parse(JSON.stringify(Array.from(values, asset => resolveAssetUrl ? { ...asset, url: resolveAssetUrl(asset) } : asset)));
+    },
+    async readCodeFiles() {
+      checkProject();
+      const codeNodes = [...sourceIndex().values()].filter(node => node.__class === 'LocalModuleNode' && node.save?.type === 'codeFile');
+      capturedCodeIds = codeNodes.map(node => node.id);
+      const store = engine.stores.modulesStore, result = [];
+      for (const node of codeNodes) {
+        const fail = message => { throw Object.assign(new Error(message), { sourceId: node.id }); };
+        if (typeof store?.getSourceContentForModuleSave !== 'function' || typeof store.getTransientSave !== 'function') fail('SOURCE_CODE_UNAVAILABLE: The original source accessor is unavailable.');
+        const save = node.save;
+        if (![save.moduleId, save.saveId, save.name].every(value => typeof value === 'string' && value)) fail('SOURCE_CODE_UNAVAILABLE: The original file save pointer is incomplete.');
+        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: Wait for the original code file to finish saving, then capture again.');
+        // This accessor reads files.source, not files.module / moduleContent.
+        const code = await store.getSourceContentForModuleSave({ moduleId: save.moduleId, saveId: save.saveId });
+        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: The original code changed while it was being read.');
+        if (typeof code !== 'string') fail('SOURCE_CODE_UNAVAILABLE: The original file is not text.');
+        result.push({ sourceId: node.id, path: save.name, moduleId: save.moduleId, saveId: save.saveId, code });
+      }
+      return result;
     },
   };
 }

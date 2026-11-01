@@ -25,6 +25,10 @@ export function sourceVariableKey(scopeId: string, id: string): string {
   return JSON.stringify([scopeId, id]);
 }
 
+export function sourceAssetKey(key: string): string {
+  return JSON.stringify(['asset', key, 'file']);
+}
+
 export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
   const value = requiredNode(graph, scopeId).raw.variables ?? [];
   const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
@@ -222,6 +226,12 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
   const used = new Set([...existingPaths].map(path => normalize(path.split('/').pop()!.replace(/\.[^.]+$/, ''))));
   const identity: Record<string, string> = Object.create(null);
   const entries = [...graph.reachable].map(id => ({ id, field: false, slug: false }));
+  const assetKeys = new Set(graph.transfer.assets.map(asset => asset.key).filter((key): key is string => typeof key === 'string' && !!key));
+  for (const key of assetKeys) {
+    const id = sourceAssetKey(key);
+    if (graph.nodes.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: asset/node identity collision ${id}`);
+    entries.push({ id, field: false, slug: false });
+  }
   for (const scopeId of graph.reachable) for (const variable of sourceVariables(graph, scopeId)) {
     const id = sourceVariableKey(scopeId, String(variable.id));
     if (graph.nodes.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: field/node identity collision ${id}`);

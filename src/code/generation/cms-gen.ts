@@ -222,6 +222,9 @@ export function buildChainCode(
 
   const sortKeys = Array.isArray(sort) ? sort : sort ? [sort] : [];
   if (sortKeys.length > 0) {
+    // Imports are shared by every list. filter() already returns a copy;
+    // an unfiltered sort must also avoid mutating that shared source array.
+    if (!filterGroup?.filters.length) chain += '.slice()';
     const cmp = sortKeys.map(k => buildSortKeyExpr(k.field, k.direction)).join(' || ');
     chain += `.sort((a, b) => ${cmp})`;
   }
@@ -260,8 +263,10 @@ export function createCollectionListInCode(
   parentId: string,
   collectionSlug: string,
   templateJSX: string,
+  itemVar = 'item',
 ): string {
   trace.fn('cms-gen:createCollectionList', { parentId, collectionSlug });
+  if (!/^[A-Za-z_$][\w$]*$/.test(itemVar)) throw new Error('Invalid collection iterator');
 
   // Step 1: Ensure import exists
   let result = ensureCmsImport(code, collectionSlug);
@@ -280,7 +285,7 @@ export function createCollectionListInCode(
   }
 
   // Step 3: Replace children with .map() expression
-  const mapExpr = `\n      {${collectionSlug}.map(item => (\n        ${templateJSX}\n      ))}\n    `;
+  const mapExpr = `\n      {${collectionSlug}.map(${itemVar} => (\n        ${templateJSX}\n      ))}\n    `;
 
   result = result.slice(0, closing.contentStart) + mapExpr + result.slice(closing.closeTagStart);
 

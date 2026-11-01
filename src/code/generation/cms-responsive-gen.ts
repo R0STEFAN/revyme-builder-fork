@@ -224,6 +224,7 @@ function buildInlineFilterSort(base: ListConfigDims): string {
   }
   const keys = base.sort ?? [];
   if (keys.length > 0) {
+    if (!base.filterGroup?.filters.length) s += '.slice()';
     s += `.sort((a, b) => ${keys.map(k => buildSortKeyExpr(k.field, k.direction)).join(' || ')})`;
   }
   return s;

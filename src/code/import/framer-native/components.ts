@@ -208,6 +208,13 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
+          if (base.kind === 'CodeComponentNode') {
+            const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
+            if ([...controls].some(key => JSON.stringify(base.properties[key]) !== JSON.stringify(state.properties[key]))) {
+              throw new Error(`Per-state instance controls on ${id} require their native conditional-prop adapter`);
+            }
+            if (state.properties.codeComponentIdentifier !== base.properties.codeComponentIdentifier) throw new Error(`Per-state instance master replacement on ${id} requires its native adapter`);
+          }
           const styles = stylesFor(state, parentId ? resolveSourceNode(graph, parentId, stateId) : undefined);
           const delta: Record<string, string> = {};
           for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) if (styles[key] !== baseStyles[key]) {

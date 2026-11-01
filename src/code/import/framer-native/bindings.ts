@@ -1,8 +1,9 @@
 import { trace } from '../../../shared/debug-trace';
 import { nodeIdToVarNameCapitalised } from '../../../shared/id-utils';
-import type { SortConfig } from '../../../shared/types';
+import type { FilterConfig, SortConfig } from '../../../shared/types';
 import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
 import { setTagAttr } from '../../generation/generator-utils';
+import { createCollectionListInCode, findJSXElementByDataId, updateCollectionListConfigInCode } from '../../generation/cms-gen';
 import { nativePropName } from './components';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { sourceRecord, sourceVariables } from './source-graph';
@@ -174,4 +175,24 @@ export function resolveSourceQuery(providerId: string, context: BindingContext):
     ...(typeof raw.collectionStartOffset === 'number' ? { offset: raw.collectionStartOffset } : {}),
     ...(typeof raw.collectionLimit === 'number' ? { limit: raw.collectionLimit } : {}),
   };
+}
+
+/** Source query → editable native collection config; unsupported semantics never disappear. */
+export function emitSourceQueryInCode(code: string, parentId: string, providerId: string, templateJSX: string, context: BindingContext): string {
+  trace.fn('framer-native.emitQuery', { parentId, providerId });
+  const query = resolveSourceQuery(providerId, context);
+  const unsupported = (): never => { throw new Error(`A native source-query adapter is required for ${providerId}`); };
+  if (query.reverse || query.limit === 0) unsupported();
+  const filters: FilterConfig[] = query.predicates.map(predicate => {
+    if (predicate.kind !== 'transform' || predicate.input.kind !== 'field' || predicate.input.providerId !== providerId) return unsupported();
+    const argument = predicate.argument;
+    if (!argument || argument.kind !== 'literal' && argument.kind !== 'reference') return unsupported();
+    const value = argument.kind === 'literal' ? argument.value : argument.rowId;
+    if (predicate.name === 'equals') return { field: predicate.input.fieldId, operator: 'equals', value };
+    if (predicate.name === 'isIncludedIn' && Array.isArray(value)) return { field: predicate.input.fieldId, operator: 'in', value };
+    return unsupported();
+  });
+  if (findJSXElementByDataId(code, parentId) < 0) throw new Error(`Native query target ${parentId} is missing`);
+  const list = createCollectionListInCode(code, parentId, query.slug, templateJSX, query.itemVar);
+  return updateCollectionListConfigInCode(list, parentId, { combinator: query.combinator, filters }, query.sorts, query.limit, query.offset);
 }

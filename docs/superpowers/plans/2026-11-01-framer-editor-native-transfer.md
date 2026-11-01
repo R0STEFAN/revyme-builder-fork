@@ -80,8 +80,8 @@ path/content. The UI owns queue flush and selection synchronization.
 - `captureNativeTransfer(adapter, request, signal): Promise<NativeTransfer>`.
 - Reader adapter: `readContext()`, `readScope(id)`, `loadScopes(ids, signal)`, `readDefinitions(ids)`, `readAssets(ids)`; each returns plain data. No writer method is exposed.
 
-- [ ] Record current HEAD/status and the relevant Vitest/typecheck baseline. Copy fresh fixtures from the evidence directory in the spec; strip unrelated records and external identifiers for committed test fixtures. Keep an unmodified local evidence manifest and hashes.
-- [ ] Write and run the source-reader contract tests before implementation:
+- [x] Record current HEAD/status and the relevant Vitest/typecheck baseline. Copy fresh fixtures from the evidence directory in the spec; strip unrelated records and external identifiers for committed test fixtures. Keep an unmodified local evidence manifest and hashes.
+- [x] Write and run the source-reader contract tests before implementation:
 
 ```js
 test('does not succeed with an unresolved component scope', async () => {
@@ -98,24 +98,24 @@ test('retries a changed revision and never mixes two revisions', async () => {
 });
 ```
 
-- [ ] Implement envelope validation: reject incorrect format/version, duplicate definition IDs,
+- [x] Implement envelope validation: reject incorrect format/version, duplicate definition IDs,
   prototype keys, cycles, missing roots and non-plain records. Bound JSON size to 50 MiB,
   definition count to 100000 and nesting depth to 256 with explicit errors.
-- [ ] Implement the first source adapter for the observed editor build. Resolve the currently
+- [x] Implement the first source adapter for the observed editor build. Resolve the currently
   loaded engine singleton and verify its project/branch and read API shape. Static evidence
   identifies `chunk-VNJKMZPM.mjs` export `Fc` for the observed build; derive the editor build
   from the current entrypoint and do not treat the export name as universal. Capture raw
   scope definitions, variables, replicas, tokens, collections and source code metadata;
   await unloaded scopes with bounded cancellation and retry a revision change at most twice.
-- [ ] Run `node --test extensions/framer-native/test/capture.test.mjs` and
+- [x] Run `node --test extensions/framer-native/test/capture.test.mjs` and
   `npx vitest run src/shared/framer-transfer-envelope.test.ts`.
-- [ ] Perform a live diagnostic capture of the user-selected project using the new reader.
+- [x] Perform a live diagnostic capture of the user-selected project using the new reader.
   Verify six Underline Link variants, five Project Card variants, declarations for their
   exposed variables, all three page breakpoints, layout slot and 20 CMS records. Compare
   IDs/properties to the independent native Copy fixtures, accounting for renamedIds.
   If the engine cannot provide these, report the exact missing read capability and repair
   this adapter before proceeding; do not substitute the compiled site's component modules.
-- [ ] Commit only source-reader/envelope/fixture changes after the proof passes.
+- [x] Commit only source-reader/envelope/fixture changes after the proof passes.
 
 ### Task 2: Normalize source graph, identity and inheritance
 
@@ -125,7 +125,7 @@ test('retries a changed revision and never mixes two revisions', async () => {
 `SourceGraph` stores definitions/references by kind and owns source scope/variant/record IDs;
 `ResolvedSourceNode` stores `id`, `sourceId`, `kind`, `properties`, `children` and provenance.
 
-- [ ] Write failing tests for transitive component/collection closure, cycles, renamedIds,
+- [x] Write failing tests for transitive component/collection closure, cycles, renamedIds,
   duplicate labels, non-Latin labels, unknown types and deterministic collision handling.
 
 ```ts
@@ -137,12 +137,12 @@ it('keeps deleted properties deleted and preserves replica child order', () => {
 });
 ```
 
-- [ ] Run `npx vitest run src/code/import/framer-native/source-graph.test.ts` and confirm semantic failures.
-- [ ] Normalize object maps and arrays explicitly; resolve base + overrides + `_deleted`;
+- [x] Run `npx vitest run src/code/import/framer-native/source-graph.test.ts` and confirm semantic failures.
+- [x] Normalize object maps and arrays explicitly; resolve base + overrides + `_deleted`;
   preserve explicit false/empty/zero; separate render roots from dependency roots. Use
   existing ID/string helpers where appropriate. Preserve unknown source properties and
   issue diagnostics for unsupported semantics instead of dropping entities.
-- [ ] Run graph/envelope tests, inspect diagnostics for source IDs and commit this module.
+- [x] Run graph/envelope tests, inspect diagnostics for source IDs and commit this module.
 
 ### Task 3: Native frames, text, styles and responsive overrides
 
@@ -153,7 +153,7 @@ it('keeps deleted properties deleted and preserves replica child order', () => {
 `NativeText` keeps editable content plus tag/runs/preset/bindings; `context` explicitly
 includes parent layout, viewport and resolved source variables.
 
-- [ ] Write failing tests for stacks/grids, fractional/fill/fit sizing, absolute pins,
+- [x] Write failing tests for stacks/grids, fractional/fill/fit sizing, absolute pins,
   active/inactive fills, inherited styles, image fitting, rich-text links, JSX escaping,
   typography presets and responsive visibility/order.
 
@@ -168,12 +168,12 @@ it('keeps literal text editable without changing braces or ampersands', () => {
 });
 ```
 
-- [ ] Run the new module tests and confirm their failures.
-- [ ] Implement typed mapping from observed Framer properties. Use native generators for
+- [x] Run the new module tests and confirm their failures.
+- [x] Implement typed mapping from observed Framer properties. Use native generators for
   container rules, variant styles, fit-text scaffolds and typography; preserve original
   viewport widths/bands. Emit one responsive tree rather than three duplicated DOM trees.
   Route missing style semantics to structured diagnostics with source property/ID.
-- [ ] Run the new tests plus `src/code/generation/fit-text-gen.test.ts`;
+- [x] Run the new tests plus `src/code/generation/fit-text-gen.test.ts`;
   parse emitted JSX and assert original content/order. Commit the completed mapping.
 
 ### Task 4: Editable component masters, props, variants and interaction graphs

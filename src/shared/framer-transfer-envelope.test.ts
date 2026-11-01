@@ -27,6 +27,14 @@ describe('native Framer transfer trust boundary', () => {
     expect(decoded.definitions[0].data.children).toEqual([{ id: 'text', name: 'A & B {draft}' }]);
   });
 
+  it('carries optional original code sources while retaining compatibility with existing raw captures', () => {
+    const codeFiles = [{ sourceId: 'codeFile/original', path: 'Original.tsx', moduleId: 'module', saveId: 'save', code: 'export const value = 1;' }];
+    expect(decodeNativeTransfer({ ...sample(), codeFiles }).codeFiles).toEqual(codeFiles);
+    expect(decodeNativeTransfer(sample()).codeFiles).toBeUndefined();
+    expect(() => decodeNativeTransfer({ ...sample(), codeFiles: [{ ...codeFiles[0], code: {} }] })).toThrow(/code/i);
+    expect(() => decodeNativeTransfer({ ...sample(), codeFiles: [codeFiles[0], codeFiles[0]] })).toThrow(/code/i);
+  });
+
   it.each([
     ['unsupported version', () => ({ ...sample(), version: 2 })],
     ['wrong format', () => ({ ...sample(), format: 'other' })],

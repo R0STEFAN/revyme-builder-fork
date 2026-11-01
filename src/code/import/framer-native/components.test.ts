@@ -86,6 +86,15 @@ describe('editable native component emission', () => {
     expect(result.files).toEqual([]);
     expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'SOURCE_CAPTURE_INCOMPLETE' })]));
   });
+  it('does not silently drop per-state nested instance controls', () => {
+    const frame = (id: string, children: unknown[] = [], extra = {}) => ({ id, __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children, ...extra });
+    const child = { id: 'child', __class: 'SmartComponentNode', baseVariantId: 'child-base', variables: [{ id: 'label', type: 'string', initialValue: 'Default' }], children: [frame('child-base')] };
+    const instance = frame('instance', [], { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/child:default', '$control__label': { type: 'string', value: 'Base' } });
+    const parent = { id: 'parent', __class: 'SmartComponentNode', baseVariantId: 'parent-base', variables: [], children: [frame('parent-base', [instance]), frame('parent-other', [], { replicaInfo: { master: 'parent-base', overrides: { instance: { '$control__label': { type: 'string', value: 'Changed' } } } } })] };
+    const graph = buildSourceGraph({ ...capture, rootIds: ['parent'], definitions: [parent, child].map(data => ({ id: data.id, kind: data.__class, data })) });
+    const result = emitNativeComponents(graph, allocateTargetIdentity(graph, new Set()));
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ sourceId: 'parent', message: expect.stringMatching(/per-state instance control/i) }));
+  });
   it('normalizes a field map through the same identity rules as an array', () => {
     const copy = JSON.parse(JSON.stringify(capture)); copy.rootIds = ['f03DgVEM5'];
     const scope = copy.definitions.find((d: { id: string }) => d.id === 'f03DgVEM5').data;

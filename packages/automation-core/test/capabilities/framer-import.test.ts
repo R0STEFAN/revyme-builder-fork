@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
+import capturedComponents from '@/code/import/framer-native/fixtures/captured-components.json';
 import { allocateTargetIdentity, buildSourceGraph } from '@/code/import/framer-native/source-graph';
 import { emitNativeCms } from '@/code/import/framer-native/cms';
+import { emitNativeComponents } from '@/code/import/framer-native/components';
 import { buildCreatedMaster } from '@/code/generation/create-component-gen';
 import { projectFS } from '@/code/project/project-fs';
 import { createOperationContext, createSnapshot, prepareOperation } from '../../src/session';
@@ -177,6 +179,17 @@ describe('deterministic Framer full-file import boundary', () => {
     expect(emitted.diagnostics).toEqual([]);
     const input = bundle(); input.files = emitted.files;
     expect((await run(input)).changes).toHaveLength(6);
+  });
+  it('accepts the unchanged automatic six-state component output from original source', async () => {
+    const graph = buildSourceGraph({ ...capturedComponents, rootIds: ['f03DgVEM5'] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const emitted = emitNativeComponents(graph, identity);
+    expect(emitted.diagnostics).toEqual([]);
+    const input = bundle(); input.files = emitted.files;
+    const result = await run(input);
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0].content).toBe(emitted.files[0].code);
+    expect(result.createdIds).toContain(identity.q7dmakjiW);
   });
   it('catches inbound references broken by replacement of an existing collection', async () => {
     const input = bundle();

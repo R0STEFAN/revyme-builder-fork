@@ -2817,7 +2817,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             parsedFilter = parseFilterCallback(cursor.arguments?.[0]);
           } else if (method === 'sort') {
             parsedSort = parseSortCallback(cursor.arguments?.[0]);
-          } else if (method === 'slice') {
+          } else if (method === 'slice' && cursor.arguments?.length) {
             const sliceArgs = parseSliceArgs(cursor.arguments);
             parsedLimit = sliceArgs.limit;
             parsedOffset = sliceArgs.offset;
@@ -4184,6 +4184,15 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
       && n.callee?.type === 'MemberExpression'
       && n.callee.property?.type === 'Identifier'
       && n.callee.property.name === 'includes') {
+      // Native `in`: a literal list of record IDs includes the row field.
+      // This is distinct from `item.field.includes(value)` (contains).
+      if (n.callee.object?.type === 'ArrayExpression' && n.arguments?.length === 1) {
+        const field = extractFieldPathFromNode(n.arguments[0]);
+        const entries = n.callee.object.elements;
+        if (field && entries.every((entry: any) => entry && ['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral'].includes(entry.type))) {
+          return { field, operator: 'in', value: entries.map((entry: any) => entry.type === 'NullLiteral' ? null : entry.value) };
+        }
+      }
       const field = extractFieldPathFromNode(n.callee.object);
       if (field) {
         const v = unwrapStringCoerce(n.arguments?.[0]);
@@ -4194,6 +4203,7 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
     if (n.type === 'UnaryExpression' && n.operator === '!') {
       const inner = parseComparison(n.argument);
       if (inner?.operator === 'contains') return { ...inner, operator: 'not_contains' };
+      if (inner?.operator === 'in') return { ...inner, operator: 'not_in' };
       if (inner?.operator === 'equals') return { ...inner, operator: 'not_equals' };
       if (inner?.operator === 'exists') return { ...inner, operator: 'exists', value: false };
       return null;
@@ -4693,7 +4703,7 @@ function extractPropBindings(attrs: (JSXAttribute | any)[], itemVar: string): Cm
     if (attr.type !== 'JSXAttribute' || attr.name?.type !== 'JSXIdentifier') continue;
     const prop = attr.name.name;
     if (skipAttrs.has(prop) || prop.startsWith('data-') || attr.value?.type !== 'JSXExpressionContainer') continue;
-    const binding = readCmsPropBindingExpression(attr.value.expression, itemVar);
+    const binding = readCmsPropBindingExpression(attr.value.expression, itemVar, extractItemMemberPath);
     if (binding) bindings.push({ prop, ...binding });
   }
   return bindings;

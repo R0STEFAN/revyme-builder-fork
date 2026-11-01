@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseJSX } from '@/code/parsing/ast-utils';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 import {
   createCollectionListInCode,
   bindFieldInCode,
@@ -68,6 +69,20 @@ export default function Page() {
     </div>
   );
 }`;
+
+describe('independent CMS query results', () => {
+  it('sorts a copy so one list cannot change the shared collection order', () => {
+    const rows = Object.freeze([{ title: 'B' }, { title: 'A' }, { title: 'C' }]);
+    const chain = buildChainCode('rows', undefined, [{ field: 'title', direction: 'asc' }], 2);
+    const result = new Function('rows', `return ${chain};`)(rows);
+    expect(result).toEqual([{ title: 'A' }, { title: 'B' }]);
+    expect(rows.map(row => row.title)).toEqual(['B', 'A', 'C']);
+  });
+  it('retains the outer limit while parsing a non-mutating sort chain', () => {
+    const code = CODE_WITH_COLLECTION.replace('teamMembers.map(item =>', 'teamMembers.slice().sort((a, b) => (a.name > b.name ? 1 : a.name < b.name ? -1 : 0)).slice(0, 2).map(item =>');
+    expect(parseJSXToNodes(code).get('card-list')?.collectionList).toMatchObject({ limit: 2, sort: [{ field: 'name', direction: 'asc' }] });
+  });
+});
 
 // ─── createCollectionListInCode ─────────────────────────────────────────────
 

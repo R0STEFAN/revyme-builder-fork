@@ -52,3 +52,19 @@ test('does not turn a canceled capture into a successful bundle', async () => {
   const controller = new AbortController(); controller.abort();
   await assert.rejects(captureNativeTransfer(adapter(), { mode: 'page' }, controller.signal), { name: 'AbortError' });
 });
+
+test('carries original code source in the same stable capture envelope', async () => {
+  const source = adapter();
+  source.readCodeFiles = async () => [{ sourceId: 'original', path: 'Original.tsx', moduleId: 'module', saveId: 'save', code: 'export const original = true;' }];
+  const result = await captureNativeTransfer(source, { mode: 'page' }, new AbortController().signal);
+  assert.equal(result.complete, true);
+  assert.equal(result.codeFiles[0].code, 'export const original = true;');
+});
+
+test('marks unavailable original source incomplete instead of silently dropping it', async () => {
+  const source = adapter();
+  source.readCodeFiles = async () => { throw Object.assign(new Error('Source unavailable'), { sourceId: 'original' }); };
+  const result = await captureNativeTransfer(source, { mode: 'page' }, new AbortController().signal);
+  assert.equal(result.complete, false);
+  assert(result.diagnostics.some(d => d.code === 'SOURCE_CODE_UNAVAILABLE' && d.sourceId === 'original'));
+});

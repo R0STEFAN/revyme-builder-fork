@@ -13,16 +13,19 @@ function memberPath(node: t.Node | null | undefined, itemVar: string): string | 
 }
 
 /** Only recognize the native presence expression when EVERY field reference agrees. */
-export function readCmsPropBindingExpression(node: t.Node, itemVar: string): Omit<CmsPropBinding, 'prop'> | null {
-  const field = memberPath(node, itemVar);
+export function readCmsPropBindingExpression(
+  node: t.Node, itemVar: string,
+  readFieldPath: (node: t.Node | null | undefined, itemVar: string) => string | null = memberPath,
+): Omit<CmsPropBinding, 'prop'> | null {
+  const field = readFieldPath(node, itemVar);
   if (field) return { field };
   if (t.isTemplateLiteral(node) && node.expressions.length === 1) {
-    const inner = memberPath(node.expressions[0], itemVar);
+    const inner = readFieldPath(node.expressions[0], itemVar);
     if (inner && node.quasis[0].value.raw.trimStart().toLowerCase().startsWith('url(') && node.quasis[1].value.raw.trimEnd() === ')') return { field: inner, urlWrap: true };
   }
   if (!t.isConditionalExpression(node) || !t.isCallExpression(node.test)) return null;
-  const target = memberPath(node.test.arguments[0], itemVar);
-  if (!target) return null;
+  const target = readFieldPath(node.test.arguments[0], itemVar);
+  if (!target || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(target)) return null;
   const binding = { field: target, transform: 'isSet' as const };
   if (t.isNodesEquivalent(node, parseExpression(cmsPropBindingExpression(itemVar, binding)))) {
     trace.action('parser:computed-prop-binding', { field: target, transform: binding.transform });

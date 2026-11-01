@@ -1,4 +1,4 @@
-# Framer Native → Revyme — source reader 0.1.0
+# Framer Native → Revyme — source reader 0.1.1
 
 Це перша діагностична частина нового імпортера. Вона захоплює оригінальну модель
 редактора; конвертація й вставка в Revyme ще не підключені.
@@ -28,11 +28,17 @@ npx vitest run src/shared/framer-transfer-envelope.test.ts
 Captured definitions включають повні declarations проєкту; `rootIds` окремо
 визначає обрані render roots для майбутнього конвертера.
 
+Версія 0.1.1 також читає оригінальні `codeFile` через accessor `files.source`,
+зберігає точний module/save pointer і додає нативні URL ресурсів через helper
+редактора. Незбережений код або недоступний оригінал робить capture неповним;
+скомпільований `moduleContent` не використовується як заміна.
+
 Перший adapter прив'язаний до спостереженого editor entrypoint
 `https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.
-Невідома версія завершується явною помилкою. Успішні unit tests не є доказом,
-що цей adapter уже перевірено наживо: наступний обов'язковий крок — live capture
-і порівняння з незалежним native clipboard.
+Невідома версія завершується явною помилкою. Дерево версії 0.1.0 перевірене
+на живому проєкті й незалежному native clipboard. Live capture 0.1.1 також
+підтвердив оригінальний Overrides.tsx та URL всіх 526 asset descriptors.
+Доступність самих ресурсів і повна конвертація перевіряються окремо.
 
 У поточній діагностичній версії JSON не містить згенерованого Revyme-коду.
 Не вставляй його через старий Framer import handler.

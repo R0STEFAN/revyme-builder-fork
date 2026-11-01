@@ -64,6 +64,14 @@ export function decodeNativeTransfer(input) {
   if (!Array.isArray(rootIds) || rootIds.length === 0 || rootIds.some(id => !validId(id) || !ids.has(id))
     || new Set(rootIds).size !== rootIds.length) fail('missing or duplicate root');
   if (!Array.isArray(assets) || assets.some(asset => !record(asset))) fail('invalid assets');
+  if (value.codeFiles !== undefined) {
+    if (!Array.isArray(value.codeFiles) || value.codeFiles.length > 10000) fail('invalid code sources');
+    const codeIds = new Set();
+    for (const file of value.codeFiles) {
+      if (!record(file) || !['sourceId', 'path', 'moduleId', 'saveId'].every(key => validId(file[key])) || typeof file.code !== 'string' || codeIds.has(file.sourceId)) fail('invalid/duplicate code source');
+      codeIds.add(file.sourceId);
+    }
+  }
   if (typeof complete !== 'boolean' || !Array.isArray(diagnostics)) fail('invalid completeness');
   for (const diagnostic of diagnostics) {
     if (!record(diagnostic) || !validId(diagnostic.code) || typeof diagnostic.message !== 'string'

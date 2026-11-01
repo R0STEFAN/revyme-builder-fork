@@ -44,8 +44,16 @@ export async function captureNativeTransfer(adapter, request, signal) {
       diagnostics.push({ code: 'SOURCE_DEFINITION_NOT_SERIALIZED', sourceId: id, message: 'Loaded definition was omitted by the reader.' });
     }
     const assets = await abortable(adapter.readAssets(loadedIds), deadline);
+    let codeFiles = [];
+    if (adapter.readCodeFiles) {
+      try { codeFiles = await abortable(adapter.readCodeFiles(loadedIds), deadline); }
+      catch (error) {
+        deadline.throwIfAborted();
+        diagnostics.push({ code: 'SOURCE_CODE_UNAVAILABLE', ...(error?.sourceId ? { sourceId: error.sourceId } : {}), message: String(error?.message ?? error) });
+      }
+    }
     const after = await abortable(adapter.readContext(request), deadline);
-    result = { format: 'revyme.framer.native', version: 1, context, rootIds, definitions, assets,
+    result = { format: 'revyme.framer.native', version: 1, context, rootIds, definitions, assets, codeFiles,
       complete: diagnostics.length === 0, diagnostics };
     if (['projectId', 'branchId', 'revision', 'scopeId'].every(key => after[key] === context[key])) return result;
   }

@@ -39,4 +39,11 @@ export default function Page() {
     const node = parseJSXToNodes(code).get('col-a-card');
     expect(node?.propBindings?.some((b) => b.prop === 'coverImage')).toBeFalsy();
   });
+  test('retains existing fallback and safely stringified field bindings', () => {
+    const code = CODE.replace('title2={item.title2}', `title2={String(item.title2 ?? '')}`).replace('url(\${item.coverImage})', "url(\${item.coverImage ?? ''})");
+    expect(parseJSXToNodes(code).get('col-a-card')?.propBindings).toEqual(expect.arrayContaining([
+      { prop: 'title2', field: 'title2' },
+      { prop: 'coverImage', field: 'coverImage', urlWrap: true },
+    ]));
+  });
 });

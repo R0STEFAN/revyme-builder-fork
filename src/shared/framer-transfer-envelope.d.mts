@@ -25,7 +25,15 @@ export interface NativeTransfer {
   rootIds: string[];
   definitions: RawDefinition[];
   assets: Record<string, unknown>[];
+  codeFiles?: SourceCodeFile[];
   complete: boolean;
   diagnostics: TransferDiagnostic[];
+}
+export interface SourceCodeFile {
+  sourceId: string;
+  path: string;
+  moduleId: string;
+  saveId: string;
+  code: string;
 }
 export function decodeNativeTransfer(value: unknown): NativeTransfer;

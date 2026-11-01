@@ -11,6 +11,7 @@ import {
   type ResponsiveListConfig,
 } from './cms-responsive-gen';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { getEnclosingMapSourceForNode } from './map-gen';
 
 // A design-component master with a collection list inside a `function Name()` body
 // (variant discriminator `initialVariant` in scope) — the per-variant axis case.
@@ -40,6 +41,15 @@ const parses = (code: string): boolean => {
 };
 
 describe('writeResponsiveListConfigInCode', () => {
+  it('keeps the shared collection immutable after a sorted list loses its responsive overrides', () => {
+    const cfg: ResponsiveListConfig = { base: { sort: [{ field: 'title', direction: 'asc' }] }, viewport: { 768: { sort: [{ field: 'title', direction: 'desc' }] } }, variants: {} };
+    const upgraded = writeResponsiveListConfigInCode(COMPONENT_CODE, 'list', 'blog', cfg, { variantArg: 'initialVariant', vpWidths: [768] });
+    const down = writeResponsiveListConfigInCode(upgraded, 'list', 'blog', { ...cfg, viewport: {} }, { variantArg: 'initialVariant', vpWidths: [768] });
+    const source = getEnclosingMapSourceForNode(down, 'row')!.sourceExpr;
+    const rows = Object.freeze([{ title: 'B' }, { title: 'A' }]);
+    expect(new Function('blog', `return ${source};`)(rows)).toEqual([{ title: 'A' }, { title: 'B' }]);
+    expect(rows[0].title).toBe('B');
+  });
   it('upgrades to __applyListConfig + const + hook block when a per-variant override is added', () => {
     const cfg: ResponsiveListConfig = {
       base: { filterGroup: { combinator: 'and', filters: [{ field: 'featured', operator: 'equals', value: true }] } },
