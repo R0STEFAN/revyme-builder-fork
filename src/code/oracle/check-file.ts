@@ -1606,6 +1606,10 @@ export function checkFile(
       let isActuallyTemplated: boolean;
       if (opts.isTemplated !== undefined) {
         isActuallyTemplated = opts.isTemplated;
+      } else if (opts.projectFiles) {
+        // Headless candidates must resolve template ownership from the same
+        // projected file set used for their imports, never the live editor FS.
+        isActuallyTemplated = !!routeGroup && opts.projectFiles.has(`app/(${routeGroup})/LayoutClient.tsx`);
       } else if (routeGroup) {
         if (opts.path && projectFS.exists(opts.path) && !projectFS.exists(`app/(${routeGroup})/LayoutClient.tsx`)) {
           isActuallyTemplated = false;

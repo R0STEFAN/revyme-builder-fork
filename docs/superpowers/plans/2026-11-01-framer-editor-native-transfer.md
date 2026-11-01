@@ -289,7 +289,7 @@ if actually reused by `operations/code-files.ts`. Keep its existing prohibitions
 returns `{ changes: FileChange[], createdIds, diagnostics }`. Use the existing
 `prepareOperation` → `createPlan` → `validatePlan` → commit/receipt pipeline.
 
-- [ ] Write failing tests proving a canonical page+component+CMS bundle is accepted here
+- [x] Write failing tests proving a canonical page+component+CMS bundle is accepted here
   while ordinary `codeFiles.submit` still rejects pages/design masters.
 
 ```ts
@@ -302,16 +302,16 @@ it('rejects a bad master without modifying the input snapshot or ProjectFS', asy
 });
 ```
 
-- [ ] Test traversal/duplicate paths/protected files, forged source/kind/annotations,
+- [x] Test traversal/duplicate paths/protected files, forged source/kind/annotations,
   missing canvas config, relative imports across the bundle, duplicate IDs, invalid
   CMS references, stale revision, existing-file hash conflicts and absent dependencies.
-- [ ] Run the new test to verify failure before implementation.
-- [ ] Implement a pure candidate operation: infer every file family, enforce paths and
+- [x] Run the new test to verify failure before implementation.
+- [x] Implement a pure candidate operation: infer every file family, enforce paths and
   modes, compute hashes against snapshot, build projected files, validate correct Oracle
   kinds without a caller-controlled exemption, validate server wrappers/JSON/references,
   return FileChanges. Never perform live ProjectFS writes in this operation. Use existing
   plan validation/CAS/history rather than introducing another commit implementation.
-- [ ] Run the new tests plus `packages/automation-core/test/capabilities/T20-code.test.ts`
+- [x] Run the new tests plus `packages/automation-core/test/capabilities/T20-code.test.ts`
   and relevant server commit tests; verify registry/schema exposure through CLI. Commit.
 
 ### Task 8: Native paste integration, queue ordering and one-operation Undo

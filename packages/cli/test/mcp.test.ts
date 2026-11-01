@@ -54,6 +54,18 @@ describe('T05: Revyme Model Context Protocol (MCP) Server v2', () => {
     expect(Array.isArray(page1.tools)).toBe(true);
   });
 
+  it('publishes the dedicated full-file Framer import without weakening its schema', async () => {
+    let res = await client.listTools();
+    let tool = res.tools.find(tool => tool.name === 'imports.framer.submit');
+    while (!tool && res.nextCursor) {
+      res = await client.listTools({ cursor: res.nextCursor });
+      tool = res.tools.find(tool => tool.name === 'imports.framer.submit');
+    }
+    expect(tool).toBeDefined();
+    expect(tool!.inputSchema.required).toEqual(expect.arrayContaining(['files', 'sourceManifest', 'mode', 'target', 'expectedRevision']));
+    expect(tool!.inputSchema.properties?.files).toMatchObject({ type: 'array', items: { additionalProperties: false } });
+  });
+
 function getTextContent(res: any, index = 0): string {
   const content = res.content as Array<{ type: string; text: string }>;
   return content[index]?.text ?? '';

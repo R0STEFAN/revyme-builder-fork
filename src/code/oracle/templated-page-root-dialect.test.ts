@@ -60,6 +60,11 @@ describe('TEMPLATED_PAGE_ROOT_STYLED', () => {
     expect(codes(page(PADDED_ROOT), { kind: 'page' })).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
   });
 
+  it('uses explicit projected files for template ownership rather than route-group spelling', () => {
+    expect(checkFile(page(PADDED_ROOT), { kind: 'page', path: TEMPLATED, projectFiles: new Set([TEMPLATED]) }).map(v => v.code)).not.toContain('TEMPLATED_PAGE_ROOT_STYLED');
+    expect(checkFile(page(PADDED_ROOT), { kind: 'page', path: TEMPLATED, projectFiles: new Set([TEMPLATED, 'app/(Body)/LayoutClient.tsx']) }).map(v => v.code)).toContain('TEMPLATED_PAGE_ROOT_STYLED');
+  });
+
   it('names the offending props in the message', () => {
     const vs = checkFile(page(PADDED_ROOT), { kind: 'page', path: TEMPLATED });
     const msg = vs.find((x) => x.code === 'TEMPLATED_PAGE_ROOT_STYLED')!.message;
