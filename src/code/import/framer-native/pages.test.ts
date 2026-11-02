@@ -5,7 +5,6 @@ import { emitNativePages } from './pages';
 import { parseJSXToNodes } from '../../parsing/parser';
 import { parseCanvasConfig } from '../../project/canvas-config';
 import { checkFile } from '../../oracle/check-file';
-import { emitNativeCodeComponents } from './code-components';
 import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createSnapshot, createOperationContext } from '../../../../packages/automation-core/src/session';
 
@@ -54,24 +53,25 @@ it('blocks unresolved template and CMS semantics instead of exporting a partial 
   expect(emit(transfer).result.files).toEqual([]);
   expect(emit(transfer).result.diagnostics.length).toBeGreaterThan(0);
 });
-it('retains third-party component instances on pages through the validated native import', async () => {
+it('imports a third-party code component as a native page placeholder', async () => {
   const transfer = input(), identifier = 'module:vendor/save/Widget.tsx:Widget';
   const desktop = transfer.definitions[0].data.children as Record<string, unknown>[];
   const instance = { id: 'widget', __class: 'CodeComponentNode', parentid: 'desktop', children: [], codeComponentIdentifier: identifier, width: 200, height: 80, widthType: 0, heightType: 0, $control__title: { value: 'Imported title' } };
   (desktop[0].children as unknown[]).push(instance);
+  ((desktop[1] as any).replicaInfo.overrides as Record<string, unknown>).widget = { $control__title: { value: 'Different phone value' } };
   transfer.definitions.push({ id: 'vendor', kind: 'ExternalModuleNode', data: { id: 'vendor', __class: 'ExternalModuleNode', codeComponentIdentifier: identifier, intrinsicWidth: 200, intrinsicHeight: 80, children: [] } });
   transfer.codeFiles = [{ sourceId: 'vendor', moduleId: 'vendor', saveId: 'save', path: 'Widget.tsx', code: "import React from 'react'; import { addPropertyControls, ControlType } from 'framer'; export function Widget({title = ''}) {return <strong>{title}</strong>} addPropertyControls(Widget,{title:{type:ControlType.String,defaultValue:''}});" }];
   const graph = buildSourceGraph(transfer), identity = allocateTargetIdentity(graph, new Set());
-  const components = emitNativeCodeComponents(graph, identity);
-  expect(components.diagnostics).toEqual([]);
-  const pages = emitNativePages(graph, identity, { existingPaths: new Set(), codeComponents: components.components });
+  const pages = emitNativePages(graph, identity, { existingPaths: new Set() });
   expect(pages.diagnostics).toEqual([]);
   const node = parseJSXToNodes(pages.files[0].code).get(identity.widget)!;
-  expect(node.attrs.title).toBe('Imported title');
+  expect(node.type).toBe('div');
+  expect(node.name).toContain('Заглушка');
+  expect(node.styles.width).toBe('200px');
   const target = { projectId: 'destination', branchId: 'main' };
-  const result = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: [...components.files, ...pages.files], mode: 'create', target, expectedRevision: 0, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, createOperationContext());
+  const result = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: pages.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, createOperationContext());
   expect(result.diagnostics).toEqual([]);
-  expect(result.changes).toHaveLength(3);
+  expect(result.changes).toHaveLength(2);
 });
 it('rejects breakpoint changes to source code controls instead of silently keeping the desktop value', () => {
   const transfer = input();

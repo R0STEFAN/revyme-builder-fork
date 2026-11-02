@@ -3,7 +3,7 @@ import { trace } from '../../../shared/debug-trace';
 import type { ViewportConfig } from '../../../shared/types';
 import { CSS_NEUTRAL_FALLBACK, updateContainerQueryStyle } from '../../generation/generator-styles';
 import { updateCanvasConfigInCode } from '../../project/canvas-config';
-import { resolveSourceNode } from './source-graph';
+import { isSourceCodeComponent, resolveSourceNode } from './source-graph';
 import { mapSourceStyles, mappingDiagnostic, type SourceMappingContext } from './styles';
 import type { ResolvedSourceNode, SourceGraph } from './types';
 
@@ -52,7 +52,7 @@ export function applyNativeResponsive(code: string, model: { graph: SourceGraph;
       if (!identity[id]) mappingDiagnostic(context, state, 'identity', 'SOURCE_IDENTITY_MISSING');
       else if (Object.keys(changes).length) result = updateContainerQueryStyle(result, identity[id], viewport.width, normalizeTransparent(changes), { viewportWidths: viewports.map(v => v.width) });
     }
-    for (const child of base.children) walk(child, id);
+    if (!isSourceCodeComponent(base)) for (const child of base.children) walk(child, id);
   };
   walk(baseRoot.sourceId);
   return result;

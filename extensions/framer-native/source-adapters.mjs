@@ -148,28 +148,16 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
     },
     async readCodeFiles() {
       checkProject();
-      const codeNodes = [...sourceIndex().values()].filter(node => node.__class === 'LocalModuleNode' && node.save?.type === 'codeFile');
-      capturedCodeIds = codeNodes.map(node => node.id);
       const store = engine.stores.modulesStore, result = [];
-      for (const node of codeNodes) {
-        const fail = message => { throw Object.assign(new Error(message), { sourceId: node.id }); };
-        if (typeof store?.getSourceContentForModuleSave !== 'function' || typeof store.getTransientSave !== 'function') fail('SOURCE_CODE_UNAVAILABLE: The original source accessor is unavailable.');
-        const save = node.save;
-        if (![save.moduleId, save.saveId, save.name].every(value => typeof value === 'string' && value)) fail('SOURCE_CODE_UNAVAILABLE: The original file save pointer is incomplete.');
-        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: Wait for the original code file to finish saving, then capture again.');
-        // This accessor reads files.source, not files.module / moduleContent.
-        const code = await store.getSourceContentForModuleSave({ moduleId: save.moduleId, saveId: save.saveId });
-        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: The original code changed while it was being read.');
-        if (typeof code !== 'string') fail('SOURCE_CODE_UNAVAILABLE: The original file is not text.');
-        result.push({ sourceId: node.id, path: save.name, moduleId: save.moduleId, saveId: save.saveId, code });
-      }
       const requiredExternal = new Set();
       const requiredOverrides = new Map();
+      const requiredLocal = new Set();
       if (codeRootIds) {
         const source = sourceIndex(), visited = new Set(), pending = [...codeRootIds];
         const scan = value => {
           if (Array.isArray(value)) { value.forEach(scan); return; }
           if (!value || typeof value !== 'object' || value.__class === 'ExternalModuleNode' || value.__class === 'LocalModuleNode') return;
+          if (value.__class === 'CodeComponentNode' && !String(value.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/')) return;
           if (value.__class === 'WebPageNode') scan({ inheritedTemplate: source.get(value.parentid)?.layoutTemplateIdentifier });
           if (value.type === 'variableReference' && typeof value.providerId === 'string') pending.push(value.providerId);
           for (const [key, item] of Object.entries(value)) {
@@ -177,8 +165,10 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
               const local = /^local-module:(?:canvasComponent|layoutTemplate)\/([^:]+):/.exec(item);
               if (local) pending.push(local[1]);
               if (key === 'master' || key === 'inheritsFrom') pending.push(item);
-              const remote = (key === 'codeComponentIdentifier' || key === 'codeOverrideIdentifier') && /^module:([^/]+)\//.exec(item);
+              const remote = key === 'codeOverrideIdentifier' && value.codeOverrideEnabled === true && /^module:([^/]+)\//.exec(item);
               if (remote) requiredExternal.add(remote[1]);
+              const overrideFile = key === 'codeOverrideIdentifier' && value.codeOverrideEnabled === true && /^local-module:(codeFile\/[^:]+):/.exec(item);
+              if (overrideFile) requiredLocal.add(overrideFile[1]);
               if (key === 'codeOverrideIdentifier' && value.codeOverrideEnabled === true && remote) {
                 const previous = requiredOverrides.get(remote[1]);
                 if (previous && previous.slice(0, previous.lastIndexOf(':')) !== item.slice(0, item.lastIndexOf(':'))) throw new Error(`SOURCE_CODE_UNAVAILABLE: Multiple pinned versions require separate source resolution for ${remote[1]}.`);
@@ -192,6 +182,20 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
           if (visited.has(id)) continue;
           visited.add(id); scan(source.get(id));
         }
+      }
+      const codeNodes = [...sourceIndex().values()].filter(node => node.__class === 'LocalModuleNode' && node.save?.type === 'codeFile' && (!codeRootIds || requiredLocal.has(node.id)));
+      for (const id of requiredLocal) if (!codeNodes.some(node => node.id === id)) throw Object.assign(new Error(`SOURCE_CODE_UNAVAILABLE: Missing original override ${id}.`), { sourceId: id });
+      capturedCodeIds = codeNodes.map(node => node.id);
+      for (const node of codeNodes) {
+        const fail = message => { throw Object.assign(new Error(message), { sourceId: node.id }); };
+        if (typeof store?.getSourceContentForModuleSave !== 'function' || typeof store.getTransientSave !== 'function') fail('SOURCE_CODE_UNAVAILABLE: The original source accessor is unavailable.');
+        const save = node.save;
+        if (![save.moduleId, save.saveId, save.name].every(value => typeof value === 'string' && value)) fail('SOURCE_CODE_UNAVAILABLE: The original file save pointer is incomplete.');
+        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: Wait for the original code file to finish saving, then capture again.');
+        const code = await store.getSourceContentForModuleSave({ moduleId: save.moduleId, saveId: save.saveId });
+        if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: The original code changed while it was being read.');
+        if (typeof code !== 'string') fail('SOURCE_CODE_UNAVAILABLE: The original file is not text.');
+        result.push({ sourceId: node.id, path: save.name, moduleId: save.moduleId, saveId: save.saveId, code });
       }
       const external = [...sourceIndex().values()].filter(node => node.__class === 'ExternalModuleNode' && node.type === 'codeFile' && (!codeRootIds || requiredExternal.has(node.id)));
       for (const [id, identifier] of requiredOverrides) {

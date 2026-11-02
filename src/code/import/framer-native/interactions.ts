@@ -1,6 +1,6 @@
 import { trace } from '../../../shared/debug-trace';
 import type { Connection, ConnectionTrigger } from '../../variants/connection-config';
-import { resolveSourceNode, sourceRecord } from './source-graph';
+import { isSourceCodeComponent, resolveSourceNode, sourceRecord } from './source-graph';
 import type { SourceGraph } from './types';
 
 export interface SourceComponent { graph: SourceGraph; scopeId: string }
@@ -28,6 +28,7 @@ export function mapSourceConnections(component: SourceComponent, identity: Recor
     const root = resolveSourceNode(graph, stateId);
     const walk = (id: string) => {
       const node = resolveSourceNode(graph, id, stateId === root.sourceId ? undefined : stateId);
+      if (isSourceCodeComponent(node)) return;
       for (const [event, value] of Object.entries(node.properties)) {
         if (!/^on[A-Z]/.test(event) || !Array.isArray(value) || value.length === 0) continue;
         if (!triggers[event]) throw new Error(`FRAMER_ACTION_UNSUPPORTED: ${event} on ${id}`);

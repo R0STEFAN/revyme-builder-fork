@@ -6,7 +6,7 @@ import { exportedOverrideFunctions, overrideRenderFunction, validateNativeOverri
 import { generate } from '../../generation/generator-utils';
 import { normalizeBabelTraverse } from '../../generation/variant-visibility-gen';
 import type { CodeOverrideRef } from '../../generation/code-override-gen';
-import { activeSourceCodeOverride, sourceCodeExportKey, sourceRecord } from './source-graph';
+import { activeSourceCodeOverride, isSourceCodeComponent, sourceCodeExportKey, sourceRecord } from './source-graph';
 import type { NativeCompileResult, SourceGraph } from './types';
 
 export interface NativeCodeOverrideResult extends NativeCompileResult {
@@ -39,7 +39,7 @@ export function emitNativeCodeOverrides(graph: SourceGraph, identity: Record<str
     }
     for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item, sourceId);
   };
-  for (const id of graph.reachable) scan(graph.nodes.get(id)!.raw, id);
+  for (const id of graph.reachable) if (!isSourceCodeComponent(graph.nodes.get(id)!)) scan(graph.nodes.get(id)!.raw, id);
   for (const [sourceId, names] of requested) {
     try {
       const save = sourceRecord(graph.nodes.get(sourceId)?.raw.save);

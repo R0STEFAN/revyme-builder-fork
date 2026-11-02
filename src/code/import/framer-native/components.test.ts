@@ -17,6 +17,20 @@ import capturedCms from './fixtures/captured-cms.json';
 import { parseComponentInfoFromSource } from '../../components/component-registry';
 
 describe('editable native component emission', () => {
+  it('keeps filling placeholder and frame children from shrinking in a native stack', () => {
+    const data = { id: 'fill-master', __class: 'SmartComponentNode', baseVariantId: 'fill-base', variables: [], children: [{ id: 'fill-base', __class: 'FrameNode', layout: 'stack', stackDirection: 'vertical', width: 200, widthType: 0, height: 100, heightType: 0, children: [
+      { id: 'widget', __class: 'CodeComponentNode', parentid: 'fill-base', codeComponentIdentifier: 'module:vendor/save/Widget.js:Widget', heightType: 3, height: 1, children: [] },
+      { id: 'image', __class: 'FrameNode', parentid: 'fill-base', heightType: 3, height: 1, children: [] },
+    ] }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    const file = result.files[0], nodes = parseJSXToNodes(file.code);
+    expect(nodes.get(identity.widget)?.styles.flex).toBe('1 0 0px');
+    expect(nodes.get(identity.image)?.styles.flex).toBe('1 0 0px');
+    expect(checkFile(file.code, { kind: 'component', path: file.path })).toEqual([]);
+  });
   it('keeps a controlReference to a file as an editable native file prop', () => {
     const data = { id: 'file-master', __class: 'SmartComponentNode', baseVariantId: 'file-base', variables: [{ id: 'clip', name: 'Video', type: 'controlReference', expectedType: 'file', initialValue: '' }], children: [{ id: 'file-base', __class: 'FrameNode', children: [], width: 100, widthType: 0, heightType: 2 }] };
     const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });

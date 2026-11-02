@@ -1,6 +1,6 @@
 import { trace } from '../../../shared/debug-trace';
 import { escapeJsxText } from '../../parsing/rich-text-runs';
-import { resolveSourceNode } from './source-graph';
+import { isSourceCodeComponent, resolveSourceNode } from './source-graph';
 import { mapSourceText } from './text';
 import type { SourceMappingContext } from './styles';
 import type { NativeCodeComponentRef } from './code-components';
@@ -44,6 +44,12 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       return '{children}';
     }
     const styles = options.stylesFor(node, parent);
+    if (isSourceCodeComponent(node)) {
+      const identifier = String(node.properties.codeComponentIdentifier ?? '');
+      const name = typeof node.properties.name === 'string' && node.properties.name ? node.properties.name : identifier.split(':').pop() || 'Code component';
+      const label = escapeJsxText(`Заглушка · ${name}`).replace(/"/g, '&quot;');
+      return `<div data-id="${targetId}" data-name="${label}" style={${sourceStyleLiteral({ backgroundColor: '#eeeeee', ...styles })}}></div>`;
+    }
     let tag = 'div', content = '', attributes = '';
     if (node.kind === 'RichTextNode') {
       const text = mapSourceText(node, context);
@@ -56,12 +62,6 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       const identifier = String(node.properties.codeComponentIdentifier);
       const match = /^local-module:canvasComponent\/([^:]+):/.exec(identifier);
       if (match) result.nested.set(id, match[1]);
-      else {
-        const ref = options.codeComponents?.[identifier];
-        if (!ref) throw new Error(`Source code component adapter required on ${id}: ${identifier}`);
-        if (node.children.length) throw new Error(`Source code component slots on ${id} require their native adapter`);
-        result.codeInstances.set(id, ref);
-      }
       content = node.children.map(child => emit(child, node)).join('\n');
     } else if (node.kind === 'FrameNode') {
       if (node.properties.htmlTag != null) {

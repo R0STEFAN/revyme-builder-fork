@@ -2,8 +2,9 @@
 
 ## Active implementation
 
-The user explicitly resumed, approved Native inline execution and clarified that
-third-party code components must remain code components. Work is ACTIVE. Tasks
+The user explicitly resumed, approved Native inline execution and subsequently
+directed that all custom code components (local and third-party) become editable,
+labeled placeholders. Design components remain native. Work is ACTIVE. Tasks
 1/2/3/7 are complete; 4/5/6 are partial; 8/9 final transport/10 are pending.
 The pause instructions in the historical section are superseded by the resume.
 No complete page/project has been persisted in Revyme or claimed 1:1.
@@ -18,12 +19,11 @@ pure compiler assembly and the live-capture regressions described below.
 
 ## Working conversion and explicit gaps
 
-- Original local HOCs retain their callback body/order through native overrides.
-  Generic original local/external React functions retain their source bodies,
-  Fragments, runtime defaultProps and scalar property controls inside a native
-  outer host. Every file passes native Oracle and dedicated submit tests.
-  Runtime Framer APIs, unadapted controls/imports and unavailable original code
-  diagnose; compiled Framer modules never substitute for original source.
+- Original local HOCs on ordinary nodes retain their callback body/order through
+  native overrides. Custom code-component instances are instead gray, labeled
+  editable frames, retaining their mapped layout and responsive styles. Their
+  source, controls, internals and behavior are not imported or executed. The
+  previous standalone code adapter is not called by the project compiler.
 - CMS has strict live variable equality/membership, typed preview defaults,
   responsive upgrade/downgrade, reference prop metadata/pickers and submit
   validation, rename/duplicate preservation, and nested query/text bindings.
@@ -49,7 +49,8 @@ pure compiler assembly and the live-capture regressions described below.
 
 ## Latest live capture and remaining source dependencies
 
-Reader 0.1.6 is installed at /home/rost/Документи/Framer-Native-Reader.
+Reader 0.1.7 is packaged at /home/rost/Документи/Framer-Native-Reader;
+the updated reader has not yet been tested in the live browser.
 It recognizes compatible editor builds from their active static imports and
 checks the source engine and tree version. The user captured project source at
 `/home/rost/Завантажене/framer-native-2wu2XMOUbTCMJbRRQrOz (2).json`.
@@ -67,11 +68,9 @@ SDD workspace. No destination project file was persisted. No asset payloads
 were supplied to that probe, so its 19 asset-content diagnostics are expected;
 18 originals are cached and the native Spinner SVG URL returned 404.
 
-Video.js needs native Framer runtime APIs and imports a separate module at
-framerusercontent.com/modules/G4IfyjvwmaeSBpdb4TWu/OIjZRBmWDcIE2B6qgG1j/index.js;
-the original source of that dependency has not been captured. SmoothScroll
-needs withCSS and lenis. Both currently fail closed with explicit diagnostics;
-do not use their compiled dependency as original source or claim parity.
+Video.js and SmoothScroll are custom code components: their instances now
+become placeholders and do not require source or their code dependencies.
+Their original visuals and behavior are intentionally not reproduced.
 Original `webPage` references now resolve to allocated static page routes in
 pages and design masters; unresolved destinations and per-state link changes
 fail closed. controlReference expectedType=file maps to a native file prop.
@@ -86,13 +85,12 @@ currentOnly=[], baselineOnly=[], unhandledErrors=false. The final full run after
 the native conditional-style/line-height fixes has 15,548 passed and exactly the
 same 58 baseline failures, no unhandled errors (resume-verified-suite.log and
 resume-verified-baseline-comparison.json). The suite is NOT green.
-Latest reader validation: 36 Node tests passed. Latest focused converter/native
-submit validation: 16 files / 194 tests passed (/tmp/framer-016-final-focused.log).
-Typecheck: /tmp/framer-016-final-types.log. The previous 325-test combined run
+Latest reader validation: 37 Node tests passed. Latest focused converter/native
+submit validation: 16 files / 197 tests passed; TypeScript typecheck passed.
+The previous 325-test combined run
 covered native styles as well; no partial task is complete from unit tests alone.
 
-Next: capture original source for transitive module dependencies and finish
-source-backed code/runtime adapters, variable/image domains, CMS dynamic pages,
+Next: finish variable/image domains, CMS dynamic pages,
 template props/effects/fonts/tokens/metadata; then native paste/CAS/receipt/Undo,
 extension transport and full semantic/editability/visual parity. Preserve the
 existing full-file submit boundary and generic codeFiles.submit prohibitions.
@@ -204,6 +202,9 @@ when resuming. Chrome extension-management navigation was previously explicitly
 blocked; never work around it through CDP or another surface.
 
 ## Verification and resume order
+
+This section records an earlier pause; where it conflicts with the active
+implementation above, the current user-directed placeholder rule takes precedence.
 
 Latest large focused run: 18 files / 427 tests passed. Reader: 22 Node tests passed.
 Later focused fallback/parser/computed-binding run: 155 passed; later SVG asset

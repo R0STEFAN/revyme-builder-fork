@@ -20,7 +20,7 @@ import { forwardEventPropsToComponentRoot } from '../../variants/event-prop-forw
 import { parseVariantConfig, serializeVariantConfig, type VariantConfig } from '../../variants/variant-config';
 import { sourceStateNames } from './interactions';
 import { mapSourceConnections } from './interactions';
-import { activeSourceCodeOverride, resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
+import { activeSourceCodeOverride, isSourceCodeComponent, resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { emitSourceScene } from './scene';
@@ -101,7 +101,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (parent && ['stack', 'grid'].includes(String(parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
           styles.order = String(parent.children.indexOf(node.sourceId));
           if (parent.properties.layout === 'stack') {
-            styles.flex = styles.flexGrow ? `${styles.flexGrow} ${styles.flexShrink ?? '1'} ${styles.flexBasis ?? '0px'}` : '0 0 auto';
+            styles.flex = styles.flexGrow ? `${styles.flexGrow} 0 ${styles.flexBasis ?? '0px'}` : '0 0 auto';
             delete styles.flexGrow; delete styles.flexShrink; delete styles.flexBasis;
           }
         }
@@ -201,7 +201,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
-          for (const property of ['link', 'linkOpenInNewTab']) if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
+          if (!isSourceCodeComponent(base)) for (const property of ['link', 'linkOpenInNewTab']) if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
           if ((sourceRecord(base.properties.visible) || sourceRecord(state.properties.visible)) && JSON.stringify(base.properties.visible) !== JSON.stringify(state.properties.visible)) throw new Error(`Per-state visibility binding on ${id} requires its native adapter`);
           if (base.properties.dataIdentifier !== undefined) {
             for (const property of ['dataIdentifier', 'collectionFilters', 'collectionFiltersOperator', 'collectionOrder', 'collectionReverse', 'collectionStartOffset', 'collectionLimit', 'collectionPaginationPageSize']) {
@@ -209,8 +209,8 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
             }
           }
           const override = (node: ResolvedSourceNode) => activeSourceCodeOverride(node.properties) ?? '';
-          if (override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
-          if (base.kind === 'CodeComponentNode') {
+          if (!isSourceCodeComponent(base) && override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
+          if (base.kind === 'CodeComponentNode' && !isSourceCodeComponent(base)) {
             const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
             if ([...controls].some(key => JSON.stringify(base.properties[key]) !== JSON.stringify(state.properties[key]))) {
               throw new Error(`Per-state instance controls on ${id} require their native conditional-prop adapter`);
@@ -262,6 +262,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const callbackIds = new Map<string, string[]>();
         for (const stateId of scope.children) {
           const state = resolveSourceNode(graph, id, stateId === primaryId ? undefined : stateId);
+          if (isSourceCodeComponent(state)) continue;
           for (const [event, actions] of Object.entries(state.properties)) if (event !== 'onTap' && /^on[A-Z]/.test(event) && Array.isArray(actions) && actions.some(action => sourceRecord(action)?.actionIdentifier === 'framer/useTriggerEvent')) throw new Error(`Exposed ${event} on ${id} needs its native callback adapter`);
           for (const action of Array.isArray(state.properties.onTap) ? state.properties.onTap : []) {
             const a = sourceRecord(action);
@@ -299,6 +300,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       code = forwardEventPropsToComponentRoot(code);
       for (const id of sourceIds) {
         const node = resolveSourceNode(graph, id);
+        if (isSourceCodeComponent(node)) continue;
         const identifier = activeSourceCodeOverride(node.properties);
         if (!identifier) continue;
         const ref = options.overrides?.[identifier];

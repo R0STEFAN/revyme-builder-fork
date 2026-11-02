@@ -9,7 +9,7 @@ const imageData = 'data:image/png;base64,iVBORw0KGgo=';
 const videoData = 'data:video/mp4;base64,AAAAAA==';
 function source() {
   return { ...capture, rootIds: ['page'], definitions: [{ id: 'page', kind: 'WebPageNode', data: {
-    id: 'page', __class: 'WebPageNode', children: [{ id: 'frame', __class: 'FrameNode', fillImage: image, children: [{ id: 'video', __class: 'CodeComponentNode', '$control__srcFile': { type: 'file', value: video }, children: [] }] }],
+    id: 'page', __class: 'WebPageNode', children: [{ id: 'frame', __class: 'FrameNode', fillImage: image, children: [{ id: 'video', __class: 'FrameNode', poster: video, children: [] }] }],
   } }], assets: [
     { key: 'image-key', extension: '.png', mimeType: 'image/png', name: 'Photo.png', url: 'https://native.example/assets/image-key.png' },
     { key: 'video-key', extension: '.mp4', mimeType: 'video/mp4', name: 'Movie.mp4', url: 'https://native.example/assets/video-key.mp4' },
@@ -22,6 +22,15 @@ function model(input = source(), existing = new Set<string>()) {
 }
 
 describe('native Framer assets', () => {
+  it('does not require assets used only inside a custom code component placeholder', () => {
+    const input = source();
+    input.definitions[0].data.children[0].children[0] = { id: 'video', __class: 'CodeComponentNode', '$control__srcFile': { type: 'file', value: video }, children: [] } as any;
+    input.assets = input.assets.filter(asset => asset.key !== 'video-key');
+    const { graph, identity } = model(input);
+    const plan = planNativeAssets(graph, identity);
+    expect(plan.diagnostics).toEqual([]);
+    expect(plan.requests.map(request => request.key)).toEqual(['image-key']);
+  });
   it('plans only referenced original assets and maps exact source URIs to centrally allocated paths', () => {
     const { graph, identity } = model();
     const plan = planNativeAssets(graph, identity);

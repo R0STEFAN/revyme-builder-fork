@@ -126,7 +126,7 @@ it('keeps a third-party fragment and defaultProps inside a native host without r
   expect(html).toContain('width:240px');
 });
 
-it('keeps third-party instances inside a native design master with their original props', () => {
+it('uses a labeled placeholder for a third-party instance inside a native design master', () => {
   const value = input();
   const instance = value.definitions[0].data;
   instance.parentid = 'base'; instance.$control__title = { type: 'string', value: 'Instance title' };
@@ -139,7 +139,10 @@ it('keeps third-party instances inside a native design master with their origina
   expect(design.files).toHaveLength(1);
   const paths = new Set([...code.files, ...design.files].map(file => file.path));
   expect(checkFile(design.files[0].code, { kind: 'component', path: design.files[0].path, projectFiles: paths })).toEqual([]);
-  expect(parseJSXToNodes(design.files[0].code).get(identity.instance)?.attrs.title).toBe('Instance title');
+  const node = parseJSXToNodes(design.files[0].code).get(identity.instance)!;
+  expect(node.type).toBe('div');
+  expect(node.name).toContain('Заглушка');
+  expect(node.styles.width).toBe('240px');
 });
 
 it.each(['missing', 'stale', 'runtime-api', 'dynamic-control', 'hoc'])('reports %s third-party source without emitting a placeholder', problem => {

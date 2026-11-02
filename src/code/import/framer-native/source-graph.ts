@@ -20,6 +20,10 @@ export function sourceRecord(value: unknown): SourceProperties | undefined {
     ? value as SourceProperties : undefined;
 }
 
+export function isSourceCodeComponent(node: { kind: string; properties?: SourceProperties; raw?: SourceProperties }): boolean {
+  return node.kind === 'CodeComponentNode' && !String((node.properties ?? node.raw)?.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/');
+}
+
 /** Framer can enable the picker without assigning any override. */
 export function activeSourceCodeOverride(properties: SourceProperties): string | undefined {
   const identifier = properties.codeOverrideIdentifier;
@@ -67,7 +71,7 @@ export function sourceCodeOverrideIdentifiers(graph: SourceGraph): Set<string> {
     if (identifier?.startsWith('module:')) identifiers.add(identifier);
     for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item);
   };
-  for (const id of graph.reachable) scan(graph.nodes.get(id)!.raw);
+  for (const id of graph.reachable) if (!isSourceCodeComponent(graph.nodes.get(id)!)) scan(graph.nodes.get(id)!.raw);
   return identifiers;
 }
 
@@ -103,9 +107,9 @@ function readReferences(node: SourceNode): SourceReference[] {
       // A module identifier points to an original scope, never a compiled URL.
       const module = /^local-module:(canvasComponent|layoutTemplate|collection)\/([^:]+):/.exec(value);
       if (module) add(module[2], property);
-      const codeFile = /^local-module:(codeFile\/[^:]+):/.exec(value);
+      const codeFile = !isSourceCodeComponent(node) && /^local-module:(codeFile\/[^:]+):/.exec(value);
       if (codeFile) add(codeFile[1], property);
-      const externalCode = field === 'codeComponentIdentifier' && /^module:([^/]+)\/[^/]+\/[^:]+:/.exec(value);
+      const externalCode = !isSourceCodeComponent(node) && field === 'codeComponentIdentifier' && /^module:([^/]+)\/[^/]+\/[^:]+:/.exec(value);
       if (externalCode) add(externalCode[1], property);
       for (const match of value.matchAll(/var\(--token-([^,\s)]+)\s*([,)])/g)) add(match[1], property, match[2] === ',');
       if (field === 'baseVariantId') add(value, property);
@@ -123,7 +127,7 @@ function readReferences(node: SourceNode): SourceReference[] {
       }
     }
   };
-  for (const [key, value] of Object.entries(node.raw)) if (key !== 'children' && key !== 'renamedIds') scan(value, key);
+  for (const [key, value] of Object.entries(node.raw)) if (key !== 'children' && key !== 'renamedIds' && !(isSourceCodeComponent(node) && (key.startsWith('$control__') || key.startsWith('codeOverride') || /^on[A-Z]/.test(key)))) scan(value, key);
   return result;
 }
 
@@ -184,7 +188,7 @@ export function buildSourceGraph(input: unknown): SourceGraph {
     }
     reachable.add(id);
     if (!supportedKinds.has(node.kind)) diagnostics.push({ code: 'SOURCE_KIND_UNSUPPORTED', sourceId: id, property: '__class', message: `Unsupported editor class ${node.kind}; raw properties retained.` });
-    const dependencies: SourceReference[] = [...node.children.map(targetId => ({ targetId, property: 'children' })), ...references.get(id)!];
+    const dependencies: SourceReference[] = [...(isSourceCodeComponent(node) ? [] : node.children.map(targetId => ({ targetId, property: 'children' }))), ...references.get(id)!];
     for (const ref of dependencies) {
       if (!nodes.has(ref.targetId)) {
         if (!ref.optional) diagnostics.push({ code: 'SOURCE_REFERENCE_MISSING', sourceId: id, property: ref.property, message: `Missing source dependency ${ref.targetId}.` });

@@ -8,7 +8,6 @@ import { buildSourceGraph, allocateTargetIdentity, sourceRecord } from './source
 import { planNativeAssets, emitNativeAssets } from './assets';
 import { emitNativeCms } from './cms';
 import { emitNativeComponents } from './components';
-import { emitNativeCodeComponents } from './code-components';
 import { emitNativeCodeOverrides } from './code-adapters';
 import { emitNativePages, sourcePageRoute } from './pages';
 import type { NativeCompileResult, SourceGraph } from './types';
@@ -53,13 +52,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const assets = planNativeAssets(graph, identity);
     const originals = emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const overrides = emitNativeCodeOverrides(graph, identity);
-    const codeComponents = emitNativeCodeComponents(graph, identity);
     const cms = emitNativeCms(graph, identity, { assets: assets.assets });
-    const options = { assets: assets.assets, overrides: overrides.overrides, codeComponents: codeComponents.components };
+    const options = { assets: assets.assets, overrides: overrides.overrides };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
     const relocatedRoutes = new Map(Object.entries(pages.routes).map(([id, route]) => [sourcePageRoute(graph, graph.nodes.get(id)!), route] as const).filter(([before, after]) => before !== after));
-    for (const emitted of [originals, overrides, codeComponents, cms, components, pages]) {
+    for (const emitted of [originals, overrides, cms, components, pages]) {
       result.files.push(...emitted.files); result.createdIds.push(...emitted.createdIds); result.diagnostics.push(...emitted.diagnostics);
     }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();

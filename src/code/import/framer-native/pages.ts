@@ -3,7 +3,7 @@ import { checkFile } from '../../oracle/check-file';
 import { setTagAttr } from '../../generation/generator-utils';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
-import { activeSourceCodeOverride, sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
+import { activeSourceCodeOverride, isSourceCodeComponent, sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
 import { mapSourceStyles, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { sourceViewports, applyNativeResponsive } from './responsive';
@@ -106,7 +106,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         } else if (ctx.parent && ['stack', 'grid'].includes(String(ctx.parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
           styles.order = String(ctx.parent.children.indexOf(node.sourceId));
           if (ctx.parent.properties.layout === 'stack') {
-            styles.flex = styles.flexGrow ? `${styles.flexGrow} ${styles.flexShrink ?? '1'} ${styles.flexBasis ?? '0px'}` : '0 0 auto';
+            styles.flex = styles.flexGrow ? `${styles.flexGrow} 0 ${styles.flexBasis ?? '0px'}` : '0 0 auto';
             delete styles.flexGrow; delete styles.flexShrink; delete styles.flexBasis;
           }
         }
@@ -127,8 +127,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       code = applySourceInstances(code, scene, graph, identity, options.assets);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
-        for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length) throw new Error(`Source page action ${property} requires its native adapter`);
-        const override = activeSourceCodeOverride(node.properties);
+        if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length) throw new Error(`Source page action ${property} requires its native adapter`);
+        const override = isSourceCodeComponent(node) ? undefined : activeSourceCodeOverride(node.properties);
         if (override) {
           const ref = options.overrides?.[override];
           if (!ref) throw new Error(`Source page override ${override} is unavailable`);
@@ -137,7 +137,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         for (const viewport of viewports.slice(1)) {
           const state = resolveSourceNode(graph, nodeId, viewport.sourceStateId);
           const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']);
-          for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
+          if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
+          else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
           for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
           if (node.kind === 'RichTextNode') {
             const base = mapSourceText(node, context), text = mapSourceText(state, context);

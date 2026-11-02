@@ -163,12 +163,16 @@ Rename collisions вирішуються детерміновано; імена 
   typography/color tokens та usage references через штатні системи Revyme.
 - Routes/links: page identity → target path, dynamic CMS routes, section targets
   та зовнішні URL; конфлікти маршрутів не руйнують наявні сторінки.
-- Code components/overrides: доступний оригінальний source аналізується окремо.
-  Framer-specific runtime APIs потребують явного adapter або відповідної native
-  можливості Revyme. Недоступний чи непереносний source відображається як
-  конкретна перешкода; compiled module не маскується під editable master.
+- Code components: за уточненням користувача від 2 листопада 2026 року кожен
+  кастомний компонент із коду перетворюється на позначену редаговану заглушку
+  зі збереженням розмірів, розташування та responsive стилів. Його код, props,
+  внутрішні slots і поведінка не виконуються. Нативні design components Framer
+  залишаються окремими редагованими masters та instances.
+- Code overrides на інших вузлах: доступний оригінальний source аналізується
+  окремо. Непереносний source відображається як конкретна перешкода.
 
-Непідтримувану семантику не відкидають мовчки. Strict import завершується
+За винятком явно погоджених заглушок, непідтримувану семантику не відкидають
+мовчки. Strict import завершується
 діагностикою до commit. Розширення Revyme для відсутньої browser behavior
 додається у `@revyme/runtime`, якщо воно потрібне published site.
 

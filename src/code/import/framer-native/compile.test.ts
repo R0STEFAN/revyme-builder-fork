@@ -66,14 +66,27 @@ it.each(['metadata', 'font', 'token'])('does not report a complete candidate whi
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: kind === 'metadata' ? 'SOURCE_METADATA_ADAPTER_REQUIRED' : kind === 'font' ? 'SOURCE_FONT_ADAPTER_REQUIRED' : 'SOURCE_TOKEN_ADAPTER_REQUIRED' }));
 });
-it('reports the missing original third-party source rather than substituting a visual frame', () => {
+it('imports a code component as a labeled editable placeholder even without original code', () => {
   const source = transfer(), identifier = 'module:vendor/pinned/Widget.tsx:Widget';
   const frame = (source.definitions[0].data.children as Record<string, any>[])[0];
   frame.children[0].codeComponentIdentifier = identifier;
-  source.definitions.push({ id: 'vendor', kind: 'ExternalModuleNode', data: { id: 'vendor', __class: 'ExternalModuleNode', codeComponentIdentifier: identifier, children: [], intrinsicWidth: 200, intrinsicHeight: 100 } });
   const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
-  expect(result.files).toEqual([]);
-  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'CODE_SOURCE_UNAVAILABLE', sourceId: identifier }));
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  const node = parseJSXToNodes(page.code).get(result.identity.instance)!;
+  expect(node.type).toBe('div');
+  expect(node.name).toContain('Заглушка');
+  expect(node.styles.width).toBe('200px');
+  expect(result.files.some(file => file.path.startsWith('components/'))).toBe(false);
+});
+it('does not require custom code, controls, nested slots or overrides behind a placeholder', () => {
+  const source = transfer(), frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  Object.assign(frame.children[0], { codeComponentIdentifier: 'local-module:codeFile/missing:Widget', '$control__image': { value: 'data:framer/asset-reference,missing.png' }, codeOverrideEnabled: true, codeOverrideIdentifier: 'local-module:codeFile/unavailable:Effect', onTap: [{ actionIdentifier: 'unsupported' }], children: [{ id: 'opaque-child', __class: 'UnknownNode', children: [] }] });
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(parseJSXToNodes(page.code).get(result.identity.instance)?.name).toContain('Заглушка');
+  expect(page.code).not.toContain('opaque-child');
 });
 it('reports a source-only declaration with no importable content instead of a successful empty import', () => {
   const source = transfer();

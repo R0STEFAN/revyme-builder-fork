@@ -211,6 +211,8 @@ test('does not substitute a compiled module or a stale saved file for unsaved co
 
 test('detects a code edit while original source is being fetched', async () => {
   const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => { const raw = serialize(); raw.root.children[0].codeOverrideEnabled = true; raw.root.children[0].codeOverrideIdentifier = 'local-module:codeFile/original:Original'; return raw; };
   let dirty = false;
   engine.stores.modulesStore.getTransientSave = () => dirty ? { saveId: 'unsaved' } : null;
   engine.stores.modulesStore.getSourceContentForModuleSave = async () => { dirty = true; return 'original'; };
@@ -257,10 +259,10 @@ test('does not require an unrelated private component when capturing another pag
   };
   const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
   await adapter.readContext({ mode: 'page' });
-  assert.equal((await adapter.readCodeFiles()).length, 1);
+  assert.equal((await adapter.readCodeFiles()).length, 0);
 });
 
-test('follows a local master dependency to fetch a third-party source needed by the selected page', async () => {
+test('does not fetch third-party code nested inside a local design master', async () => {
   const engine = await codeEngine();
   const serialize = engine.tree.toJS.bind(engine.tree);
   engine.tree.toJS = () => {
@@ -274,7 +276,7 @@ test('follows a local master dependency to fetch a third-party source needed by 
   engine.stores.modulesStore.getSourceContentForModuleSave = async pointer => pointer.moduleId === 'module-a' ? local(pointer) : 'export default function Widget(props) { return <div {...props} />; }';
   const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
   await adapter.readContext({ mode: 'page' });
-  assert.equal((await adapter.readCodeFiles()).some(file => file.sourceId === 'vendor-widget'), true);
+  assert.equal((await adapter.readCodeFiles()).some(file => file.sourceId === 'vendor-widget'), false);
 });
 
 test('reads an active external override even when the source tree has no module descriptor', async () => {
@@ -290,4 +292,18 @@ test('reads an active external override even when the source tree has no module 
   const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
   await adapter.readContext({ mode: 'page' });
   assert.deepEqual((await adapter.readCodeFiles()).find(file => file.sourceId === 'vendor'), { sourceId: 'vendor', moduleId: 'vendor', saveId: 'pinned', path: 'Override.js', code: 'export function withEffect(Component) { return Component; }' });
+});
+
+test('does not require the original source of a custom code component represented by a placeholder', async () => {
+  const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => {
+    const raw = serialize();
+    raw.root.children[0].children.push({ id: 'custom', __class: 'CodeComponentNode', children: [], codeComponentIdentifier: 'local-module:codeFile/original:default' });
+    return raw;
+  };
+  engine.stores.modulesStore.getSourceContentForModuleSave = async () => { throw new Error('Unavailable'); };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await adapter.readContext({ mode: 'project' });
+  assert.deepEqual(await adapter.readCodeFiles(), []);
 });

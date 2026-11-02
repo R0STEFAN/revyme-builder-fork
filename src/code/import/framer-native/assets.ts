@@ -1,5 +1,5 @@
 import { trace } from '../../../shared/debug-trace';
-import { sourceAssetKey, sourceRecord } from './source-graph';
+import { isSourceCodeComponent, sourceAssetKey, sourceRecord } from './source-graph';
 import type { NativeCompileResult, SourceGraph, TransferDiagnostic } from './types';
 
 export interface NativeAssetRequest { key: string; url: string; mimeType: string; path: string }
@@ -18,13 +18,14 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
   const result: NativeAssetPlan = { requests: [], assets: {}, diagnostics: [...graph.diagnostics] };
   if (result.diagnostics.length) return result;
   const references = new Set<string>();
-  function scan(value: unknown): void {
+  function scan(value: unknown, ignoreControls = false): void {
     if (typeof value === 'string' && value.startsWith(PREFIX)) references.add(value);
-    else if (Array.isArray(value)) value.forEach(scan);
-    else if (value && typeof value === 'object') Object.values(value).forEach(scan);
+    else if (Array.isArray(value)) value.forEach(item => scan(item, ignoreControls));
+    else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) if (!(ignoreControls && key.startsWith('$control__'))) scan(item, ignoreControls);
   }
   for (const id of graph.reachable) {
-    for (const [property, value] of Object.entries(graph.nodes.get(id)!.raw)) if (property !== 'children') scan(value);
+    const node = graph.nodes.get(id)!;
+    for (const [property, value] of Object.entries(node.raw)) if (property !== 'children' && !(isSourceCodeComponent(node) && property.startsWith('$control__'))) scan(value, isSourceCodeComponent(node));
   }
   const requested = new Set<string>();
   const diagnostic = (code: string, message: string) => result.diagnostics.push({ code, property: 'assets', message });
