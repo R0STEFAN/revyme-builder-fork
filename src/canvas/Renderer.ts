@@ -2022,6 +2022,14 @@ export function matchesValue(target: any, searchVal: any, exact: boolean): boole
 
 function evalFilter(item: CollectionItem, filter: FilterConfig): boolean {
   let rhs = filter.value;
+  if (filter.valueSource === 'variable') {
+    const lhs = getDeepFieldValue(item, filter.field);
+    if (filter.operator === 'equals') return lhs === rhs;
+    if (filter.operator === 'not_equals') return lhs !== rhs;
+    if (filter.operator === 'in') return Array.isArray(rhs) && rhs.includes(lhs);
+    if (filter.operator === 'not_in') return !(Array.isArray(rhs) && rhs.includes(lhs));
+    return false;
+  }
   if (filter.valueSource === 'routeParam') {
     if (!filter.valueVar) return true;
     const previewParams = getPreviewRouteParams();

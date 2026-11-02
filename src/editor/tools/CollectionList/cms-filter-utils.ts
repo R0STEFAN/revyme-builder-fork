@@ -39,6 +39,8 @@ export const COLLECTION_VALUE_CLS = 'grow-0 shrink-0 basis-[61.6%] min-w-0';
  *  `schema.fields` (so they don't show as editable columns) but ARE sortable +
  *  filterable date fields — design-tool parity (Created / Updated). */
 const SYSTEM_SORT_FIELDS: FieldDefinition[] = [
+  { id: '_id', name: 'ID', type: 'text' },
+  { id: '_slug', name: 'Slug', type: 'text' },
   { id: '_createdAt', name: 'Created', type: 'date' },
   { id: '_updatedAt', name: 'Updated', type: 'date' },
 ];
@@ -46,7 +48,8 @@ const SYSTEM_SORT_FIELDS: FieldDefinition[] = [
 /** Fields offered in the Sort/Filter field dropdowns: the collection's own
  *  fields PLUS the system Created/Updated date fields. */
 export function fieldsForSortFilter(schema: CollectionSchema | null): FieldDefinition[] {
-  return [...(schema?.fields ?? []), ...SYSTEM_SORT_FIELDS];
+  const fields = schema?.fields ?? [];
+  return [...fields, ...SYSTEM_SORT_FIELDS.filter(system => !fields.some(field => field.id === system.id))];
 }
 
 /** Operator menu options for a given field type (standard: text gets
@@ -137,6 +140,7 @@ export function filterSummary(f: FilterConfig, fieldName: string): string {
   if (f.valueSource === 'dateField') return `${displayField} from date`;
   if (f.valueSource === 'routeParam') return `${displayField} is [:${f.valueVar}]`;
   const op = OP_SUMMARY[f.operator] ?? f.operator;
+  if (f.valueSource === 'variable') return `${displayField} ${op} ${f.valueVar || 'Missing variable'}`;
   if (operatorTakesNoValue(f.operator)) return `${displayField} ${op}`;
   if (f.operator === 'between' && Array.isArray(f.value)) return `${displayField} ${op} ${f.value[0]}–${f.value[1]}`;
   const v = f.value === '' || f.value == null ? '…' : String(f.value);

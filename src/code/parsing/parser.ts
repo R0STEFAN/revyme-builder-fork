@@ -4,7 +4,7 @@
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import type { JSXElement, JSXAttribute, JSXExpressionContainer, ObjectExpression, ObjectProperty, StringLiteral, NumericLiteral, JSXText } from '@babel/types';
-import { isTruthy } from '@/code/values/value-eval';
+import { isTruthy, evaluate } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
 import { parseCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop-bindings';
 import { readCmsPropBindingExpression } from './cms-prop-binding';
@@ -639,8 +639,10 @@ interface ParseCtx {
  * a default, or whose default is a complex expression, are skipped (they
  * can't be safely inlined into a CSS string).
  */
-export function extractComponentPropDefaults(ast: any): Record<string, string> {
-  const defaults: Record<string, string> = {};
+export function extractComponentPropDefaults(ast: any): Record<string, string>;
+export function extractComponentPropDefaults(ast: any, preserveTypes: true): Record<string, unknown>;
+export function extractComponentPropDefaults(ast: any, preserveTypes = false): Record<string, any> {
+  const defaults: Record<string, any> = {};
 
   // Helper to read defaults out of a destructured first param.
   const readParam = (params: any[]) => {
@@ -658,10 +660,12 @@ export function extractComponentPropDefaults(ast: any): Record<string, string> {
         const name = p.value.left.name;
         const def = p.value.right;
         if (def?.type === 'StringLiteral') defaults[name] = def.value;
-        else if (def?.type === 'NumericLiteral') defaults[name] = String(def.value);
+        else if (def?.type === 'NumericLiteral') defaults[name] = preserveTypes ? def.value : String(def.value);
         // Boolean defaults (`hidden = true`) — needed so `condvar:` visibility bindings
         // (`display: hidden ? 'none' : ''`) resolve to the right branch in the resolve pass.
-        else if (def?.type === 'BooleanLiteral') defaults[name] = String(def.value);
+        else if (def?.type === 'BooleanLiteral') defaults[name] = preserveTypes ? def.value : String(def.value);
+        else if (preserveTypes && def?.type === 'NullLiteral') defaults[name] = null;
+        else if (preserveTypes && def?.type === 'ArrayExpression' && def.elements.every((element: any) => element && ['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral'].includes(element.type))) defaults[name] = def.elements.map((element: any) => element.type === 'NullLiteral' ? null : element.value);
         else if (
           def?.type === 'TemplateLiteral'
           && def.expressions.length === 0
@@ -3465,6 +3469,18 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
   // which on a regular page (no destructured params) is every name.
   // Route values (canvas template resolution) win over param/page-variable defaults.
   const propDefaults: Record<string, string> = { ...pageVarDefaults, ...componentPropDefaults, ...(propOverrides ?? {}) };
+  const typedPropDefaults = { ...Object.fromEntries((pageVarConfig?.variables ?? []).map(variable => [variable.name, evaluate(variable.default, variable.type)])), ...extractComponentPropDefaults(ast, true) };
+  for (const node of nodes.values()) {
+    if (!node.collectionList) continue;
+    const groups = [node.collectionList.filterGroup, ...Object.values(node.collectionList.responsive ?? {}).map(config => config.filterGroup), ...Object.values(node.collectionList.variantConfigs ?? {}).map(config => config.filterGroup)];
+    for (const group of groups) for (const filter of group?.filters ?? []) {
+      if (filter.valueSource !== 'variable' || !filter.valueVar) continue;
+      const name = filter.valueVar;
+      const initial = typedPropDefaults[name];
+      const value = propOverrides && name in propOverrides ? propOverrides[name] : name in typedPropDefaults ? initial : pageVarDefaults[name];
+      filter.value = typeof initial === 'boolean' && typeof value === 'string' ? evaluate(value, 'boolean') : typeof initial === 'number' && typeof value === 'string' ? evaluate(value, 'number') : value;
+    }
+  }
   if (Object.keys(propDefaults).length > 0) {
     let resolvedStyleCount = 0;
     let resolvedTextCount = 0;
@@ -4220,6 +4236,7 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
       };
       const op = opMap[n.operator];
       if (!op) return null;
+      if (v?.type === 'Identifier' && (n.operator === '===' || n.operator === '!==')) return { field, operator: op, value: '', valueSource: 'variable', valueVar: v.name };
       return { field, operator: op, value };
     }
     return null;
@@ -4261,6 +4278,16 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
   }
   function tryParseDynamic(node: any): import('@/shared/types').FilterConfig | null {
     let n = unwrapStringCoerce(node);
+    const negated = n?.type === 'UnaryExpression' && n.operator === '!';
+    const setExpression = negated ? n.argument : n;
+    if (setExpression?.type === 'LogicalExpression' && setExpression.operator === '&&') {
+      const guard = setExpression.left, includes = setExpression.right;
+      if (guard?.type === 'CallExpression' && guard.callee?.type === 'MemberExpression' && guard.callee.object?.name === 'Array' && guard.callee.property?.name === 'isArray' && guard.arguments?.length === 1 && guard.arguments[0]?.type === 'Identifier' &&
+          includes?.type === 'CallExpression' && includes.callee?.type === 'MemberExpression' && includes.callee.object?.type === 'Identifier' && includes.callee.object.name === guard.arguments[0].name && includes.callee.property?.name === 'includes' && includes.arguments?.length === 1) {
+        const field = extractFieldPathFromNode(includes.arguments[0]);
+        if (field) return { field, operator: negated ? 'not_in' : 'in', value: '', valueSource: 'variable', valueVar: guard.arguments[0].name };
+      }
+    }
     if (n?.type !== 'LogicalExpression' || n.operator !== '||') return null;
     const L = unwrapStringCoerce(n.left), R = unwrapStringCoerce(n.right);
     // search field

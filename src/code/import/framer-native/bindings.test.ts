@@ -72,9 +72,16 @@ describe('source data bindings', () => {
     const emitted = emitSourceQueryInCode('export default function Page(){return <div data-id="target"></div>; }', 'target', 'related', '<Card data-id="card" />', ctx);
     expect(parseJSXToNodes(emitted).get('target')?.collectionList?.filterGroup?.filters).toEqual([{ field: '_id', operator: 'in', value: [ctx.identity[works.children[0]]] }]);
   });
-  it('rejects dynamic predicates or reverse/zero-limit cases until their full native round-trip exists', () => {
+  it('emits the original Category query bound to its parent component prop', () => {
+    const ctx = context();
+    const prop = nativePropName(ctx.identity, 'ZfAw5qjTc', 'Sj_xvP4fy');
+    const code = `export default function Card({${prop} = 'category-a'}){return <div data-id="target"></div>; }`;
+    const emitted = emitSourceQueryInCode(code, 'target', 'xmUkU_AV5', '<p data-id="label" />', ctx);
+    expect(parseJSXToNodes(emitted).get('target')?.collectionList?.filterGroup?.filters).toEqual([{ field: '_id', operator: 'equals', valueSource: 'variable', valueVar: prop, value: 'category-a' }]);
+  });
+  it('rejects reverse/zero-limit cases until their full native round-trip exists', () => {
     const ctx = context([provider('reversed', 'E5RT5hQRC', { collectionReverse: true }), provider('empty', 'E5RT5hQRC', { collectionLimit: 0 })]);
-    for (const id of ['xmUkU_AV5', 'reversed', 'empty']) expect(() => emitSourceQueryInCode('<div data-id="target"></div>', 'target', id, '<Card data-id="card"/>', ctx)).toThrow(/native.*query/i);
+    for (const id of ['reversed', 'empty']) expect(() => emitSourceQueryInCode('<div data-id="target"></div>', 'target', id, '<Card data-id="card"/>', ctx)).toThrow(/native.*query/i);
   });
   it('does not confuse nested repeaters or permit an out-of-scope provider', () => {
     const ctx = context([provider('outer', 'E5RT5hQRC', { children: [{ id: 'inner', __class: 'FrameNode', dataIdentifier: 'local-module:collection/DwP_tmnNO:default', parentid: 'outer', children: [{ id: 'leaf', __class: 'RichTextNode', parentid: 'inner', children: [] }] }] }), provider('unrelated', 'E5RT5hQRC')]);

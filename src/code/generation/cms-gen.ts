@@ -108,6 +108,17 @@ export function buildFilterExpression(fg: FilterGroup): string {
     const subPath = isDeep ? f.field.split('.').slice(1).join('?.') : '';
     const refSlug = isDeep ? inferReferencedCollectionSlug(rootField) : '';
 
+    // A component prop is an exact predicate, including an empty value.
+    if (f.valueSource === 'variable') {
+      if (!f.valueVar || !/^[A-Za-z_$][\w$]*$/.test(f.valueVar) || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(f.field)) throw new Error('CMS_FILTER_VARIABLE_INVALID');
+      const lhs = `item.${f.field}`;
+      if (f.operator === 'equals') return `${lhs} === ${f.valueVar}`;
+      if (f.operator === 'not_equals') return `${lhs} !== ${f.valueVar}`;
+      if (f.operator === 'in') return `(Array.isArray(${f.valueVar}) && ${f.valueVar}.includes(${lhs}))`;
+      if (f.operator === 'not_in') return `!(Array.isArray(${f.valueVar}) && ${f.valueVar}.includes(${lhs}))`;
+      throw new Error(`CMS_FILTER_VARIABLE_OPERATOR_UNSUPPORTED: ${f.operator}`);
+    }
+
     // Dynamic value (Phase 4) — the predicate reads a page variable (search input /
     // date picker) at runtime, with an empty-guard so a blank input matches all.
     if (f.valueSource === 'searchField' && f.valueVar) {

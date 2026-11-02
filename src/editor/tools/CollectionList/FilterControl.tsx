@@ -5,6 +5,9 @@ import ToolRow from '../../controls/ToolRow';
 import ToolPopup, { useToolPopup } from '../../ui/ToolPopup';
 import { collectionDataAtom, collectionSchemasAtom } from '@/code/stores/cms-store';
 import { activeFilePathAtom } from '@/code/project/active-file-store';
+import { codeAtom } from '@/code/stores/store';
+import { parseComponentInfoFromSource, isStructuralProp } from '@/code/components/component-registry';
+import { parsePageVariables } from '@/code/features/page-variables';
 import { cmsItemLabel } from '@/code/project/cms-ops';
 import type { FilterConfig, FilterGroup, CollectionSchema, FieldDefinition, CollectionItem } from '@/shared/types';
 import {
@@ -59,6 +62,7 @@ interface EditorData {
    *  Source change) is INACTIVE — shown as a placeholder needing a field re-select. */
   isInactive: (fieldId: string) => boolean;
   routeParams: string[];
+  variables: { value: string; label: string }[];
 }
 
 // Native date input styled to match ToolInput (dark color-scheme picker).
@@ -88,6 +92,11 @@ function FiltersPopupBody({
     // variable or route param, so the Value is the bound variable — not an editable literal.
     if (f.valueSource === 'routeParam') {
       return <PageVariableChip name={`[:${f.valueVar || 'param'}]`} />;
+    }
+    if (f.valueSource === 'variable') {
+      const options = [...d.variables];
+      if (f.valueVar && !options.some(option => option.value === f.valueVar)) options.unshift({ value: f.valueVar, label: `Missing: ${f.valueVar}` });
+      return <ToolSelect value={f.valueVar ?? ''} onChange={valueVar => d.update(idx, { valueVar })} options={options} />;
     }
     if ((f.valueSource === 'searchField' || f.valueSource === 'dateField') && f.valueVar) {
       return <PageVariableChip name={f.valueVar} />;
@@ -137,6 +146,7 @@ function FiltersPopupBody({
       // Inactive = the root field is missing from the current schema (post Source change).
       const inactive = d.isInactive(f.field);
       const isRouteParam = f.valueSource === 'routeParam';
+      const isVariable = f.valueSource === 'variable';
       const options = [
         ...(inactive ? [{ value: '', label: 'Select…' }] : []),
         ...d.fieldOptions,
@@ -156,17 +166,19 @@ function FiltersPopupBody({
           </ToolRow>
           {!inactive && (
             <ToolRow label="Condition">
-              <ToolSelect value={f.operator} onChange={(v) => d.update(idx, { operator: v as FilterConfig['operator'], value: v === 'between' ? ['', ''] : f.value })} options={operatorsForFieldType(d.fieldType(f.field))} />
+              <ToolSelect value={f.operator} onChange={(v) => d.update(idx, { operator: v as FilterConfig['operator'], value: v === 'between' ? ['', ''] : f.value })} options={isVariable ? [{ value: 'equals', label: 'is' }, { value: 'not_equals', label: 'is not' }, { value: 'in', label: 'in' }, { value: 'not_in', label: 'not in' }] : operatorsForFieldType(d.fieldType(f.field))} />
             </ToolRow>
           )}
           {!inactive && (
             <ToolRow label="Source">
               <ToolSegmentedControl
-                value={isRouteParam ? 'routeParam' : 'static'}
+                value={isRouteParam ? 'routeParam' : isVariable ? 'variable' : 'static'}
                 onChange={(v) => {
                   if (v === 'routeParam') {
                     const defaultParam = d.routeParams[0] || 'param';
                     d.update(idx, { valueSource: 'routeParam', valueVar: f.valueVar || defaultParam, value: '' });
+                  } else if (v === 'variable') {
+                    d.update(idx, { valueSource: 'variable', valueVar: d.variables.find(option => option.value === f.valueVar)?.value ?? d.variables[0]?.value, operator: 'equals', value: '' });
                   } else {
                     d.update(idx, { valueSource: undefined, valueVar: undefined, value: '' });
                   }
@@ -174,6 +186,7 @@ function FiltersPopupBody({
                 options={[
                   { value: 'static', label: 'Static' },
                   { value: 'routeParam', label: 'Route' },
+                  ...(d.variables.length || isVariable ? [{ value: 'variable', label: 'Variable' }] : []),
                 ]}
                 size="sm"
               />
@@ -264,6 +277,13 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
   const collectionData = useAtomValue(collectionDataAtom);
   const collectionSchemas = useAtomValue(collectionSchemasAtom);
   const activeFilePath = useAtomValue(activeFilePathAtom);
+  const code = useAtomValue(codeAtom);
+  const variables = useMemo(() => {
+    const info = parseComponentInfoFromSource(activeFilePath ?? 'components/Current.tsx', code, '');
+    const options = (info?.props ?? []).filter(prop => !isStructuralProp(prop.name)).map(prop => ({ value: prop.name, label: prop.label ?? prop.name }));
+    for (const variable of parsePageVariables(code)?.variables ?? []) if (!options.some(option => option.value === variable.name)) options.push({ value: variable.name, label: variable.name });
+    return options;
+  }, [activeFilePath, code]);
   const routeParams = useMemo(() => {
     if (!activeFilePath) return [];
     const matches = Array.from(activeFilePath.matchAll(/\[([^/\]]+)\]/g));
@@ -360,7 +380,7 @@ export default function FilterControl({ schema, filterGroup, onChange, overridde
   };
 
   const dataRef = useRef<EditorData>(null as unknown as EditorData);
-  dataRef.current = { filters, fields, fieldDef, fieldType, fieldOptions, update, changeField, onAddPicker: openPicker, onRemove: remove, getRefItems, isInactive, routeParams };
+  dataRef.current = { filters, fields, fieldDef, fieldType, fieldOptions, update, changeField, onAddPicker: openPicker, onRemove: remove, getRefItems, isInactive, routeParams, variables };
 
   return (
     <div className="flex items-center justify-between w-full" ref={rowRef}>

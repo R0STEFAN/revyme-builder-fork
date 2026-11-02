@@ -100,7 +100,7 @@ const HOOK_END = '// @responsiveList-end';
  *  `__matchListFilter` / `__cmpListSort` mirror Renderer.evalFilter + the sort
  *  comparator so deploy === canvas. Self-contained (no shared/versioned runtime). */
 const HOOK_DEFINITION = `
-function useResponsiveListConfig(base, vpOverrides, vpWidths, variant, variantOverrides) {
+function useResponsiveListConfig(base, vpOverrides, vpWidths, variant, variantOverrides, variables) {
   const [w, setW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : Infinity);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -117,6 +117,9 @@ function useResponsiveListConfig(base, vpOverrides, vpWidths, variant, variantOv
   for (let i = 0; i < widths.length; i++) { if (w <= widths[i]) { bucket = widths[i]; break; } }
   if (bucket !== null && vpOverrides && vpOverrides[bucket]) cfg = Object.assign({}, cfg, vpOverrides[bucket]);
   if (variant != null && variantOverrides && variantOverrides[variant]) cfg = Object.assign({}, cfg, variantOverrides[variant]);
+  if (cfg.filter && variables) cfg.filter = Object.assign({}, cfg.filter, { filters: cfg.filter.filters.map(function (f) {
+    return f.valueSource === 'variable' ? Object.assign({}, f, { value: variables[f.valueVar] }) : f;
+  }) });
   return cfg;
 }
 function __matchListFilter(item, fg) {
@@ -263,11 +266,22 @@ function upsertConfigConst(
     + `${JSON.stringify(serializeMap(cfg.viewport))}, `
     + `${JSON.stringify(opts.vpWidths ?? [])}, `
     + `${variantTok}, `
-    + `${JSON.stringify(serializeMap(cfg.variants))})`;
+    + `${JSON.stringify(serializeMap(cfg.variants))}`
+    + `${variableFilterArgs(cfg)})`;
   const decl = `const ${cfgVar} = ${init};`;
   const existing = new RegExp(`const ${cfgVar} = useResponsiveListConfig\\([\\s\\S]*?\\);`);
   if (existing.test(code)) return code.replace(existing, decl);
   return insertConstIntoEnclosingFn(code, parentId, decl);
+}
+
+function variableFilterArgs(cfg: ResponsiveListConfig): string {
+  const names = new Set<string>();
+  for (const dims of [cfg.base, ...Object.values(cfg.viewport), ...Object.values(cfg.variants)]) for (const filter of dims.filterGroup?.filters ?? []) {
+    if (filter.valueSource !== 'variable') continue;
+    if (!filter.valueVar || !/^[A-Za-z_$][\w$]*$/.test(filter.valueVar)) throw new Error('CMS_FILTER_VARIABLE_INVALID');
+    names.add(filter.valueVar);
+  }
+  return names.size ? `, {${[...names].sort().map(name => `${JSON.stringify(name)}: ${name}`).join(', ')}}` : '';
 }
 
 /** Remove the per-list config const (downgrade / list deleted). */

@@ -201,8 +201,12 @@ describe('writeResponsiveListConfigInCode', () => {
     const cfg: ResponsiveListConfig = { base: {}, viewport: { 768: { sort: [{ field: 'x', direction: 'asc' }] } }, variants: {} };
     const code = writeResponsiveListConfigInCode(COMPONENT_CODE, 'list', 'blog', cfg, { variantArg: 'initialVariant', vpWidths: [768] });
     const out = rewriteListConfigBreakpoints(code, 768, 810);
-    // The `function useResponsiveListConfig(...)` declaration is untouched + still parses.
-    expect(out).toContain('function useResponsiveListConfig(base, vpOverrides, vpWidths, variant, variantOverrides)');
+    const hook = (source: string) => {
+      const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+      const fn = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id?.name === 'useResponsiveListConfig')!;
+      return source.slice(fn.start!, fn.end!);
+    };
+    expect(hook(out)).toBe(hook(code));
     expect(parses(out)).toBe(true);
   });
 

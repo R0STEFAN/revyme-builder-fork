@@ -293,7 +293,7 @@ export interface FilterConfig {
   /** Dynamic value source (Phase 4 — search field / date picker bound to a page
    *  variable, or route parameter like [:category]). When set (not 'static'), the predicate reads `valueVar` at runtime
    *  instead of the literal `value`. */
-  valueSource?: 'static' | 'searchField' | 'dateField' | 'routeParam';
+  valueSource?: 'static' | 'searchField' | 'dateField' | 'routeParam' | 'variable';
   /** Page-variable name driving a dynamic filter (when valueSource !== 'static'). */
   valueVar?: string;
 }

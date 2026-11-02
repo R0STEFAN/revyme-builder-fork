@@ -2,9 +2,20 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import ToolSelect from '../../controls/ToolSelect';
-import { buildHierarchicalFields, flattenHierarchicalFields } from './cms-filter-utils';
+import { buildHierarchicalFields, flattenHierarchicalFields, fieldsForSortFilter, filterSummary } from './cms-filter-utils';
 
 afterEach(cleanup);
+
+it('offers record identity and slug as editable native query fields', () => {
+  expect(fieldsForSortFilter(null)).toEqual(expect.arrayContaining([
+    { id: '_id', name: 'ID', type: 'text' },
+    { id: '_slug', name: 'Slug', type: 'text' },
+  ]));
+});
+
+it('shows the live variable binding rather than its preview value in a filter summary', () => {
+  expect(filterSummary({ field: '_id', operator: 'equals', value: 'preview-row', valueSource: 'variable', valueVar: 'category' }, 'ID')).toBe('ID is category');
+});
 
 function relation(id: string, target?: string): FieldDefinition {
   return { id, name: id, type: 'multi-reference', referenceCollection: target };
