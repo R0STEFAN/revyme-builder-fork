@@ -18,6 +18,18 @@ describe('editor source styles', () => {
     mapSourceStyles(node({ masks: [], enterEffectEnabled: false, enterEffectOpacity: 0, isFormContainer: false }), inactive);
     expect(inactive.diagnostics).toEqual([]);
   });
+  it('maps a single image alpha mask to editable native CSS without losing its fit', () => {
+    const c = context({ assets: { 'asset:mask.svg': '/assets/original.svg' } });
+    const result = mapSourceStyles(node({ masks: [{ maskType: 'image', maskImage: 'asset:mask.svg', maskImageResize: 'cover', maskMode: 'alpha', maskPosition: 'center', maskRepeat: 'no-repeat', maskComposite: 'add' }] }), c);
+    expect(c.diagnostics).toEqual([]);
+    expect(result).toMatchObject({ maskImage: 'url("/assets/original.svg")', WebkitMaskImage: 'url("/assets/original.svg")', maskSize: 'cover', maskPosition: 'center', maskRepeat: 'no-repeat' });
+    const unsupported = context({ assets: { 'asset:mask.svg': '/assets/original.svg' } });
+    mapSourceStyles(node({ masks: [{ maskType: 'image', maskImage: 'asset:mask.svg', maskMode: 'luminance' }] }), unsupported);
+    expect(unsupported.diagnostics).toContainEqual(expect.objectContaining({ property: 'masks' }));
+    const unknown = context({ assets: { 'asset:mask.svg': '/assets/original.svg' } });
+    mapSourceStyles(node({ masks: [{ maskType: 'image', maskImage: 'asset:mask.svg', maskImageResize: 'cover', maskMode: 'alpha', maskPosition: 'center', maskRepeat: 'no-repeat', maskComposite: 'add', maskRotation: 45 }] }), unknown);
+    expect(unknown.diagnostics).toContainEqual(expect.objectContaining({ property: 'masks' }));
+  });
   it('maps stacks, wrapping and main/cross axis fill weights', () => {
     const styles = mapSourceStyles(node({ layout: 'stack', stackDirection: 'horizontal', stackAlignment: 'center', stackDistribution: 'space-between', stackWrapEnabled: true, gap: '20px', width: 2, widthType: 3, height: 1, heightType: 3 }), context({ parent: node({ layout: 'stack', stackDirection: 'horizontal' }) }));
     expect(styles).toMatchObject({ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', flexGrow: '2', flexBasis: '0px', height: '100%' });

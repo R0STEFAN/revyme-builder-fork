@@ -48,7 +48,9 @@ pure compiler assembly and the live-capture regressions described below.
   on any diagnostic. Only create context is implemented; replace/paste diagnose
   until their native placement/CAS adapter exists. The clipboard/history path is
   not connected. There is no second commit engine.
-- Unsupported active masks/effects/forms/cursors and fonts/tokens/document
+- A single centered cover/no-repeat image alpha mask maps to native editable
+  mask styles if its original asset is available; other mask forms still block.
+  Unsupported active effects/forms/cursors and fonts/tokens/document
   metadata remain explicit blockers. Unadapted relocated href/link-prop defaults
   block to avoid linking back to an existing Home. Static scale, sticky offsets,
   text selection and inline native line-height ratios are preserved.

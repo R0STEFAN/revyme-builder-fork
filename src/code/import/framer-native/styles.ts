@@ -52,11 +52,20 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
     if (p[key] === true) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
-  for (const key of ['masks', 'boxShadows', 'pageEffects']) {
+  for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   if (p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   const result: Record<string, string> = { boxSizing: 'border-box', position: 'relative', display: 'block' };
+  if (Array.isArray(p.masks) && p.masks.length) {
+    const mask = p.masks.length === 1 ? sourceRecord(p.masks[0]) : undefined;
+    const url = typeof mask?.maskImage === 'string' ? context.assets?.[mask.maskImage] : undefined;
+    const maskKeys = new Set(['id', 'maskType', 'maskImage', 'maskImageResize', 'maskMode', 'maskPosition', 'maskRepeat', 'maskComposite', 'maskConicGradient', 'maskLinearGradient', 'maskRadialGradient']);
+    if (mask?.maskType === 'image' && Object.keys(mask).every(key => maskKeys.has(key)) && mask.maskMode === 'alpha' && mask.maskImageResize === 'cover' && mask.maskPosition === 'center' && mask.maskRepeat === 'no-repeat' && mask.maskComposite === 'add' && url) {
+      result.maskImage = result.WebkitMaskImage = `url(${JSON.stringify(url)})`;
+      result.maskSize = 'cover'; result.maskPosition = 'center'; result.maskRepeat = 'no-repeat';
+    } else mappingDiagnostic(context, node, 'masks', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+  }
   const set = (key: string, value: string | undefined) => { if (value !== undefined) result[key] = value; };
   const value = (key: string) => sourceStyleValue(p[key], node, context, key);
   const parent = context.parent?.properties;

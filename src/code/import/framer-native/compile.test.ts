@@ -54,6 +54,22 @@ it('returns no partial files if any required original asset or behavior is unava
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'ASSET_DEFINITION_MISSING' }));
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ property: 'masks' }));
 });
+it('imports an original image mask as editable native styling with the original asset', async () => {
+  const source = transfer(), frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  const mask = 'data:framer/asset-reference,mask.png';
+  frame.masks = [{ maskType: 'image', maskImage: mask, maskImageResize: 'cover', maskMode: 'alpha', maskPosition: 'center', maskRepeat: 'no-repeat', maskComposite: 'add' }];
+  source.assets = [{ key: 'mask', extension: '.png', mimeType: 'image/png', url: 'https://example.com/mask.png' }];
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create', assetPayloads: { mask: 'data:image/png;base64,iVBORw0KGgo=' } });
+  expect(result.diagnostics).toEqual([]);
+  const asset = result.files.find(file => file.path.startsWith('public/assets/'))!;
+  const client = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  const styles = parseJSXToNodes(client.code).get(result.identity.desktop)!.styles;
+  expect(styles.maskImage).toBe(`url("${asset.path.slice('public'.length)}")`);
+  expect(styles.maskSize).toBe('cover');
+  const target = { projectId: 'destination', branchId: 'main' };
+  const submitted = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext());
+  expect(submitted.changes).toHaveLength(result.files.length);
+});
 
 it('reports unsupported paste context and malformed captures without touching a destination', () => {
   expect(compileNativeTransfer(transfer(), { existingFiles: new Map(), mode: 'paste' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'NATIVE_TARGET_ADAPTER_REQUIRED' })] });
