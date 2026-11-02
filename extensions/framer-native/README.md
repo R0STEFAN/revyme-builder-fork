@@ -1,4 +1,4 @@
-# Framer Native → Revyme — source reader 0.1.4
+# Framer Native → Revyme — source reader 0.1.5
 
 Це перша діагностична частина нового імпортера. Вона захоплює оригінальну модель
 редактора; конвертація й вставка в Revyme ще не підключені.
@@ -49,6 +49,9 @@ Resource entries використовуються лише для діагнос
 source accessor перевірені за модулями цієї збірки. Native URL для SVG отримується
 через helper редактора, а растрові файли зберігають оригінальний file URL.
 Повний live capture цієї версії ще потребує перевірки.
+
+Версія 0.1.5 також шукає оригінальний код активних сторонніх overrides,
+навіть якщо Framer не додав для них окремий опис модуля в дереві.
 
 Перший adapter прив'язаний до спостереженого editor entrypoint
 `https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.

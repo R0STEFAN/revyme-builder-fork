@@ -57,6 +57,20 @@ export function sourceCodeComponentIdentifiers(graph: SourceGraph): Set<string> 
   return identifiers;
 }
 
+export function sourceCodeOverrideIdentifiers(graph: SourceGraph): Set<string> {
+  const identifiers = new Set<string>();
+  const scan = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(scan); return; }
+    const object = sourceRecord(value);
+    if (!object) return;
+    const identifier = activeSourceCodeOverride(object);
+    if (identifier?.startsWith('module:')) identifiers.add(identifier);
+    for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item);
+  };
+  for (const id of graph.reachable) scan(graph.nodes.get(id)!.raw);
+  return identifiers;
+}
+
 export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
   const value = requiredNode(graph, scopeId).raw.variables ?? [];
   const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
@@ -268,7 +282,7 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
   const used = new Set([...existingPaths].map(path => normalize(path.split('/').pop()!.replace(/\.[^.]+$/, ''))));
   const identity: Record<string, string> = Object.create(null);
   const entries = [...graph.reachable].map(id => ({ id, field: false, slug: false }));
-  for (const identifier of sourceCodeComponentIdentifiers(graph)) {
+  for (const identifier of new Set([...sourceCodeComponentIdentifiers(graph), ...sourceCodeOverrideIdentifiers(graph)])) {
     const id = sourceCodeExportKey(identifier);
     if (graph.nodes.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: code/node identity collision ${id}`);
     entries.push({ id, field: false, slug: false });

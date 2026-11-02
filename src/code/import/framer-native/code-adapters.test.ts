@@ -13,6 +13,17 @@ const emit = (input = captured) => {
 };
 
 describe('original code override adapter', () => {
+  it('adapts an external override only from the exact captured module and pinned save', () => {
+    const input = structuredClone(captured);
+    const identifier = 'module:vendor/save/Override.tsx:BackToTop';
+    input.definitions[0].data.codeOverrideIdentifier = identifier;
+    input.codeFiles[0] = { ...input.codeFiles[0], sourceId: 'vendor', moduleId: 'vendor', saveId: 'save', path: 'Override.tsx' };
+    const result = emit(input);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.overrides[identifier]?.name).toBe('withBackToTop');
+    input.codeFiles[0].saveId = 'different';
+    expect(emit(input).diagnostics).toContainEqual(expect.objectContaining({ code: 'CODE_SOURCE_UNAVAILABLE' }));
+  });
   it('does not invent an override when Framer enables the empty override picker by default', () => {
     const input = structuredClone(captured);
     delete (input.definitions[0].data as Record<string, unknown>).codeOverrideIdentifier;

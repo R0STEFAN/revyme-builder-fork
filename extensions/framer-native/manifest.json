@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Framer Native → Revyme · Source Reader",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Diagnostic source reader for the new native Framer to Revyme import. Conversion is not connected yet.",
   "permissions": ["activeTab", "scripting", "clipboardWrite", "downloads"],
   "action": { "default_popup": "popup.html", "default_title": "Захопити source Framer" },

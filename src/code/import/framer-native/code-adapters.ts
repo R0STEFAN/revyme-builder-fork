@@ -6,7 +6,7 @@ import { exportedOverrideFunctions, overrideRenderFunction, validateNativeOverri
 import { generate } from '../../generation/generator-utils';
 import { normalizeBabelTraverse } from '../../generation/variant-visibility-gen';
 import type { CodeOverrideRef } from '../../generation/code-override-gen';
-import { activeSourceCodeOverride, sourceRecord } from './source-graph';
+import { activeSourceCodeOverride, sourceCodeExportKey, sourceRecord } from './source-graph';
 import type { NativeCompileResult, SourceGraph } from './types';
 
 export interface NativeCodeOverrideResult extends NativeCompileResult {
@@ -18,6 +18,7 @@ export function emitNativeCodeOverrides(graph: SourceGraph, identity: Record<str
   const result: NativeCodeOverrideResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], overrides: {} };
   if (result.diagnostics.length) return result;
   const requested = new Map<string, Set<string>>();
+  const external = new Set<string>();
   // Replica tables can contain an active override absent from their master.
   const scan = (value: unknown, sourceId: string): void => {
     if (Array.isArray(value)) { value.forEach(item => scan(item, sourceId)); return; }
@@ -25,11 +26,15 @@ export function emitNativeCodeOverrides(graph: SourceGraph, identity: Record<str
     if (!object) return;
     const identifier = activeSourceCodeOverride(object);
     if (identifier) {
-      const match = typeof identifier === 'string' && /^local-module:(codeFile\/[^:]+):([A-Za-z_$][\w$]*)$/.exec(identifier);
-      if (!match) result.diagnostics.push({ code: 'CODE_SOURCE_UNAVAILABLE', sourceId, property: 'codeOverrideIdentifier', message: `Original override source unavailable: ${String(identifier)}` });
-      else {
-        const names = requested.get(match[1]) ?? new Set<string>();
-        names.add(match[2]); requested.set(match[1], names);
+      if (/^module:[^/]+\/[^/]+\/[^:]+:[A-Za-z_$][\w$]*$/.test(identifier)) {
+        external.add(identifier);
+      } else {
+        const match = /^local-module:(codeFile\/[^:]+):([A-Za-z_$][\w$]*)$/.exec(identifier);
+        if (!match) result.diagnostics.push({ code: 'CODE_SOURCE_UNAVAILABLE', sourceId, property: 'codeOverrideIdentifier', message: `Original override source unavailable: ${String(identifier)}` });
+        else {
+          const names = requested.get(match[1]) ?? new Set<string>();
+          names.add(match[2]); requested.set(match[1], names);
+        }
       }
     }
     for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item, sourceId);
@@ -49,6 +54,22 @@ export function emitNativeCodeOverrides(graph: SourceGraph, identity: Record<str
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.diagnostics.push({ code: message.split(':')[0].startsWith('CODE_') ? message.split(':')[0] : 'CODE_ADAPTER_UNSUPPORTED', sourceId, property: 'codeOverrideIdentifier', message });
+    }
+  }
+  for (const identifier of external) {
+    try {
+      const match = /^module:([^/]+)\/([^/]+)\/([^:]+):([A-Za-z_$][\w$]*)$/.exec(identifier)!;
+      const file = graph.transfer.codeFiles?.find(file => file.sourceId === match[1] && file.moduleId === match[1] && file.saveId === match[2] && file.path === match[3]);
+      if (!file) throw new Error('CODE_SOURCE_UNAVAILABLE: original external override source was not captured at its pinned save');
+      const targetId = identity[sourceCodeExportKey(identifier)];
+      if (!targetId) throw new Error('CODE_IDENTITY_MISSING');
+      const converted = adaptOverrideSource(file.code, new Set([match[4]]));
+      const path = `overrides/${targetId}.tsx`;
+      result.files.push({ path, code: converted.code });
+      result.overrides[identifier] = { file: path, name: converted.names.get(match[4])! };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.diagnostics.push({ code: message.split(':')[0].startsWith('CODE_') ? message.split(':')[0] : 'CODE_ADAPTER_UNSUPPORTED', sourceId: identifier, property: 'codeOverrideIdentifier', message });
     }
   }
   if (result.diagnostics.length) { result.files = []; result.overrides = {}; }
