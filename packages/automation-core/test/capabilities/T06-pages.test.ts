@@ -179,7 +179,7 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
 
   it('does not mistake a page inside a route group named template for LayoutClient', () => {
     const pageCode = `'use client';\n\n/** @canvas { "viewports": [{ "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 }], "positions": { "desktop": { "x": 0, "y": 0 } } } */\n\nimport React from 'react';\n\nexport default function Page() {\n  return <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%', backgroundColor: '#FFFFFF' }} />;\n}`;
-    snapshot.files.set('app/(template)/LayoutClient.tsx', 'export default function LayoutClient() { return null; }');
+    files.set('app/(template)/LayoutClient.tsx', 'export default function LayoutClient() { return null; }');
     const plan = createPlan({
       scope: snapshot.scope,
       baseRevision: snapshot.revision,

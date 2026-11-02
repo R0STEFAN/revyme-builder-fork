@@ -538,7 +538,7 @@ export const presetsBatchSetOperation: Operation<
         createdTokens.push(...res.createdTokens);
         createdTypographyCount++;
         const changedFile = res.changes.find((c) => c.path === targetFile);
-        if (changedFile) {
+        if (changedFile?.content != null) {
           currentCss = changedFile.content;
           intermediateSnapshot = {
             ...intermediateSnapshot,
