@@ -10,7 +10,7 @@ import { sourceViewports, applyNativeResponsive } from './responsive';
 import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
-import { nativeCollectionSlug, sourceCollectionId } from './cms';
+import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import type { NativeCodeComponentRef } from './code-components';
@@ -97,7 +97,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const isTemplate = page.kind === 'LayoutTemplateNode';
       const isDetail = !isTemplate && page.raw.dataIdentifier !== undefined;
       if (isDetail && !result.routes[id]?.endsWith('/[slug]')) throw new Error('Source CMS page requires its native page-context adapter');
-      if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).length) throw new Error('Source CMS page metadata requires its native per-record adapter');
+      if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).some(key => !['title', 'description'].includes(key))) throw new Error('Source CMS page metadata requires its native per-record adapter');
       const collection = isDetail ? nativeCollectionSlug(identity, sourceCollectionId(page.raw.dataIdentifier)) : undefined;
       if (sourceVariables(graph, id).length) throw new Error(`Source ${isTemplate ? 'template' : 'page'} variables require their native declaration adapter`);
       const templateIdentifier = page.raw.layoutTemplateIdentifierOverride !== undefined ? page.raw.layoutTemplateIdentifierOverride : document?.raw.layoutTemplateIdentifier;
@@ -193,7 +193,30 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (isDetail) {
         const globalMeta = sourceRecord(document?.raw.webMetadata);
         const defaults = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
-        result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: buildCmsDetailServerWrapper({ collection: collection!, defaults, apiConfig: null }) });
+        const expressions: Record<string, string> = {};
+        const pageMeta = sourceRecord(page.raw.webMetadata);
+        const collectionId = sourceCollectionId(page.raw.dataIdentifier);
+        for (const key of ['title', 'description']) {
+          const value = pageMeta?.[key];
+          if (value === undefined) continue;
+          if (typeof value !== 'string') throw new Error(`Unsupported source CMS metadata ${key}`);
+          const parts: string[] = [];
+          let index = 0;
+          for (const match of value.matchAll(/\{\{([^{}]+)\}\}/g)) {
+            const literal = value.slice(index, match.index);
+            if (/[{}]/.test(literal)) throw new Error(`Unsupported source CMS metadata ${key}`);
+            parts.push(JSON.stringify(literal));
+            const variable = sourceVariables(graph, collectionId).find(item => item.id === match[1]);
+            if (variable?.type !== 'string') throw new Error(`Unsupported source CMS metadata field ${match[1]}`);
+            parts.push(`item?.${nativeFieldId(identity, collectionId, match[1])} ?? ""`);
+            index = match.index! + match[0].length;
+          }
+          const tail = value.slice(index);
+          if (/[{}]/.test(tail)) throw new Error(`Unsupported source CMS metadata ${key}`);
+          if (!parts.length) defaults[key] = value;
+          else { parts.push(JSON.stringify(tail)); expressions[key] = `[${parts.join(', ')}].join("")`; }
+        }
+        result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: buildCmsDetailServerWrapper({ collection: collection!, defaults, expressions, apiConfig: null }) });
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
         continue;
       }

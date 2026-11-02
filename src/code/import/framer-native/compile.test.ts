@@ -5,6 +5,7 @@ import type { NativeTransfer } from './types';
 import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
 import { parseMetadataFromCode } from '../../generation/metadata-gen';
+import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../project/cms-seo';
 import { nativeCollectionSlug, nativeFieldId } from './cms';
 
 function transfer(): NativeTransfer {
@@ -125,7 +126,17 @@ it('imports a CMS detail route with live record bindings into a native page pair
   const mismatch = result.files.map(file => file.path === client.path ? { ...file, code: file.code.replace(`"collection": "${nativeCollectionSlug(result.identity, 'articles')}"`, '"collection": "other"') } : file);
   await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: mismatch, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).rejects.toThrow(/WRAPPER_INVALID/);
   page.webMetadata = { title: '{{titleField}} article' };
-  expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('per-record') }));
+  const dynamicSeo = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(dynamicSeo.diagnostics).toEqual([]);
+  const seoServer = dynamicSeo.files.find(file => file.path === server.path)!;
+  const titleExpression = parseCmsSeoExpressions(seoServer.code).title!;
+  expect(new Function('item', `return (${titleExpression});`)({ [nativeFieldId(dynamicSeo.identity, 'articles', 'titleField')]: 'First' })).toBe('First article');
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: dynamicSeo.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  const malicious = buildCmsDetailServerWrapper({ collection: nativeCollectionSlug(result.identity, 'articles'), defaults: { title: 'Site title', description: 'Site description' }, expressions: { title: 'process.env.SECRET' }, apiConfig: null });
+  const unsafeFiles = dynamicSeo.files.map(file => file.path === server.path ? { ...file, code: malicious } : file);
+  await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: unsafeFiles, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).rejects.toThrow(/WRAPPER_INVALID/);
+  page.webMetadata = { title: '{{missingField}} article' };
+  expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('metadata') }));
   delete page.webMetadata;
   frame.children[0].link = { type: 'webPage', webPageId: 'home' };
   expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('dynamic') }));

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { parse } from '@babel/parser';
+import { parse, parseExpression } from '@babel/parser';
 import * as t from '@babel/types';
 import { z } from 'zod';
 import { checkFile } from '@/code/oracle/check-file';
@@ -14,7 +14,7 @@ import { validatePlan } from '../validate';
 import { safeProjectPath } from './scoped-restore';
 import { isSystemProtectedPath, PROTECTED_SYSTEM_FILES } from './code-files';
 import { validateFramerImportCms } from './framer-import-cms';
-import { buildCmsDetailServerWrapper, parseCmsSeoDefaults } from '@/code/project/cms-seo';
+import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '@/code/project/cms-seo';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 
 export const framerImportSubmitInputSchema = z.object({
@@ -72,6 +72,18 @@ function isStaticMetadata(node: t.Node | null | undefined): boolean {
     (t.isIdentifier(property.key) || t.isStringLiteral(property.key)) && isStaticMetadata(property.value));
 }
 
+function isSafeCmsSeoExpression(value: string, fields: ReadonlySet<string>): boolean {
+  try {
+    const expr = parseExpression(value);
+    if (!t.isCallExpression(expr) || expr.arguments.length !== 1 || !t.isStringLiteral(expr.arguments[0], { value: '' }) ||
+        !t.isMemberExpression(expr.callee) || expr.callee.computed || !t.isIdentifier(expr.callee.property, { name: 'join' }) || !t.isArrayExpression(expr.callee.object)) return false;
+    return expr.callee.object.elements.every(element => t.isStringLiteral(element) ||
+      (t.isLogicalExpression(element, { operator: '??' }) && t.isStringLiteral(element.right, { value: '' }) &&
+       t.isOptionalMemberExpression(element.left) && element.left.optional && !element.left.computed &&
+       t.isIdentifier(element.left.object, { name: 'item' }) && t.isIdentifier(element.left.property) && fields.has(element.left.property.name)));
+  } catch { return false; }
+}
+
 /** Server entries have a narrow structural contract; annotations cannot turn canvas code into a wrapper. */
 function validateWrapper(path: string, code: string, projected: ReadonlyMap<string, string>): void {
   if (path.endsWith('/[slug]/page.tsx')) {
@@ -79,10 +91,17 @@ function validateWrapper(path: string, code: string, projected: ReadonlyMap<stri
     const meta = client ? parseCmsPageMeta(client) : undefined;
     const collection = meta?.collection;
     const defaults = parseCmsSeoDefaults(code);
+    const expressions = parseCmsSeoExpressions(code);
+    let fields = new Set<string>();
+    try {
+      const schema = JSON.parse(projected.get(`cms/${collection}.schema.json`) ?? '{}');
+      if (Array.isArray(schema.fields)) fields = new Set(schema.fields.filter((field: any) => field?.type === 'text' && typeof field.id === 'string').map((field: any) => field.id));
+    } catch { /* CMS validation rejects malformed schema. */ }
     if (meta?.kind === 'detail' && typeof collection === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(collection) &&
         Object.entries(defaults).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string') &&
+        Object.entries(expressions).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string' && isSafeCmsSeoExpression(value, fields)) &&
         projected.has(`cms/${collection}.schema.json`) && projected.has(`cms/${collection}.json`) &&
-        code === buildCmsDetailServerWrapper({ collection, defaults, apiConfig: null })) return;
+        code === buildCmsDetailServerWrapper({ collection, defaults, expressions, apiConfig: null })) return;
   }
   const ast = astFor(code, path);
   const client = path.endsWith('/layout.tsx') ? './LayoutClient' : './page.client';

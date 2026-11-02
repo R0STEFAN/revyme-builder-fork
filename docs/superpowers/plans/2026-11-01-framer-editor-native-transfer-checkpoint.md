@@ -29,8 +29,10 @@ pure compiler assembly and the live-capture regressions described below.
   validation, rename/duplicate preservation, and nested query/text bindings.
   A basic CMS detail page now maps its actual collection slug field to a native
   `[slug]` route, page-scoped `item` bindings and canonical native CMS server
-  wrapper. Route collisions are relocated; dynamic links requiring a record
-  and per-record SEO still fail closed. This is not full CMS page support.
+  wrapper. Route collisions are relocated; title/description templates using
+  text fields become validated native SEO expressions. Dynamic links requiring
+  a record and unsupported SEO field types still fail closed. This is not full
+  CMS page support.
 - Shared scene/instance emission handles masters, static pages and templates.
   Page pairs preserve fluid responsive trees, typography and route conflicts.
   Static templates without variables become native route groups/Layouts with
