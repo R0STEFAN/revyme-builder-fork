@@ -64,6 +64,19 @@ export function decodeNativeTransfer(input) {
   if (!Array.isArray(rootIds) || rootIds.length === 0 || rootIds.some(id => !validId(id) || !ids.has(id))
     || new Set(rootIds).size !== rootIds.length) fail('missing or duplicate root');
   if (!Array.isArray(assets) || assets.some(asset => !record(asset))) fail('invalid assets');
+  if (value.fonts !== undefined) {
+    if (!Array.isArray(value.fonts) || value.fonts.length > 10000) fail('invalid fonts');
+    const selectors = new Set();
+    const weight = value => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1000;
+    for (const font of value.fonts) {
+      if (!record(font) || !validId(font.selector) || !validId(font.family) || selectors.has(font.selector) || !weight(font.weight) || !['normal', 'italic'].includes(font.style) || !['woff2', 'woff', 'otf', 'ttf'].includes(font.ext)) fail('invalid/duplicate font');
+      let url;
+      try { url = typeof font.url === 'string' && font.url.length <= 8192 ? new URL(font.url) : undefined; } catch { /* invalid font URL */ }
+      if (!url || url.protocol !== 'https:' || url.username || url.password) fail('invalid font URL');
+      if (font.weightRange !== undefined && (!record(font.weightRange) || !weight(font.weightRange.min) || !weight(font.weightRange.max) || font.weightRange.min > font.weightRange.max)) fail('invalid font weight range');
+      selectors.add(font.selector);
+    }
+  }
   if (value.codeFiles !== undefined) {
     if (!Array.isArray(value.codeFiles) || value.codeFiles.length > 10000) fail('invalid code sources');
     const codeIds = new Set();

@@ -97,6 +97,14 @@ pure compiler assembly and the live-capture regressions described below.
   and deduplicates identical faces in one batch. Focused 24 files/269 tests,
   TypeScript and production build passed. Automatic original-font capture/upload
   is not wired yet; do not claim the live capture's font blockers are removed.
+  Reader source now captures original Google font files from the editor's native
+  webFontStore.googleWebFonts metadata, with exact static style/weight and variable
+  wght ranges. Inline base64 --font-selector values are decoded; custom code
+  placeholders are skipped. Stable capture carries optional `fonts`, validated by
+  the envelope decoder; missing native metadata marks capture incomplete. Reader
+  41 Node tests, focused 264 Vitest tests and TypeScript passed. This reader source
+  change is not yet repackaged into Documents or verified in live Framer; automatic
+  font download/upload and compiler context wiring remain the next step.
   Token aliases and other unverified color formats still diagnose.
 
 ## Latest live capture and remaining source dependencies

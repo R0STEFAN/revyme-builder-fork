@@ -146,6 +146,49 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
         ...(resolveAssetImageUrl && asset.mimeType === 'image/svg+xml' ? { imageUrl: resolveAssetImageUrl(asset) } : {}),
       }))));
     },
+    async readFonts() {
+      checkProject();
+      const selectors = new Set();
+      const scan = value => {
+        if (Array.isArray(value)) { value.forEach(scan); return; }
+        if (!value || typeof value !== 'object') return;
+        if (value.__class === 'CodeComponentNode' && !String(value.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/')) return;
+        for (const [key, item] of Object.entries(value)) {
+          if (typeof item === 'string') {
+            if (/^font(?:Bold|Italic|BoldItalic|Selector)?$/.test(key) && item.startsWith('GF;')) selectors.add(item.split('VF=')[0]);
+            if (key === 'html') for (const match of item.matchAll(/--font-selector:\s*(?:["']?(GF;[^"'<>;{}]+)|([A-Za-z0-9+/]+={0,2}))/g)) {
+              let selector;
+              try { selector = match[1]?.trim() ?? atob(match[2]); } catch { throw new Error('SOURCE_FONT_UNAVAILABLE: Invalid inline font selector.'); }
+              if (selector.startsWith('GF;')) selectors.add(selector.split('VF=')[0]);
+            }
+          } else scan(item);
+        }
+      };
+      scan(sourceIndex().get(engine.tree.root.id));
+      if (!selectors.size) return [];
+      const store = engine.stores.webFontStore;
+      if (!store?.googleWebFonts && typeof store?.importFonts === 'function') await store.importFonts();
+      const metadata = store?.googleWebFonts;
+      if (!Array.isArray(metadata?.staticFonts) || !Array.isArray(metadata?.variableFonts)) throw new Error('SOURCE_FONT_UNAVAILABLE: Original editor font metadata is unavailable.');
+      return [...selectors].sort().map(selector => {
+        const match = /^GF;(.+?)-(variable-)?(regular|italic|[1-9]\d{1,3}(?:italic)?)$/.exec(selector);
+        if (!match) throw new Error(`SOURCE_FONT_UNAVAILABLE: Unsupported source font selector ${selector}.`);
+        const [, family, variable, variant] = match;
+        const entry = metadata[variable ? 'variableFonts' : 'staticFonts'].find(font => font.family === family);
+        const file = entry?.files?.[variant];
+        const url = typeof file === 'string' ? file.replace(/^http:\/\//, 'https://') : '';
+        const ext = /\.(woff2|woff|ttf|otf)(?:[?#]|$)/i.exec(url)?.[1].toLowerCase();
+        if (!url.startsWith('https://') || !ext) throw new Error(`SOURCE_FONT_UNAVAILABLE: Original font file is unavailable for ${selector}.`);
+        const weight = parseInt(variant, 10) || 400;
+        let weightRange;
+        if (variable) {
+          const axis = entry.axes?.find(axis => axis.tag === 'wght');
+          if (!axis || !Number.isFinite(axis.start) || !Number.isFinite(axis.end) || axis.start <= 0 || axis.start > axis.end || axis.end > 1000) throw new Error(`SOURCE_FONT_UNAVAILABLE: Original variable weight range is unavailable for ${selector}.`);
+          weightRange = { min: axis.start, max: axis.end };
+        }
+        return { selector, family, url, weight, ...(weightRange ? { weightRange } : {}), style: variant.endsWith('italic') ? 'italic' : 'normal', ext };
+      });
+    },
     async readCodeFiles() {
       checkProject();
       const store = engine.stores.modulesStore, result = [];

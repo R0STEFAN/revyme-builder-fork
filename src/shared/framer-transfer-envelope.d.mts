@@ -26,8 +26,18 @@ export interface NativeTransfer {
   definitions: RawDefinition[];
   assets: Record<string, unknown>[];
   codeFiles?: SourceCodeFile[];
+  fonts?: SourceFontFile[];
   complete: boolean;
   diagnostics: TransferDiagnostic[];
+}
+export interface SourceFontFile {
+  selector: string;
+  family: string;
+  url: string;
+  weight: number;
+  weightRange?: { min: number; max: number };
+  style: 'normal' | 'italic';
+  ext: 'woff2' | 'woff' | 'otf' | 'ttf';
 }
 export interface SourceCodeFile {
   sourceId: string;

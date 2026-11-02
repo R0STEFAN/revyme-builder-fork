@@ -68,3 +68,15 @@ test('marks unavailable original source incomplete instead of silently dropping 
   assert.equal(result.complete, false);
   assert(result.diagnostics.some(d => d.code === 'SOURCE_CODE_UNAVAILABLE' && d.sourceId === 'original'));
 });
+
+test('carries original font files and fails explicitly when native font metadata is unavailable', async () => {
+  const source = adapter();
+  const fonts = [{ selector: 'GF;Example-regular', family: 'Example', url: 'https://fonts.gstatic.com/original.woff2', ext: 'woff2', weight: 400, style: 'normal' }];
+  source.readFonts = async () => fonts;
+  const result = await captureNativeTransfer(source, { mode: 'page' }, new AbortController().signal);
+  assert.deepEqual(result.fonts, fonts);
+  source.readFonts = async () => { throw new Error('original metadata missing'); };
+  const failed = await captureNativeTransfer(source, { mode: 'page' }, new AbortController().signal);
+  assert.equal(failed.complete, false);
+  assert(failed.diagnostics.some(d => d.code === 'SOURCE_FONT_UNAVAILABLE'));
+});

@@ -10,6 +10,12 @@ const sample = () => ({
 });
 
 describe('native Framer transfer trust boundary', () => {
+  it('validates original font declarations while accepting older captures without fonts', () => {
+    const font = { selector: 'GF;Example-variable-regular', family: 'Example', url: 'https://fonts.gstatic.com/original.woff2', ext: 'woff2', weight: 400, weightRange: { min: 200, max: 900 }, style: 'normal' };
+    expect(decodeNativeTransfer({ ...sample(), fonts: [font] }).fonts).toEqual([font]);
+    expect(decodeNativeTransfer(sample()).fonts).toBeUndefined();
+    for (const fonts of [[font, font], [{ ...font, weight: 0 }], [{ ...font, url: 'javascript:alert(1)' }], [{ ...font, weightRange: { min: 900, max: 200 } }]]) expect(() => decodeNativeTransfer({ ...sample(), fonts })).toThrow(/font/i);
+  });
   it('accepts the live source serialization with exposed variables and all inherited variants', () => {
     const decoded = decodeNativeTransfer(capturedUnderline);
     const component = decoded.definitions[0].data;
