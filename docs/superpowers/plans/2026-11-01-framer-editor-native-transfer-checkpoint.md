@@ -54,6 +54,9 @@ pure compiler assembly and the live-capture regressions described below.
   reversible journal entry. Tests cover durable undo/redo and lost responses,
   plus preserving local edits after a commit. Browser services, clipboard routing,
   asset transport, selection and editor history synchronization are NOT wired yet.
+  Original asset download transport is implemented and is the coordinator's
+  default: exact MIME, omitted credentials, cancellation and whole-set failure.
+  Browser CORS/live download and clipboard/editor application remain unverified.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
   A linear continuous rotation with unchanged variant/breakpoint semantics uses
@@ -106,7 +109,8 @@ the native conditional-style/line-height fixes has 15,548 passed and exactly the
 same 58 baseline failures, no unhandled errors (resume-verified-suite.log and
 resume-verified-baseline-comparison.json). The suite is NOT green.
 Latest reader validation: 37 Node tests passed. Latest combined converter/native
-submit/transaction/recovery validation: 21 files / 226 tests passed.
+submit/transaction/recovery validation: 22 files / 231 tests passed; the subsequent
+cancellation-focused run passed 8 tests. CLI package smoke test passed as well.
 The previous 325-test combined run
 covered native styles as well; no partial task is complete from unit tests alone.
 

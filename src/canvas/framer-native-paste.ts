@@ -1,15 +1,17 @@
 import { trace } from '../shared/debug-trace';
 import { decodeNativeTransfer } from '../code/import/framer-native/decode';
 import { compileNativeTransfer } from '../code/import/framer-native/compile';
+import { loadNativeTransferAssetPayloads } from '../code/import/framer-native/load-assets';
 import type { NativeTransfer } from '../code/import/framer-native/types';
 import type { Plan, Receipt, Scope, Snapshot } from '../../packages/automation-core/src/contracts';
 import type { FramerImportSubmitInput } from '../../packages/automation-core/src/operations/framer-import';
 
 export interface NativePasteServices {
+  signal?: AbortSignal;
   operationId(): string;
   flush(): Promise<void>;
   snapshot(): Promise<Snapshot>;
-  assetPayloads(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
+  assetPayloads?(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
   isCurrent(snapshot: Snapshot): boolean;
   prepare(input: FramerImportSubmitInput, operationId: string): Promise<Plan>;
   commit(plan: Plan): Promise<Receipt>;
@@ -20,19 +22,22 @@ export interface NativePasteServices {
 /** One user action owns one operation ID, including recovery of a lost response. */
 export async function handleNativeTransferPaste(input: unknown, target: Scope, services: NativePasteServices): Promise<Receipt> {
   const transfer = decodeNativeTransfer(input);
+  services.signal?.throwIfAborted();
   const operationId = services.operationId();
   trace.action('framer-native.paste-start', { operationId, projectId: target.projectId });
   await services.flush();
   const snapshot = await services.snapshot();
   if (snapshot.scope.projectId !== target.projectId || snapshot.scope.branchId !== target.branchId) throw new Error('TARGET_SCOPE_CHANGED');
-  const payloads = await services.assetPayloads(transfer, snapshot);
+  const payloads = services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
   const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
+  services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
   const plan = await services.prepare({ files: compiled.files, mode: 'create', target: { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}) }, expectedRevision: snapshot.revision, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, operationId);
   if (plan.operationId !== operationId || plan.scope.projectId !== target.projectId || plan.scope.branchId !== target.branchId || plan.baseRevision !== snapshot.revision) throw new Error('IMPORT_PLAN_CONTEXT_MISMATCH');
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
   let receipt: Receipt;
+  services.signal?.throwIfAborted();
   try { receipt = await services.commit(plan); }
   catch (error) {
     const recovered = await services.status(target, operationId).catch(() => null);

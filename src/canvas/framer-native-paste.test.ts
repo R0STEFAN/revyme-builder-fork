@@ -30,6 +30,9 @@ it('leaves the destination alone when conversion fails or local context changes'
   await expect(handleNativeTransferPaste(transfer, scope, deps)).rejects.toThrow(/LOCAL_CONTEXT_CHANGED/);
   await expect(handleNativeTransferPaste({ ...transfer, complete: false }, scope, { ...deps, isCurrent: () => true })).rejects.toThrow(/SOURCE_CAPTURE_INCOMPLETE/);
   expect(committed).toBe(false);
+  const controller = new AbortController();
+  await expect(handleNativeTransferPaste(transfer, scope, { ...deps, signal: controller.signal, isCurrent: () => true, assetPayloads: async () => { controller.abort(); return {}; } })).rejects.toThrow(/abort/i);
+  expect(committed).toBe(false);
 });
 
 it('retains the committed receipt if new local edits prevent applying the server result', async () => {
