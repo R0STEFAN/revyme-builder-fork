@@ -12,6 +12,19 @@ import { resolveVariantStyles } from '@/canvas/Renderer';
 import { syncViewportWidths } from '../stores/viewport-store';
 import { checkFile } from '../oracle/check-file';
 
+it('keeps quoted font families and sibling variants intact through conditional style edits', () => {
+  const family = '"Zalando Sans", "Fallback Font", sans-serif';
+  const alternate = "'Another Font', serif";
+  const source = `function Card({initialVariant = 'default'}) { return <div data-id="text" style={{fontFamily: ${JSON.stringify(family)}}}/>; }`;
+  let code = setConditionalStyleInCode(source, 'text', 'fontFamily', 'phone', alternate);
+  code = setConditionalStyleInCode(code, 'text', 'fontFamily', 'tablet', 'Font\\With\\Backslashes');
+  expect(() => transform(code, { presets: ['react', 'typescript'], filename: 'f.tsx' })).not.toThrow();
+  const node = parseJSXToNodes(code).get('text')!;
+  expect(resolveVariantStyles(node, 'default').fontFamily).toBe(family);
+  expect(resolveVariantStyles(node, 'phone').fontFamily).toBe(alternate);
+  expect(resolveVariantStyles(node, 'tablet').fontFamily).toBe('Font\\With\\Backslashes');
+});
+
 const PAGE_WITH_OVERRIDE = `'use client';
 
 import React from 'react';

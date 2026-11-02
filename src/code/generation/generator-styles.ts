@@ -15,6 +15,7 @@ import { cssTransformToMotionProps, MOTION_TRANSFORM_PROPS, MOTION_VISUAL_TRANSF
 import { removeAxisTranslate } from '@/shared/position-utils';
 import { parseJSX } from '@/code/parsing/ast-utils';
 import * as t from '@babel/types';
+import { parseExpression } from '@babel/parser';
 import _traverse from '@babel/traverse';
 
 const traverseAst = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
@@ -4007,19 +4008,25 @@ export function setConditionalStyleInCode(
   const parseSpan = findTopLevelPropSpan(styleContent, prop);
   if (parseSpan) {
     const expr = styleContent.slice(parseSpan.valStart, parseSpan.valEnd).trim();
-    const branchRegex = /(?:variant|initialVariant)\s*===\s*['"]([^'"]+)['"]\s*\?\s*['"]([\s\S]*?)['"]/g;
-    let bm: RegExpExecArray | null;
-    while ((bm = branchRegex.exec(expr)) !== null) map[bm[1]] = bm[2];
-    // Fallback (default) branch — strip the `X === 'v' ? 'val' :` segments and
-    // read the trailing quoted literal (or a bare value).
-    const tail = expr.replace(/(?:variant|initialVariant)\s*===\s*['"][^'"]+['"]\s*\?\s*['"][\s\S]*?['"]\s*:\s*/g, '').trim();
-    const tailQuoted = tail.match(/^['"]([\s\S]*?)['"]/);
-    if (tailQuoted) {
-      map.default = tailQuoted[1];
-      hadExplicitDefault = true;
-    } else if (tail && !tail.includes('?')) {
-      map.default = tail.replace(/^['"]|['"]$/g, '');
-      hadExplicitDefault = true;
+    const literal = (node: t.Node): string | undefined => {
+      if (t.isStringLiteral(node)) return node.value;
+      if (t.isNumericLiteral(node)) return String(node.value);
+      if (t.isUnaryExpression(node, { operator: '-' }) && t.isNumericLiteral(node.argument)) return String(-node.argument.value);
+      if (t.isIdentifier(node)) return `var:${node.name}`;
+    };
+    try {
+      let tail: t.Expression = parseExpression(expr);
+      while (t.isConditionalExpression(tail) && t.isBinaryExpression(tail.test, { operator: '===' }) && t.isIdentifier(tail.test.left) && ['variant', 'initialVariant'].includes(tail.test.left.name) && t.isStringLiteral(tail.test.right)) {
+        const value = literal(tail.consequent);
+        if (value === undefined) break;
+        map[tail.test.right.value] = value;
+        tail = tail.alternate;
+      }
+      const fallback = literal(tail);
+      if (fallback !== undefined) { map.default = fallback; hadExplicitDefault = true; }
+    } catch {
+      trace.error('generator.setConditionalStyle:invalidExpression', { nodeId, prop });
+      return code;
     }
   }
   // Apply this write. An empty value is a "reset override" — drop this
@@ -4096,10 +4103,10 @@ export function setConditionalStyleInCode(
   const nonDefault = Object.entries(map).filter(([k, v]) => k !== 'default' && (hadExplicitDefault ? v !== map.default : true));
   let expr: string;
   if (nonDefault.length === 0) {
-    expr = `'${map.default}'`;
+    expr = quoteStyleValue(map.default);
   } else {
-    const conds = nonDefault.map(([v, val]) => `${variantVar} === '${v}' ? '${val}'`).join(' : ');
-    expr = `${conds} : '${map.default}'`;
+    const conds = nonDefault.map(([v, val]) => `${variantVar} === ${quoteStyleValue(v)} ? ${quoteStyleValue(val)}`).join(' : ');
+    expr = `${conds} : ${quoteStyleValue(map.default)}`;
   }
 
   // Remove the existing prop entry (FULL, comma-safe value), then re-insert
