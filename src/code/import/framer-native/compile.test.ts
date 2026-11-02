@@ -7,6 +7,7 @@ import { createOperationContext, createSnapshot } from '../../../../packages/aut
 import { parseMetadataFromCode } from '../../generation/metadata-gen';
 import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../project/cms-seo';
 import { nativeCollectionSlug, nativeFieldId } from './cms';
+import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -69,6 +70,20 @@ it('imports an original image mask as editable native styling with the original 
   const target = { projectId: 'destination', branchId: 'main' };
   const submitted = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext());
   expect(submitted.changes).toHaveLength(result.files.length);
+});
+it('imports a simple source rotation loop as an editable native motion effect', async () => {
+  const source = transfer(), frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  frame.children.push({ id: 'spinner', __class: 'FrameNode', parentid: 'desktop', children: [], loopEffectEnabled: true, loopEffectRotate: 360, loopEffectRepeatType: 'loop', loopEffectRepeatDelay: 0, loopEffectTransition: { type: 'tween', duration: 1, delay: 0, ease: [0, 0, 1, 1] } });
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  const decomposed = decomposeLoopInCode(client.code, result.identity.spinner);
+  expect(getLoopAnimate(decomposed, result.identity.spinner)).toMatchObject({ props: { rotate: '360' }, trans: { duration: '1', repeat: 'Infinity', ease: 'linear' } });
+  const target = { projectId: 'destination', branchId: 'main' };
+  const submitted = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext());
+  expect(submitted.changes).toHaveLength(result.files.length);
+  frame.children[1].rotation = 45;
+  expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ property: 'loopEffectEnabled' }));
 });
 
 it('reports unsupported paste context and malformed captures without touching a destination', () => {
@@ -156,6 +171,9 @@ it('imports a CMS detail route with live record bindings into a native page pair
   delete page.webMetadata;
   frame.children[0].link = { type: 'webPage', webPageId: 'home' };
   expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('dynamic') }));
+  delete frame.children[0].link;
+  frame.children.push({ id: 'detail-spinner', __class: 'FrameNode', parentid: 'desktop', children: [], loopEffectEnabled: true, loopEffectRotate: 360, loopEffectRepeatType: 'loop', loopEffectTransition: { type: 'tween', duration: 1, delay: 0, ease: [0, 0, 1, 1] } });
+  expect(compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('hook-order') }));
 });
 it('imports a code component as a labeled editable placeholder even without original code', () => {
   const source = transfer(), identifier = 'module:vendor/pinned/Widget.tsx:Widget';

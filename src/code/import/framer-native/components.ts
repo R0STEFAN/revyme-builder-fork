@@ -27,6 +27,7 @@ import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
@@ -87,7 +88,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const name = nativeComponentName(identity, scopeId);
       const variables = sourceVariables(graph, scopeId).map(variable => variable.type === 'controlReference' && variable.expectedType === 'file' ? { ...variable, type: 'file' } : variable);
       const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(identity, scopeId, String(variable.id))}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, ...options };
+      const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, supportedLoops: true, ...options };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -307,6 +308,17 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const ref = options.overrides?.[identifier];
         if (!ref) throw new Error(`Original code override adapter required on ${id}: ${identifier}`);
         code = setCodeOverridesInCode(code, identity[id], [ref]);
+      }
+      for (const id of sourceIds) {
+        const node = resolveSourceNode(graph, id);
+        if (isSourceCodeComponent(node)) continue;
+        const spec = sourceRotationLoop(node.properties);
+        for (const state of scope.children.filter(state => state !== primaryId)) if (JSON.stringify(sourceRotationLoop(resolveSourceNode(graph, id, state).properties)) !== JSON.stringify(spec)) throw new Error(`Per-state loop on ${id} requires its native adapter`);
+        if (spec) {
+          if (!['FrameNode', 'RichTextNode'].includes(node.kind)) throw new Error(`Loop on source component ${id} requires its native adapter`);
+          assertLoopOutsideSourceList(graph, id);
+          code = applySourceRotationLoop(code, identity[id], spec);
+        }
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');

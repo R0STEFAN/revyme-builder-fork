@@ -12,6 +12,7 @@ import { applySourceInstances } from './scene-instances';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceNode } from './types';
@@ -110,7 +111,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (!isTemplate && document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
-      const context: SourceMappingContext = { graph, diagnostics: [], assets: options.assets, viewport: { width: viewports[0].designWidth! } };
+      const context: SourceMappingContext = { graph, diagnostics: [], assets: options.assets, supportedLoops: true, viewport: { width: viewports[0].designWidth! } };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(node, ctx);
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, ctx).styles);
@@ -179,6 +180,18 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
+      for (const nodeId of scene.sourceIds) {
+        const node = resolveSourceNode(graph, nodeId);
+        if (isSourceCodeComponent(node)) continue;
+        const spec = sourceRotationLoop(node.properties);
+        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceRotationLoop(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(spec)) throw new Error(`Responsive loop on ${nodeId} requires its native adapter`);
+        if (spec) {
+          if (isDetail) throw new Error(`Loop on CMS detail page ${nodeId} requires its native hook-order adapter`);
+          if (!['FrameNode', 'RichTextNode'].includes(node.kind)) throw new Error(`Loop on source component ${nodeId} requires its native adapter`);
+          assertLoopOutsideSourceList(graph, nodeId);
+          code = applySourceRotationLoop(code, identity[nodeId], spec);
+        }
+      }
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
       const route = result.routes[id], folder = 'app' + (group ? `/(${group})` : '') + (isTemplate || route === '/' ? '' : route);
       const path = `${folder}/${isTemplate ? 'LayoutClient' : 'page.client'}.tsx`;

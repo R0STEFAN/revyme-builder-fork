@@ -50,6 +50,10 @@ pure compiler assembly and the live-capture regressions described below.
   not connected. There is no second commit engine.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
+  A linear continuous rotation with unchanged variant/breakpoint semantics uses
+  the native editable loop effect, including the observed offscreen-pause default.
+  Loops in repeated lists, CMS detail pages and loops with other transforms or
+  differing per-state settings remain blocked until their adapters exist.
   Unsupported active effects/forms/cursors and fonts/tokens/document
   metadata remain explicit blockers. Unadapted relocated href/link-prop defaults
   block to avoid linking back to an existing Home. Static scale, sticky offsets,

@@ -1,6 +1,7 @@
 import { normalizeTransparent } from '../../../shared/css-utils';
 import { trace } from '../../../shared/debug-trace';
 import { sourceRecord } from './source-graph';
+import { sourceRotationLoop } from './effects';
 import type { ResolvedSourceNode, SourceGraph, TransferDiagnostic } from './types';
 
 export interface SourceMappingContext {
@@ -11,6 +12,7 @@ export interface SourceMappingContext {
   /** Values may be canonical whole-value `{prop}` expressions. */
   variables?: Record<string, string | number | boolean>;
   assets?: Record<string, string>;
+  supportedLoops?: boolean;
 }
 
 export function mappingDiagnostic(context: SourceMappingContext, node: ResolvedSourceNode, property: string, code = 'SOURCE_STYLE_UNSUPPORTED'): void {
@@ -50,7 +52,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   const p = node.properties;
   // These are active source behaviors, not decorative metadata; never drop them.
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
-    if (p[key] === true) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p))) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');

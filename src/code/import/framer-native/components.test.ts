@@ -15,8 +15,21 @@ import { emitNativeCodeOverrides } from './code-adapters';
 import { readCodeOverrides } from '../../generation/code-override-gen';
 import capturedCms from './fixtures/captured-cms.json';
 import { parseComponentInfoFromSource } from '../../components/component-registry';
+import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 
 describe('editable native component emission', () => {
+  it('preserves a constant rotation loop on a component child across variants', () => {
+    const spinner = { id: 'spinner', __class: 'FrameNode', parentid: 'base', children: [], loopEffectEnabled: true, loopEffectRotate: 360, loopEffectRepeatType: 'loop', loopEffectRepeatDelay: 0, loopEffectTransition: { type: 'tween', duration: 1, delay: 0, ease: [0, 0, 1, 1] } };
+    const data = { id: 'animated', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [{ id: 'base', __class: 'FrameNode', width: 100, widthType: 0, height: 100, heightType: 0, children: [spinner] }, { id: 'other', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: {} } }] };
+    const input = { ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] };
+    const graph = buildSourceGraph(input), identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    expect(getLoopAnimate(decomposeLoopInCode(result.files[0].code, identity.spinner), identity.spinner)?.props.rotate).toBe('360');
+    expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
+    data.children[1].replicaInfo!.overrides = { spinner: { loopEffectRotate: 180 } };
+    expect(emitNativeComponents(buildSourceGraph(input), identity).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('loop') }));
+  });
   it('keeps filling placeholder and frame children from shrinking in a native stack', () => {
     const data = { id: 'fill-master', __class: 'SmartComponentNode', baseVariantId: 'fill-base', variables: [], children: [{ id: 'fill-base', __class: 'FrameNode', layout: 'stack', stackDirection: 'vertical', width: 200, widthType: 0, height: 100, heightType: 0, children: [
       { id: 'widget', __class: 'CodeComponentNode', parentid: 'fill-base', codeComponentIdentifier: 'module:vendor/save/Widget.js:Widget', heightType: 3, height: 1, children: [] },
