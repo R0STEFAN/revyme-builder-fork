@@ -147,9 +147,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       }
       for (const nodeId of scene.links) {
         const node = resolveSourceNode(graph, nodeId);
-        if (typeof node.properties.link !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
-        let href = node.properties.link;
-        for (const [pageId, route] of originalRoutes) if (href === route) href = result.routes[pageId];
+        const pageLink = sourceRecord(node.properties.link);
+        let href = typeof node.properties.link === 'string' ? node.properties.link : pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? result.routes[pageLink.webPageId] : undefined;
+        if (typeof href !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
+        if (typeof node.properties.link === 'string') for (const [pageId, route] of originalRoutes) if (href === route) { href = result.routes[pageId]; break; }
         code = convertToMotionLinkInCode(code, identity[nodeId]);
         code = setTagAttr(code, identity[nodeId], 'href', JSON.stringify(href));
         if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));

@@ -40,6 +40,14 @@ it('imports into a free route instead of overwriting an existing Home, including
   expect(result.files.some(file => file.path === 'app/page.client.tsx')).toBe(false);
   expect(result.files[0].path).toMatch(/^app\/framer-[\w-]+\/page\.client\.tsx$/);
 });
+it('resolves page references to their allocated route after a Home collision', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  states[0].children[0].link = { type: 'webPage', webPageId: 'home' };
+  const { result, identity } = emit(source, new Set(['app/page.client.tsx']));
+  expect(result.diagnostics).toEqual([]);
+  expect(parseJSXToNodes(result.files[0].code).get(identity.heading)?.attrs.href).toBe(result.routes.home);
+  expect(result.routes.home).not.toBe('/');
+});
 it('blocks unresolved template and CMS semantics instead of exporting a partial page', () => {
   const transfer = input();
   transfer.definitions[0].data.dataIdentifier = 'local-module:collection/missing:default';

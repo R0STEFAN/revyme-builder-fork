@@ -47,31 +47,34 @@ pure compiler assembly and the live-capture regressions described below.
   block to avoid linking back to an existing Home. Static scale, sticky offsets,
   text selection and inline native line-height ratios are preserved.
 
-## Third-party live source still pending
+## Latest live capture and remaining source dependencies
 
-Reader 0.1.2 is already copied to /home/rost/Документи/Framer-Native-Reader.
-An asynchronous user question asks to reload it and save a new capture or report
-its exact error. Do not ask for the same action again while pending. No new file
-has appeared in Downloads/Documents; latest verified capture is still the
-0.1.1 Downloads file described below. Original external-module source access is
-UNIT-tested but has NOT yet been proven on the live editor.
+Reader 0.1.6 is installed at /home/rost/Документи/Framer-Native-Reader.
+It recognizes compatible editor builds from their active static imports and
+checks the source engine and tree version. The user captured project source at
+`/home/rost/Завантажене/framer-native-2wu2XMOUbTCMJbRRQrOz (2).json`.
+SHA-256: 19351f9af560b64d561174dae06a6d450903fa8ed66f78e0291448180ab77688.
+It is complete per reader, with 25 definitions, 526 assets and four original
+code files: Overrides.tsx, Video.js, SmoothScroll_Prod.js, Copyright_Year.js.
+Definitions, root IDs and asset descriptors match capture 0.1.4 exactly; the new
+capture adds Copyright_Year. Reader 0.1.6 live build discovery is confirmed.
 
-The generic compiler was run automatically on that exact user JSON (SHA-256
-724eb5692ecd8703454f464a2a2cd4de8a235e5c0935c5be9e3ed1eeefca3009).
-Only one original local code file exists in that capture. Actual required
-unavailable originals are Video, SmoothScroll_Prod and Copyright_Year HOC.
-The report is in the ignored SDD workspace: live-compile-0.1.1-report.json.
-Its 19 ASSET_CONTENT_UNAVAILABLE diagnostics mean payloads were deliberately NOT
-supplied for this semantic probe; 18 originals are already cached (see below),
-and the Spinner SVG is the separately verified missing resource. The probe
-wrote no destination project files and is not a successful project import.
+The generic original-code adapter emits both HOCs, including Copyright_Year.
+The actual captured copyright HOC was transpiled and executed in a local test:
+it replaces YYYY with the current year and retains unrelated props. The probe
+and diagnostics are recorded in live-compile-0.1.6-report.json in the ignored
+SDD workspace. No destination project file was persisted. No asset payloads
+were supplied to that probe, so its 19 asset-content diagnostics are expected;
+18 originals are cached and the native Spinner SVG URL returned 404.
 
-The real capture exposed and now covers these generic regressions: Framer's
-codeOverrideEnabled=true with no identifier means an empty picker, not missing
-source; --font-selector is editor metadata when actual font CSS exists; quoted
-font families must survive native conditional-style edits; inline em/%/px line
-height must normalize to native ratios. The syntax error and phantom undefined
-code-source diagnostics are absent from the final live probe.
+Video.js needs native Framer runtime APIs and imports a separate module at
+framerusercontent.com/modules/G4IfyjvwmaeSBpdb4TWu/OIjZRBmWDcIE2B6qgG1j/index.js;
+the original source of that dependency has not been captured. SmoothScroll
+needs withCSS and lenis. Both currently fail closed with explicit diagnostics;
+do not use their compiled dependency as original source or claim parity.
+Original `webPage` references now resolve to allocated static page routes in
+pages and design masters; unresolved destinations and per-state link changes
+fail closed. controlReference expectedType=file maps to a native file prop.
 
 ## Verification and next work
 
@@ -83,20 +86,19 @@ currentOnly=[], baselineOnly=[], unhandledErrors=false. The final full run after
 the native conditional-style/line-height fixes has 15,548 passed and exactly the
 same 58 baseline failures, no unhandled errors (resume-verified-suite.log and
 resume-verified-baseline-comparison.json). The suite is NOT green.
-Reader: 26/26 Node tests passed. Typecheck: /tmp/framer-final-types.log.
-Final focused validation: 18 files / 325 tests passed, including all Framer
-modules, native submit and the shared native style writer
-(/tmp/framer-verified-focused.log). Do not mark partial tasks complete from unit tests.
+Latest reader validation: 36 Node tests passed. Latest focused converter/native
+submit validation: 16 files / 194 tests passed (/tmp/framer-016-final-focused.log).
+Typecheck: /tmp/framer-016-final-types.log. The previous 325-test combined run
+covered native styles as well; no partial task is complete from unit tests alone.
 
-Next: obtain and prove the pending external original-source capture; finish
+Next: capture original source for transitive module dependencies and finish
 source-backed code/runtime adapters, variable/image domains, CMS dynamic pages,
 template props/effects/fonts/tokens/metadata; then native paste/CAS/receipt/Undo,
 extension transport and full semantic/editability/visual parity. Preserve the
 existing full-file submit boundary and generic codeFiles.submit prohibitions.
 
 CUA browser2/tab1 is signed in to Framer, currently Project Card/Video selected.
-The verified editor entry is still web.D7IYYINP.mjs; the canvas sandbox's different
-app hash is not an editor-entry change. No original source edits were made.
+The latest captured editor entry is web.D5A5JTQ5.mjs. No original source edits were made.
 Chrome extension-management navigation was explicitly blocked; never bypass it
 through CDP or another surface. Tools cannot operate the extension popup here.
 

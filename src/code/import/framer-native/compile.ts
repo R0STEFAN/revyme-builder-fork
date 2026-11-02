@@ -56,8 +56,8 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const codeComponents = emitNativeCodeComponents(graph, identity);
     const cms = emitNativeCms(graph, identity, { assets: assets.assets });
     const options = { assets: assets.assets, overrides: overrides.overrides, codeComponents: codeComponents.components };
-    const components = emitNativeComponents(graph, identity, options);
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
+    const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
     const relocatedRoutes = new Map(Object.entries(pages.routes).map(([id, route]) => [sourcePageRoute(graph, graph.nodes.get(id)!), route] as const).filter(([before, after]) => before !== after));
     for (const emitted of [originals, overrides, codeComponents, cms, components, pages]) {
       result.files.push(...emitted.files); result.createdIds.push(...emitted.createdIds); result.diagnostics.push(...emitted.diagnostics);

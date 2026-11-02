@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { compileNativeTransfer } from './compile';
+import { parseJSXToNodes } from '../../parsing/parser';
 import type { NativeTransfer } from './types';
 import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
@@ -28,6 +29,17 @@ it('compiles a complete native candidate deterministically without mutating sour
   }, createOperationContext());
   expect(result.diagnostics).toEqual([]);
   expect(result.changes).toHaveLength(3);
+});
+
+it('compiles source page references inside a master to the imported page route', () => {
+  const source = transfer(), master = source.definitions[1].data;
+  const frame = (master.children as Record<string, any>[])[0];
+  frame.children[0].link = { type: 'webPage', webPageId: 'home' };
+  const result = compileNativeTransfer(source, { existingFiles: new Map([['app/page.client.tsx', 'existing']]), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!;
+  const masterFile = result.files.find(file => file.path.startsWith('components/'))!;
+  expect(parseJSXToNodes(masterFile.code).get(result.identity.label)?.attrs.href).toBe('/' + page.path.split('/')[1]);
 });
 
 it('returns no partial files if any required original asset or behavior is unavailable', () => {

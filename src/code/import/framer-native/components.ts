@@ -72,7 +72,7 @@ function transitionSpec(value: unknown): Record<string, string> | undefined {
 }
 
 /** Build the canonical shell, then use native transforms for states and links. */
-export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>>; codeComponents?: Readonly<Record<string, NativeCodeComponentRef>> } = {}): NativeCompileResult {
+export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>>; codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>; routes?: Readonly<Record<string, string>> } = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeComponents', { components: graph.byKind.get('SmartComponentNode')?.length ?? 0 });
   const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
   if (result.diagnostics.length) return result;
@@ -85,7 +85,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const names = sourceStateNames(model, identity);
       const primaryId = Object.keys(names).find(id => names[id] === 'default')!;
       const name = nativeComponentName(identity, scopeId);
-      const variables = sourceVariables(graph, scopeId);
+      const variables = sourceVariables(graph, scopeId).map(variable => variable.type === 'controlReference' && variable.expectedType === 'file' ? { ...variable, type: 'file' } : variable);
       const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(identity, scopeId, String(variable.id))}}`]));
       const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, ...options };
       const visibilityFor = (node: ResolvedSourceNode) => {
@@ -188,7 +188,10 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       for (const id of links) {
         const node = resolveSourceNode(graph, id);
         code = convertToMotionLinkInCode(code, identity[id]);
-        code = setTagAttr(code, identity[id], 'href', `{${valueExpression(node.properties.link, node, context, 'link')}}`);
+        const pageLink = sourceRecord(node.properties.link);
+        const route = pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? options.routes?.[pageLink.webPageId] : undefined;
+        if (pageLink?.type === 'webPage' && !route) throw new Error(`Destination route unavailable for source page ${String(pageLink.webPageId)}`);
+        code = setTagAttr(code, identity[id], 'href', `{${route ? JSON.stringify(route) : valueExpression(node.properties.link, node, context, 'link')}}`);
         if (node.properties.linkOpenInNewTab !== undefined) code = setTagAttr(code, identity[id], 'target', `{${valueExpression(node.properties.linkOpenInNewTab, node, context, 'linkOpenInNewTab')} ? '_blank' : '_self'}`);
       }
       for (const id of sourceIds) {
@@ -198,6 +201,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
+          for (const property of ['link', 'linkOpenInNewTab']) if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
           if ((sourceRecord(base.properties.visible) || sourceRecord(state.properties.visible)) && JSON.stringify(base.properties.visible) !== JSON.stringify(state.properties.visible)) throw new Error(`Per-state visibility binding on ${id} requires its native adapter`);
           if (base.properties.dataIdentifier !== undefined) {
             for (const property of ['dataIdentifier', 'collectionFilters', 'collectionFiltersOperator', 'collectionOrder', 'collectionReverse', 'collectionStartOffset', 'collectionLimit', 'collectionPaginationPageSize']) {

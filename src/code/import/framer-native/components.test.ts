@@ -17,6 +17,34 @@ import capturedCms from './fixtures/captured-cms.json';
 import { parseComponentInfoFromSource } from '../../components/component-registry';
 
 describe('editable native component emission', () => {
+  it('keeps a controlReference to a file as an editable native file prop', () => {
+    const data = { id: 'file-master', __class: 'SmartComponentNode', baseVariantId: 'file-base', variables: [{ id: 'clip', name: 'Video', type: 'controlReference', expectedType: 'file', initialValue: '' }], children: [{ id: 'file-base', __class: 'FrameNode', children: [], width: 100, widthType: 0, heightType: 2 }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set()), prop = nativePropName(identity, data.id, 'clip');
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    expect(parsePropMeta(result.files[0].code)[prop]).toMatchObject({ type: 'file', label: 'Video' });
+  });
+  it('preserves a source page link using the allocated destination route', () => {
+    const data = { id: 'link-master', __class: 'SmartComponentNode', baseVariantId: 'link-base', variables: [], children: [{ id: 'link-base', __class: 'FrameNode', children: [{ id: 'link-child', __class: 'FrameNode', parentid: 'link-base', children: [], link: { type: 'webPage', webPageId: 'source-home' } }] }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity, { routes: { 'source-home': '/imported-home' } });
+    expect(result.diagnostics).toEqual([]);
+    expect(parseJSXToNodes(result.files[0].code).get(identity['link-child'])?.attrs.href).toBe('/imported-home');
+    expect(emitNativeComponents(graph, identity).files).toEqual([]);
+  });
+  it('does not discard page-link changes between component variants', () => {
+    const data = { id: 'link-master', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [
+      { id: 'base', __class: 'FrameNode', children: [{ id: 'child', __class: 'FrameNode', parentid: 'base', children: [], link: { type: 'webPage', webPageId: 'home' } }] },
+      { id: 'other', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: { child: { link: { type: 'webPage', webPageId: 'about' } } } } },
+    ] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity, { routes: { home: '/', about: '/about' } });
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics.some(item => item.message.includes('link'))).toBe(true);
+  });
   it('uses the native whole-value image prop contract for a bound image fill', () => {
     const asset = 'data:framer/asset-reference,photo.jpg';
     const data = { id: 'image-master', __class: 'SmartComponentNode', baseVariantId: 'image-base', variables: [{ id: 'photo', type: 'image', initialValue: asset }], children: [{ id: 'image-base', __class: 'FrameNode', children: [{ id: 'image-child', parentid: 'image-base', __class: 'FrameNode', width: 100, height: 80, widthType: 0, heightType: 0, children: [], fillEnabled: true, fillType: 'image', fillImage: { type: 'variableReference', providerId: 'image-master', id: 'photo' } }] }] };
