@@ -27,6 +27,10 @@ pure compiler assembly and the live-capture regressions described below.
 - CMS has strict live variable equality/membership, typed preview defaults,
   responsive upgrade/downgrade, reference prop metadata/pickers and submit
   validation, rename/duplicate preservation, and nested query/text bindings.
+  A basic CMS detail page now maps its actual collection slug field to a native
+  `[slug]` route, page-scoped `item` bindings and canonical native CMS server
+  wrapper. Route collisions are relocated; dynamic links requiring a record
+  and per-record SEO still fail closed. This is not full CMS page support.
 - Shared scene/instance emission handles masters, static pages and templates.
   Page pairs preserve fluid responsive trees, typography and route conflicts.
   Static templates without variables become native route groups/Layouts with
@@ -35,8 +39,8 @@ pure compiler assembly and the live-capture regressions described below.
   canonical file-scoped root/children-slot identities allocated centrally.
 - Whole-value CSS image props and boolean visibility round-trip in masters.
   Nested image domains, controlReference file props, per-state instance controls,
-  richer data predicates, template/page variable declarations and CMS detail
-  wrappers still require adapters. Full Project Card is NOT complete.
+  richer data predicates, template/page variable declarations and dynamic CMS
+  SEO still require adapters. Full Project Card is NOT complete.
 - compileNativeTransfer is pure and deterministic, joins assets/CMS/original
   code/masters/pages, checks the projected native file set and returns NO files
   on any diagnostic. Only create context is implemented; replace/paste diagnose
@@ -46,6 +50,8 @@ pure compiler assembly and the live-capture regressions described below.
   metadata remain explicit blockers. Unadapted relocated href/link-prop defaults
   block to avoid linking back to an existing Home. Static scale, sticky offsets,
   text selection and inline native line-height ratios are preserved.
+- Page-level boolean noIndex converts to native robots.index (including explicit
+  false) and remains readable by the native SEO parser and sitemap detection.
 
 ## Latest live capture and remaining source dependencies
 

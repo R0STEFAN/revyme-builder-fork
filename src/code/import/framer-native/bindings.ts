@@ -38,6 +38,7 @@ export interface NativeSourceQuery {
 }
 
 function itemVariable(context: BindingContext, providerId: string): string {
+  if (context.graph.nodes.get(providerId)?.kind === 'WebPageNode') return 'item';
   const id = context.identity[providerId];
   if (!id) throw new Error(`Missing data-provider identity ${providerId}`);
   return `item${nodeIdToVarNameCapitalised(id)}`;

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import type { NativeTransfer } from './types';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
-import { emitNativePages } from './pages';
+import { emitNativePages, sourcePageRoute } from './pages';
 import { parseJSXToNodes } from '../../parsing/parser';
 import { parseCanvasConfig } from '../../project/canvas-config';
 import { checkFile } from '../../oracle/check-file';
@@ -52,6 +52,22 @@ it('blocks unresolved template and CMS semantics instead of exporting a partial 
   transfer.definitions[0].data.dataIdentifier = 'local-module:collection/missing:default';
   expect(emit(transfer).result.files).toEqual([]);
   expect(emit(transfer).result.diagnostics.length).toBeGreaterThan(0);
+});
+it('maps a CMS detail route to the native slug segment without accepting arbitrary dynamic routes', () => {
+  const transfer = input(), page = transfer.definitions[0].data;
+  transfer.definitions[1].data.homePageNodeId = 'other';
+  page.pagePath = '/works/:fieldId';
+  page.dataIdentifier = 'local-module:collection/works:default';
+  transfer.definitions.push({ id: 'works', kind: 'CollectionNode', data: { id: 'works', __class: 'CollectionNode', children: [], variables: [{ id: 'fieldId', type: 'slug' }] } });
+  const graph = buildSourceGraph(transfer);
+  expect(sourcePageRoute(graph, graph.nodes.get('home')!)).toBe('/works/[slug]');
+  delete page.dataIdentifier;
+  expect(() => sourcePageRoute(buildSourceGraph(transfer), buildSourceGraph(transfer).nodes.get('home')!)).toThrow(/route.*adapter/i);
+  page.dataIdentifier = 'local-module:collection/works:default';
+  page.pagePath = '/works/:unknown';
+  expect(() => sourcePageRoute(buildSourceGraph(transfer), buildSourceGraph(transfer).nodes.get('home')!)).toThrow(/route.*adapter/i);
+  page.pagePath = '/works/:fieldId/nested';
+  expect(() => sourcePageRoute(buildSourceGraph(transfer), buildSourceGraph(transfer).nodes.get('home')!)).toThrow(/route.*adapter/i);
 });
 it('imports a third-party code component as a native page placeholder', async () => {
   const transfer = input(), identifier = 'module:vendor/save/Widget.tsx:Widget';

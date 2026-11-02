@@ -14,6 +14,8 @@ import { validatePlan } from '../validate';
 import { safeProjectPath } from './scoped-restore';
 import { isSystemProtectedPath, PROTECTED_SYSTEM_FILES } from './code-files';
 import { validateFramerImportCms } from './framer-import-cms';
+import { buildCmsDetailServerWrapper, parseCmsSeoDefaults } from '@/code/project/cms-seo';
+import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
@@ -71,7 +73,17 @@ function isStaticMetadata(node: t.Node | null | undefined): boolean {
 }
 
 /** Server entries have a narrow structural contract; annotations cannot turn canvas code into a wrapper. */
-function validateWrapper(path: string, code: string): void {
+function validateWrapper(path: string, code: string, projected: ReadonlyMap<string, string>): void {
+  if (path.endsWith('/[slug]/page.tsx')) {
+    const client = projected.get(path.replace(/page\.tsx$/, 'page.client.tsx'));
+    const meta = client ? parseCmsPageMeta(client) : undefined;
+    const collection = meta?.collection;
+    const defaults = parseCmsSeoDefaults(code);
+    if (meta?.kind === 'detail' && typeof collection === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(collection) &&
+        Object.entries(defaults).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string') &&
+        projected.has(`cms/${collection}.schema.json`) && projected.has(`cms/${collection}.json`) &&
+        code === buildCmsDetailServerWrapper({ collection, defaults, apiConfig: null })) return;
+  }
   const ast = astFor(code, path);
   const client = path.endsWith('/layout.tsx') ? './LayoutClient' : './page.client';
   const imports = ast.program.body.filter(t.isImportDeclaration);
@@ -149,7 +161,7 @@ export const framerImportSubmitOperation: Operation<FramerImportSubmitInput, Fra
         const oldIds = previous === undefined ? new Set<string>() : nodeIds(previous, file.path);
         for (const id of nodeIds(file.code, file.path)) if (!oldIds.has(id)) createdIds.add(id);
       } else if (file.path.startsWith('overrides/')) validateNativeOverrideSource(file.code);
-      else if (/\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code);
+      else if (/\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
     }
     for (const id of validateFramerImportCms(projected, seen)) createdIds.add(id);
     // Reuse the ordinary syntax, duplicate data-id and projected import checks as well as later commit CAS.

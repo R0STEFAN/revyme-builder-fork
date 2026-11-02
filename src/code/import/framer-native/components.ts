@@ -191,6 +191,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const pageLink = sourceRecord(node.properties.link);
         const route = pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? options.routes?.[pageLink.webPageId] : undefined;
         if (pageLink?.type === 'webPage' && !route) throw new Error(`Destination route unavailable for source page ${String(pageLink.webPageId)}`);
+        if (route?.includes('[slug]')) throw new Error(`Source link on ${id} requires a dynamic record adapter`);
         code = setTagAttr(code, identity[id], 'href', `{${route ? JSON.stringify(route) : valueExpression(node.properties.link, node, context, 'link')}}`);
         if (node.properties.linkOpenInNewTab !== undefined) code = setTagAttr(code, identity[id], 'target', `{${valueExpression(node.properties.linkOpenInNewTab, node, context, 'linkOpenInNewTab')} ? '_blank' : '_self'}`);
       }

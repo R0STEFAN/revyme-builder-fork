@@ -22,6 +22,15 @@ describe('source data bindings', () => {
     const binding = resolveSourceBinding({ type: 'variableReference', providerId: 'xmUkU_AV5', id: 'nTU4ZCwmq' }, { ...ctx, nodeId: 'Raj6ATn3j' });
     expect(binding).toMatchObject({ kind: 'field', providerId: 'xmUkU_AV5', collectionId: 'DwP_tmnNO', fieldId: ctx.identity[sourceVariableKey('DwP_tmnNO', 'nTU4ZCwmq')] });
   });
+  it('binds a CMS detail page to its native item while keeping nested list items distinct', () => {
+    const page = { id: 'detail', kind: 'WebPageNode', data: { id: 'detail', __class: 'WebPageNode', dataIdentifier: 'local-module:collection/E5RT5hQRC:default', children: [{ id: 'detail-list', __class: 'FrameNode', parentid: 'detail', dataIdentifier: 'local-module:collection/DwP_tmnNO:default', children: [{ id: 'detail-leaf', __class: 'RichTextNode', parentid: 'detail-list', children: [] }] }] } };
+    const ctx = context([page]);
+    const field = resolveSourceBinding({ type: 'variableReference', providerId: 'detail', id: 'WzsCxsMgh' }, { ...ctx, nodeId: 'detail-leaf' });
+    const nested = resolveSourceBinding({ type: 'variableReference', providerId: 'detail-list', id: 'nTU4ZCwmq' }, { ...ctx, nodeId: 'detail-leaf' });
+    expect(field).toMatchObject({ kind: 'field', itemVar: 'item', fieldId: ctx.identity[sourceVariableKey('E5RT5hQRC', 'WzsCxsMgh')] });
+    expect(nested).toMatchObject({ kind: 'field', providerId: 'detail-list' });
+    expect(nested.kind === 'field' && nested.itemVar).not.toBe('item');
+  });
   it('resolves a component reference variable by its centralized identity', () => {
     const ctx = context();
     expect(resolveSourceBinding({ type: 'variableReference', providerId: 'ZfAw5qjTc', id: 'Sj_xvP4fy' }, ctx)).toMatchObject({ kind: 'variable', providerId: 'ZfAw5qjTc', name: nativePropName(ctx.identity, 'ZfAw5qjTc', 'Sj_xvP4fy'), valueType: 'collectionreference' });

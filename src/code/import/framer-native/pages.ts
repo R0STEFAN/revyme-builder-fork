@@ -10,6 +10,8 @@ import { sourceViewports, applyNativeResponsive } from './responsive';
 import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
+import { nativeCollectionSlug, sourceCollectionId } from './cms';
+import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceNode } from './types';
@@ -47,10 +49,19 @@ export function sourcePageRoute(graph: SourceGraph, page: SourceNode): string {
     if (cursor?.kind !== 'RouteSegmentRootNode') throw new Error('Source route root is unavailable');
     route = '/' + parts.join('/');
   } else route = documentFor(graph, page)?.raw.homePageNodeId === page.id ? '/' : page.raw.pagePath;
+  if (typeof route === 'string' && page.raw.dataIdentifier !== undefined) {
+    const match = /^(\/(?:[\p{L}\p{N}_-]+\/)*):([\w-]+)$/u.exec(route);
+    if (match) {
+      let collectionId: string | undefined;
+      try { collectionId = sourceCollectionId(page.raw.dataIdentifier); } catch { /* invalid source route is rejected below */ }
+      const collection = collectionId ? graph.nodes.get(collectionId) : undefined;
+      if (collectionId && collection?.kind === 'CollectionNode' && sourceVariables(graph, collectionId).some(variable => variable.type === 'slug' && variable.id === match[2])) return `${match[1]}[slug]`;
+    }
+  }
   if (typeof route !== 'string' || !/^\/(?:[\p{L}\p{N}_-]+(?:\/[\p{L}\p{N}_-]+)*)?$/u.test(route)) throw new Error(`Source route requires a native route/CMS adapter: ${String(route)}`);
   return route;
 }
-const routeOfFile = (path: string) => path.replace(/^app\//, '/').replace(/\([^/]+\)\//g, '').replace(/\/(?:page\.client|page)\.tsx$/, '') || '/';
+const routeOfFile = (path: string) => path.replace(/^app\//, '/').replace(/\([^/]+\)\//g, '').replace(/\/(?:page\.client|page)\.tsx$/, '').replace(/\[[^/\]]+\]/g, '[slug]') || '/';
 
 /** Static pages use the same original scene, bindings and native responsive writers. */
 export function emitNativePages(graph: SourceGraph, identity: Record<string, string>, options: NativePageOptions): NativePageResult {
@@ -84,7 +95,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       active = id;
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
       const isTemplate = page.kind === 'LayoutTemplateNode';
-      if (page.raw.dataIdentifier !== undefined) throw new Error('Source CMS page requires its native page-context adapter');
+      const isDetail = !isTemplate && page.raw.dataIdentifier !== undefined;
+      if (isDetail && !result.routes[id]?.endsWith('/[slug]')) throw new Error('Source CMS page requires its native page-context adapter');
+      if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).length) throw new Error('Source CMS page metadata requires its native per-record adapter');
+      const collection = isDetail ? nativeCollectionSlug(identity, sourceCollectionId(page.raw.dataIdentifier)) : undefined;
       if (sourceVariables(graph, id).length) throw new Error(`Source ${isTemplate ? 'template' : 'page'} variables require their native declaration adapter`);
       const templateIdentifier = page.raw.layoutTemplateIdentifierOverride !== undefined ? page.raw.layoutTemplateIdentifierOverride : document?.raw.layoutTemplateIdentifier;
       let group = isTemplate ? groups.get(id) : undefined;
@@ -121,9 +135,11 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         },
       });
       if (isTemplate ? scene.slots.length !== 1 : scene.slots.length !== 0) throw new Error('A native template requires one children slot; pages cannot own template slots');
-      const signature = isTemplate ? 'LayoutClient({ children }: { children: React.ReactNode })' : 'Page()';
-      const jsx = isTemplate ? scene.jsx : `<div data-id="root" style={{position:'relative',width:'100%'}}>${scene.jsx}</div>`;
-      let code = `"use client";\nimport React from 'react';\nexport default function ${signature} { return ${jsx}; }`;
+      const signature = isTemplate ? 'LayoutClient({ children }: { children: React.ReactNode })' : isDetail ? 'Page({ item: serverItem }: { item?: any } = {})' : 'Page()';
+      const jsx = isTemplate ? scene.jsx : `<div data-id="root"${isDetail ? " key={String(params?.slug ?? '')}" : ''} style={{position:'relative',width:'100%'}}>${scene.jsx}</div>`;
+      const detailSetup = isDetail ? `/** @cmsPage { "collection": "${collection}", "kind": "detail" } */\nimport { useParams } from 'next/navigation';\nimport { useLocale } from 'next-intl';\nimport { localizeRows } from '@revyme/runtime';\nimport rows from '@/cms/${collection}.json';\n` : '';
+      const detailBody = isDetail ? 'const params = useParams(); const locale = useLocale(); const rawItem = serverItem ?? (rows.find(row => row._slug === params?.slug) ?? rows[0]); const item = rawItem ? (localizeRows([rawItem], locale)[0] || rawItem) : undefined; if (!item) return null; ' : '';
+      let code = `"use client";\nimport React from 'react';\n${detailSetup}export default function ${signature} { ${detailBody}return ${jsx}; }`;
       code = applySourceInstances(code, scene, graph, identity, options.assets);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
@@ -152,6 +168,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         let href = typeof node.properties.link === 'string' ? node.properties.link : pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? result.routes[pageLink.webPageId] : undefined;
         if (typeof href !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
         if (typeof node.properties.link === 'string') for (const [pageId, route] of originalRoutes) if (href === route) { href = result.routes[pageId]; break; }
+        if (href.includes('[slug]')) throw new Error(`Source link on ${nodeId} requires a dynamic record adapter`);
         code = convertToMotionLinkInCode(code, identity[nodeId]);
         code = setTagAttr(code, identity[nodeId], 'href', JSON.stringify(href));
         if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
@@ -173,9 +190,18 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
         continue;
       }
+      if (isDetail) {
+        const globalMeta = sourceRecord(document?.raw.webMetadata);
+        const defaults = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
+        result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: buildCmsDetailServerWrapper({ collection: collection!, defaults, apiConfig: null }) });
+        result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+        continue;
+      }
       const pageMeta = sourceRecord(page.raw.webMetadata), globalMeta = sourceRecord(document?.raw.webMetadata);
       const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
-      result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = ${JSON.stringify(metadata)};\nexport default function Page(){ return <PageClient />; }\n` });
+      const fields = Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
+      if (typeof pageMeta?.noIndex === 'boolean') fields.push(`robots: { index: ${!pageMeta.noIndex} }`);
+      result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = { ${fields.join(', ')} };\nexport default function Page(){ return <PageClient />; }\n` });
       result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
     }
   } catch (error) {
