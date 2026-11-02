@@ -250,3 +250,18 @@ test('follows a local master dependency to fetch a third-party source needed by 
   await adapter.readContext({ mode: 'page' });
   assert.equal((await adapter.readCodeFiles()).some(file => file.sourceId === 'vendor-widget'), true);
 });
+
+test('reads an active external override even when the source tree has no module descriptor', async () => {
+  const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => {
+    const raw = serialize();
+    raw.root.children[0].children.push({ id: 'external-override-node', __class: 'FrameNode', children: [], codeOverrideEnabled: true, codeOverrideIdentifier: 'module:vendor/pinned/Override.js:withEffect' });
+    return raw;
+  };
+  const local = engine.stores.modulesStore.getSourceContentForModuleSave;
+  engine.stores.modulesStore.getSourceContentForModuleSave = async pointer => pointer.moduleId === 'module-a' ? local(pointer) : 'export function withEffect(Component) { return Component; }';
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await adapter.readContext({ mode: 'page' });
+  assert.deepEqual((await adapter.readCodeFiles()).find(file => file.sourceId === 'vendor'), { sourceId: 'vendor', moduleId: 'vendor', saveId: 'pinned', path: 'Override.js', code: 'export function withEffect(Component) { return Component; }' });
+});

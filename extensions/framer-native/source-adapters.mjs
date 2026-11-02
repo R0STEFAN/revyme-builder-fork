@@ -137,6 +137,7 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
         result.push({ sourceId: node.id, path: save.name, moduleId: save.moduleId, saveId: save.saveId, code });
       }
       const requiredExternal = new Set();
+      const requiredOverrides = new Map();
       if (codeRootIds) {
         const source = sourceIndex(), visited = new Set(), pending = [...codeRootIds];
         const scan = value => {
@@ -151,6 +152,11 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
               if (key === 'master' || key === 'inheritsFrom') pending.push(item);
               const remote = (key === 'codeComponentIdentifier' || key === 'codeOverrideIdentifier') && /^module:([^/]+)\//.exec(item);
               if (remote) requiredExternal.add(remote[1]);
+              if (key === 'codeOverrideIdentifier' && value.codeOverrideEnabled === true && remote) {
+                const previous = requiredOverrides.get(remote[1]);
+                if (previous && previous.slice(0, previous.lastIndexOf(':')) !== item.slice(0, item.lastIndexOf(':'))) throw new Error(`SOURCE_CODE_UNAVAILABLE: Multiple pinned versions require separate source resolution for ${remote[1]}.`);
+                requiredOverrides.set(remote[1], item);
+              }
             } else scan(item);
           }
         };
@@ -161,6 +167,11 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
         }
       }
       const external = [...sourceIndex().values()].filter(node => node.__class === 'ExternalModuleNode' && node.type === 'codeFile' && (!codeRootIds || requiredExternal.has(node.id)));
+      for (const [id, identifier] of requiredOverrides) {
+        const descriptor = external.find(node => node.id === id);
+        if (!descriptor) external.push({ id, codeComponentIdentifier: identifier });
+        else if (String(descriptor.codeComponentIdentifier).split(':').slice(0, -1).join(':') !== identifier.split(':').slice(0, -1).join(':')) throw Object.assign(new Error(`SOURCE_CODE_UNAVAILABLE: Conflicting pinned source pointers for ${id}.`), { sourceId: id });
+      }
       for (const node of external) {
         const fail = message => { throw Object.assign(new Error(message), { sourceId: node.id }); };
         const match = /^module:([^/]+)\/([^/]+)\/([^:]+):[A-Za-z_$][\w$]*$/.exec(String(node.codeComponentIdentifier));
