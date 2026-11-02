@@ -5,7 +5,7 @@
 The user explicitly resumed, approved Native inline execution and subsequently
 directed that all custom code components (local and third-party) become editable,
 labeled placeholders. Design components remain native. Work is ACTIVE. Tasks
-1/2/3/7 are complete; 4/5/6 are partial; 8/9 final transport/10 are pending.
+1/2/3/7 are complete; 4/5/6/8 are partial; 9 final transport/10 are pending.
 The pause instructions in the historical section are superseded by the resume.
 No complete page/project has been persisted in Revyme or claimed 1:1.
 
@@ -48,6 +48,12 @@ pure compiler assembly and the live-capture regressions described below.
   on any diagnostic. Only create context is implemented; replace/paste diagnose
   until their native placement/CAS adapter exists. The clipboard/history path is
   not connected. There is no second commit engine.
+- Task 8 now has a tested transaction coordinator (flush/snapshot/compile/
+  prepare/commit/receipt/apply) and a server prepare endpoint using native submit
+  and the ordinary CAS commit service. The shared CLI history writer records one
+  reversible journal entry. Tests cover durable undo/redo and lost responses,
+  plus preserving local edits after a commit. Browser services, clipboard routing,
+  asset transport, selection and editor history synchronization are NOT wired yet.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
   A linear continuous rotation with unchanged variant/breakpoint semantics uses
@@ -99,8 +105,8 @@ currentOnly=[], baselineOnly=[], unhandledErrors=false. The final full run after
 the native conditional-style/line-height fixes has 15,548 passed and exactly the
 same 58 baseline failures, no unhandled errors (resume-verified-suite.log and
 resume-verified-baseline-comparison.json). The suite is NOT green.
-Latest reader validation: 37 Node tests passed. Latest focused converter/native
-submit validation: 16 files / 197 tests passed; TypeScript typecheck passed.
+Latest reader validation: 37 Node tests passed. Latest combined converter/native
+submit/transaction/recovery validation: 21 files / 226 tests passed.
 The previous 325-test combined run
 covered native styles as well; no partial task is complete from unit tests alone.
 

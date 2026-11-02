@@ -10,11 +10,9 @@ import type {
 import { defaultRegistry } from '@revyme/automation-core';
 import { prepareOperation } from '@revyme/automation-core';
 import { createPlan, createIdFactory } from '@revyme/automation-core';
-import { createHash } from 'node:crypto';
+import { addPlanHistory, HISTORY_PATH } from '../../automation-core/src/plan-history';
 import { projectFS } from '@/code/project/project-fs';
 import type { ProjectData } from '@/backend/types';
-
-const HISTORY_PATH = '_meta/history.json';
 
 /**
  * Operations share a ProjectFS-backed implementation with the editor. In a
@@ -50,26 +48,6 @@ export function hydrateProjectFSFromSnapshot(snapshot: Snapshot): void {
   } as ProjectData;
   const refusal = projectFS.fromEnvelope(envelope);
   if (refusal) throw new Error(`PROJECT_CONTEXT_SYNC_FAILED: ${refusal}`);
-}
-
-function addHistory(plan: Plan, snapshot: Snapshot, createId: (kind?: string) => string): Plan {
-  if (!plan.changes.length || plan.changes.some(change => change.path === HISTORY_PATH)) return plan;
-  const raw = snapshot.files.get(HISTORY_PATH);
-  let state: { undoStack: unknown[]; redoStack: unknown[] } = { undoStack: [], redoStack: [] };
-  if (raw !== undefined) {
-    const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.undoStack) || !Array.isArray(parsed.redoStack)) throw new Error('INVALID_HISTORY: History journal has invalid stacks');
-    state = parsed;
-  }
-  const diffs = plan.changes.map(change => ({ path: change.path, oldContent: snapshot.files.get(change.path) ?? null, newContent: change.content }))
-    .filter(diff => diff.oldContent !== diff.newContent);
-  if (!diffs.length) return plan;
-  state.undoStack = [...state.undoStack, { id: createId('hist'), timestamp: Date.now(), activeFile: plan.scope.filePath ?? diffs[0].path,
-    branchId: plan.scope.branchId, diffs }].slice(-100);
-  state.redoStack = [];
-  const historyChange = { path: HISTORY_PATH, beforeHash: raw === undefined ? null : createHash('sha256').update(raw).digest('hex'), content: JSON.stringify(state) };
-  return createPlan({ scope: plan.scope, baseRevision: plan.baseRevision, operationId: plan.operationId,
-    changes: [...plan.changes, historyChange], createdIds: plan.createdIds, normalizations: plan.normalizations, issues: plan.issues });
 }
 
 function operationResultSummary(value: unknown): Record<string, unknown> | undefined {
@@ -464,7 +442,7 @@ export class AutomationClient {
 
     if (op.kind === 'mutation' && op.category !== 'history' && plan.changes.length) {
       try {
-        plan = addHistory(plan, snapshot, context.createId);
+        plan = addPlanHistory(plan, snapshot, context.createId);
         context.trace('history:record', { operation: op.name, files: plan.changes.length - 1 });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
