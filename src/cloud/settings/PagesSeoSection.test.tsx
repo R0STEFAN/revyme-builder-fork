@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { createStore, Provider, atom } from 'jotai';
@@ -20,6 +20,7 @@ vi.mock('@/code/project/project-fs', () => ({
       return result.sort();
     }),
     exists: vi.fn((path: string) => fsStore.has(path)),
+    getSnapshot: vi.fn(() => new Map(fsStore)),
   },
 }));
 
@@ -38,6 +39,9 @@ import PagesSeoSection from './PagesSeoSection';
 import { activeLocaleAtom, i18nConfigAtom, isDefaultLocaleAtom } from '@/code/stores/locale-store';
 import { selectedSeoPageAtom } from '@/code/stores/website-settings-store';
 import { migrateLegacyTemplateTranslations } from '@/code/project/translation-ops';
+import { sealPendingHistory } from '@/code/mutation/history';
+
+afterEach(() => sealPendingHistory());
 
 describe('PagesSeoSection localization round-trip', () => {
   let store: ReturnType<typeof createStore>;
