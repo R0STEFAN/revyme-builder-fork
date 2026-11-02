@@ -2,11 +2,13 @@ import { trace } from '../../../shared/debug-trace';
 import type { CollectionItem, CollectionSchema, FieldDefinition } from '../../../shared/types';
 import { sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import type { NativeCompileResult, SourceGraph, SourceProperties } from './types';
+import { renameCustomPropertyInText } from '../../generation/preset-refs-gen';
 
 export interface NativeCmsOptions {
   assets?: Record<string, string>;
   locale?: string;
   defaultLocale?: string;
+  colorNames?: Record<string, string>;
 }
 export function nativeCollectionSlug(identity: Record<string, string>, collectionId: string): string {
   const id = identity[collectionId];
@@ -47,6 +49,12 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
     const resolveValue = (value: unknown, variable: SourceProperties, collectionId: string): unknown => {
       if (value === undefined || value === null || value === '') return value;
       const type = String(variable.type);
+      if (type === 'color' && typeof value === 'string') {
+        let color = value;
+        for (const [id, name] of Object.entries(options.colorNames ?? {})) color = renameCustomPropertyInText(color, `token-${id}`, name, true);
+        if (/var\(--token-/.test(color)) throw new Error(`Unresolved source color token in ${collectionId}:${String(variable.id)}`);
+        return color;
+      }
       if (type === 'collectionreference' || type === 'multicollectionreference') {
         const target = sourceCollectionId(variable.dataIdentifier);
         if (!collectionSet.has(target)) throw new Error(`Missing referenced collection ${target}`);

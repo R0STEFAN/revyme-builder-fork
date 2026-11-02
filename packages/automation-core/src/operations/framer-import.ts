@@ -16,10 +16,13 @@ import { isSystemProtectedPath, PROTECTED_SYSTEM_FILES } from './code-files';
 import { validateFramerImportCms } from './framer-import-cms';
 import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '@/code/project/cms-seo';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
+import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
     path: z.string().min(1), code: z.string(), baseHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    baseCode: z.string().optional(),
+    colorTokens: z.array(z.object({ name: z.string(), value: z.string(), dark: z.string().optional() }).strict()).min(1).max(10000).optional(),
   }).strict()).min(1).max(10000),
   sourceManifest: z.object({
     format: z.literal('revyme.framer.native'), version: z.literal(1), complete: z.literal(true),
@@ -41,6 +44,7 @@ function fail(code: string, message: string): never { throw new Error(`${code}: 
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
+  if (path === 'app/globals.css') return;
   if (PROTECTED_SYSTEM_FILES.has(path) || isSystemProtectedPath(path) || path === 'app/layout.tsx') fail('PROTECTED_PATH', path);
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
@@ -137,7 +141,7 @@ function validateWrapper(path: string, code: string, projected: ReadonlyMap<stri
 }
 
 /** Candidate only: native validation is never bypassed by the source manifest or generated comments. */
-export const framerImportSubmitOperation: Operation<FramerImportSubmitInput, FramerImportSubmitOutput> = {
+const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImportSubmitOutput> = {
   name: 'imports.framer.submit', category: 'imports', kind: 'mutation', permit: 'write', environment: 'headless', ownerTask: 'framer-native-transfer',
   description: 'Validate a deterministic Framer conversion as a native full-file candidate. Supports pages, design/code components, CMS and assets; returns changes for the normal atomic plan/CAS/commit pipeline.',
   inputSchema: framerImportSubmitInputSchema,
@@ -152,11 +156,17 @@ export const framerImportSubmitOperation: Operation<FramerImportSubmitInput, Fra
       if (seen.has(file.path)) fail('DUPLICATE_FILE_CHANGE', file.path);
       seen.add(file.path);
       const existing = snapshot.files.get(file.path);
+      const tokenPatch = file.path === 'app/globals.css';
+      if (tokenPatch) {
+        if (!file.colorTokens || file.baseCode !== existing || applyFramerColorTokens(existing ?? '', file.colorTokens) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+      } else if (file.baseCode !== undefined || file.colorTokens !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       if (existing !== undefined) {
-        if (input.mode === 'create') fail('ALREADY_EXISTS', file.path);
+        if (input.mode === 'create' && !tokenPatch) fail('ALREADY_EXISTS', file.path);
         if (input.mode === 'paste' && file.path !== input.target.filePath) fail('PASTE_TARGET_CONFLICT', file.path);
-        if (!file.baseHash) fail('BASE_HASH_REQUIRED', file.path);
-        if (sha256(existing) !== file.baseHash) fail('CAS_CONFLICT', file.path);
+        if (!tokenPatch) {
+          if (!file.baseHash) fail('BASE_HASH_REQUIRED', file.path);
+          if (sha256(existing) !== file.baseHash) fail('CAS_CONFLICT', file.path);
+        }
       } else if (file.baseHash !== undefined) fail('CAS_CONFLICT', `Expected existing file ${file.path}`);
       changes.push({ path: file.path, content: file.code, beforeHash: existing === undefined ? null : sha256(existing) });
       projected.set(file.path, file.code);
@@ -191,4 +201,10 @@ export const framerImportSubmitOperation: Operation<FramerImportSubmitInput, Fra
     return { changes, createdIds: [...createdIds], diagnostics: [] };
   },
 };
-defaultRegistry.register(framerImportSubmitOperation);
+// Vite can reload this validator while retaining the registry singleton.
+const registeredFramerImport = defaultRegistry.get(framerImportSubmitDefinition.name);
+if (registeredFramerImport && registeredFramerImport.ownerTask !== framerImportSubmitDefinition.ownerTask) throw new Error('FRAMER_OPERATION_OWNER_MISMATCH');
+export const framerImportSubmitOperation = registeredFramerImport
+  ? Object.assign(registeredFramerImport, framerImportSubmitDefinition) as Operation<FramerImportSubmitInput, FramerImportSubmitOutput>
+  : framerImportSubmitDefinition;
+if (!registeredFramerImport) defaultRegistry.register(framerImportSubmitOperation);

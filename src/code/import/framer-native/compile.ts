@@ -11,6 +11,9 @@ import { emitNativeComponents } from './components';
 import { emitNativeCodeOverrides } from './code-adapters';
 import { emitNativePages, sourcePageRoute } from './pages';
 import type { NativeCompileResult, SourceGraph } from './types';
+import { applyFramerColorTokens, type FramerColorToken } from '../../generation/framer-token-gen';
+import { renameCustomPropertyInText } from '../../generation/preset-refs-gen';
+import { generate } from '../../generation/generator-utils';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
@@ -36,7 +39,10 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
   if (graph.diagnostics.length) { result.diagnostics = [...graph.diagnostics]; return result; }
   try {
     const paths = new Set(target.existingFiles.keys());
-    const identity = result.identity = allocateTargetIdentity(graph, paths);
+    const identityPaths = new Set(paths);
+    for (const match of (target.existingFiles.get('app/globals.css') ?? '').matchAll(/--color-(framer-[a-z0-9-]+)/g)) identityPaths.add(`__tokens__/${match[1]}.css`);
+    const identity = result.identity = allocateTargetIdentity(graph, identityPaths);
+    const colorNames = Object.fromEntries((graph.byKind.get('ColorStyleTokenNode') ?? []).filter(id => graph.reachable.has(id)).map(id => [id, `color-${identity[id]}`]));
     for (const id of graph.renderRootIds) {
       if (!['WebPageNode', 'SmartComponentNode', 'LayoutTemplateNode', 'CollectionNode'].includes(graph.nodes.get(id)!.kind)) result.diagnostics.push({ code: 'SOURCE_ROOT_ADAPTER_REQUIRED', sourceId: id, message: 'This source root requires its native placement adapter.' });
     }
@@ -53,7 +59,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
-    const cms = emitNativeCms(graph, identity, { assets: assets.assets });
+    const cms = emitNativeCms(graph, identity, { assets: assets.assets, colorNames });
     const options = { assets: assets.assets, overrides: overrides.overrides };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
@@ -61,14 +67,35 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     for (const emitted of [originals, overrides, cms, components, pages]) {
       result.files.push(...emitted.files); result.createdIds.push(...emitted.createdIds); result.diagnostics.push(...emitted.diagnostics);
     }
+    const colorTokens: FramerColorToken[] = [];
+    for (const id of (graph.byKind.get('ColorStyleTokenNode') ?? []).filter(id => graph.reachable.has(id)).sort()) {
+      const token = graph.nodes.get(id)!.raw;
+      if (typeof token.light !== 'string' || token.dark != null && typeof token.dark !== 'string') { result.diagnostics.push({ code: 'SOURCE_TOKEN_ADAPTER_REQUIRED', sourceId: id, message: 'Source color token requires static light/dark colors.' }); continue; }
+      const name = `color-${identity[id]}`;
+      colorTokens.push({ name, value: token.light, ...(typeof token.dark === 'string' ? { dark: token.dark } : {}) });
+    }
+    for (const file of result.files.filter(file => file.path.endsWith('.tsx'))) {
+      const ast = parseJSX(file.code);
+      let changed = false;
+      if (ast) t.traverseFast(ast, node => {
+        if (!t.isStringLiteral(node)) return;
+        const before = node.value;
+        for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
+        changed ||= before !== node.value;
+      });
+      if (ast && changed) file.code = generate(ast).code;
+    }
+    if (colorTokens.length) {
+      const before = target.existingFiles.get('app/globals.css');
+      result.files.push({ path: 'app/globals.css', code: applyFramerColorTokens(before ?? '', colorTokens), ...(before === undefined ? {} : { baseCode: before }), colorTokens });
+    }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();
     for (const file of result.files) {
-      if (paths.has(file.path) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && file.colorTokens)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;
       for (const violation of checkFile(file.code, { kind, path: file.path, projectFiles: projected })) result.diagnostics.push({ code: violation.code, property: file.path, message: violation.message });
-      if (/var\(--token-/.test(file.code)) result.diagnostics.push({ code: 'SOURCE_TOKEN_ADAPTER_REQUIRED', property: file.path, message: 'Source design tokens need their native preset adapter.' });
       const ast = parseJSX(file.code);
       const linkProps = new Set(Object.entries(parsePropMeta(file.code)).filter(([, meta]) => meta.type === 'link').map(([name]) => name));
       const checkLink = (value: string) => {
@@ -76,6 +103,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (relocatedRoutes.has(pathname)) result.diagnostics.push({ code: 'SOURCE_LINK_ADAPTER_REQUIRED', property: file.path, message: `Source link ${value} still targets a relocated route; its native link adapter is required.` });
       };
       if (ast) t.traverseFast(ast, node => {
+        if (t.isStringLiteral(node) && /var\(--token-/.test(node.value)) result.diagnostics.push({ code: 'SOURCE_TOKEN_ADAPTER_REQUIRED', property: file.path, message: 'Source design tokens need their native preset adapter.' });
         if (t.isJSXAttribute(node) && t.isJSXIdentifier(node.name, { name: 'href' })) {
           const value = t.isJSXExpressionContainer(node.value) ? node.value.expression : node.value;
           if (t.isStringLiteral(value)) checkLink(value.value);

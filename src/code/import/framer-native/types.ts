@@ -30,7 +30,7 @@ export interface ResolvedSourceNode {
   children: string[];
   provenance: string[];
 }
-export interface NativeFile { path: string; code: string }
+export interface NativeFile { path: string; code: string; baseCode?: string; colorTokens?: import('../../generation/framer-token-gen').FramerColorToken[] }
 export interface NativeCompileResult {
   files: NativeFile[];
   createdIds: string[];

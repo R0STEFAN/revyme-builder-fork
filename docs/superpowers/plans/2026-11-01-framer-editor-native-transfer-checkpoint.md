@@ -47,8 +47,8 @@ pure compiler assembly and the live-capture regressions described below.
 - compileNativeTransfer is pure and deterministic, joins assets/CMS/original
   code/masters/pages, checks the projected native file set and returns NO files
   on any diagnostic. Only create context is implemented; replace/paste diagnose
-  until their native placement/CAS adapter exists. The clipboard/history path is
-  not connected. There is no second commit engine.
+  until their native placement adapter exists. Create-mode clipboard/history is
+  connected through native CAS. There is no second commit engine.
 - Task 8 now has a tested transaction coordinator (flush/snapshot/compile/
   prepare/commit/receipt/apply) and a server prepare endpoint using native submit
   and the ordinary CAS commit service. The shared CLI history writer records one
@@ -69,6 +69,8 @@ pure compiler assembly and the live-capture regressions described below.
   with that project's media and bound via /api/uploads/*.webp. Evidence is in
   live-webp-* in the SDD workspace. Native instance image overrides and CMS
   image prop bindings now preserve the CSS URL domain and live binding marker.
+  A shared-image integration test also verifies one download/upload binds the same
+  native URL to a page fill, component instance prop, CMS field default and row.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
   A linear continuous rotation with unchanged variant/breakpoint semantics uses
@@ -81,6 +83,13 @@ pure compiler assembly and the live-capture regressions described below.
   text selection and inline native line-height ratios are preserved.
 - Page-level boolean noIndex converts to native robots.index (including explicit
   false) and remains readable by the native SEO parser and sitemap detection.
+- Static light/dark Framer color tokens now become native palette presets in
+  globals.css. A canonical token recipe plus exact base CSS gates the additive
+  change; ordinary globals edits cannot use this exception. Native existing
+  palette names/references are reserved, source JSX text stays literal, and CMS
+  color values map while source provenance remains untouched. The live test
+  rendered the native dark value rgb(60,70,80); live-native-palette* is evidence.
+  Token aliases and other unverified color formats still diagnose.
 
 ## Latest live capture and remaining source dependencies
 
@@ -127,7 +136,7 @@ The previous 325-test combined run
 covered native styles as well; no partial task is complete from unit tests alone.
 
 Next: finish variable/image domains, CMS dynamic pages,
-template props/effects/fonts/tokens/metadata; then native paste/CAS/receipt/Undo,
+template props/effects/fonts/remaining tokens/metadata; then finish paste recovery,
 extension transport and full semantic/editability/visual parity. Preserve the
 existing full-file submit boundary and generic codeFiles.submit prohibitions.
 

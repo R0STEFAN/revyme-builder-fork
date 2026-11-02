@@ -9,6 +9,7 @@ import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../proje
 import { nativeCollectionSlug, nativeFieldId } from './cms';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 import { nativePropName } from './components';
+import { parsePresetTokens } from '../../generation/preset-gen';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -16,6 +17,32 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+it('imports source color tokens into native presets while retaining existing globals', async () => {
+  const source = transfer();
+  const frame = (source.definitions[1].data.children as any[])[0];
+  Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-palette, rgb(0, 0, 0))' });
+  frame.children[0].html = '<p>var(--token-palette, red)</p>';
+  source.definitions.push({ id: 'palette', kind: 'ColorStyleTokenNode', data: { id: 'palette', __class: 'ColorStyleTokenNode', children: [], name: 'Ink', light: 'rgb(20, 30, 40)', dark: 'rgb(220, 230, 240)' } });
+  const globals = ':root {\n  --color-existing: #aabbcc;\n}\nbody { margin: 0; }\n';
+  const existingFiles = new Map([['app/globals.css', globals]]);
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles });
+  expect(result.diagnostics).toEqual([]);
+  const css = result.files.find(file => file.path === 'app/globals.css')!;
+  const token = parsePresetTokens(css.code).find(item => item.name !== 'color-existing')!;
+  expect(token.value).toBe('rgb(20, 30, 40)');
+  expect(css.code).toContain('body { margin: 0; }');
+  expect(css.code).toContain('rgb(220, 230, 240)');
+  expect(result.files.find(file => file.path.startsWith('components/'))!.code).toContain(`var(--${token.name},`);
+  expect(parseJSXToNodes(result.files.find(file => file.path.startsWith('components/'))!.code).get(result.identity.label)?.textContent).toBe('var(--token-palette, red)');
+  const target = { projectId: 'destination', branchId: 'main' };
+  const input = { files: result.files, mode: 'create' as const, target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), input, createOperationContext())).diagnostics).toEqual([]);
+  const tampered = { ...input, files: result.files.map(file => file.path === 'app/globals.css' ? { ...file, code: file.code + 'body { display: none; }' } : file) };
+  await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), tampered, createOperationContext())).rejects.toThrow(/TOKEN_PATCH/);
+  const again = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/globals.css', css.code]]) });
+  expect(again.diagnostics).toEqual([]);
+  expect(parsePresetTokens(again.files.find(file => file.path === 'app/globals.css')!.code)).toHaveLength(3);
+});
 
 it('converts an instance image override into the native CSS image prop domain', () => {
   const source = transfer(), asset = 'data:framer/asset-reference,photo.png';
