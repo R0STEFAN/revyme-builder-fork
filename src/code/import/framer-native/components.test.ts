@@ -10,8 +10,27 @@ import { parseVariantConfig } from '../../variants/variant-config';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
 import { emitNativeComponents, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
+import capturedOverride from './fixtures/captured-override.json';
+import { emitNativeCodeOverrides } from './code-adapters';
+import { readCodeOverrides } from '../../generation/code-override-gen';
 
 describe('editable native component emission', () => {
+  it('retains an active original override on a native master and blocks a missing adapter', () => {
+    const input = JSON.parse(JSON.stringify(capture));
+    input.rootIds = ['f03DgVEM5'];
+    const scope = input.definitions.find((item: { id: string }) => item.id === input.rootIds[0])!.data;
+    Object.assign(scope.children[0].children[0], capturedOverride.definitions[0].data, { id: scope.children[0].children[0].id, __class: 'RichTextNode', children: [] });
+    const transfer = { ...input, codeFiles: capturedOverride.codeFiles, definitions: [...input.definitions, capturedOverride.definitions[1]] };
+    const graph = buildSourceGraph(transfer), identity = allocateTargetIdentity(graph, new Set());
+    expect(emitNativeComponents(graph, identity).diagnostics.length).toBeGreaterThan(0);
+    const adapted = emitNativeCodeOverrides(graph, identity);
+    expect(adapted.diagnostics).toEqual([]);
+    const result = emitNativeComponents(graph, identity, { overrides: adapted.overrides });
+    expect(result.diagnostics).toEqual([]);
+    const files = [...result.files, ...adapted.files];
+    expect(readCodeOverrides(result.files[0].code, identity[scope.children[0].children[0].id])).toEqual(Object.values(adapted.overrides));
+    expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path, projectFiles: new Set(files.map(file => file.path)) })).toEqual([]);
+  });
   it('emits the real six-state component with five props and all eight connections', () => {
     const graph = buildSourceGraph({ ...capture, rootIds: ['f03DgVEM5'] });
     const identity = allocateTargetIdentity(graph, new Set());

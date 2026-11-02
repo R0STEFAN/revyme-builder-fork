@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
 import capturedComponents from '@/code/import/framer-native/fixtures/captured-components.json';
+import capturedOverride from '@/code/import/framer-native/fixtures/captured-override.json';
+import { emitNativeCodeOverrides } from '@/code/import/framer-native/code-adapters';
+import { setCodeOverridesInCode } from '@/code/generation/code-override-gen';
 import { allocateTargetIdentity, buildSourceGraph } from '@/code/import/framer-native/source-graph';
 import { emitNativeCms } from '@/code/import/framer-native/cms';
 import { emitNativeComponents } from '@/code/import/framer-native/components';
@@ -61,6 +64,27 @@ function replaceFile(input: ReturnType<typeof bundle>, path: string, code: strin
 const run = (input = bundle(), base = snapshot()) => framerImportSubmitOperation.execute(base, input, context);
 
 describe('deterministic Framer full-file import boundary', () => {
+  it('accepts original-source HOCs and keeps their native editor wrapper', async () => {
+    const graph = buildSourceGraph(capturedOverride);
+    const emitted = emitNativeCodeOverrides(graph, allocateTargetIdentity(graph, new Set()));
+    expect(emitted.diagnostics).toEqual([]);
+    const ref = Object.values(emitted.overrides)[0];
+    const input = bundle();
+    input.files[0].code = setCodeOverridesInCode(page, 'imported-card', [ref]);
+    input.files.push(...emitted.files);
+    const result = await run(input);
+    expect(result.changes).toHaveLength(8);
+    expect(result.changes.find(change => change.path === ref.file)?.content).toBe(emitted.files[0].code);
+  });
+  it.each([
+    'export default function withBad(Component) { return props => <Component {...props} /> }',
+    'export function withBad() { return { onClick() {} }; }',
+    'import { createStore } from "https://framer.com/m/framer/store.js@^1.0.0"; export function withBad(Component) { return props => <Component {...props} />; }',
+  ])('validates every native override rather than giving its file family an exemption', async code => {
+    const input = bundle();
+    input.files.push({ path: 'overrides/withBad.tsx', code });
+    await expect(run(input)).rejects.toThrow(/OVERRIDE_/);
+  });
   it('prepares a native page, design master and mutually resolved CMS as one ordinary plan', async () => {
     const base = snapshot();
     const result = await run(bundle(), base);

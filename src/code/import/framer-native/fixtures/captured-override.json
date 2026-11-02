@@ -1,0 +1,93 @@
+{
+  "format": "revyme.framer.native",
+  "version": 1,
+  "context": {
+    "branchId": "main",
+    "editorBuild": "https://app.framerstatic.com/web.D7IYYINP.mjs",
+    "mode": "project",
+    "projectId": "2wu2XMOUbTCMJbRRQrOz",
+    "revision": "1793537640648000:15",
+    "rootIds": [
+      "augiA20Il",
+      "HHDTVO_oW",
+      "muYpolpKZ",
+      "E1v1uUHgV",
+      "externalModules",
+      "contentManagement",
+      "colorStyles",
+      "localModules",
+      "routeSegmentRoot",
+      "B1BOPR7cc",
+      "presets",
+      "j0BXZ81Wn",
+      "errors",
+      "f03DgVEM5",
+      "HyhIFMk1e",
+      "IE5bRxGZv",
+      "GInvxXvf2",
+      "customCodeScope",
+      "UWT2dyDzK",
+      "ZfAw5qjTc",
+      "wuvWCAvM_",
+      "dgFqQKldG",
+      "zetQXLNuB",
+      "assetsEntityRoot"
+    ],
+    "scopeId": "augiA20Il"
+  },
+  "complete": true,
+  "diagnostics": [],
+  "codeFiles": [
+    {
+      "code": "import { forwardRef, type ComponentType } from \"react\"\nimport { createStore } from \"https://framer.com/m/framer/store.js@^1.0.0\"\nimport { randomColor } from \"https://framer.com/m/framer/utils.js@^0.9.0\"\n\n// Learn more: https://www.framer.com/developers/overrides/\n\nexport function BackToTop(Component): ComponentType {\n    return forwardRef((props, ref) => {\n        const handleClick = (event: MouseEvent) => {\n            // Keep existing onClick behavior if present\n            props?.onClick?.(event)\n\n            // Scroll to top of the current page\n            window.scrollTo({\n                top: 0,\n                left: 0,\n                behavior: \"smooth\",\n            })\n        }\n\n        return <Component ref={ref} {...props} onClick={handleClick} />\n    })\n}\n",
+      "moduleId": "Ahsoj5mDqyAM4TE56NaM",
+      "path": "Overrides.tsx",
+      "saveId": "2uySDHv3gHpSQ2Ss8ueh",
+      "sourceId": "codeFile/cMyUSqf"
+    }
+  ],
+  "rootIds": [
+    "source-node"
+  ],
+  "assets": [],
+  "definitions": [
+    {
+      "id": "source-node",
+      "kind": "FrameNode",
+      "data": {
+        "id": "source-node",
+        "__class": "FrameNode",
+        "children": [],
+        "codeOverrideEnabled": true,
+        "codeOverrideIdentifier": "local-module:codeFile/cMyUSqf:BackToTop"
+      }
+    },
+    {
+      "id": "codeFile/cMyUSqf",
+      "kind": "LocalModuleNode",
+      "data": {
+        "__class": "LocalModuleNode",
+        "duplicatedFrom": null,
+        "id": "codeFile/cMyUSqf",
+        "name": null,
+        "originalid": null,
+        "parentid": "localModules",
+        "save": {
+          "annotations": {
+            "BackToTop": {
+              "framerContractVersion": 1
+            }
+          },
+          "imports": [],
+          "moduleId": "Ahsoj5mDqyAM4TE56NaM",
+          "name": "Overrides.tsx",
+          "saveId": "2uySDHv3gHpSQ2Ss8ueh",
+          "title": "Overrides",
+          "treeVersion": 17417,
+          "type": "codeFile"
+        },
+        "visible": false
+      }
+    }
+  ]
+}

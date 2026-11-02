@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { checkFile } from '@/code/oracle/check-file';
 import { oracleFileKind } from '@/code/oracle/file-kind';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
+import { validateNativeOverrideSource } from '@/code/components/code-override-source';
 import type { TransferDiagnostic } from '@/shared/framer-transfer-envelope.mjs';
 import type { FileChange, Operation } from '../contracts';
 import { createPlan } from '../plan';
@@ -40,6 +41,7 @@ function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
   if (PROTECTED_SYSTEM_FILES.has(path) || isSystemProtectedPath(path) || path === 'app/layout.tsx') fail('PROTECTED_PATH', path);
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
+      /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^app\/(?:[^/]+\/)*(?:page\.client|page|LayoutClient)\.tsx$/.test(path) ||
       /^app\/\([A-Za-z0-9_-]+\)\/layout\.tsx$/.test(path) ||
       /^cms\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.schema)?\.json$/.test(path) ||
@@ -146,7 +148,8 @@ export const framerImportSubmitOperation: Operation<FramerImportSubmitInput, Fra
         const previous = snapshot.files.get(file.path);
         const oldIds = previous === undefined ? new Set<string>() : nodeIds(previous, file.path);
         for (const id of nodeIds(file.code, file.path)) if (!oldIds.has(id)) createdIds.add(id);
-      } else if (/\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code);
+      } else if (file.path.startsWith('overrides/')) validateNativeOverrideSource(file.code);
+      else if (/\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code);
     }
     for (const id of validateFramerImportCms(projected, seen)) createdIds.add(id);
     // Reuse the ordinary syntax, duplicate data-id and projected import checks as well as later commit CAS.

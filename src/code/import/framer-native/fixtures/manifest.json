@@ -37,6 +37,18 @@
         "rows": 20,
         "references": 31
       }
+    },
+    {
+      "file": "captured-override.json",
+      "sha256": "dc8a94f3661c2bccf047ebda12118c04c147084b207268c611252fd78e43f421",
+      "sourceCaptureSha256": "724eb5692ecd8703454f464a2a2cd4de8a235e5c0935c5be9e3ed1eeefca3009",
+      "redactions": [
+        "Only the original LocalModuleNode and original code file retained; a synthetic FrameNode references its original exported override. This is adapter evidence, not full-page parity."
+      ],
+      "expected": {
+        "originalCodeFiles": 1,
+        "originalSourceBytes": 777
+      }
     }
   ]
 }

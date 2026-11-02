@@ -5,6 +5,7 @@ import { PROJECTION_STYLE_PROPS } from '../../../shared/constants';
 import { normalizeTransparent, TRANSPARENT_FILL } from '../../../shared/css-utils';
 import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
 import { buildCreatedMaster } from '../../generation/create-component-gen';
+import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
 import { updateVariantTextInCode } from '../../generation/generator-crud';
 import { bindTextVariableForVariantInCode } from '../../features/variable-ops';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
@@ -66,7 +67,7 @@ function transitionSpec(value: unknown): Record<string, string> | undefined {
 }
 
 /** Build the canonical shell, then use native transforms for states and links. */
-export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> = {}): NativeCompileResult {
+export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>> } = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeComponents', { components: graph.byKind.get('SmartComponentNode')?.length ?? 0 });
   const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
   if (result.diagnostics.length) return result;
@@ -208,6 +209,8 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
+          const override = (node: ResolvedSourceNode) => node.properties.codeOverrideEnabled === true ? String(node.properties.codeOverrideIdentifier) : '';
+          if (override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
           if (base.kind === 'CodeComponentNode') {
             const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
             if ([...controls].some(key => JSON.stringify(base.properties[key]) !== JSON.stringify(state.properties[key]))) {
@@ -281,6 +284,14 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       // Rebuild retains the source pause flag as part of the native connection metadata.
       if (connections.length) code = rebuildConnections(code, connections);
       code = forwardEventPropsToComponentRoot(code);
+      for (const id of sourceIds) {
+        const node = resolveSourceNode(graph, id);
+        if (node.properties.codeOverrideEnabled !== true) continue;
+        const identifier = String(node.properties.codeOverrideIdentifier);
+        const ref = options.overrides?.[identifier];
+        if (!ref) throw new Error(`Original code override adapter required on ${id}: ${identifier}`);
+        code = setCodeOverridesInCode(code, identity[id], [ref]);
+      }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');
       result.files.push({ path: `components/${name}.tsx`, code });
