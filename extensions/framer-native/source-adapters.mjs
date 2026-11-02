@@ -32,6 +32,7 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
   }
   checkProject();
   let capturedCodeIds = [];
+  let codeRootIds;
   const scopeIds = () => Array.from(engine.tree.root.children || [], node => node.id);
   const revision = () => {
     const dirty = capturedCodeIds.filter(id => engine.stores.modulesStore?.getTransientSave?.(id)).sort();
@@ -64,6 +65,7 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
       const mode = request.mode;
       const rootIds = mode === 'project' ? scopeIds()
         : mode === 'selection' ? [...stores.selectionStore.ids] : [scopeId];
+      codeRootIds = [...rootIds];
       if (!scopeId || rootIds.length === 0) throw new Error('SOURCE_SELECTION_EMPTY: Open a page/component or select layers.');
       return { projectId: stores.projectStore.projectId, branchId: String(stores.treeStore.branchId),
         revision: revision(), editorBuild, scopeId, mode, rootIds };
@@ -115,6 +117,42 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
         if (store.getTransientSave(node.id)) fail('SOURCE_CODE_UNSAVED: The original code changed while it was being read.');
         if (typeof code !== 'string') fail('SOURCE_CODE_UNAVAILABLE: The original file is not text.');
         result.push({ sourceId: node.id, path: save.name, moduleId: save.moduleId, saveId: save.saveId, code });
+      }
+      const requiredExternal = new Set();
+      if (codeRootIds) {
+        const source = sourceIndex(), visited = new Set(), pending = [...codeRootIds];
+        const scan = value => {
+          if (Array.isArray(value)) { value.forEach(scan); return; }
+          if (!value || typeof value !== 'object' || value.__class === 'ExternalModuleNode' || value.__class === 'LocalModuleNode') return;
+          if (value.__class === 'WebPageNode') scan({ inheritedTemplate: source.get(value.parentid)?.layoutTemplateIdentifier });
+          if (value.type === 'variableReference' && typeof value.providerId === 'string') pending.push(value.providerId);
+          for (const [key, item] of Object.entries(value)) {
+            if (typeof item === 'string') {
+              const local = /^local-module:(?:canvasComponent|layoutTemplate)\/([^:]+):/.exec(item);
+              if (local) pending.push(local[1]);
+              if (key === 'master' || key === 'inheritsFrom') pending.push(item);
+              const remote = (key === 'codeComponentIdentifier' || key === 'codeOverrideIdentifier') && /^module:([^/]+)\//.exec(item);
+              if (remote) requiredExternal.add(remote[1]);
+            } else scan(item);
+          }
+        };
+        while (pending.length) {
+          const id = pending.pop();
+          if (visited.has(id)) continue;
+          visited.add(id); scan(source.get(id));
+        }
+      }
+      const external = [...sourceIndex().values()].filter(node => node.__class === 'ExternalModuleNode' && node.type === 'codeFile' && (!codeRootIds || requiredExternal.has(node.id)));
+      for (const node of external) {
+        const fail = message => { throw Object.assign(new Error(message), { sourceId: node.id }); };
+        const match = /^module:([^/]+)\/([^/]+)\/([^:]+):[A-Za-z_$][\w$]*$/.exec(String(node.codeComponentIdentifier));
+        if (!match || match[1] !== node.id) fail('SOURCE_CODE_UNAVAILABLE: The third-party source save pointer is incomplete.');
+        if (typeof store?.getSourceContentForModuleSave !== 'function') fail('SOURCE_CODE_UNAVAILABLE: The original source accessor is unavailable.');
+        let code;
+        try { code = await store.getSourceContentForModuleSave({ moduleId: match[1], saveId: match[2] }); }
+        catch { fail(`SOURCE_CODE_UNAVAILABLE: Original third-party source is not accessible for ${node.id} at ${match[2]}.`); }
+        if (typeof code !== 'string') fail('SOURCE_CODE_UNAVAILABLE: The original third-party file is not text.');
+        result.push({ sourceId: node.id, path: match[3], moduleId: match[1], saveId: match[2], code });
       }
       return result;
     },

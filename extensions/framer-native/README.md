@@ -1,4 +1,4 @@
-# Framer Native → Revyme — source reader 0.1.1
+# Framer Native → Revyme — source reader 0.1.2
 
 Це перша діагностична частина нового імпортера. Вона захоплює оригінальну модель
 редактора; конвертація й вставка в Revyme ще не підключені.
@@ -32,6 +32,12 @@ Captured definitions включають повні declarations проєкту; 
 зберігає точний module/save pointer і додає нативні URL ресурсів через helper
 редактора. Незбережений код або недоступний оригінал робить capture неповним;
 скомпільований `moduleContent` не використовується як заміна.
+
+Версія 0.1.2 додає читання оригінальних сторонніх code components через той
+самий `files.source` accessor з точним module/save pointer. Для page/component
+scope сторонні source files читаються за залежностями обраного дерева;
+недоступне стороннє джерело дає `SOURCE_CODE_UNAVAILABLE`. Цей шлях має
+автоматичні тести; живий capture зовнішнього коду ще не підтверджений.
 
 Перший adapter прив'язаний до спостереженого editor entrypoint
 `https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.

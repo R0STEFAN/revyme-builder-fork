@@ -25,7 +25,8 @@ import { resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } f
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
-import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
+import { resolveSourceBinding, emitSourceQueryInCode, bindSourcePropInCode } from './bindings';
+import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
 export function nativeComponentName(identity: Record<string, string>, sourceId: string): string {
@@ -76,7 +77,7 @@ function transitionSpec(value: unknown): Record<string, string> | undefined {
 }
 
 /** Build the canonical shell, then use native transforms for states and links. */
-export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>> } = {}): NativeCompileResult {
+export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>>; codeComponents?: Readonly<Record<string, NativeCodeComponentRef>> } = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeComponents', { components: graph.byKind.get('SmartComponentNode')?.length ?? 0 });
   const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
   if (result.diagnostics.length) return result;
@@ -94,6 +95,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, ...options };
       const sourceIds: string[] = [];
       const nested = new Map<string, string>();
+      const codeInstances = new Map<string, NativeCodeComponentRef>();
       const links: string[] = [];
       const slots: string[] = [];
       const stylesFor = (node: ResolvedSourceNode, parent?: ResolvedSourceNode) => {
@@ -125,8 +127,13 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           slots.push(id); content = '{children}';
         } else if (node.kind === 'CodeComponentNode') {
           const match = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier));
-          if (!match) throw new Error(`Source code component adapter required on ${id}: ${String(node.properties.codeComponentIdentifier)}`);
-          nested.set(id, match[1]);
+          if (match) nested.set(id, match[1]);
+          else {
+            const ref = options.codeComponents?.[String(node.properties.codeComponentIdentifier)];
+            if (!ref) throw new Error(`Source code component adapter required on ${id}: ${String(node.properties.codeComponentIdentifier)}`);
+            if (node.children.length) throw new Error(`Source code component slots on ${id} require their native adapter`);
+            codeInstances.set(id, ref);
+          }
           content = node.children.map(child => emit(child, node)).join('\n');
         } else if (node.kind === 'FrameNode') {
           content = node.children.map(child => emit(child, node)).join('\n');
@@ -206,6 +213,32 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         });
       }
       code = generate(ast).code;
+      for (const [id, ref] of codeInstances) {
+        const instanceAst = parseJSX(code)!;
+        if (!importedComponents.has(ref.name)) instanceAst.program.body.unshift(t.importDeclaration([t.importDefaultSpecifier(t.identifier(ref.name))], t.stringLiteral(`@/${ref.path.replace(/\.tsx$/, '')}`)));
+        importedComponents.add(ref.name);
+        findFirstElementByDataId(instanceAst, identity[id], (_path, element) => {
+          element.openingElement.name = t.jsxIdentifier(ref.name);
+          if (element.closingElement) element.closingElement.name = t.jsxIdentifier(ref.name);
+        });
+        code = generate(instanceAst).code;
+        const source = graph.nodes.get(id)!.raw;
+        const values = new Map(Object.entries(ref.controls).filter(([, control]) => control.default !== undefined).map(([prop, control]) => [prop, control.default as unknown]));
+        for (const [key, control] of Object.entries(source)) {
+          if (!key.startsWith('$control__')) continue;
+          const prop = key.slice(10);
+          if (!ref.controls[prop]) throw new Error(`Code component control ${prop} on ${id} has no native adapter`);
+          values.set(prop, sourceRecord(control)?.value);
+        }
+        for (const [prop, raw] of values) {
+          let value = raw;
+          if (typeof value === 'string' && value.startsWith('data:framer/asset-reference,')) {
+            if (!options.assets?.[value]) throw new Error(`Missing code component asset on ${id}:${prop}`);
+            value = options.assets[value];
+          }
+          code = bindSourcePropInCode(code, identity[id], prop, value, { graph, identity, nodeId: id });
+        }
+      }
       for (const variable of variables) {
         const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);

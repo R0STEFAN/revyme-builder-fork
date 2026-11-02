@@ -130,3 +130,60 @@ test('detects a code edit while original source is being fetched', async () => {
   await assert.rejects(adapter.readCodeFiles(), /SOURCE_CODE_UNSAVED/);
   assert.notEqual((await adapter.readContext({ mode: 'project' })).revision, before.revision);
 });
+
+test('reads third-party original source at its pinned module/save without using compiled code', async () => {
+  const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => {
+    const raw = serialize();
+    raw.root.children.push({ id: 'vendor-widget', __class: 'ExternalModuleNode', type: 'codeFile', codeComponentIdentifier: 'module:vendor-widget/pinned-save/Widget.tsx:Widget', children: [] });
+    return raw;
+  };
+  const local = engine.stores.modulesStore.getSourceContentForModuleSave;
+  engine.stores.modulesStore.getSourceContentForModuleSave = async pointer => {
+    if (pointer.moduleId === 'module-a') return local(pointer);
+    assert.deepEqual(pointer, { moduleId: 'vendor-widget', saveId: 'pinned-save' });
+    return 'export function Widget(props) { return <div {...props} />; }';
+  };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  const files = await adapter.readCodeFiles();
+  assert.deepEqual(files.find(file => file.sourceId === 'vendor-widget'), { sourceId: 'vendor-widget', moduleId: 'vendor-widget', saveId: 'pinned-save', path: 'Widget.tsx', code: 'export function Widget(props) { return <div {...props} />; }' });
+});
+
+test('reports unavailable third-party source instead of reading a compiled module', async () => {
+  const engine = await codeEngine();
+  engine.tree.toJS = () => ({ version: 128, root: { id: 'document', __class: 'RootNode', children: [{ id: 'vendor-widget', __class: 'ExternalModuleNode', type: 'codeFile', codeComponentIdentifier: 'module:vendor-widget/pinned-save/Widget.tsx:Widget', children: [] }] } });
+  engine.stores.modulesStore.getSourceContentForModuleSave = async () => { throw new Error('source not accessible'); };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await assert.rejects(adapter.readCodeFiles(), error => error.sourceId === 'vendor-widget' && /SOURCE_CODE_UNAVAILABLE/.test(error.message));
+});
+
+test('does not require an unrelated private component when capturing another page', async () => {
+  const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => {
+    const raw = serialize();
+    raw.root.children.push({ id: 'private-widget', __class: 'ExternalModuleNode', type: 'codeFile', codeComponentIdentifier: 'module:private-widget/pinned/Private.tsx:default', children: [] });
+    return raw;
+  };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await adapter.readContext({ mode: 'page' });
+  assert.equal((await adapter.readCodeFiles()).length, 1);
+});
+
+test('follows a local master dependency to fetch a third-party source needed by the selected page', async () => {
+  const engine = await codeEngine();
+  const serialize = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => {
+    const raw = serialize();
+    raw.root.children[0].children.push({ id: 'card', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/master:default', children: [] });
+    raw.root.children[1].children[0].children.push({ id: 'third-party', __class: 'CodeComponentNode', codeComponentIdentifier: 'module:vendor-widget/pinned/Widget.tsx:default', children: [] });
+    raw.root.children.push({ id: 'vendor-widget', __class: 'ExternalModuleNode', type: 'codeFile', codeComponentIdentifier: 'module:vendor-widget/pinned/Widget.tsx:default', children: [] });
+    return raw;
+  };
+  const local = engine.stores.modulesStore.getSourceContentForModuleSave;
+  engine.stores.modulesStore.getSourceContentForModuleSave = async pointer => pointer.moduleId === 'module-a' ? local(pointer) : 'export default function Widget(props) { return <div {...props} />; }';
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await adapter.readContext({ mode: 'page' });
+  assert.equal((await adapter.readCodeFiles()).some(file => file.sourceId === 'vendor-widget'), true);
+});

@@ -29,6 +29,24 @@ export function sourceAssetKey(key: string): string {
   return JSON.stringify(['asset', key, 'file']);
 }
 
+export function sourceCodeExportKey(identifier: string): string {
+  return JSON.stringify(['code-export', identifier]);
+}
+
+export function sourceCodeComponentIdentifiers(graph: SourceGraph): Set<string> {
+  const identifiers = new Set<string>();
+  const scan = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(scan); return; }
+    const object = sourceRecord(value);
+    if (!object) return;
+    const identifier = object.codeComponentIdentifier;
+    if (typeof identifier === 'string' && !identifier.startsWith('local-module:canvasComponent/')) identifiers.add(identifier);
+    for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item);
+  };
+  for (const id of graph.reachable) scan(graph.nodes.get(id)!.raw);
+  return identifiers;
+}
+
 export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
   const value = requiredNode(graph, scopeId).raw.variables ?? [];
   const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
@@ -63,6 +81,8 @@ function readReferences(node: SourceNode): SourceReference[] {
       if (module) add(module[2], property);
       const codeFile = /^local-module:(codeFile\/[^:]+):/.exec(value);
       if (codeFile) add(codeFile[1], property);
+      const externalCode = field === 'codeComponentIdentifier' && /^module:([^/]+)\/[^/]+\/[^:]+:/.exec(value);
+      if (externalCode) add(externalCode[1], property);
       for (const match of value.matchAll(/var\(--token-([^,\s)]+)\s*([,)])/g)) add(match[1], property, match[2] === ',');
       if (field === 'baseVariantId') add(value, property);
       if (field === 'html') for (const match of value.matchAll(/data-styles-preset=["']([^"']+)["']/g)) add(match[1], property);
@@ -226,6 +246,11 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
   const used = new Set([...existingPaths].map(path => normalize(path.split('/').pop()!.replace(/\.[^.]+$/, ''))));
   const identity: Record<string, string> = Object.create(null);
   const entries = [...graph.reachable].map(id => ({ id, field: false, slug: false }));
+  for (const identifier of sourceCodeComponentIdentifiers(graph)) {
+    const id = sourceCodeExportKey(identifier);
+    if (graph.nodes.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: code/node identity collision ${id}`);
+    entries.push({ id, field: false, slug: false });
+  }
   const assetKeys = new Set(graph.transfer.assets.map(asset => asset.key).filter((key): key is string => typeof key === 'string' && !!key));
   for (const key of assetKeys) {
     const id = sourceAssetKey(key);
