@@ -12,8 +12,8 @@ describe('editor source styles', () => {
   });
   it('reports active masks, effects, forms and custom cursors until their native adapters exist', () => {
     const c = context();
-    mapSourceStyles(node({ masks: [{ maskType: 'image' }], enterEffectEnabled: true, isFormContainer: true, customCursorSmartComponentId: 'cursor' }), c);
-    expect(c.diagnostics.map(item => item.property)).toEqual(expect.arrayContaining(['masks', 'enterEffectEnabled', 'isFormContainer', 'customCursorSmartComponentId']));
+    mapSourceStyles(node({ masks: [{ maskType: 'image' }], enterEffectEnabled: true, appearEffectEnabled: true, isFormContainer: true, customCursorSmartComponentId: 'cursor' }), c);
+    expect(c.diagnostics.map(item => item.property)).toEqual(expect.arrayContaining(['masks', 'enterEffectEnabled', 'appearEffectEnabled', 'isFormContainer', 'customCursorSmartComponentId']));
     const inactive = context();
     mapSourceStyles(node({ masks: [], enterEffectEnabled: false, enterEffectOpacity: 0, isFormContainer: false }), inactive);
     expect(inactive.diagnostics).toEqual([]);

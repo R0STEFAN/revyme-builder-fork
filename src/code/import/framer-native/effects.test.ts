@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
+import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
 import { buildSourceGraph } from './source-graph';
 import type { NativeTransfer } from './types';
 
@@ -17,4 +17,10 @@ it('keeps unsupported timings or other effects from being approximated as rotati
   expect(sourceRotationLoop({ ...base, loopEffectTransition: { ...base.loopEffectTransition, ease: [0.4, 0, 1, 1] } })).toBeUndefined();
   expect(sourceRotationLoop({ ...base, loopEffectPauseOffscreen: false })?.offscreen).toBe('play');
   expect(sourceRotationLoop({ ...base, loopEffectOpacity: 1, loopEffectX: 0, loopEffectY: 0, loopEffectScale: 1, loopEffectRotate3d: false, loopEffectRotateX: 0, loopEffectRotateY: 0, loopEffectSkewX: 0, loopEffectSkewY: 0, loopEffectRepeatDelay: 0, loopEffectTransition: { ...base.loopEffectTransition, damping: 60, mass: 1, stiffness: 500 } })).toEqual(sourceRotationLoop(base));
+});
+
+it('retains source transition modes and rejects malformed or unsupported animation settings', () => {
+  expect(sourceTransitionSpec({ type: 'spring', durationBasedSpring: true, duration: 0.8, bounce: 0.2, stiffness: 400, damping: 30, mass: 1, delay: 0.1 })).toEqual({ type: 'spring', duration: '0.8', bounce: '0.2', delay: '0.1' });
+  expect(sourceTransitionSpec({ type: 'spring', durationBasedSpring: false, duration: 0.8, bounce: 0.2, stiffness: 400, damping: 30, mass: 1 })).toEqual({ type: 'spring', stiffness: '400', damping: '30', mass: '1' });
+  for (const value of [{ type: 'tween', duration: 'slow' }, { type: 'tween', duration: -1 }, { type: 'spring', mass: 0 }, { type: 'tween', custom: true }, { type: 'tween', ease: [2, 0, 1, 1] }]) expect(() => sourceTransitionSpec(value)).toThrow();
 });

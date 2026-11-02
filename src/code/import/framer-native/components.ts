@@ -27,7 +27,7 @@ import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
-import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
@@ -52,24 +52,6 @@ function valueExpression(value: unknown, node: ResolvedSourceNode, context: Sour
   if (mapped === undefined) throw new Error(`Unresolved ${property} on ${node.sourceId}`);
   const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(mapped);
   return binding ? binding[1] : JSON.stringify(mapped);
-}
-function transitionSpec(value: unknown): Record<string, string> | undefined {
-  const transition = sourceRecord(value);
-  if (!transition) return;
-  if (transition.type === false) return { duration: '0' };
-  if (!['tween', 'spring'].includes(String(transition.type))) throw new Error('Unsupported variant transition type');
-  const output: Record<string, string> = { type: String(transition.type) };
-  const keys = transition.type === 'spring'
-    ? transition.durationBasedSpring ? ['duration', 'bounce', 'delay'] : ['stiffness', 'damping', 'mass', 'delay']
-    : ['duration', 'delay'];
-  for (const key of keys) if (typeof transition[key] === 'number') output[key] = String(transition[key]);
-  if (transition.type === 'tween' && transition.ease !== undefined) {
-    if (Array.isArray(transition.ease) && transition.ease.length === 4 && transition.ease.every(item => typeof item === 'number' && Number.isFinite(item))) output.ease = JSON.stringify(transition.ease);
-    else if (typeof transition.ease === 'string') output.ease = transition.ease;
-    else throw new Error('Unsupported variant easing');
-  }
-  if (typeof transition.stagger === 'number' && transition.stagger !== 0) throw new Error('Source stagger requires the motion emitter');
-  return output;
 }
 
 /** Build the canonical shell, then use native transforms for states and links. */
@@ -111,6 +93,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const { jsx: body, sourceIds, nested, codeInstances, links, slots } = emitSourceScene(graph, identity, primaryId, context, {
         stylesFor, expressionFor: (value, node, property) => valueExpression(value, node, context, property, identity), codeComponents: options.codeComponents,
       });
+      if (sourceIds.some(id => graph.nodes.get(id)!.kind === 'OverlayNode')) throw new Error('Source design-master overlay requires its native state-scope adapter');
       const cssImageProps = new Set<string>();
       const renderedStates = sourceIds.flatMap(id => [resolveSourceNode(graph, id), ...scope.children.filter(state => state !== primaryId).map(state => resolveSourceNode(graph, id, state))]);
       for (const node of renderedStates) {
@@ -243,7 +226,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           });
           if (!hasVariants) code = updateVariantStyleInCode(code, identity[id], names[scope.children.find(id => id !== primaryId)!], { opacity: baseStyles.opacity ?? '1' });
           for (const stateId of scope.children) {
-          const transition = transitionSpec(resolveSourceNode(graph, stateId).properties.variantTransition);
+          const transition = sourceTransitionSpec(resolveSourceNode(graph, stateId).properties.variantTransition);
           if (transition) code = updateVariantEntryTransition(code, identity[id], names[stateId], transition);
           }
         }

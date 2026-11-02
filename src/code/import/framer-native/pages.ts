@@ -9,6 +9,7 @@ import { mapSourceText } from './text';
 import { sourceViewports, applyNativeResponsive } from './responsive';
 import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
+import { applySourceOverlays } from './overlays';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
@@ -232,10 +233,13 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = setPropTypeInCode(code, prop.name, prop.type);
         code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
       }
-      code = applySourceInstances(code, scene, graph, identity, options.assets);
+      code = applySourceInstances(code, scene, graph, identity, options.assets, true);
+      if (isDetail && scene.sourceIds.some(id => graph.nodes.get(id)!.kind === 'OverlayNode')) throw new Error('Source CMS detail overlay requires its native hook-order adapter');
+      const overlays = applySourceOverlays(code, scene.sourceIds, graph, identity, viewports.slice(1).map(viewport => viewport.sourceStateId));
+      code = overlays.code;
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
-        if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length) throw new Error(`Source page action ${property} requires its native adapter`);
+        if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length && !overlays.handled.has(`${nodeId}:${property}`)) throw new Error(`Source page action ${property} requires its native adapter`);
         const override = isSourceCodeComponent(node) ? undefined : activeSourceCodeOverride(node.properties);
         if (override) {
           const ref = options.overrides?.[override];

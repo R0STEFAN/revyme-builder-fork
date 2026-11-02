@@ -7,11 +7,12 @@ import { nativeComponentName, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
 import { sourceCollectionId } from './cms';
 import { sourceRecord, sourceVariables, sourceCssImageVariables } from './source-graph';
+import { sourceShowOverlayTarget } from './overlays';
 import type { SourceGraph } from './types';
 import type { SourceScene } from './scene';
 
 /** Same imported instances and prop bindings in pages, templates and masters. */
-export function applySourceInstances(code: string, scene: SourceScene, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>): string {
+export function applySourceInstances(code: string, scene: SourceScene, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, allowOverlayEvents = false): string {
   trace.fn('framer-native.applyInstances', { design: scene.nested.size, code: scene.codeInstances.size });
   let result = code;
   const imported = new Set<string>();
@@ -46,7 +47,14 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
         continue;
       }
       const variable = variables.find(variable => variable.id === sourceProp);
-      if (!variable) throw new Error(`Missing source instance prop ${sourceProp}`);
+      if (!variable) {
+        trace.action('framer-native.skipDeletedInstanceProp', { sourceId: id, masterId, prop: sourceProp });
+        continue;
+      }
+      if (variable.type === 'eventhandler' && sourceShowOverlayTarget(value)) {
+        if (!allowOverlayEvents) throw new Error(`Source instance overlay event on ${id} requires its native scope adapter`);
+        continue;
+      }
       if (variable.type === 'image' && !imageDomains.has(masterId)) imageDomains.set(masterId, sourceCssImageVariables(graph, masterId));
       const cssImage = variable.type === 'image' && imageDomains.get(masterId)!.has(sourceProp);
       let mapped = assetValue(value, id, sourceProp);

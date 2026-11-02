@@ -51,7 +51,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   trace.fn('framer-native.mapSourceStyles', { sourceId: node.sourceId });
   const p = node.properties;
   // These are active source behaviors, not decorative metadata; never drop them.
-  for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
+  for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'appearEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
     if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p))) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   for (const key of ['boxShadows', 'pageEffects']) {

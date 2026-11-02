@@ -53,6 +53,34 @@ media URLs without network/upload proof and persisted no destination files.
 Full-project import/parity remains incomplete; active overlay/scroll behavior,
 custom cursor bindings, document metadata and remaining media gaps still need work.
 
+## Native fixed overlays — 2026-11-02
+
+Page/template overlay capture now retains the whole editable subtree and rebuilds
+native fixed-overlay state, AnimatePresence, trigger metadata, click/event handlers,
+backdrop dismissal, body scroll lock, stacking and separate enter/exit transitions.
+Design-instance event triggers and on-open variants use the native prop/event and
+overlay generators. Descendant useDismissOverlay actions become native close actions.
+The shared source transition adapter now rejects malformed/unknown settings and
+preserves physics-vs-duration spring modes. Active Scroll Variant is explicitly
+diagnosed until its adapter exists; disabled stored fields stay ignorable.
+
+Ruling: ignore controls absent from a native design master's captured variable
+list, tracing the skip — deleted props/events cannot bind a source declaration.
+This removes the actual stale LWpmxrzuo -> deleted HHE_PNPF9 overlay event while
+retaining declared lgmPQ1a1K. No project/source IDs are hardcoded in product logic.
+Ruling: nested overlays, multiple triggers on one instance, modal configuration or
+on-open changes across breakpoints, design-master-owned overlays, and CMS detail
+hook-order cases remain explicit adapter errors; do not claim these supported.
+
+Tests: fixed and template overlays, design-event/on-open binding, missing/conflicting
+and responsive targets, malformed transitions. A real React/framer-motion execution
+regression compiles the emitted source, clicks open/close and verifies DOM presence
+and body scroll lock restoration. Focused 24 files / 559 tests passed; production
+build and TypeScript check passed. Actual capture
+preflight now reaches Unsupported source binding webPage in nested link props,
+which is the next adapter. Planned media URLs were used only for preflight; no
+media acquisition or full-project import/parity is claimed.
+
 ## Working conversion and explicit gaps
 
 - Original local HOCs on ordinary nodes retain their callback body/order through

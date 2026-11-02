@@ -42,3 +42,28 @@ export function assertLoopOutsideSourceList(graph: SourceGraph, nodeId: string):
     id = typeof parent === 'string' ? parent : undefined;
   }
 }
+
+export function sourceTransitionSpec(value: unknown): Record<string, string> | undefined {
+  trace.fn('framer-native.sourceTransition');
+  const transition = sourceRecord(value);
+  if (value == null) return;
+  if (!transition) throw new Error('Invalid source transition');
+  if (transition.type === false) return { duration: '0' };
+  if (!['tween', 'spring'].includes(String(transition.type))) throw new Error('Unsupported source transition type');
+  const numeric = ['duration', 'delay', 'bounce', 'stiffness', 'damping', 'mass', 'stagger'];
+  if (Object.keys(transition).some(key => !['type', 'ease', 'durationBasedSpring', ...numeric].includes(key))) throw new Error('Unsupported source transition field');
+  for (const key of numeric) if (transition[key] !== undefined && (typeof transition[key] !== 'number' || !Number.isFinite(transition[key]) || Number(transition[key]) < 0 || ['mass', 'stiffness'].includes(key) && transition[key] === 0 || key === 'bounce' && Number(transition[key]) > 1)) throw new Error(`Invalid source transition ${key}`);
+  if (transition.durationBasedSpring !== undefined && typeof transition.durationBasedSpring !== 'boolean') throw new Error('Invalid source spring mode');
+  const output: Record<string, string> = { type: String(transition.type) };
+  const keys = transition.type === 'spring'
+    ? transition.durationBasedSpring ? ['duration', 'bounce', 'delay'] : ['stiffness', 'damping', 'mass', 'delay']
+    : ['duration', 'delay'];
+  for (const key of keys) if (typeof transition[key] === 'number') output[key] = String(transition[key]);
+  if (transition.type === 'tween' && transition.ease !== undefined) {
+    if (Array.isArray(transition.ease) && transition.ease.length === 4 && transition.ease.every(item => typeof item === 'number' && Number.isFinite(item)) && [transition.ease[0], transition.ease[2]].every(value => value >= 0 && value <= 1)) output.ease = JSON.stringify(transition.ease);
+    else if (typeof transition.ease === 'string' && ['linear', 'easeIn', 'easeOut', 'easeInOut', 'circIn', 'circOut', 'circInOut', 'backIn', 'backOut', 'backInOut', 'anticipate'].includes(transition.ease)) output.ease = transition.ease;
+    else throw new Error('Unsupported source easing');
+  }
+  if (typeof transition.stagger === 'number' && transition.stagger !== 0) throw new Error('Source stagger requires the motion emitter');
+  return output;
+}

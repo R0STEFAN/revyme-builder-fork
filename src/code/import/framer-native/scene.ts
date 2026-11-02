@@ -63,6 +63,8 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       const match = /^local-module:canvasComponent\/([^:]+):/.exec(identifier);
       if (match) result.nested.set(id, match[1]);
       content = node.children.map(child => emit(child, node)).join('\n');
+    } else if (node.kind === 'OverlayNode') {
+      content = node.children.map(child => emit(child, node)).join('\n');
     } else if (node.kind === 'FrameNode') {
       if (node.properties.htmlTag != null) {
         if (typeof node.properties.htmlTag !== 'string' || !frameTags.has(node.properties.htmlTag)) throw new Error(`Frame tag ${String(node.properties.htmlTag)} on ${id} requires its native adapter`);
