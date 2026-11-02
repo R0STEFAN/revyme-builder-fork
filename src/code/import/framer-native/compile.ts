@@ -14,12 +14,15 @@ import type { NativeCompileResult, SourceGraph } from './types';
 import { applyFramerColorTokens, type FramerColorToken } from '../../generation/framer-token-gen';
 import { renameCustomPropertyInText } from '../../generation/preset-refs-gen';
 import { generate } from '../../generation/generator-utils';
+import { applyFramerFontFaces } from '../../generation/framer-font-gen';
+import type { WorkspaceFontFaceSpec } from '../../project/preset-ops';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
   mode: 'create' | 'replace' | 'paste';
   assetPayloads?: Readonly<Record<string, string>>;
   uploadedAssets?: Readonly<Record<string, string>>;
+  fontFaces?: readonly WorkspaceFontFaceSpec[];
 }
 
 /** Pure candidate assembly. Only the native submit/plan pipeline may persist it. */
@@ -74,10 +77,24 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const name = `color-${identity[id]}`;
       colorTokens.push({ name, value: token.light, ...(typeof token.dark === 'string' ? { dark: token.dark } : {}) });
     }
+    const fontNames = new Map<string, string>();
+    let fontIndex = 1;
+    for (const family of [...new Set(target.fontFaces?.map(face => face.family))].sort()) {
+      let alias: string;
+      do { alias = `Framer ${identity[graph.renderRootIds[0]]} ${fontIndex++} ${family}`; }
+      while ([...target.existingFiles.values()].some(code => code.includes(alias)));
+      fontNames.set(family, alias);
+    }
+    const fontFaces = (target.fontFaces ?? []).map(face => ({ ...face, family: fontNames.get(face.family)! }));
     for (const file of result.files.filter(file => file.path.endsWith('.tsx'))) {
       const ast = parseJSX(file.code);
       let changed = false;
       if (ast) t.traverseFast(ast, node => {
+        if (t.isObjectProperty(node) && (t.isIdentifier(node.key, { name: 'fontFamily' }) || t.isStringLiteral(node.key, { value: 'fontFamily' })) && t.isStringLiteral(node.value)) {
+          const before = node.value.value;
+          node.value.value = before.split(',').map(family => fontNames.has(family.trim().replace(/^["']|["']$/g, '')) ? JSON.stringify(fontNames.get(family.trim().replace(/^["']|["']$/g, ''))) : family).join(',');
+          changed ||= before !== node.value.value;
+        }
         if (!t.isStringLiteral(node)) return;
         const before = node.value;
         for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
@@ -85,13 +102,14 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       });
       if (ast && changed) file.code = generate(ast).code;
     }
-    if (colorTokens.length) {
+    if (colorTokens.length || fontFaces.length) {
       const before = target.existingFiles.get('app/globals.css');
-      result.files.push({ path: 'app/globals.css', code: applyFramerColorTokens(before ?? '', colorTokens), ...(before === undefined ? {} : { baseCode: before }), colorTokens });
+      const code = applyFramerFontFaces(applyFramerColorTokens(before ?? '', colorTokens), fontFaces);
+      result.files.push({ path: 'app/globals.css', code, ...(before === undefined ? {} : { baseCode: before }), ...(colorTokens.length ? { colorTokens } : {}), ...(fontFaces.length ? { fontFaces } : {}) });
     }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();
     for (const file of result.files) {
-      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && file.colorTokens)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces))) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;
@@ -112,7 +130,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (!t.isObjectProperty(node) || !(t.isIdentifier(node.key, { name: 'fontFamily' }) || t.isStringLiteral(node.key, { value: 'fontFamily' })) || !t.isStringLiteral(node.value)) return;
         const families = node.value.value.split(',').map(family => family.trim().replace(/^["']|["']$/g, ''));
         const system = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'inherit']);
-        if (families.some(family => !system.has(family))) result.diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', property: file.path, message: `Original font registration is required for ${node.value.value}.` });
+        if (families.some(family => !system.has(family) && !fontFaces.some(face => face.family === family))) result.diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', property: file.path, message: `Original font registration is required for ${node.value.value}.` });
       });
     }
   } catch (error) {

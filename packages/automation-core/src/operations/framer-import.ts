@@ -17,12 +17,14 @@ import { validateFramerImportCms } from './framer-import-cms';
 import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '@/code/project/cms-seo';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
+import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
     path: z.string().min(1), code: z.string(), baseHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     baseCode: z.string().optional(),
     colorTokens: z.array(z.object({ name: z.string(), value: z.string(), dark: z.string().optional() }).strict()).min(1).max(10000).optional(),
+    fontFaces: z.array(z.object({ family: z.string(), url: z.string(), weight: z.number(), style: z.enum(['normal', 'italic']), ext: z.enum(['woff2', 'woff', 'otf', 'ttf']), weightRange: z.object({ min: z.number(), max: z.number() }).strict().optional(), unicodeRange: z.string().optional() }).strict()).min(1).max(10000).optional(),
   }).strict()).min(1).max(10000),
   sourceManifest: z.object({
     format: z.literal('revyme.framer.native'), version: z.literal(1), complete: z.literal(true),
@@ -158,8 +160,8 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
       const existing = snapshot.files.get(file.path);
       const tokenPatch = file.path === 'app/globals.css';
       if (tokenPatch) {
-        if (!file.colorTokens || file.baseCode !== existing || applyFramerColorTokens(existing ?? '', file.colorTokens) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
-      } else if (file.baseCode !== undefined || file.colorTokens !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+        if (!(file.colorTokens?.length || file.fontFaces?.length) || file.baseCode !== existing || applyFramerFontFaces(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.fontFaces ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+      } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.fontFaces !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       if (existing !== undefined) {
         if (input.mode === 'create' && !tokenPatch) fail('ALREADY_EXISTS', file.path);
         if (input.mode === 'paste' && file.path !== input.target.filePath) fail('PASTE_TARGET_CONFLICT', file.path);

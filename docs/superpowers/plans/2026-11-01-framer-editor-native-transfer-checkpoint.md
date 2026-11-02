@@ -89,6 +89,14 @@ pure compiler assembly and the live-capture regressions described below.
   palette names/references are reserved, source JSX text stays literal, and CMS
   color values map while source provenance remains untouched. The live test
   rendered the native dark value rgb(60,70,80); live-native-palette* is evidence.
+  Uploaded original font-face candidates now use an equally exact native globals
+  recipe, including weights/ranges and Unicode subsets. Compiler assigns scoped
+  font-family aliases and rewrites imported styles, preserving existing destination
+  fonts. The full-file submit regenerates the patch and rejects tampered CSS.
+  Native font-face generation now retains distinct registrations sharing one file
+  and deduplicates identical faces in one batch. Focused 24 files/269 tests,
+  TypeScript and production build passed. Automatic original-font capture/upload
+  is not wired yet; do not claim the live capture's font blockers are removed.
   Token aliases and other unverified color formats still diagnose.
 
 ## Latest live capture and remaining source dependencies

@@ -306,7 +306,7 @@ function fontFaceFormat(ext: WorkspaceFontFaceSpec['ext']): string {
 
 /**
  * Append `@font-face` rules for workspace custom fonts to globals.css, skipping
- * any whose src url is already declared (idempotent). Pure function — pass the
+ * identical registrations already declared (idempotent). Pure function — pass the
  * current css, get the next css. Rules are appended at the END so they never
  * precede the `@import` block (CSS requires `@import` first). The src points at
  * the hosted (R2) font file — same model as image assets — so the canvas
@@ -316,8 +316,7 @@ function fontFaceFormat(ext: WorkspaceFontFaceSpec['ext']): string {
 export function addWorkspaceFontFacesToCss(css: string, fonts: WorkspaceFontFaceSpec[]): string {
   const additions: string[] = [];
   for (const f of fonts) {
-    if (css.includes(f.url)) continue; // already declared
-    additions.push(
+    const rule =
       `@font-face {\n` +
         `  font-family: '${f.family.replace(/'/g, "\\'")}';\n` +
         `  src: url('${f.url}') format('${fontFaceFormat(f.ext)}');\n` +
@@ -325,8 +324,8 @@ export function addWorkspaceFontFacesToCss(css: string, fonts: WorkspaceFontFace
         `  font-style: ${f.style};\n` +
         (f.unicodeRange ? `  unicode-range: ${f.unicodeRange};\n` : '') +
         `  font-display: swap;\n` +
-        `}`,
-    );
+        `}`;
+    if (!css.includes(rule) && !additions.includes(rule)) additions.push(rule);
   }
   if (additions.length === 0) return css;
   const header = css.includes('/* Workspace custom fonts */') ? '' : '\n/* Workspace custom fonts */\n';

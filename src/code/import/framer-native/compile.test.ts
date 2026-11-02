@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { compileNativeTransfer } from './compile';
 import { parseJSXToNodes } from '../../parsing/parser';
 import type { NativeTransfer } from './types';
-import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
+import { framerImportSubmitOperation, framerImportSubmitInputSchema } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
 import { parseMetadataFromCode } from '../../generation/metadata-gen';
 import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../project/cms-seo';
@@ -17,6 +17,36 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+it('imports original uploaded font faces through a canonical native globals patch', async () => {
+  const source = transfer();
+  const frame = (source.definitions[1].data.children as any[])[0];
+  frame.children[0].html = '<p style="font-family: Zalando Sans; font-weight: 450; font-variation-settings: &quot;wdth&quot; 100">Original font</p>';
+  Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-ink, #000)' });
+  source.definitions.push({ id: 'ink', kind: 'ColorStyleTokenNode', data: { id: 'ink', __class: 'ColorStyleTokenNode', children: [], light: '#000' } });
+  const fontFaces = [{ family: 'Zalando Sans', url: '/api/uploads/original.woff2', weight: 450, style: 'normal' as const, ext: 'woff2' as const }];
+  const globals = ':root { --color-brand: #fff; }';
+  const existingFiles = new Map([['app/globals.css', globals]]);
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles, fontFaces });
+  expect(result.diagnostics).toEqual([]);
+  const css = result.files.find(file => file.path === 'app/globals.css')!;
+  expect(parsePresetTokens(css.code)).toContainEqual(expect.objectContaining({ name: 'color-brand', value: '#fff' }));
+  expect(css.code).toContain('/api/uploads/original.woff2');
+  expect(css.colorTokens).toHaveLength(1);
+  const text = parseJSXToNodes(result.files.find(file => file.path.startsWith('components/'))!.code).get(result.identity.label)!;
+  expect(text.styles.fontFamily).toBe(JSON.stringify(css.fontFaces![0].family));
+  expect(text.styles.fontWeight).toBe('450');
+  expect(text.styles.fontVariationSettings).toBe('"wdth" 100');
+  const target = { projectId: 'destination', branchId: 'main' };
+  const input = { files: result.files, mode: 'create' as const, target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
+  expect(framerImportSubmitInputSchema.safeParse(input).success).toBe(true);
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), input, createOperationContext())).diagnostics).toEqual([]);
+  const altered = { ...input, files: result.files.map(file => file.path === 'app/globals.css' ? { ...file, code: file.code + 'body {display:none}' } : file) };
+  await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), altered, createOperationContext())).rejects.toThrow(/PATCH/);
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_FONT_ADAPTER_REQUIRED' }));
+  const repeated = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/globals.css', css.code]]), fontFaces });
+  expect(repeated.diagnostics).toEqual([]);
+  expect(repeated.files.find(file => file.path === 'app/globals.css')!.fontFaces![0].family).not.toBe(css.fontFaces![0].family);
+});
 it('imports source color tokens into native presets while retaining existing globals', async () => {
   const source = transfer();
   const frame = (source.definitions[1].data.children as any[])[0];

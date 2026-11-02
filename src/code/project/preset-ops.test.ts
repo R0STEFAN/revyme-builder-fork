@@ -97,6 +97,18 @@ describe('addWorkspaceFontFacesToCss', () => {
     expect(out).toContain('font-weight: 700');
   });
 
+  test('preserves distinct registrations sharing a variable-font file and deduplicates identical faces', () => {
+    const regular = font({ weight: 450 });
+    const bold = font({ weight: 800 });
+    const alias = font({ family: 'Brand Sans Alias' });
+    const out = addWorkspaceFontFacesToCss('', [regular, bold, alias, regular]);
+    expect(out.match(/@font-face/g)).toHaveLength(3);
+    expect(out).toContain('font-weight: 450;');
+    expect(out).toContain('font-weight: 800;');
+    expect(out).toContain("font-family: 'Brand Sans Alias';");
+    expect(addWorkspaceFontFacesToCss(out, [regular, bold, alias])).toBe(out);
+  });
+
   test('appends AFTER existing @import lines (CSS requires @import first)', () => {
     const css = "@import url('https://fonts.googleapis.com/x');\n:root { --x: 1; }";
     const out = addWorkspaceFontFacesToCss(css, [font()]);
