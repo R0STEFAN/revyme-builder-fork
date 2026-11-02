@@ -1,0 +1,159 @@
+import { trace } from '../../../shared/debug-trace';
+import { checkFile } from '../../oracle/check-file';
+import { setTagAttr } from '../../generation/generator-utils';
+import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
+import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
+import { sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
+import { mapSourceStyles, type SourceMappingContext } from './styles';
+import { mapSourceText } from './text';
+import { sourceViewports, applyNativeResponsive } from './responsive';
+import { emitSourceScene } from './scene';
+import { applySourceInstances } from './scene-instances';
+import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
+import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
+import type { NativeCodeComponentRef } from './code-components';
+import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceNode } from './types';
+
+export interface NativePageOptions {
+  existingPaths: ReadonlySet<string>;
+  assets?: Record<string, string>;
+  codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>;
+  overrides?: Readonly<Record<string, CodeOverrideRef>>;
+}
+export interface NativePageResult extends NativeCompileResult { routes: Record<string, string> }
+
+function documentFor(graph: SourceGraph, page: SourceNode): SourceNode | undefined {
+  let id = page.raw.parentid;
+  const seen = new Set<string>();
+  while (typeof id === 'string' && !seen.has(id)) {
+    seen.add(id);
+    const node = graph.nodes.get(id);
+    if (!node) throw new Error(`Source page context ${id} is missing`);
+    if (node.kind === 'RootNode') return node;
+    id = node.raw.parentid;
+  }
+}
+function routeFor(graph: SourceGraph, page: SourceNode): string {
+  const segment = (graph.byKind.get('RouteSegmentNode') ?? []).map(id => graph.nodes.get(id)!).find(node => node.raw.webPageId === page.id);
+  let route: unknown;
+  if (segment) {
+    const parts: string[] = [], seen = new Set<string>();
+    let cursor: SourceNode | undefined = segment;
+    while (cursor?.kind === 'RouteSegmentNode') {
+      if (seen.has(cursor.id) || typeof cursor.raw.segment !== 'string') throw new Error('Invalid source route hierarchy');
+      seen.add(cursor.id); parts.unshift(cursor.raw.segment);
+      cursor = typeof cursor.raw.parentid === 'string' ? graph.nodes.get(cursor.raw.parentid) : undefined;
+    }
+    if (cursor?.kind !== 'RouteSegmentRootNode') throw new Error('Source route root is unavailable');
+    route = '/' + parts.join('/');
+  } else route = documentFor(graph, page)?.raw.homePageNodeId === page.id ? '/' : page.raw.pagePath;
+  if (typeof route !== 'string' || !/^\/(?:[\p{L}\p{N}_-]+(?:\/[\p{L}\p{N}_-]+)*)?$/u.test(route)) throw new Error(`Source route requires a native route/CMS adapter: ${String(route)}`);
+  return route;
+}
+const routeOfFile = (path: string) => path.replace(/^app\//, '/').replace(/\([^/]+\)\//g, '').replace(/\/(?:page\.client|page)\.tsx$/, '') || '/';
+
+/** Static pages use the same original scene, bindings and native responsive writers. */
+export function emitNativePages(graph: SourceGraph, identity: Record<string, string>, options: NativePageOptions): NativePageResult {
+  trace.fn('framer-native.emitPages');
+  const result: NativePageResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], routes: {} };
+  if (result.diagnostics.length) return result;
+  const ids = (graph.byKind.get('WebPageNode') ?? []).filter(id => graph.reachable.has(id)).sort();
+  if (!ids.length) return result;
+  let active: string | undefined;
+  try {
+    const originalRoutes = new Map(ids.map(id => [id, routeFor(graph, graph.nodes.get(id)!)]));
+    if (new Set(originalRoutes.values()).size !== ids.length) throw new Error('Duplicate source page routes');
+    const used = new Set([...options.existingPaths].filter(path => /^app\/.+page(?:\.client)?\.tsx$|^app\/page(?:\.client)?\.tsx$/.test(path)).map(path => routeOfFile(path).toLowerCase()));
+    let prefix = '';
+    const collides = (prefix: string) => [...originalRoutes.values()].some(route => used.has((prefix + (route === '/' ? '' : route) || '/').toLowerCase()) || /^\/api(?:\/|$)/.test(prefix + route));
+    if (collides(prefix)) {
+      prefix = `/${identity[ids[0]]}`;
+      for (let suffix = 2; collides(prefix); suffix++) prefix = `/${identity[ids[0]]}-${suffix}`;
+    }
+    for (const [id, route] of originalRoutes) result.routes[id] = prefix + (route === '/' ? '' : route) || '/';
+    for (const id of ids) {
+      active = id;
+      const page = graph.nodes.get(id)!, document = documentFor(graph, page);
+      if (page.raw.dataIdentifier !== undefined) throw new Error('Source CMS page requires its native page-context adapter');
+      if (sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
+      if (page.raw.layoutTemplateIdentifierOverride || document?.raw.layoutTemplateIdentifier) throw new Error('Source page template requires its native template adapter');
+      if (document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
+      const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
+      if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
+      const context: SourceMappingContext = { graph, diagnostics: [], assets: options.assets, viewport: { width: viewports[0].designWidth! } };
+      const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
+        const styles = mapSourceStyles(node, ctx);
+        if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, ctx).styles);
+        if (node.sourceId === primary) {
+          styles.width = '100%'; styles.position = 'relative';
+          for (const key of ['left', 'right', 'top', 'bottom']) delete styles[key];
+        } else if (ctx.parent && ['stack', 'grid'].includes(String(ctx.parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
+          styles.order = String(ctx.parent.children.indexOf(node.sourceId));
+          if (ctx.parent.properties.layout === 'stack') {
+            styles.flex = styles.flexGrow ? `${styles.flexGrow} ${styles.flexShrink ?? '1'} ${styles.flexBasis ?? '0px'}` : '0 0 auto';
+            delete styles.flexGrow; delete styles.flexShrink; delete styles.flexBasis;
+          }
+        }
+        return styles;
+      };
+      const scene = emitSourceScene(graph, identity, primary, context, {
+        stylesFor: (node, parent) => stylesFor(node, { ...context, parent }), codeComponents: options.codeComponents,
+        expressionFor: (value, node) => {
+          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
+          if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
+          throw new Error('Source page text requires its native binding adapter');
+        },
+      });
+      if (scene.slots.length) throw new Error('Page content slots require the source template adapter');
+      let code = `"use client";\nimport React from 'react';\nexport default function Page() { return <div data-id="root" style={{position:'relative',width:'100%'}}>${scene.jsx}</div>; }`;
+      code = applySourceInstances(code, scene, graph, identity, options.assets);
+      for (const nodeId of scene.sourceIds) {
+        const node = resolveSourceNode(graph, nodeId);
+        for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length) throw new Error(`Source page action ${property} requires its native adapter`);
+        if (node.properties.codeOverrideEnabled === true) {
+          const ref = options.overrides?.[String(node.properties.codeOverrideIdentifier)];
+          if (!ref) throw new Error(`Source page override ${String(node.properties.codeOverrideIdentifier)} is unavailable`);
+          code = setCodeOverridesInCode(code, identity[nodeId], [ref]);
+        }
+        for (const viewport of viewports.slice(1)) {
+          const state = resolveSourceNode(graph, nodeId, viewport.sourceStateId);
+          const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']);
+          for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
+          for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
+          if (node.kind === 'RichTextNode') {
+            const base = mapSourceText(node, context), text = mapSourceText(state, context);
+            if (base.tag !== text.tag || base.jsx !== text.jsx || JSON.stringify(base.binding) !== JSON.stringify(text.binding) || JSON.stringify(base.attributes) !== JSON.stringify(text.attributes)) throw new Error(`Responsive text content on ${nodeId} requires its native text adapter`);
+          }
+        }
+      }
+      for (const nodeId of scene.links) {
+        const node = resolveSourceNode(graph, nodeId);
+        if (typeof node.properties.link !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
+        let href = node.properties.link;
+        for (const [pageId, route] of originalRoutes) if (href === route) href = result.routes[pageId];
+        code = convertToMotionLinkInCode(code, identity[nodeId]);
+        code = setTagAttr(code, identity[nodeId], 'href', JSON.stringify(href));
+        if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
+      }
+      for (const nodeId of [...scene.sourceIds].reverse()) if (graph.nodes.get(nodeId)!.raw.dataIdentifier !== undefined) {
+        const range = findClosingTag(code, findJSXElementByDataId(code, identity[nodeId]));
+        if (!range) throw new Error('Native list container is missing');
+        code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
+      }
+      code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
+      if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
+      const route = result.routes[id], folder = 'app' + (route === '/' ? '' : route);
+      const path = `${folder}/page.client.tsx`;
+      const violations = checkFile(code, { kind: 'page', path, projectFiles: new Set([path]) });
+      if (violations.length) throw new Error(`Native page validation: ${violations.map(violation => violation.code).join(', ')}`);
+      const pageMeta = sourceRecord(page.raw.webMetadata), globalMeta = sourceRecord(document?.raw.webMetadata);
+      const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
+      result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = ${JSON.stringify(metadata)};\nexport default function Page(){ return <PageClient />; }\n` });
+      result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+    }
+  } catch (error) {
+    result.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: active, message: error instanceof Error ? error.message : String(error) });
+  }
+  if (result.diagnostics.length) { result.files = []; result.createdIds = []; result.routes = {}; }
+  return result;
+}

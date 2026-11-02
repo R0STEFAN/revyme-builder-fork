@@ -6,6 +6,18 @@ const node = (properties: Record<string, unknown>): ResolvedSourceNode => ({ id:
 const context = (extra = {}) => ({ diagnostics: [] as TransferDiagnostic[], ...extra });
 
 describe('editor source styles', () => {
+  it('retains static scale, sticky offset and text selection', () => {
+    expect(mapSourceStyles(node({ position: 'sticky', positionStickyTop: 120, scale: 2, rotation: 10, userSelect: 'none' }), context())).toMatchObject({ top: '120px', transform: 'rotate(10deg) scale(2)', userSelect: 'none' });
+    expect(mapSourceStyles(node({ scale: 0 }), context()).transform).toBe('scale(0)');
+  });
+  it('reports active masks, effects, forms and custom cursors until their native adapters exist', () => {
+    const c = context();
+    mapSourceStyles(node({ masks: [{ maskType: 'image' }], enterEffectEnabled: true, isFormContainer: true, customCursorSmartComponentId: 'cursor' }), c);
+    expect(c.diagnostics.map(item => item.property)).toEqual(expect.arrayContaining(['masks', 'enterEffectEnabled', 'isFormContainer', 'customCursorSmartComponentId']));
+    const inactive = context();
+    mapSourceStyles(node({ masks: [], enterEffectEnabled: false, enterEffectOpacity: 0, isFormContainer: false }), inactive);
+    expect(inactive.diagnostics).toEqual([]);
+  });
   it('maps stacks, wrapping and main/cross axis fill weights', () => {
     const styles = mapSourceStyles(node({ layout: 'stack', stackDirection: 'horizontal', stackAlignment: 'center', stackDistribution: 'space-between', stackWrapEnabled: true, gap: '20px', width: 2, widthType: 3, height: 1, heightType: 3 }), context({ parent: node({ layout: 'stack', stackDirection: 'horizontal' }) }));
     expect(styles).toMatchObject({ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', flexGrow: '2', flexBasis: '0px', height: '100%' });

@@ -5,7 +5,7 @@ import { CSS_NEUTRAL_FALLBACK, updateContainerQueryStyle } from '../../generatio
 import { updateCanvasConfigInCode } from '../../project/canvas-config';
 import { resolveSourceNode } from './source-graph';
 import { mapSourceStyles, mappingDiagnostic, type SourceMappingContext } from './styles';
-import type { SourceGraph } from './types';
+import type { ResolvedSourceNode, SourceGraph } from './types';
 
 export interface SourceViewport extends ViewportConfig { sourceStateId: string }
 export function sourceViewports(graph: SourceGraph, scopeId: string): SourceViewport[] {
@@ -24,7 +24,7 @@ export function sourceViewports(graph: SourceGraph, scopeId: string): SourceView
   }));
 }
 
-export function applyNativeResponsive(code: string, model: { graph: SourceGraph; scopeId: string; context: SourceMappingContext }, identity: Record<string, string>): string {
+export function applyNativeResponsive(code: string, model: { graph: SourceGraph; scopeId: string; context: SourceMappingContext; stylesFor?: (node: ResolvedSourceNode, context: SourceMappingContext) => Record<string, string> }, identity: Record<string, string>): string {
   trace.fn('framer-native.applyNativeResponsive', { scopeId: model.scopeId });
   const { graph, context } = model;
   const viewports = sourceViewports(graph, model.scopeId);
@@ -34,14 +34,15 @@ export function applyNativeResponsive(code: string, model: { graph: SourceGraph;
   }));
   let result = updateCanvasConfigInCode(code, { viewports, positions });
   const baseRoot = resolveSourceNode(graph, viewports[0].sourceStateId);
+  const stylesFor = model.stylesFor ?? mapSourceStyles;
   const walk = (id: string, parentId?: string) => {
     const base = resolveSourceNode(graph, id);
     const baseParent = parentId ? resolveSourceNode(graph, parentId) : undefined;
-    const baseStyles = mapSourceStyles(base, { ...context, parent: baseParent, graph });
+    const baseStyles = stylesFor(base, { ...context, parent: baseParent, graph, viewport: { width: viewports[0].designWidth! } });
     for (const viewport of viewports.slice(1)) {
       const state = resolveSourceNode(graph, id, viewport.sourceStateId);
       const parent = parentId ? resolveSourceNode(graph, parentId, viewport.sourceStateId) : undefined;
-      const styles = mapSourceStyles(state, { ...context, graph, parent, viewport: { width: viewport.designWidth! } });
+      const styles = stylesFor(state, { ...context, graph, parent, viewport: { width: viewport.designWidth! } });
       const changes: Record<string, string> = {};
       for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) {
         if (styles[key] !== baseStyles[key]) changes[key] = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';

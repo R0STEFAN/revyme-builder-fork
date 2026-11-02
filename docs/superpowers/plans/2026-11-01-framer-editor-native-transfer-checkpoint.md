@@ -1,4 +1,73 @@
-# Framer native transfer — paused checkpoint, 2026-11-01
+# Framer native transfer — continuation checkpoint, 2026-11-02
+
+## Resumed work on November 2
+
+The user explicitly resumed work and clarified that third-party code components
+must remain code components. Work is ACTIVE, not paused. Tasks 1/2/3/7 are complete;
+Tasks 4/5/6 remain partial; 8/9 final transport/10 are pending. The historical
+pause notes below describe the starting checkpoint only.
+
+New commits: `107716b` original HOC adapter; `dfaed63` live native variable CMS
+filters; `8dc7785` two typing repairs to intervening commit 45f3800;
+`1cd9950` native CMS reference props/pickers and nested component queries;
+`66a0979` source-backed third-party code components and reader 0.1.2.
+
+New source files: `code-adapters.ts` handles original local override HOCs;
+`code-components.ts` handles original local or external React render functions,
+converts supported scalar property controls and validates native code files.
+External components have their own identity per source export/version and remain
+imported instances inside generated design masters. Unsupported controls, imports,
+or unreadable source produce diagnostics, never placeholder frames. Original
+Fragment returns and defaultProps are now retained inside a native outer host.
+The adapter's React body/props/callback/style, strict TS and dedicated submit have
+automated proof; NO live third-party source capture has been received yet.
+
+Reader 0.1.2 is copied to `/home/rost/Документи/Framer-Native-Reader`. An asynchronous
+question asks the user to reload it and save a fresh project JSON or report the
+error. Do not ask for the same action again while pending. Latest verified input
+is still the 0.1.1 Downloads file below. Old source capture has no external code.
+
+CMS now supports strict variable-driven equality/set membership, typed preview
+defaults and overrides, native filter-panel editing, responsive upgrade/downgrade,
+reference props and their CMS picker, rename/duplicate metadata preservation and
+reference-default validation at submit. Nested component query/text bindings emit
+through native generators. Dynamic outer-field predicates and per-state query
+changes still need adapters. Full Project Card still needs Video, visibility,
+image-prop and other integration; do not mark it complete.
+
+New static page emitter shares scene/instance emission with native masters,
+retains semantic Frame tags, native typography breakpoints, route conflicts and
+third-party instances through the real dedicated submit. It blocks unresolved
+templates, CMS page context, actions and per-breakpoint control changes. This is
+a foundation, not a complete page/compiler implementation. Live boolean visibility
+and whole-value image props now round-trip in masters; instance image domains
+still require an adapter. Active masks/effects/forms/cursors diagnose until mapped;
+static scale, sticky offset and userSelect are preserved.
+
+Latest focused converter/import validation: 176 tests passed in 16 files; reader:
+26 tests passed; `npx tsc --noEmit` passed. Earlier reference/registry/mutation/picker
+run: 244 tests passed. Logs `/tmp/framer-thirdparty-*` and the local SDD ledger.
+
+CUA browser2/tab1 is signed in to Framer, currently Project Card with Video selected.
+Current DOM script entry is STILL web.D7IYYINP.mjs. The canvas sandbox's different
+app hash is not an editor-entry change. Video panel confirms Playing Yes, Poster
+Yes, Loop Yes, Controls Hide, Muted Yes, Cover, Radius 0, Start Time 0%; editor DOM
+has autoplay=false but Playing Yes is its runtime control. No source project edits.
+New tab was marked for handoff.
+
+The full suite found 58 failures in 16 modules. A read-only git-archive mirror of
+resume baseline 45f3800 reproduced the EXACT same 58 test names: currentOnly=[],
+baselineOnly=[] (resume-baseline-comparison.json). Do not claim the suite green.
+An additional asynchronous history error exposed PagesSeoSection test mock/cleanup
+defects; its mock now implements getSnapshot and afterEach seals pending history,
+RED then GREEN 5/5. Full-suite cleanup needs re-verification. No Revyme page has been imported in this resumed run.
+
+Next: inspect the fresh capture if the user provides it; complete Card/image and
+visibility/native code adapters, then assemble pages/templates/effects in a pure
+compiler and wire the existing validated submit into paste/history. Do not build
+another commit engine or use rejected old converters.
+
+## Historical pause checkpoint
 
 Paused explicitly at the user's request because their usage limits are running out.
 Do not resume work until the user asks. Implementation is roughly 40%; the full

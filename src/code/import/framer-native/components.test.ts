@@ -17,6 +17,31 @@ import capturedCms from './fixtures/captured-cms.json';
 import { parseComponentInfoFromSource } from '../../components/component-registry';
 
 describe('editable native component emission', () => {
+  it('uses the native whole-value image prop contract for a bound image fill', () => {
+    const asset = 'data:framer/asset-reference,photo.jpg';
+    const data = { id: 'image-master', __class: 'SmartComponentNode', baseVariantId: 'image-base', variables: [{ id: 'photo', type: 'image', initialValue: asset }], children: [{ id: 'image-base', __class: 'FrameNode', children: [{ id: 'image-child', parentid: 'image-base', __class: 'FrameNode', width: 100, height: 80, widthType: 0, heightType: 0, children: [], fillEnabled: true, fillType: 'image', fillImage: { type: 'variableReference', providerId: 'image-master', id: 'photo' } }] }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set()), prop = nativePropName(identity, data.id, 'photo');
+    const result = emitNativeComponents(graph, identity, { assets: { [asset]: '/assets/photo.jpg' } });
+    expect(result.diagnostics).toEqual([]);
+    const file = result.files[0];
+    expect(parseJSXToNodes(file.code).get(identity['image-child'])?.styles.backgroundImage).toBe('url(/assets/photo.jpg)');
+    expect(parseJSXToNodes(file.code).get(identity['image-child'])?.styleVariables?.backgroundImage).toBe(prop);
+    expect(parseJSXToNodes(file.code, { [prop]: 'url(/assets/other.jpg)' }).get(identity['image-child'])?.styles.backgroundImage).toBe('url(/assets/other.jpg)');
+    expect(checkFile(file.code, { kind: 'component', path: file.path })).toEqual([]);
+  });
+  it('keeps a source boolean visibility prop live and editable instead of baking its preview', () => {
+    const data = { id: 'visibility-master', __class: 'SmartComponentNode', baseVariantId: 'visible-base', variables: [{ id: 'shown', name: 'Shown', type: 'boolean', initialValue: false }], children: [{ id: 'visible-base', __class: 'FrameNode', children: [{ id: 'visible-child', parentid: 'visible-base', __class: 'FrameNode', layout: 'stack', children: [], visible: { type: 'variableReference', providerId: 'visibility-master', id: 'shown' } }] }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set()), prop = nativePropName(identity, data.id, 'shown');
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    const file = result.files[0];
+    expect(parseJSXToNodes(file.code).get(identity['visible-child'])?.styles.display).toBe('none');
+    expect(parseJSXToNodes(file.code, { [prop]: 'true' }).get(identity['visible-child'])?.styles.display).toBe('flex');
+    expect(parseJSXToNodes(file.code).get(identity['visible-child'])?.styleVariables?.display).toBe(prop);
+    expect(checkFile(file.code, { kind: 'component', path: file.path })).toEqual([]);
+  });
   it('remaps a source reference prop default and retains its collection in native metadata', () => {
     const sourceCollection = buildSourceGraph(capturedCms).nodes.get('DwP_tmnNO')!;
     const variable = { id: 'category', name: 'Category', type: 'collectionreference', dataIdentifier: 'local-module:collection/DwP_tmnNO:default', initialValue: sourceCollection.children[0] };

@@ -8,14 +8,13 @@ import { buildCreatedMaster } from '../../generation/create-component-gen';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
 import { updateVariantTextInCode } from '../../generation/generator-crud';
-import { bindTextVariableForVariantInCode } from '../../features/variable-ops';
+import { bindTextVariableForVariantInCode, createConditionalVariableInCode } from '../../features/variable-ops';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { CSS_NEUTRAL_FALLBACK, setConditionalStyleInCode, updateVariantStyleInCode } from '../../generation/generator-styles';
 import { updateVariantEntryTransition } from '../../generation/generator-motion-transition';
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
 import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
-import { escapeJsxText } from '../../parsing/rich-text-runs';
 import { addConnectionToCode, rebuildConnections } from '../../variants/connection-config';
 import { forwardEventPropsToComponentRoot } from '../../variants/event-prop-forwarding';
 import { parseVariantConfig, serializeVariantConfig, type VariantConfig } from '../../variants/variant-config';
@@ -24,8 +23,10 @@ import { mapSourceConnections } from './interactions';
 import { resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
+import { emitSourceScene } from './scene';
+import { applySourceInstances } from './scene-instances';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
-import { resolveSourceBinding, emitSourceQueryInCode, bindSourcePropInCode } from './bindings';
+import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
@@ -39,12 +40,6 @@ export function nativePropName(identity: Record<string, string>, scopeId: string
   return `prop${nodeIdToVarNameCapitalised(target)}`;
 }
 
-function styleLiteral(styles: Record<string, string>): string {
-  return `{ ${Object.entries(styles).map(([key, value]) => {
-    const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(value);
-    return `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key)}: ${binding ? binding[1] : JSON.stringify(value)}`;
-  }).join(', ')} }`;
-}
 function valueExpression(value: unknown, node: ResolvedSourceNode, context: SourceMappingContext, property: string, identity?: Record<string, string>): string {
   if (identity && context.graph && sourceRecord(value)?.type === 'variableReference') {
     const binding = resolveSourceBinding(value, { graph: context.graph, identity, nodeId: node.sourceId });
@@ -93,13 +88,15 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const variables = sourceVariables(graph, scopeId);
       const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(identity, scopeId, String(variable.id))}}`]));
       const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, ...options };
-      const sourceIds: string[] = [];
-      const nested = new Map<string, string>();
-      const codeInstances = new Map<string, NativeCodeComponentRef>();
-      const links: string[] = [];
-      const slots: string[] = [];
+      const visibilityFor = (node: ResolvedSourceNode) => {
+        if (!sourceRecord(node.properties.visible)) return;
+        const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
+        if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'boolean') throw new Error(`Visibility binding on ${node.sourceId} requires its native adapter`);
+        return binding;
+      };
       const stylesFor = (node: ResolvedSourceNode, parent?: ResolvedSourceNode) => {
-        const styles = mapSourceStyles(node, { ...context, parent });
+        const styleNode = visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node;
+        const styles = mapSourceStyles(styleNode, { ...context, parent });
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, context).styles);
         if (parent && ['stack', 'grid'].includes(String(parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
           styles.order = String(parent.children.indexOf(node.sourceId));
@@ -110,39 +107,25 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         }
         return styles;
       };
-      const emit = (id: string, parent?: ResolvedSourceNode): string => {
-        const node = resolveSourceNode(graph, id);
-        const targetId = identity[id];
-        if (!targetId) throw new Error(`Missing node identity ${id}`);
-        sourceIds.push(id);
-        const styles = stylesFor(node, parent);
-        let tag = 'div', content = '';
-        let attributes = '';
-        if (node.kind === 'RichTextNode') {
-          const text = mapSourceText(node, context);
-          tag = text.tag;
-          attributes = Object.entries(text.attributes).map(([key, value]) => ` ${key}=${JSON.stringify(value)}`).join('');
-          content = text.binding ? `{${valueExpression(text.binding, node, context, 'textContent', identity)}}` : text.jsx;
-        } else if (node.kind === 'SlotNode') {
-          slots.push(id); content = '{children}';
-        } else if (node.kind === 'CodeComponentNode') {
-          const match = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier));
-          if (match) nested.set(id, match[1]);
-          else {
-            const ref = options.codeComponents?.[String(node.properties.codeComponentIdentifier)];
-            if (!ref) throw new Error(`Source code component adapter required on ${id}: ${String(node.properties.codeComponentIdentifier)}`);
-            if (node.children.length) throw new Error(`Source code component slots on ${id} require their native adapter`);
-            codeInstances.set(id, ref);
-          }
-          content = node.children.map(child => emit(child, node)).join('\n');
-        } else if (node.kind === 'FrameNode') {
-          content = node.children.map(child => emit(child, node)).join('\n');
-        } else throw new Error(`Unsupported component child ${node.kind} on ${id}`);
-        if (node.properties.link !== undefined && node.properties.link !== null && node.properties.link !== '') links.push(id);
-        const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
-        return `<${tag} data-id="${targetId}"${label}${attributes} style={${styleLiteral(styles)}}>${content}</${tag}>`;
+      const { jsx: body, sourceIds, nested, codeInstances, links, slots } = emitSourceScene(graph, identity, primaryId, context, {
+        stylesFor, expressionFor: (value, node, property) => valueExpression(value, node, context, property, identity), codeComponents: options.codeComponents,
+      });
+      const cssImageProps = new Set<string>();
+      const renderedStates = sourceIds.flatMap(id => [resolveSourceNode(graph, id), ...scope.children.filter(state => state !== primaryId).map(state => resolveSourceNode(graph, id, state))]);
+      for (const node of renderedStates) {
+        const ref = sourceRecord(node.properties.fillImage);
+        if (node.properties.fillEnabled === true && node.properties.fillType === 'image' && ref?.type === 'variableReference' && ref.providerId === scopeId && typeof ref.id === 'string') {
+          if (!variables.some(variable => variable.id === ref.id && variable.type === 'image')) throw new Error(`Image fill on ${node.sourceId} does not reference an image prop`);
+          cssImageProps.add(ref.id);
+        }
+      }
+      const assertImageDomain = (value: unknown) => {
+        const ref = sourceRecord(value);
+        if (ref?.type === 'variableReference' && ref.providerId === scopeId && cssImageProps.has(String(ref.id))) throw new Error(`Image prop ${String(ref.id)} is used both as a CSS value and as a plain URL; a native image-domain adapter is required`);
+        if (Array.isArray(value)) value.forEach(assertImageDomain);
+        else if (ref) Object.values(ref).forEach(assertImageDomain);
       };
-      const body = emit(primaryId);
+      for (const node of renderedStates) for (const [key, value] of Object.entries(node.properties)) if (!['fillImage', 'children', 'replicaInfo'].includes(key)) assertImageDomain(value);
       const created = buildCreatedMaster({ name, props: [], from: identity[primaryId], variants: Object.values(names).filter(value => value !== 'default').map(name => ({ name })) }, { sourceCode: `"use client"; export default function Source(){return (${body});}` });
       if ('error' in created) throw new Error(created.error);
       let code = created.masterCode;
@@ -181,6 +164,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           if (!options.assets?.[initial]) throw new Error(`Missing asset default for ${String(variable.id)}`);
           initial = options.assets[initial];
         }
+        if (sourceType === 'image' && cssImageProps.has(String(variable.id)) && initial) initial = `url(${initial})`;
         const parameter = sourceType === 'eventhandler' ? t.identifier(prop) : t.assignmentPattern(t.identifier(prop), t.valueToNode(initial) as t.Expression);
         params.properties.push(t.objectProperty(t.identifier(prop), parameter, false, true));
         const tsType = sourceType === 'eventhandler' ? t.tsFunctionType(null, [], t.tsTypeAnnotation(t.tsVoidKeyword())) : sourceType === 'number' ? t.tsNumberKeyword() : sourceType === 'boolean' ? t.tsBooleanKeyword() : t.tsStringKeyword();
@@ -191,54 +175,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         params.properties.push(t.objectProperty(t.identifier('children'), t.identifier('children'), false, true));
         const member = t.tsPropertySignature(t.identifier('children'), t.tsTypeAnnotation(t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ReactNode'))))); member.optional = true; types.members.push(member);
       }
-      const importedComponents = new Set<string>();
-      for (const [id, masterId] of nested) {
-        const tagName = nativeComponentName(identity, masterId);
-        if (!importedComponents.has(tagName)) ast.program.body.unshift(t.importDeclaration([t.importDefaultSpecifier(t.identifier(tagName))], t.stringLiteral(`@/components/${tagName}`)));
-        importedComponents.add(tagName);
-        findFirstElementByDataId(ast, identity[id], (_path, element) => {
-          element.openingElement.name = t.jsxIdentifier(tagName);
-          if (element.closingElement) element.closingElement.name = t.jsxIdentifier(tagName);
-          const instance = graph.nodes.get(id)!;
-          for (const [key, control] of Object.entries(instance.raw)) {
-            if (!key.startsWith('$control__')) continue;
-            const value = sourceRecord(control)?.value;
-            const sourceProp = key.slice(10);
-            const attribute = sourceProp === 'variant' ? 'initialVariant' : nativePropName(identity, masterId, sourceProp);
-            const expression = sourceProp === 'variant'
-              ? t.stringLiteral(sourceStateNames({ graph, scopeId: masterId }, identity)[String(value)] ?? (() => { throw new Error(`Missing instance state ${String(value)}`); })())
-              : sourceRecord(value)?.type === 'variableReference' ? t.identifier(valueExpression(value, resolveSourceNode(graph, id), context, key)) : t.valueToNode(value) as t.Expression;
-            element.openingElement.attributes.push(t.jsxAttribute(t.jsxIdentifier(attribute), t.jsxExpressionContainer(expression)));
-          }
-        });
-      }
-      code = generate(ast).code;
-      for (const [id, ref] of codeInstances) {
-        const instanceAst = parseJSX(code)!;
-        if (!importedComponents.has(ref.name)) instanceAst.program.body.unshift(t.importDeclaration([t.importDefaultSpecifier(t.identifier(ref.name))], t.stringLiteral(`@/${ref.path.replace(/\.tsx$/, '')}`)));
-        importedComponents.add(ref.name);
-        findFirstElementByDataId(instanceAst, identity[id], (_path, element) => {
-          element.openingElement.name = t.jsxIdentifier(ref.name);
-          if (element.closingElement) element.closingElement.name = t.jsxIdentifier(ref.name);
-        });
-        code = generate(instanceAst).code;
-        const source = graph.nodes.get(id)!.raw;
-        const values = new Map(Object.entries(ref.controls).filter(([, control]) => control.default !== undefined).map(([prop, control]) => [prop, control.default as unknown]));
-        for (const [key, control] of Object.entries(source)) {
-          if (!key.startsWith('$control__')) continue;
-          const prop = key.slice(10);
-          if (!ref.controls[prop]) throw new Error(`Code component control ${prop} on ${id} has no native adapter`);
-          values.set(prop, sourceRecord(control)?.value);
-        }
-        for (const [prop, raw] of values) {
-          let value = raw;
-          if (typeof value === 'string' && value.startsWith('data:framer/asset-reference,')) {
-            if (!options.assets?.[value]) throw new Error(`Missing code component asset on ${id}:${prop}`);
-            value = options.assets[value];
-          }
-          code = bindSourcePropInCode(code, identity[id], prop, value, { graph, identity, nodeId: id });
-        }
-      }
+      code = applySourceInstances(generate(ast).code, { jsx: body, sourceIds, nested, codeInstances, links, slots }, graph, identity, options.assets);
       for (const variable of variables) {
         const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);
@@ -261,6 +198,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
+          if ((sourceRecord(base.properties.visible) || sourceRecord(state.properties.visible)) && JSON.stringify(base.properties.visible) !== JSON.stringify(state.properties.visible)) throw new Error(`Per-state visibility binding on ${id} requires its native adapter`);
           if (base.properties.dataIdentifier !== undefined) {
             for (const property of ['dataIdentifier', 'collectionFilters', 'collectionFiltersOperator', 'collectionOrder', 'collectionReverse', 'collectionStartOffset', 'collectionLimit', 'collectionPaginationPageSize']) {
               if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state query ${property} on ${id} requires its native adapter`);
@@ -334,6 +272,12 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const prop = nativePropName(identity, scopeId, callbackId);
           const expression = states.length === scope.children.length ? prop : `${states.map(state => `initialVariant === ${JSON.stringify(state)}`).join(' || ')} ? ${prop} : undefined`;
           code = setTagAttr(code, identity[id], 'onClick', `{${expression}}`);
+        }
+        const visibility = visibilityFor(base);
+        if (visibility) {
+          for (const stateId of scope.children.filter(stateId => stateId !== primaryId)) if (stylesFor(resolveSourceNode(graph, id, stateId), parentId ? resolveSourceNode(graph, parentId, stateId) : undefined).display !== baseStyles.display) throw new Error(`Per-state display with a visibility binding on ${id} requires its native adapter`);
+          const variable = variables.find(variable => variable.id === visibility.sourceId)!;
+          code = createConditionalVariableInCode(code, identity[id], 'display', visibility.name, baseStyles.display || 'block', 'none', variable.initialValue === true ? 'true' : 'false');
         }
       }
       for (const id of [...sourceIds].reverse()) {

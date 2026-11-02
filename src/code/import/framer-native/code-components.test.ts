@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import ts from 'typescript';
 import * as React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { parseComponentControlsMeta } from '../../components/controls-parser';
 import { checkFile } from '../../oracle/check-file';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
@@ -98,6 +99,24 @@ it('emits strict TypeScript while keeping the original React function body', () 
   host.getSourceFile = (name, version, onError, create) => name === path ? ts.createSourceFile(name, file.code, ts.ScriptTarget.ES2020, true, ts.ScriptKind.TSX) : read(name, version, onError, create);
   const program = ts.createProgram([path], options, host);
   expect(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))).toEqual([]);
+});
+
+it('keeps a third-party fragment and defaultProps inside a native host without rewriting its body', () => {
+  const source = `import * as React from 'react';
+    export function Widget(props) { return <><span>{props.title}</span><span>{props.count}</span></>; }
+    Widget.defaultProps = { title: 'Original fallback', count: 7 };`;
+  const result = emit(input(source));
+  expect(result.diagnostics).toEqual([]);
+  const file = result.files[0];
+  expect(checkFile(file.code, { kind: 'code-component', path: file.path })).toEqual([]);
+  const exports: Record<string, any> = {};
+  const js = ts.transpileModule(file.code, { fileName: file.path, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+  new Function('exports', 'require', js)(exports, (module: string) => module === 'react' ? React : { withResponsiveProps });
+  const html = renderToStaticMarkup(React.createElement(exports.default, { title: undefined, count: 0, 'data-id': 'source-instance', style: { width: '240px' } }));
+  expect(html).toContain('Original fallback');
+  expect(html).toContain('<span>0</span>');
+  expect(html).toContain('data-id="source-instance"');
+  expect(html).toContain('width:240px');
 });
 
 it('keeps third-party instances inside a native design master with their original props', () => {

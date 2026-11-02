@@ -85,7 +85,6 @@ function convertCodeComponent(code: string, exportedName: string, module: Record
     for (const statement of program.get('body')) {
       if (statement.isExpressionStatement()) {
         const value = statement.node.expression;
-        if (t.isAssignmentExpression(value) && t.isMemberExpression(value.left) && t.isIdentifier(value.left.object, { name: selectedName }) && t.isIdentifier(value.left.property, { name: 'defaultProps' })) throw new Error('CODE_DEFAULT_PROPS_ADAPTER_REQUIRED');
         if (t.isCallExpression(value) && controlsFunction && t.isIdentifier(value.callee, { name: controlsFunction })) {
           if (value.arguments.length !== 2 || !t.isIdentifier(value.arguments[0])) throw new Error('CODE_CONTROLS_UNSUPPORTED');
           if (value.arguments[0].name === selectedName) Object.assign(controls, convertControls(value.arguments[1], controlTypes));
@@ -105,11 +104,10 @@ function convertCodeComponent(code: string, exportedName: string, module: Record
         else statement.remove();
       }
     }
-    if (selectedName !== nativeName) {
-      if (program.scope.hasBinding(nativeName)) throw new Error('CODE_COMPONENT_NAME_CONFLICT');
-      program.scope.rename(selectedName!, nativeName);
-      selectedName = nativeName;
-    }
+    if (selectedName === nativeName) {
+      const renamed = program.scope.generateUidIdentifier(`${nativeName}Source`).name;
+      program.scope.rename(selectedName, renamed); selectedName = renamed;
+    } else if (program.scope.hasBinding(nativeName)) throw new Error('CODE_COMPONENT_NAME_CONFLICT');
   } });
   const annotations = sourceRecord(sourceRecord(module?.save)?.annotations);
   const defaults = sourceRecord(annotations?.default);
@@ -119,7 +117,20 @@ function convertCodeComponent(code: string, exportedName: string, module: Record
   // Metadata describes this real code component; it never exempts it from Oracle.
   const label = String(module?.title ?? selectedName).replace(/["\n\r]/g, ' ').replace(/\*\//g, '*\\/');
   const header = `"use client";\n/** @label "${label}" */\n/** @defaultWidth ${width} */\n/** @defaultHeight ${height} */\n/** @controls ${JSON.stringify(controls).replace(/\*\//g, '*\\/')} */\n`;
-  return ensureNamedImport(`${header}${generate(ast).code}\nexport default withResponsiveProps(${selectedName});\n`, '@revyme/runtime', ['withResponsiveProps']);
+  // Framer gives arbitrary code a frame. Keep the author's DOM/props inside
+  // an ordinary native host so layout edits do not overwrite their root styles.
+  const host = `
+function ${nativeName}({ style, 'data-id': nodeId, 'data-name': nodeName, ...props }: any) {
+  const defaults = (${selectedName} as any).defaultProps ?? {};
+  const resolved: Record<string, any> = { ...props };
+  for (const key of Object.keys(defaults)) if (resolved[key] === undefined) resolved[key] = defaults[key];
+  return <div data-id={nodeId} data-name={nodeName} style={{ position: 'relative', ...style }}>
+    <${selectedName} {...resolved} style={{ width: '100%', height: '100%' }} />
+  </div>;
+}
+export default withResponsiveProps(${nativeName});
+`;
+  return ensureNamedImport(`${header}${generate(ast).code}\n${host}`, '@revyme/runtime', ['withResponsiveProps']);
 }
 
 function convertControls(value: t.Node | null | undefined, controlTypeName: string | undefined): Record<string, ComponentControlDef> {

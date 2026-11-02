@@ -48,6 +48,14 @@ const alignment = (value: unknown) => value === 'start' ? 'flex-start' : value =
 export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMappingContext): Record<string, string> {
   trace.fn('framer-native.mapSourceStyles', { sourceId: node.sourceId });
   const p = node.properties;
+  // These are active source behaviors, not decorative metadata; never drop them.
+  for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
+    if (p[key] === true) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+  }
+  for (const key of ['masks', 'boxShadows', 'pageEffects']) {
+    if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+  }
+  if (p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   const result: Record<string, string> = { boxSizing: 'border-box', position: 'relative', display: 'block' };
   const set = (key: string, value: string | undefined) => { if (value !== undefined) result[key] = value; };
   const value = (key: string) => sourceStyleValue(p[key], node, context, key);
@@ -76,6 +84,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     result.position = String(p.position);
     for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null) set(key, px(p[key]));
   }
+  if (p.position === 'sticky' && p.positionStickyTop != null) set('top', px(p.positionStickyTop));
   for (const axis of ['width', 'height'] as const) {
     const type = p[`${axis}Type`], size = p[axis];
     const main = parent?.layout === 'stack' && (axis === 'width' ? parent.stackDirection === 'horizontal' : parent.stackDirection !== 'horizontal');
@@ -117,8 +126,9 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     else if (p.fillType === 'image') {
       const image = value('fillImage');
       const url = image && context.assets?.[image];
-      if (url) {
-        result.backgroundImage = `url(${JSON.stringify(url)})`;
+      const binding = image && /^\{[A-Za-z_$][\w$]*\}$/.test(image);
+      if (url || binding) {
+        result.backgroundImage = url ? `url(${JSON.stringify(url)})` : image!;
         result.backgroundPosition = 'center'; result.backgroundRepeat = 'no-repeat';
         result.backgroundSize = p.fillImageResize === 'fit' ? 'contain' : 'cover';
       } else mappingDiagnostic(context, node, 'fillImage', 'SOURCE_ASSET_UNRESOLVED');
@@ -153,7 +163,14 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   if (p.overflow) result.overflow = p.overflow === 'clip' ? 'clip' : String(p.overflow);
   for (const key of ['opacity', 'zIndex']) if (p[key] !== undefined) set(key, value(key));
   if (p.blendingMode) result.mixBlendMode = String(p.blendingMode);
-  if (p.rotation) result.transform = `rotate(${p.rotation}deg)`;
+  const transforms: string[] = [];
+  if (p.rotation) transforms.push(`rotate(${p.rotation}deg)`);
+  if (p.scale !== undefined && p.scale !== 1) {
+    const scale = value('scale');
+    if (scale !== undefined) transforms.push(`scale(${scale})`);
+  }
+  if (transforms.length) result.transform = transforms.join(' ');
+  if (p.userSelect !== undefined) set('userSelect', value('userSelect'));
   if (p.visible === false) result.display = 'none';
   else if (p.visible !== undefined && p.visible !== true) {
     const visible = value('visible');
