@@ -74,6 +74,29 @@ test('rejects unsupported editor builds without importing a guessed module', asy
     importModule() { throw new Error('must not import'); } }), /EDITOR_BUILD_UNSUPPORTED/);
 });
 
+test('reports the actual unsupported editor entry without URL queries or unrelated scripts', async () => {
+  let imported = false;
+  await assert.rejects(resolveEditorSourceAdapter({
+    scriptUrls: ['https://app.framerstatic.com/web.NEWBUILD.mjs?private=value', 'https://example.com/private.js?token=secret'], href,
+    importModule() { imported = true; },
+  }), error => /EDITOR_BUILD_UNSUPPORTED/.test(error.message)
+    && error.message.includes('https://app.framerstatic.com/web.NEWBUILD.mjs')
+    && !error.message.includes('private') && !error.message.includes('secret'));
+  assert.equal(imported, false);
+});
+
+test('distinguishes a missing editor entry from a detected unsupported editor version', async () => {
+  await assert.rejects(resolveEditorSourceAdapter({ scriptUrls: ['https://example.com/unrelated.js'], href,
+    importModule() { throw new Error('must not import'); } }), /EDITOR_BUILD_UNSUPPORTED.*No editor entry found/);
+});
+
+test('reports observed resource entries for diagnosis without selecting an unverified adapter', async () => {
+  await assert.rejects(resolveEditorSourceAdapter({ scriptUrls: [], resourceUrls: ['https://app.framerstatic.com/web.NEWBUILD.mjs?private=value'], href,
+    importModule() { throw new Error('must not import'); } }), error => error.message.includes('No editor entry found')
+      && error.message.includes('Observed resources: https://app.framerstatic.com/web.NEWBUILD.mjs')
+      && !error.message.includes('private'));
+});
+
 test('resolves asset URLs through the observed native helper rather than guessing a CDN', async () => {
   const engine = makeEngine();
   const calls = [];
@@ -87,6 +110,46 @@ test('resolves asset URLs through the observed native helper rather than guessin
   });
   assert.deepEqual(calls, ['https://app.framerstatic.com/chunk-VNJKMZPM.mjs', 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs']);
   assert.equal((await adapter.readAssets())[0].url, 'https://native.example/image.png');
+});
+
+test('reads the new editor through its verified singleton export and native image URL helper', async () => {
+  const engine = makeEngine();
+  engine.stores.assetStore.assetMap.image.mimeType = 'image/svg+xml';
+  const calls = [];
+  const adapter = await resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.D5JMWQLK.mjs'], href,
+    async importModule(url) {
+      calls.push(url);
+      if (url.endsWith('chunk-IIU4YMHS.mjs')) return { Ac: engine };
+      if (url.endsWith('chunk-ZNFBUDMT.mjs')) return {
+        l: () => 'https://native.example/assets/original.svg',
+        j: () => 'https://native.example/images/original.svg',
+      };
+      throw new Error(`Unexpected module ${url}`);
+    },
+  });
+  assert.equal((await adapter.readContext({ mode: 'page' })).editorBuild, 'https://app.framerstatic.com/web.D5JMWQLK.mjs');
+  assert.deepEqual(calls, ['https://app.framerstatic.com/chunk-IIU4YMHS.mjs', 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs']);
+  assert.deepEqual((await adapter.readAssets()).map(asset => [asset.url, asset.imageUrl]), [['https://native.example/assets/original.svg', 'https://native.example/images/original.svg']]);
+});
+
+test('does not add an image helper URL to ordinary downloadable files', async () => {
+  const engine = makeEngine();
+  engine.stores.assetStore.assetMap.image.mimeType = 'application/pdf';
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href,
+    resolveAssetUrl: () => 'https://native.example/original.pdf',
+    resolveAssetImageUrl() { throw new Error('Image helper must not process files'); },
+  });
+  assert.equal((await adapter.readAssets())[0].imageUrl, undefined);
+});
+
+test('keeps raster assets on their original file URL', async () => {
+  const engine = makeEngine();
+  engine.stores.assetStore.assetMap.image.mimeType = 'image/png';
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href,
+    resolveAssetUrl: () => 'https://native.example/original.png',
+    resolveAssetImageUrl() { throw new Error('Raster source must use the original file URL'); },
+  });
+  assert.equal((await adapter.readAssets())[0].url, 'https://native.example/original.png');
 });
 
 async function codeEngine() {

@@ -6,6 +6,7 @@ export async function readEditorSource(request) {
   console.debug('[framer-native] source capture started', { mode: request.mode });
   const adapter = await resolveEditorSourceAdapter({
     scriptUrls: Array.from(document.scripts, script => script.src).filter(Boolean),
+    resourceUrls: performance.getEntriesByType('resource').map(entry => entry.name),
     href: () => location.href,
     importModule: url => import(url),
   });

@@ -1,4 +1,4 @@
-# Framer Native → Revyme — source reader 0.1.2
+# Framer Native → Revyme — source reader 0.1.4
 
 Це перша діагностична частина нового імпортера. Вона захоплює оригінальну модель
 редактора; конвертація й вставка в Revyme ще не підключені.
@@ -38,6 +38,17 @@ Captured definitions включають повні declarations проєкту; 
 scope сторонні source files читаються за залежностями обраного дерева;
 недоступне стороннє джерело дає `SOURCE_CODE_UNAVAILABLE`. Цей шлях має
 автоматичні тести; живий capture зовнішнього коду ще не підтверджений.
+
+Версія 0.1.3 уточнює `EDITOR_BUILD_UNSUPPORTED`: повідомлення містить фактичні
+editor entry URLs із document scripts та окремо спостережені resource entries.
+Query/hash, сторонні script URLs і вміст проєкту в цю діагностику не потрапляють.
+Resource entries використовуються лише для діагностики, без автоматичного вибору
+адаптера. Нову збірку редактора треба окремо перевірити; обмеження не вимкнено.
+
+Версія 0.1.4 додає адаптер для `web.D5JMWQLK.mjs`: singleton та оригінальний
+source accessor перевірені за модулями цієї збірки. Native URL для SVG отримується
+через helper редактора, а растрові файли зберігають оригінальний file URL.
+Повний live capture цієї версії ще потребує перевірки.
 
 Перший adapter прив'язаний до спостереженого editor entrypoint
 `https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.

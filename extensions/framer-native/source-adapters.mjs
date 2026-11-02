@@ -4,19 +4,34 @@ const EDITOR_BUILDS = Object.freeze({
     engineModule: 'https://app.framerstatic.com/chunk-VNJKMZPM.mjs', engineExport: 'Fc', treeVersion: 128,
     assetModule: 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs', assetUrlExport: 'l',
   },
+  'https://app.framerstatic.com/web.D5JMWQLK.mjs': {
+    engineModule: 'https://app.framerstatic.com/chunk-IIU4YMHS.mjs', engineExport: 'Ac', treeVersion: 128,
+    assetModule: 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs', assetUrlExport: 'l', assetImageUrlExport: 'j',
+  },
 });
 
-export async function resolveEditorSourceAdapter({ scriptUrls, href, importModule }) {
+export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = [], href, importModule }) {
   const entry = scriptUrls.find(url => EDITOR_BUILDS[url]);
-  if (!entry) throw new Error('EDITOR_BUILD_UNSUPPORTED: This Framer editor build has no verified source adapter.');
+  if (!entry) {
+    const editorEntries = urls => [...new Set(urls.flatMap(value => {
+      try {
+        const url = new URL(value);
+        return url.origin === 'https://app.framerstatic.com' && /^\/web\.[A-Za-z0-9_-]+\.mjs$/.test(url.pathname)
+          ? [url.origin + url.pathname] : [];
+      } catch { return []; }
+    }))];
+    const scripts = editorEntries(scriptUrls), resources = editorEntries(resourceUrls);
+    throw new Error(`EDITOR_BUILD_UNSUPPORTED: ${scripts.length ? `Detected editor: ${scripts.join(', ')}.` : 'No editor entry found in document scripts.'} Observed resources: ${resources.join(', ') || 'none'}. Verified adapter: ${Object.keys(EDITOR_BUILDS).join(', ')}.`);
+  }
   const build = EDITOR_BUILDS[entry];
   const exports = await importModule(build.engineModule);
   const assetExports = await importModule(build.assetModule);
   if (typeof assetExports[build.assetUrlExport] !== 'function') throw new Error('ASSET_RESOLVER_UNAVAILABLE: The verified native URL helper is unavailable.');
-  return createEngineSourceAdapter(exports[build.engineExport], { editorBuild: entry, href, treeVersion: build.treeVersion, resolveAssetUrl: assetExports[build.assetUrlExport] });
+  if (build.assetImageUrlExport && typeof assetExports[build.assetImageUrlExport] !== 'function') throw new Error('ASSET_RESOLVER_UNAVAILABLE: The native image URL helper is unavailable.');
+  return createEngineSourceAdapter(exports[build.engineExport], { editorBuild: entry, href, treeVersion: build.treeVersion, resolveAssetUrl: assetExports[build.assetUrlExport], resolveAssetImageUrl: assetExports[build.assetImageUrlExport] });
 }
 
-export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersion = 128, resolveAssetUrl }) {
+export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersion = 128, resolveAssetUrl, resolveAssetImageUrl }) {
   if (!engine?.stores?.projectStore || !engine?.stores?.treeStore || !engine?.stores?.scopeStore
     || typeof engine.tree?.toJS !== 'function' || typeof engine.tree?.get !== 'function'
     || typeof engine.loadScopesThenProcess !== 'function') {
@@ -99,7 +114,10 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
       if (!map) return [];
       const values = typeof map.items === 'function' ? map.items()
         : map instanceof Map ? Array.from(map.values()) : Object.values(map);
-      return JSON.parse(JSON.stringify(Array.from(values, asset => resolveAssetUrl ? { ...asset, url: resolveAssetUrl(asset) } : asset)));
+      return JSON.parse(JSON.stringify(Array.from(values, asset => ({ ...asset,
+        ...(resolveAssetUrl ? { url: resolveAssetUrl(asset) } : {}),
+        ...(resolveAssetImageUrl && asset.mimeType === 'image/svg+xml' ? { imageUrl: resolveAssetImageUrl(asset) } : {}),
+      }))));
     },
     async readCodeFiles() {
       checkProject();
