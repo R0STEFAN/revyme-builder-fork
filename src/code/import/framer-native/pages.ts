@@ -3,7 +3,7 @@ import { checkFile } from '../../oracle/check-file';
 import { setTagAttr } from '../../generation/generator-utils';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
-import { activeSourceCodeOverride, isSourceCodeComponent, sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
+import { activeSourceCodeOverride, isSourceCodeComponent, sourceRecord, sourceVariables, sourceVariableKey, resolveSourceNode } from './source-graph';
 import { mapSourceStyles, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { sourceViewports, applyNativeResponsive } from './responsive';
@@ -14,6 +14,11 @@ import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
+import { nativePropName } from './components';
+import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
+import { createConditionalVariableInCode } from '../../features/variable-ops';
+import { updateTemplatePropsInCode } from '../../features/template-props';
+import { setTemplateRouteValueInCode } from '../../generation/template-route-gen';
 import type { NativeCodeComponentRef } from './code-components';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceNode } from './types';
 
@@ -92,6 +97,85 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       for (let suffix = 2; [...options.existingPaths].some(path => path.startsWith(`app/(${name})/`)) || [...groups.values()].includes(name); suffix++) name = `${identity[id]}-${suffix}`;
       groups.set(id, name);
     }
+    const anchors = new Set<string>(), writtenAnchors = new Set<string>();
+    const templateForPage = new Map<string, string>();
+    for (const id of pageIds) {
+      const page = graph.nodes.get(id)!;
+      const identifier = page.raw.layoutTemplateIdentifierOverride !== undefined ? page.raw.layoutTemplateIdentifierOverride : documentFor(graph, page)?.raw.layoutTemplateIdentifier;
+      if (identifier === undefined) continue;
+      const match = typeof identifier === 'string' && /^local-module:layoutTemplate\/([^:]+):default$/.exec(identifier);
+      if (!match || !groups.has(match[1])) throw new Error(`Source page template ${String(identifier)} is unavailable`);
+      templateForPage.set(id, match[1]);
+    }
+    const sectionConsumers = new Set<string>(), scrollConsumers = new Set<string>(), sourceStrings: string[] = [];
+    let hasActiveScrollVariant = false;
+    const scanConsumers = (value: unknown, scrollTargets = false): void => {
+      if (typeof value === 'string') { sourceStrings.push(value); return; }
+      if (Array.isArray(value)) { value.forEach(item => scanConsumers(item, scrollTargets)); return; }
+      const object = sourceRecord(value);
+      if (!object) return;
+      if (object.appearEffectEnabled === true) hasActiveScrollVariant = true;
+      if (object.type === 'variableReference' && typeof object.providerId === 'string' && typeof object.id === 'string') {
+        (scrollTargets ? scrollConsumers : sectionConsumers).add(sourceVariableKey(object.providerId, object.id));
+      }
+      for (const [key, item] of Object.entries(object)) if (key !== 'children') scanConsumers(item, scrollTargets || key === 'appearEffectScrollTargets');
+    };
+    for (const id of graph.reachable) {
+      const node = graph.nodes.get(id)!;
+      if (!isSourceCodeComponent(node)) scanConsumers(node.raw);
+    }
+    const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', link: 'link', scrollsectionref: 'section' };
+    const templateValue = (providerId: string, variable: Record<string, unknown>, value: unknown): string | number | boolean => {
+      const type = variable.type;
+      if (value == null) value = type === 'boolean' ? false : type === 'number' ? 0 : '';
+      if (type === 'boolean' && typeof value === 'boolean' || type === 'number' && typeof value === 'number' && Number.isFinite(value)) return value as number | boolean;
+      if (type === 'scrollsectionref' && value !== '') {
+        const target = sourceRecord(value)?.target;
+        if (typeof target !== 'string') throw new Error(`Invalid template section target ${String(target)}`);
+        if (!graph.reachable.has(target)) {
+          const key = sourceVariableKey(providerId, String(variable.id));
+          // Replica overrides may inherit activation, so any active variant keeps this check conservative.
+          if (!sectionConsumers.has(key) && !(hasActiveScrollVariant && scrollConsumers.has(key)) && !sourceStrings.some(text => text.includes(`--variable-reference-${String(variable.id)}-${providerId}`))) {
+            trace.action('framer-native.skipInactiveSectionTarget', { providerId, variableId: variable.id, target });
+            return '';
+          }
+          throw new Error(`Missing template section target ${target}`);
+        }
+        const id = resolveSourceNode(graph, target).sourceId;
+        if (!identity[id]) throw new Error(`Missing native section identity ${target}`);
+        anchors.add(id);
+        return identity[id];
+      }
+      if (type === 'link') {
+        const ref = sourceRecord(value);
+        if (ref?.type === 'webPage' && typeof ref.webPageId === 'string') value = result.routes[ref.webPageId];
+        if (typeof value === 'string') {
+          if (!ref) for (const [pageId, route] of originalRoutes) if (value === route) { value = result.routes[pageId]; break; }
+          if (!/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#|$)/i.test(String(value)) || String(value).includes('[slug]')) throw new Error(`Unsupported template link ${String(value)}`);
+        }
+      }
+      if (['string', 'color', 'link', 'scrollsectionref'].includes(String(type)) && typeof value === 'string') return value;
+      throw new Error(`Invalid template ${String(type)} value for ${String(variable.id)}`);
+    };
+    const templateProps = new Map(templateIds.map(id => [id, sourceVariables(graph, id).map(variable => {
+      const type = propTypes[String(variable.type)];
+      if (!type) throw new Error(`Source template variable ${String(variable.id)} type ${String(variable.type)} requires its native adapter`);
+      return { variable, type, name: nativePropName(identity, id, String(variable.id)), initial: templateValue(id, variable, variable.initialValue) };
+    })]));
+    const pageProps = new Map<string, Record<string, string>>();
+    for (const [pageId, templateId] of templateForPage) {
+      active = pageId;
+      const values: Record<string, string> = {};
+      for (const prop of templateProps.get(templateId)!) {
+        const control = sourceRecord(graph.nodes.get(pageId)!.raw[`$control__${String(prop.variable.id)}`]);
+        if (!control || control.value == null) continue;
+        const value = templateValue(templateId, prop.variable, control.value);
+        if (value === prop.initial) continue;
+        if (value === '') throw new Error(`Explicit empty template override ${String(prop.variable.id)} requires its native clear-value adapter`);
+        values[prop.name] = String(value);
+      }
+      pageProps.set(pageId, values);
+    }
     for (const id of ids) {
       active = id;
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
@@ -100,20 +184,22 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (isDetail && !result.routes[id]?.endsWith('/[slug]')) throw new Error('Source CMS page requires its native page-context adapter');
       if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).some(key => !['title', 'description'].includes(key))) throw new Error('Source CMS page metadata requires its native per-record adapter');
       const collection = isDetail ? nativeCollectionSlug(identity, sourceCollectionId(page.raw.dataIdentifier)) : undefined;
-      if (sourceVariables(graph, id).length) throw new Error(`Source ${isTemplate ? 'template' : 'page'} variables require their native declaration adapter`);
-      const templateIdentifier = page.raw.layoutTemplateIdentifierOverride !== undefined ? page.raw.layoutTemplateIdentifierOverride : document?.raw.layoutTemplateIdentifier;
-      let group = isTemplate ? groups.get(id) : undefined;
-      if (!isTemplate && templateIdentifier !== undefined) {
-        const match = typeof templateIdentifier === 'string' && /^local-module:layoutTemplate\/([^:]+):default$/.exec(templateIdentifier);
-        if (!match || !groups.has(match[1])) throw new Error(`Source page template ${String(templateIdentifier)} is unavailable`);
-        group = groups.get(match[1]);
-      }
+      if (!isTemplate && sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
+      const props = isTemplate ? templateProps.get(id)! : [];
+      const group = isTemplate ? groups.get(id) : groups.get(templateForPage.get(id) ?? '');
       if (!isTemplate && document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
-      const context: SourceMappingContext = { graph, diagnostics: [], assets: options.assets, supportedLoops: true, viewport: { width: viewports[0].designWidth! } };
+      const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
+      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, viewport: { width: viewports[0].designWidth! } };
+      const visibilityFor = (node: ResolvedSourceNode) => {
+        if (!sourceRecord(node.properties.visible)) return;
+        const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
+        if (!isTemplate || binding.kind !== 'variable' || binding.providerId !== id || binding.valueType !== 'boolean') throw new Error(`Source visibility on ${node.sourceId} requires its native adapter`);
+        return binding;
+      };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
-        const styles = mapSourceStyles(node, ctx);
+        const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, ctx).styles);
         if (node.sourceId === primary) {
           styles.width = '100%'; styles.position = 'relative';
@@ -132,15 +218,20 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
           if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
+          if (isTemplate && binding.kind === 'variable' && binding.providerId === id) return binding.name;
           throw new Error('Source page text requires its native binding adapter');
         },
       });
       if (isTemplate ? scene.slots.length !== 1 : scene.slots.length !== 0) throw new Error('A native template requires one children slot; pages cannot own template slots');
-      const signature = isTemplate ? 'LayoutClient({ children }: { children: React.ReactNode })' : isDetail ? 'Page({ item: serverItem }: { item?: any } = {})' : 'Page()';
+      const signature = isTemplate ? `LayoutClient({ children${props.map(prop => `, ${prop.name} = ${JSON.stringify(prop.initial)}`).join('')} }: { children: React.ReactNode${props.map(prop => `; ${prop.name}?: ${typeof prop.initial}`).join('')} })` : isDetail ? 'Page({ item: serverItem }: { item?: any } = {})' : 'Page()';
       const jsx = isTemplate ? scene.jsx : `<div data-id="root"${isDetail ? " key={String(params?.slug ?? '')}" : ''} style={{position:'relative',width:'100%'}}>${scene.jsx}</div>`;
       const detailSetup = isDetail ? `/** @cmsPage { "collection": "${collection}", "kind": "detail" } */\nimport { useParams } from 'next/navigation';\nimport { useLocale } from 'next-intl';\nimport { localizeRows } from '@revyme/runtime';\nimport rows from '@/cms/${collection}.json';\n` : '';
       const detailBody = isDetail ? 'const params = useParams(); const locale = useLocale(); const rawItem = serverItem ?? (rows.find(row => row._slug === params?.slug) ?? rows[0]); const item = rawItem ? (localizeRows([rawItem], locale)[0] || rawItem) : undefined; if (!item) return null; ' : '';
       let code = `"use client";\nimport React from 'react';\n${detailSetup}export default function ${signature} { ${detailBody}return ${jsx}; }`;
+      for (const prop of props) {
+        code = setPropTypeInCode(code, prop.name, prop.type);
+        code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
+      }
       code = applySourceInstances(code, scene, graph, identity, options.assets);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
@@ -166,6 +257,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       for (const nodeId of scene.links) {
         const node = resolveSourceNode(graph, nodeId);
         const pageLink = sourceRecord(node.properties.link);
+        if (isTemplate && pageLink?.type === 'variableReference') {
+          const binding = resolveSourceBinding(node.properties.link, { graph, identity, nodeId });
+          if (binding.kind !== 'variable' || binding.providerId !== id || binding.valueType !== 'link') throw new Error(`Template link on ${nodeId} requires its native variable adapter`);
+          code = convertToMotionLinkInCode(code, identity[nodeId]);
+          code = setTagAttr(code, identity[nodeId], 'href', `{${binding.name}}`);
+          if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
+          continue;
+        }
         let href = typeof node.properties.link === 'string' ? node.properties.link : pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? result.routes[pageLink.webPageId] : undefined;
         if (typeof href !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
         if (typeof node.properties.link === 'string') for (const [pageId, route] of originalRoutes) if (href === route) { href = result.routes[pageId]; break; }
@@ -180,6 +279,18 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
+      for (const nodeId of scene.sourceIds) {
+        if (anchors.has(nodeId)) { code = setTagAttr(code, identity[nodeId], 'id', JSON.stringify(identity[nodeId])); writtenAnchors.add(nodeId); }
+        const node = resolveSourceNode(graph, nodeId), binding = visibilityFor(node);
+        if (!binding) continue;
+        const display = stylesFor(node, context).display;
+        for (const viewport of viewports.slice(1)) if (stylesFor(resolveSourceNode(graph, nodeId, viewport.sourceStateId), context).display !== display) throw new Error(`Responsive display with a visibility binding on ${nodeId} requires its native adapter`);
+        const prop = props.find(prop => prop.name === binding.name)!;
+        code = createConditionalVariableInCode(code, identity[nodeId], 'display', prop.name, display || 'block', 'none', prop.initial === true ? 'true' : 'false');
+      }
+      if (isTemplate) for (const [pageId, templateId] of templateForPage) if (templateId === id) for (const [name, value] of Object.entries(pageProps.get(pageId)!)) code = setTemplateRouteValueInCode(code, result.routes[pageId], name, value, props.map(prop => prop.name));
+      if (!isTemplate) code = updateTemplatePropsInCode(code, pageProps.get(id) ?? {});
+      code = code.replace(/(\/\*\* @(?:propMeta|templateProps) )([\s\S]*?)( \*\/)/g, (_all, before, json, after) => before + json.replace(/\*\//g, '*\\/') + after);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
         if (isSourceCodeComponent(node)) continue;
@@ -240,6 +351,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = { ${fields.join(', ')} };\nexport default function Page(){ return <PageClient />; }\n` });
       result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
     }
+    if ([...anchors].some(id => !writtenAnchors.has(id))) throw new Error('Source template section target is outside the emitted page/template scenes');
   } catch (error) {
     result.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: active, message: error instanceof Error ? error.message : String(error) });
   }

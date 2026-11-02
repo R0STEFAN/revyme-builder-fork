@@ -7,6 +7,14 @@ import { parseCanvasConfig } from '../../project/canvas-config';
 import { checkFile } from '../../oracle/check-file';
 import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createSnapshot, createOperationContext } from '../../../../packages/automation-core/src/session';
+import { nativePropName } from './components';
+import { parseTemplateProps } from '../../features/template-props';
+import { getTemplateRouteValues } from '../../generation/template-route-parse';
+import { parsePropMeta } from '../../components/prop-meta';
+import * as React from 'react';
+import * as jsxRuntime from 'react/jsx-runtime';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ts from 'typescript';
 
 function input(): NativeTransfer {
   const label = { id: 'heading', __class: 'RichTextNode', parentid: 'desktop', children: [], html: '<h1>Привіт</h1>' };
@@ -113,4 +121,77 @@ it('preserves an inherited native template, its content slot and page assignment
   const target = { projectId: 'destination', branchId: 'main' };
   const imported = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, createOperationContext());
   expect(imported.changes).toHaveLength(4);
+});
+
+it('retains per-page template variables as native props, route values, visibility and section anchors', async () => {
+  const transfer = input();
+  transfer.definitions[1].data.layoutTemplateIdentifier = 'local-module:layoutTemplate/navigation:default';
+  Object.assign(transfer.definitions[0].data, { $control__show: { value: false }, $control__title: { value: 'Page navigation' }, $control__anchor: { value: { target: 'heading' } } });
+  const data = { id: 'navigation', __class: 'LayoutTemplateNode', parentid: 'document', baseVariantId: 'template-desktop', variables: [{ id: 'show', name: 'Show header', type: 'boolean', initialValue: true }, { id: 'title', name: 'Navigation title', type: 'string', initialValue: 'Default title' }, { id: 'anchor', name: 'Scroll section', type: 'scrollsectionref' }], children: [{ id: 'template-desktop', __class: 'FrameNode', parentid: 'navigation', width: 1200, widthType: 0, heightType: 2, children: [{ id: 'template-header', __class: 'RichTextNode', parentid: 'template-desktop', html: '<p>Default title</p>', visible: { type: 'variableReference', providerId: 'navigation', id: 'show' }, textContent: { type: 'variableReference', providerId: 'navigation', id: 'title' }, children: [] }, { id: 'template-slot', __class: 'SlotNode', parentid: 'template-desktop', children: [] }] }] };
+  transfer.definitions.push({ id: data.id, kind: data.__class, data });
+  const { result, identity } = emit(transfer);
+  expect(result.diagnostics).toEqual([]);
+  const layout = result.files.find(file => file.path.endsWith('LayoutClient.tsx'))!;
+  const page = result.files.find(file => file.path.endsWith('page.client.tsx'))!;
+  const show = nativePropName(identity, 'navigation', 'show'), title = nativePropName(identity, 'navigation', 'title'), anchor = nativePropName(identity, 'navigation', 'anchor');
+  expect(parseTemplateProps(page.code)).toMatchObject({ [show]: 'false', [title]: 'Page navigation', [anchor]: identity.heading });
+  expect(getTemplateRouteValues(layout.code, '/')).toMatchObject({ [show]: false, [title]: 'Page navigation', [anchor]: identity.heading });
+  expect(parsePropMeta(layout.code)[show]).toMatchObject({ type: 'toggle', label: 'Show header' });
+  expect(parsePropMeta(layout.code)[anchor]?.type).toBe('section');
+  expect(layout.code).toContain(`${show} ? "block" : "none"`);
+  expect(parseJSXToNodes(page.code).get(identity.heading)?.attrs.id).toBe(identity.heading);
+  const executable = ts.transpileModule(layout.code, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const exports: { default?: React.ComponentType<{ children: React.ReactNode }> } = {};
+  new Function('exports', 'require', executable)(exports, (name: string) => {
+    if (name === 'react') return React;
+    if (name === 'react/jsx-runtime') return jsxRuntime;
+    if (name === 'next/navigation') return { usePathname: () => '/' };
+    throw new Error(`Unexpected template dependency ${name}`);
+  });
+  const rendered = renderToStaticMarkup(React.createElement(exports.default!, { children: 'Page content' }));
+  expect(rendered).toContain('display:none');
+  expect(rendered).toContain('Page navigation');
+  expect(rendered).toContain('Page content');
+  expect(rendered).not.toContain('Default title');
+  const target = { projectId: 'destination', branchId: 'main' };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  data.variables.push({ id: 'link', type: 'link', name: 'Navigation link', initialValue: '' } as any);
+  Object.assign(data.children[0].children[0], { link: { type: 'variableReference', providerId: 'navigation', id: 'link' } });
+  transfer.definitions[0].data.$control__link = { value: 'https://example.com/work' };
+  const linked = emit(transfer);
+  expect(linked.result.diagnostics).toEqual([]);
+  const linkName = nativePropName(linked.identity, 'navigation', 'link');
+  expect(linked.result.files.find(file => file.path.endsWith('LayoutClient.tsx'))!.code).toContain(`href={${linkName}}`);
+  expect(parseTemplateProps(linked.result.files.find(file => file.path.endsWith('page.client.tsx'))!.code)[linkName]).toBe('https://example.com/work');
+  const relocated = emit(transfer, new Set(['app/page.client.tsx']));
+  expect(relocated.result.diagnostics).toEqual([]);
+  expect(getTemplateRouteValues(relocated.result.files.find(file => file.path.endsWith('LayoutClient.tsx'))!.code, relocated.result.routes.home)[nativePropName(relocated.identity, 'navigation', 'show')]).toBe(false);
+  transfer.definitions[0].data.$control__show = { value: 'false' };
+  expect(emit(transfer).result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('Invalid template boolean') }));
+});
+
+it('skips missing section targets used only by inactive Scroll Variant metadata', () => {
+  const transfer = input();
+  transfer.definitions[1].data.layoutTemplateIdentifier = 'local-module:layoutTemplate/navigation:default';
+  transfer.definitions[0].data.$control__anchor = { value: { target: 'deleted-section' } };
+  const header: Record<string, unknown> = {
+    id: 'template-header', __class: 'RichTextNode', html: '<p>Site navigation</p>', children: [],
+    appearEffectScrollTargets: [{ id: 'old-target', target: { type: 'variableReference', providerId: 'navigation', id: 'anchor' }, variant: 'deleted-variant' }],
+  };
+  const data = { id: 'navigation', __class: 'LayoutTemplateNode', baseVariantId: 'template-desktop', variables: [{ id: 'anchor', name: 'Scroll section', type: 'scrollsectionref' }], children: [{ id: 'template-desktop', __class: 'FrameNode', width: 1200, widthType: 0, heightType: 2, children: [header, { id: 'template-slot', __class: 'SlotNode', children: [] }] }] };
+  transfer.definitions.push({ id: data.id, kind: data.__class, data });
+  const { result, identity } = emit(transfer);
+  expect(result.diagnostics).toEqual([]);
+  expect(parseJSXToNodes(result.files.find(file => file.path.endsWith('LayoutClient.tsx'))!.code).get(identity['template-header'])?.textContent).toBe('Site navigation');
+  expect(parseTemplateProps(result.files.find(file => file.path.endsWith('page.client.tsx'))!.code)).not.toHaveProperty(nativePropName(identity, 'navigation', 'anchor'));
+  header.appearEffectEnabled = true;
+  expect(emit(transfer).result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('Missing template section target') }));
+  delete header.appearEffectEnabled;
+  header.link = { type: 'variableReference', providerId: 'navigation', id: 'anchor' };
+  expect(emit(transfer).result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('Missing template section target') }));
+  delete header.link;
+  delete header.appearEffectScrollTargets;
+  expect(emit(transfer).result.diagnostics).toEqual([]);
+  transfer.definitions[0].data.$control__anchor = { value: { target: 123 } };
+  expect(emit(transfer).result.diagnostics.length).toBeGreaterThan(0);
 });

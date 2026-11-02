@@ -454,7 +454,7 @@ function styleValueEndsWithPercent(val: t.ObjectProperty['value']): boolean {
  * `booleanPropNames`) and both branches plain strings, which is the only form
  * the resolver's own regex matches.
  */
-function isTogglePropTernary(
+export function isTogglePropTernary(
   val: t.ObjectProperty['value'],
   booleanProps: Set<string> | undefined,
 ): boolean {

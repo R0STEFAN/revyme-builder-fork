@@ -37,6 +37,20 @@ const hides = (code: string) =>
   checkFile(code, { kind: 'component' }).filter((x) => x.code === 'DISPLAY_TOGGLE_VISIBILITY');
 
 describe('display driven by a boolean prop', () => {
+  it('accepts the native template toggle shape but keeps page/local ternaries blocked', () => {
+    const template = `'use client';
+import React from 'react';
+export default function LayoutClient({children, footerVisible = true}: {children: React.ReactNode; footerVisible?: boolean}) {
+  return <div data-id="root" style={{position:'relative',width:'100%'}}><footer data-id="footer" style={{display: footerVisible ? 'block' : 'none'}}>Footer</footer>{children}</div>;
+}`;
+    const codes = (source: string, kind: 'template' | 'page') => checkFile(source, { kind }).map(issue => issue.code);
+    expect(codes(template, 'template')).not.toContain('DISPLAY_TOGGLE_VISIBILITY');
+    expect(codes(template, 'template')).not.toContain('UNRESOLVABLE_TERNARY');
+    expect(codes(template, 'page')).toContain('UNRESOLVABLE_TERNARY');
+    const local = template.replace('children, footerVisible = true', 'children').replace('return <div', 'const footerVisible = true; return <div');
+    expect(codes(local, 'template')).toContain('DISPLAY_TOGGLE_VISIBILITY');
+    expect(codes(local, 'template')).toContain('UNRESOLVABLE_TERNARY');
+  });
   it('is accepted', () => {
     expect(hides(COMPONENT("position: 'relative', display: iconVisible ? 'block' : 'none'"))).toEqual([]);
   });

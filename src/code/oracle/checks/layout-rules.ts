@@ -7,6 +7,7 @@ import * as t from '@babel/types';
 import { isSafeCmsText } from './cms-safe-text';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, hasAttr, isCodeComponentSource } from './shared';
 import type { OracleViolation } from './shared';
+import { isTogglePropTernary } from './style-object';
 
 /** FLEX/GRID CHILD ORDER — a direct, in-flow child of a flex/grid container
  *  must carry an explicit `order` (number literal, string number, or a
@@ -78,7 +79,7 @@ function checkSlotComponentInlineChildren(ast: t.File, v: OracleViolation[]): vo
  * element ternaries (`cond ? <A/> : <B/>`) are conditional render, a separate concern.
  * PAGE only — design COMPONENTS legitimately use variant ternaries (`variant === 'v' ? …`).
  */
-function checkUnresolvableTernary(ast: t.File, v: OracleViolation[], isCmsDetail = false): void {
+function checkUnresolvableTernary(ast: t.File, v: OracleViolation[], isCmsDetail = false, templateBooleanProps?: Set<string>): void {
   const isValueTernary = (ce: t.ConditionalExpression): boolean =>
     !t.isJSXElement(ce.consequent) && !t.isJSXFragment(ce.consequent)
     && !t.isJSXElement(ce.alternate) && !t.isJSXFragment(ce.alternate);
@@ -101,6 +102,7 @@ function checkUnresolvableTernary(ast: t.File, v: OracleViolation[], isCmsDetail
       const val = path.node.value;
       if (val?.type !== 'JSXExpressionContainer' || !t.isObjectExpression(val.expression)) return;
       for (const prop of val.expression.properties) {
+        if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key, { name: 'display' }) || t.isStringLiteral(prop.key, { value: 'display' })) && isTogglePropTernary(prop.value, templateBooleanProps)) continue;
         if (t.isObjectProperty(prop) && t.isConditionalExpression(prop.value) && isValueTernary(prop.value)) {
           flag(prop.loc?.start.line, 'a style value');
         }

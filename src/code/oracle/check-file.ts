@@ -105,7 +105,7 @@ const IMPORT_ALLOWLIST = [
 /** Comment blocks that are FEATURE ANNOTATIONS, not prose — always allowed.
  *  @propMeta + @pageVariables are the page-variables feature's blocks (live
  *  prime-rule find 2026-06-10: a builder-written page bounced NO_COMMENTS). */
-const ANNOTATION_RE = /@name|@controls|@label|@comment|@canvas|@propMeta|@pageVariables|@cmsPage|@useResponsiveText|@responsiveList-(begin|end)/;
+const ANNOTATION_RE = /@name|@controls|@label|@comment|@canvas|@propMeta|@templateProps|@pageVariables|@cmsPage|@useResponsiveText|@responsiveList-(begin|end)/;
 
 /** A page may carry the builder's exact, JSON-backed ruler metadata. */
 function isRulerGuidesAnnotation(raw: string): boolean {
@@ -250,7 +250,7 @@ export function checkFile(
       message: `The file does not parse: ${e.message ?? 'unknown parse error'}. Return the complete corrected file.`,
     }];
   }
-  fileBooleanProps = booleanPropNames(ast);
+  fileBooleanProps = booleanPropNames(ast, isTemplate);
 
   // ── tier 2 — DIALECT ───────────────────────────────────────────────────────
 
@@ -1454,7 +1454,7 @@ export function checkFile(
   //    toggle it on a page; state-driven values MUST be page variables switched by
   //    a Set-Variable interaction. (Design components use variant ternaries, which
   //    DO resolve — so this never runs for them.) ─────────────────────────────────
-  if (kind === 'page') checkUnresolvableTernary(ast, v, isCmsDetail);
+  if (kind === 'page') checkUnresolvableTernary(ast, v, isCmsDetail, isTemplate ? fileBooleanProps : undefined);
 
   // ── @canvas VIEWPORT CONFIG (pages) — the canvas renders one tile per
   //    viewport entry; a malformed block silently collapses the page to a

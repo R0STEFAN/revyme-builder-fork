@@ -18,6 +18,41 @@ scenes, native hosts/visibility/image props and static native page pairs.
 The current checkpoint additionally contains template closure/slot assignment,
 pure compiler assembly and the live-capture regressions described below.
 
+## Template props and inactive section targets — 2026-11-02
+
+Native template props now preserve primitive declarations, labels/types, page route
+values (including boolean false), bound text/links, visibility toggles and actual
+HTML section IDs. An execution regression renders the generated LayoutClient and
+checks page-specific content, display:none and its content slot. Dedicated submit
+accepts the generated fixture. Empty overrides clearing nonempty defaults and
+responsive display changes combined with visibility remain explicit adapter gaps.
+
+The missing ci18Cvnd5/wHARDegNd IDs in the actual capture occur only in template
+Scroll Section control values, consumed by old appearEffectScrollTargets arrays.
+A controlled live Framer test on a temporary duplicate proved the mapping: adding
+Scroll Variant, choosing Section in view and Phone generated
+appearEffectEnabled:true, appearEffectTrigger:onScrollTarget and the exact Phone
+variant ID. Four native Undo actions removed the test settings and duplicate;
+restored native clipboard effect fields exactly equal the before fields. Evidence:
+ignored SDD scroll-variant-controlled-proof.json and /tmp/framer-scroll-variant-proof.png.
+The original effect was disabled; those records are inactive legacy metadata.
+
+User ruling: skip unresolved inactive bindings that do not affect layout/design.
+The importer now skips missing section targets only when unused or referenced
+solely by inactive Scroll Variant arrays; functional uses, malformed targets and
+potentially active uses still diagnose. It traces every skip. No source IDs,
+project IDs, routes or editor builds are hardcoded into this rule.
+
+Verification: focused 3 files / 53 tests passed; broad 90 files / 1327 passed,
+4 failed in sections-blueprints.test.ts (header-editorial, header-glass,
+hero-editorial, hero-typewall). The same four were independently reproduced in
+baseline-45f3800; the broad suite is not green. TypeScript and production build
+passed. Actual capture conversion preflight no longer blocks on missing sections;
+next page diagnostic is an unsupported OverlayNode. This preflight used planned
+media URLs without network/upload proof and persisted no destination files.
+Full-project import/parity remains incomplete; active overlay/scroll behavior,
+custom cursor bindings, document metadata and remaining media gaps still need work.
+
 ## Working conversion and explicit gaps
 
 - Original local HOCs on ordinary nodes retain their callback body/order through

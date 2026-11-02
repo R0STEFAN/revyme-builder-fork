@@ -194,6 +194,12 @@ describe('setTagAttr / getJsonAttr / setJsonAttr / stripJsonAttr', () => {
     const out = setTagAttr(code, 'n1', 'ref', '{myRef}');
     expect(out).toContain('<div ref={myRef} data-id="n1"');
   });
+  it('adds a DOM id without deleting the canvas data-id attribute', () => {
+    const out = setTagAttr(code, 'n1', 'id', '"section-one"');
+    expect(out).toContain('data-id="n1"');
+    expect(out).toContain('id="section-one"');
+    expect(setTagAttr(out, 'n1', 'id', null)).toContain('data-id="n1"');
+  });
 
   it('returns null / original code for a missing node', () => {
     expect(getJsonAttr(code, 'nope', 'data-fx')).toBeNull();

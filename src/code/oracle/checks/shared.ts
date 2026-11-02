@@ -223,9 +223,10 @@ export function isCodeComponentSource(code: string): boolean {
  * must be a destructured object that also carries `style` or `initialVariant`
  * (a component, not a helper), and the prop must default to a boolean
  * literal. A `useState` flag, a page-level variable or a local const can
- * never match.
+ * never match. Templates instead accept the default-export entry's own props
+ * beside its children slot, which the native route map resolves per page.
  */
-export function booleanPropNames(ast: t.File): Set<string> {
+export function booleanPropNames(ast: t.File, template = false): Set<string> {
   const out = new Set<string>();
   traverse(ast, {
     Function(p) {
@@ -234,7 +235,8 @@ export function booleanPropNames(ast: t.File): Set<string> {
       const keys = p0.properties
         .filter((x): x is t.ObjectProperty => t.isObjectProperty(x) && t.isIdentifier(x.key))
         .map((x) => (x.key as t.Identifier).name);
-      if (!keys.includes('style') && !keys.includes('initialVariant')) return;
+      const templateEntry = template && p.parentPath.isExportDefaultDeclaration() && keys.includes('children');
+      if (template ? !templateEntry : !keys.includes('style') && !keys.includes('initialVariant')) return;
       for (const prop of p0.properties) {
         if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)
             && t.isAssignmentPattern(prop.value) && t.isBooleanLiteral(prop.value.right)) {

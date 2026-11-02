@@ -46,7 +46,7 @@ export function scanGates(code: string): Map<string, number> {
  *  object or an arrow body can't end the value early. Shared by the strip and
  *  read helpers below so both agree on where an attribute ends. */
 export function findTagAttrRange(tag: string, attr: string): { start: number; end: number } | null {
-  const m = tag.match(new RegExp(`\\s*\\b${escapeRegExp(attr)}=`));
+  const m = tag.match(new RegExp(`\\s+${escapeRegExp(attr)}\\s*=`));
   if (!m || m.index === undefined) return null;
   let i = m.index + m[0].length;
   while (i < tag.length && /\s/.test(tag[i])) i++;
