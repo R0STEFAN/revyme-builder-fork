@@ -6,7 +6,7 @@ import { exportedOverrideFunctions, overrideRenderFunction, validateNativeOverri
 import { generate } from '../../generation/generator-utils';
 import { normalizeBabelTraverse } from '../../generation/variant-visibility-gen';
 import type { CodeOverrideRef } from '../../generation/code-override-gen';
-import { sourceRecord } from './source-graph';
+import { activeSourceCodeOverride, sourceRecord } from './source-graph';
 import type { NativeCompileResult, SourceGraph } from './types';
 
 export interface NativeCodeOverrideResult extends NativeCompileResult {
@@ -23,8 +23,8 @@ export function emitNativeCodeOverrides(graph: SourceGraph, identity: Record<str
     if (Array.isArray(value)) { value.forEach(item => scan(item, sourceId)); return; }
     const object = sourceRecord(value);
     if (!object) return;
-    if (object.codeOverrideEnabled === true) {
-      const identifier = object.codeOverrideIdentifier;
+    const identifier = activeSourceCodeOverride(object);
+    if (identifier) {
       const match = typeof identifier === 'string' && /^local-module:(codeFile\/[^:]+):([A-Za-z_$][\w$]*)$/.exec(identifier);
       if (!match) result.diagnostics.push({ code: 'CODE_SOURCE_UNAVAILABLE', sourceId, property: 'codeOverrideIdentifier', message: `Original override source unavailable: ${String(identifier)}` });
       else {

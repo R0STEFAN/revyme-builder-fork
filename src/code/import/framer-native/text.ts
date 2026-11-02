@@ -27,6 +27,12 @@ const cssNames: Record<string, string> = {
   'text-decoration-thickness': 'textDecorationThickness', 'font-open-type-features': 'fontFeatureSettings',
 };
 
+function normalizeSourceLineHeight(styles: Record<string, string>): void {
+  if (styles.lineHeight?.endsWith('em')) styles.lineHeight = styles.lineHeight.slice(0, -2);
+  else if (styles.lineHeight?.endsWith('%')) styles.lineHeight = String(parseFloat(styles.lineHeight) / 100);
+  else if (styles.lineHeight?.endsWith('px') && styles.fontSize?.endsWith('px') && parseFloat(styles.fontSize) > 0) styles.lineHeight = String(parseFloat(styles.lineHeight) / parseFloat(styles.fontSize));
+}
+
 export function mapSourceTypography(p: SourceProperties): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [source, target] of Object.entries({ fontSize: 'fontSize', textColor: 'color', textAlignment: 'textAlign', textTransform: 'textTransform', textDecoration: 'textDecoration' })) {
@@ -36,9 +42,7 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
     const value = p[key];
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'string') out[key] = `${value[0]}${value[1]}`;
   }
-  if (out.lineHeight?.endsWith('em')) out.lineHeight = out.lineHeight.slice(0, -2);
-  else if (out.lineHeight?.endsWith('%')) out.lineHeight = String(parseFloat(out.lineHeight) / 100);
-  else if (out.lineHeight?.endsWith('px') && out.fontSize?.endsWith('px') && parseFloat(out.fontSize) > 0) out.lineHeight = String(parseFloat(out.lineHeight) / parseFloat(out.fontSize));
+  normalizeSourceLineHeight(out);
   // The captured Google-font descriptor includes its explicit variation axes.
   if (typeof p.font === 'string' && p.font.startsWith('GF;') && p.font.includes('-variable-')) {
     out.fontFamily = JSON.stringify(p.font.slice(3).split('-variable-')[0]);
@@ -72,13 +76,19 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       if (context.graph.nodes.has(attrs['data-styles-preset'])) styles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
       else mappingDiagnostic(context, node, 'data-styles-preset', 'SOURCE_TYPOGRAPHY_MISSING');
     }
-    for (const [key, value] of Object.entries(parseStyleString(attrs.style ?? ''))) {
+    const declarations = parseStyleString(attrs.style ?? '');
+    for (const [key, value] of Object.entries(declarations)) {
+      if (key === '--font-selector') {
+        if (!styles.fontFamily && !declarations['--framer-font-family'] && !declarations['font-family']) mappingDiagnostic(context, node, key, 'SOURCE_FONT_ADAPTER_REQUIRED');
+        continue;
+      }
       const target = key.startsWith('--framer-') ? cssNames[key.slice(9)] : toCamel(key);
-      if (target) {
+      if (target && !target.startsWith('-')) {
         const mapped = sourceStyleValue(value, node, context, key);
         if (mapped !== undefined) styles[target] = mapped;
       } else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_STYLE_UNSUPPORTED');
     }
+    normalizeSourceLineHeight(styles);
     return { attrs, styles };
   };
   const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {

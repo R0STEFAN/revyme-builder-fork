@@ -13,6 +13,11 @@ const emit = (input = captured) => {
 };
 
 describe('original code override adapter', () => {
+  it('does not invent an override when Framer enables the empty override picker by default', () => {
+    const input = structuredClone(captured);
+    delete (input.definitions[0].data as Record<string, unknown>).codeOverrideIdentifier;
+    expect(emit(input)).toMatchObject({ files: [], overrides: {}, diagnostics: [] });
+  });
   it('preserves the captured HOC callback order and smooth scrolling through native wrapping', () => {
     const result = emit();
     expect(result.diagnostics).toEqual([]);

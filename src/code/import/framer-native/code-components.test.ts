@@ -65,6 +65,13 @@ it('retains a third-party React component as native editable code with its contr
   expect(element.props['data-id']).toBe('native-instance');
   expect(element.props.children).toEqual(['Preserved', ': ', 4]);
 });
+it('does not require the source of an unused external module listed in the project assets', () => {
+  const value = input();
+  value.rootIds.push('externalModules');
+  value.definitions.push({ id: 'externalModules', kind: 'ExternalModulesListNode', data: { id: 'externalModules', __class: 'ExternalModulesListNode', children: [{ id: 'unused-vendor', __class: 'ExternalModuleNode', codeComponentIdentifier: 'module:unused-vendor/save/Unused.tsx:Unused', children: [] }] } });
+  expect(emit(value).diagnostics).toEqual([]);
+  expect(emit(value).files).toHaveLength(1);
+});
 
 it('also adapts original local code files using the captured module save', () => {
   const value = input();

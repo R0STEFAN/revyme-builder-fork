@@ -6,6 +6,19 @@ const node = (html: string, extra = {}): ResolvedSourceNode => ({ id: 'text', so
 const context = () => ({ diagnostics: [] as TransferDiagnostic[] });
 
 describe('editable original rich text', () => {
+  it('uses the actual font CSS while treating --font-selector as editor metadata', () => {
+    const c = context();
+    const text = mapSourceText(node('<p style="--framer-font-family: Zalando Sans, sans-serif; --font-selector: R0Y7WmFsYW5kbyBTYW5zLTgwMA==; --framer-font-weight: 800">Title</p>'), c);
+    expect(text.styles).toEqual({ fontFamily: 'Zalando Sans, sans-serif', fontWeight: '800' });
+    expect(c.diagnostics).toEqual([]);
+    const unresolved = context();
+    mapSourceText(node('<p style="--font-selector: original-font-id; --foreign-css: 10px">Title</p>'), unresolved);
+    expect(unresolved.diagnostics.map(item => item.property)).toEqual(expect.arrayContaining(['--font-selector', '--foreign-css']));
+  });
+  it.each([['0.8em', '0.8'], ['150%', '1.5'], ['30px', '1.25']])('normalizes inline line-height %s to the native ratio %s', (height, ratio) => {
+    const text = mapSourceText(node(`<p style="--framer-font-size: 24px; --framer-line-height: ${height}">Title</p>`), context());
+    expect(text.styles.lineHeight).toBe(ratio);
+  });
   it('preserves literal braces, entities, whitespace and inline links in valid JSX', () => {
     const text = mapSourceText(node('<p>A &amp; B {draft} <a href="/works?a=1&amp;b=2">more</a><br>next</p>'), context());
     expect(text.plainText).toBe('A & B {draft} more\nnext');

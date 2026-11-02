@@ -16,6 +16,12 @@ function transfer(...data: ReturnType<typeof node>[]): NativeTransfer {
 }
 
 describe('original editor source graph', () => {
+  it('includes an inherited page template without pulling every sibling page into the closure', () => {
+    const input = transfer(node('page', { __class: 'WebPageNode', parentid: 'document' }), node('document', { __class: 'RootNode', layoutTemplateIdentifier: 'local-module:layoutTemplate/template:default', children: [] }), node('template', { __class: 'LayoutTemplateNode', children: [node('slot', { __class: 'SlotNode' })] }), node('sibling', { __class: 'WebPageNode', parentid: 'document' }));
+    const graph = buildSourceGraph(input);
+    expect([...graph.reachable].sort()).toEqual(['page', 'slot', 'template']);
+    expect(graph.diagnostics).toEqual([]);
+  });
   it('materializes the real six-state capture without mutating the source', () => {
     const before = JSON.stringify(capturedUnderline);
     const graph = buildSourceGraph(capturedUnderline);

@@ -20,7 +20,7 @@ import { forwardEventPropsToComponentRoot } from '../../variants/event-prop-forw
 import { parseVariantConfig, serializeVariantConfig, type VariantConfig } from '../../variants/variant-config';
 import { sourceStateNames } from './interactions';
 import { mapSourceConnections } from './interactions';
-import { resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
+import { activeSourceCodeOverride, resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { emitSourceScene } from './scene';
@@ -204,7 +204,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
               if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state query ${property} on ${id} requires its native adapter`);
             }
           }
-          const override = (node: ResolvedSourceNode) => node.properties.codeOverrideEnabled === true ? String(node.properties.codeOverrideIdentifier) : '';
+          const override = (node: ResolvedSourceNode) => activeSourceCodeOverride(node.properties) ?? '';
           if (override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
           if (base.kind === 'CodeComponentNode') {
             const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
@@ -295,8 +295,8 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       code = forwardEventPropsToComponentRoot(code);
       for (const id of sourceIds) {
         const node = resolveSourceNode(graph, id);
-        if (node.properties.codeOverrideEnabled !== true) continue;
-        const identifier = String(node.properties.codeOverrideIdentifier);
+        const identifier = activeSourceCodeOverride(node.properties);
+        if (!identifier) continue;
         const ref = options.overrides?.[identifier];
         if (!ref) throw new Error(`Original code override adapter required on ${id}: ${identifier}`);
         code = setCodeOverridesInCode(code, identity[id], [ref]);

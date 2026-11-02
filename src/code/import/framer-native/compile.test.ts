@@ -1,0 +1,81 @@
+import { expect, it } from 'vitest';
+import { compileNativeTransfer } from './compile';
+import type { NativeTransfer } from './types';
+import { framerImportSubmitOperation } from '../../../../packages/automation-core/src/operations/framer-import';
+import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
+
+function transfer(): NativeTransfer {
+  const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
+  const page = { id: 'home', __class: 'WebPageNode', parentid: 'document', baseVariantId: 'desktop', children: [{ id: 'desktop', __class: 'FrameNode', name: 'Desktop', width: 1200, widthType: 0, heightType: 2, children: [{ id: 'instance', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default', children: [], width: 200, widthType: 0, heightType: 2 }] }] };
+  const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
+  return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
+}
+
+it('compiles a complete native candidate deterministically without mutating source or destination', async () => {
+  const source = transfer(), before = JSON.stringify(source);
+  const existingFiles = new Map([['app/page.client.tsx', 'existing Home'], ['app/page.tsx', 'existing wrapper']]);
+  const compiled = compileNativeTransfer(source, { existingFiles, mode: 'create' });
+  expect(compiled.diagnostics).toEqual([]);
+  expect(compiled.files).toHaveLength(3);
+  expect(compiled.files.some(file => existingFiles.has(file.path))).toBe(false);
+  expect(compileNativeTransfer(source, { existingFiles, mode: 'create' })).toEqual(compiled);
+  expect(JSON.stringify(source)).toBe(before);
+  expect([...existingFiles.values()]).toEqual(['existing Home', 'existing wrapper']);
+  const target = { projectId: 'destination', branchId: 'main' };
+  const result = await framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), {
+    files: compiled.files, mode: 'create', target, expectedRevision: 0,
+    sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds },
+  }, createOperationContext());
+  expect(result.diagnostics).toEqual([]);
+  expect(result.changes).toHaveLength(3);
+});
+
+it('returns no partial files if any required original asset or behavior is unavailable', () => {
+  const source = transfer();
+  const page = source.definitions[0].data;
+  (page.children as Record<string, unknown>[])[0].masks = [{ maskType: 'image', maskImage: 'data:framer/asset-reference,missing.svg' }];
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'ASSET_DEFINITION_MISSING' }));
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ property: 'masks' }));
+});
+
+it('reports unsupported paste context and malformed captures without touching a destination', () => {
+  expect(compileNativeTransfer(transfer(), { existingFiles: new Map(), mode: 'paste' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'NATIVE_TARGET_ADAPTER_REQUIRED' })] });
+  expect(compileNativeTransfer({}, { existingFiles: new Map(), mode: 'create' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'SOURCE_CAPTURE_INVALID' })] });
+});
+it.each(['metadata', 'font', 'token'])('does not report a complete candidate while required %s semantics are missing', kind => {
+  const source = transfer();
+  if (kind === 'metadata') source.definitions[2].data.webMetadata = { language: 'uk' };
+  const frame = (source.definitions[1].data.children as Record<string, any>[])[0];
+  if (kind === 'token') Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-theme, red)' });
+  if (kind === 'font') frame.children[0].html = '<p style="font-family: Custom Font">Original text</p>';
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: kind === 'metadata' ? 'SOURCE_METADATA_ADAPTER_REQUIRED' : kind === 'font' ? 'SOURCE_FONT_ADAPTER_REQUIRED' : 'SOURCE_TOKEN_ADAPTER_REQUIRED' }));
+});
+it('reports the missing original third-party source rather than substituting a visual frame', () => {
+  const source = transfer(), identifier = 'module:vendor/pinned/Widget.tsx:Widget';
+  const frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  frame.children[0].codeComponentIdentifier = identifier;
+  source.definitions.push({ id: 'vendor', kind: 'ExternalModuleNode', data: { id: 'vendor', __class: 'ExternalModuleNode', codeComponentIdentifier: identifier, children: [], intrinsicWidth: 200, intrinsicHeight: 100 } });
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'CODE_SOURCE_UNAVAILABLE', sourceId: identifier }));
+});
+it('reports a source-only declaration with no importable content instead of a successful empty import', () => {
+  const source = transfer();
+  const data = { id: 'empty', __class: 'LocalModulesListNode', children: [] };
+  source.rootIds = [data.id]; source.definitions = [{ id: data.id, kind: data.__class, data }];
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_EMPTY_IMPORT' }));
+});
+it('blocks an unadapted link prop default after namespacing instead of linking back to the existing Home', () => {
+  const source = transfer(), master = source.definitions[1].data;
+  master.variables = [{ id: 'destination', type: 'link', initialValue: '/' }];
+  const frame = (master.children as Record<string, any>[])[0];
+  frame.children[0].link = { type: 'variableReference', providerId: 'card', id: 'destination' };
+  const result = compileNativeTransfer(source, { existingFiles: new Map([['app/page.client.tsx', 'existing Home']]), mode: 'create' });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_LINK_ADAPTER_REQUIRED' }));
+});

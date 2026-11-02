@@ -3,7 +3,7 @@ import { checkFile } from '../../oracle/check-file';
 import { setTagAttr } from '../../generation/generator-utils';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
-import { sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
+import { activeSourceCodeOverride, sourceRecord, sourceVariables, resolveSourceNode } from './source-graph';
 import { mapSourceStyles, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { sourceViewports, applyNativeResponsive } from './responsive';
@@ -33,7 +33,7 @@ function documentFor(graph: SourceGraph, page: SourceNode): SourceNode | undefin
     id = node.raw.parentid;
   }
 }
-function routeFor(graph: SourceGraph, page: SourceNode): string {
+export function sourcePageRoute(graph: SourceGraph, page: SourceNode): string {
   const segment = (graph.byKind.get('RouteSegmentNode') ?? []).map(id => graph.nodes.get(id)!).find(node => node.raw.webPageId === page.id);
   let route: unknown;
   if (segment) {
@@ -57,27 +57,43 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
   trace.fn('framer-native.emitPages');
   const result: NativePageResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], routes: {} };
   if (result.diagnostics.length) return result;
-  const ids = (graph.byKind.get('WebPageNode') ?? []).filter(id => graph.reachable.has(id)).sort();
+  const pageIds = (graph.byKind.get('WebPageNode') ?? []).filter(id => graph.reachable.has(id)).sort();
+  const templateIds = (graph.byKind.get('LayoutTemplateNode') ?? []).filter(id => graph.reachable.has(id)).sort();
+  const ids = [...templateIds, ...pageIds];
   if (!ids.length) return result;
   let active: string | undefined;
   try {
-    const originalRoutes = new Map(ids.map(id => [id, routeFor(graph, graph.nodes.get(id)!)]));
-    if (new Set(originalRoutes.values()).size !== ids.length) throw new Error('Duplicate source page routes');
+    const originalRoutes = new Map(pageIds.map(id => [id, sourcePageRoute(graph, graph.nodes.get(id)!)]));
+    if (new Set(originalRoutes.values()).size !== pageIds.length) throw new Error('Duplicate source page routes');
     const used = new Set([...options.existingPaths].filter(path => /^app\/.+page(?:\.client)?\.tsx$|^app\/page(?:\.client)?\.tsx$/.test(path)).map(path => routeOfFile(path).toLowerCase()));
     let prefix = '';
     const collides = (prefix: string) => [...originalRoutes.values()].some(route => used.has((prefix + (route === '/' ? '' : route) || '/').toLowerCase()) || /^\/api(?:\/|$)/.test(prefix + route));
     if (collides(prefix)) {
-      prefix = `/${identity[ids[0]]}`;
-      for (let suffix = 2; collides(prefix); suffix++) prefix = `/${identity[ids[0]]}-${suffix}`;
+      prefix = `/${identity[pageIds[0]]}`;
+      for (let suffix = 2; collides(prefix); suffix++) prefix = `/${identity[pageIds[0]]}-${suffix}`;
     }
     for (const [id, route] of originalRoutes) result.routes[id] = prefix + (route === '/' ? '' : route) || '/';
+    const groups = new Map<string, string>();
+    for (const id of templateIds) {
+      let name = identity[id];
+      if (!name) throw new Error(`Missing template identity ${id}`);
+      for (let suffix = 2; [...options.existingPaths].some(path => path.startsWith(`app/(${name})/`)) || [...groups.values()].includes(name); suffix++) name = `${identity[id]}-${suffix}`;
+      groups.set(id, name);
+    }
     for (const id of ids) {
       active = id;
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
+      const isTemplate = page.kind === 'LayoutTemplateNode';
       if (page.raw.dataIdentifier !== undefined) throw new Error('Source CMS page requires its native page-context adapter');
-      if (sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
-      if (page.raw.layoutTemplateIdentifierOverride || document?.raw.layoutTemplateIdentifier) throw new Error('Source page template requires its native template adapter');
-      if (document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
+      if (sourceVariables(graph, id).length) throw new Error(`Source ${isTemplate ? 'template' : 'page'} variables require their native declaration adapter`);
+      const templateIdentifier = page.raw.layoutTemplateIdentifierOverride !== undefined ? page.raw.layoutTemplateIdentifierOverride : document?.raw.layoutTemplateIdentifier;
+      let group = isTemplate ? groups.get(id) : undefined;
+      if (!isTemplate && templateIdentifier !== undefined) {
+        const match = typeof templateIdentifier === 'string' && /^local-module:layoutTemplate\/([^:]+):default$/.exec(templateIdentifier);
+        if (!match || !groups.has(match[1])) throw new Error(`Source page template ${String(templateIdentifier)} is unavailable`);
+        group = groups.get(match[1]);
+      }
+      if (!isTemplate && document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const context: SourceMappingContext = { graph, diagnostics: [], assets: options.assets, viewport: { width: viewports[0].designWidth! } };
@@ -97,22 +113,25 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         return styles;
       };
       const scene = emitSourceScene(graph, identity, primary, context, {
-        stylesFor: (node, parent) => stylesFor(node, { ...context, parent }), codeComponents: options.codeComponents,
+        stylesFor: (node, parent) => stylesFor(node, { ...context, parent }), codeComponents: options.codeComponents, template: isTemplate,
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
           if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
           throw new Error('Source page text requires its native binding adapter');
         },
       });
-      if (scene.slots.length) throw new Error('Page content slots require the source template adapter');
-      let code = `"use client";\nimport React from 'react';\nexport default function Page() { return <div data-id="root" style={{position:'relative',width:'100%'}}>${scene.jsx}</div>; }`;
+      if (isTemplate ? scene.slots.length !== 1 : scene.slots.length !== 0) throw new Error('A native template requires one children slot; pages cannot own template slots');
+      const signature = isTemplate ? 'LayoutClient({ children }: { children: React.ReactNode })' : 'Page()';
+      const jsx = isTemplate ? scene.jsx : `<div data-id="root" style={{position:'relative',width:'100%'}}>${scene.jsx}</div>`;
+      let code = `"use client";\nimport React from 'react';\nexport default function ${signature} { return ${jsx}; }`;
       code = applySourceInstances(code, scene, graph, identity, options.assets);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
         for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length) throw new Error(`Source page action ${property} requires its native adapter`);
-        if (node.properties.codeOverrideEnabled === true) {
-          const ref = options.overrides?.[String(node.properties.codeOverrideIdentifier)];
-          if (!ref) throw new Error(`Source page override ${String(node.properties.codeOverrideIdentifier)} is unavailable`);
+        const override = activeSourceCodeOverride(node.properties);
+        if (override) {
+          const ref = options.overrides?.[override];
+          if (!ref) throw new Error(`Source page override ${override} is unavailable`);
           code = setCodeOverridesInCode(code, identity[nodeId], [ref]);
         }
         for (const viewport of viewports.slice(1)) {
@@ -142,10 +161,16 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
-      const route = result.routes[id], folder = 'app' + (route === '/' ? '' : route);
-      const path = `${folder}/page.client.tsx`;
-      const violations = checkFile(code, { kind: 'page', path, projectFiles: new Set([path]) });
+      const route = result.routes[id], folder = 'app' + (group ? `/(${group})` : '') + (isTemplate || route === '/' ? '' : route);
+      const path = `${folder}/${isTemplate ? 'LayoutClient' : 'page.client'}.tsx`;
+      const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`)]);
+      const violations = checkFile(code, { kind: isTemplate ? 'template' : 'page', path, projectFiles: projectedPaths });
       if (violations.length) throw new Error(`Native page validation: ${violations.map(violation => violation.code).join(', ')}`);
+      if (isTemplate) {
+        result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" });
+        result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+        continue;
+      }
       const pageMeta = sourceRecord(page.raw.webMetadata), globalMeta = sourceRecord(document?.raw.webMetadata);
       const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
       result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = ${JSON.stringify(metadata)};\nexport default function Page(){ return <PageClient />; }\n` });

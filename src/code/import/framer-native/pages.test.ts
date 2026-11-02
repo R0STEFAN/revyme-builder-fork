@@ -73,3 +73,20 @@ it('rejects breakpoint changes to source code controls instead of silently keepi
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('$control__title') }));
 });
+it('preserves an inherited native template, its content slot and page assignment', async () => {
+  const transfer = input();
+  transfer.definitions[1].data.layoutTemplateIdentifier = 'local-module:layoutTemplate/navigation:default';
+  const data = { id: 'navigation', __class: 'LayoutTemplateNode', name: 'Navigation', baseVariantId: 'template-desktop', children: [{ id: 'template-desktop', __class: 'FrameNode', width: 1200, widthType: 0, heightType: 2, layout: 'stack', stackDirection: 'vertical', children: [{ id: 'template-header', __class: 'RichTextNode', html: '<p>Site navigation</p>', children: [] }, { id: 'template-slot', __class: 'SlotNode', children: [] }] }] };
+  transfer.definitions.push({ id: data.id, kind: data.__class, data });
+  const { result, identity } = emit(transfer);
+  expect(result.diagnostics).toEqual([]);
+  const clientPath = `app/(${identity.navigation})/LayoutClient.tsx`;
+  const files = new Map(result.files.map(file => [file.path, file.code]));
+  expect(files.get(clientPath)).toContain('{children}');
+  expect(files.has(`app/(${identity.navigation})/page.client.tsx`)).toBe(true);
+  expect(parseJSXToNodes(files.get(clientPath)!).get(identity['template-header'])?.textContent).toBe('Site navigation');
+  expect(checkFile(files.get(clientPath)!, { kind: 'template', path: clientPath, projectFiles: new Set(files.keys()) })).toEqual([]);
+  const target = { projectId: 'destination', branchId: 'main' };
+  const imported = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, createOperationContext());
+  expect(imported.changes).toHaveLength(4);
+});

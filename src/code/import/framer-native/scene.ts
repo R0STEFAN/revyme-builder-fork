@@ -27,6 +27,7 @@ export interface SourceSceneOptions {
   stylesFor(node: ResolvedSourceNode, parent?: ResolvedSourceNode): Record<string, string>;
   expressionFor(value: unknown, node: ResolvedSourceNode, property: string): string;
   codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>;
+  template?: boolean;
 }
 
 /** One source traversal for native page/template and design-master JSX. */
@@ -37,6 +38,11 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
     const node = resolveSourceNode(graph, id), targetId = identity[id];
     if (!targetId) throw new Error(`Missing node identity ${id}`);
     result.sourceIds.push(id);
+    if (node.kind === 'SlotNode' && options.template) {
+      if (parent?.sourceId !== rootId || node.properties.visible === false || node.children.length) throw new Error(`Template slot ${id} requires a native layout adapter`);
+      result.slots.push(id);
+      return '{children}';
+    }
     const styles = options.stylesFor(node, parent);
     let tag = 'div', content = '', attributes = '';
     if (node.kind === 'RichTextNode') {

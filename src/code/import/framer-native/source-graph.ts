@@ -20,6 +20,13 @@ export function sourceRecord(value: unknown): SourceProperties | undefined {
     ? value as SourceProperties : undefined;
 }
 
+/** Framer can enable the picker without assigning any override. */
+export function activeSourceCodeOverride(properties: SourceProperties): string | undefined {
+  const identifier = properties.codeOverrideIdentifier;
+  if (properties.codeOverrideEnabled !== true || identifier == null || identifier === '') return;
+  return String(identifier);
+}
+
 /** Field IDs are scoped; a component and a collection may reuse a source ID. */
 export function sourceVariableKey(scopeId: string, id: string): string {
   return JSON.stringify([scopeId, id]);
@@ -43,7 +50,10 @@ export function sourceCodeComponentIdentifiers(graph: SourceGraph): Set<string> 
     if (typeof identifier === 'string' && !identifier.startsWith('local-module:canvasComponent/')) identifiers.add(identifier);
     for (const [key, item] of Object.entries(object)) if (key !== 'children') scan(item);
   };
-  for (const id of graph.reachable) scan(graph.nodes.get(id)!.raw);
+  for (const id of graph.reachable) {
+    const node = graph.nodes.get(id)!;
+    if (!['ExternalModuleNode', 'LocalModuleNode'].includes(node.kind)) scan(node.raw);
+  }
   return identifiers;
 }
 
@@ -133,6 +143,18 @@ export function buildSourceGraph(input: unknown): SourceGraph {
   for (const node of nodes.values()) {
     byKind.set(node.kind, [...(byKind.get(node.kind) ?? []), node.id]);
     references.set(node.id, readReferences(node));
+  }
+  for (const node of nodes.values()) {
+    if (node.kind !== 'WebPageNode' || node.raw.layoutTemplateIdentifierOverride !== undefined) continue;
+    const seen = new Set<string>();
+    let parent = nodes.get(String(node.raw.parentid));
+    while (parent && parent.kind !== 'RootNode' && !seen.has(parent.id)) {
+      seen.add(parent.id); parent = nodes.get(String(parent.raw.parentid));
+    }
+    if (parent?.kind === 'RootNode' && parent.raw.layoutTemplateIdentifier !== undefined) {
+      const inherited = readReferences({ ...node, raw: { layoutTemplateIdentifier: parent.raw.layoutTemplateIdentifier } });
+      references.get(node.id)!.push(...inherited);
+    }
   }
   const diagnostics = [...transfer.diagnostics];
   if (!transfer.complete) diagnostics.push({ code: 'SOURCE_CAPTURE_INCOMPLETE', message: 'The editor capture is incomplete.' });
@@ -270,6 +292,18 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
     for (let suffix = 2; used.has(normalize(candidate)); suffix++) candidate = `${stem}${field ? '_' : '-'}${suffix}`;
     used.add(normalize(candidate));
     identity[id] = candidate;
+  }
+  // Native template roots and outlets have canonical, file-scoped identities.
+  for (const id of graph.byKind.get('LayoutTemplateNode') ?? []) {
+    if (!graph.reachable.has(id)) continue;
+    const primary = graph.nodes.get(id)!.raw.baseVariantId;
+    if (typeof primary === 'string' && graph.nodes.has(primary)) identity[primary] = 'root';
+    const walk = (nodeId: string) => {
+      const node = graph.nodes.get(nodeId)!;
+      if (node.kind === 'SlotNode') identity[nodeId] = 'children-slot';
+      node.children.forEach(walk);
+    };
+    graph.nodes.get(id)!.children.forEach(walk);
   }
   return identity;
 }
