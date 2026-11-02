@@ -396,6 +396,7 @@ export function humanizeStylePropName(prop: string | undefined | null): string |
  *  instance inside a collection list). Untyped props may bind to any field. */
 export const cmsFieldTypesForVarType = (varType?: string): Set<string> => {
   switch (varType) {
+    case 'reference': return new Set(['reference']);
     case 'image': return new Set(['image', 'file']);
     case 'link': case 'url': return new Set(['link', 'url', 'text', 'slug']);
     case 'number': return new Set(['number']);

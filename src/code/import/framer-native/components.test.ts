@@ -13,8 +13,28 @@ import { sourceStateNames } from './interactions';
 import capturedOverride from './fixtures/captured-override.json';
 import { emitNativeCodeOverrides } from './code-adapters';
 import { readCodeOverrides } from '../../generation/code-override-gen';
+import capturedCms from './fixtures/captured-cms.json';
+import { parseComponentInfoFromSource } from '../../components/component-registry';
 
 describe('editable native component emission', () => {
+  it('remaps a source reference prop default and retains its collection in native metadata', () => {
+    const sourceCollection = buildSourceGraph(capturedCms).nodes.get('DwP_tmnNO')!;
+    const variable = { id: 'category', name: 'Category', type: 'collectionreference', dataIdentifier: 'local-module:collection/DwP_tmnNO:default', initialValue: sourceCollection.children[0] };
+    const query = { id: 'category-query', __class: 'FrameNode', parentid: 'reference-base', dataIdentifier: variable.dataIdentifier, collectionFilters: { filters: [{ itemKey: 'id', transforms: [{ name: 'equals', value: { type: 'variableReference', providerId: 'reference-master', id: variable.id } }] }] }, children: [{ id: 'category-title', __class: 'RichTextNode', parentid: 'category-query', children: [], html: '<p>Category</p>', textContent: { type: 'variableReference', providerId: 'category-query', id: 'nTU4ZCwmq' } }] };
+    const data = { id: 'reference-master', __class: 'SmartComponentNode', name: 'Reference Card', baseVariantId: 'reference-base', variables: [variable], children: [{ id: 'reference-base', __class: 'FrameNode', children: [query], width: 100, widthType: 0, heightType: 2, visible: true }] };
+    const graph = buildSourceGraph({ ...capturedCms, rootIds: [data.id], definitions: [...capturedCms.definitions, { id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    const file = result.files[0];
+    const prop = nativePropName(identity, data.id, variable.id);
+    expect(parsePropMeta(file.code)[prop]).toMatchObject({ type: 'reference', label: 'Category', referenceCollection: identity.DwP_tmnNO.replace(/-/g, '') });
+    expect(parseComponentInfoFromSource(file.path, file.code, '')?.props.find(item => item.name === prop)).toMatchObject({ defaultValue: identity[variable.initialValue], varType: 'reference', referenceCollection: identity.DwP_tmnNO.replace(/-/g, '') });
+    const nodes = parseJSXToNodes(file.code);
+    expect(nodes.get(identity['category-query'])?.collectionList?.filterGroup?.filters[0]).toMatchObject({ field: '_id', valueSource: 'variable', valueVar: prop, value: identity[variable.initialValue] });
+    expect(nodes.get(identity['category-title'])?.binding?.field).toBe(identity['["DwP_tmnNO","nTU4ZCwmq"]']);
+    expect(checkFile(file.code, { kind: 'component', path: file.path })).toEqual([]);
+  });
   it('retains an active original override on a native master and blocks a missing adapter', () => {
     const input = JSON.parse(JSON.stringify(capture));
     input.rootIds = ['f03DgVEM5'];

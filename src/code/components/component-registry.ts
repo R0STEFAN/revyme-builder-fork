@@ -23,6 +23,7 @@ export interface ComponentProp {
   varType?: string;
   /** Friendly display name from `@propMeta` (e.g. "Overflow 2"). Absent → use `name`. */
   label?: string;
+  referenceCollection?: string;
 }
 
 /**
@@ -376,6 +377,7 @@ function extractDestructuredProps(code: string, startPos: number): ComponentProp
       if (m?.description) p.description = m.description;
       if (m?.type) p.varType = m.type;
       if (m?.label) p.label = m.label;
+      if (m?.referenceCollection) p.referenceCollection = m.referenceCollection;
     }
   }
   // Fall back to the `@pageVariables` type for any prop @propMeta didn't type. A variable hoisted from a

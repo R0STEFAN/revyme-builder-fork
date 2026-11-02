@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import type { CollectionSchema, FieldDefinition } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
+import { parse } from '@babel/parser';
+import { parsePropMeta } from '@/code/components/prop-meta';
+import { extractComponentPropDefaults } from '@/code/parsing/parser';
 
 const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/);
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
@@ -39,6 +42,18 @@ function parseJson(content: string, path: string): unknown {
 /** Validate the affected collection closure against a candidate, without ProjectFS access. */
 export function validateFramerImportCms(files: ReadonlyMap<string, string>, changedPaths: ReadonlySet<string>): string[] {
   const affected = new Set([...changedPaths].filter(path => /^cms\/.+\.json$/.test(path)).map(path => path.slice(4).replace(/(?:\.schema)?\.json$/, '')));
+  const references: { path: string; prop: string; collection: string; value: unknown }[] = [];
+  for (const [path, code] of files) {
+    if (!/\.tsx$/.test(path)) continue;
+    const entries = Object.entries(parsePropMeta(code)).filter(([, meta]) => meta.type === 'reference' && (changedPaths.has(path) || !!meta.referenceCollection && affected.has(meta.referenceCollection)));
+    if (!entries.length) continue;
+    const defaults = extractComponentPropDefaults(parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] }), true);
+    for (const [prop, meta] of entries) {
+      if (!meta.referenceCollection) fail(`Missing prop reference collection ${path}:${prop}`);
+      affected.add(meta.referenceCollection);
+      references.push({ path, prop, collection: meta.referenceCollection, value: defaults[prop] });
+    }
+  }
   trace.fn('framer-import.validateCms', { collections: affected.size });
   if (!affected.size) return [];
   // Replacing a referenced record must also preserve inbound references in existing data.
@@ -89,6 +104,10 @@ export function validateFramerImportCms(files: ReadonlyMap<string, string>, chan
     for (const field of schema.fields) if (field.type === 'reference' || field.type === 'multi-reference') load(field.referenceCollection!);
   }
   for (const name of affected) load(name);
+  for (const ref of references) {
+    if (ref.value == null || ref.value === '') continue;
+    if (typeof ref.value !== 'string' || !collections.get(ref.collection)!.rows.some(row => row._id === ref.value)) fail(`Dangling prop reference ${ref.path}:${ref.prop}`);
+  }
 
   function checkValue(value: unknown, field: FieldDefinition, label: string): void {
     if (value === undefined || value === null) {

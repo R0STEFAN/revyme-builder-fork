@@ -11,7 +11,7 @@ import type { VariableIconKey } from './VariableTypeIcon';
 export type VariableTypeId =
   | 'plainText' | 'formattedText' | 'number' | 'toggle' | 'option' | 'color'
   | 'date' | 'link' | 'image' | 'file' | 'event' | 'transition' | 'border' | 'shadow'
-  | 'componentCursor';
+  | 'componentCursor' | 'reference';
 
 type LiteralKind = 'string' | 'number' | 'boolean';
 type DefaultEditor = 'text' | 'textarea' | 'number' | 'toggle' | 'option' | 'style' | 'componentCursor' | 'none' | 'image';
@@ -47,6 +47,7 @@ export const VARIABLE_TYPES: VariableTypeDef[] = [
   { id: 'option',        label: 'Option',         iconKey: 'option',     literalKind: 'string',  defaultValue: '',                              editor: 'option' },
   { id: 'event',         label: 'Event',          iconKey: 'event',      literalKind: 'string',  defaultValue: '',                              editor: 'none' },
   { id: 'file',          label: 'File',           iconKey: 'file',       literalKind: 'string',  defaultValue: '',                              editor: 'text' },
+  { id: 'reference',     label: 'CMS Record',     iconKey: 'link',       literalKind: 'string',  defaultValue: '',                              editor: 'text', pickable: false },
   { id: 'transition',    label: 'Transition',     iconKey: 'transition', literalKind: 'string',  defaultValue: '',                              editor: 'style', controlProperty: 'transition' },
   { id: 'border',        label: 'Border',         iconKey: 'border',     literalKind: 'string',  defaultValue: '1px solid #000000',             editor: 'style', controlProperty: 'border' },
   { id: 'shadow',        label: 'Shadow',         iconKey: 'shadow',     literalKind: 'string',  defaultValue: '0px 4px 8px rgba(0, 0, 0, 0.25)', editor: 'style', controlProperty: 'boxShadow' },

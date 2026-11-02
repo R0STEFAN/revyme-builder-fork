@@ -156,7 +156,7 @@ import { sanitizeRichMessage } from '@/shared/rich-message';
 import { bindTextNodeToPropInCode, createVariableInCode, createConditionalVariableInCode, removeVariableInCode, createTextVariableInCode, createFormattedTextVariableInCode, removeTextVariableInCode, bindTextNodeAsPageVarInCode, bindTextVariableForVariantInCode, createLinkAttrVariableInCode, removeLinkAttrVariableInCode, setBorderOverlayVariableForVariant, setInlineVariableForVariant, removeVariantStyleVariableInCode, setComponentPropDefaultInCode, createTypedVariableInCode, addBarePropToFunctionInCode, deleteComponentVariableInCode, renameComponentVariableInCode } from '../features/variable-ops';
 import { addPageVariableInCode, removePageVariableInCode, updatePageVariableInCode } from '../features/page-variables';
 import { applyDeleteVariablePipeline } from '../features/delete-variable-pipeline';
-import { setPropDescriptionInCode, setPropTypeInCode, setPropOptionsInCode, setPropLabelInCode, setPropNumberMetaInCode, setPropVariantOfInCode, getPropType, getPropDescription, getPropOptions, getPropLabel, getPropVariantOf } from '../components/prop-meta';
+import { setPropDescriptionInCode, setPropTypeInCode, setPropOptionsInCode, setPropLabelInCode, setPropNumberMetaInCode, setPropVariantOfInCode, setPropReferenceCollectionInCode, parsePropMeta, getPropType, getPropDescription, getPropOptions, getPropLabel, getPropVariantOf } from '../components/prop-meta';
 import { ensureLayoutRootOnComponentRoot } from '../components/component-ops';
 import { hoistInstancePropInCode } from '../features/hoist-prop';
 import type { PageVariable } from '../features/page-variables';
@@ -358,6 +358,7 @@ export type Mutation =
   | { type: 'renameComponentVariable'; oldName: string; newName: string }
   | { type: 'setComponentPropLabel'; propName: string; label: string }
   | { type: 'setComponentPropVariantOf'; propName: string; componentTag: string }
+  | { type: 'setComponentPropReferenceCollection'; propName: string; collection: string }
   | { type: 'setComponentPropNumberMeta'; propName: string; meta: { min?: number | null; max?: number | null; step?: number | null; unit?: string | null; control?: 'slider' | 'stepper' | null } }
   /** Remove a component prop and restore the inline style value. */
   | { type: 'removeVariable'; nodeId: string; styleProperty: string; propName: string; defaultValue: string; deleteProp?: boolean }
@@ -3232,6 +3233,8 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         return setPropLabelInCode(code, mutation.propName, mutation.label);
       case 'setComponentPropVariantOf':
         return setPropVariantOfInCode(code, mutation.propName, mutation.componentTag);
+      case 'setComponentPropReferenceCollection':
+        return setPropReferenceCollectionInCode(code, mutation.propName, mutation.collection);
       case 'setComponentPropNumberMeta':
         return setPropNumberMetaInCode(code, mutation.propName, mutation.meta);
       case 'deleteComponentVariable': {
@@ -3250,17 +3253,20 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         const oldOpts = getPropOptions(code, mutation.oldName);
         const oldLabel = getPropLabel(code, mutation.oldName);
         const oldVariantOf = getPropVariantOf(code, mutation.oldName);
+        const oldReferenceCollection = parsePropMeta(code)[mutation.oldName]?.referenceCollection;
         let c = renameComponentVariableInCode(code, mutation.oldName, mutation.newName);
         c = setPropTypeInCode(c, mutation.oldName, '');
         c = setPropDescriptionInCode(c, mutation.oldName, '');
         c = setPropOptionsInCode(c, mutation.oldName, []);
         c = setPropLabelInCode(c, mutation.oldName, '');
         c = setPropVariantOfInCode(c, mutation.oldName, '');
+        c = setPropReferenceCollectionInCode(c, mutation.oldName, '');
         if (oldType) c = setPropTypeInCode(c, mutation.newName, oldType);
         if (oldDesc) c = setPropDescriptionInCode(c, mutation.newName, oldDesc);
         if (oldOpts.length) c = setPropOptionsInCode(c, mutation.newName, oldOpts);
         if (oldLabel) c = setPropLabelInCode(c, mutation.newName, oldLabel);
         if (oldVariantOf) c = setPropVariantOfInCode(c, mutation.newName, oldVariantOf);
+        if (oldReferenceCollection) c = setPropReferenceCollectionInCode(c, mutation.newName, oldReferenceCollection);
         return c;
       }
       case 'bindTextVariable':

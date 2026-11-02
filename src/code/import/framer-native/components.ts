@@ -3,8 +3,9 @@ import { trace } from '../../../shared/debug-trace';
 import { nodeIdToVarNameCapitalised } from '../../../shared/id-utils';
 import { PROJECTION_STYLE_PROPS } from '../../../shared/constants';
 import { normalizeTransparent, TRANSPARENT_FILL } from '../../../shared/css-utils';
-import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
+import { setPropLabelInCode, setPropTypeInCode, setPropReferenceCollectionInCode } from '../../components/prop-meta';
 import { buildCreatedMaster } from '../../generation/create-component-gen';
+import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
 import { updateVariantTextInCode } from '../../generation/generator-crud';
 import { bindTextVariableForVariantInCode } from '../../features/variable-ops';
@@ -23,6 +24,8 @@ import { mapSourceConnections } from './interactions';
 import { resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
+import { nativeCollectionSlug, sourceCollectionId } from './cms';
+import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import type { NativeCompileResult, ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
 export function nativeComponentName(identity: Record<string, string>, sourceId: string): string {
@@ -41,7 +44,13 @@ function styleLiteral(styles: Record<string, string>): string {
     return `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key)}: ${binding ? binding[1] : JSON.stringify(value)}`;
   }).join(', ')} }`;
 }
-function valueExpression(value: unknown, node: ResolvedSourceNode, context: SourceMappingContext, property: string): string {
+function valueExpression(value: unknown, node: ResolvedSourceNode, context: SourceMappingContext, property: string, identity?: Record<string, string>): string {
+  if (identity && context.graph && sourceRecord(value)?.type === 'variableReference') {
+    const binding = resolveSourceBinding(value, { graph: context.graph, identity, nodeId: node.sourceId });
+    if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
+    if (binding.kind === 'variable') return binding.name;
+    throw new Error(`Unsupported expression binding ${binding.kind} on ${node.sourceId}`);
+  }
   const mapped = sourceStyleValue(value, node, context, property);
   if (mapped === undefined) throw new Error(`Unresolved ${property} on ${node.sourceId}`);
   const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(mapped);
@@ -111,7 +120,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const text = mapSourceText(node, context);
           tag = text.tag;
           attributes = Object.entries(text.attributes).map(([key, value]) => ` ${key}=${JSON.stringify(value)}`).join('');
-          content = text.binding ? `{${valueExpression(text.binding, node, context, 'textContent')}}` : text.jsx;
+          content = text.binding ? `{${valueExpression(text.binding, node, context, 'textContent', identity)}}` : text.jsx;
         } else if (node.kind === 'SlotNode') {
           slots.push(id); content = '{children}';
         } else if (node.kind === 'CodeComponentNode') {
@@ -146,12 +155,21 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const fn = ast.program.body.find(statement => t.isFunctionDeclaration(statement) && statement.id?.name === name);
       if (!t.isFunctionDeclaration(fn) || !t.isObjectPattern(fn.params[0]) || !t.isTSTypeAnnotation(fn.params[0].typeAnnotation) || !t.isTSTypeLiteral(fn.params[0].typeAnnotation.typeAnnotation)) throw new Error('Native master signature missing');
       const params = fn.params[0], types = fn.params[0].typeAnnotation.typeAnnotation;
-      const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', image: 'image', link: 'link', eventhandler: 'event', file: 'file' };
+      const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', image: 'image', link: 'link', eventhandler: 'event', file: 'file', collectionreference: 'reference' };
       for (const variable of variables) {
         const sourceType = String(variable.type), type = propTypes[sourceType];
         if (!type) throw new Error(`Variable ${String(variable.id)} type ${sourceType} requires a native data adapter`);
         const prop = nativePropName(identity, scopeId, String(variable.id));
         let initial = variable.initialValue ?? (sourceType === 'boolean' ? false : sourceType === 'number' ? 0 : '');
+        if (sourceType === 'collectionreference') {
+          const collectionId = sourceCollectionId(variable.dataIdentifier);
+          const collection = graph.nodes.get(collectionId);
+          if (collection?.kind !== 'CollectionNode' || !identity[collectionId]) throw new Error(`Missing prop reference collection ${collectionId}`);
+          if (initial !== '') {
+            if (typeof initial !== 'string' || !collection.children.includes(initial) || !identity[initial]) throw new Error(`Missing prop reference record ${String(initial)}`);
+            initial = identity[initial];
+          }
+        }
         if ((sourceType === 'image' || sourceType === 'file') && typeof initial === 'string' && initial) {
           if (!options.assets?.[initial]) throw new Error(`Missing asset default for ${String(variable.id)}`);
           initial = options.assets[initial];
@@ -192,6 +210,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);
         code = setPropLabelInCode(code, prop, String(variable.name ?? variable.id));
+        if (variable.type === 'collectionreference') code = setPropReferenceCollectionInCode(code, prop, nativeCollectionSlug(identity, sourceCollectionId(variable.dataIdentifier)));
       }
       // Native metadata is JSON in comments; escape the delimiter without changing decoded labels.
       code = code.replace(/(\/\*\* @propMeta )([\s\S]*?)( \*\/)/, (_all, before, json, after) => before + json.replace(/\*\//g, '*\\/') + after);
@@ -209,6 +228,11 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
+          if (base.properties.dataIdentifier !== undefined) {
+            for (const property of ['dataIdentifier', 'collectionFilters', 'collectionFiltersOperator', 'collectionOrder', 'collectionReverse', 'collectionStartOffset', 'collectionLimit', 'collectionPaginationPageSize']) {
+              if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state query ${property} on ${id} requires its native adapter`);
+            }
+          }
           const override = (node: ResolvedSourceNode) => node.properties.codeOverrideEnabled === true ? String(node.properties.codeOverrideIdentifier) : '';
           if (override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
           if (base.kind === 'CodeComponentNode') {
@@ -278,6 +302,14 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const expression = states.length === scope.children.length ? prop : `${states.map(state => `initialVariant === ${JSON.stringify(state)}`).join(' || ')} ? ${prop} : undefined`;
           code = setTagAttr(code, identity[id], 'onClick', `{${expression}}`);
         }
+      }
+      for (const id of [...sourceIds].reverse()) {
+        if (graph.nodes.get(id)?.raw.dataIdentifier === undefined) continue;
+        const start = findJSXElementByDataId(code, identity[id]);
+        const range = start >= 0 ? findClosingTag(code, start) : null;
+        if (!range) throw new Error(`Missing native query container ${id}`);
+        const template = code.slice(range.contentStart, range.closeTagStart).trim();
+        code = emitSourceQueryInCode(code, identity[id], id, template, { graph, identity, nodeId: id });
       }
       const connections = mapSourceConnections(model, identity);
       for (const connection of connections) code = addConnectionToCode(code, connection.from, connection.to, connection.trigger, connection.delay, connection.sourceNode).code;

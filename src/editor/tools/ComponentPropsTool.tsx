@@ -31,6 +31,7 @@ import { YES_NO_OPTIONS } from '../controls/css-property-options';
 import ColorInput from '../controls/ColorInput';
 import ImagePickerInput from '../controls/ImagePickerInput';
 import UploadControl from '../controls/UploadControl';
+import { ReferencePicker } from '../left-toolbar/panels/cms/FieldControl';
 import { FontFamilyControl } from './TextStyleTool/atoms/FontFamilyControl';
 import SlotControl from './SlotControl';
 import GroupControl from './GroupControl';
@@ -2792,6 +2793,18 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
               // Section Ref): its value is an anchor id on the page, so the instance
               // picks from that page's anchors instead of typing the id by hand.
               // Inside a master the page is the breadcrumb's origin.
+              if (prop.varType === 'reference') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <div className="flex items-center justify-between w-full">
+                      <ControlLabel label={prop.label || prop.name} property="" plain={false} hideLocalize overridden={propOverridden} onResetOverride={propResetOverride} subLabel="CMS Record" />
+                      <div className="w-full min-w-0">
+                        <ReferencePicker field={{ id: prop.name, name: prop.label || prop.name, type: 'reference', referenceCollection: prop.referenceCollection }} value={propValue} onChange={(value: string) => handlePropChange(prop.name, value, prop.defaultValue)} multi={false} />
+                      </div>
+                    </div>
+                  </HoistMenuItemProvider>
+                );
+              }
               if (prop.varType === 'section') {
                 const anchorPage = isComponentFilePath(activeFile) ? (breadcrumb[0] ?? activeFile) : activeFile;
                 const anchors = anchorPage ? getAnchorsForPage(anchorPage) : [];

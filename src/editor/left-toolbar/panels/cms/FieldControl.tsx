@@ -390,7 +390,7 @@ function TagsFieldControl({ value, onChange, name }: { value: any; onChange: (v:
  *  field's target collection (`field.referenceCollection`), showing each
  *  item's display label rather than a raw ID. Single mode renders a
  *  dropdown; multi mode renders an "add" dropdown plus removable pills. */
-function ReferencePicker({ field, value, onChange, multi }: {
+export function ReferencePicker({ field, value, onChange, multi }: {
   field: FieldDefinition;
   value: any;
   onChange: (v: any) => void;

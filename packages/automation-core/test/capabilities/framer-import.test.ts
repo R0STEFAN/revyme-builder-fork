@@ -64,6 +64,16 @@ function replaceFile(input: ReturnType<typeof bundle>, path: string, code: strin
 const run = (input = bundle(), base = snapshot()) => framerImportSubmitOperation.execute(base, input, context);
 
 describe('deterministic Framer full-file import boundary', () => {
+  it.each(['missing-collection', 'missing-record', 'valid'])('validates native reference prop defaults: %s', async kind => {
+    const input = bundle();
+    const name = kind === 'missing-collection' ? 'missing' : 'categories';
+    const initial = kind === 'missing-record' ? 'missing-row' : 'category-a';
+    const code = master.replace("'use client';", "'use client';")
+      .replace('function ImportedCard({', `function ImportedCard({ category = ${JSON.stringify(initial)},`);
+    input.files[2].code = `/** @propMeta {"category":{"type":"reference","referenceCollection":"${name}"}} */\n${code}`;
+    if (kind === 'valid') expect((await run(input)).diagnostics).toEqual([]);
+    else await expect(run(input)).rejects.toThrow(/CMS_INVALID/);
+  });
   it('accepts original-source HOCs and keeps their native editor wrapper', async () => {
     const graph = buildSourceGraph(capturedOverride);
     const emitted = emitNativeCodeOverrides(graph, allocateTargetIdentity(graph, new Set()));

@@ -32,6 +32,8 @@ export interface PropMetaEntry {
    *  bare text box) and "Set Variable" can re-offer it on that component. Resolved via the host's imports
    *  → the component file → its variantConfig. design-tool parity: a variant var is tied to its component. */
   variantOf?: string;
+  /** CMS record prop: the native collection slug its ID belongs to. */
+  referenceCollection?: string;
   // ── Number-variable metadata (the reference's ControlType.Number knobs) ──
   /** Lower bound for the slider/stepper. */
   min?: number;
@@ -95,6 +97,7 @@ export function parsePropMeta(code: string): Record<string, PropMetaEntry> {
         if (r.optionsLocked === true) entry.optionsLocked = true;
         if (typeof r.label === 'string' && r.label) entry.label = r.label;
         if (typeof r.variantOf === 'string' && r.variantOf) entry.variantOf = r.variantOf;
+        if (typeof r.referenceCollection === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(r.referenceCollection)) entry.referenceCollection = r.referenceCollection;
         // Number knobs — `Number.isFinite` so 0 is kept (a valid min/step), NaN/strings dropped.
         if (Number.isFinite(r.min as number)) entry.min = r.min as number;
         if (Number.isFinite(r.max as number)) entry.max = r.max as number;
@@ -149,6 +152,7 @@ function upsertPropMeta(code: string, propName: string, patch: PropMetaEntry, cl
   }
   if (patch.label) entry.label = patch.label;
   if (patch.variantOf) entry.variantOf = patch.variantOf;
+  if (patch.referenceCollection) entry.referenceCollection = patch.referenceCollection;
   // Number knobs — merge by `!== undefined` so 0 is a valid value (truthy checks would drop min/step 0).
   if (patch.min !== undefined) entry.min = patch.min;
   if (patch.max !== undefined) entry.max = patch.max;
@@ -237,6 +241,12 @@ export function setPropOptionsInCode(code: string, propName: string, options: st
 export function setPropLabelInCode(code: string, propName: string, label: string): string {
   const l = label.trim();
   return upsertPropMeta(code, propName, l ? { label: l } : {}, l ? [] : ['label']);
+}
+
+/** Set the collection of a CMS record prop; empty clears that association. */
+export function setPropReferenceCollectionInCode(code: string, propName: string, slug: string): string {
+  if (slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('Invalid native reference collection');
+  return upsertPropMeta(code, propName, slug ? { referenceCollection: slug } : {}, slug ? [] : ['referenceCollection']);
 }
 
 /** A Number variable's slider/stepper knobs (or {} when none). */

@@ -14,6 +14,7 @@ import { inferPropertyFromValue, resolveVariableCssProp, type ChildResolution } 
 import { getPropOptions, getPropOptionsLocked, getPropNumberMeta, getPropDescription, getPropLabel, parsePropMeta, type PropNumberMeta } from '@/code/components/prop-meta';
 import NumberVariableEditor from '../controls/NumberVariableEditor';
 import ImagePickerInput from '../controls/ImagePickerInput';
+import { ReferencePicker } from '../left-toolbar/panels/cms/FieldControl';
 import RichInlineEditor from './RichInlineEditor';
 import { VariableTypeIcon, resolveVariableIconKey } from '../controls/VariableTypeIcon';
 import { VariableTypePicker } from '../controls/VariableTypePicker';
@@ -802,6 +803,8 @@ export default function VariableModal({
       if (opts.length) { expediteStableAtomSync(); queueMutation({ type: 'setComponentPropOptions', propName: newName, options: opts }); }
       const numMeta = getPropNumberMeta(componentCode, name);
       if (Object.keys(numMeta).length) { expediteStableAtomSync(); queueMutation({ type: 'setComponentPropNumberMeta', propName: newName, meta: numMeta }); }
+      const referenceCollection = parsePropMeta(componentCode)[name]?.referenceCollection;
+      if (referenceCollection) { expediteStableAtomSync(); queueMutation({ type: 'setComponentPropReferenceCollection', propName: newName, collection: referenceCollection }); }
     } else {
       const pv = pageVariables.find(p => p.name === name);
       if (pv) { expediteStableAtomSync(); queueMutation({ type: 'addPageVariable', variable: { ...pv, name: newName } }); }
@@ -878,6 +881,9 @@ export default function VariableModal({
   const VariableEditorAtom = useMemo(() => resolveVariableEditor(effectiveProperty), [effectiveProperty]);
 
   const renderDefaultValueControl = (value: string, onChange: (v: string) => void) => {
+    if (activeTypeDef?.id === 'reference' && selectedVar) {
+      return <ReferencePicker field={{ id: selectedVar, name: selectedVar, type: 'reference', referenceCollection: parsePropMeta(componentCode)[selectedVar]?.referenceCollection }} value={value} onChange={onChange} multi={false} />;
+    }
     // LIVE drag preview: imperatively patch the canvas nodes bound to THIS variable per frame (color /
     // border-width / slider) instead of committing code every move. `onChange` still commits once on
     // pointer-up. No-op for a brand-new var (selectedVar null → previewVar finds no bindings). Mirrors the
