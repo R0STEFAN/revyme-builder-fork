@@ -88,6 +88,26 @@ export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProp
   });
 }
 
+/** Image props bound to fills use Revyme's whole CSS background-image value. */
+export function sourceCssImageVariables(graph: SourceGraph, scopeId: string): Set<string> {
+  const scope = graph.nodes.get(scopeId), result = new Set<string>();
+  if (!scope) throw new Error(`Missing source image scope ${scopeId}`);
+  for (const state of scope.children) {
+    const seen = new Set<string>();
+    const replicaState = sourceRecord(graph.nodes.get(state)?.raw.replicaInfo) ? state : undefined;
+    const walk = (id: string) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const node = resolveSourceNode(graph, id, replicaState);
+      const ref = sourceRecord(node.properties.fillImage);
+      if (node.properties.fillEnabled === true && node.properties.fillType === 'image' && ref?.type === 'variableReference' && ref.providerId === scopeId && typeof ref.id === 'string') result.add(ref.id);
+      if (!isSourceCodeComponent(node)) node.children.forEach(walk);
+    };
+    walk(state);
+  }
+  return result;
+}
+
 function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSON).join(',')}]`;
   const object = sourceRecord(value);

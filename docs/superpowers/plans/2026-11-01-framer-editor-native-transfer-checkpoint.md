@@ -60,9 +60,15 @@ pure compiler assembly and the live-capture regressions described below.
   the SDD workspace. The original user project rejected its stale revision safely.
   Selection/replace modes, committed-but-unsynced recovery UI and full-project
   acceptance remain incomplete.
-  Original asset download transport is implemented and is the coordinator's
-  default: exact MIME, omitted credentials, cancellation and whole-set failure.
-  Browser CORS/live download remains unverified; the live smoke had no assets.
+  Per the user's latest rule, the editor now uses native fetchMediaBytes/uploadAsset:
+  static raster images encode as WebP (quality 0.9, original dimensions) and every
+  source URI maps to its uploaded URL; SVG stays vector. GIF/APNG conversion remains
+  explicitly unsupported until animation-preserving WebP encoding exists.
+  LIVE JPEG→WebP→native uploaded library→background binding passed in isolated
+  `framer-webp-smoke-1793627816259`: actual WebP 3082×3852, 829392 bytes, listed
+  with that project's media and bound via /api/uploads/*.webp. Evidence is in
+  live-webp-* in the SDD workspace. Native instance image overrides and CMS
+  image prop bindings now preserve the CSS URL domain and live binding marker.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
   A linear continuous rotation with unchanged variant/breakpoint semantics uses

@@ -24,6 +24,7 @@ export interface BindingContext {
   defaultLocale?: string;
   /** Explicitly known reference destination, e.g. a predicate on a record ID. */
   referenceCollectionId?: string;
+  cssImage?: boolean;
 }
 export interface NativeSourceQuery {
   collectionId: string;
@@ -117,10 +118,13 @@ export function bindSourcePropInCode(code: string, nodeId: string, prop: string,
   if (!/^[A-Za-z_$][\w$]*$/.test(prop)) throw new Error(`Invalid native prop ${prop}`);
   const binding = resolveSourceBinding(value, context);
   let expression: string;
-  if (binding.kind === 'field') expression = cmsPropBindingExpression(binding.itemVar, { field: binding.fieldId });
+  if (binding.kind === 'field') expression = cmsPropBindingExpression(binding.itemVar, { field: binding.fieldId, ...(context.cssImage ? { urlWrap: true } : {}) });
   else if (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field') {
     expression = cmsPropBindingExpression(binding.input.itemVar, { field: binding.input.fieldId, transform: 'isSet' });
-  } else if (binding.kind === 'variable') expression = binding.name;
+  } else if (binding.kind === 'variable') {
+    if (context.cssImage) throw new Error('Source image variable requires its native image-domain adapter');
+    expression = binding.name;
+  }
   else if (binding.kind === 'reference') expression = JSON.stringify(binding.rowId);
   else if (binding.kind === 'literal') {
     if (binding.value === undefined) return setTagAttr(code, nodeId, prop, null);

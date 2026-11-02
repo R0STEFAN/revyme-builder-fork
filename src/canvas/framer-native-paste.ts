@@ -12,6 +12,7 @@ export interface NativePasteServices {
   flush(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   assetPayloads?(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
+  uploadAssets?(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
   isCurrent(snapshot: Snapshot): boolean;
   prepare(input: FramerImportSubmitInput, operationId: string): Promise<Plan>;
   commit(plan: Plan): Promise<Receipt>;
@@ -28,8 +29,9 @@ export async function handleNativeTransferPaste(input: unknown, target: Scope, s
   await services.flush();
   const snapshot = await services.snapshot();
   if (snapshot.scope.projectId !== target.projectId || snapshot.scope.branchId !== target.branchId) throw new Error('TARGET_SCOPE_CHANGED');
-  const payloads = services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
-  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads });
+  const uploaded = services.uploadAssets ? await services.uploadAssets(transfer, snapshot) : undefined;
+  const payloads = uploaded ? undefined : services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
+  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads, uploadedAssets: uploaded });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
   services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');

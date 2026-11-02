@@ -161,6 +161,11 @@ Rename collisions вирішуються детерміновано; імена 
   Усі linked records зберігаються; rendered cards не замінюють CMS.
 - Assets/styles: fonts, image/video/file descriptors, alt text, fitting,
   typography/color tokens та usage references через штатні системи Revyme.
+  За уточненням користувача від 2 листопада 2026 року вставка завантажує
+  растрові зображення, конвертує їх у WebP і додає через upload Revyme.
+  Прив'язки елементів, властивостей компонентів та CMS використовують отримані
+  URL завантажень. Розміри й прозорість зберігаються; SVG-маски зберігають
+  векторну форму. Анімоване зображення не можна мовчки перетворювати на кадр.
 - Routes/links: page identity → target path, dynamic CMS routes, section targets
   та зовнішні URL; конфлікти маршрутів не руйнують наявні сторінки.
 - Code components: за уточненням користувача від 2 листопада 2026 року кожен

@@ -8,6 +8,7 @@ import { parseMetadataFromCode } from '../../generation/metadata-gen';
 import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../project/cms-seo';
 import { nativeCollectionSlug, nativeFieldId } from './cms';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
+import { nativePropName } from './components';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -15,6 +16,22 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+
+it('converts an instance image override into the native CSS image prop domain', () => {
+  const source = transfer(), asset = 'data:framer/asset-reference,photo.png';
+  const master = source.definitions[1].data;
+  master.variables = [{ id: 'photo', type: 'image', initialValue: '' }];
+  const child = (master.children as any[])[0].children[0];
+  Object.assign(child, { __class: 'FrameNode', fillEnabled: true, fillType: 'image', fillImage: { type: 'variableReference', providerId: 'card', id: 'photo' } });
+  delete child.html;
+  (source.definitions[0].data.children as any[])[0].children[0].$control__photo = { type: 'image', value: asset };
+  source.assets = [{ key: 'photo', extension: '.png', mimeType: 'image/png', url: 'https://example.com/photo.png' }];
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create', assetPayloads: { photo: 'data:image/png;base64,iVBORw0KGgo=' } });
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  const assetFile = result.files.find(file => file.path.startsWith('public/assets/'))!;
+  expect(parseJSXToNodes(client.code).get(result.identity.instance)?.attrs[nativePropName(result.identity, 'card', 'photo')]).toBe(`url(${assetFile.path.slice(6)})`);
+});
 
 it('compiles a complete native candidate deterministically without mutating source or destination', async () => {
   const source = transfer(), before = JSON.stringify(source);

@@ -14,6 +14,15 @@ function context(extraDefinitions: { id: string; kind: string; data: Record<stri
 const provider = (id: string, collectionId: string, extra = {}) => ({ id, kind: 'FrameNode', data: { id, __class: 'FrameNode', children: [], dataIdentifier: `local-module:collection/${collectionId}:default`, ...extra } });
 
 describe('source data bindings', () => {
+  it('keeps a CMS image prop live with the native CSS URL binding marker', () => {
+    const ctx = context([provider('photos', 'E5RT5hQRC')]);
+    const raw = { type: 'variableReference', providerId: 'photos', id: 'PrPpB5TAv' };
+    const binding = resolveSourceBinding(raw, ctx);
+    if (binding.kind !== 'field') throw new Error('Expected image field');
+    const code = `import rows from '@/cms/works.json'; export default function Page(){return <div data-id="root">{rows.map(${binding.itemVar} => <Card data-id="photo" />)}</div>}`;
+    const emitted = bindSourcePropInCode(code, 'photo', 'cover', raw, { ...ctx, cssImage: true });
+    expect(parseJSXToNodes(emitted).get('photo')?.propBindings).toContainEqual({ prop: 'cover', field: binding.fieldId, urlWrap: true });
+  });
   it.each([0, false, '', null])('preserves literal %s without replacing it with preview text', value => {
     expect(resolveSourceBinding(value, context())).toEqual({ kind: 'literal', value });
   });

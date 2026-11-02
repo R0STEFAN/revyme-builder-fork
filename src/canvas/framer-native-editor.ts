@@ -14,6 +14,8 @@ import { createNativePasteHttpServices } from './framer-native-http';
 import { handleNativeTransferPaste } from './framer-native-paste';
 import type { Plan, Snapshot } from '../../packages/automation-core/src/contracts';
 import { trace } from '../shared/debug-trace';
+import { backend } from '../backend';
+import { uploadNativeTransferAssets } from '../code/import/framer-native/upload-assets';
 
 export function sameImportFiles(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
   return a.size === b.size && [...a].every(([path, code]) => b.get(path) === code);
@@ -67,6 +69,7 @@ export async function pasteNativeTransferInEditor(input: unknown, read: typeof f
     },
   }, read);
   const prepare = services.prepare;
+  services.uploadAssets = (transfer, snapshot) => uploadNativeTransferAssets(transfer, snapshot.files, scope.projectId, backend);
   services.prepare = async (...args) => { prepared = await prepare(...args); return prepared; };
   try { return await handleNativeTransferPaste(input, scope, services); }
   finally { if (held) { setAutosaveHeld(false); unlockBranch(scope.branchId); } importing = false; }

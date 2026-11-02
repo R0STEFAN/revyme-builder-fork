@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import capture from './fixtures/captured-underline.json';
 import { allocateTargetIdentity, buildSourceGraph, sourceAssetKey } from './source-graph';
-import { emitNativeAssets, planNativeAssets } from './assets';
+import { emitNativeAssets, planNativeAssets, resolveUploadedNativeAssets } from './assets';
 
 const image = 'data:framer/asset-reference,image-key.png?originalFilename=Photo.png&width=640&height=480';
 const video = 'data:framer/asset-reference,video-key.mp4?originalFilename=Movie.mp4';
@@ -22,6 +22,14 @@ function model(input = source(), existing = new Set<string>()) {
 }
 
 describe('native Framer assets', () => {
+  it('binds native uploaded media URLs without emitting duplicate embedded originals', () => {
+    const { graph, identity } = model();
+    const result = resolveUploadedNativeAssets(graph, identity, { 'image-key': '/api/uploads/photo.webp', 'video-key': 'https://cdn.example.com/movie.mp4' });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toEqual([]);
+    expect(result.assets[image]).toBe('/api/uploads/photo.webp');
+    expect(resolveUploadedNativeAssets(graph, identity, { 'image-key': 'data:image/png;base64,AAAA' }).diagnostics.length).toBeGreaterThan(0);
+  });
   it('does not require assets used only inside a custom code component placeholder', () => {
     const input = source();
     input.definitions[0].data.children[0].children[0] = { id: 'video', __class: 'CodeComponentNode', '$control__srcFile': { type: 'file', value: video }, children: [] } as any;

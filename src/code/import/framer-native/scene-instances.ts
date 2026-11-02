@@ -6,7 +6,7 @@ import { bindSourcePropInCode } from './bindings';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
 import { sourceCollectionId } from './cms';
-import { sourceRecord, sourceVariables } from './source-graph';
+import { sourceRecord, sourceVariables, sourceCssImageVariables } from './source-graph';
 import type { SourceGraph } from './types';
 import type { SourceScene } from './scene';
 
@@ -15,6 +15,7 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
   trace.fn('framer-native.applyInstances', { design: scene.nested.size, code: scene.codeInstances.size });
   let result = code;
   const imported = new Set<string>();
+  const imageDomains = new Map<string, Set<string>>();
   const attach = (id: string, name: string, path: string) => {
     const ast = parseJSX(result);
     if (!ast) throw new Error('Native instance host does not parse');
@@ -46,9 +47,13 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
       }
       const variable = variables.find(variable => variable.id === sourceProp);
       if (!variable) throw new Error(`Missing source instance prop ${sourceProp}`);
-      if (variable.type === 'image' && value !== undefined) throw new Error(`Native image prop domain adapter required on ${id}:${sourceProp}`);
-      result = bindSourcePropInCode(result, identity[id], nativePropName(identity, masterId, sourceProp), assetValue(value, id, sourceProp), {
+      if (variable.type === 'image' && !imageDomains.has(masterId)) imageDomains.set(masterId, sourceCssImageVariables(graph, masterId));
+      const cssImage = variable.type === 'image' && imageDomains.get(masterId)!.has(sourceProp);
+      let mapped = assetValue(value, id, sourceProp);
+      if (cssImage && typeof mapped === 'string' && mapped) mapped = `url(${mapped})`;
+      result = bindSourcePropInCode(result, identity[id], nativePropName(identity, masterId, sourceProp), mapped, {
         graph, identity, nodeId: id,
+        ...(cssImage ? { cssImage: true } : {}),
         ...(variable.type === 'collectionreference' ? { referenceCollectionId: sourceCollectionId(variable.dataIdentifier) } : {}),
       });
     }

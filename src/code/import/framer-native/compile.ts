@@ -5,7 +5,7 @@ import { checkFile } from '../../oracle/check-file';
 import { oracleFileKind } from '../../oracle/file-kind';
 import { parsePropMeta } from '../../components/prop-meta';
 import { buildSourceGraph, allocateTargetIdentity, sourceRecord } from './source-graph';
-import { planNativeAssets, emitNativeAssets } from './assets';
+import { planNativeAssets, emitNativeAssets, resolveUploadedNativeAssets } from './assets';
 import { emitNativeCms } from './cms';
 import { emitNativeComponents } from './components';
 import { emitNativeCodeOverrides } from './code-adapters';
@@ -16,6 +16,7 @@ export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
   mode: 'create' | 'replace' | 'paste';
   assetPayloads?: Readonly<Record<string, string>>;
+  uploadedAssets?: Readonly<Record<string, string>>;
 }
 
 /** Pure candidate assembly. Only the native submit/plan pipeline may persist it. */
@@ -49,8 +50,8 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
       if (metadata && Object.keys(metadata).some(key => !['title', 'description'].includes(key))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
     }
-    const assets = planNativeAssets(graph, identity);
-    const originals = emitNativeAssets(graph, identity, target.assetPayloads ?? {});
+    const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
+    const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
     const cms = emitNativeCms(graph, identity, { assets: assets.assets });
     const options = { assets: assets.assets, overrides: overrides.overrides };
