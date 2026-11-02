@@ -8,6 +8,29 @@ import {
 } from './next-font-gen';
 
 describe('next-font-gen', () => {
+  it('retains exact Google CSS imports when next/font conversion would quantize weights or drop axes', () => {
+    const exact = "@import url('https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@100,450&display=swap');";
+    const intermediate = "@import url('https://fonts.googleapis.com/css2?family=Zalando+Sans:wght@450&display=swap');";
+    const simple = "@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap');";
+    const result = transformSiteFilesForNextFonts({ 'app/layout.tsx': 'export default function Layout(){ return <html><body /></html>; }', 'app/globals.css': `${exact}\n${intermediate}\n${simple}\nbody {font-family: 'Zalando Sans';}` });
+    expect(result['app/globals.css']).toContain(exact);
+    expect(result['app/globals.css']).toContain(intermediate);
+    expect(result['app/globals.css']).not.toContain(simple);
+    expect(result['app/layout.tsx']).toContain('Comfortaa');
+    expect(result['app/layout.tsx']).not.toContain('Zalando_Sans');
+  });
+  it('preserves noncatalog imports and multiple styles for the same family across CSS files', () => {
+    const unknown = "@import url('https://fonts.googleapis.com/css2?family=Future+Typeface:wght@450&display=swap');";
+    const regular = "@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400&display=swap');";
+    const bold = "@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@700&display=swap');";
+    const files = { 'app/layout.tsx': 'export default function Layout(){ return <html />; }', 'app/globals.css': `${unknown}\n${regular}`, 'styles/other.css': bold };
+    expect(transformSiteFilesForNextFonts(files)).toEqual(files);
+  });
+  it('does not remove a multi-family Google request after converting only its first family', () => {
+    const css = "@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400&family=Inter:wght@700&display=swap');";
+    const files = { 'app/layout.tsx': 'export default function Layout(){ return <html />; }', 'app/globals.css': css };
+    expect(transformSiteFilesForNextFonts(files)).toEqual(files);
+  });
   describe('fontNameToNextFontIdentifier', () => {
     it('handles single-word font names', () => {
       expect(fontNameToNextFontIdentifier('Inter')).toBe('Inter');

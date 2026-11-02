@@ -16,6 +16,7 @@ import type { PresetToken } from '@/shared/types';
 import { trace } from '@/shared/debug-trace';
 import { parseVarRef } from '@/shared/css-utils';
 import catalogFonts from '@/shared/google-fonts-catalog.json';
+import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 
 const googleFontNames = new Set((catalogFonts as any[]).map((f: any) => f.family.toLowerCase()));
 
@@ -252,8 +253,7 @@ export function ensureGoogleFontImport(fontFamilyValue: string): void {
   if (fontFaceRegex.test(css)) return;
 
   // Build import URL
-  const urlFamily = `family=${name.replace(/ /g, '+')}:wght@300;400;500;600;700`;
-  const importLine = `@import url('https://fonts.googleapis.com/css2?${urlFamily}&display=swap');`;
+  const importLine = addGoogleFontImportsToCss('', [300, 400, 500, 600, 700].map(wght => ({ family: name, axes: { wght } }))).trim();
 
   // CSS requires @import before ALL other rules.
   // 1. Extract all existing @import lines from anywhere in the file

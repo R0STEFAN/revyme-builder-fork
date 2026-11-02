@@ -161,6 +161,9 @@ Rename collisions вирішуються детерміновано; імена 
   Усі linked records зберігаються; rendered cards не замінюють CMS.
 - Assets/styles: fonts, image/video/file descriptors, alt text, fitting,
   typography/color tokens та usage references через штатні системи Revyme.
+  Google Fonts підключаються через наявний механізм Revyme за сімейством,
+  вагою, курсивом і точними variable axes; їхні файли не завантажуються в
+  медіатеку. Завантаження font-файлів потрібне лише для власних шрифтів.
   За уточненням користувача від 2 листопада 2026 року вставка завантажує
   растрові зображення, конвертує їх у WebP і додає через upload Revyme.
   Прив'язки елементів, властивостей компонентів та CMS використовують отримані

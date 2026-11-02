@@ -1,0 +1,64 @@
+import type { GoogleFontRequest } from '../../../shared/google-font-import';
+import { parseFragment, type DefaultTreeAdapterTypes } from 'parse5';
+import { parseStyleString } from '../../../shared/css-utils';
+import { isSourceCodeComponent } from './source-graph';
+import type { SourceGraph, TransferDiagnostic } from './types';
+import { trace } from '../../../shared/debug-trace';
+export function parseSourceGoogleFont(value: string): GoogleFontRequest | undefined {
+  const match = /^GF;(.+?)-(variable-)?(regular|italic|[1-9]\d{1,3}(?:italic)?)(?:VF=([A-Za-z0-9+/]+=*))?$/.exec(value);
+  if (!match) return;
+  const [, family, variable, variant, encoded] = match;
+  const axes: Record<string, number> = { wght: parseInt(variant, 10) || 400 };
+  if (variant.endsWith('italic')) axes.ital = 1;
+  if (encoded) {
+    if (!variable) return;
+    let decoded: string;
+    try { decoded = atob(encoded); } catch { return; }
+    if (!/^"[a-zA-Z]{4}" [+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:, "[a-zA-Z]{4}" [+-]?(?:\d+(?:\.\d+)?|\.\d+))*$/.test(decoded)) return;
+    const seen = new Set<string>();
+    for (const axis of decoded.matchAll(/"([a-zA-Z]{4})" ([+-]?(?:\d+(?:\.\d+)?|\.\d+))/g)) {
+      if (seen.has(axis[1])) return;
+      seen.add(axis[1]);
+      axes[axis[1]] = Number(axis[2]);
+    }
+  }
+  if (axes.wght <= 0 || axes.wght > 1000 || axes.ital !== undefined && axes.ital !== 0 && axes.ital !== 1) return;
+  return { family, axes };
+}
+
+export function sourceGoogleFontRequests(graph: Pick<SourceGraph, 'nodes' | 'reachable'>): { requests: GoogleFontRequest[]; diagnostics: TransferDiagnostic[] } {
+  trace.fn('framer-native.googleFonts', { nodes: graph.reachable.size });
+  const requests: GoogleFontRequest[] = [], diagnostics: TransferDiagnostic[] = [];
+  for (const id of graph.reachable) {
+    const node = graph.nodes.get(id)!;
+    if (isSourceCodeComponent(node)) continue;
+    const add = (selector: string) => {
+      if (!selector.startsWith('GF;')) return;
+      const request = parseSourceGoogleFont(selector);
+      if (request) requests.push(request);
+      else diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', sourceId: id, message: `Unsupported Google font selector ${selector}.` });
+    };
+    const html = (value: DefaultTreeAdapterTypes.ChildNode) => {
+      if ('attrs' in value) {
+        const style = value.attrs.find(attr => attr.name === 'style')?.value;
+        const encoded = parseStyleString(style ?? '')['--font-selector'];
+        if (encoded) { try { add(encoded.startsWith('GF;') ? encoded : atob(encoded)); } catch { diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', sourceId: id, message: 'Invalid inline font selector.' }); } }
+      }
+      if ('childNodes' in value) value.childNodes.forEach(html);
+    };
+    const scan = (value: unknown) => {
+      if (Array.isArray(value)) { value.forEach(scan); return; }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, item] of Object.entries(value)) {
+        if (key === 'children') continue;
+        if (typeof item === 'string') {
+          if (/^font(?:Bold|Italic|BoldItalic|Selector)?$/.test(key)) add(item);
+          else if (key === 'html') parseFragment(item).childNodes.forEach(html);
+        } else scan(item);
+      }
+    };
+    scan(node.raw);
+  }
+  const unique = new Map(requests.map(request => [JSON.stringify([request.family, Object.entries(request.axes).sort()]), request]));
+  return { requests: [...unique].sort(([a], [b]) => a.localeCompare(b)).map(([, request]) => request), diagnostics };
+}

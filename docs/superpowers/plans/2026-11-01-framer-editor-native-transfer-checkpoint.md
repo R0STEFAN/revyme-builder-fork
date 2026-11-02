@@ -77,7 +77,7 @@ pure compiler assembly and the live-capture regressions described below.
   the native editable loop effect, including the observed offscreen-pause default.
   Loops in repeated lists, CMS detail pages and loops with other transforms or
   differing per-state settings remain blocked until their adapters exist.
-  Unsupported active effects/forms/cursors and fonts/tokens/document
+  Unsupported active effects/forms/cursors and custom fonts/tokens/document
   metadata remain explicit blockers. Unadapted relocated href/link-prop defaults
   block to avoid linking back to an existing Home. Static scale, sticky offsets,
   text selection and inline native line-height ratios are preserved.
@@ -95,16 +95,26 @@ pure compiler assembly and the live-capture regressions described below.
   fonts. The full-file submit regenerates the patch and rejects tampered CSS.
   Native font-face generation now retains distinct registrations sharing one file
   and deduplicates identical faces in one batch. Focused 24 files/269 tests,
-  TypeScript and production build passed. Automatic original-font capture/upload
-  is not wired yet; do not claim the live capture's font blockers are removed.
-  Reader source now captures original Google font files from the editor's native
-  webFontStore.googleWebFonts metadata, with exact static style/weight and variable
-  wght ranges. Inline base64 --font-selector values are decoded; custom code
-  placeholders are skipped. Stable capture carries optional `fonts`, validated by
-  the envelope decoder; missing native metadata marks capture incomplete. Reader
-  41 Node tests, focused 264 Vitest tests and TypeScript passed. This reader source
-  change is not yet repackaged into Documents or verified in live Framer; automatic
-  font download/upload and compiler context wiring remain the next step.
+  TypeScript and production build passed. This recipe remains available for custom
+  fonts; their automatic download/upload path is not wired yet.
+  USER OVERRIDE: Google Fonts use Revyme's normal CSS import mechanism, with exact
+  source weights/italic/variable axes; they are not downloaded/uploaded as media.
+  The compiler and native typography controls now share the canonical Google URL
+  generator. Native submit verifies the precise additive Google import recipe.
+  Unrepresentable next/font styles and noncatalog Google imports remain CSS imports
+  at export, preserving their original request rather than quantizing/dropping axes.
+  The original-file Google reader experiment was removed; no new capture is needed
+  for Google requirements. Existing raw GF descriptors and inline base64 selectors
+  supply the requirements. Live capture probe no longer has font diagnostics.
+  Isolated browser paste at /google-font-test persisted the exact wdth=100/wght=450
+  Google import and showed the text with matching computed font styles; no font
+  files were created. Browser FontFaceSet enumeration/resource inspection did not
+  provide actual font-byte loading proof, so do not claim that stronger result.
+  Screenshot: live-google-font.png in the SDD workspace. The complete project still
+  has metadata, missing asset payloads, template/component and page blockers.
+  Verification: focused 31 files/324 tests passed, followed by 33 export tests
+  after the multi-family preservation regression; reader37 passed, typecheck and
+  production build passed. No complete-project import/parity claim.
   Token aliases and other unverified color formats still diagnose.
 
 ## Latest live capture and remaining source dependencies
@@ -152,7 +162,7 @@ The previous 325-test combined run
 covered native styles as well; no partial task is complete from unit tests alone.
 
 Next: finish variable/image domains, CMS dynamic pages,
-template props/effects/fonts/remaining tokens/metadata; then finish paste recovery,
+template props/effects/custom fonts/remaining tokens/metadata; then finish paste recovery,
 extension transport and full semantic/editability/visual parity. Preserve the
 existing full-file submit boundary and generic codeFiles.submit prohibitions.
 

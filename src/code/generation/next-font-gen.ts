@@ -16,6 +16,8 @@ export interface GoogleFontSpec {
   subsets?: string[];
   display?: string;
   importUrl: string;
+  /** Keep the original Google request when this loader cannot represent it exactly. */
+  preserveImport?: boolean;
 }
 
 const fontCatalogMap = new Map<string, { family: string; variants: string[]; isCyrillic: boolean }>();
@@ -118,7 +120,7 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
 
   const importRegex = /@import\s+(?:url\(['"]?([^'")]+)['"]?\)|['"]([^'"]+)['"]);?/g;
   const fonts: GoogleFontSpec[] = [];
-  const seenFamilies = new Set<string>();
+  const seenImports = new Set<string>();
 
   let match: RegExpExecArray | null;
   while ((match = importRegex.exec(css)) !== null) {
@@ -139,12 +141,12 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
       const [rawFamily, spec] = familyParam.split(':');
       const familyName = decodeURIComponent(rawFamily.replace(/\+/g, ' ')).trim();
 
-      if (!familyName || seenFamilies.has(familyName.toLowerCase())) continue;
+      if (!familyName || seenImports.has(url)) continue;
       if (!fontCatalogMap.has(familyName.toLowerCase())) {
         trace.action('next-font-gen:skipNonCatalogFont', { familyName });
         continue;
       }
-      seenFamilies.add(familyName.toLowerCase());
+      seenImports.add(url);
 
       let rawRequestedWeights: string[] | undefined;
       if (spec) {
@@ -167,6 +169,7 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
 
       // Filter and validate weights strictly against catalog
       const weights = getSupportedWeightsForFont(familyName, rawRequestedWeights);
+      const preserveImport = params.getAll('family').length !== 1 || !!spec && (!/^wght@\d+(?:;\d+)*$/.test(spec) || !!rawRequestedWeights?.some(weight => !weights?.includes(weight)));
       const subsets = getSubsetsForFont(familyName);
       const display = params.get('display') || 'swap';
 
@@ -178,12 +181,14 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
         subsets,
         display,
         importUrl: url,
+        ...(preserveImport ? { preserveImport: true } : {}),
       });
     } catch {
       // Ignore malformed URLs
     }
   }
 
+  for (const font of fonts) if (fonts.some(other => other.family.toLowerCase() === font.family.toLowerCase() && other.importUrl !== font.importUrl)) font.preserveImport = true;
   return fonts;
 }
 
@@ -192,6 +197,7 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
  * imports, instantiations, and CSS variables onto <html>.
  */
 export function transformLayoutWithNextFonts(layoutCode: string, fonts: GoogleFontSpec[]): string {
+  fonts = fonts.filter(font => !font.preserveImport);
   if (!fonts.length || !layoutCode) return layoutCode;
 
   // Check if next/font/google is already imported
@@ -275,8 +281,10 @@ export function transformLayoutWithNextFonts(layoutCode: string, fonts: GoogleFo
 /** Remove Google Fonts CSS requests and route quoted family names through the
  * generated next/font CSS variables. Shared by the source exporter and MCP tool. */
 export function transformCssForNextFonts(css: string, fonts: GoogleFontSpec[]): string {
+  fonts = fonts.filter(font => !font.preserveImport);
   if (!css || fonts.length === 0) return css;
-  let cleaned = css.replace(/@import\s+(?:url\(['"]?https:\/\/fonts\.googleapis\.com\/[^'")]+['"]?\)|['"]https:\/\/fonts\.googleapis\.com\/[^'"]+['"]);?\s*\n?/g, '');
+  const converted = new Set(fonts.map(font => font.importUrl));
+  let cleaned = css.replace(/@import\s+(?:url\(['"]?(https:\/\/fonts\.googleapis\.com\/[^'")]+)['"]?\)|['"](https:\/\/fonts\.googleapis\.com\/[^'"]+)['"]);?\s*\n?/g, (match, url, quotedUrl) => converted.has(url ?? quotedUrl) ? '' : match);
 
   for (const font of fonts) {
     const escaped = font.family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -305,6 +313,8 @@ export function transformSiteFilesForNextFonts(files: Record<string, string>): R
     if (path.endsWith('.css')) {
       const fonts = extractGoogleFontsFromCSS(content);
       for (const f of fonts) {
+        const existing = allFonts.find(font => font.family.toLowerCase() === f.family.toLowerCase());
+        if (existing && (f.preserveImport || existing.importUrl !== f.importUrl)) existing.preserveImport = true;
         if (!seenFamilies.has(f.family.toLowerCase())) {
           seenFamilies.add(f.family.toLowerCase());
           allFonts.push(f);

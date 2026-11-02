@@ -7,6 +7,19 @@ import { parseJSXToNodes } from '../../parsing/parser';
 
 const uri = 'data:framer/asset-reference,photo.png';
 const source = { format: 'revyme.framer.native', version: 1, complete: true, diagnostics: [], context: { projectId: 'source', branchId: 'main', revision: '1', editorBuild: 'fixture', scopeId: 'page', mode: 'page' }, rootIds: ['page'], assets: [{ key: 'photo', extension: '.png', mimeType: 'image/png', url: 'https://example.com/photo.png' }], definitions: [{ id: 'page', kind: 'WebPageNode', data: { id: 'page', __class: 'WebPageNode', pagePath: '/asset-test', baseVariantId: 'desktop', children: [{ id: 'desktop', __class: 'FrameNode', width: 1200, widthType: 0, children: [{ id: 'image', __class: 'FrameNode', parentid: 'desktop', width: 200, widthType: 0, height: 100, heightType: 0, fillEnabled: true, fillType: 'image', fillImage: uri, children: [] }] }] } }] };
+it('connects inline Google Fonts without downloading or uploading font files as media', async () => {
+  const input = structuredClone(source);
+  input.assets = [];
+  input.definitions[0].data.children[0].children = [{ id: 'text', __class: 'RichTextNode', heightType: 2, html: '<p style="--font-selector: R0Y7WmFsYW5kbyBTYW5zLTgwMA==; --framer-font-family: Zalando Sans; --framer-font-weight: 800">Google font</p>', children: [] }] as any;
+  const assets = await uploadNativeTransferAssets(input, new Map(), 'destination', {
+    fetchMediaBytes: async () => { throw new Error('Google font must not be downloaded as media'); },
+    uploadAsset: async () => { throw new Error('Google font must not be uploaded as media'); },
+  });
+  expect(assets).toEqual({});
+  const result = compileNativeTransfer(input, { mode: 'create', existingFiles: new Map(), uploadedAssets: assets });
+  expect(result.diagnostics).toEqual([]);
+  expect(result.files.find(file => file.path === 'app/globals.css')!.code).toContain('family=Zalando+Sans:wght@800');
+});
 it('uploads converted WebP once and binds the uploaded URL in the native page', async () => {
   let uploads = 0;
   const urls = await uploadNativeTransferAssets(source, new Map(), 'destination', {

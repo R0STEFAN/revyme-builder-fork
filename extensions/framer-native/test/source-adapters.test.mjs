@@ -25,54 +25,6 @@ function makeEngine() {
 
 const href = () => 'https://framer.com/projects/Example--project-abc?node=page';
 
-test('captures exact original Google font URLs and variable weight ranges from native editor metadata', async () => {
-  const engine = makeEngine();
-  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
-  await adapter.loadScopes(['master'], new AbortController().signal);
-  const raw = engine.tree.toJS();
-  raw.root.children[0].font = 'GF;Example Sans-variable-regularVF=IndnaHQiIDQ1MA==';
-  raw.root.children[0].html = `<p style="--font-selector: ${btoa('GF;Example Sans-800')};">Native inline font</p>`;
-  engine.tree.toJS = () => structuredClone(raw);
-  engine.stores.webFontStore = { googleWebFonts: {
-    staticFonts: [{ family: 'Example Sans', files: { '800': 'https://fonts.gstatic.com/original-bold.ttf' } }],
-    variableFonts: [{ family: 'Example Sans', files: { regular: 'https://fonts.gstatic.com/original-variable.woff2' }, axes: [{ tag: 'wght', start: 200, end: 900 }] }],
-  } };
-  assert.deepEqual(await adapter.readFonts(), [
-    { selector: 'GF;Example Sans-800', family: 'Example Sans', url: 'https://fonts.gstatic.com/original-bold.ttf', weight: 800, style: 'normal', ext: 'ttf' },
-    { selector: 'GF;Example Sans-variable-regular', family: 'Example Sans', url: 'https://fonts.gstatic.com/original-variable.woff2', weight: 400, weightRange: { min: 200, max: 900 }, style: 'normal', ext: 'woff2' },
-  ]);
-});
-
-test('imports native font metadata when necessary and refuses missing variable ranges', async () => {
-  const engine = makeEngine();
-  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
-  await adapter.loadScopes(['master'], new AbortController().signal);
-  const raw = engine.tree.toJS();
-  raw.root.children[0].font = 'GF;Example Sans-variable-italic';
-  engine.tree.toJS = () => structuredClone(raw);
-  let imported = 0;
-  engine.stores.webFontStore = { async importFonts() {
-    imported++;
-    this.googleWebFonts = { staticFonts: [], variableFonts: [{ family: 'Example Sans', files: { italic: 'https://fonts.gstatic.com/italic.woff2' }, axes: [{ tag: 'wght', start: 100, end: 900 }] }] };
-  } };
-  const [font] = await adapter.readFonts();
-  assert.equal(imported, 1);
-  assert.equal(font.style, 'italic');
-  assert.deepEqual(font.weightRange, { min: 100, max: 900 });
-  engine.stores.webFontStore.googleWebFonts.variableFonts[0].axes = [];
-  await assert.rejects(adapter.readFonts(), /SOURCE_FONT_UNAVAILABLE.*weight range/);
-});
-
-test('does not request fonts used only inside custom code component placeholders', async () => {
-  const engine = makeEngine();
-  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
-  await adapter.loadScopes(['master'], new AbortController().signal);
-  const raw = engine.tree.toJS();
-  raw.root.children.push({ id: 'custom', __class: 'CodeComponentNode', codeComponentIdentifier: 'module:external/save/Font.js:default', $control__font: { value: { font: 'GF;Missing-regular' } }, children: [] });
-  engine.tree.toJS = () => structuredClone(raw);
-  assert.deepEqual(await adapter.readFonts(), []);
-});
-
 test('loads source scopes and retains exposed variable declarations and variant trees', async () => {
   const adapter = createEngineSourceAdapter(makeEngine(), { editorBuild: 'known', href });
   const scope = await adapter.readScope('page');

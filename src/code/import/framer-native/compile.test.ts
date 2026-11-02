@@ -17,6 +17,23 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+it('connects source Google families and exact axes through native imports without uploading font files', async () => {
+  const source = transfer();
+  const frame = (source.definitions[1].data.children as any[])[0];
+  frame.children[0].html = '<p data-styles-preset="type">Google type</p>';
+  source.definitions.push({ id: 'type', kind: 'TextStylePresetNode', data: { id: 'type', __class: 'TextStylePresetNode', font: 'GF;Zalando Sans-variable-regularVF=IndkdGgiIDEwMCwgIndnaHQiIDQ1MA==', fontBold: 'GF;Zalando Sans-900', children: [] } });
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.diagnostics).toEqual([]);
+  const css = result.files.find(file => file.path === 'app/globals.css')!;
+  expect(css.code).toContain('family=Zalando+Sans:wdth,wght@100,450');
+  expect(css.code).toContain('family=Zalando+Sans:wght@900');
+  expect(css.code).not.toContain('@font-face');
+  expect(result.files.some(file => /\.(woff2?|ttf|otf)$/.test(file.path))).toBe(false);
+  const target = { projectId: 'destination', branchId: 'main' };
+  const input = { files: result.files, mode: 'create' as const, target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
+  expect(framerImportSubmitInputSchema.safeParse(input).success).toBe(true);
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), input, createOperationContext())).diagnostics).toEqual([]);
+});
 it('imports original uploaded font faces through a canonical native globals patch', async () => {
   const source = transfer();
   const frame = (source.definitions[1].data.children as any[])[0];

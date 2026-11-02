@@ -5,6 +5,7 @@ import { escapeJsxText } from '../../parsing/rich-text-runs';
 import { resolveSourceNode, sourceRecord } from './source-graph';
 import { mappingDiagnostic, sourceStyleValue, type SourceMappingContext } from './styles';
 import type { ResolvedSourceNode, SourceProperties } from './types';
+import { parseSourceGoogleFont } from './fonts';
 
 export interface NativeText {
   plainText: string;
@@ -43,21 +44,13 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'string') out[key] = `${value[0]}${value[1]}`;
   }
   normalizeSourceLineHeight(out);
-  // The captured Google-font descriptor includes its explicit variation axes.
-  if (typeof p.font === 'string' && p.font.startsWith('GF;') && p.font.includes('-variable-')) {
-    out.fontFamily = JSON.stringify(p.font.slice(3).split('-variable-')[0]);
-    const encoded = p.font.split('VF=')[1];
-    if (encoded) {
-      try {
-        const axes = atob(encoded);
-        if (/^"[a-zA-Z0-9]{4}" [-\d.]+(?:, "[a-zA-Z0-9]{4}" [-\d.]+)*$/.test(axes)) {
-          const extraAxes = axes.split(', ').filter(axis => !axis.startsWith('"wght" '));
-          if (extraAxes.length) out.fontVariationSettings = extraAxes.join(', ');
-          const weight = /"wght" ([-\d.]+)/.exec(axes);
-          if (weight) out.fontWeight = weight[1];
-        }
-      } catch { /* Invalid font data is diagnosed by the font asset emitter. */ }
-    }
+  const font = typeof p.font === 'string' ? parseSourceGoogleFont(p.font) : undefined;
+  if (font) {
+    out.fontFamily = JSON.stringify(font.family);
+    out.fontWeight = String(font.axes.wght);
+    if (font.axes.ital === 1) out.fontStyle = 'italic';
+    const extraAxes = Object.entries(font.axes).filter(([axis]) => axis !== 'wght' && axis !== 'ital');
+    if (extraAxes.length) out.fontVariationSettings = extraAxes.map(([axis, value]) => `"${axis}" ${value}`).join(', ');
   }
   if (Array.isArray(p.openTypeFontFeatures) && p.openTypeFontFeatures.every(feature => typeof feature === 'string' && /^[a-zA-Z0-9]{4}$/.test(feature))) out.fontFeatureSettings = p.openTypeFontFeatures.map(feature => `"${feature}"`).join(', ');
   return out;

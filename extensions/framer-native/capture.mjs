@@ -44,14 +44,6 @@ export async function captureNativeTransfer(adapter, request, signal) {
       diagnostics.push({ code: 'SOURCE_DEFINITION_NOT_SERIALIZED', sourceId: id, message: 'Loaded definition was omitted by the reader.' });
     }
     const assets = await abortable(adapter.readAssets(loadedIds), deadline);
-    let fonts;
-    if (adapter.readFonts) {
-      try { fonts = await abortable(adapter.readFonts(loadedIds), deadline); }
-      catch (error) {
-        deadline.throwIfAborted();
-        diagnostics.push({ code: 'SOURCE_FONT_UNAVAILABLE', message: String(error?.message ?? error) });
-      }
-    }
     let codeFiles = [];
     if (adapter.readCodeFiles) {
       try { codeFiles = await abortable(adapter.readCodeFiles(loadedIds), deadline); }
@@ -61,7 +53,7 @@ export async function captureNativeTransfer(adapter, request, signal) {
       }
     }
     const after = await abortable(adapter.readContext(request), deadline);
-    result = { format: 'revyme.framer.native', version: 1, context, rootIds, definitions, assets, codeFiles, ...(fonts === undefined ? {} : { fonts }),
+    result = { format: 'revyme.framer.native', version: 1, context, rootIds, definitions, assets, codeFiles,
       complete: diagnostics.length === 0, diagnostics };
     if (['projectId', 'branchId', 'revision', 'scopeId'].every(key => after[key] === context[key])) return result;
   }
