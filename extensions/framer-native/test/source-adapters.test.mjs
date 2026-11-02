@@ -74,6 +74,32 @@ test('rejects unsupported editor builds without importing a guessed module', asy
     importModule() { throw new Error('must not import'); } }), /EDITOR_BUILD_UNSUPPORTED/);
 });
 
+test('discovers a compatible new build from its active entry imports and engine capabilities', async () => {
+  const engine = makeEngine(), imports = [];
+  const entry = 'https://app.framerstatic.com/web.FUTURE.mjs';
+  const source = 'import{Ac as engine}from"https://app.framerstatic.com/chunk-IIU4YMHS.mjs";import{l as asset}from"https://app.framerstatic.com/chunk-ZNFBUDMT.mjs";engine.stores.projectStore;engine.loadScopesThenProcess([]);';
+  const adapter = await resolveEditorSourceAdapter({ scriptUrls: [entry], href,
+    fetchModuleText: async url => { assert.equal(url, entry); return source; },
+    async importModule(url) { imports.push(url); return url.includes('IIU4YMHS') ? { Ac: engine } : { l: () => 'https://assets.example/a', j: () => 'https://assets.example/b' }; },
+  });
+  assert.equal((await adapter.readContext({ mode: 'page' })).editorBuild, entry);
+  assert.equal(imports.length, 2);
+});
+
+test('rejects an ambiguous engine fingerprint without importing any guessed modules', async () => {
+  let imported = false;
+  const source = 'import{a as x,b as y}from"https://app.framerstatic.com/chunk-IIU4YMHS.mjs";import"https://app.framerstatic.com/chunk-ZNFBUDMT.mjs";x.stores.projectStore;x.loadScopesThenProcess();y.stores.projectStore;y.loadScopesThenProcess();';
+  await assert.rejects(resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.FUTURE.mjs'], href, fetchModuleText: async () => source, importModule() { imported = true; } }), /EDITOR_BUILD_UNSUPPORTED/);
+  assert.equal(imported, false);
+});
+
+test('rejects a discovered export that is not the native editor engine', async () => {
+  const source = 'import{Ac as engine}from"https://app.framerstatic.com/chunk-IIU4YMHS.mjs";import"https://app.framerstatic.com/chunk-ZNFBUDMT.mjs";engine.stores.projectStore;engine.loadScopesThenProcess();';
+  await assert.rejects(resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.FUTURE.mjs'], href, fetchModuleText: async () => source,
+    importModule: async url => url.includes('IIU4YMHS') ? { Ac: { ...makeEngine(), name: 'OtherEngine' } } : { l() {}, j() {} },
+  }), /ENGINE_UNAVAILABLE/);
+});
+
 test('reports the actual unsupported editor entry without URL queries or unrelated scripts', async () => {
   let imported = false;
   await assert.rejects(resolveEditorSourceAdapter({

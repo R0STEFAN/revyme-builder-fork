@@ -9,6 +9,11 @@ export async function readEditorSource(request) {
     resourceUrls: performance.getEntriesByType('resource').map(entry => entry.name),
     href: () => location.href,
     importModule: url => import(url),
+    fetchModuleText: async url => {
+      const response = await fetch(url, { credentials: 'omit' });
+      if (!response.ok) throw new Error('Editor entry unavailable');
+      return response.text();
+    },
   });
   const result = await captureNativeTransfer(adapter, request, new AbortController().signal);
   console.debug('[framer-native] source capture finished', { complete: result.complete, definitions: result.definitions.length });

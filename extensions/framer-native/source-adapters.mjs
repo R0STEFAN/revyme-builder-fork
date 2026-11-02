@@ -10,9 +10,36 @@ const EDITOR_BUILDS = Object.freeze({
   },
 });
 
-export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = [], href, importModule }) {
-  const entry = scriptUrls.find(url => EDITOR_BUILDS[url]);
-  if (!entry) {
+const ASSET_MODULE = 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs';
+
+async function discoverCompatibleBuild(entry, fetchModuleText) {
+  if (!fetchModuleText) return;
+  let source;
+  try { source = await fetchModuleText(entry); } catch { return; }
+  if (typeof source !== 'string' || source.length > 2_000_000) return;
+  // Only static imports at the beginning of the actual active editor entry are
+  // candidates: they already ran as part of the page, and no other chunk is loaded.
+  const imports = [], pattern = /\s*import\s*(?:\{([^}]*)\}\s*from\s*)?["'](https:\/\/app\.framerstatic\.com\/chunk-[A-Za-z0-9_-]+\.mjs)["']\s*;?/gy;
+  let match, end = 0;
+  while ((match = pattern.exec(source))) { imports.push({ bindings: match[1] ?? '', url: match[2] }); end = pattern.lastIndex; }
+  if (!imports.some(item => item.url === ASSET_MODULE)) return;
+  const body = source.slice(end);
+  const candidates = [];
+  for (const item of imports) for (const binding of item.bindings.split(',')) {
+    const names = /^\s*([\w$]+)\s+as\s+([\w$]+)\s*$/.exec(binding);
+    if (!names) continue;
+    const local = names[2].replace(/[$]/g, '\\$&');
+    if (new RegExp(`\\b${local}\\.stores\\.projectStore\\b`).test(body) && new RegExp(`\\b${local}\\.loadScopesThenProcess\\s*\\(`).test(body)) candidates.push({ engineModule: item.url, engineExport: names[1] });
+  }
+  if (candidates.length !== 1) return;
+  return { ...candidates[0], treeVersion: 128, assetModule: ASSET_MODULE, assetUrlExport: 'l', assetImageUrlExport: 'j', discovered: true };
+}
+
+export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = [], href, importModule, fetchModuleText }) {
+  const active = scriptUrls.filter(url => /^https:\/\/app\.framerstatic\.com\/web\.[A-Za-z0-9_-]+\.mjs$/.test(url));
+  const entry = active.length === 1 ? active[0] : undefined;
+  const build = entry && (EDITOR_BUILDS[entry] ?? await discoverCompatibleBuild(entry, fetchModuleText));
+  if (!build) {
     const editorEntries = urls => [...new Set(urls.flatMap(value => {
       try {
         const url = new URL(value);
@@ -23,9 +50,9 @@ export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = []
     const scripts = editorEntries(scriptUrls), resources = editorEntries(resourceUrls);
     throw new Error(`EDITOR_BUILD_UNSUPPORTED: ${scripts.length ? `Detected editor: ${scripts.join(', ')}.` : 'No editor entry found in document scripts.'} Observed resources: ${resources.join(', ') || 'none'}. Verified adapter: ${Object.keys(EDITOR_BUILDS).join(', ')}.`);
   }
-  const build = EDITOR_BUILDS[entry];
   const exports = await importModule(build.engineModule);
   const assetExports = await importModule(build.assetModule);
+  if (build.discovered && exports[build.engineExport]?.name !== 'VekterEngine') throw new Error('ENGINE_UNAVAILABLE: Discovered engine does not match the expected source model.');
   if (typeof assetExports[build.assetUrlExport] !== 'function') throw new Error('ASSET_RESOLVER_UNAVAILABLE: The verified native URL helper is unavailable.');
   if (build.assetImageUrlExport && typeof assetExports[build.assetImageUrlExport] !== 'function') throw new Error('ASSET_RESOLVER_UNAVAILABLE: The native image URL helper is unavailable.');
   return createEngineSourceAdapter(exports[build.engineExport], { editorBuild: entry, href, treeVersion: build.treeVersion, resolveAssetUrl: assetExports[build.assetUrlExport], resolveAssetImageUrl: assetExports[build.assetImageUrlExport] });
