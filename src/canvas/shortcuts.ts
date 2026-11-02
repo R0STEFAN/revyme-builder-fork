@@ -29,6 +29,7 @@ import {
 import { handleClipboardTextPaste } from './text-paste';
 import { readFigmaClipboard, handleFigmaPaste } from './figma-paste';
 import { readReshadersClipboard } from './reshaders-clipboard';
+import { isNativeTransferClipboardText } from './framer-native-clipboard';
 import { hasClipboard as hasInternalClipboard, setExternalClipboardData } from '../code/features/paste-engine';
 import { parsePluginUrl } from '@/editor/command-palette/marketplace-client';
 import { paletteOpenAtom, paletteQueryAtom } from '@/code/stores/palette-store';
@@ -74,6 +75,15 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     setToolMode, setSelectedIds, commitTextEdit, handleNodeMouseDown, setPanHighlight,
   } = refs;
   const cleanups: (() => void)[] = [];
+  const pasteFramer = (text: string) => {
+    const notification = toast.loading('Імпортуємо з Framer…');
+    void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text)).then(() => {
+      toast.success('Імпорт із Framer завершено.', { id: notification });
+    }).catch(error => {
+      trace.error('framer-native.paste-failed', { error: String(error) });
+      toast.error(String(error instanceof Error ? error.message : error).slice(0, 1200), { id: notification, duration: 12000 });
+    });
+  };
 
   // Helpers: focused-toolbar masters where most creators are no-ops.
   //   - Icon-set master: only shape tools (rect / circle / triangle /
@@ -558,6 +568,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     function doTextPaste() {
     navigator.clipboard.readText().then(text => {
       const trimmed = text?.trim() ?? '';
+      if (isNativeTransferClipboardText(trimmed)) { pasteFramer(trimmed); return; }
       const pluginUrl = trimmed ? parsePluginUrl(trimmed) : null;
       trace.action('clipboard:read-text', {
         text: trimmed.slice(0, 100),
@@ -751,6 +762,9 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
 
     const text = e.clipboardData?.getData('text/plain')?.trim();
     if (!text) return;
+    if (isNativeTransferClipboardText(text)) {
+      e.preventDefault(); e.stopPropagation(); pasteFramer(text); return;
+    }
 
     if (isComponentUrl(text)) {
       e.preventDefault();

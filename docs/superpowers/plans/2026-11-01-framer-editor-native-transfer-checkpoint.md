@@ -7,7 +7,8 @@ directed that all custom code components (local and third-party) become editable
 labeled placeholders. Design components remain native. Work is ACTIVE. Tasks
 1/2/3/7 are complete; 4/5/6/8 are partial; 9 final transport/10 are pending.
 The pause instructions in the historical section are superseded by the resume.
-No complete page/project has been persisted in Revyme or claimed 1:1.
+No complete captured Framer project has been persisted or claimed 1:1.
+The synthetic browser paste smoke below is an isolated integration proof only.
 
 Commits since the starting checkpoint: 107716b original override HOCs; dfaed63
 live variable CMS predicates; 8dc7785 intervening baseline typing fixes; 1cd9950
@@ -53,10 +54,15 @@ pure compiler assembly and the live-capture regressions described below.
   and the ordinary CAS commit service. The shared CLI history writer records one
   reversible journal entry. Tests cover durable undo/redo and lost responses,
   plus preserving local edits after a commit. Browser services, clipboard routing,
-  asset transport, selection and editor history synchronization are NOT wired yet.
+  page activation and editor history are wired for create-mode imports. A
+  synthetic page passed LIVE paste, durable source, rendering, Undo and Redo in
+  isolated project `framer-import-smoke-1793627058722`. Screenshot proof is in
+  the SDD workspace. The original user project rejected its stale revision safely.
+  Selection/replace modes, committed-but-unsynced recovery UI and full-project
+  acceptance remain incomplete.
   Original asset download transport is implemented and is the coordinator's
   default: exact MIME, omitted credentials, cancellation and whole-set failure.
-  Browser CORS/live download and clipboard/editor application remain unverified.
+  Browser CORS/live download remains unverified; the live smoke had no assets.
 - A single centered cover/no-repeat image alpha mask maps to native editable
   mask styles if its original asset is available; other mask forms still block.
   A linear continuous rotation with unchanged variant/breakpoint semantics uses
