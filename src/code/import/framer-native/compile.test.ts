@@ -158,6 +158,19 @@ it('remaps native link prop defaults and instance overrides to the allocated pag
   expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).files).toEqual([]);
 });
 
+it('converts source URL objects in component link overrides', () => {
+  const source = transfer(), master = source.definitions[1].data;
+  master.variables = [{ id: 'destination', type: 'link', initialValue: '' }];
+  const instance = (source.definitions[0].data.children as any[])[0].children[0];
+  instance.$control__destination = { type: 'link', value: { type: 'url', url: 'mailto:hello@example.com' } };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!;
+  expect(parseJSXToNodes(page.code).get(result.identity.instance)?.attrs[nativePropName(result.identity, 'card', 'destination')]).toBe('mailto:hello@example.com');
+  instance.$control__destination.value = { type: 'url', url: 'javascript:alert(1)' };
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).files).toEqual([]);
+});
+
 it('returns no partial files if any required original asset or behavior is unavailable', () => {
   const source = transfer();
   const page = source.definitions[0].data;

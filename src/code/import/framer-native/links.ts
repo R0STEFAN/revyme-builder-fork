@@ -4,6 +4,10 @@ import { sourceRecord } from './source-graph';
 /** Resolve editor page identities before binding a literal link or native link prop. */
 export function sourceStaticLinkValue(value: unknown, routes?: Readonly<Record<string, string>>): unknown {
   const ref = sourceRecord(value);
+  if (ref?.type === 'url') {
+    if (Object.keys(ref).some(key => !['type', 'url'].includes(key)) || typeof ref.url !== 'string' || !/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(ref.url) || /[\u0000-\u0020]/.test(ref.url)) throw new Error('Unsupported source URL link');
+    return ref.url;
+  }
   if (ref?.type !== 'webPage') return value;
   trace.fn('framer-native.sourcePageLink', { pageId: ref.webPageId });
   if (Object.keys(ref).some(key => !['type', 'webPageId'].includes(key))) throw new Error('Source page link parameters/section require their native adapter');
