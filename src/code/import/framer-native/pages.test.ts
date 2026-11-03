@@ -42,6 +42,19 @@ it.each([true, false])('imports on-mount presence with exit enabled %s as editab
   else expect(props.exit!.transition).toContain('0');
   expect(checkFile(file.code, { kind: 'page', path: file.path })).toEqual([]);
 });
+it('keeps an animated design instance editable inside a native presence frame', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  Object.assign(states[0].children[0], { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default', width: 100, widthType: 0, height: 50, heightType: 0, styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectTransition: { type: 'tween', duration: 0.8 }, exitEffectEnabled: true, exitEffectOpacity: 0, exitEffectTransition: { type: 'tween', duration: 0.4 } });
+  delete states[0].children[0].html;
+  states[1].replicaInfo.overrides.heading = {};
+  source.definitions.push({ id: 'card', kind: 'SmartComponentNode', data: { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', children: [{ id: 'card-base', __class: 'FrameNode', children: [] }] } });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const file = result.files[0], nodes = parseJSXToNodes(file.code);
+  expect(hasMountPresenceMotion(nodes.get(identity.heading)?.motionProps)).toBe(true);
+  expect(nodes.get(`${identity.heading}-content`)?.parentId).toBe(identity.heading);
+  expect(checkFile(file.code, { kind: 'page', path: file.path })).toEqual([]);
+});
 it('emits a native page pair with one fluid tree and source responsive typography', () => {
   const { result, identity } = emit();
   expect(result.diagnostics).toEqual([]);

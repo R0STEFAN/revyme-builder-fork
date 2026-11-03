@@ -14,6 +14,7 @@ import { sourceStaticLinkValue } from './links';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
+import { wrapInstanceForPresence } from '../../generation/instance-presence-gen';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceMountEffects, applySourceMountEffects } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
@@ -324,7 +325,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         const mount = sourceMountEffects(node.properties);
         for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
         if (mount) {
-          if (!['FrameNode', 'RichTextNode'].includes(node.kind) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
+          if ((!['FrameNode', 'RichTextNode'].includes(node.kind) && !scene.nested.has(nodeId)) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
+          if (scene.nested.has(nodeId)) code = wrapInstanceForPresence(code, identity[nodeId]).code;
           code = applySourceMountEffects(code, identity[nodeId], mount);
         }
         if (isSourceCodeComponent(node)) continue;

@@ -132,7 +132,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     for (const corner of ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft']) set(`border${corner}Radius`, px(p[`radius${corner}`]));
   } else if (p.radius != null || p.radiusTopLeft != null) {
     const radius = p.radius ?? p.radiusTopLeft;
-    set('borderRadius', p.radiusIsRelative && typeof radius === 'number' ? `${radius * 100}%` : px(radius));
+    if (!(node.kind === 'CodeComponentNode' && radius === 0)) set('borderRadius', p.radiusIsRelative && typeof radius === 'number' ? `${radius * 100}%` : px(radius));
   }
   if (p.fillEnabled === true) {
     if (p.fillType === 'color') set('backgroundColor', value('fillColor'));

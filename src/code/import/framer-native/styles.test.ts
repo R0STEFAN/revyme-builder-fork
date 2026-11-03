@@ -78,4 +78,7 @@ describe('editor source styles', () => {
     expect(styles.gridAutoRows).toBe('auto');
     expect(styles.backgroundImage).toBe('conic-gradient(from 20deg at 25% 50%, red 0%, blue 100%)');
   });
+  it('omits schema-default zero corner radius on component instances so placement wrappers stay clean', () => {
+    expect(mapSourceStyles({ ...node({ radiusPerCorner: false, radiusTopLeft: 0 }), kind: 'CodeComponentNode' }, context())).not.toHaveProperty('borderRadius');
+  });
 });
