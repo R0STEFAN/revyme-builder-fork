@@ -5,8 +5,10 @@ import { sourceRecord } from './source-graph';
 export function sourceStaticLinkValue(value: unknown, routes?: Readonly<Record<string, string>>): unknown {
   const ref = sourceRecord(value);
   if (ref?.type === 'url') {
-    if (Object.keys(ref).some(key => !['type', 'url'].includes(key)) || typeof ref.url !== 'string' || !/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(ref.url) || /[\u0000-\u0020]/.test(ref.url)) throw new Error('Unsupported source URL link');
-    return ref.url;
+    if (Object.keys(ref).some(key => !['type', 'url'].includes(key)) || typeof ref.url !== 'string' || /[\u0000-\u0020]/.test(ref.url)) throw new Error('Unsupported source URL link');
+    const url = /^www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/:?#]|$)/i.test(ref.url) ? `https://${ref.url}` : ref.url;
+    if (!/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(url)) throw new Error('Unsupported source URL link');
+    return url;
   }
   if (ref?.type !== 'webPage') return value;
   trace.fn('framer-native.sourcePageLink', { pageId: ref.webPageId });

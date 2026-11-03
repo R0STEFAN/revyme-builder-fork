@@ -167,6 +167,10 @@ it('converts source URL objects in component link overrides', () => {
   expect(result.diagnostics).toEqual([]);
   const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!;
   expect(parseJSXToNodes(page.code).get(result.identity.instance)?.attrs[nativePropName(result.identity, 'card', 'destination')]).toBe('mailto:hello@example.com');
+  instance.$control__destination.value = { type: 'url', url: 'www.instagram.com' };
+  const social = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(social.diagnostics).toEqual([]);
+  expect(parseJSXToNodes(social.files.find(file => file.path.endsWith('/page.client.tsx'))!.code).get(social.identity.instance)?.attrs[nativePropName(social.identity, 'card', 'destination')]).toBe('https://www.instagram.com');
   instance.$control__destination.value = { type: 'url', url: 'javascript:alert(1)' };
   expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).files).toEqual([]);
 });
