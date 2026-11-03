@@ -28,6 +28,19 @@ it('preserves removal of a text direction attribute in a component state', () =>
   expect(parseResponsiveAttr(result.files[0].code, identity.label, 'dir').byVariant.get(names.success)).toBeNull();
   expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
 });
+
+it.each([true, false])('converts static per-state visibility with base hidden %s into native presence', baseHidden => {
+  const data = { id: 'button', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [
+    { id: 'base', __class: 'FrameNode', children: [{ id: 'spinner', __class: 'FrameNode', parentid: 'base', layout: 'stack', visible: !baseHidden, children: [] }] },
+    { id: 'loading', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: { spinner: { visible: baseHidden } } } },
+  ] };
+  const graph = buildSourceGraph({ ...capture, rootIds: ['button'], definitions: [{ id: data.id, kind: data.__class, data }] });
+  const identity = allocateTargetIdentity(graph, new Set()), result = emitNativeComponents(graph, identity);
+  expect(result.diagnostics).toEqual([]);
+  expect(result.files[0].code).toContain('AnimatePresence');
+  expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
+  expect(parseJSXToNodes(result.files[0].code).get(identity.spinner)?.styles.display).toBe('flex');
+});
 import { parseComponentInfoFromSource } from '../../components/component-registry';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 

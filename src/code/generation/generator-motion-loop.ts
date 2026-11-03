@@ -95,7 +95,7 @@ function composeCanvasLoop(code: string, nodeId: string, loop: { props: Record<s
  *  repeat-free transition is left alone). No-op when the tag has no animate. */
 function stripDormantLoopAttrs(code: string, nodeId: string): string {
   const got = getOpeningTag(code, nodeId);
-  if (!got || !/\banimate=\{/.test(got.tag)) return code;
+  if (!got || !parseTagObject(got.tag, 'animate')) return code;
   let newTag = stripTagAttrBalanced(got.tag, 'animate');
   const trans = parseTagObject(newTag, 'transition');
   if (trans && 'repeat' in trans) newTag = stripTagAttrBalanced(newTag, 'transition');

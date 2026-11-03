@@ -6,6 +6,12 @@ import { cleanup, render } from '@testing-library/react';
 import ts from 'typescript';
 import { composeLoopInCode, decomposeLoopInCode, getLoopAnimate, setLoopInCode } from './generator-motion-loop';
 
+it('preserves variant animation bindings while composing a loop', () => {
+  const base = `export default function Component(){\n return <motion.div data-id="spinner" variants={spinnerVariants} animate={['default', variant]} initial={['default', initialVariant]} />;\n}`;
+  const code = composeLoopInCode(setLoopInCode(base, 'spinner', { props: { rotate: '360' }, transition: { duration: '1', repeat: 'Infinity' }, offscreen: 'play' }), 'spinner');
+  expect(code).toContain("animate={['default', variant]}");
+});
+
 it('stops imperative loops under reduced motion and preserves their editable specification', () => {
   const base = `import React, { useEffect } from 'react'; import { motion, useMotionValue, animate } from 'framer-motion'; export default function Page(){\n  return <motion.div data-id="spinner" />;\n}`;
   const code = composeLoopInCode(setLoopInCode(base, 'spinner', { props: { rotate: '360' }, transition: { duration: '1', repeat: 'Infinity' }, offscreen: 'play' }), 'spinner');

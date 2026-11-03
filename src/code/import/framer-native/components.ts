@@ -28,6 +28,7 @@ import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { sourceStaticLinkValue } from './links';
 import { setVariantAttrInCode } from '../../generation/responsive-attrs-gen';
+import { setVariantVisibilityInCode } from '../../generation/variant-visibility-gen';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
@@ -81,7 +82,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         return binding;
       };
       const stylesFor = (node: ResolvedSourceNode, parent?: ResolvedSourceNode) => {
-        const styleNode = visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node;
+        const styleNode = visibilityFor(node) || node.properties.visible === false ? { ...node, properties: { ...node.properties, visible: true } } : node;
         const styles = mapSourceStyles(styleNode, { ...context, parent });
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, context).styles);
         if (parent && ['stack', 'grid'].includes(String(parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
@@ -316,6 +317,13 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           assertLoopOutsideSourceList(graph, id);
           code = applySourceRotationLoop(code, identity[id], spec);
         }
+      }
+      for (const id of sourceIds) {
+        const hidden = scope.children.filter(state => resolveSourceNode(graph, id, state === primaryId ? undefined : state).properties.visible === false).map(state => names[state]);
+        if (!hidden.length) continue;
+        if (id === primaryId) throw new Error('Source root visibility requires its native component lifecycle adapter');
+        code = setVariantVisibilityInCode(code, identity[id], hidden, Object.values(names));
+        code = setTagAttr(code, identity[primaryId], 'layout', '{true}');
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');
