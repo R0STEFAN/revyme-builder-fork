@@ -5,7 +5,7 @@ import type { NativeTransfer } from './types';
 import { framerImportSubmitOperation, framerImportSubmitInputSchema } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
 import { parseMetadataFromCode } from '../../generation/metadata-gen';
-import { buildCmsDetailServerWrapper, parseCmsSeoExpressions } from '../../project/cms-seo';
+import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '../../project/cms-seo';
 import { nativeCollectionSlug, nativeFieldId } from './cms';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 import { nativePropName } from './components';
@@ -192,6 +192,19 @@ it('binds a page social image to the uploaded native media URL', async () => {
   const target = { projectId: 'destination', branchId: 'main' };
   expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
 });
+it('inherits a document social image through native media and permits a page override', () => {
+  const source = transfer(), global = 'data:framer/asset-reference,global.png', local = 'data:framer/asset-reference,local.png';
+  source.definitions[2].data.webMetadata = { socialImage: global };
+  source.assets = [{ key: 'global', extension: '.png', mimeType: 'image/png', url: 'https://example.com/global.png' }, { key: 'local', extension: '.png', mimeType: 'image/png', url: 'https://example.com/local.png' }];
+  const options = { mode: 'create' as const, existingFiles: new Map<string, string>(), uploadedAssets: { global: '/api/uploads/global.webp', local: '/api/uploads/local.webp' } };
+  const inherited = compileNativeTransfer(source, options);
+  expect(inherited.diagnostics).toEqual([]);
+  expect(parseMetadataFromCode(inherited.files.find(file => file.path === 'app/page.tsx')!.code)).toMatchObject({ openGraph: { images: ['/api/uploads/global.webp'] } });
+  source.definitions[0].data.webMetadata = { socialImage: local };
+  const overridden = compileNativeTransfer(source, options);
+  expect(overridden.diagnostics).toEqual([]);
+  expect(parseMetadataFromCode(overridden.files.find(file => file.path === 'app/page.tsx')!.code)).toMatchObject({ openGraph: { images: ['/api/uploads/local.webp'] } });
+});
 
 it('compiles a complete native candidate deterministically without mutating source or destination', async () => {
   const source = transfer(), before = JSON.stringify(source);
@@ -359,6 +372,16 @@ it('imports a CMS detail route with live record bindings into a native page pair
   expect(client.code).toContain(`"collection": "${nativeCollectionSlug(result.identity, 'articles')}"`);
   expect(parseJSXToNodes(client.code).get(result.identity['detail-title'])?.binding?.field).toBe(nativeFieldId(result.identity, 'articles', 'titleField'));
   expect(server.code).toContain('generateMetadata');
+  const globalImage = 'data:framer/asset-reference,global.png';
+  source.definitions[2].data.webMetadata = { title: 'Site title', description: 'Site description', socialImage: globalImage };
+  source.assets = [{ key: 'global', extension: '.png', mimeType: 'image/png', url: 'https://example.com/global.png' }];
+  const withImage = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create', uploadedAssets: { global: '/api/uploads/global.webp' } });
+  expect(withImage.diagnostics).toEqual([]);
+  expect(parseCmsSeoDefaults(withImage.files.find(file => file.path === server.path)!.code)?.ogImage).toBe('/api/uploads/global.webp');
+  const imageTarget = { projectId: 'destination', branchId: 'main' };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(imageTarget, 0, {}), { files: withImage.files, mode: 'create', target: imageTarget, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  source.definitions[2].data.webMetadata = { title: 'Site title', description: 'Site description' };
+  source.assets = [];
   expect(server.code).toContain('Site title');
   const relocated = compileNativeTransfer(source, { existingFiles: new Map([['app/articles/[record]/page.client.tsx', 'existing']]), mode: 'create' });
   expect(relocated.diagnostics).toEqual([]);

@@ -94,6 +94,12 @@ function isSafeCmsSeoExpression(value: string, fields: ReadonlySet<string>): boo
   } catch { return false; }
 }
 
+function isSafeCmsImage(value: string): boolean {
+  if (!/^(?:\/api\/uploads\/|\/assets\/|https:\/\/)[^\s"'<>]+$/.test(value)) return false;
+  try { const url = new URL(value, 'https://revyme.invalid'); return url.protocol === 'https:' && !url.username && !url.password; }
+  catch { return false; }
+}
+
 /** Server entries have a narrow structural contract; annotations cannot turn canvas code into a wrapper. */
 function validateWrapper(path: string, code: string, projected: ReadonlyMap<string, string>): void {
   if (path.endsWith('/[slug]/page.tsx')) {
@@ -108,7 +114,7 @@ function validateWrapper(path: string, code: string, projected: ReadonlyMap<stri
       if (Array.isArray(schema.fields)) fields = new Set(schema.fields.filter((field: any) => field?.type === 'text' && typeof field.id === 'string').map((field: any) => field.id));
     } catch { /* CMS validation rejects malformed schema. */ }
     if (meta?.kind === 'detail' && typeof collection === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(collection) &&
-        Object.entries(defaults).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string') &&
+        Object.entries(defaults).every(([key, value]) => typeof value === 'string' && (['title', 'description'].includes(key) || key === 'ogImage' && isSafeCmsImage(value))) &&
         Object.entries(expressions).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string' && isSafeCmsSeoExpression(value, fields)) &&
         projected.has(`cms/${collection}.schema.json`) && projected.has(`cms/${collection}.json`) &&
         code === buildCmsDetailServerWrapper({ collection, defaults, expressions, apiConfig: null })) return;

@@ -41,6 +41,16 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
   for (const id of graph.reachable) {
     const node = graph.nodes.get(id)!;
     for (const [property, value] of Object.entries(node.raw)) if (property !== 'children' && !(isSourceCodeComponent(node) && property.startsWith('$control__'))) scan(value, isSourceCodeComponent(node));
+    if (node.kind === 'WebPageNode' && sourceRecord(node.raw.webMetadata)?.socialImage === undefined) {
+      let parent = node.raw.parentid;
+      const seen = new Set<string>();
+      while (typeof parent === 'string' && !seen.has(parent)) {
+        seen.add(parent);
+        const ancestor = graph.nodes.get(parent);
+        if (ancestor?.kind === 'RootNode') { scan(sourceRecord(ancestor.raw.webMetadata)?.socialImage); break; }
+        parent = ancestor?.raw.parentid;
+      }
+    }
   }
   const requested = new Set<string>();
   const diagnostic = (code: string, message: string) => result.diagnostics.push({ code, property: 'assets', message });

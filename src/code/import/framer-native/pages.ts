@@ -341,6 +341,11 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (isDetail) {
         const globalMeta = sourceRecord(document?.raw.webMetadata);
         const defaults = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
+        if (globalMeta?.socialImage !== undefined) {
+          const image = typeof globalMeta.socialImage === 'string' ? options.assets?.[globalMeta.socialImage] : undefined;
+          if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
+          defaults.ogImage = image;
+        }
         const expressions: Record<string, string> = {};
         const pageMeta = sourceRecord(page.raw.webMetadata);
         const collectionId = sourceCollectionId(page.raw.dataIdentifier);
@@ -372,8 +377,9 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
       const fields = Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
       if (typeof pageMeta?.noIndex === 'boolean') fields.push(`robots: { index: ${!pageMeta.noIndex} }`);
-      if (pageMeta?.socialImage !== undefined) {
-        const image = typeof pageMeta.socialImage === 'string' ? options.assets?.[pageMeta.socialImage] : undefined;
+      const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
+      if (socialImage !== undefined) {
+        const image = typeof socialImage === 'string' ? options.assets?.[socialImage] : undefined;
         if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
         fields.push(`openGraph: { images: [${JSON.stringify(image)}] }`);
       }

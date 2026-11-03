@@ -55,12 +55,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     for (const id of graph.reachable) {
       const node = graph.nodes.get(id)!;
       const metadata = sourceRecord(node.raw.webMetadata);
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && (key === 'noIndex' && typeof value === 'boolean' || key === 'socialImage' && typeof value === 'string')))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && key === 'noIndex' && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string'))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
     }
     // Document metadata is inherited without importing all sibling pages.
     if (graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      if (metadata && Object.keys(metadata).some(key => !['title', 'description'].includes(key))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string'))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
     }
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
