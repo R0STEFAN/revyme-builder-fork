@@ -41,6 +41,16 @@ it('emits a native page pair with one fluid tree and source responsive typograph
   expect(client.code).toContain('font-size: 24px');
   expect(checkFile(client.code, { kind: 'page', path: client.path, projectFiles: new Set(result.files.map(file => file.path)) })).toEqual([]);
 });
+it('preserves static breakpoint visibility through native responsive rules', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  states[1].replicaInfo.overrides.heading.visible = false;
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files[0];
+  expect(client.code).toContain('display: none');
+  expect(parseJSXToNodes(client.code).get(identity.heading)?.textContent).toBe('Привіт');
+  expect(checkFile(client.code, { kind: 'page', path: client.path })).toEqual([]);
+});
 it('imports into a free route instead of overwriting an existing Home, including route groups', () => {
   const { result } = emit(input(), new Set(['app/(main)/page.client.tsx', 'app/(main)/page.tsx']));
   expect(result.diagnostics).toEqual([]);

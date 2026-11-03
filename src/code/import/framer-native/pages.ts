@@ -257,6 +257,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         for (const viewport of viewports.slice(1)) {
           const state = resolveSourceNode(graph, nodeId, viewport.sourceStateId);
           const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']);
+          if ([node.properties.visible, state.properties.visible].every(value => value === undefined || typeof value === 'boolean')) semanticProperties.delete('visible');
           if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
           else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
           if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node) && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
