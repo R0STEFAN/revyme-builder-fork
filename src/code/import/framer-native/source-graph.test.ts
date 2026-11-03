@@ -22,6 +22,10 @@ describe('original editor source graph', () => {
     source.definitions.pop();
     expect(buildSourceGraph(source).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING', message: expect.stringContaining('cursor') }));
   });
+  it('ignores cursor references in deleted design-component controls', () => {
+    const source = transfer(node('page', { children: [node('instance', { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default', '$control__deleted': { value: { customCursorType: 'component', customCursorSmartComponentId: 'missing' } } })] }), node('card', { __class: 'SmartComponentNode', variables: [] }));
+    expect(buildSourceGraph(source).diagnostics).toEqual([]);
+  });
   it('includes an inherited page template without pulling every sibling page into the closure', () => {
     const input = transfer(node('page', { __class: 'WebPageNode', parentid: 'document' }), node('document', { __class: 'RootNode', layoutTemplateIdentifier: 'local-module:layoutTemplate/template:default', children: [] }), node('template', { __class: 'LayoutTemplateNode', children: [node('slot', { __class: 'SlotNode' })] }), node('sibling', { __class: 'WebPageNode', parentid: 'document' }));
     const graph = buildSourceGraph(input);

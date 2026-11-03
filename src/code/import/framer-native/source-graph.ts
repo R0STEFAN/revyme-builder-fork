@@ -115,7 +115,7 @@ function stableJSON(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function readReferences(node: SourceNode): SourceReference[] {
+function readReferences(node: SourceNode, nodes?: Map<string, SourceNode>): SourceReference[] {
   const result: SourceReference[] = [];
   const add = (targetId: string, property: string, optional = false) => {
     const existing = result.find(ref => ref.targetId === targetId && ref.property === property);
@@ -148,7 +148,12 @@ function readReferences(node: SourceNode): SourceReference[] {
       }
     }
   };
-  for (const [key, value] of Object.entries(node.raw)) if (key !== 'children' && key !== 'renamedIds' && !(isSourceCodeComponent(node) && (key.startsWith('$control__') || key.startsWith('codeOverride') || /^on[A-Z]/.test(key)))) scan(value, key);
+  const masterId = node.kind === 'CodeComponentNode' ? /^local-module:canvasComponent\/([^:]+):/.exec(String(node.raw.codeComponentIdentifier ?? ''))?.[1] : undefined;
+  const variables = masterId ? nodes?.get(masterId)?.raw.variables : undefined;
+  for (const [key, value] of Object.entries(node.raw)) {
+    if (key.startsWith('$control__') && key !== '$control__variant' && Array.isArray(variables) && !variables.some(variable => sourceRecord(variable)?.id === key.slice(10))) continue;
+    if (key !== 'children' && key !== 'renamedIds' && !(isSourceCodeComponent(node) && (key.startsWith('$control__') || key.startsWith('codeOverride') || /^on[A-Z]/.test(key)))) scan(value, key);
+  }
   return result;
 }
 
@@ -181,7 +186,7 @@ export function buildSourceGraph(input: unknown): SourceGraph {
   const references = new Map<string, SourceReference[]>();
   for (const node of nodes.values()) {
     byKind.set(node.kind, [...(byKind.get(node.kind) ?? []), node.id]);
-    references.set(node.id, readReferences(node));
+    references.set(node.id, readReferences(node, nodes));
   }
   for (const node of nodes.values()) {
     if (node.kind !== 'WebPageNode' || node.raw.layoutTemplateIdentifierOverride !== undefined) continue;
