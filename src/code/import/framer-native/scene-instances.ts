@@ -1,7 +1,8 @@
 import * as t from '@babel/types';
 import { trace } from '../../../shared/debug-trace';
 import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
-import { generate, setTagAttr } from '../../generation/generator-utils';
+import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
+import { cursorOptsPropName, serializeInstanceCursorOpts } from '../../generation/cursor-gen';
 import { bindSourcePropInCode } from './bindings';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
@@ -53,7 +54,16 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
         continue;
       }
       if (variable.type === 'customcursor') {
-        if (value != null && value !== '') throw new Error(`Cursor assignment on ${id} requires its native component adapter`);
+        if (value != null && value !== '') {
+          const cursor = sourceRecord(value), componentId = cursor?.customCursorSmartComponentId;
+          if (cursor?.customCursorType !== 'component' || typeof componentId !== 'string' || Object.keys(cursor).some(key => !['customCursorType', 'customCursorSmartComponentId', 'customCursorVariant'].includes(key)) || graph.nodes.get(componentId)?.kind !== 'SmartComponentNode') throw new Error(`Cursor assignment on ${id} requires its native component adapter`);
+          const name = nativeComponentName(identity, componentId), prop = nativePropName(identity, masterId, sourceProp);
+          const variant = cursor.customCursorVariant == null ? undefined : sourceStateNames({ graph, scopeId: componentId }, identity)[String(cursor.customCursorVariant)];
+          if (cursor.customCursorVariant != null && !variant) throw new Error(`Missing cursor variant ${String(cursor.customCursorVariant)} on ${id}`);
+          result = ensureNamedImport(result, `@/components/${name}`, [], { ensureDefault: name });
+          result = setTagAttr(result, identity[id], prop, `{${name}}`);
+          if (variant) result = setTagAttr(result, identity[id], cursorOptsPropName(prop), `{${serializeInstanceCursorOpts({ variant })}}`);
+        }
         continue;
       }
       if (variable.type === 'eventhandler' && sourceShowOverlayTarget(value)) {

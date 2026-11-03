@@ -13,7 +13,7 @@ import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { CSS_NEUTRAL_FALLBACK, setConditionalStyleInCode, updateVariantStyleInCode } from '../../generation/generator-styles';
 import { updateVariantEntryTransition } from '../../generation/generator-motion-transition';
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
-import { addComponentCursorInCode } from '../../generation/cursor-gen';
+import { addComponentCursorInCode, ensureCursorOptsForwardInCode, cursorOptsPropName } from '../../generation/cursor-gen';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
 import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
 import { addConnectionToCode, rebuildConnections } from '../../variants/connection-config';
@@ -157,6 +157,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         params.properties.push(t.objectProperty(t.identifier(prop), parameter, false, true));
         const tsType = sourceType === 'eventhandler' ? t.tsFunctionType(null, [], t.tsTypeAnnotation(t.tsVoidKeyword())) : sourceType === 'customcursor' ? t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ComponentType'))) : sourceType === 'number' ? t.tsNumberKeyword() : sourceType === 'boolean' ? t.tsBooleanKeyword() : t.tsStringKeyword();
         const member = t.tsPropertySignature(t.identifier(prop), t.tsTypeAnnotation(tsType)); member.optional = true; types.members.push(member);
+        if (sourceType === 'customcursor') { const opts = t.tsPropertySignature(t.identifier(cursorOptsPropName(prop)), t.tsTypeAnnotation(t.tsAnyKeyword())); opts.optional = true; types.members.push(opts); }
       }
       if (slots.length) {
         if (slots.length > 1) throw new Error('Multiple source slots require named native slot props');
@@ -292,6 +293,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'customcursor') throw new Error(`Cursor on ${id} requires its native component adapter`);
           for (const state of scope.children.filter(state => state !== primaryId)) if (JSON.stringify(resolveSourceNode(graph, id, state).properties.customCursorType) !== JSON.stringify(node.properties.customCursorType)) throw new Error(`Per-state cursor on ${id} requires its native adapter`);
           code = addComponentCursorInCode(code, identity[id], { componentName: binding.name });
+          code = ensureCursorOptsForwardInCode(code, binding.name);
         }
         const identifier = activeSourceCodeOverride(node.properties);
         if (!identifier) continue;

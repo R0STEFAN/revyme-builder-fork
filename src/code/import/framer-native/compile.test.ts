@@ -43,6 +43,25 @@ it('prepares an exact native cursor portal patch alongside the generated compone
   (source.definitions[0].data.children as any[])[0].children[0].$control__cursor = { type: 'customcursor', value: { customCursorType: 'component', customCursorSmartComponentId: 'missing' } };
   expect(compileNativeTransfer(source, { mode: 'create', existingFiles }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING', message: expect.stringContaining('missing') }));
 });
+it('assigns an original design cursor and its variant to a native component instance', async () => {
+  const source = transfer(), master = source.definitions[1].data;
+  master.variables = [{ id: 'cursor', type: 'customcursor' }];
+  (master.children as any[])[0].customCursorType = { type: 'variableReference', providerId: 'card', id: 'cursor' };
+  (source.definitions[0].data.children as any[])[0].children[0].$control__cursor = { type: 'customcursor', value: { customCursorType: 'component', customCursorSmartComponentId: 'pointer', customCursorVariant: 'hover' } };
+  const pointer = { id: 'pointer', __class: 'SmartComponentNode', baseVariantId: 'pointer-base', children: [{ id: 'pointer-base', __class: 'FrameNode', children: [] }, { id: 'hover', __class: 'FrameNode', children: [], replicaInfo: { master: 'pointer-base', overrides: {} } }] };
+  source.definitions.push({ id: pointer.id, kind: pointer.__class, data: pointer });
+  const layout = `import React from 'react'; export default function Layout({children}) { return <html><body>{children}</body></html>; }`;
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]) });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!.code;
+  const prop = nativePropName(result.identity, 'card', 'cursor');
+  expect(page).toContain(`${prop}={`);
+  expect(page).toContain(`${prop}Opts={{`);
+  expect(page).toContain(result.identity.hover);
+  expect(result.files.find(file => file.code.includes(`withCursor(${prop},`))?.code).toContain(`...${prop}Opts`);
+  const target = { projectId: 'destination', branchId: 'main' };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+});
 it('connects source Google families and exact axes through native imports without uploading font files', async () => {
   const source = transfer();
   const frame = (source.definitions[1].data.children as any[])[0];
