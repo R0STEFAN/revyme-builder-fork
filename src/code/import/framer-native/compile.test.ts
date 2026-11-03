@@ -10,6 +10,7 @@ import { nativeCollectionSlug, nativeFieldId } from './cms';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 import { nativePropName } from './components';
 import { parsePresetTokens } from '../../generation/preset-gen';
+import { parseComponentInfoFromSource } from '../../components/component-registry';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -135,6 +136,26 @@ it('compiles source page references inside a master to the imported page route',
   const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!;
   const masterFile = result.files.find(file => file.path.startsWith('components/'))!;
   expect(parseJSXToNodes(masterFile.code).get(result.identity.label)?.attrs.href).toBe('/' + page.path.split('/')[1]);
+});
+
+it('remaps native link prop defaults and instance overrides to the allocated page route', () => {
+  const source = transfer(), master = source.definitions[1].data;
+  master.variables = [{ id: 'destination', type: 'link', initialValue: { type: 'webPage', webPageId: 'home' } }];
+  (master.children as any[])[0].children[0].link = { type: 'variableReference', providerId: 'card', id: 'destination' };
+  const instance = (source.definitions[0].data.children as any[])[0].children[0];
+  instance.$control__destination = { type: 'link', value: { type: 'webPage', webPageId: 'home' } };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/page.client.tsx', 'Existing home']]) });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path.endsWith('/page.client.tsx'))!;
+  const route = '/' + page.path.split('/')[1], prop = nativePropName(result.identity, 'card', 'destination');
+  expect(parseJSXToNodes(page.code).get(result.identity.instance)?.attrs[prop]).toBe(route);
+  const component = result.files.find(file => file.path.startsWith('components/'))!;
+  expect(parseComponentInfoFromSource(component.path, component.code, '')?.props.find(item => item.name === prop)?.defaultValue).toBe(route);
+  expect(parseJSXToNodes(component.code).get(result.identity.label)?.attrs.href).toBe(`var:${prop}`);
+  instance.$control__destination.value = { type: 'webPage', webPageId: 'missing' };
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/route.*missing|missing.*route/i) }));
+  instance.$control__destination.value = { type: 'webPage', webPageId: 'home', sectionId: 'unadapted-section' };
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).files).toEqual([]);
 });
 
 it('returns no partial files if any required original asset or behavior is unavailable', () => {

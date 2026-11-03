@@ -25,6 +25,7 @@ import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './
 import { mapSourceText } from './text';
 import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
+import { sourceStaticLinkValue } from './links';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
@@ -135,6 +136,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (!type) throw new Error(`Variable ${String(variable.id)} type ${sourceType} requires a native data adapter`);
         const prop = nativePropName(identity, scopeId, String(variable.id));
         let initial = variable.initialValue ?? (sourceType === 'boolean' ? false : sourceType === 'number' ? 0 : '');
+        if (sourceType === 'link') initial = sourceStaticLinkValue(initial, options.routes) as typeof initial;
         if (sourceType === 'collectionreference') {
           const collectionId = sourceCollectionId(variable.dataIdentifier);
           const collection = graph.nodes.get(collectionId);
@@ -159,7 +161,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         params.properties.push(t.objectProperty(t.identifier('children'), t.identifier('children'), false, true));
         const member = t.tsPropertySignature(t.identifier('children'), t.tsTypeAnnotation(t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ReactNode'))))); member.optional = true; types.members.push(member);
       }
-      code = applySourceInstances(generate(ast).code, { jsx: body, sourceIds, nested, codeInstances, links, slots }, graph, identity, options.assets);
+      code = applySourceInstances(generate(ast).code, { jsx: body, sourceIds, nested, codeInstances, links, slots }, graph, identity, options.assets, { routes: options.routes });
       for (const variable of variables) {
         const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);
@@ -172,11 +174,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       for (const id of links) {
         const node = resolveSourceNode(graph, id);
         code = convertToMotionLinkInCode(code, identity[id]);
-        const pageLink = sourceRecord(node.properties.link);
-        const route = pageLink?.type === 'webPage' && typeof pageLink.webPageId === 'string' ? options.routes?.[pageLink.webPageId] : undefined;
-        if (pageLink?.type === 'webPage' && !route) throw new Error(`Destination route unavailable for source page ${String(pageLink.webPageId)}`);
-        if (route?.includes('[slug]')) throw new Error(`Source link on ${id} requires a dynamic record adapter`);
-        code = setTagAttr(code, identity[id], 'href', `{${route ? JSON.stringify(route) : valueExpression(node.properties.link, node, context, 'link')}}`);
+        code = setTagAttr(code, identity[id], 'href', `{${valueExpression(sourceStaticLinkValue(node.properties.link, options.routes), node, context, 'link')}}`);
         if (node.properties.linkOpenInNewTab !== undefined) code = setTagAttr(code, identity[id], 'target', `{${valueExpression(node.properties.linkOpenInNewTab, node, context, 'linkOpenInNewTab')} ? '_blank' : '_self'}`);
       }
       for (const id of sourceIds) {
