@@ -6,6 +6,14 @@
 // viewport's enter animates back to rest. whileInView is non-responsive (resting
 // is the same everywhere) but must cover the UNION of keys across all viewports.
 
+/** Presence transitions on ordinary children use the same dialect as modal roots. */
+export function hasMountPresenceMotion(props: Partial<Record<'initial' | 'animate' | 'exit' | 'transition', Record<string, string>>> | null | undefined): boolean {
+  return !!props?.initial && !props.initial._variantName
+    && !!props.animate && !props.animate._variantName
+    && !!props.exit && !props.exit._variantName
+    && props.transition?.repeat === undefined;
+}
+
 /** Transform + opacity keys whose RESTING value is neutral (0, or 1 for scale/
  *  opacity) — the element is un-transformed at rest, so the reveal animates back
  *  to neutral. Every OTHER animated key is a real CSS box value (height, width,

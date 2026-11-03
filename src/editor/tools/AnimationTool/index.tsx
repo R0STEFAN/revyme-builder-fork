@@ -27,7 +27,7 @@ import { trace } from '@/shared/debug-trace';
 import { type AnimEntryType, type DetectedEntry, ENTRY_META, OpenEditorBadge } from './shared';
 import type { MenuItem } from '../../controls/control-menu-items';
 import { copiedAnimationAtom, buildCopiedAnimation, canPasteAnimation, applyCopiedAnimation, type CopiedAnimation } from './animation-clipboard';
-import { appearReveal } from './appear-utils';
+import { appearReveal, hasMountPresenceMotion } from './appear-utils';
 import { summarizeTransition } from './CurvePreview';
 import AddEffectDropdown, { type AddActionType } from './AddEffectDropdown';
 import NameInputModal from '../../ui/NameInputModal';
@@ -465,7 +465,7 @@ export default function AnimationTool({ styles: s, onUpdate, glideOnly }: Props)
     // ── Scroll Animation (DISCRETE): On Appear / in-view / direction-triggered
     //    On Scroll. State-based — plays a transition when triggered. The scrubbed
     //    Scroll Transform is a SEPARATE entry (below), so these no longer share.
-    if (isOverlayNode && mp?.animate && !mp.animate._variantName) {
+    if ((isOverlayNode || hasMountPresenceMotion(mp)) && mp?.animate && !mp.animate._variantName) {
       // Overlay appear uses initial→animate + exit inside <AnimatePresence> (NOT
       // whileInView) — it gets both an ENTER and an EXIT animation. Editor: a
       // dedicated OverlayAppearPopup with Enter + Exit rows.
@@ -551,7 +551,7 @@ export default function AnimationTool({ styles: s, onUpdate, glideOnly }: Props)
     // folded into a useEffect); skip live detection when the spec carries it.
     // Overlays carry `animate` as their Appear RESTING state (inside
     // <AnimatePresence>), NOT a loop — exclude them or a phantom Loop row shows.
-    if (mp?.animate && !mp.animate._variantName && !animIsScrollTrigger && !fxSpec?.loop && !isOverlayNode) {
+    if (mp?.animate && !mp.animate._variantName && !animIsScrollTrigger && !fxSpec?.loop && !isOverlayNode && !hasMountPresenceMotion(mp)) {
       entries.push({ type: 'loop', summary: 'Edit', key: 'loop',
         data: { props: mp.animate, transition: mp?.transition || {} } });
     }

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { appearNeutralValue, appearUnionKeys, appearReveal, appearRestingValue } from './appear-utils';
+import { appearNeutralValue, appearUnionKeys, appearReveal, appearRestingValue, hasMountPresenceMotion } from './appear-utils';
+
+it('classifies a child initial/animate/exit sequence as presence rather than a loop', () => {
+  const presence = { initial: { opacity: '0' }, animate: { opacity: '1' }, exit: { opacity: '0' } };
+  expect(hasMountPresenceMotion(presence)).toBe(true);
+  expect(hasMountPresenceMotion({ ...presence, transition: { repeat: 'Infinity' } })).toBe(false);
+  expect(hasMountPresenceMotion({ ...presence, animate: { _variantName: 'default' } })).toBe(false);
+  expect(hasMountPresenceMotion({ initial: { opacity: '0' }, animate: { opacity: '1' } })).toBe(false);
+});
 
 describe('appearNeutralValue', () => {
   it('opacity + scale → 1, transforms → 0', () => {
