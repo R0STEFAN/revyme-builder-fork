@@ -49,6 +49,23 @@ test('marks a missing assigned design cursor incomplete while ignoring code comp
   assert(!result.diagnostics.some(item => item.sourceId === 'ignored'));
 });
 
+test('loads an assigned cursor definition omitted from initial project scopes', async () => {
+  const source = adapter(), readScope = source.readScope, readDefinitions = source.readDefinitions;
+  let loaded = false;
+  source.readScope = async id => id === 'cursor' ? { id, loaded, dependencyIds: [] } : readScope(id);
+  const loadScopes = source.loadScopes;
+  source.loadScopes = async ids => { if (ids.includes('cursor')) loaded = true; else await loadScopes(ids); };
+  source.readDefinitions = async ids => {
+    const definitions = await readDefinitions(ids.filter(id => id !== 'cursor'));
+    definitions[0].data.children = [{ id: 'button', __class: 'FrameNode', customCursorType: 'component', customCursorSmartComponentId: 'cursor', children: [] }];
+    if (ids.includes('cursor')) definitions.push({ id: 'cursor', kind: 'SmartComponentNode', data: { id: 'cursor', __class: 'SmartComponentNode', children: [] } });
+    return definitions;
+  };
+  const result = await captureNativeTransfer(source, { mode: 'project' }, new AbortController().signal);
+  assert.equal(result.complete, true);
+  assert(result.definitions.some(item => item.id === 'cursor'));
+});
+
 test('does not reject a present cursor or deleted component control', async () => {
   const source = adapter(), read = source.readDefinitions;
   source.readDefinitions = async ids => {
