@@ -327,6 +327,15 @@ it.each(['metadata', 'font', 'token'])('does not report a complete candidate whi
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: kind === 'metadata' ? 'SOURCE_METADATA_ADAPTER_REQUIRED' : kind === 'font' ? 'SOURCE_FONT_ADAPTER_REQUIRED' : 'SOURCE_TOKEN_ADAPTER_REQUIRED' }));
 });
+it('accepts the source language only when the destination document already uses it', () => {
+  const source = transfer(); source.definitions[2].data.webMetadata = { language: 'uk' };
+  const layout = `export const siteConfig = { language: 'uk' }; export default function Layout({children}) { return <html lang={siteConfig.language || 'en'}><body>{children}</body></html>; }`;
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]) });
+  expect(result.diagnostics).toEqual([]);
+  expect(result.files.some(file => file.path === 'app/layout.tsx')).toBe(false);
+  const mismatched = layout.replace("lang={siteConfig.language || 'en'}", 'lang="en"');
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', mismatched]]) }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED' }));
+});
 it('preserves a page no-index setting in native metadata and sitemap detection', async () => {
   const source = transfer();
   source.definitions[0].data.webMetadata = { title: 'Private page', noIndex: true };

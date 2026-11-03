@@ -19,6 +19,7 @@ import type { WorkspaceFontFaceSpec } from '../../project/preset-ops';
 import { addGoogleFontImportsToCss } from '../../../shared/google-font-import';
 import { sourceGoogleFontRequests } from './fonts';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '../../generation/cursor-gen';
+import { parseSiteConfigFromCode } from '../../generation/metadata-gen';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
@@ -26,6 +27,23 @@ export interface NativeTargetContext {
   assetPayloads?: Readonly<Record<string, string>>;
   uploadedAssets?: Readonly<Record<string, string>>;
   fontFaces?: readonly WorkspaceFontFaceSpec[];
+}
+
+function destinationLanguageMatches(code: string | undefined, language: unknown): boolean {
+  if (!code || typeof language !== 'string' || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(language)) return false;
+  const ast = parseJSX(code);
+  if (!ast) return false;
+  const values: Array<string | undefined> = [];
+  t.traverseFast(ast, node => {
+    if (!t.isJSXOpeningElement(node) || !t.isJSXIdentifier(node.name, { name: 'html' })) return;
+    const attr = node.attributes.find(item => t.isJSXAttribute(item) && t.isJSXIdentifier(item.name, { name: 'lang' }));
+    if (!t.isJSXAttribute(attr)) { values.push(undefined); return; }
+    if (t.isStringLiteral(attr.value)) { values.push(attr.value.value); return; }
+    const expr = t.isJSXExpressionContainer(attr.value) ? attr.value.expression : undefined;
+    if (t.isLogicalExpression(expr, { operator: '||' }) && t.isMemberExpression(expr.left) && !expr.left.computed && t.isIdentifier(expr.left.object, { name: 'siteConfig' }) && t.isIdentifier(expr.left.property, { name: 'language' }) && t.isStringLiteral(expr.right)) values.push(parseSiteConfigFromCode(code).language || expr.right.value);
+    else values.push(undefined);
+  });
+  return values.length === 1 && values[0] === language;
 }
 
 /** Pure candidate assembly. Only the native submit/plan pipeline may persist it. */
@@ -56,12 +74,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const node = graph.nodes.get(id)!;
       const metadata = sourceRecord(node.raw.webMetadata);
       if (node.kind === 'WebPageNode' && typeof metadata?.noIndexSite === 'boolean') trace.action('framer-native.skipSiteIndexFlag', { sourceId: id, value: metadata.noIndexSite });
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string'))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
     }
     // Document metadata is inherited without importing all sibling pages.
     if (graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string'))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
     }
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);

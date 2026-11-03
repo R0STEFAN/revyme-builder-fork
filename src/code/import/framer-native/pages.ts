@@ -340,7 +340,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       }
       if (isDetail) {
         const globalMeta = sourceRecord(document?.raw.webMetadata);
-        const defaults = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
+        const defaults: Record<string, unknown> = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
         const pageMeta = sourceRecord(page.raw.webMetadata);
         if (typeof pageMeta?.noIndex === 'boolean') defaults.robotsIndex = !pageMeta.noIndex;
         const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
