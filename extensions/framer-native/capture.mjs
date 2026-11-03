@@ -7,6 +7,31 @@ function abortable(promise, signal) {
   });
 }
 
+function missingProjectCursors(definitions) {
+  const nodes = new Map(), roots = definitions.map(item => item.data);
+  const index = value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    if (typeof value.id === 'string' && typeof value.__class === 'string') nodes.set(value.id, value);
+    if (Array.isArray(value.children)) value.children.forEach(index);
+  };
+  roots.forEach(index);
+  const missing = new Set();
+  const scan = value => {
+    if (Array.isArray(value)) { value.forEach(scan); return; }
+    if (!value || typeof value !== 'object') return;
+    if (value.__class === 'CodeComponentNode' && !String(value.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/')) return;
+    if (value.customCursorType === 'component' && typeof value.customCursorSmartComponentId === 'string' && value.customCursorSmartComponentId && !nodes.has(value.customCursorSmartComponentId)) missing.add(value.customCursorSmartComponentId);
+    const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(value.codeComponentIdentifier ?? ''))?.[1];
+    const variables = master && nodes.get(master)?.variables;
+    for (const [key, item] of Object.entries(value)) {
+      if (key.startsWith('$control__') && Array.isArray(variables) && !variables.some(variable => variable?.id === key.slice(10))) continue;
+      scan(item);
+    }
+  };
+  roots.forEach(scan);
+  return [...missing];
+}
+
 /** Only the adapter reads Framer. The capture protocol cannot mutate its document. */
 export async function captureNativeTransfer(adapter, request, signal) {
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(45000)]);
@@ -43,6 +68,7 @@ export async function captureNativeTransfer(adapter, request, signal) {
     for (const id of loadedIds) if (!returned.has(id)) {
       diagnostics.push({ code: 'SOURCE_DEFINITION_NOT_SERIALIZED', sourceId: id, message: 'Loaded definition was omitted by the reader.' });
     }
+    if (request.mode === 'project') for (const id of missingProjectCursors(definitions)) diagnostics.push({ code: 'SOURCE_DEPENDENCY_MISSING', sourceId: id, message: 'Assigned cursor component is missing from the source capture.' });
     const assets = await abortable(adapter.readAssets(loadedIds), deadline);
     let codeFiles = [];
     if (adapter.readCodeFiles) {

@@ -36,6 +36,30 @@ test('does not silently drop a missing referenced scope', async () => {
   assert(result.diagnostics.some(x => x.code === 'SOURCE_DEPENDENCY_MISSING' && x.sourceId === 'master'));
 });
 
+test('marks a missing assigned design cursor incomplete while ignoring code component internals', async () => {
+  const source = adapter(), read = source.readDefinitions;
+  source.readDefinitions = async ids => {
+    const definitions = await read(ids);
+    definitions[0].data.children = [{ id: 'button', __class: 'FrameNode', customCursorType: 'component', customCursorSmartComponentId: 'missing-cursor', children: [] }, { id: 'placeholder', __class: 'CodeComponentNode', codeComponentIdentifier: 'module:vendor/save/File.tsx:Widget', $control__cursor: { value: { customCursorType: 'component', customCursorSmartComponentId: 'ignored' } }, children: [] }];
+    return definitions;
+  };
+  const result = await captureNativeTransfer(source, { mode: 'project' }, new AbortController().signal);
+  assert.equal(result.complete, false);
+  assert(result.diagnostics.some(item => item.code === 'SOURCE_DEPENDENCY_MISSING' && item.sourceId === 'missing-cursor'));
+  assert(!result.diagnostics.some(item => item.sourceId === 'ignored'));
+});
+
+test('does not reject a present cursor or deleted component control', async () => {
+  const source = adapter(), read = source.readDefinitions;
+  source.readDefinitions = async ids => {
+    const definitions = await read(ids);
+    definitions[1].data.__class = 'SmartComponentNode';
+    definitions[0].data.children = [{ id: 'button', __class: 'FrameNode', customCursorType: 'component', customCursorSmartComponentId: 'cursor', children: [] }, { id: 'instance', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/master:default', $control__deleted: { value: { customCursorType: 'component', customCursorSmartComponentId: 'old' } }, children: [] }, { id: 'cursor', __class: 'SmartComponentNode', children: [] }];
+    return definitions;
+  };
+  assert.equal((await captureNativeTransfer(source, { mode: 'project' }, new AbortController().signal)).complete, true);
+});
+
 test('retries a changing revision and emits only a stable capture', async () => {
   const result = await captureNativeTransfer(adapter({ revisions: ['a', 'b', 'b', 'b'] }), { mode: 'page' }, new AbortController().signal);
   assert.equal(result.context.revision, 'b');
