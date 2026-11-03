@@ -181,6 +181,17 @@ it('converts an instance image override into the native CSS image prop domain', 
   const assetFile = result.files.find(file => file.path.startsWith('public/assets/'))!;
   expect(parseJSXToNodes(client.code).get(result.identity.instance)?.attrs[nativePropName(result.identity, 'card', 'photo')]).toBe(`url(${assetFile.path.slice(6)})`);
 });
+it('binds a page social image to the uploaded native media URL', async () => {
+  const source = transfer(), ref = 'data:framer/asset-reference,social.png';
+  source.definitions[0].data.webMetadata = { title: 'Article', socialImage: ref };
+  source.assets = [{ key: 'social', extension: '.png', mimeType: 'image/png', url: 'https://example.com/social.png' }];
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map(), uploadedAssets: { social: '/api/uploads/social.webp' } });
+  expect(result.diagnostics).toEqual([]);
+  const wrapper = result.files.find(file => file.path === 'app/page.tsx')!;
+  expect(parseMetadataFromCode(wrapper.code)).toMatchObject({ title: 'Article', openGraph: { images: ['/api/uploads/social.webp'] } });
+  const target = { projectId: 'destination', branchId: 'main' };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+});
 
 it('compiles a complete native candidate deterministically without mutating source or destination', async () => {
   const source = transfer(), before = JSON.stringify(source);

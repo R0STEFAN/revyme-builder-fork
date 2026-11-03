@@ -372,6 +372,11 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
       const fields = Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
       if (typeof pageMeta?.noIndex === 'boolean') fields.push(`robots: { index: ${!pageMeta.noIndex} }`);
+      if (pageMeta?.socialImage !== undefined) {
+        const image = typeof pageMeta.socialImage === 'string' ? options.assets?.[pageMeta.socialImage] : undefined;
+        if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
+        fields.push(`openGraph: { images: [${JSON.stringify(image)}] }`);
+      }
       result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = { ${fields.join(', ')} };\nexport default function Page(){ return <PageClient />; }\n` });
       result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
     }
