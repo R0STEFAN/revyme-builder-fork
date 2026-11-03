@@ -140,6 +140,7 @@ function readReferences(node: SourceNode): SourceReference[] {
       const object = sourceRecord(value);
       if (!object) return;
       if (object.type === 'variableReference' && typeof object.providerId === 'string') add(object.providerId, property);
+      if (object.customCursorType === 'component' && typeof object.customCursorSmartComponentId === 'string' && object.customCursorSmartComponentId) add(object.customCursorSmartComponentId, `${property}.customCursorSmartComponentId`);
       for (const [key, item] of Object.entries(object)) {
         if (key === 'children' || key === 'renamedIds') continue;
         if (property === 'replicaInfo' && (key === 'master' || key === 'inheritsFrom') && typeof item === 'string') add(item, `replicaInfo.${key}`);

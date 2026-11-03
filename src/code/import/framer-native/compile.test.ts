@@ -41,7 +41,7 @@ it('prepares an exact native cursor portal patch alongside the generated compone
   const submitted = await framerImportSubmitOperation.execute(createSnapshot(target, 0, Object.fromEntries(existingFiles)), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext());
   expect(submitted.changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
   (source.definitions[0].data.children as any[])[0].children[0].$control__cursor = { type: 'customcursor', value: { customCursorType: 'component', customCursorSmartComponentId: 'missing' } };
-  expect(compileNativeTransfer(source, { mode: 'create', existingFiles }).diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/cursor.*assignment/i) }));
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING', message: expect.stringContaining('missing') }));
 });
 it('connects source Google families and exact axes through native imports without uploading font files', async () => {
   const source = transfer();

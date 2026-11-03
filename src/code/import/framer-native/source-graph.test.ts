@@ -16,6 +16,12 @@ function transfer(...data: ReturnType<typeof node>[]): NativeTransfer {
 }
 
 describe('original editor source graph', () => {
+  it('includes assigned design cursor masters and reports missing originals', () => {
+    const source = transfer(node('page', { children: [node('button', { '$control__cursor': { type: 'customcursor', value: { customCursorType: 'component', customCursorSmartComponentId: 'cursor' } } })] }), node('cursor', { __class: 'SmartComponentNode' }));
+    expect(buildSourceGraph(source).reachable.has('cursor')).toBe(true);
+    source.definitions.pop();
+    expect(buildSourceGraph(source).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING', message: expect.stringContaining('cursor') }));
+  });
   it('includes an inherited page template without pulling every sibling page into the closure', () => {
     const input = transfer(node('page', { __class: 'WebPageNode', parentid: 'document' }), node('document', { __class: 'RootNode', layoutTemplateIdentifier: 'local-module:layoutTemplate/template:default', children: [] }), node('template', { __class: 'LayoutTemplateNode', children: [node('slot', { __class: 'SlotNode' })] }), node('sibling', { __class: 'WebPageNode', parentid: 'document' }));
     const graph = buildSourceGraph(input);
