@@ -3,8 +3,11 @@ import { checkFile } from '../../oracle/check-file';
 import { setTagAttr } from '../../generation/generator-utils';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
+import { FORM_ROUTE_CONTENT, FORM_ROUTE_PATH, wireFormSubmitInCode } from '../../generation/form-gen';
+import { formStateSetter, formStateVar, hasFormStateDeclaration, setFormStateMappingInCode, type FormStateMapping } from '../../generation/form-state-gen';
+import { updatePseudoStyleInCode } from '../../generation/generator-styles';
 import { activeSourceCodeOverride, isSourceCodeComponent, sourceRecord, sourceVariables, sourceVariableKey, resolveSourceNode } from './source-graph';
-import { mapSourceStyles, type SourceMappingContext } from './styles';
+import { mapSourceStyles, sourceFormControlPseudoStyles, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { sourceViewports, applyNativeResponsive } from './responsive';
 import { emitSourceScene } from './scene';
@@ -198,6 +201,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (prior && JSON.stringify(prior) !== JSON.stringify(effect)) throw new Error('Conflicting source global page effects across template pages');
       templatePageEffects.set(templateId, effect);
     }
+    let hasForms = false;
     for (const id of ids) {
       active = id;
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
@@ -212,7 +216,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, viewport: { width: viewports[0].designWidth! } };
+      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -257,6 +261,55 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
       }
       code = applySourceInstances(code, scene, graph, identity, options.assets, { allowOverlayEvents: true, routes: result.routes });
+      const parentOf = new Map<string, string>();
+      for (const nodeId of scene.sourceIds) for (const childId of resolveSourceNode(graph, nodeId).children) parentOf.set(childId, nodeId);
+      const formSet = new Set(scene.forms);
+      const enclosingFormFor = (nodeId: string): string | undefined => {
+        let cursor = parentOf.get(nodeId);
+        while (cursor) {
+          if (formSet.has(cursor)) return cursor;
+          cursor = parentOf.get(cursor);
+        }
+      };
+      const formButtonPairs = [
+        ['loading', 'formButtonPendingVariantEnabled', 'formButtonPendingVariant'],
+        ['success', 'formButtonSuccessVariantEnabled', 'formButtonSuccessVariant'],
+        ['error', 'formButtonErrorVariantEnabled', 'formButtonErrorVariant'],
+        ['disabled', 'formButtonIncompleteVariantEnabled', 'formButtonIncompleteVariant'],
+      ] as const;
+      for (const controlId of scene.formControls) if (!enclosingFormFor(controlId)) throw new Error(`Form control ${controlId} must live inside a form container`);
+      for (const nodeId of scene.sourceIds) {
+        const node = resolveSourceNode(graph, nodeId);
+        if (formButtonPairs.some(([, enabledKey]) => node.properties[enabledKey] === true) && !enclosingFormFor(nodeId)) throw new Error(`Form submit button ${nodeId} must live inside a form container`);
+      }
+      for (const formId of scene.forms) {
+        if (enclosingFormFor(formId)) throw new Error(`Nested form container ${formId} requires its native form adapter`);
+        hasForms = true;
+        const formNode = resolveSourceNode(graph, formId), formTargetId = identity[formId], stateVar = formStateVar(formTargetId);
+        const submitButtonId = formNode.properties.formSubmitButtonId;
+        if (submitButtonId != null && (typeof submitButtonId !== 'string' || enclosingFormFor(submitButtonId) !== formId)) throw new Error(`Form submit button ${String(submitButtonId)} on ${formId} is outside the form`);
+        for (const nodeId of scene.sourceIds) {
+          if (enclosingFormFor(nodeId) !== formId) continue;
+          const buttonNode = resolveSourceNode(graph, nodeId);
+          if (formButtonPairs.some(([, enabledKey]) => buttonNode.properties[enabledKey] === true)) {
+            const master = scene.nested.get(nodeId);
+            if (!master || sourceMountEffects(buttonNode.properties)) throw new Error(`Form submit button ${nodeId} requires its native form state adapter`);
+            const baseVariant = sourceRecord(buttonNode.properties.$control__variant)?.value;
+            if (baseVariant !== undefined && sourceInstanceStateName({ graph, scopeId: master }, identity, baseVariant) !== 'default') throw new Error(`Form submit button ${nodeId} idle variant requires its native form state adapter`);
+            const mapping: FormStateMapping = {};
+            for (const [stateKey, enabledKey, variantKey] of formButtonPairs) {
+              if (buttonNode.properties[enabledKey] !== true) continue;
+              const targetVariant = sourceInstanceStateName({ graph, scopeId: master }, identity, buttonNode.properties[variantKey]);
+              if (!targetVariant) throw new Error(`Missing form button variant ${String(buttonNode.properties[variantKey])} on ${nodeId}`);
+              mapping[stateKey] = targetVariant;
+            }
+            code = setFormStateMappingInCode(code, identity[nodeId], stateVar, mapping);
+          } else if (nodeId === submitButtonId && buttonNode.kind === 'FrameNode' && buttonNode.properties.htmlTag === 'button') {
+            code = setTagAttr(code, identity[nodeId], 'type', '"submit"');
+          }
+        }
+        code = wireFormSubmitInCode(code, formTargetId, hasFormStateDeclaration(code, stateVar) ? formStateSetter(stateVar) : undefined);
+      }
       if (isDetail && scene.sourceIds.some(id => graph.nodes.get(id)!.kind === 'OverlayNode')) throw new Error('Source CMS detail overlay requires its native hook-order adapter');
       const overlays = applySourceOverlays(code, scene.sourceIds, graph, identity, viewports.slice(1), viewports[0].width);
       code = overlays.code;
@@ -271,7 +324,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         }
         for (const viewport of viewports.slice(1)) {
           const state = resolveSourceNode(graph, nodeId, viewport.sourceStateId);
-          const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']);
+          const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled', 'isFormContainer', 'formSubmitButtonId', 'formTextInputType', 'formInputName', 'formInputPlaceholder', 'formInputRequired', 'formInputValue', 'formSelectOptions', 'formInputPlaceholderColor', 'formInputFocusedBorderColor', 'formInputFocusedBorderWidth', 'formInputFocusedBorderStyle', 'formInputFocusedBorderPerSide', 'formInputFocusedBorderTop', 'formInputFocusedBorderRight', 'formInputFocusedBorderBottom', 'formInputFocusedBorderLeft', 'formButtonPendingVariantEnabled', 'formButtonPendingVariant', 'formButtonSuccessVariantEnabled', 'formButtonSuccessVariant', 'formButtonErrorVariantEnabled', 'formButtonErrorVariant', 'formButtonIncompleteVariantEnabled', 'formButtonIncompleteVariant']);
           if ([node.properties.visible, state.properties.visible].every(value => value === undefined || typeof value === 'boolean')) semanticProperties.delete('visible');
           if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
           else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
@@ -322,6 +375,12 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
+      for (const controlId of scene.formControls) {
+        const controlNode = resolveSourceNode(graph, controlId);
+        const pseudo = sourceFormControlPseudoStyles(controlNode, context);
+        if (pseudo.placeholder) code = updatePseudoStyleInCode(code, identity[controlId], 'placeholder', pseudo.placeholder);
+        if (pseudo.focus) code = updatePseudoStyleInCode(code, identity[controlId], 'focus', pseudo.focus);
+      }
       for (const nodeId of scene.sourceIds) {
         if (anchors.has(nodeId)) { code = setTagAttr(code, identity[nodeId], 'id', JSON.stringify(identity[nodeId])); writtenAnchors.add(nodeId); }
         const node = resolveSourceNode(graph, nodeId), binding = visibilityFor(node);
@@ -363,7 +422,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (violations.length) throw new Error(`Native page validation: ${violations.map(violation => violation.code).join(', ')}`);
       if (isTemplate) {
         result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" }, ...(pageEffect ? [{ path: `${folder}/page-effects.ts`, code: serializePageEffects({ __default: pageEffect, pages: {} }) }, { path: `${folder}/page-effects-runtime.ts`, code: PAGE_EFFECTS_RUNTIME_SOURCE }, { path: `${folder}/page-transitions.tsx`, code: PAGE_TRANSITIONS_SOURCE }] : []));
-        result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+        result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
         continue;
       }
       if (isDetail) {
@@ -400,7 +459,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           else { parts.push(JSON.stringify(tail)); expressions[key] = `[${parts.join(', ')}].join("")`; }
         }
         result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: buildCmsDetailServerWrapper({ collection: collection!, defaults, expressions, apiConfig: null }) });
-        result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+        result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
         continue;
       }
       const pageMeta = sourceRecord(page.raw.webMetadata), globalMeta = sourceRecord(document?.raw.webMetadata);
@@ -414,8 +473,9 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         fields.push(`openGraph: { images: [${JSON.stringify(image)}] }`);
       }
       result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = { ${fields.join(', ')} };\nexport default function Page(){ return <PageClient />; }\n` });
-      result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
+      result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
     }
+    if (hasForms && !options.existingPaths.has(FORM_ROUTE_PATH)) result.files.push({ path: FORM_ROUTE_PATH, code: FORM_ROUTE_CONTENT });
     if ([...anchors].some(id => !writtenAnchors.has(id))) throw new Error('Source template section target is outside the emitted page/template scenes');
   } catch (error) {
     result.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: active, message: error instanceof Error ? error.message : String(error) });

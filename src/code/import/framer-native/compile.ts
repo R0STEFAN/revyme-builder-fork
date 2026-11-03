@@ -144,10 +144,18 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
           node.value.value = before.split(',').map(family => fontNames.has(family.trim().replace(/^["']|["']$/g, '')) ? JSON.stringify(fontNames.get(family.trim().replace(/^["']|["']$/g, ''))) : family).join(',');
           changed ||= before !== node.value.value;
         }
-        if (!t.isStringLiteral(node)) return;
-        const before = node.value;
-        for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
-        changed ||= before !== node.value;
+        if (t.isStringLiteral(node)) {
+          const before = node.value;
+          for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
+          changed ||= before !== node.value;
+        } else if (t.isTemplateElement(node)) {
+          const before = node.value.raw;
+          for (const [id, name] of Object.entries(colorNames)) {
+            node.value.raw = renameCustomPropertyInText(node.value.raw, `token-${id}`, name, true);
+            if (node.value.cooked != null) node.value.cooked = renameCustomPropertyInText(node.value.cooked, `token-${id}`, name, true);
+          }
+          changed ||= before !== node.value.raw;
+        }
       });
       if (ast && changed) file.code = generate(ast).code;
     }
@@ -170,7 +178,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (relocatedRoutes.has(pathname)) result.diagnostics.push({ code: 'SOURCE_LINK_ADAPTER_REQUIRED', property: file.path, message: `Source link ${value} still targets a relocated route; its native link adapter is required.` });
       };
       if (ast) t.traverseFast(ast, node => {
-        if (t.isStringLiteral(node) && /var\(--token-/.test(node.value)) result.diagnostics.push({ code: 'SOURCE_TOKEN_ADAPTER_REQUIRED', property: file.path, message: 'Source design tokens need their native preset adapter.' });
+        if ((t.isStringLiteral(node) && /var\(--token-/.test(node.value)) || (t.isTemplateElement(node) && /var\(--token-/.test(node.value.raw))) result.diagnostics.push({ code: 'SOURCE_TOKEN_ADAPTER_REQUIRED', property: file.path, message: 'Source design tokens need their native preset adapter.' });
         if (t.isJSXAttribute(node) && t.isJSXIdentifier(node.name, { name: 'href' })) {
           const value = t.isJSXExpressionContainer(node.value) ? node.value.expression : node.value;
           if (t.isStringLiteral(value)) checkLink(value.value);

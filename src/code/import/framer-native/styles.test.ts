@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapSourceStyles } from './styles';
+import { mapSourceStyles, sourceFormControlPseudoStyles } from './styles';
 import type { ResolvedSourceNode, TransferDiagnostic } from './types';
 
 const node = (properties: Record<string, unknown>): ResolvedSourceNode => ({ id: 'box', sourceId: 'box', kind: 'FrameNode', properties, children: [], provenance: ['box'] });
@@ -80,5 +80,44 @@ describe('editor source styles', () => {
   });
   it('omits schema-default zero corner radius on component instances so placement wrappers stay clean', () => {
     expect(mapSourceStyles({ ...node({ radiusPerCorner: false, radiusTopLeft: 0 }), kind: 'CodeComponentNode' }, context())).not.toHaveProperty('borderRadius');
+  });
+  it('maps form containers, form controls, pseudo styles and viewport-relative min/max constraints', () => {
+    const c = context({ supportedForms: true, viewport: { width: 1200, height: 800 } });
+    expect(mapSourceStyles(node({ isFormContainer: true, minHeight: '50vh', maxWidth: '50vw' }), c)).toMatchObject({ minHeight: '400px', maxWidth: '600px' });
+    expect(c.diagnostics).toEqual([]);
+    const inputNode: ResolvedSourceNode = {
+      ...node({
+        formTextInputType: 'textarea',
+        formInputFontColor: 'rgb(255, 255, 255)',
+        formInputPlaceholderColor: 'rgba(255, 255, 255, 0.5)',
+        formInputFontSize: 16,
+        formInputFontLineHeight: 1.2,
+        formInputFontLineHeightUnit: 'em',
+        formInputFontLetterSpacing: 0,
+        formInputFontLetterSpacingUnit: 'em',
+        formInputFontSelector: 'GF;Instrument Sans-variable-regular',
+        formInputVariationAxes: { wdth: 100, wght: 450 },
+        formInputFocusedBorderEnabled: true,
+        formInputFocusedBorderColor: 'rgb(0, 153, 255)',
+        formInputFocusedBorderWidth: 1,
+        formInputFocusedBorderStyle: 'solid',
+      }),
+      kind: 'FormPlainTextInputNode',
+    };
+    expect(mapSourceStyles(inputNode, c)).toMatchObject({
+      outline: 'none',
+      resize: 'vertical',
+      color: 'rgb(255, 255, 255)',
+      fontSize: '16px',
+      lineHeight: '1.2',
+      letterSpacing: '0em',
+      fontFamily: '"Instrument Sans"',
+      fontWeight: '450',
+      fontVariationSettings: '"wdth" 100',
+    });
+    expect(sourceFormControlPseudoStyles(inputNode, c)).toEqual({
+      placeholder: { color: 'rgba(255, 255, 255, 0.5)' },
+      focus: { border: '1px solid rgb(0, 153, 255)' },
+    });
   });
 });

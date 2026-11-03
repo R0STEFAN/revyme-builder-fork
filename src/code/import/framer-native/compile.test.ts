@@ -534,3 +534,161 @@ it('blocks an unadapted link prop default after namespacing instead of linking b
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_LINK_ADAPTER_REQUIRED' }));
 });
+it('imports a native form with labels, inputs, select options, pseudo styles, submit button state variants and form API route', async () => {
+  const source = transfer();
+  const submitMaster = {
+    id: 'submit-btn',
+    __class: 'SmartComponentNode',
+    name: 'FormButton',
+    baseVariantId: 'btn-default',
+    children: [
+      { id: 'btn-default', __class: 'FrameNode', name: 'Default', width: 120, widthType: 0, height: 44, heightType: 0, children: [] },
+      { id: 'btn-loading', __class: 'FrameNode', name: 'Loading', originalid: 'btn-default', replicaInfo: { master: 'btn-default', overrides: {} }, children: [] },
+      { id: 'btn-success', __class: 'FrameNode', name: 'Success', originalid: 'btn-default', replicaInfo: { master: 'btn-default', overrides: {} }, children: [] },
+      { id: 'btn-error', __class: 'FrameNode', name: 'Error', originalid: 'btn-default', replicaInfo: { master: 'btn-default', overrides: {} }, children: [] },
+      { id: 'btn-disabled', __class: 'FrameNode', name: 'Disabled', originalid: 'btn-default', replicaInfo: { master: 'btn-default', overrides: {} }, children: [] },
+    ],
+  };
+  const token = { id: 'accent-token', __class: 'ColorStyleTokenNode', name: 'Accent', light: 'rgb(0, 153, 255)' };
+  source.definitions.push(
+    { id: submitMaster.id, kind: submitMaster.__class, data: submitMaster },
+    { id: token.id, kind: token.__class, data: token },
+  );
+  const frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  frame.viewportHeight = 800;
+  frame.children = [
+    {
+      id: 'contact-form',
+      __class: 'FrameNode',
+      parentid: 'desktop',
+      isFormContainer: true,
+      layout: 'stack',
+      stackDirection: 'vertical',
+      width: 1,
+      widthType: 3,
+      height: 400,
+      heightType: 2,
+      minHeight: '50vh',
+      children: [
+        {
+          id: 'name-label',
+          __class: 'FrameNode',
+          parentid: 'contact-form',
+          htmlTag: 'label',
+          layout: 'stack',
+          stackDirection: 'vertical',
+          width: 1,
+          widthType: 3,
+          height: 60,
+          heightType: 2,
+          children: [
+            {
+              id: 'name-input',
+              __class: 'FormPlainTextInputNode',
+              parentid: 'name-label',
+              children: [],
+              width: 1,
+              widthType: 3,
+              height: 40,
+              heightType: 0,
+              formInputName: 'Name',
+              formTextInputType: 'text',
+              formInputPlaceholder: 'Jane Smith',
+              formInputRequired: true,
+              formInputFontColor: 'rgb(255, 255, 255)',
+              formInputPlaceholderColor: 'rgba(255, 255, 255, 0.5)',
+              formInputFocusedBorderEnabled: true,
+              formInputFocusedBorderColor: 'var(--token-accent-token, rgb(0, 153, 255))',
+              formInputFocusedBorderWidth: 1,
+              formInputFocusedBorderStyle: 'solid',
+              formInputFontSize: 16,
+              formInputFontLineHeight: 1.2,
+              formInputFontLineHeightUnit: 'em',
+              formInputFontLetterSpacing: 0,
+              formInputFontLetterSpacingUnit: 'em',
+              formInputFontSelector: 'GF;Instrument Sans-variable-regular',
+              formInputVariationAxes: { wdth: 100, wght: 450 },
+            },
+          ],
+        },
+        {
+          id: 'service-select',
+          __class: 'FormSelectNode',
+          parentid: 'contact-form',
+          children: [],
+          width: 1,
+          widthType: 3,
+          height: 40,
+          heightType: 0,
+          formInputName: 'Service',
+          formInputRequired: true,
+          formInputValue: '',
+          formSelectOptions: [
+            { id: 'opt-1', title: 'Select…', value: '', type: 'option', disabled: true },
+            { id: 'opt-2', title: 'Design', value: 'design', type: 'option', disabled: false },
+          ],
+          formInputFontColor: 'rgb(255, 255, 255)',
+          formInputFontSize: 16,
+          formInputFontLineHeight: 1.2,
+          formInputFontLineHeightUnit: 'em',
+        },
+        {
+          id: 'message-input',
+          __class: 'FormPlainTextInputNode',
+          parentid: 'contact-form',
+          children: [],
+          width: 1,
+          widthType: 3,
+          height: 120,
+          heightType: 0,
+          formInputName: 'Message',
+          formTextInputType: 'textarea',
+          formInputPlaceholder: 'Tell us more',
+          formInputFontColor: 'rgb(255, 255, 255)',
+          formInputFontSize: 16,
+          formInputFontLineHeight: 1.2,
+          formInputFontLineHeightUnit: 'em',
+        },
+        {
+          id: 'submit-instance',
+          __class: 'CodeComponentNode',
+          parentid: 'contact-form',
+          children: [],
+          width: 120,
+          widthType: 0,
+          height: 44,
+          heightType: 0,
+          codeComponentIdentifier: 'local-module:canvasComponent/submit-btn:default',
+          formButtonType: 'submit',
+          formButtonPendingVariantEnabled: true,
+          formButtonPendingVariant: 'btn-loading',
+          formButtonSuccessVariantEnabled: true,
+          formButtonSuccessVariant: 'btn-success',
+          formButtonErrorVariantEnabled: true,
+          formButtonErrorVariant: 'btn-error',
+          formButtonIncompleteVariantEnabled: true,
+          formButtonIncompleteVariant: 'btn-disabled',
+        },
+      ],
+    },
+  ];
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(page.code).toContain('<form ');
+  expect(page.code).toContain('<label ');
+  expect(page.code).toContain('<input ');
+  expect(page.code).toContain('<select ');
+  expect(page.code).toContain('<textarea ');
+  expect(page.code).toContain('::placeholder');
+  expect(page.code).toContain(`var(--color-${result.identity['accent-token']},`);
+  expect(page.code).toContain("=== 'loading'");
+  expect(result.files.some(file => file.path === 'app/api/form/route.ts')).toBe(true);
+  const target = { projectId: 'destination', branchId: 'main' };
+  const submitted = await framerImportSubmitOperation.execute(
+    createSnapshot(target, 0, {}),
+    { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } },
+    createOperationContext(),
+  );
+  expect(submitted.diagnostics).toEqual([]);
+});

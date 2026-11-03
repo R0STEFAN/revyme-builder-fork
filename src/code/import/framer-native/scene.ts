@@ -1,12 +1,15 @@
 import { trace } from '../../../shared/debug-trace';
 import { escapeJsxText } from '../../parsing/rich-text-runs';
-import { isSourceCodeComponent, resolveSourceNode } from './source-graph';
+import { serializeFormConfig } from '../../../editor/tools/FormTool/form-config';
+import { isSourceCodeComponent, resolveSourceNode, sourceRecord } from './source-graph';
 import { mapSourceText } from './text';
 import type { SourceMappingContext } from './styles';
 import type { NativeCodeComponentRef } from './code-components';
 import type { ResolvedSourceNode, SourceGraph } from './types';
 
-const frameTags = new Set(['div', 'section', 'header', 'footer', 'main', 'nav', 'aside', 'article', 'figure', 'figcaption', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'button', 'ul', 'ol', 'li', 'a']);
+const frameTags = new Set(['div', 'section', 'header', 'footer', 'main', 'nav', 'aside', 'article', 'figure', 'figcaption', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'button', 'ul', 'ol', 'li', 'a', 'label']);
+const formTextInputTypes = new Set(['text', 'textarea', 'email', 'number', 'tel', 'url', 'date', 'time']);
+const formContainerKeys = new Set(['isFormContainer', 'formSaveId', 'formSubmitButtonId']);
 
 export function sourceStyleLiteral(styles: Record<string, string>): string {
   return `{ ${Object.entries(styles).map(([key, value]) => {
@@ -22,6 +25,9 @@ export interface SourceScene {
   codeInstances: Map<string, NativeCodeComponentRef>;
   links: string[];
   slots: string[];
+  forms: string[];
+  formControls: string[];
+  optionIds: string[];
 }
 export interface SourceSceneOptions {
   stylesFor(node: ResolvedSourceNode, parent?: ResolvedSourceNode): Record<string, string>;
@@ -33,7 +39,7 @@ export interface SourceSceneOptions {
 /** One source traversal for native page/template and design-master JSX. */
 export function emitSourceScene(graph: SourceGraph, identity: Record<string, string>, rootId: string, context: SourceMappingContext, options: SourceSceneOptions): SourceScene {
   trace.fn('framer-native.emitScene', { rootId });
-  const result: SourceScene = { jsx: '', sourceIds: [], nested: new Map(), codeInstances: new Map(), links: [], slots: [] };
+  const result: SourceScene = { jsx: '', sourceIds: [], nested: new Map(), codeInstances: new Map(), links: [], slots: [], forms: [], formControls: [], optionIds: [] };
   const emit = (id: string, parent?: ResolvedSourceNode): string => {
     const node = resolveSourceNode(graph, id), targetId = identity[id];
     if (!targetId) throw new Error(`Missing node identity ${id}`);
@@ -66,11 +72,67 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
     } else if (node.kind === 'OverlayNode') {
       content = node.children.map(child => emit(child, node)).join('\n');
     } else if (node.kind === 'FrameNode') {
-      if (node.properties.htmlTag != null) {
+      if (node.properties.isFormContainer === true) {
+        if (!context.supportedForms || (node.properties.htmlTag != null && node.properties.htmlTag !== 'form') || Object.entries(node.properties).some(([key, value]) => key.startsWith('form') && value !== undefined && value !== false && !formContainerKeys.has(key))) {
+          throw new Error(`Form container ${id} requires its native form adapter`);
+        }
+        tag = 'form';
+        attributes = ` data-form='${serializeFormConfig({ sendTo: [] })}'`;
+        result.forms.push(id);
+      } else if (node.properties.htmlTag != null) {
         if (typeof node.properties.htmlTag !== 'string' || !frameTags.has(node.properties.htmlTag)) throw new Error(`Frame tag ${String(node.properties.htmlTag)} on ${id} requires its native adapter`);
         tag = node.properties.htmlTag;
       }
       content = node.children.map(child => emit(child, node)).join('\n');
+    } else if (node.kind === 'FormPlainTextInputNode') {
+      if (!context.supportedForms || node.children.length) throw new Error(`Form input ${id} requires its native form adapter`);
+      const inputType = node.properties.formTextInputType;
+      if (typeof inputType !== 'string' || !formTextInputTypes.has(inputType)) throw new Error(`Form input type ${String(inputType)} on ${id} requires its native form adapter`);
+      const name = node.properties.formInputName;
+      if (typeof name !== 'string' || !name.trim()) throw new Error(`Form input ${id} requires a non-empty name`);
+      if (node.properties.formInputValue !== undefined && typeof node.properties.formInputValue !== 'string') throw new Error(`Form input value on ${id} requires its native form adapter`);
+      if (node.properties.formInputPlaceholder !== undefined && typeof node.properties.formInputPlaceholder !== 'string') throw new Error(`Form input placeholder on ${id} requires its native form adapter`);
+      if (node.properties.formInputRequired !== undefined && typeof node.properties.formInputRequired !== 'boolean') throw new Error(`Form input required flag on ${id} requires its native form adapter`);
+      tag = inputType === 'textarea' ? 'textarea' : 'input';
+      const attrs: string[] = [];
+      if (tag === 'input') attrs.push(`type=${JSON.stringify(inputType)}`);
+      attrs.push(`name=${JSON.stringify(name)}`);
+      if (typeof node.properties.formInputPlaceholder === 'string' && node.properties.formInputPlaceholder !== '') attrs.push(`placeholder=${JSON.stringify(node.properties.formInputPlaceholder)}`);
+      if (node.properties.formInputRequired === true) attrs.push('required="true"');
+      if (typeof node.properties.formInputValue === 'string' && node.properties.formInputValue !== '') attrs.push(`defaultValue=${JSON.stringify(node.properties.formInputValue)}`);
+      attributes = ` ${attrs.join(' ')}`;
+      result.formControls.push(id);
+    } else if (node.kind === 'FormSelectNode') {
+      if (!context.supportedForms || node.children.length) throw new Error(`Form select ${id} requires its native form adapter`);
+      const name = node.properties.formInputName;
+      if (typeof name !== 'string' || !name.trim()) throw new Error(`Form select ${id} requires a non-empty name`);
+      if (node.properties.formInputRequired !== undefined && typeof node.properties.formInputRequired !== 'boolean') throw new Error(`Form select required flag on ${id} requires its native form adapter`);
+      if (node.properties.formInputValue !== undefined && typeof node.properties.formInputValue !== 'string') throw new Error(`Form select value on ${id} requires its native form adapter`);
+      const rawOptions = node.properties.formSelectOptions;
+      if (!Array.isArray(rawOptions) || !rawOptions.length) throw new Error(`Form select ${id} requires options`);
+      const selectedValue = typeof node.properties.formInputValue === 'string' ? node.properties.formInputValue : '';
+      let matchedSelection = selectedValue === '';
+      const optionItems = rawOptions.map((rawOption, index) => {
+        const option = sourceRecord(rawOption);
+        if (option?.type !== 'option' || typeof option.id !== 'string' || typeof option.title !== 'string' || typeof option.value !== 'string' || (option.disabled !== undefined && typeof option.disabled !== 'boolean')) {
+          throw new Error(`Form select option on ${id} requires its native form adapter`);
+        }
+        const selected = selectedValue !== '' && (option.id === selectedValue || option.value === selectedValue);
+        if (selected) matchedSelection = true;
+        const optionId = `${targetId}-option-${index + 1}`;
+        result.optionIds.push(optionId);
+        const optAttrs = [`value=${JSON.stringify(option.value)}`];
+        if (option.disabled === true) optAttrs.push('disabled="true"');
+        if (selected) optAttrs.push('selected="true"');
+        return `<option data-id="${optionId}" ${optAttrs.join(' ')}>${escapeJsxText(option.title)}</option>`;
+      });
+      if (!matchedSelection) throw new Error(`Form select default value ${selectedValue} on ${id} is missing from options`);
+      tag = 'select';
+      const attrs = [`name=${JSON.stringify(name)}`];
+      if (node.properties.formInputRequired === true) attrs.push('required="true"');
+      attributes = ` ${attrs.join(' ')}`;
+      content = optionItems.join('');
+      result.formControls.push(id);
     }
     else throw new Error(`Unsupported source child ${node.kind} on ${id}`);
     if (node.properties.link !== undefined && node.properties.link !== null && node.properties.link !== '') result.links.push(id);

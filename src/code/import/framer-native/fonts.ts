@@ -4,7 +4,7 @@ import { parseStyleString } from '../../../shared/css-utils';
 import { isSourceCodeComponent } from './source-graph';
 import type { SourceGraph, TransferDiagnostic } from './types';
 import { trace } from '../../../shared/debug-trace';
-export function parseSourceGoogleFont(value: string): GoogleFontRequest | undefined {
+export function parseSourceGoogleFont(value: string, variationAxes?: unknown): GoogleFontRequest | undefined {
   const match = /^GF;(.+?)-(variable-)?(regular|italic|[1-9]\d{1,3}(?:italic)?)(?:VF=([A-Za-z0-9+/]+=*))?$/.exec(value);
   if (!match) return;
   const [, family, variable, variant, encoded] = match;
@@ -22,6 +22,13 @@ export function parseSourceGoogleFont(value: string): GoogleFontRequest | undefi
       axes[axis[1]] = Number(axis[2]);
     }
   }
+  if (variationAxes !== undefined) {
+    if (!variable || !variationAxes || typeof variationAxes !== 'object' || Array.isArray(variationAxes)) return;
+    for (const [axis, axisValue] of Object.entries(variationAxes)) {
+      if (!/^[a-zA-Z]{4}$/.test(axis) || typeof axisValue !== 'number' || !Number.isFinite(axisValue)) return;
+      axes[axis] = axisValue;
+    }
+  }
   if (axes.wght <= 0 || axes.wght > 1000 || axes.ital !== undefined && axes.ital !== 0 && axes.ital !== 1) return;
   return { family, axes };
 }
@@ -32,9 +39,9 @@ export function sourceGoogleFontRequests(graph: Pick<SourceGraph, 'nodes' | 'rea
   for (const id of graph.reachable) {
     const node = graph.nodes.get(id)!;
     if (isSourceCodeComponent(node)) continue;
-    const add = (selector: string) => {
+    const add = (selector: string, variationAxes?: unknown) => {
       if (!selector.startsWith('GF;')) return;
-      const request = parseSourceGoogleFont(selector);
+      const request = parseSourceGoogleFont(selector, variationAxes);
       if (request) requests.push(request);
       else diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', sourceId: id, message: `Unsupported Google font selector ${selector}.` });
     };
@@ -52,7 +59,7 @@ export function sourceGoogleFontRequests(graph: Pick<SourceGraph, 'nodes' | 'rea
       for (const [key, item] of Object.entries(value)) {
         if (key === 'children') continue;
         if (typeof item === 'string') {
-          if (/^font(?:Bold|Italic|BoldItalic|Selector)?$/.test(key)) add(item);
+          if (/^(?:formInputF|f)ont(?:Bold|Italic|BoldItalic|Selector)?$/.test(key)) add(item, key === 'formInputFontSelector' ? (value as Record<string, unknown>).formInputVariationAxes : undefined);
           else if (key === 'html') parseFragment(item).childNodes.forEach(html);
         } else scan(item);
       }

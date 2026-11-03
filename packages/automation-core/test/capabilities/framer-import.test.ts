@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
 import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '@/code/generation/page-transitions-gen';
 import { createDefaultSide, serializePageEffects } from '@/code/project/page-effects-config';
+import { FORM_ROUTE_CONTENT, FORM_ROUTE_PATH } from '@/code/generation/form-gen';
 import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
@@ -312,5 +313,10 @@ describe('deterministic Framer full-file import boundary', () => {
     expect((await framerImportSubmitOperation.execute(snapshot(), input, context)).changes).toHaveLength(12);
     const tampered = { ...input, files: input.files.map(file => file.path === 'app/(site)/page-effects-runtime.ts' ? { ...file, code: '// tampered' } : file) };
     await expect(framerImportSubmitOperation.execute(snapshot(), tampered, context)).rejects.toThrow(/PAGE_EFFECTS_RUNTIME_INVALID/);
+  });
+  it('rejects a form relay route when tampered or unaccompanied by a native form page', async () => {
+    const withoutForm = bundle();
+    withoutForm.files.push({ path: FORM_ROUTE_PATH, code: FORM_ROUTE_CONTENT });
+    await expect(framerImportSubmitOperation.execute(snapshot(), withoutForm, context)).rejects.toThrow(/FORM_ROUTE_INVALID/);
   });
 });

@@ -1,7 +1,9 @@
 import { normalizeTransparent } from '../../../shared/css-utils';
 import { trace } from '../../../shared/debug-trace';
+import { simulatedVpHeight } from '../../../shared/responsive-units';
 import { sourceRecord } from './source-graph';
 import { sourceRotationLoop, sourceMountEffects } from './effects';
+import { parseSourceGoogleFont } from './fonts';
 import type { ResolvedSourceNode, SourceGraph, TransferDiagnostic } from './types';
 
 export interface SourceMappingContext {
@@ -14,6 +16,7 @@ export interface SourceMappingContext {
   assets?: Record<string, string>;
   supportedLoops?: boolean;
   supportedMountEffects?: boolean;
+  supportedForms?: boolean;
 }
 
 export function mappingDiagnostic(context: SourceMappingContext, node: ResolvedSourceNode, property: string, code = 'SOURCE_STYLE_UNSUPPORTED'): void {
@@ -54,7 +57,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   const mount = context.supportedMountEffects && sourceMountEffects(p);
   // These are active source behaviors, not decorative metadata; never drop them.
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'appearEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
-    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key))) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key)) && !(key === 'isFormContainer' && context.supportedForms && node.kind === 'FrameNode')) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
@@ -123,7 +126,20 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     if (p.gridItemHorizontalAlignment) set('justifySelf', String(p.gridItemHorizontalAlignment));
     if (p.gridItemVerticalAlignment) set('alignSelf', String(p.gridItemVerticalAlignment));
   }
-  for (const key of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']) if (p[key] != null) set(key, px(p[key]));
+  for (const key of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']) if (p[key] != null) {
+    const raw = p[key];
+    if (typeof raw === 'number' && Number.isFinite(raw)) result[key] = `${raw}px`;
+    else if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      const vpMatch = /^(\d*\.?\d+)(vw|vh)$/i.exec(trimmed);
+      if (trimmed === '0' || /^\d*\.?\d+(?:px|%)$/.test(trimmed)) result[key] = trimmed;
+      else if (vpMatch) {
+        const basis = vpMatch[2].toLowerCase() === 'vw' ? context.viewport?.width : (context.viewport?.height ?? (context.viewport?.width ? simulatedVpHeight(context.viewport.width) : undefined));
+        if (basis && basis > 0) result[key] = `${Number(((Number(vpMatch[1]) / 100) * basis).toFixed(2))}px`;
+        else mappingDiagnostic(context, node, key);
+      } else mappingDiagnostic(context, node, key);
+    } else mappingDiagnostic(context, node, key);
+  }
   if (typeof p.aspectRatio === 'number' && p.aspectRatio > 0) result.aspectRatio = String(p.aspectRatio);
   if (p.paddingPerSide) {
     for (const side of ['Top', 'Right', 'Bottom', 'Left']) set(`padding${side}`, px(p[`padding${side}`]));
@@ -183,6 +199,37 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     if (scale !== undefined) transforms.push(`scale(${scale})`);
   }
   if (transforms.length) result.transform = transforms.join(' ');
+  if (node.kind === 'FormPlainTextInputNode' || node.kind === 'FormSelectNode') {
+    result.outline = 'none';
+    if (node.kind === 'FormPlainTextInputNode' && p.formTextInputType === 'textarea') result.resize = 'vertical';
+    set('color', value('formInputFontColor'));
+    set('fontSize', px(p.formInputFontSize));
+    if (typeof p.formInputFontLineHeight === 'number' && Number.isFinite(p.formInputFontLineHeight)) {
+      const unit = typeof p.formInputFontLineHeightUnit === 'string' ? p.formInputFontLineHeightUnit : 'em';
+      if (unit === 'em') result.lineHeight = String(p.formInputFontLineHeight);
+      else if (unit === '%') result.lineHeight = String(p.formInputFontLineHeight / 100);
+      else if (unit === 'px' && result.fontSize?.endsWith('px') && parseFloat(result.fontSize) > 0) result.lineHeight = String(p.formInputFontLineHeight / parseFloat(result.fontSize));
+      else result.lineHeight = `${p.formInputFontLineHeight}${unit}`;
+    }
+    if (typeof p.formInputFontLetterSpacing === 'number' && Number.isFinite(p.formInputFontLetterSpacing) && typeof p.formInputFontLetterSpacingUnit === 'string') {
+      result.letterSpacing = `${p.formInputFontLetterSpacing}${p.formInputFontLetterSpacingUnit}`;
+    }
+    if (typeof p.formInputFontStyle === 'string') result.fontStyle = p.formInputFontStyle;
+    if (typeof p.formInputFontWeight === 'number' && Number.isFinite(p.formInputFontWeight) || typeof p.formInputFontWeight === 'string') result.fontWeight = String(p.formInputFontWeight);
+    if (typeof p.formInputFontFamily === 'string' && p.formInputFontFamily) result.fontFamily = JSON.stringify(p.formInputFontFamily);
+    if (p.formInputFontSelector !== undefined) {
+      const font = typeof p.formInputFontSelector === 'string' ? parseSourceGoogleFont(p.formInputFontSelector, p.formInputVariationAxes) : undefined;
+      if (font) {
+        result.fontFamily = JSON.stringify(font.family);
+        result.fontWeight = String(font.axes.wght);
+        if (font.axes.ital === 1) result.fontStyle = 'italic';
+        const extraAxes = Object.entries(font.axes).filter(([axis]) => axis !== 'wght' && axis !== 'ital');
+        if (extraAxes.length) result.fontVariationSettings = extraAxes.map(([axis, axisValue]) => `"${axis}" ${axisValue}`).join(', ');
+      } else if (typeof p.formInputFontSelector !== 'string' || p.formInputFontSelector.startsWith('GF;') || !result.fontFamily) {
+        mappingDiagnostic(context, node, 'formInputFontSelector', 'SOURCE_FONT_ADAPTER_REQUIRED');
+      }
+    }
+  }
   if (p.userSelect !== undefined) set('userSelect', value('userSelect'));
   if (p.visible === false) result.display = 'none';
   else if (p.visible !== undefined && p.visible !== true) {
@@ -190,4 +237,26 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     if (visible !== 'true') mappingDiagnostic(context, node, 'visible', 'SOURCE_VISIBILITY_BINDING_REQUIRED');
   }
   return normalizeTransparent(result);
+}
+
+export function sourceFormControlPseudoStyles(node: ResolvedSourceNode, context: SourceMappingContext): { placeholder?: Record<string, string>; focus?: Record<string, string> } {
+  const p = node.properties;
+  const value = (key: string) => sourceStyleValue(p[key], node, context, key);
+  let placeholder: Record<string, string> | undefined;
+  if (node.kind === 'FormPlainTextInputNode' && p.formInputPlaceholderColor !== undefined) {
+    const color = value('formInputPlaceholderColor');
+    if (color) placeholder = normalizeTransparent({ color });
+  }
+  let focus: Record<string, string> | undefined;
+  if ((node.kind === 'FormPlainTextInputNode' || node.kind === 'FormSelectNode') && p.formInputFocusedBorderColor !== undefined) {
+    const color = value('formInputFocusedBorderColor');
+    if (color) {
+      const raw: Record<string, string> = {};
+      if (p.formInputFocusedBorderPerSide === true) {
+        for (const side of ['Top', 'Right', 'Bottom', 'Left']) raw[`border${side}`] = `${px(p[`formInputFocusedBorder${side}`]) ?? '0px'} ${p.formInputFocusedBorderStyle ?? 'solid'} ${color}`;
+      } else raw.border = `${px(p.formInputFocusedBorderWidth) ?? '1px'} ${p.formInputFocusedBorderStyle ?? 'solid'} ${color}`;
+      focus = normalizeTransparent(raw);
+    }
+  }
+  return { ...(placeholder ? { placeholder } : {}), ...(focus ? { focus } : {}) };
 }

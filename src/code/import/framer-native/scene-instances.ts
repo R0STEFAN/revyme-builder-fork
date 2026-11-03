@@ -14,7 +14,7 @@ import type { SourceGraph } from './types';
 import type { SourceScene } from './scene';
 
 /** Same imported instances and prop bindings in pages, templates and masters. */
-export function applySourceInstances(code: string, scene: SourceScene, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>> } = {}): string {
+export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx' | 'sourceIds' | 'nested' | 'codeInstances' | 'links' | 'slots'>, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>> } = {}): string {
   trace.fn('framer-native.applyInstances', { design: scene.nested.size, code: scene.codeInstances.size });
   let result = code;
   const imported = new Set<string>();

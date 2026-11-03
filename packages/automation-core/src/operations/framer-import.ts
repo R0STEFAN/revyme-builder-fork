@@ -20,6 +20,7 @@ import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
+import { FORM_ROUTE_CONTENT, FORM_ROUTE_PATH } from '@/code/generation/form-gen';
 import { PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '@/code/generation/page-transitions-gen';
 import { isEmptyPageEffects, parsePageEffects, serializePageEffects } from '@/code/project/page-effects-config';
 import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
@@ -55,7 +56,7 @@ function fail(code: string, message: string): never { throw new Error(`${code}: 
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
-  if (path === 'app/globals.css') return;
+  if (path === 'app/globals.css' || path === FORM_ROUTE_PATH) return;
   if (PROTECTED_SYSTEM_FILES.has(path) || isSystemProtectedPath(path) || path === 'app/layout.tsx') fail('PROTECTED_PATH', path);
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
@@ -225,6 +226,8 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
       } else if (file.path.endsWith('/page-effects.ts')) {
         const parsed = parsePageEffects(file.code);
         if (isEmptyPageEffects(parsed) || serializePageEffects(parsed) !== file.code || !projected.has(file.path.replace(/page-effects\.ts$/, 'LayoutClient.tsx')) || !projected.has(file.path.replace(/page-effects\.ts$/, 'page-effects-runtime.ts')) || !projected.has(file.path.replace(/page-effects\.ts$/, 'page-transitions.tsx'))) fail('PAGE_EFFECTS_CONFIG_INVALID', file.path);
+      } else if (file.path === FORM_ROUTE_PATH) {
+        if (file.code !== FORM_ROUTE_CONTENT || snapshot.files.has(file.path) || !input.files.some(candidate => /^(?:page|template)$/.test(oracleFileKind(candidate.path, candidate.code) ?? '') && /<(?:motion\.)?form\b/.test(candidate.code))) fail('FORM_ROUTE_INVALID', file.path);
       } else if (file.path !== 'app/layout.tsx' && /\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
     }
     for (const id of validateFramerImportCms(projected, seen)) createdIds.add(id);
