@@ -18,6 +18,16 @@ import { parseComponentInfoFromSource } from '../../components/component-registr
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 
 describe('editable native component emission', () => {
+  it('retains a component cursor prop as a native editable cursor binding', () => {
+    const data = { id: 'cursor-master', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [{ id: 'pointer', type: 'customcursor', name: 'Cursor' }], children: [{ id: 'base', __class: 'FrameNode', width: 100, widthType: 0, height: 100, heightType: 0, customCursorType: { type: 'variableReference', providerId: 'cursor-master', id: 'pointer' }, children: [] }] };
+    const graph = buildSourceGraph({ ...capture, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set()), result = emitNativeComponents(graph, identity);
+    expect(result.diagnostics).toEqual([]);
+    const prop = nativePropName(identity, data.id, 'pointer');
+    expect(parsePropMeta(result.files[0].code)[prop]).toMatchObject({ type: 'componentCursor' });
+    expect(result.files[0].code).toContain(`withCursor(${prop},`);
+    expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
+  });
   it('preserves a constant rotation loop on a component child across variants', () => {
     const spinner = { id: 'spinner', __class: 'FrameNode', parentid: 'base', children: [], loopEffectEnabled: true, loopEffectRotate: 360, loopEffectRepeatType: 'loop', loopEffectRepeatDelay: 0, loopEffectTransition: { type: 'tween', duration: 1, delay: 0, ease: [0, 0, 1, 1] } };
     const data = { id: 'animated', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [{ id: 'base', __class: 'FrameNode', width: 100, widthType: 0, height: 100, heightType: 0, children: [spinner] }, { id: 'other', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: {} } }] };

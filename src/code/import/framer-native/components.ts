@@ -13,6 +13,7 @@ import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { CSS_NEUTRAL_FALLBACK, setConditionalStyleInCode, updateVariantStyleInCode } from '../../generation/generator-styles';
 import { updateVariantEntryTransition } from '../../generation/generator-motion-transition';
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
+import { addComponentCursorInCode } from '../../generation/cursor-gen';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
 import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
 import { addConnectionToCode, rebuildConnections } from '../../variants/connection-config';
@@ -130,7 +131,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const fn = ast.program.body.find(statement => t.isFunctionDeclaration(statement) && statement.id?.name === name);
       if (!t.isFunctionDeclaration(fn) || !t.isObjectPattern(fn.params[0]) || !t.isTSTypeAnnotation(fn.params[0].typeAnnotation) || !t.isTSTypeLiteral(fn.params[0].typeAnnotation.typeAnnotation)) throw new Error('Native master signature missing');
       const params = fn.params[0], types = fn.params[0].typeAnnotation.typeAnnotation;
-      const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', image: 'image', link: 'link', eventhandler: 'event', file: 'file', collectionreference: 'reference' };
+      const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', image: 'image', link: 'link', eventhandler: 'event', file: 'file', collectionreference: 'reference', customcursor: 'componentCursor' };
       for (const variable of variables) {
         const sourceType = String(variable.type), type = propTypes[sourceType];
         if (!type) throw new Error(`Variable ${String(variable.id)} type ${sourceType} requires a native data adapter`);
@@ -151,9 +152,10 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           initial = options.assets[initial];
         }
         if (sourceType === 'image' && cssImageProps.has(String(variable.id)) && initial) initial = `url(${initial})`;
-        const parameter = sourceType === 'eventhandler' ? t.identifier(prop) : t.assignmentPattern(t.identifier(prop), t.valueToNode(initial) as t.Expression);
+        if (sourceType === 'customcursor' && variable.initialValue != null && variable.initialValue !== '') throw new Error(`Cursor default ${String(variable.id)} requires its native component adapter`);
+        const parameter = sourceType === 'eventhandler' ? t.identifier(prop) : t.assignmentPattern(t.identifier(prop), sourceType === 'customcursor' ? t.arrowFunctionExpression([], t.nullLiteral()) : t.valueToNode(initial) as t.Expression);
         params.properties.push(t.objectProperty(t.identifier(prop), parameter, false, true));
-        const tsType = sourceType === 'eventhandler' ? t.tsFunctionType(null, [], t.tsTypeAnnotation(t.tsVoidKeyword())) : sourceType === 'number' ? t.tsNumberKeyword() : sourceType === 'boolean' ? t.tsBooleanKeyword() : t.tsStringKeyword();
+        const tsType = sourceType === 'eventhandler' ? t.tsFunctionType(null, [], t.tsTypeAnnotation(t.tsVoidKeyword())) : sourceType === 'customcursor' ? t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ComponentType'))) : sourceType === 'number' ? t.tsNumberKeyword() : sourceType === 'boolean' ? t.tsBooleanKeyword() : t.tsStringKeyword();
         const member = t.tsPropertySignature(t.identifier(prop), t.tsTypeAnnotation(tsType)); member.optional = true; types.members.push(member);
       }
       if (slots.length) {
@@ -284,6 +286,13 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       for (const id of sourceIds) {
         const node = resolveSourceNode(graph, id);
         if (isSourceCodeComponent(node)) continue;
+        const cursor = sourceRecord(node.properties.customCursorType);
+        if (cursor) {
+          const binding = resolveSourceBinding(cursor, { graph, identity, nodeId: id });
+          if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'customcursor') throw new Error(`Cursor on ${id} requires its native component adapter`);
+          for (const state of scope.children.filter(state => state !== primaryId)) if (JSON.stringify(resolveSourceNode(graph, id, state).properties.customCursorType) !== JSON.stringify(node.properties.customCursorType)) throw new Error(`Per-state cursor on ${id} requires its native adapter`);
+          code = addComponentCursorInCode(code, identity[id], { componentName: binding.name });
+        }
         const identifier = activeSourceCodeOverride(node.properties);
         if (!identifier) continue;
         const ref = options.overrides?.[identifier];

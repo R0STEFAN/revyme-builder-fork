@@ -68,6 +68,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const options = { assets: assets.assets, overrides: overrides.overrides };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
+    if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code))) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require the native cursor portal and assignment adapter.' });
     const relocatedRoutes = new Map(Object.entries(pages.routes).map(([id, route]) => [sourcePageRoute(graph, graph.nodes.get(id)!), route] as const).filter(([before, after]) => before !== after));
     for (const emitted of [originals, overrides, cms, components, pages]) {
       result.files.push(...emitted.files); result.createdIds.push(...emitted.createdIds); result.diagnostics.push(...emitted.diagnostics);

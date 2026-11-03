@@ -18,6 +18,14 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+it('does not import a component cursor without its native cursor portal', () => {
+  const source = transfer(), master = source.definitions[1].data;
+  master.variables = [{ id: 'cursor', type: 'customcursor' }];
+  (master.children as any[])[0].customCursorType = { type: 'variableReference', providerId: 'card', id: 'cursor' };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED' }));
+});
 it('connects source Google families and exact axes through native imports without uploading font files', async () => {
   const source = transfer();
   const frame = (source.definitions[1].data.children as any[])[0];
