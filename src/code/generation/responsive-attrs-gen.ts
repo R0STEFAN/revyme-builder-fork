@@ -20,6 +20,7 @@
 import { trace } from '@/shared/debug-trace';
 import { findJSXDataIdIndex, findTagClose, scanGates } from './generator-utils';
 import { ensureMediaGate, ensureMediaQueryHook, sweepOrphanMediaGates } from './generator-motion';
+import { detectVariantVar } from './scoped-expr';
 
 /** A parsed responsive attribute: the base (fallback) + per-viewport overrides. */
 export interface ResponsiveAttr {
@@ -121,10 +122,9 @@ function buildAttr(code: string, attr: string, r: ResponsiveAttr): { code: strin
   }
   let c = code;
   const parts: string[] = [];
-  // Variant branches first (most specific), then viewport branches smallest-width
-  // first. Test `initialVariant` (every master param; the breakpoint-driven
-  // variant) — NOT `variant` (only present with connections → undefined here).
-  for (const [name, val] of r.byVariant) parts.push(`initialVariant === '${name}' ? ${JSON.stringify(val)}`);
+  // Connection state drives live variants; masters without state use their prop.
+  const variantVar = detectVariantVar(code);
+  for (const [name, val] of r.byVariant) parts.push(`${variantVar} === '${name}' ? ${JSON.stringify(val)}`);
   const vpSorted = [...r.byViewport.entries()].sort((a, b) => a[0] - b[0]);
   for (const [w, val] of vpSorted) {
     const g = ensureMediaGate(c, queryForWidth(w));

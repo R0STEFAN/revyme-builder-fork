@@ -86,6 +86,13 @@ describe('responsive-attrs-gen: per-viewport overrides', () => {
 
 describe('responsive-attrs-gen: per-variant overrides', () => {
   const base = PAGE('<input data-id="in-1" type="text" name="email" />');
+  it('uses the live connection state when the component owns variant state', () => {
+    const stateful = base.replace('return (', "const [variant, setVariant] = useState(initialVariant);\n  return (");
+    const out = setVariantAttrInCode(stateful, 'in-1', 'success', 'dir', 'rtl', 'auto');
+    expect(out).toContain(`dir={variant === 'success' ? "rtl" : "auto"}`);
+    expect(getResponsiveAttrForVariant(out, 'in-1', 'dir', 'success')).toBe('rtl');
+    parses(out);
+  });
 
   it('encodes a variant override as an `initialVariant === ...` ternary (always defined in masters)', () => {
     const out = setVariantAttrInCode(base, 'in-1', 'variant-1', 'type', 'date', 'text');
