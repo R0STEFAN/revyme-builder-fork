@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
 import capturedComponents from '@/code/import/framer-native/fixtures/captured-components.json';
@@ -64,6 +65,20 @@ function replaceFile(input: ReturnType<typeof bundle>, path: string, code: strin
 const run = (input = bundle(), base = snapshot()) => framerImportSubmitOperation.execute(base, input, context);
 
 describe('deterministic Framer full-file import boundary', () => {
+  it('permits only the exact native cursor portal patch against the current root layout', async () => {
+    const original = `import React from 'react';\nexport default function Layout({children}) { return <html><body>{children}</body></html>; }`;
+    const input = bundle(), base = snapshot({ 'app/layout.tsx': original });
+    const patch = { path: 'app/layout.tsx', code: ensureCursorPortalInLayout(original), baseCode: original, cursorPortal: true };
+    input.files.push(patch as any);
+    expect((await run(input, base)).changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
+    patch.code += '\n// unrelated edit';
+    await expect(run(input, base)).rejects.toThrow(/CURSOR_PORTAL_PATCH_INVALID/);
+    patch.code = ensureCursorPortalInLayout(original); patch.baseCode += ' ';
+    await expect(run(input, base)).rejects.toThrow(/CURSOR_PORTAL_PATCH_INVALID/);
+    const invalid = 'export default function Layout(){ return <main />; }';
+    patch.baseCode = invalid; patch.code = ensureCursorPortalInLayout(invalid);
+    await expect(run(input, snapshot({ 'app/layout.tsx': invalid }))).rejects.toThrow(/CURSOR_PORTAL_PATCH_INVALID/);
+  });
   it.each(['missing-collection', 'missing-record', 'valid'])('validates native reference prop defaults: %s', async kind => {
     const input = bundle();
     const name = kind === 'missing-collection' ? 'missing' : 'categories';

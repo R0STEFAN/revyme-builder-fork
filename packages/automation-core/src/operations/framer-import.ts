@@ -19,11 +19,13 @@ import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
+import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
     path: z.string().min(1), code: z.string(), baseHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     baseCode: z.string().optional(),
+    cursorPortal: z.literal(true).optional(),
     colorTokens: z.array(z.object({ name: z.string(), value: z.string(), dark: z.string().optional() }).strict()).min(1).max(10000).optional(),
     fontFaces: z.array(z.object({ family: z.string(), url: z.string(), weight: z.number(), style: z.enum(['normal', 'italic']), ext: z.enum(['woff2', 'woff', 'otf', 'ttf']), weightRange: z.object({ min: z.number(), max: z.number() }).strict().optional(), unicodeRange: z.string().optional() }).strict()).min(1).max(10000).optional(),
     googleFonts: z.array(z.object({ family: z.string(), axes: z.record(z.string(), z.number()) }).strict()).min(1).max(10000).optional(),
@@ -45,6 +47,16 @@ export interface FramerImportSubmitOutput { changes: FileChange[]; createdIds: s
 
 const sha256 = (code: string) => createHash('sha256').update(code).digest('hex');
 function fail(code: string, message: string): never { throw new Error(`${code}: ${message}`); }
+
+function hasNativeCursorPortal(code: string): boolean {
+  const ast = astFor(code, 'app/layout.tsx');
+  const imported = ast.program.body.some(node => t.isImportDeclaration(node) && ['@revyme/runtime', '@/lib/cursor-runtime'].includes(node.source.value) && node.specifiers.some(spec => t.isImportSpecifier(spec) && t.isIdentifier(spec.imported, { name: 'CursorPortal' }) && spec.local.name === 'CursorPortal'));
+  let mounted = false;
+  t.traverseFast(ast, node => {
+    if (t.isJSXElement(node) && t.isJSXIdentifier(node.openingElement.name, { name: 'body' }) && node.children.some(child => t.isJSXElement(child) && t.isJSXIdentifier(child.openingElement.name, { name: 'CursorPortal' }))) mounted = true;
+  });
+  return imported && mounted;
+}
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
@@ -156,18 +168,22 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
     if (input.target.projectId !== snapshot.scope.projectId || input.target.branchId !== snapshot.scope.branchId) fail('SCOPE_MISMATCH', 'Import target does not match snapshot');
     const seen = new Set<string>(), projected = new Map(snapshot.files), changes: FileChange[] = [];
     for (const file of input.files) {
-      assertNativeFamily(file.path);
+      if (!(file.path === 'app/layout.tsx' && file.cursorPortal)) assertNativeFamily(file.path);
       if (seen.has(file.path)) fail('DUPLICATE_FILE_CHANGE', file.path);
       seen.add(file.path);
       const existing = snapshot.files.get(file.path);
       const tokenPatch = file.path === 'app/globals.css';
-      if (tokenPatch) {
+      const cursorPatch = file.path === 'app/layout.tsx' && file.cursorPortal === true;
+      if (cursorPatch) {
+        if (existing === undefined || file.baseCode !== existing || file.code === existing || ensureCursorPortalInLayout(existing) !== file.code || !hasNativeCursorPortal(file.code) || file.colorTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+      } else if (file.cursorPortal) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+      else if (tokenPatch) {
         if (!(file.colorTokens?.length || file.fontFaces?.length || file.googleFonts?.length) || file.baseCode !== existing || addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.fontFaces ?? []), file.googleFonts ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       if (existing !== undefined) {
-        if (input.mode === 'create' && !tokenPatch) fail('ALREADY_EXISTS', file.path);
+        if (input.mode === 'create' && !tokenPatch && !cursorPatch) fail('ALREADY_EXISTS', file.path);
         if (input.mode === 'paste' && file.path !== input.target.filePath) fail('PASTE_TARGET_CONFLICT', file.path);
-        if (!tokenPatch) {
+        if (!tokenPatch && !cursorPatch) {
           if (!file.baseHash) fail('BASE_HASH_REQUIRED', file.path);
           if (sha256(existing) !== file.baseHash) fail('CAS_CONFLICT', file.path);
         }
@@ -194,7 +210,7 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
         const oldIds = previous === undefined ? new Set<string>() : nodeIds(previous, file.path);
         for (const id of nodeIds(file.code, file.path)) if (!oldIds.has(id)) createdIds.add(id);
       } else if (file.path.startsWith('overrides/')) validateNativeOverrideSource(file.code);
-      else if (/\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
+      else if (file.path !== 'app/layout.tsx' && /\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
     }
     for (const id of validateFramerImportCms(projected, seen)) createdIds.add(id);
     // Reuse the ordinary syntax, duplicate data-id and projected import checks as well as later commit CAS.
