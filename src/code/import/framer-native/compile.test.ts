@@ -24,6 +24,24 @@ function transfer(): NativeTransfer {
   const document = { id: 'document', __class: 'RootNode', homePageNodeId: 'home', children: [] };
   return { format: 'revyme.framer.native', version: 1, context: { projectId: 'automatic', branchId: 'main', revision: 'source-1', editorBuild: 'fixture', scopeId: 'home', mode: 'page' }, complete: true, diagnostics: [], rootIds: ['home'], definitions: [page, master, document].map(data => ({ id: data.id, kind: data.__class, data })), assets: [] };
 }
+it('reports independent conversion blockers together when a source dependency is missing', () => {
+  const source = transfer();
+  source.definitions[2].data.webMetadata = { reducedMotion: true };
+  (source.definitions[0].data.children as any[])[0].children[0].codeComponentIdentifier = 'local-module:canvasComponent/missing:default';
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.files).toEqual([]);
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING' }));
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', property: 'webMetadata.reducedMotion' }));
+});
+it('keeps source routes when translation of page paths is disabled', () => {
+  const source = transfer();
+  source.definitions[2].data.webMetadata = { translatePagePaths: false };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.diagnostics).toEqual([]);
+  expect(result.files.some(file => file.path === 'app/page.tsx')).toBe(true);
+  source.definitions[2].data.webMetadata = { translatePagePaths: true };
+  expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).diagnostics).toContainEqual(expect.objectContaining({ property: 'webMetadata.translatePagePaths' }));
+});
 it('does not import a component cursor without its native cursor portal', () => {
   const source = transfer(), master = source.definitions[1].data;
   master.variables = [{ id: 'cursor', type: 'customcursor' }];

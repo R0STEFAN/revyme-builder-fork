@@ -61,7 +61,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     result.diagnostics.push({ code: 'SOURCE_CAPTURE_INVALID', message: error instanceof Error ? error.message : String(error) });
     return result;
   }
-  if (graph.diagnostics.length) { result.diagnostics = [...graph.diagnostics]; return result; }
+  result.diagnostics = [...graph.diagnostics];
   try {
     const paths = new Set(target.existingFiles.keys());
     const identityPaths = new Set(paths);
@@ -75,13 +75,14 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const node = graph.nodes.get(id)!;
       const metadata = sourceRecord(node.raw.webMetadata);
       if (node.kind === 'WebPageNode' && typeof metadata?.noIndexSite === 'boolean') trace.action('framer-native.skipSiteIndexFlag', { sourceId: id, value: metadata.noIndexSite });
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && ['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
+      for (const [metadataKey] of Object.entries(metadata ?? {}).filter(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && ['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(node.kind === 'RootNode' && key === 'translatePagePaths' && value === false) && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: `webMetadata.${metadataKey}`, message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
     }
     // Document metadata is inherited without importing all sibling pages.
     if (graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
+      for (const [metadataKey] of Object.entries(metadata ?? {}).filter(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'translatePagePaths' && value === false) && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: `webMetadata.${metadataKey}`, message: 'Inherited source document settings need their native metadata adapter.' });
     }
+    if (result.diagnostics.length) return result;
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
