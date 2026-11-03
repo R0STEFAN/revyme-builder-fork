@@ -86,6 +86,15 @@ describe('responsive-attrs-gen: per-viewport overrides', () => {
 
 describe('responsive-attrs-gen: per-variant overrides', () => {
   const base = PAGE('<input data-id="in-1" type="text" name="email" />');
+  it('preserves an explicit absent attribute through native reads and edits', () => {
+    const out = setVariantAttrInCode(base, 'in-1', 'success', 'dir', null, 'auto');
+    expect(out).toContain(`dir={initialVariant === 'success' ? undefined : "auto"}`);
+    expect(parseResponsiveAttr(out, 'in-1', 'dir').byVariant.get('success')).toBeNull();
+    expect(getResponsiveAttrForVariant(out, 'in-1', 'dir', 'success')).toBe('');
+    expect(getResponsiveAttrForVariant(out, 'in-1', 'dir', 'default')).toBe('auto');
+    expect(setResponsiveAttrBaseInCode(out, 'in-1', 'dir', 'ltr')).toContain(`? undefined : "ltr"`);
+    parses(out);
+  });
   it('uses the live connection state when the component owns variant state', () => {
     const stateful = base.replace('return (', "const [variant, setVariant] = useState(initialVariant);\n  return (");
     const out = setVariantAttrInCode(stateful, 'in-1', 'success', 'dir', 'rtl', 'auto');

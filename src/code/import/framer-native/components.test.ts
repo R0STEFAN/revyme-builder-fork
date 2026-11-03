@@ -13,7 +13,21 @@ import { sourceStateNames } from './interactions';
 import capturedOverride from './fixtures/captured-override.json';
 import { emitNativeCodeOverrides } from './code-adapters';
 import { readCodeOverrides } from '../../generation/code-override-gen';
+import { parseResponsiveAttr } from '../../generation/responsive-attrs-gen';
 import capturedCms from './fixtures/captured-cms.json';
+
+it('preserves removal of a text direction attribute in a component state', () => {
+  const data = { id: 'button', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [
+    { id: 'base', __class: 'FrameNode', children: [{ id: 'label', __class: 'RichTextNode', parentid: 'base', html: '<p dir="auto">Submit</p>', children: [] }] },
+    { id: 'success', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: { label: { html: '<p>Sent</p>' } } } },
+  ] };
+  const graph = buildSourceGraph({ ...capture, rootIds: ['button'], definitions: [{ id: data.id, kind: data.__class, data }] });
+  const identity = allocateTargetIdentity(graph, new Set()), names = sourceStateNames({ graph, scopeId: 'button' }, identity);
+  const result = emitNativeComponents(graph, identity);
+  expect(result.diagnostics).toEqual([]);
+  expect(parseResponsiveAttr(result.files[0].code, identity.label, 'dir').byVariant.get(names.success)).toBeNull();
+  expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
+});
 import { parseComponentInfoFromSource } from '../../components/component-registry';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
 

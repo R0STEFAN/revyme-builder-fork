@@ -27,8 +27,8 @@ export interface ResponsiveAttr {
   base: string;
   /** breakpoint width (px) → override value. */
   byViewport: Map<number, string>;
-  /** variant name → override value. */
-  byVariant: Map<string, string>;
+  /** variant name → override value; null explicitly omits the attribute. */
+  byVariant: Map<string, string | null>;
 }
 
 /** The media query a viewport-width override gates on (max-width cascade). */
@@ -79,7 +79,7 @@ export function parseResponsiveAttr(code: string, nodeId: string, attr: string):
   // axis keys on `initialVariant` (always a master param; `variant` only exists
   // with connections) — accept legacy `variant ===` when reading too.
   const vpBranch = /^(__mq\d+)\s*\?\s*"([^"]*)"\s*:\s*/;
-  const varBranch = /^(?:initialVariant|variant)\s*===\s*'([^']*)'\s*\?\s*"([^"]*)"\s*:\s*/;
+  const varBranch = /^(?:initialVariant|variant)\s*===\s*'([^']*)'\s*\?\s*(?:"([^"]*)"|(undefined|null))\s*:\s*/;
   for (;;) {
     let m = vpBranch.exec(rest);
     if (m) {
@@ -90,7 +90,7 @@ export function parseResponsiveAttr(code: string, nodeId: string, attr: string):
     }
     m = varBranch.exec(rest);
     if (m) {
-      out.byVariant.set(m[1], m[2]);
+      out.byVariant.set(m[1], m[3] ? null : m[2]);
       rest = rest.slice(m[0].length);
       continue;
     }
@@ -110,7 +110,7 @@ export function getResponsiveAttrAtViewport(code: string, nodeId: string, attr: 
 /** Convenience: the resolved value for a variant (override or base). */
 export function getResponsiveAttrForVariant(code: string, nodeId: string, attr: string, variant: string): string {
   const r = parseResponsiveAttr(code, nodeId, attr);
-  return r.byVariant.get(variant) ?? r.base;
+  return r.byVariant.has(variant) ? r.byVariant.get(variant) ?? '' : r.base;
 }
 
 /** Build the JSX attr text (`attr="x"` or `attr={…ternary…}`) from a ResponsiveAttr,
@@ -124,7 +124,7 @@ function buildAttr(code: string, attr: string, r: ResponsiveAttr): { code: strin
   const parts: string[] = [];
   // Connection state drives live variants; masters without state use their prop.
   const variantVar = detectVariantVar(code);
-  for (const [name, val] of r.byVariant) parts.push(`${variantVar} === '${name}' ? ${JSON.stringify(val)}`);
+  for (const [name, val] of r.byVariant) parts.push(`${variantVar} === '${name}' ? ${val === null ? 'undefined' : JSON.stringify(val)}`);
   const vpSorted = [...r.byViewport.entries()].sort((a, b) => a[0] - b[0]);
   for (const [w, val] of vpSorted) {
     const g = ensureMediaGate(c, queryForWidth(w));
@@ -182,13 +182,13 @@ export function setResponsiveAttrInCode(
   return next;
 }
 
-/** Set (or clear) a PER-VARIANT attr override (`variant === 'name'` ternary). */
+/** Set a per-variant attr override. Empty string resets; null omits the attr in that state. */
 export function setVariantAttrInCode(
   code: string,
   nodeId: string,
   variant: string,
   attr: string,
-  value: string,
+  value: string | null,
   baseValue: string,
 ): string {
   const r = parseResponsiveAttr(code, nodeId, attr);

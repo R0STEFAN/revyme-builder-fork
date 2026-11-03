@@ -27,6 +27,7 @@ import { mapSourceText } from './text';
 import { emitSourceScene } from './scene';
 import { applySourceInstances } from './scene-instances';
 import { sourceStaticLinkValue } from './links';
+import { setVariantAttrInCode } from '../../generation/responsive-attrs-gen';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
@@ -115,6 +116,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const created = buildCreatedMaster({ name, props: [], from: identity[primaryId], variants: Object.values(names).filter(value => value !== 'default').map(name => ({ name })) }, { sourceCode: `"use client"; export default function Source(){return (${body});}` });
       if ('error' in created) throw new Error(created.error);
       let code = created.masterCode;
+      const textDirections: Array<{ nodeId: string; variant: string; value: string | null; base: string }> = [];
       const states: VariantConfig[] = scope.children.map(id => {
         const raw = graph.nodes.get(id)!.raw;
         const replica = sourceRecord(raw.replicaInfo);
@@ -235,7 +237,9 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const baseText = mapSourceText(base, context);
           for (const stateId of scope.children.filter(id => id !== primaryId)) {
             const text = mapSourceText(resolveSourceNode(graph, id, stateId), context);
-            if (text.tag !== baseText.tag || JSON.stringify(text.attributes) !== JSON.stringify(baseText.attributes)) throw new Error(`Text tag or attributes change on ${id} requires a native per-state element adapter`);
+            const attributes = new Set([...Object.keys(text.attributes), ...Object.keys(baseText.attributes)]);
+            if (text.tag !== baseText.tag || [...attributes].some(key => key !== 'dir' && text.attributes[key] !== baseText.attributes[key])) throw new Error(`Text tag or attributes change on ${id} requires a native per-state element adapter`);
+            if (text.attributes.dir !== baseText.attributes.dir) textDirections.push({ nodeId: identity[id], variant: names[stateId], value: text.attributes.dir ?? null, base: baseText.attributes.dir ?? '' });
             if (JSON.stringify(text.binding) === JSON.stringify(baseText.binding) && text.jsx === baseText.jsx) continue;
             if (text.binding) {
               const prop = valueExpression(text.binding, base, context, 'textContent');
@@ -283,6 +287,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       for (const connection of connections) code = addConnectionToCode(code, connection.from, connection.to, connection.trigger, connection.delay, connection.sourceNode).code;
       // Rebuild retains the source pause flag as part of the native connection metadata.
       if (connections.length) code = rebuildConnections(code, connections);
+      for (const direction of textDirections) code = setVariantAttrInCode(code, direction.nodeId, direction.variant, 'dir', direction.value, direction.base);
       code = forwardEventPropsToComponentRoot(code);
       for (const id of sourceIds) {
         const node = resolveSourceNode(graph, id);
