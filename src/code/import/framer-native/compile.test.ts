@@ -11,6 +11,12 @@ import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-
 import { nativePropName } from './components';
 import { parsePresetTokens } from '../../generation/preset-gen';
 import { parseComponentInfoFromSource } from '../../components/component-registry';
+import * as React from 'react';
+import * as jsxRuntime from 'react/jsx-runtime';
+import * as motionRuntime from 'framer-motion';
+import * as revymeRuntime from '@revyme/runtime';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import ts from 'typescript';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -48,7 +54,7 @@ it('assigns an original design cursor and its variant to a native component inst
   master.variables = [{ id: 'cursor', type: 'customcursor' }];
   (master.children as any[])[0].customCursorType = { type: 'variableReference', providerId: 'card', id: 'cursor' };
   (source.definitions[0].data.children as any[])[0].children[0].$control__cursor = { type: 'customcursor', value: { customCursorType: 'component', customCursorSmartComponentId: 'pointer', customCursorVariant: 'hover' } };
-  const pointer = { id: 'pointer', __class: 'SmartComponentNode', baseVariantId: 'pointer-base', children: [{ id: 'pointer-base', __class: 'FrameNode', children: [] }, { id: 'hover', __class: 'FrameNode', children: [], replicaInfo: { master: 'pointer-base', overrides: {} } }] };
+  const pointer = { id: 'pointer', __class: 'SmartComponentNode', baseVariantId: 'pointer-base', children: [{ id: 'pointer-base', __class: 'FrameNode', children: [{ id: 'cursor-label', __class: 'RichTextNode', parentid: 'pointer-base', html: '<p>Default pointer</p>', children: [] }] }, { id: 'hover', __class: 'FrameNode', children: [], replicaInfo: { master: 'pointer-base', overrides: { 'cursor-label': { html: '<p>Hover pointer</p>' } } } }] };
   source.definitions.push({ id: pointer.id, kind: pointer.__class, data: pointer });
   const layout = `import React from 'react'; export default function Layout({children}) { return <html><body>{children}</body></html>; }`;
   const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]) });
@@ -61,6 +67,30 @@ it('assigns an original design cursor and its variant to a native component inst
   expect(result.files.find(file => file.code.includes(`withCursor(${prop},`))?.code).toContain(`...${prop}Opts`);
   const target = { projectId: 'destination', branchId: 'main' };
   expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  const modules = new Map<string, any>();
+  const load = (name: string): any => {
+    if (name === 'react') return React;
+    if (name === 'react/jsx-runtime') return jsxRuntime;
+    if (name === 'framer-motion') return motionRuntime;
+    if (name === '@revyme/runtime') return revymeRuntime;
+    if (!name.startsWith('@/components/')) throw new Error(`Unexpected dependency ${name}`);
+    if (modules.has(name)) return modules.get(name);
+    const file = result.files.find(item => item.path === `${name.slice(2)}.tsx`)!;
+    const exports = { __esModule: true }; modules.set(name, exports);
+    new Function('exports', 'require', ts.transpileModule(file.code, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText)(exports, load);
+    return exports;
+  };
+  const pageExports: { default?: React.ComponentType } = {};
+  new Function('exports', 'require', ts.transpileModule(page, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText)(pageExports, load);
+  try {
+    const view = render(React.createElement(React.Fragment, null, React.createElement(revymeRuntime.CursorPortal), React.createElement(pageExports.default!)));
+    expect(view.queryByText('Hover pointer')).toBeNull();
+    const trigger = view.getByText('Original text').parentElement!;
+    fireEvent.mouseEnter(trigger);
+    await waitFor(() => expect(view.getByText('Hover pointer')).toBeTruthy());
+    fireEvent.mouseLeave(trigger);
+    await waitFor(() => expect(view.queryByText('Hover pointer')).toBeNull());
+  } finally { cleanup(); }
 });
 it('connects source Google families and exact axes through native imports without uploading font files', async () => {
   const source = transfer();
