@@ -59,11 +59,20 @@ export function mapSourceConnections(component: SourceComponent, identity: Recor
   for (const [stateId, to] of Object.entries(names)) {
     const raw = graph.nodes.get(stateId)!.raw;
     if (!raw.gesture) continue;
-    if (raw.gesture !== 'hover') throw new Error(`FRAMER_ACTION_UNSUPPORTED: gesture ${String(raw.gesture)} on ${stateId} requires its native interaction adapter`);
+    if (!['hover', 'pressed'].includes(String(raw.gesture))) throw new Error(`FRAMER_ACTION_UNSUPPORTED: gesture ${String(raw.gesture)} on ${stateId} requires its native interaction adapter`);
     const replica = sourceRecord(raw.replicaInfo);
-    const parent = names[String(replica?.inheritsFrom ?? replica?.master)];
+    const parentId = String(replica?.inheritsFrom ?? replica?.master);
+    const parent = names[parentId];
     if (!parent) throw new Error(`FRAMER_ACTION_INVALID: missing gesture parent on ${stateId}`);
-    const edges: Connection[] = [{ from: parent, to, trigger: 'mouseEnter' }, { from: to, to: parent, trigger: 'mouseLeave' }];
+    const hoverSiblings = raw.gesture === 'pressed' ? Object.keys(names).filter(id => {
+      const sibling = graph.nodes.get(id)!.raw, inherited = sourceRecord(sibling.replicaInfo);
+      return sibling.gesture === 'hover' && String(inherited?.inheritsFrom ?? inherited?.master) === parentId;
+    }) : [];
+    if (hoverSiblings.length > 1) throw new Error(`FRAMER_ACTION_UNSUPPORTED: ambiguous hover parent for pressed state ${stateId}`);
+    const origin = hoverSiblings.length ? names[hoverSiblings[0]] : parent;
+    const edges: Connection[] = raw.gesture === 'hover'
+      ? [{ from: parent, to, trigger: 'mouseEnter' }, { from: to, to: parent, trigger: 'mouseLeave' }]
+      : [{ from: origin, to, trigger: 'clickStart' }, { from: to, to: origin, trigger: 'click' }];
     for (const edge of edges) {
       const existing = result.find(candidate => candidate.from === edge.from && candidate.trigger === edge.trigger && !candidate.sourceNode);
       if (existing && existing.to !== edge.to) throw new Error(`FRAMER_ACTION_UNSUPPORTED: gesture/action conflict on ${stateId}`);

@@ -4,6 +4,20 @@ import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
 import { mapSourceConnections, sourceStateNames } from './interactions';
 
 describe('original component interaction graph', () => {
+  it.each([false, true])('maps a pressed gesture with hover sibling %s through native interaction edges', withHover => {
+    const data = { id: 'button', __class: 'SmartComponentNode', baseVariantId: 'base', children: [
+      { id: 'base', __class: 'FrameNode', children: [] },
+      ...(withHover ? [{ id: 'hover', __class: 'FrameNode', gesture: 'hover', children: [], replicaInfo: { master: 'base', overrides: {} } }] : []),
+      { id: 'pressed', __class: 'FrameNode', gesture: 'pressed', children: [], replicaInfo: { master: 'base', overrides: {} } },
+    ] };
+    const graph = buildSourceGraph({ ...fixture, rootIds: ['button'], definitions: [{ id: data.id, kind: data.__class, data }] });
+    const identity = allocateTargetIdentity(graph, new Set());
+    const edges = mapSourceConnections({ graph, scopeId: 'button' }, identity);
+    const parent = withHover ? identity.hover : 'default';
+    expect(edges).toContainEqual({ from: parent, to: identity.pressed, trigger: 'clickStart' });
+    expect(edges).toContainEqual({ from: identity.pressed, to: parent, trigger: 'click' });
+    expect(edges).toHaveLength(withHover ? 4 : 2);
+  });
   it('preserves every edge in the six-state Underline source, including delayed resets', () => {
     const graph = buildSourceGraph(fixture), identity = allocateTargetIdentity(graph, new Set());
     const names = sourceStateNames({ graph, scopeId: 'f03DgVEM5' }, identity);
