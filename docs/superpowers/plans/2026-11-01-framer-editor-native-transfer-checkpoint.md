@@ -1,4 +1,49 @@
-# Framer native transfer — continuation checkpoint, 2026-11-02
+# Framer native transfer — continuation checkpoint, 2026-11-03
+
+## Continuation checkpoint — 2026-11-03 (HEAD `61a30a0`)
+
+Since the `18329ac` checkpoint, 46 additional commits have landed across `src/code/import/framer-native/`, `src/code/generation/`, `src/editor/tools/AnimationTool/`, `packages/automation-core/src/operations/framer-import.ts`, and `extensions/framer-native/`:
+
+- **Responsive variants, links, and custom cursors** (`dab5d82`..`05bee02`, `b9b089a`, `419094c`):
+  - Resolved Framer `webPage` links in native component props, explicit URL link objects, and normalized `www.` links.
+  - Imported responsive overlay variants and responsive design-component variants (`data-rv`), composing them cleanly with instance and overlay states.
+  - Mapped custom cursor components (`CustomCursorHost` portal in `app/layout.tsx`, `data-cursor` bindings, cursor variants/options forwarding, active cursor control resolution across replicas, and ignoring inactive retained cursor IDs when `cursorEnabled !== true`).
+  - Updated `extensions/framer-native/capture.mjs` (`b9b089a`) to load referenced `customCursorSmartComponentId` scopes during capture.
+- **Metadata, social images, favicons, locales, and reduced-motion** (`d233b58`..`50bd5d4`, `90c5608`):
+  - Bound page and CMS social images (including inherited document social images and CMS page overrides) to uploaded native media.
+  - Imported light and dark Framer favicons into native site metadata (`app/layout.tsx` `icons`).
+  - Preserved CMS page indexing settings (`robots.index`), matched destination language codes without false diagnostics, and preserved reduced-motion policies in imported pages and imperative loops.
+- **Interactions, mount/presence animations, and page transitions** (`8719f0c`..`6a9ec4e`):
+  - Drove variant attributes from live component state, converted Framer `pressed` gestures to native `whileTap`/variant interactions, matched Framer fallback for stale instance variants, and converted static responsive visibility in pages.
+  - Decoded explicit Framer `onMount` `enterEffect*` / `exitEffect*` channels (`sourceMountEffects`), preserved independent exit transition timing across parser/editor/codegen, recognized presence animations on ordinary child elements, and wrapped animated design-component instances in native `AnimatePresence` + `motion.div` presence frames (`wrapInstanceInPresenceFrameInCode`, `9918c8b`) while keeping the inner instance editable.
+  - Decoded document-level `globalPageEffect` (`sourceGlobalPageEffect`) into native `PageTransition` (`@revyme/runtime`) in `app/(template-group)/layout.tsx` or `app/layout.tsx`, with `framer-import.ts` validating exact layout transformations (`6a9ec4e`).
+- **Native forms and viewport-relative min/max dimensions** (`61a30a0`):
+  - Converted Framer `FormContainer` (`form`), `FormPlainTextInputNode` (`input`/`textarea`), `FormSelectNode` (`select` + `option` children), and label/submit frames into native Revyme forms (`<form action="/api/form" method="POST">`, `setFormStateMappingInCode` `data-form-state` on submit buttons, `::placeholder` and `:focus` scoped `<style>` rules with color token remapping, `formInputFontSelector` + `formInputVariationAxes` Google Font requests, and canonical `app/api/form/route.ts` accepted by `imports.framer.submit`).
+  - Resolved `<n>vw` and `<n>vh` on `minWidth`, `maxWidth`, `minHeight`, `maxHeight` against breakpoint viewport dimensions (`width` and `viewportHeight` `800`/`1080`/`844`) into per-breakpoint `px` values so responsive hero sections (`50vh`, `90vh`, `100vh`) pass Oracle `MINMAX_SIZE_UNIT`.
+
+### Audit of live capture `/home/rost/Завантажене/framer-native-2wu2XMOUbTCMJbRRQrOz (2).json`
+
+- **Passing with 0 compiler diagnostics and 0 Oracle (`checkFile`) errors**:
+  - Layout template `B1BOPR7cc` (`LayoutTemplateNode`)
+  - Primary captured scope page `E1v1uUHgV` (`/contact`, `WebPageNode` — including Contact form, responsive `50vh` hero, and template integration)
+  - Page `muYpolpKZ` (`/about`, `WebPageNode` — including `90vh`/`100vh`/`50vh` sections and animated design-component instances)
+  - All 8 `SmartComponentNode` design masters (`FramerBbebye`, `FramerRabn9l`, `FramerZ2l2uv`, `FramerNbjhb4t`, `FramerOexjb2`, `FramerN2b2eoi`, `FramerNgru0fy`, `GInvxXvf2`)
+  - All 6 CMS files (`cms/*.json`, `cms/*.schema.json`) and both code overrides (`overrides/*.tsx`)
+- **Remaining 4 `WebPageNode` scopes in full-project mode and exact next steps**:
+  1. `dgFqQKldG` (`/404`): `Source stagger requires its native timing adapter` on nodes `oiOwhFHPW`, `HE4PWXA6w`, `gcCe2XCl6`, `tphnupm3o`, `gzIpnhxx5` (`enterEffectTransition.stagger: 0.05` stored on single-element `onMount` transitions in `src/code/import/framer-native/effects.ts`).
+  2. `augiA20Il` (`/`):
+     - `Source appearance mode requires its native lifecycle adapter` on `PlNx_eCBE` and `wxmzC1QHS` (`styleAppearEffectLocked: true` with `enterEffectEnabled: true` and `exitEffectEnabled: true`, where Framer locks exit to reuse `enterEffect*` values and transition in `src/code/import/framer-native/effects.ts`).
+     - Node `Fculmw_Oh` references cursor master `jsUV7E_LN`, which was not yet loaded in the `0.1.6` capture file (fixed in reader capture `b9b089a`; requires fresh capture in live browser for full project).
+  3. `j0BXZ81Wn` (`/blog/:uItp5sWns`, CMS detail page):
+     - Breakpoint root frames (`QP5nB0kFJ`, `RCObtCaEX`, `YkdwZeffo`) have `flowEffectEnabled: true`.
+     - Node `eBHcHKg5W` (`Hero Image`) has `visible` bound to a `computedValue` (`isSet` transform on CMS field `PrPpB5TAv` on `j0BXZ81Wn`) — needs CMS detail page conditional visibility binding support in `pages.ts` / `bindings.ts`.
+  4. `HHDTVO_oW` (`/works`):
+     - `Source page variables require their native declaration adapter` (optional page variable `XRE0xiPqt` `Category` of type `collectionreference`, referenced by collection list `LLVrpIqCM` in `collectionFilters`).
+
+### Focused verification status at `61a30a0`
+
+- `npx vitest run src/code/import/framer-native packages/automation-core/test/capabilities/framer-import.test.ts`: **22 test files / 282 tests passed**.
+- `npx tsc --noEmit`: **0 errors**.
 
 ## Active implementation
 
