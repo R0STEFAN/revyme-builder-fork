@@ -16,7 +16,9 @@ import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
-import { nativePropName } from './components';
+import { nativeComponentName, nativePropName } from './components';
+import { sourceStateNames } from './interactions';
+import { setResponsiveOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
 import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
 import { createConditionalVariableInCode } from '../../features/variable-ops';
 import { updateTemplatePropsInCode } from '../../features/template-props';
@@ -252,6 +254,15 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           const semanticProperties = new Set(['link', 'linkOpenInNewTab', 'visible', 'htmlTag', 'dataIdentifier', 'collectionFilters', 'collectionOrder', 'collectionLimit', 'collectionOffset', 'collectionReverse', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']);
           if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
           else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
+          if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node) && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
+            if (node.properties.whileOpenEffectEnabled === true) throw new Error(`Responsive $control__variant on ${nodeId} with an overlay requires its native composition adapter`);
+            const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier))?.[1];
+            const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
+            const target = master && sourceStateNames({ graph, scopeId: master }, identity)[String(sourceVariant)];
+            if (!master || !target) throw new Error(`Missing responsive component variant on ${nodeId}`);
+            code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', target, null);
+            semanticProperties.delete('$control__variant');
+          }
           for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
           if (node.kind === 'RichTextNode') {
             const base = mapSourceText(node, context), text = mapSourceText(state, context);
@@ -259,6 +270,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           }
         }
       }
+      code = transformAllResponsiveAttrs(code, model => { model.bp = viewports.map(viewport => viewport.width).sort((a, b) => a - b); });
       for (const nodeId of scene.links) {
         const node = resolveSourceNode(graph, nodeId);
         const pageLink = sourceRecord(node.properties.link);
