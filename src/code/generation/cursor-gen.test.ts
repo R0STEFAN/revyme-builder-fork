@@ -158,6 +158,11 @@ describe('removeComponentCursorInCode', () => {
 });
 
 describe('ensureCursorPortalInLayout', () => {
+  test('adds the portal import when the layout already imports another runtime export', () => {
+    const out = ensureCursorPortalInLayout(`import { OtherRuntime } from '@revyme/runtime';\n${SERVER_LAYOUT}`);
+    expect(out).toMatch(/import\s*\{[^}]*CursorPortal[^}]*\}\s*from\s*['"]@revyme\/runtime['"]/);
+    expect(out).toContain('<CursorPortal />');
+  });
   test('adds import + mounts <CursorPortal /> inside <body>', () => {
     const out = ensureCursorPortalInLayout(SERVER_LAYOUT);
 

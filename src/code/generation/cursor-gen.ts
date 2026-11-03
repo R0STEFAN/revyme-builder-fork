@@ -14,7 +14,7 @@
 // Pairs with src/code/parsing/cursor-parser.ts.
 
 import type { CursorMode, CursorSide, CursorAlign, CursorTransition } from '@/code/parsing/cursor-parser';
-import { insertAfterLastImportLine } from './generator-utils';
+import { insertAfterLastImportLine, ensureNamedImport } from './generator-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
 import { parseComponentCursorCalls, getComponentCursorForNode } from '@/code/parsing/cursor-parser';
 import { trace } from '@/shared/debug-trace';
@@ -179,10 +179,7 @@ export function ensureCursorPortalInLayout(layoutCode: string): string {
   //    insert at top of file (after any 'use client' directive). Detects
   //    either the new `@revyme/runtime` path OR the legacy `@/lib/cursor-runtime`
   //    so files already migrated by hand don't get a duplicate import.
-  if (!/from\s+['"]@revyme\/runtime['"]/.test(next) && !/from\s+['"]@\/lib\/cursor-runtime['"]/.test(next)) {
-    const importLine = `import { CursorPortal } from '${RUNTIME_IMPORT_PATH}';`;
-    next = insertAfterLastImportLine(next, importLine) ?? (importLine + '\n\n' + next);
-  }
+  if (!/import\s*\{[^}]*\bCursorPortal\b[^}]*\}\s*from\s*['"]@\/lib\/cursor-runtime['"]/.test(next)) next = ensureNamedImport(next, RUNTIME_IMPORT_PATH, ['CursorPortal']);
 
   // 2. Mount `<CursorPortal />` as the last child of `<body>`. Matches both
   //    self-closing and full body tags. We insert before `</body>`.
