@@ -1313,7 +1313,7 @@ export function updateOverlayConfigInCode(
  *  ≥ width). No inner `{}` (regex-safe) and `window.innerWidth` is only read when
  *  open (always client-side), so no SSR guard is needed. Returns a quoted string
  *  for the static case or a parenthesised nested ternary for the responsive one. */
-function buildOnOpenVariantExpr(config: OverlayConfig): string {
+export function buildOnOpenVariantExpr(config: OverlayConfig): string {
   const baseOpen = config.onOpenVariant || '';
   if (!baseOpen) return '';
   const responsive = config.responsive || {};

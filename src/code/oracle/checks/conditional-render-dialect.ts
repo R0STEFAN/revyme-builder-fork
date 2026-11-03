@@ -36,6 +36,10 @@
 // is not a gate; this is.
 
 import * as t from '@babel/types';
+import { parseExpression } from '@babel/parser';
+import generate from '@babel/generator';
+import { parseOverlayCalls } from '../../parsing/overlay-parser';
+import { buildOnOpenVariantExpr, stateVarName } from '../../generation/overlay-gen';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, hasAttr } from './shared';
 import { MOTION_ONLY_PROPS } from './motion-tag';
 import { isCodeComponentSource } from './shared';
@@ -154,6 +158,7 @@ export function checkHandWrittenMediaQuery(
   if (isCodeComponentSource(code)) return;                 // code component — black box
   const exempt = injectedHelperRanges(code);
   const inHelper = (idx: number) => exempt.some(([s, e]) => idx >= s && idx < e);
+  const overlays = parseOverlayCalls(code);
 
   const seen = new Set<number>();
   traverse(ast, {
@@ -164,6 +169,21 @@ export function checkHandWrittenMediaQuery(
       if (!t.isIdentifier(path.node.object) || path.node.object.name !== 'window') return;
       const at = path.node.start ?? -1;
       if (at < 0 || inHelper(at)) return;
+      const attr = path.findParent(p => p.isJSXAttribute());
+      if (attr?.isJSXAttribute() && t.isJSXIdentifier(attr.node.name, { name: 'initialVariant' }) && t.isJSXExpressionContainer(attr.node.value) && t.isConditionalExpression(attr.node.value.expression)) {
+        const expression = attr.node.value.expression;
+        const opening = attr.parentPath;
+        if (opening?.isJSXOpeningElement()) {
+          const id = stringAttr(jsxAttrs(opening.node), 'data-id');
+          const overlay = overlays.find(item => item.config.triggerId === id);
+          if (overlay && t.isIdentifier(expression.test, { name: stateVarName(overlay.overlayId) }) && t.isStringLiteral(expression.alternate)) {
+            try {
+              const expected = parseExpression(buildOnOpenVariantExpr(overlay.config));
+              if (generate(expression.consequent).code === generate(expected).code) return;
+            } catch { /* malformed metadata remains a violation */ }
+          }
+        }
+      }
       const line = path.node.loc?.start.line;
       if (line != null && seen.has(line)) return;
       if (line != null) seen.add(line);

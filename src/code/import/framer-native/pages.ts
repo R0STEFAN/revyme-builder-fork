@@ -236,7 +236,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       }
       code = applySourceInstances(code, scene, graph, identity, options.assets, { allowOverlayEvents: true, routes: result.routes });
       if (isDetail && scene.sourceIds.some(id => graph.nodes.get(id)!.kind === 'OverlayNode')) throw new Error('Source CMS detail overlay requires its native hook-order adapter');
-      const overlays = applySourceOverlays(code, scene.sourceIds, graph, identity, viewports.slice(1).map(viewport => viewport.sourceStateId));
+      const overlays = applySourceOverlays(code, scene.sourceIds, graph, identity, viewports.slice(1), viewports[0].width);
       code = overlays.code;
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);

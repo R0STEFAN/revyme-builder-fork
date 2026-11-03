@@ -19,7 +19,7 @@ export function sourceShowOverlayTarget(value: unknown): string | undefined {
 }
 
 /** Rebuild captured modal subtrees through the editor's ordinary overlay writer. */
-export function applySourceOverlays(code: string, sourceIds: string[], graph: SourceGraph, identity: Record<string, string>, states: string[]): { code: string; handled: Set<string> } {
+export function applySourceOverlays(code: string, sourceIds: string[], graph: SourceGraph, identity: Record<string, string>, states: { sourceStateId: string; width: number }[], primaryWidth: number): { code: string; handled: Set<string> } {
   trace.fn('framer-native.applyOverlays', { nodes: sourceIds.length });
   const handled = new Set<string>(), triggers = new Map<string, { id: string; config: OverlayTriggerConfig }>();
   const overlays = sourceIds.filter(id => graph.nodes.get(id)!.kind === 'OverlayNode');
@@ -64,10 +64,10 @@ export function applySourceOverlays(code: string, sourceIds: string[], graph: So
     if (Object.keys(p).some(key => !known.has(key)) || p.visible === false || ['backdropDismissible', 'backdropFillEnabled', 'blockDocumentScrolling'].some(key => typeof p[key] !== 'boolean')) throw new Error(`Source overlay ${id} requires its native modal configuration adapter`);
     const triggerNode = resolveSourceNode(graph, trigger.id);
     for (const state of states) {
-      const other = resolveSourceNode(graph, id, state).properties;
-      const sourceTrigger = resolveSourceNode(graph, trigger.id, state).properties;
+      const other = resolveSourceNode(graph, id, state.sourceStateId).properties;
+      const sourceTrigger = resolveSourceNode(graph, trigger.id, state.sourceStateId).properties;
       for (const property of [...known].filter(key => key.startsWith('backdrop') || ['blockDocumentScrolling', 'visible', 'zIndex'].includes(key))) if (JSON.stringify(p[property]) !== JSON.stringify(other[property])) throw new Error(`Responsive overlay ${id} configuration requires its native adapter`);
-      for (const property of ['whileOpenEffectEnabled', 'whileOpenEffectVariant']) if (sourceTrigger[property] !== triggerNode.properties[property]) throw new Error(`Responsive overlay ${id} on-open variant requires its native adapter`);
+      if (sourceTrigger.whileOpenEffectEnabled !== triggerNode.properties.whileOpenEffectEnabled) throw new Error(`Responsive overlay ${id} on-open activation requires its native adapter`);
     }
     const fill = p.backdropFillEnabled ? p.backdropFill === 'transparent' ? TRANSPARENT_FILL : p.backdropFill : TRANSPARENT_FILL;
     if (typeof fill !== 'string' || /['<>\r\n]/.test(fill) || p.zIndex !== undefined && (typeof p.zIndex !== 'number' || !Number.isFinite(p.zIndex))) throw new Error(`Invalid source overlay ${id} fill/stacking`);
@@ -78,6 +78,12 @@ export function applySourceOverlays(code: string, sourceIds: string[], graph: So
       const variant = master && sourceStateNames({ graph, scopeId: master }, identity)[String(triggerNode.properties.whileOpenEffectVariant)];
       if (!variant) throw new Error(`Missing overlay on-open variant on ${trigger.id}`);
       result = updateOverlayConfigInCode(result, identity[id], { onOpenVariant: variant }, null);
+      for (const state of states) {
+        const source = resolveSourceNode(graph, trigger.id, state.sourceStateId).properties;
+        const target = sourceStateNames({ graph, scopeId: master! }, identity)[String(source.whileOpenEffectVariant)];
+        if (!target) throw new Error(`Missing responsive overlay on-open variant on ${trigger.id}`);
+        if (target !== variant) result = updateOverlayConfigInCode(result, identity[id], { onOpenVariant: target }, state.width, [], [primaryWidth, ...states.map(item => item.width)]);
+      }
     }
   }
   for (const id of sourceIds) {

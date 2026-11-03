@@ -9,6 +9,7 @@ import { parseJSXToNodes } from '../../parsing/parser';
 import { parseOverlayCalls, parseOverlayTriggerCalls } from '../../parsing/overlay-parser';
 import { parseCloseOverlayForNode } from '../../generation/close-overlay-gen';
 import { nativePropName } from './components';
+import { checkFile } from '../../oracle/check-file';
 import type { NativeTransfer } from './types';
 
 function input(): NativeTransfer {
@@ -51,6 +52,12 @@ it('binds a design component event and its native on-open variant instead of pas
   expect(code).not.toContain('framer/useShowOverlay');
   expect(code).not.toContain('deleted-overlay');
   expect(code).toMatch(/initialVariant=\{[^}]*Open\s*\?/);
+  (source.definitions[0].data.children as any[]).push({ id: 'phone', __class: 'FrameNode', parentid: 'home', children: [], replicaInfo: { master: 'desktop', overrides: { desktop: { width: 390 }, button: { whileOpenEffectVariant: 'closed' } } } });
+  const responsive = compile(source);
+  expect(responsive.diagnostics).toEqual([]);
+  const responsiveCode = responsive.files.find(file => file.path.endsWith('page.client.tsx'))!.code;
+  expect(parseOverlayCalls(responsiveCode)[0]?.config.responsive?.['1199']?.onOpenVariant).toBe('default');
+  expect(checkFile(responsiveCode.replace('window.innerWidth <= 1199', 'window.innerWidth <= 1198'), { kind: 'page' }).map(item => item.code)).toContain('RESPONSIVE_JS_HANDWRITTEN');
 });
 
 it('diagnoses missing overlay targets, conflicting triggers and unsupported responsive behavior', () => {
