@@ -339,6 +339,15 @@ it('preserves a page no-index setting in native metadata and sitemap detection',
   const submitted = await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext());
   expect(submitted.diagnostics).toEqual([]);
 });
+it('keeps search-engine indexing when skipping an unsupported nonvisual site-index flag', () => {
+  const source = transfer();
+  source.definitions[0].data.webMetadata = { noIndex: true, noIndexSite: true };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.diagnostics).toEqual([]);
+  expect(parseMetadataFromCode(result.files.find(file => file.path === 'app/page.tsx')!.code)).toMatchObject({ robots: { index: false } });
+  source.definitions[0].data.webMetadata = { noIndex: false, noIndexSite: true };
+  expect(parseMetadataFromCode(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).files.find(file => file.path === 'app/page.tsx')!.code)).toMatchObject({ robots: { index: true } });
+});
 it('rejects an invalid no-index value instead of changing search visibility', () => {
   const source = transfer();
   source.definitions[0].data.webMetadata = { noIndex: 'true' };
