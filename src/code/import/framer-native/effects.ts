@@ -7,6 +7,42 @@ import type { SourceGraph, SourceProperties } from './types';
 
 type LoopSpec = { props: Record<string, string>; transition: Record<string, string>; offscreen?: string };
 
+export interface SourceMountEffects {
+  initial: Record<string, string>;
+  animate: Record<string, string>;
+  exit?: Record<string, string>;
+  enterTransition?: Record<string, string>;
+  exitTransition?: Record<string, string>;
+}
+
+/** onMount uses the explicit entry/exit channels, not the retained style-appear values. */
+export function sourceMountEffects(p: SourceProperties): SourceMountEffects | undefined {
+  trace.fn('framer-native.sourceMountEffects');
+  if (p.styleAppearEffectEnabled !== true) return;
+  if (p.styleAppearEffectTrigger !== 'onMount' || p.styleAppearEffectLocked !== false || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
+  if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) throw new Error('Source appearance with a base transform requires its native composition adapter');
+  const axes = { Opacity: 'opacity', X: 'x', Y: 'y', Scale: 'scale', Rotate: 'rotate', RotateX: 'rotateX', RotateY: 'rotateY', SkewX: 'skewX', SkewY: 'skewY' };
+  const target: Record<string, string> = {};
+  const channel = (prefix: 'enterEffect' | 'exitEffect') => {
+    const known = new Set(['Enabled', 'Transition', 'Rotate3d', 'RotateAdditiveDynamicValue', ...Object.keys(axes)].map(key => prefix + key));
+    if (Object.keys(p).some(key => key.startsWith(prefix) && !known.has(key)) || p[`${prefix}RotateAdditiveDynamicValue`] === true || p[`${prefix}Rotate3d`] !== undefined && typeof p[`${prefix}Rotate3d`] !== 'boolean') throw new Error(`Unsupported source ${prefix} setting`);
+    const values: Record<string, string> = {};
+    for (const [suffix, prop] of Object.entries(axes)) {
+      const neutral = prop === 'opacity' ? p.opacity ?? 1 : prop === 'scale' ? 1 : 0;
+      const value = p[prefix + suffix] ?? neutral;
+      if (typeof value !== 'number' || !Number.isFinite(value) || prop === 'opacity' && (value < 0 || value > 1) || typeof neutral !== 'number' || !Number.isFinite(neutral)) throw new Error(`Invalid source ${prefix}${suffix}`);
+      if (['rotateX', 'rotateY'].includes(prop) && value !== 0 && p[`${prefix}Rotate3d`] !== true) throw new Error(`Inactive 3D source ${prefix}${suffix} requires verification`);
+      values[prop] = String(value); target[prop] = String(neutral);
+    }
+    const transition = sourceRecord(p[`${prefix}Transition`]);
+    if (transition?.stagger !== undefined && transition.stagger !== 0) throw new Error('Source stagger requires its native timing adapter');
+    return { values, transition: sourceTransitionSpec(p[`${prefix}Transition`]) };
+  };
+  const enter = channel('enterEffect');
+  const exit = p.exitEffectEnabled ? channel('exitEffect') : undefined;
+  return { initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
+}
+
 /** The captured editor defaults to pausing loops offscreen. */
 export function sourceRotationLoop(p: SourceProperties): LoopSpec | undefined {
   if (p.loopEffectEnabled !== true) return;

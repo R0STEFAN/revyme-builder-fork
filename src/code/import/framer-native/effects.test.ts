@@ -1,7 +1,15 @@
 import { expect, it } from 'vitest';
-import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
+import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec, sourceMountEffects } from './effects';
 import { buildSourceGraph } from './source-graph';
 import type { NativeTransfer } from './types';
+
+it('reads separate on-mount entry and exit settings without substituting the legacy appearance values', () => {
+  const p = { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, styleAppearEffectScale: 0.5, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectScale: 1, enterEffectTransition: { type: 'tween', duration: 1.5, delay: 0.1, ease: [0.6, 0.2, 0, 1] }, exitEffectEnabled: true, exitEffectOpacity: 0, exitEffectY: 200, exitEffectTransition: { type: 'tween', duration: 0.8, delay: 0.3 } };
+  expect(sourceMountEffects(p)).toMatchObject({ initial: { opacity: '0', y: '200', scale: '1' }, animate: { opacity: '1', y: '0', scale: '1' }, exit: { opacity: '0', y: '200' }, enterTransition: { duration: '1.5', delay: '0.1' }, exitTransition: { duration: '0.8', delay: '0.3' } });
+  expect(sourceMountEffects({ ...p, styleAppearEffectEnabled: false })).toBeUndefined();
+  expect(() => sourceMountEffects({ ...p, enterEffectY: NaN })).toThrow();
+  expect(() => sourceMountEffects({ ...p, styleAppearEffectTrigger: 'inView' })).toThrow();
+});
 
 it('refuses a shared animation hook inside a repeated list', () => {
   const list = { id: 'list', __class: 'FrameNode', dataIdentifier: 'local-module:collection/items:default', children: [{ id: 'spinner', __class: 'FrameNode', parentid: 'list', children: [] }] };
