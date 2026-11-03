@@ -26,12 +26,25 @@ function transfer(): NativeTransfer {
 }
 it('reports independent conversion blockers together when a source dependency is missing', () => {
   const source = transfer();
-  source.definitions[2].data.webMetadata = { reducedMotion: true };
+  source.definitions[2].data.webMetadata = { unsupportedSetting: true };
   (source.definitions[0].data.children as any[])[0].children[0].codeComponentIdentifier = 'local-module:canvasComponent/missing:default';
   const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REFERENCE_MISSING' }));
-  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', property: 'webMetadata.reducedMotion' }));
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', property: 'webMetadata.unsupportedSetting' }));
+});
+it.each([true, false])('preserves the source reduced-motion policy %s in native pages', policy => {
+  const source = transfer();
+  source.definitions[2].data.webMetadata = { reducedMotion: policy };
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() });
+  expect(result.diagnostics).toEqual([]);
+  const page = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(page.code).toContain(`reducedMotion="${policy ? 'user' : 'never'}"`);
+  expect(parseJSXToNodes(page.code).has(result.identity.desktop)).toBe(true);
+  if (policy) {
+    (source.definitions[1].data.children as any[])[0].loopEffectEnabled = true;
+    expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED' }));
+  }
 });
 it('keeps source routes when translation of page paths is disabled', () => {
   const source = transfer();

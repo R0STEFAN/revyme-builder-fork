@@ -233,7 +233,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const jsx = isTemplate ? scene.jsx : `<div data-id="root"${isDetail ? " key={String(params?.slug ?? '')}" : ''} style={{position:'relative',width:'100%'}}>${scene.jsx}</div>`;
       const detailSetup = isDetail ? `/** @cmsPage { "collection": "${collection}", "kind": "detail" } */\nimport { useParams } from 'next/navigation';\nimport { useLocale } from 'next-intl';\nimport { localizeRows } from '@revyme/runtime';\nimport rows from '@/cms/${collection}.json';\n` : '';
       const detailBody = isDetail ? 'const params = useParams(); const locale = useLocale(); const rawItem = serverItem ?? (rows.find(row => row._slug === params?.slug) ?? rows[0]); const item = rawItem ? (localizeRows([rawItem], locale)[0] || rawItem) : undefined; if (!item) return null; ' : '';
-      let code = `"use client";\nimport React from 'react';\n${detailSetup}export default function ${signature} { ${detailBody}return ${jsx}; }`;
+      const reducedMotion = sourceRecord(document?.raw.webMetadata)?.reducedMotion;
+      const motionPolicy = typeof reducedMotion === 'boolean' ? reducedMotion ? 'user' : 'never' : undefined;
+      const pageJsx = motionPolicy ? `<MotionConfig reducedMotion="${motionPolicy}">${jsx}</MotionConfig>` : jsx;
+      let code = `"use client";\nimport React from 'react';\n${motionPolicy ? 'import { MotionConfig } from "framer-motion";\n' : ''}${detailSetup}export default function ${signature} { ${detailBody}return ${pageJsx}; }`;
       for (const prop of props) {
         code = setPropTypeInCode(code, prop.name, prop.type);
         code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
