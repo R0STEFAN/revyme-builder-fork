@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/captured-components.json';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
-import { mapSourceConnections, sourceStateNames } from './interactions';
+import { mapSourceConnections, sourceStateNames, sourceInstanceStateName } from './interactions';
 
 describe('original component interaction graph', () => {
+  it('uses the primary state for a stale instance variant, matching the observed editor fallback', () => {
+    const graph = buildSourceGraph(fixture), identity = allocateTargetIdentity(graph, new Set());
+    const component = { graph, scopeId: 'f03DgVEM5' };
+    expect(sourceInstanceStateName(component, identity, 'deleted-state')).toBe('default');
+    expect(sourceInstanceStateName(component, identity, 'yre4NRiTU')).toBe(identity.yre4NRiTU);
+    expect(() => sourceInstanceStateName(component, identity, { expression: 'dynamic' })).toThrow();
+  });
   it.each([false, true])('maps a pressed gesture with hover sibling %s through native interaction edges', withHover => {
     const data = { id: 'button', __class: 'SmartComponentNode', baseVariantId: 'base', children: [
       { id: 'base', __class: 'FrameNode', children: [] },

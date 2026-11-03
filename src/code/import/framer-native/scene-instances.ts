@@ -5,7 +5,7 @@ import { ensureNamedImport, generate, setTagAttr } from '../../generation/genera
 import { cursorOptsPropName, serializeInstanceCursorOpts } from '../../generation/cursor-gen';
 import { bindSourcePropInCode } from './bindings';
 import { nativeComponentName, nativePropName } from './components';
-import { sourceStateNames } from './interactions';
+import { sourceStateNames, sourceInstanceStateName } from './interactions';
 import { sourceCollectionId } from './cms';
 import { sourceRecord, sourceVariables, sourceCssImageVariables } from './source-graph';
 import { sourceShowOverlayTarget } from './overlays';
@@ -43,8 +43,7 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
       if (!key.startsWith('$control__')) continue;
       const sourceProp = key.slice(10), value = sourceRecord(control)?.value;
       if (sourceProp === 'variant') {
-        const variant = sourceStateNames({ graph, scopeId: masterId }, identity)[String(value)];
-        if (!variant) throw new Error(`Missing instance state ${String(value)}`);
+        const variant = sourceInstanceStateName({ graph, scopeId: masterId }, identity, value);
         result = setTagAttr(result, identity[id], 'initialVariant', JSON.stringify(variant));
         continue;
       }

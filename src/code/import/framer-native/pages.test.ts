@@ -105,15 +105,15 @@ it('rejects breakpoint changes to source code controls instead of silently keepi
   expect(result.files).toEqual([]);
   expect(result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringContaining('$control__title') }));
 });
-it('preserves a design instance variant selected on a smaller viewport', () => {
+it.each(['mobile', 'deleted-state'])('resolves a design instance variant %s selected on a smaller viewport', selected => {
   const transfer = input(), states = transfer.definitions[0].data.children as Record<string, any>[];
   states[0].children.push({ id: 'card-instance', __class: 'CodeComponentNode', parentid: 'desktop', codeComponentIdentifier: 'local-module:canvasComponent/card:default', children: [] });
-  states[1].replicaInfo.overrides['card-instance'] = { $control__variant: { value: 'mobile' } };
+  states[1].replicaInfo.overrides['card-instance'] = { $control__variant: { value: selected } };
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'base', children: [{ id: 'base', __class: 'FrameNode', children: [] }, { id: 'mobile', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: {} } }] };
   transfer.definitions.push({ id: master.id, kind: master.__class, data: master });
   const { result, identity } = emit(transfer);
   expect(result.diagnostics).toEqual([]);
-  expect(JSON.parse(parseJSXToNodes(result.files[0].code).get(identity['card-instance'])!.attrs['data-responsive'])['1199'].initialVariant).toBe(identity.mobile);
+  expect(JSON.parse(parseJSXToNodes(result.files[0].code).get(identity['card-instance'])!.attrs['data-responsive'])['1199'].initialVariant).toBe(selected === 'mobile' ? identity.mobile : 'default');
 });
 it('preserves an inherited native template, its content slot and page assignment', async () => {
   const transfer = input();

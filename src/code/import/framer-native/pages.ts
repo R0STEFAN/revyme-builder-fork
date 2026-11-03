@@ -17,7 +17,7 @@ import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
-import { sourceStateNames } from './interactions';
+import { sourceInstanceStateName } from './interactions';
 import { setResponsiveOverride, setResponsiveBindingOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
 import { parseOverlayCalls, resolveOverlayConfigForWidth } from '../../parsing/overlay-parser';
 import { stateVarName } from '../../generation/overlay-gen';
@@ -262,7 +262,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node) && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
             const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier))?.[1];
             const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
-            const target = master && sourceStateNames({ graph, scopeId: master }, identity)[String(sourceVariant)];
+            const target = master && sourceInstanceStateName({ graph, scopeId: master }, identity, sourceVariant);
             if (!master || !target) throw new Error(`Missing responsive component variant ${String(sourceVariant)} on ${nodeId}`);
             if (node.properties.whileOpenEffectEnabled === true) {
               const overlay = parseOverlayCalls(code).find(item => item.config.triggerId === identity[nodeId]);
