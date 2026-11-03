@@ -416,25 +416,30 @@ export function ensureCursorOptsForwardInCode(code: string, propName: string): s
   // 2. Spread into the withCursor opts object (brace-matched — opts nest
   //    braces via `transition: { … }`).
   const callMarker = `withCursor(${propName},`;
-  const callIdx = next.indexOf(callMarker);
+  let callIdx = next.indexOf(callMarker);
   if (callIdx === -1) {
     trace.error('cursor-gen:ensure-opts-no-call', { propName });
     return code;
   }
-  const objStart = next.indexOf('{', callIdx + callMarker.length);
-  if (objStart === -1) return code;
-  let depth = 1;
-  let j = objStart + 1;
-  while (j < next.length && depth > 0) {
-    if (next[j] === '{') depth++;
-    else if (next[j] === '}') depth--;
-    j++;
-  }
-  const objEnd = j - 1; // index of the closing '}'
-  const objBody = next.slice(objStart + 1, objEnd);
-  if (!objBody.includes(`...${optsName}`)) {
-    const spread = objBody.trim() === '' ? ` ...${optsName} ` : `${objBody.replace(/\s*$/, '')}, ...${optsName} `;
-    next = next.slice(0, objStart + 1) + spread + next.slice(objEnd);
+  while (callIdx !== -1) {
+    const objStart = next.indexOf('{', callIdx + callMarker.length);
+    if (objStart === -1) return code;
+    let depth = 1;
+    let j = objStart + 1;
+    while (j < next.length && depth > 0) {
+      if (next[j] === '{') depth++;
+      else if (next[j] === '}') depth--;
+      j++;
+    }
+    if (depth) return code;
+    const objEnd = j - 1;
+    const objBody = next.slice(objStart + 1, objEnd);
+    if (!objBody.includes(`...${optsName}`)) {
+      const spread = objBody.trim() === '' ? ` ...${optsName} ` : `${objBody.replace(/\s*$/, '')}, ...${optsName} `;
+      next = next.slice(0, objStart + 1) + spread + next.slice(objEnd);
+      j = objStart + 1 + spread.length + 1;
+    }
+    callIdx = next.indexOf(callMarker, j);
   }
   trace.action('cursor-gen:ensure-opts-forward', { propName });
   return next;

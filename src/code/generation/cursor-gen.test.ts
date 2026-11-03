@@ -204,6 +204,12 @@ describe('ensureCursorOptsForwardInCode', () => {
     const twice = ensureCursorOptsForwardInCode(once, 'cursor');
     expect(twice).toBe(once);
   });
+  test('forwards the instance options to every node using the same cursor prop', () => {
+    const two = MASTER.replace('{...rest} />', `{...rest}><span {...withCursor(cursor, { mode: 'follow' })} /></div>`);
+    const out = ensureCursorOptsForwardInCode(two, 'cursor');
+    expect(out.match(/\.\.\.cursorOpts/g)).toHaveLength(2);
+    expect(ensureCursorOptsForwardInCode(out, 'cursor')).toBe(out);
+  });
 
   test('handles an EMPTY opts object', () => {
     const empty = MASTER.replace(/\{ variant:[^)]*\}\)/, '{})');
