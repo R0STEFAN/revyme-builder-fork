@@ -2,7 +2,7 @@
 // auto_N silent-no-op class) + corrupted bare `data-` attribute stripping.
 
 import { describe, it, expect } from 'vitest';
-import { healMissingInstanceDataIds } from './heal-data-ids';
+import { healMissingInstanceDataIds, autoInjectMissingDataIds } from './heal-data-ids';
 
 describe('healMissingInstanceDataIds', () => {
   it('stamps a data-id on a PascalCase instance missing one (the corrupted-tag shape)', () => {
@@ -79,5 +79,53 @@ describe('healMissingInstanceDataIds', () => {
     const r = healMissingInstanceDataIds(stamped);
     expect(r.code).toBe(src);
     expect(r.strippedJunk).toBe(1);
+  });
+});
+
+describe('autoInjectMissingDataIds', () => {
+  it('automatically injects data-id on elements lacking one', () => {
+    const raw = `<section style={{ display: 'flex' }}>
+      <h1>Title</h1>
+      <button onClick={() => {}}>Click</button>
+    </section>`;
+    const { code, injectedCount } = autoInjectMissingDataIds(raw);
+    expect(injectedCount).toBe(3);
+    expect(code).toMatch(/<section data-id="section-[a-z0-9-]+"/);
+    expect(code).toMatch(/<h1 data-id="text-[a-z0-9-]+"/);
+    expect(code).toMatch(/<button data-id="btn-[a-z0-9-]+"/);
+  });
+
+  it('preserves existing data-ids and only injects where missing', () => {
+    const raw = `<div data-id="my-custom-box"><p>Content</p></div>`;
+    const { code, injectedCount } = autoInjectMissingDataIds(raw);
+    expect(injectedCount).toBe(1);
+    expect(code).toContain('data-id="my-custom-box"');
+    expect(code).toMatch(/<p data-id="text-[a-z0-9-]+"/);
+  });
+
+  it('automatically assigns data-id="root" to page outermost element when isPage: true', () => {
+    const raw = `export default function Page() {
+      return (
+        <div style={{ position: 'relative' }}>
+          <p>Hello</p>
+        </div>
+      );
+    }`;
+    const { code, injectedCount } = autoInjectMissingDataIds(raw, { isPage: true });
+    expect(injectedCount).toBe(2);
+    expect(code).toContain('<div data-id="root" style');
+    expect(code).toMatch(/<p data-id="text-[a-z0-9-]+"/);
+  });
+
+  it('exempts SVG children and inline rich-text spans from getting data-id', () => {
+    const raw = `<div>
+      <p>Hello <span>world</span></p>
+      <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" /></svg>
+    </div>`;
+    const { code, injectedCount } = autoInjectMissingDataIds(raw);
+    // div, p, svg get data-id (3 elements), span and circle do NOT
+    expect(injectedCount).toBe(3);
+    expect(code).toContain('<span>world</span>');
+    expect(code).toContain('<circle cx="50" cy="50" r="50" />');
   });
 });

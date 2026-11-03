@@ -18,7 +18,11 @@
 // builder flow stamps ids on those at creation, and blanket-stamping text
 // spans / style tags would be wrong.
 
+import type { NodePath } from '@babel/traverse';
+import * as t from '@babel/types';
 import { generateNodeId } from '@/shared/id-utils';
+import { parseJSX, traverse } from '@/code/parsing/ast-utils';
+import { needsDataId, jsxTagName } from '@/code/oracle/checks/shared';
 import { findTagClose } from '@/code/generation/generator-utils';
 import { trace } from '@/shared/debug-trace';
 import { PARSER_TRANSPARENT_TAGS } from './transparent-tags';
@@ -102,4 +106,89 @@ export function healMissingInstanceDataIds(code: string): { code: string; healed
     trace.action('heal-data-ids:healed', { healed, strippedJunk });
   }
   return { code: out, healed, strippedJunk };
+}
+
+export interface AutoInjectDataIdsOptions {
+  isPage?: boolean;
+}
+
+function getTagPrefix(tag: string): string {
+  const base = tag.startsWith('motion.') ? tag.slice('motion.'.length) : tag;
+  const lower = base.toLowerCase();
+  if (lower === 'button') return 'btn';
+  if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'].includes(lower)) return 'text';
+  if (lower === 'section') return 'section';
+  if (lower === 'header' || lower === 'nav') return 'nav';
+  if (lower === 'footer') return 'footer';
+  if (lower === 'img' || lower === 'image') return 'img';
+  if (lower === 'a') return 'link';
+  return lower.replace(/[^a-z0-9_-]/g, '') || 'frame';
+}
+
+/**
+ * Automatically inject missing `data-id` attributes on all JSX elements that need them.
+ * Preserves existing formatting, comments, and whitespace by applying string insertions
+ * at exact AST token offsets.
+ */
+export function autoInjectMissingDataIds(
+  code: string,
+  options: AutoInjectDataIdsOptions = {}
+): { code: string; injectedCount: number } {
+  let ast: t.File | null = null;
+  try {
+    ast = parseJSX(code);
+  } catch {
+    return { code, injectedCount: 0 };
+  }
+  if (!ast) return { code, injectedCount: 0 };
+
+  const insertions: Array<{ pos: number; text: string }> = [];
+  let hasRootId = false;
+  let rootCandidateOpening: any = null;
+
+  traverse(ast, {
+    JSXElement(path: NodePath<t.JSXElement>) {
+      const opening = path.node.openingElement;
+      const tag = jsxTagName(opening.name);
+      const attrs = opening.attributes;
+
+      const dataIdAttr = attrs.find(
+        (a): a is t.JSXAttribute => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'data-id'
+      );
+
+      if (dataIdAttr && t.isStringLiteral(dataIdAttr.value) && dataIdAttr.value.value === 'root') {
+        hasRootId = true;
+      }
+
+      if (!dataIdAttr && needsDataId(tag, path)) {
+        const isOutermost = path.findParent((p) => p.isJSXElement()) == null;
+        if (options.isPage && isOutermost && !hasRootId && !rootCandidateOpening) {
+          rootCandidateOpening = opening;
+        } else if (typeof opening.name.end === 'number') {
+          const prefix = getTagPrefix(tag);
+          const newId = generateNodeId(prefix);
+          insertions.push({ pos: opening.name.end, text: ` data-id="${newId}"` });
+        }
+      }
+    },
+  });
+
+  if (options.isPage && rootCandidateOpening && typeof rootCandidateOpening.name.end === 'number') {
+    const rootId = hasRootId ? generateNodeId('frame') : 'root';
+    insertions.push({ pos: rootCandidateOpening.name.end, text: ` data-id="${rootId}"` });
+  }
+
+  if (insertions.length === 0) {
+    return { code, injectedCount: 0 };
+  }
+
+  // Sort descending by position so insertions don't alter earlier offsets
+  insertions.sort((a, b) => b.pos - a.pos);
+  let out = code;
+  for (const ins of insertions) {
+    out = out.slice(0, ins.pos) + ins.text + out.slice(ins.pos);
+  }
+
+  trace.action('heal-data-ids:auto-injected', { count: insertions.length });
+  return { code: out, injectedCount: insertions.length };
 }

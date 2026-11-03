@@ -14,12 +14,13 @@
 // actually landed, so a partial write is detectable by the caller.
 
 import { migrateFileToStartBreakpoints } from '@/code/project/breakpoint-start-migration';
+import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { trace } from '@/shared/debug-trace';
 import { projectFS } from '@/code/project/project-fs';
 import { modifyProjectFile } from '@/code/project/modify-file';
-import { isLayoutFile, listPageFiles } from '@/code/project/active-file-store';
+import { isLayoutFile, isPageClientFile, listPageFiles } from '@/code/project/active-file-store';
 import { setForceRender, flushNow, syncImports } from '@/code/mutation/mutation-queue';
 import { pushHistoryImmediate } from '@/code/mutation/history';
 import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
@@ -63,6 +64,19 @@ export function gateTurnFiles(
     }
     return f;
   }).map((f) => {
+    // AUTO-INJECT MISSING DATA-IDS: Automatically stamp missing data-id attributes
+    // on all JSX elements that need them. This frees AI agents and MCP workflows
+    // from manually tracking data-ids across all tags.
+    const isCanvasFile = isPageClientFile(f.path) || isLayoutFile(f.path) || f.path.startsWith('components/');
+    if (isCanvasFile) {
+      const isPage = f.kind === 'page' || isLayoutFile(f.path);
+      const { code: autoCode, injectedCount } = autoInjectMissingDataIds(f.code, { isPage });
+      if (injectedCount > 0) {
+        trace.action('gate:auto-injected-data-ids', { path: f.path, count: injectedCount });
+        f = { ...f, code: autoCode };
+      }
+    }
+
     // BREAKPOINTS: a model writes the classic shape (a viewport's width is where its range ENDS,
     // bands keyed at it). Pages and templates are converted to the start model with the same
     // lossless migration every stored project went through — before the checks, so the checks

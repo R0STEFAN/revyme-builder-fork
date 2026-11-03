@@ -7,9 +7,10 @@
 import { getDefaultStore } from 'jotai';
 import { projectFS, isSharedAcrossBranches } from './project-fs';
 import { isCanvasBusy } from '@/code/stores/agent-run-lock-store';
-import { activeFilePathAtom } from './active-file-store';
+import { activeFilePathAtom, isPageClientFile } from './active-file-store';
 import { syncQueueCode, flushNow, syncImports, getCurrentCode, refreshDeferredFlushWithExternalWrite } from '../mutation/mutation-queue';
 import { parseJSX } from '../parsing/ast-utils';
+import { autoInjectMissingDataIds } from '../parsing/heal-data-ids';
 import { dragStateOps } from '@/canvas/drag/drag-state-store';
 import { trace } from '@/shared/debug-trace';
 
@@ -146,6 +147,12 @@ export function modifyProjectFile(
   //    unchanged.
   let finalResult = result;
   if (isJsxFile && finalResult !== code) {
+    const isCanvasFile = isPageClientFile(filePath) || filePath.endsWith('LayoutClient.tsx') || filePath.startsWith('components/');
+    if (isCanvasFile) {
+      const isPage = isPageClientFile(filePath) || filePath.endsWith('LayoutClient.tsx');
+      const { code: autoCode } = autoInjectMissingDataIds(finalResult, { isPage });
+      finalResult = autoCode;
+    }
     finalResult = syncImports(finalResult);
   }
 
