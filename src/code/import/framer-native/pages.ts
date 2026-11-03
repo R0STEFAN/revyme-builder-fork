@@ -260,7 +260,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
             const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier))?.[1];
             const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
             const target = master && sourceStateNames({ graph, scopeId: master }, identity)[String(sourceVariant)];
-            if (!master || !target) throw new Error(`Missing responsive component variant on ${nodeId}`);
+            if (!master || !target) throw new Error(`Missing responsive component variant ${String(sourceVariant)} on ${nodeId}`);
             if (node.properties.whileOpenEffectEnabled === true) {
               const overlay = parseOverlayCalls(code).find(item => item.config.triggerId === identity[nodeId]);
               const open = overlay && resolveOverlayConfigForWidth(overlay.config, viewport.width).onOpenVariant;
