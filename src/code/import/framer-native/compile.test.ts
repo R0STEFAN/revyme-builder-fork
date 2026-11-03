@@ -41,10 +41,6 @@ it.each([true, false])('preserves the source reduced-motion policy %s in native 
   const page = result.files.find(file => file.path === 'app/page.client.tsx')!;
   expect(page.code).toContain(`reducedMotion="${policy ? 'user' : 'never'}"`);
   expect(parseJSXToNodes(page.code).has(result.identity.desktop)).toBe(true);
-  if (policy) {
-    (source.definitions[1].data.children as any[])[0].loopEffectEnabled = true;
-    expect(compileNativeTransfer(source, { mode: 'create', existingFiles: new Map() }).diagnostics).toContainEqual(expect.objectContaining({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED' }));
-  }
 });
 it('keeps source routes when translation of page paths is disabled', () => {
   const source = transfer();
@@ -348,6 +344,7 @@ it('imports an original image mask as editable native styling with the original 
 });
 it('imports a simple source rotation loop as an editable native motion effect', async () => {
   const source = transfer(), frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  source.definitions[2].data.webMetadata = { reducedMotion: true };
   frame.children.push({ id: 'spinner', __class: 'FrameNode', parentid: 'desktop', children: [], loopEffectEnabled: true, loopEffectRotate: 360, loopEffectRepeatType: 'loop', loopEffectRepeatDelay: 0, loopEffectTransition: { type: 'tween', duration: 1, delay: 0, ease: [0, 0, 1, 1] } });
   const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
   expect(result.diagnostics).toEqual([]);

@@ -890,13 +890,14 @@ describe('characterization: loop compose', () => {
     expect(composeLoopInCode(withLoop, 'frame-x')).toMatchInlineSnapshot(`
       "'use client';
       import React from 'react';
-      import { motion } from 'framer-motion';
+      import { motion, useReducedMotionConfig } from 'framer-motion';
 
       export default function Page() {
+        const frameXLoopReducedMotion = useReducedMotionConfig();
         const frameXRef = useRef(null);
         const frameXLoopInView = useInView(frameXRef);
         const frameXLoopRotate = useMotionValue(0);
-        useEffect(() => { if (frameXLoopInView) { const _c = animate(frameXLoopRotate, 360, { duration: 2, repeat: Infinity, ease: 'linear' }); return () => _c.stop(); } }, [frameXLoopInView]);
+        useEffect(() => { if (frameXLoopReducedMotion) { frameXLoopRotate.set(0); return; } if (frameXLoopInView) { const _c = animate(frameXLoopRotate, 360, { duration: 2, repeat: Infinity, ease: 'linear' }); return () => _c.stop(); } }, [frameXLoopInView, frameXLoopReducedMotion]);
           return (
           <div data-id="root" style={{ position: 'relative', width: '100%' }}>
             <motion.div ref={frameXRef} data-id="frame-x" style={{position: 'absolute', width: '200px', height: '100px', backgroundColor: '#ff0000', rotate: frameXLoopRotate}} />
@@ -913,7 +914,7 @@ describe('characterization: loop compose', () => {
     expect(decomposeLoopInCode(composed, 'frame-x')).toMatchInlineSnapshot(`
       "'use client';
       import React from 'react';
-      import { motion } from 'framer-motion';
+      import { motion, useReducedMotionConfig } from 'framer-motion';
 
       export default function Page() {
         const frameXRef = useRef(null);

@@ -3,7 +3,7 @@
 // All code moved VERBATIM from generator-motion.ts (Phase 7.4 god-file split).
 import { escapeRegExp } from '@/shared/regex-utils';
 import { nodeIdToVarName } from '@/shared/id-utils';
-import { insertBeforeRenderReturn, getJsonAttr, setTagAttr, isModuleScopeJsx, stripTagAttrBalanced } from './generator-utils';
+import { insertBeforeRenderReturn, getJsonAttr, setTagAttr, isModuleScopeJsx, stripTagAttrBalanced, ensureNamedImport } from './generator-utils';
 import { ensureMediaQueryHook, ensureMediaGate, type SerScope } from './scoped-expr';
 import { capProp, parseTagObject, isStyleMotionVar, emitObj } from './generator-motion-compose';
 import { getOpeningTag, injectStyleMotionBinding } from './generator-motion-scroll-fx';
@@ -176,6 +176,12 @@ export function composeLoopInCode(code: string, nodeId: string, loop = getLoopAn
 
   const newBindings: Record<string, string> = {};
   const declLines: string[] = [];
+  const reducedMotionVar = `${cleanName}LoopReducedMotion`;
+  const hasMovement = Object.keys(loop.props).some(prop => prop !== 'opacity');
+  if (hasMovement) {
+    result = ensureNamedImport(result, 'framer-motion', ['useReducedMotionConfig']);
+    declLines.push(`  const ${reducedMotionVar} = useReducedMotionConfig();`);
+  }
   if (offscreenPause) {
     if (needsRef) declLines.push(`  const ${refVar} = useRef(null);`);
     declLines.push(`  const ${loopInView} = useInView(${refVar});`);
@@ -184,7 +190,7 @@ export function composeLoopInCode(code: string, nodeId: string, loop = getLoopAn
     const mult = prop === 'opacity' || prop.startsWith('scale');
     const base = mult ? '1' : '0';
     const mv = `${cleanName}Loop${capProp(prop)}`;
-    const deps = [...(offscreenPause ? [loopInView] : []), ...gateDeps].join(', ');
+    const deps = [...(offscreenPause ? [loopInView] : []), ...gateDeps, ...(prop !== 'opacity' ? [reducedMotionVar] : [])].join(', ');
     const loopRun = `const _c = animate(${mv}, ${target}, ${transStr}); return () => _c.stop();`;
     declLines.push(`  const ${mv} = useMotionValue(${base});`);
     let body: string;
@@ -199,6 +205,7 @@ export function composeLoopInCode(code: string, nodeId: string, loop = getLoopAn
     } else {
       body = loopRun;
     }
+    if (prop !== 'opacity') body = `if (${reducedMotionVar}) { ${mv}.set(${base}); return; } ` + body;
     declLines.push(`  useEffect(() => { ${body} }, [${deps}]);`);
     const existing = styleVars[prop];
     if (isStyleMotionVar(result, existing) && existing.trim() !== mv) {
@@ -316,6 +323,7 @@ export function decomposeLoopInCode(code: string, nodeId: string): string {
     result = removeLoopEffect(result, mv);
   }
   result = result.replace(new RegExp(`\\s*const ${cn}LoopInView = useInView\\([^;]*\\);`), '');
+  result = result.replace(new RegExp(`\\s*const ${cn}LoopReducedMotion = useReducedMotionConfig\\(\\);`), '');
   const finalProps = (attrLoop?.props && Object.keys(attrLoop.props).length) ? attrLoop.props : props;
   if (Object.keys(finalProps).length) {
     const spec = {

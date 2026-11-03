@@ -289,7 +289,7 @@ export function checkUnreadableHandlers(
 const ALLOWED_HOOK_CALLEES = new Set([
   // Scroll/motion dialect owns the shape of these (scroll-dialect.ts).
   'useScroll', 'useTransform', 'useSpring', 'useMotionValue', 'useMotionTemplate',
-  'useMotionValueEvent', 'useInView', 'useRef',
+  'useMotionValueEvent', 'useInView', 'useRef', 'useReducedMotionConfig',
   // Builder-injected / runtime helpers.
   'useMediaQuery', 'useResponsiveText', 'useResponsiveListConfig', 'useOverlayPos',
   // Localization + routing reads the generators emit.

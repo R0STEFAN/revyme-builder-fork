@@ -88,11 +88,9 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const overrides = emitNativeCodeOverrides(graph, identity);
     const cms = emitNativeCms(graph, identity, { assets: assets.assets, colorNames });
     const reducedMotion = (graph.byKind.get('RootNode') ?? []).some(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.reducedMotion === true);
-    if (reducedMotion && [...graph.reachable].some(id => graph.nodes.get(id)!.raw.loopEffectEnabled === true)) result.diagnostics.push({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED', message: 'Imperative motion loops require reduced-motion runtime support.' });
     const options = { assets: assets.assets, overrides: overrides.overrides };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
-    if (reducedMotion && [...pages.files, ...components.files].some(file => /\banimate\s*\(/.test(file.code)) && !result.diagnostics.some(item => item.code === 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED')) result.diagnostics.push({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED', message: 'Imperative motion loops require reduced-motion runtime support.' });
     if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code))) {
       if (reducedMotion) result.diagnostics.push({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED', message: 'Component cursors require reduced-motion runtime support.' });
       const original = target.existingFiles.get('app/layout.tsx');
