@@ -30,7 +30,7 @@ export function OverlayAppearPopup({ nodeId, node, enterProps, exitProps, transi
   };
   // Linked by default when Exit is empty or already mirrors Enter.
   const [linked, setLinked] = useState(
-    () => Object.keys(exit.props).length === 0 || sameProps(enterProps, exit.props),
+    () => (!exitProps.transition && Object.keys(exit.props).length === 0) || sameProps(enterProps, exit.props),
   );
 
   const writeEnter = (newProps: Record<string, string>) => {

@@ -1,7 +1,7 @@
 import { normalizeTransparent } from '../../../shared/css-utils';
 import { trace } from '../../../shared/debug-trace';
 import { sourceRecord } from './source-graph';
-import { sourceRotationLoop } from './effects';
+import { sourceRotationLoop, sourceMountEffects } from './effects';
 import type { ResolvedSourceNode, SourceGraph, TransferDiagnostic } from './types';
 
 export interface SourceMappingContext {
@@ -13,6 +13,7 @@ export interface SourceMappingContext {
   variables?: Record<string, string | number | boolean>;
   assets?: Record<string, string>;
   supportedLoops?: boolean;
+  supportedMountEffects?: boolean;
 }
 
 export function mappingDiagnostic(context: SourceMappingContext, node: ResolvedSourceNode, property: string, code = 'SOURCE_STYLE_UNSUPPORTED'): void {
@@ -50,9 +51,10 @@ const alignment = (value: unknown) => value === 'start' ? 'flex-start' : value =
 export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMappingContext): Record<string, string> {
   trace.fn('framer-native.mapSourceStyles', { sourceId: node.sourceId });
   const p = node.properties;
+  const mount = context.supportedMountEffects && sourceMountEffects(p);
   // These are active source behaviors, not decorative metadata; never drop them.
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'appearEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
-    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p))) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key))) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');

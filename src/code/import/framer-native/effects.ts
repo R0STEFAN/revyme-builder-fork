@@ -1,4 +1,6 @@
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
+import { updateMotionPropInCode } from '../../generation/generator-motion-props';
+import { emitObj } from '../../generation/generator-motion-compose';
 import { composeLoopInCode, setLoopInCode } from '../../generation/generator-motion-loop';
 import { ensureNamedImport } from '../../generation/generator-utils';
 import { sourceRecord } from './source-graph';
@@ -41,6 +43,14 @@ export function sourceMountEffects(p: SourceProperties): SourceMountEffects | un
   const enter = channel('enterEffect');
   const exit = p.exitEffectEnabled ? channel('exitEffect') : undefined;
   return { initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
+}
+
+export function applySourceMountEffects(code: string, nodeId: string, spec: SourceMountEffects): string {
+  trace.fn('framer-native.applySourceMountEffects', { nodeId });
+  let result = updateMotionPropInCode(code, nodeId, 'initial', spec.initial);
+  result = updateMotionPropInCode(result, nodeId, 'animate', spec.animate);
+  if (spec.enterTransition) result = updateMotionPropInCode(result, nodeId, 'transition', spec.enterTransition);
+  return updateMotionPropInCode(result, nodeId, 'exit', spec.exit ? { ...spec.exit, ...(spec.exitTransition ? { transition: emitObj(spec.exitTransition) } : {}) } : { transition: '{ duration: 0 }' });
 }
 
 /** The captured editor defaults to pausing loops offscreen. */

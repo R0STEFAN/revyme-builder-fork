@@ -14,7 +14,7 @@ import { sourceStaticLinkValue } from './links';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
-import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop } from './effects';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceMountEffects, applySourceMountEffects } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceInstanceStateName } from './interactions';
@@ -197,7 +197,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, viewport: { width: viewports[0].designWidth! } };
+      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, viewport: { width: viewports[0].designWidth! } };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -321,6 +321,12 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       code = code.replace(/(\/\*\* @(?:propMeta|templateProps) )([\s\S]*?)( \*\/)/g, (_all, before, json, after) => before + json.replace(/\*\//g, '*\\/') + after);
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
+        const mount = sourceMountEffects(node.properties);
+        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
+        if (mount) {
+          if (!['FrameNode', 'RichTextNode'].includes(node.kind) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
+          code = applySourceMountEffects(code, identity[nodeId], mount);
+        }
         if (isSourceCodeComponent(node)) continue;
         const spec = sourceRotationLoop(node.properties);
         for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceRotationLoop(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(spec)) throw new Error(`Responsive loop on ${nodeId} requires its native adapter`);

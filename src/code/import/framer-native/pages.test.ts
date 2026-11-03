@@ -15,6 +15,7 @@ import * as React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { hasMountPresenceMotion } from '../../../editor/tools/AnimationTool/appear-utils';
 
 function input(): NativeTransfer {
   const label = { id: 'heading', __class: 'RichTextNode', parentid: 'desktop', children: [], html: '<h1>Привіт</h1>' };
@@ -28,6 +29,19 @@ function emit(transfer = input(), paths = new Set<string>()) {
   const graph = buildSourceGraph(transfer), identity = allocateTargetIdentity(graph, paths);
   return { result: emitNativePages(graph, identity, { existingPaths: paths }), identity };
 }
+it.each([true, false])('imports on-mount presence with exit enabled %s as editable native motion', exitEnabled => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  Object.assign(states[0].children[0], { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectTransition: { type: 'tween', duration: 0.8, delay: 0.1 }, exitEffectEnabled: exitEnabled, exitEffectOpacity: 0, exitEffectY: 100, exitEffectTransition: { type: 'tween', duration: 0.4, delay: 0.3 } });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const file = result.files[0], props = parseJSXToNodes(file.code).get(identity.heading)!.motionProps!;
+  expect(hasMountPresenceMotion(props)).toBe(true);
+  expect(props.initial).toMatchObject({ opacity: '0', y: '200' });
+  expect(props.transition).toMatchObject({ duration: '0.8', delay: '0.1' });
+  if (exitEnabled) { expect(props.exit).toMatchObject({ y: '100' }); expect(props.exit!.transition).toContain('0.3'); }
+  else expect(props.exit!.transition).toContain('0');
+  expect(checkFile(file.code, { kind: 'page', path: file.path })).toEqual([]);
+});
 it('emits a native page pair with one fluid tree and source responsive typography', () => {
   const { result, identity } = emit();
   expect(result.diagnostics).toEqual([]);
