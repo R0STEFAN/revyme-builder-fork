@@ -10,6 +10,7 @@ import { parseCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop
 import { readCmsPropBindingExpression } from './cms-prop-binding';
 import { isSvgTag, isCustomDataAttr } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
+import { nodeIdToVarName } from '@/shared/id-utils';
 import { tickerFromJsxAttributes, type TickerConfig } from '@/shared/ticker-config';
 import { formattedBranchesOfDangerAttr, type FormattedBranches } from '@/shared/rich-message';
 import { parsePageVariables } from '../features/page-variables';
@@ -1523,7 +1524,12 @@ function extractElementAttrs(opening: any, tagName: string, ctx: ParseCtx): {
     if (attrName === 'data-responsive'
         && attr.value?.type === 'JSXExpressionContainer'
         && (attr.value.expression as any)?.type !== 'StringLiteral') {
-      const parsed = parseComputedResponsiveAttr(attr.value.expression);
+      let overlayState: string | undefined;
+      try {
+        const trigger = JSON.parse(getAttr(opening.attributes as any[], 'data-overlay-trigger') ?? 'null');
+        if (typeof trigger?.targetId === 'string') overlayState = `${nodeIdToVarName(trigger.targetId)}Open`;
+      } catch { /* malformed trigger has no recognized overlay state */ }
+      const parsed = parseComputedResponsiveAttr(attr.value.expression, overlayState);
       if (parsed) {
         if (parsed.literalJson) attrs['data-responsive'] = parsed.literalJson;
         if (parsed.fieldBindings) responsivePropFieldBindings = parsed.fieldBindings;
@@ -4573,7 +4579,7 @@ function getAttr(attrs: (JSXAttribute | any)[], name: string): string | null {
  *     member-expression values (any non-literal value), lowered later by expandComponent.
  * Returns null if the expression isn't an object/JSON.stringify(object).
  */
-function parseComputedResponsiveAttr(expr: any): { literalJson: string | null; fieldBindings: Record<number, Record<string, string>> | null } | null {
+function parseComputedResponsiveAttr(expr: any, overlayState?: string): { literalJson: string | null; fieldBindings: Record<number, Record<string, string>> | null } | null {
   const objExpr = expr?.type === 'CallExpression' ? expr.arguments?.[0]
     : expr?.type === 'ObjectExpression' ? expr : null;
   if (!objExpr || objExpr.type !== 'ObjectExpression') return null;
@@ -4601,6 +4607,9 @@ function parseComputedResponsiveAttr(expr: any): { literalJson: string | null; f
       if (v.type === 'NumericLiteral' || v.type === 'StringLiteral' || v.type === 'BooleanLiteral') {
         if (!literal[key]) literal[key] = {};
         literal[key][pk] = v.value;
+      } else if (overlayState && pk === 'initialVariant' && v.type === 'ConditionalExpression' && v.test?.type === 'Identifier' && v.test.name === overlayState && v.consequent?.type === 'StringLiteral' && v.alternate?.type === 'StringLiteral') {
+        if (!literal[key]) literal[key] = {};
+        literal[key][pk] = v.alternate.value;
       } else if (v.type === 'MemberExpression' && v.property?.type === 'Identifier' && !isNaN(vpWidth)) {
         // Live CMS field-ref (`item.shortTitle`) → record { prop: fieldName }.
         if (!fieldBindings) fieldBindings = {};

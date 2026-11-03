@@ -18,7 +18,9 @@ import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoo
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceStateNames } from './interactions';
-import { setResponsiveOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
+import { setResponsiveOverride, setResponsiveBindingOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
+import { parseOverlayCalls, resolveOverlayConfigForWidth } from '../../parsing/overlay-parser';
+import { stateVarName } from '../../generation/overlay-gen';
 import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
 import { createConditionalVariableInCode } from '../../features/variable-ops';
 import { updateTemplatePropsInCode } from '../../features/template-props';
@@ -255,12 +257,16 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
           else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
           if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node) && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
-            if (node.properties.whileOpenEffectEnabled === true) throw new Error(`Responsive $control__variant on ${nodeId} with an overlay requires its native composition adapter`);
             const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier))?.[1];
             const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
             const target = master && sourceStateNames({ graph, scopeId: master }, identity)[String(sourceVariant)];
             if (!master || !target) throw new Error(`Missing responsive component variant on ${nodeId}`);
-            code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', target, null);
+            if (node.properties.whileOpenEffectEnabled === true) {
+              const overlay = parseOverlayCalls(code).find(item => item.config.triggerId === identity[nodeId]);
+              const open = overlay && resolveOverlayConfigForWidth(overlay.config, viewport.width).onOpenVariant;
+              if (!overlay || !open) throw new Error(`Responsive overlay variant on ${nodeId} requires its native composition adapter`);
+              code = setResponsiveBindingOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', { kind: 'field', expr: `${stateVarName(overlay.overlayId)} ? ${JSON.stringify(open)} : ${JSON.stringify(target)}` });
+            } else code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', target, null);
             semanticProperties.delete('$control__variant');
           }
           for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);

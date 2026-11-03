@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import * as React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import * as motionRuntime from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import ts from 'typescript';
 import { compileNativeTransfer } from './compile';
@@ -38,7 +39,7 @@ it('imports a fixed overlay with native click, dismiss, scroll lock and separate
   expect(tree.get(result.identity.menu)?.parentId).not.toBe(result.identity.button);
 });
 
-it('binds a design component event and its native on-open variant instead of passing source action arrays', () => {
+it('binds a design component event and its native on-open variant instead of passing source action arrays', async () => {
   const source = input(), { button } = nodes(source);
   Object.assign(button, { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/navigation:default', $control__open: { type: 'eventhandler', value: button.onTap }, $control__deletedEvent: { type: 'eventhandler', value: [{ actionIdentifier: 'framer/useShowOverlay', controls: { overlay: { type: 'string', value: 'deleted-overlay' } } }] }, whileOpenEffectEnabled: true, whileOpenEffectVariant: 'expanded' });
   delete button.onTap;
@@ -52,12 +53,34 @@ it('binds a design component event and its native on-open variant instead of pas
   expect(code).not.toContain('framer/useShowOverlay');
   expect(code).not.toContain('deleted-overlay');
   expect(code).toMatch(/initialVariant=\{[^}]*Open\s*\?/);
-  (source.definitions[0].data.children as any[]).push({ id: 'phone', __class: 'FrameNode', parentid: 'home', children: [], replicaInfo: { master: 'desktop', overrides: { desktop: { width: 390 }, button: { whileOpenEffectVariant: 'closed' } } } });
+  (source.definitions[0].data.children as any[]).push({ id: 'phone', __class: 'FrameNode', parentid: 'home', children: [], replicaInfo: { master: 'desktop', overrides: { desktop: { width: 390 }, button: { whileOpenEffectVariant: 'closed', $control__variant: { type: 'variant', value: 'expanded' } } } } });
   const responsive = compile(source);
   expect(responsive.diagnostics).toEqual([]);
   const responsiveCode = responsive.files.find(file => file.path.endsWith('page.client.tsx'))!.code;
   expect(parseOverlayCalls(responsiveCode)[0]?.config.responsive?.['1199']?.onOpenVariant).toBe('default');
+  expect(JSON.parse(parseJSXToNodes(responsiveCode).get(responsive.identity.button)!.attrs['data-responsive'])['1199'].initialVariant).toBe(responsive.identity.expanded);
   expect(checkFile(responsiveCode.replace('window.innerWidth <= 1199', 'window.innerWidth <= 1198'), { kind: 'page' }).map(item => item.code)).toContain('RESPONSIVE_JS_HANDWRITTEN');
+  const eventName = nativePropName(responsive.identity, 'navigation', 'open');
+  const Probe = withResponsiveProps((props: any) => React.createElement('button', { onClick: props[eventName] }, props.initialVariant));
+  const executable = ts.transpileModule(responsiveCode, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
+  const exports: { default?: React.ComponentType } = {};
+  new Function('exports', 'require', executable)(exports, (name: string) => {
+    if (name === 'react') return React;
+    if (name === 'react/jsx-runtime') return jsxRuntime;
+    if (name === 'framer-motion') return motionRuntime;
+    if (name.startsWith('@/components/')) return { __esModule: true, default: Probe };
+    throw new Error(`Unexpected imported overlay dependency ${name}`);
+  });
+  const oldWidth = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { value: 700, configurable: true, writable: true });
+  try {
+    const view = render(React.createElement(exports.default!));
+    expect(view.getByRole('button').textContent).toBe(responsive.identity.expanded);
+    fireEvent.click(view.getByRole('button'));
+    await waitFor(() => expect(view.getByRole('button').textContent).toBe('default'));
+    fireEvent.click(view.getByRole('button'));
+    await waitFor(() => expect(view.getByRole('button').textContent).toBe(responsive.identity.expanded));
+  } finally { cleanup(); Object.defineProperty(window, 'innerWidth', { value: oldWidth, configurable: true, writable: true }); }
 });
 
 it('diagnoses missing overlay targets, conflicting triggers and unsupported responsive behavior', () => {
