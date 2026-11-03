@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { appearNeutralValue, appearUnionKeys, appearReveal, appearRestingValue, hasMountPresenceMotion } from './appear-utils';
+import { appearNeutralValue, appearUnionKeys, appearReveal, appearRestingValue, hasMountPresenceMotion, splitPresenceExit } from './appear-utils';
+
+it('separates exit timing from editable effect values without truncating easing arrays', () => {
+  const result = splitPresenceExit({ opacity: '0', y: '200', transition: "{type:'tween',duration:0.8,delay:0.3,ease:[0.6,0.2,0,1]}" });
+  expect(result.props).toEqual({ opacity: '0', y: '200' });
+  expect(result.transition).toEqual({ type: 'tween', duration: '0.8', delay: '0.3', ease: '[0.6,0.2,0,1]' });
+});
 
 it('classifies a child initial/animate/exit sequence as presence rather than a loop', () => {
   const presence = { initial: { opacity: '0' }, animate: { opacity: '1' }, exit: { opacity: '0' } };

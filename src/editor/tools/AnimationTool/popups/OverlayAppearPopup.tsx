@@ -9,7 +9,8 @@ import MotionPropsEditor from '../motion/MotionPropsEditor';
 import TransitionPanel from '../TransitionPanel';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getActiveAnimationScope } from '../animation-scope-source';
-import { appearReveal, appearUnionKeys } from '../appear-utils';
+import { appearReveal, appearUnionKeys, splitPresenceExit } from '../appear-utils';
+import { emitObj } from '@/code/generation/generator-motion-compose';
 import { TransitionRow } from './TransitionRow';
 
 // Overlay Appear = ENTER + EXIT (the reference's "Appear Effect" with both rows). The
@@ -21,13 +22,15 @@ export function OverlayAppearPopup({ nodeId, node, enterProps, exitProps, transi
   exitProps: Record<string, string>; transition: Record<string, string>;
 }) {
   const { pushPanel } = useToolPopup();
+  const exit = splitPresenceExit(exitProps);
+  const preserveExitTiming = (props: Record<string, string>) => ({ ...props, ...(exitProps.transition ? { transition: exitProps.transition } : {}) });
   const sameProps = (a: Record<string, string>, b: Record<string, string>) => {
     const ak = Object.keys(a), bk = Object.keys(b);
     return ak.length === bk.length && ak.every((k) => a[k] === b[k]);
   };
   // Linked by default when Exit is empty or already mirrors Enter.
   const [linked, setLinked] = useState(
-    () => Object.keys(exitProps).length === 0 || sameProps(enterProps, exitProps),
+    () => Object.keys(exit.props).length === 0 || sameProps(enterProps, exit.props),
   );
 
   const writeEnter = (newProps: Record<string, string>) => {
@@ -35,22 +38,22 @@ export function OverlayAppearPopup({ nodeId, node, enterProps, exitProps, transi
     queueMutation({ type: 'updateMotionProp', nodeId, propName: 'initial', props: newProps, scope: getActiveAnimationScope() });
     queueMutation({ type: 'updateMotionProp', nodeId, propName: 'animate',
       props: appearReveal(appearUnionKeys(node?.motionProps?.initial, newProps), node?.styles) });
-    if (linked) queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: newProps });
+    if (linked) queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: preserveExitTiming(newProps) });
   };
   const writeExit = (newProps: Record<string, string>) => {
-    queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: newProps });
+    queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: preserveExitTiming(newProps) });
     // Locked → Enter and Exit stay identical, so mirror the edit back to Enter
     // (+ its derived resting `animate`). The lock only changes via its button.
     if (linked) {
       queueMutation({ type: 'updateMotionProp', nodeId, propName: 'initial', props: newProps, scope: getActiveAnimationScope() });
       queueMutation({ type: 'updateMotionProp', nodeId, propName: 'animate',
-        props: appearReveal(appearUnionKeys(node?.motionProps?.exit, newProps), node?.styles) });
+        props: appearReveal(appearUnionKeys(exit.props, newProps), node?.styles) });
     }
   };
   const toggleLink = () => {
     const next = !linked;
     setLinked(next);
-    if (next) queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: enterProps });
+    if (next) queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: preserveExitTiming(enterProps) });
   };
 
   const stroke = linked ? 'var(--accent)' : 'var(--text-secondary)';
@@ -100,17 +103,23 @@ export function OverlayAppearPopup({ nodeId, node, enterProps, exitProps, transi
       <div className="flex items-center justify-between w-full">
         <ControlLabel label="Exit" property="" plain />
         <ControlActionRow onClick={() => pushPanel('Exit', (
-          <MotionPropsEditor nodeId={nodeId} props={linked ? enterProps : exitProps} preview onChange={writeExit} />
+          <MotionPropsEditor nodeId={nodeId} props={linked ? enterProps : exit.props} preview onChange={writeExit} />
         ))}>
           <AnimationIcon width={20} height={20} className="shrink-0" />
           <span className="text-[var(--text-secondary)]">Effect</span>
         </ControlActionRow>
       </div>
 
-      <TransitionRow transition={transition}
+      <TransitionRow label="Enter transition" transition={transition}
         onClick={() => pushPanel('Transition', (
           <TransitionPanel initialTransition={transition} onWrite={(t) => {
             queueMutation({ type: 'updateMotionProp', nodeId, propName: 'transition', props: t });
+          }} />
+        ))} />
+      <TransitionRow label="Exit transition" transition={exit.transition ?? transition}
+        onClick={() => pushPanel('Exit transition', (
+          <TransitionPanel initialTransition={exit.transition ?? transition} onWrite={(timing) => {
+            queueMutation({ type: 'updateMotionProp', nodeId, propName: 'exit', props: { ...(linked ? enterProps : exit.props), transition: emitObj(timing) } });
           }} />
         ))} />
     </div>

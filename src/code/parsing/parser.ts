@@ -4444,6 +4444,14 @@ function extractMotionProps(attrs: (JSXAttribute | any)[], ctx: ParseCtx): Canva
         const key = oprop.key.type === 'Identifier' ? oprop.key.name :
                     oprop.key.type === 'StringLiteral' ? oprop.key.value : null;
         if (!key) continue;
+        if (key === 'transition' && oprop.value.type === 'ObjectExpression' && oprop.value.start != null && oprop.value.end != null) {
+          out[key] = ctx.code.slice(oprop.value.start, oprop.value.end);
+          continue;
+        }
+        if (key === 'ease' && oprop.value.type === 'ArrayExpression' && oprop.value.start != null && oprop.value.end != null) {
+          out[key] = ctx.code.slice(oprop.value.start, oprop.value.end);
+          continue;
+        }
         if (oprop.value.type === 'StringLiteral') out[key] = (oprop.value as StringLiteral).value;
         else if (oprop.value.type === 'NumericLiteral') out[key] = String((oprop.value as NumericLiteral).value);
         else if (oprop.value.type === 'BooleanLiteral') out[key] = String((oprop.value as any).value);

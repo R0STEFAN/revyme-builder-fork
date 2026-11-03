@@ -6,11 +6,11 @@ import { summarizeTransition, TransitionCurveIcon } from '../CurvePreview';
 
 // ─── Transition Button Row ──────────────────────────────────────────────────
 
-export function TransitionRow({ transition, onClick }: { transition: Record<string, string>; onClick: () => void }) {
+export function TransitionRow({ transition, onClick, label = 'Transition' }: { transition: Record<string, string>; onClick: () => void; label?: string }) {
   const isSpring = transition.type === 'spring';
   return (
     <div className="flex items-center justify-between w-full">
-      <ControlLabel label="Transition" property="" plain />
+      <ControlLabel label={label} property="" plain />
       {/* Wrap in a w-full div so the right column resolves to the same
           width as sibling rows whose right control is rendered directly
           (e.g. Preserve3D's ToolSegmentedControl). Without this wrapper

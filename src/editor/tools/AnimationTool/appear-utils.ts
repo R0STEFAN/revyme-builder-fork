@@ -5,6 +5,12 @@
 // a DERIVED `whileInView` = the neutral resting value of every enter key, so each
 // viewport's enter animates back to rest. whileInView is non-responsive (resting
 // is the same everywhere) but must cover the UNION of keys across all viewports.
+import { parseTagObject } from '@/code/generation/generator-motion-compose';
+
+export function splitPresenceExit(values: Record<string, string>): { props: Record<string, string>; transition?: Record<string, string> } {
+  const { transition, ...props } = values;
+  return { props, ...(transition ? { transition: parseTagObject(` transition={${transition}}`, 'transition') ?? undefined } : {}) };
+}
 
 /** Presence transitions on ordinary children use the same dialect as modal roots. */
 export function hasMountPresenceMotion(props: Partial<Record<'initial' | 'animate' | 'exit' | 'transition', Record<string, string>>> | null | undefined): boolean {
