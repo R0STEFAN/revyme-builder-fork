@@ -75,12 +75,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const node = graph.nodes.get(id)!;
       const metadata = sourceRecord(node.raw.webMetadata);
       if (node.kind === 'WebPageNode' && typeof metadata?.noIndexSite === 'boolean') trace.action('framer-native.skipSiteIndexFlag', { sourceId: id, value: metadata.noIndexSite });
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && key === 'favicon' && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && ['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
     }
     // Document metadata is inherited without importing all sibling pages.
     if (graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(key === 'favicon' && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(['favicon', 'faviconDark'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
     }
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
@@ -96,15 +96,17 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       else if (updated !== original) result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, cursorPortal: true });
     }
     if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
-      const refs = (graph.byKind.get('RootNode') ?? []).map(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.favicon).filter(value => value !== undefined);
+      const roots = (graph.byKind.get('RootNode') ?? []).map(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)).filter(metadata => metadata?.favicon !== undefined || metadata?.faviconDark !== undefined);
+      const refs = roots.map(metadata => metadata?.favicon);
       if (refs.length) {
         const url = refs.length === 1 && typeof refs[0] === 'string' ? assets.assets[refs[0]] : undefined;
+        const darkRef = roots[0]?.faviconDark, darkUrl = typeof darkRef === 'string' ? assets.assets[darkRef] : undefined;
         const original = target.existingFiles.get('app/layout.tsx'), prior = result.files.find(file => file.path === 'app/layout.tsx');
-        const updated = original !== undefined && url ? updateNativeFavicon(prior?.code ?? original, url) : undefined;
+        const updated = original !== undefined && url && (darkRef === undefined || darkUrl) ? updateNativeFavicon(prior?.code ?? original, url, darkUrl) : undefined;
         if (!updated || !url || original === undefined) result.diagnostics.push({ code: 'SOURCE_FAVICON_ADAPTER_REQUIRED', message: 'The source favicon or native root metadata cannot be safely updated.' });
         else if (updated !== original) {
-          if (prior) { prior.code = updated; prior.favicon = url; }
-          else result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, favicon: url });
+          if (prior) { prior.code = updated; prior.favicon = url; if (darkUrl) prior.faviconDark = darkUrl; }
+          else result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, favicon: url, ...(darkUrl ? { faviconDark: darkUrl } : {}) });
         }
       }
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { updateNativeFavicon } from './favicon';
+import { parseMetadataFromCode, updateMetadataInCode } from '../../generation/metadata-gen';
 
 describe('native favicon update', () => {
   it('preserves dynamic metadata and unrelated icon options', () => {
@@ -21,5 +22,14 @@ describe('native favicon update', () => {
     const result = updateNativeFavicon("export const metadata = { title: 'Site', icons: { apple: '/apple.png', }, };", '/api/uploads/a.webp');
     expect(result).toContain('icon: "/api/uploads/a.webp"');
     expect(result).toContain("apple: '/apple.png'");
+  });
+
+  it('keeps the light icon editable and adds a dark-mode icon', () => {
+    const code = updateNativeFavicon("export const metadata = { title: 'Site' };", '/assets/light.webp', '/assets/dark.webp');
+    expect(code).toContain('icon: "/assets/light.webp"');
+    expect(code).toContain('"url":"/assets/dark.webp"');
+    expect(code).toContain('"media":"(prefers-color-scheme: dark)"');
+    expect(parseMetadataFromCode(updateMetadataInCode(code!, { title: 'New title' })).icons).toMatchObject({ icon: '/assets/light.webp', other: { url: '/assets/dark.webp', media: '(prefers-color-scheme: dark)' } });
+    expect(updateNativeFavicon('export const metadata = { icons: { other: existing } };', '/assets/light.webp', '/assets/dark.webp')).toBeUndefined();
   });
 });

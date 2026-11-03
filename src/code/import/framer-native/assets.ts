@@ -72,7 +72,10 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
     }
   }
   if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
-    for (const id of graph.byKind.get('RootNode') ?? []) scan(sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.favicon);
+    for (const id of graph.byKind.get('RootNode') ?? []) {
+      const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
+      scan(metadata?.favicon); scan(metadata?.faviconDark);
+    }
   }
   const requested = new Set<string>();
   const diagnostic = (code: string, message: string) => result.diagnostics.push({ code, property: 'assets', message });

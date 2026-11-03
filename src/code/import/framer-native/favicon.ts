@@ -3,8 +3,25 @@ import { parseJSX } from '../../parsing/ast-utils';
 import { trace } from '../../../shared/debug-trace';
 
 /** Patch only a statically identifiable metadata field; preserve all other source verbatim. */
-export function updateNativeFavicon(code: string, url: string): string | undefined {
+export function updateNativeFavicon(code: string, url: string, darkUrl?: string): string | undefined {
   trace.fn('framer-native.updateFavicon');
+  if (darkUrl !== undefined) {
+    if (!darkUrl) return undefined;
+    const lightCode = updateNativeFavicon(code, url);
+    const lightAst = lightCode && parseJSX(lightCode);
+    if (!lightCode || !lightAst) return undefined;
+    const declaration = lightAst.program.body.flatMap(statement => t.isExportNamedDeclaration(statement) && t.isVariableDeclaration(statement.declaration)
+      ? statement.declaration.declarations.filter(decl => t.isIdentifier(decl.id, { name: 'metadata' })) : [])[0];
+    if (!t.isObjectExpression(declaration?.init)) return undefined;
+    const icons = declaration.init.properties.find(property => t.isObjectProperty(property) && (t.isIdentifier(property.key, { name: 'icons' }) || t.isStringLiteral(property.key, { value: 'icons' })));
+    if (!t.isObjectProperty(icons) || !t.isObjectExpression(icons.value) || icons.value.properties.some(property => !t.isObjectProperty(property) || property.computed || t.isIdentifier(property.key, { name: 'other' }) || t.isStringLiteral(property.key, { value: 'other' }))) return undefined;
+    const end = icons.value.end;
+    if (end == null) return undefined;
+    const last = icons.value.properties[icons.value.properties.length - 1];
+    const separator = !last || /^\s*,/.test(lightCode.slice(last.end!, end - 1)) ? '' : ',';
+    const updated = lightCode.slice(0, end - 1) + `${separator} other: ${JSON.stringify({ rel: 'icon', url: darkUrl, media: '(prefers-color-scheme: dark)' })}` + lightCode.slice(end - 1);
+    return parseJSX(updated) ? updated : undefined;
+  }
   const ast = parseJSX(code);
   if (!ast || !url) return undefined;
   const declarations = ast.program.body.flatMap(statement => t.isExportNamedDeclaration(statement) && t.isVariableDeclaration(statement.declaration)

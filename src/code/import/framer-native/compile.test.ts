@@ -195,14 +195,14 @@ it('binds a page social image to the uploaded native media URL', async () => {
 it('imports a document favicon through uploaded media and a validated root-layout update', async () => {
   const source = transfer(), ref = 'data:framer/asset-reference,icon.png';
   source.context.mode = 'project';
-  source.definitions[2].data.webMetadata = { favicon: ref };
-  source.assets = [{ key: 'icon', extension: '.png', mimeType: 'image/png', url: 'https://example.com/icon.png' }];
+  source.definitions[2].data.webMetadata = { favicon: ref, faviconDark: 'data:framer/asset-reference,dark.png' };
+  source.assets = [{ key: 'icon', extension: '.png', mimeType: 'image/png', url: 'https://example.com/icon.png' }, { key: 'dark', extension: '.png', mimeType: 'image/png', url: 'https://example.com/dark.png' }];
   const layout = `export const metadata = { title: 'Existing', description: 'Keep me' }; export default function Layout({ children }) { return <html><body>{children}</body></html>; }`;
-  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]), uploadedAssets: { icon: '/api/uploads/icon.webp' } });
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]), uploadedAssets: { icon: '/api/uploads/icon.webp', dark: '/api/uploads/dark.webp' } });
   expect(result.diagnostics).toEqual([]);
   const patch = result.files.find(file => file.path === 'app/layout.tsx')!;
-  expect(patch).toMatchObject({ baseCode: layout, favicon: '/api/uploads/icon.webp' });
-  expect(parseMetadataFromCode(patch.code)).toMatchObject({ title: 'Existing', description: 'Keep me', icons: { icon: '/api/uploads/icon.webp' } });
+  expect(patch).toMatchObject({ baseCode: layout, favicon: '/api/uploads/icon.webp', faviconDark: '/api/uploads/dark.webp' });
+  expect(parseMetadataFromCode(patch.code)).toMatchObject({ title: 'Existing', description: 'Keep me', icons: { icon: '/api/uploads/icon.webp', other: { rel: 'icon', url: '/api/uploads/dark.webp', media: '(prefers-color-scheme: dark)' } } });
   const target = { projectId: 'destination', branchId: 'main' };
   const input = { files: result.files, mode: 'create' as const, target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
   expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext())).changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
