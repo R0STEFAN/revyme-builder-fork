@@ -26,6 +26,12 @@ describe('original editor source graph', () => {
     const source = transfer(node('page', { children: [node('instance', { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default', '$control__deleted': { value: { customCursorType: 'component', customCursorSmartComponentId: 'missing' } } })] }), node('card', { __class: 'SmartComponentNode', variables: [] }));
     expect(buildSourceGraph(source).diagnostics).toEqual([]);
   });
+  it('ignores deleted cursor controls in replica overrides while retaining declared ones', () => {
+    const source = transfer(node('page', { children: [node('base', { children: [node('instance', { __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default' })] }), node('phone', { replicaInfo: { master: 'base', overrides: { instance: { '$control__old': { value: { customCursorType: 'component', customCursorSmartComponentId: 'missing-old' } }, '$control__live': { value: { customCursorType: 'component', customCursorSmartComponentId: 'missing-live' } } } } } })] }), node('card', { __class: 'SmartComponentNode', variables: [{ id: 'live', type: 'customcursor' }] }));
+    const diagnostics = buildSourceGraph(source).diagnostics;
+    expect(diagnostics.some(item => item.message.includes('missing-old'))).toBe(false);
+    expect(diagnostics.some(item => item.message.includes('missing-live'))).toBe(true);
+  });
   it('includes an inherited page template without pulling every sibling page into the closure', () => {
     const input = transfer(node('page', { __class: 'WebPageNode', parentid: 'document' }), node('document', { __class: 'RootNode', layoutTemplateIdentifier: 'local-module:layoutTemplate/template:default', children: [] }), node('template', { __class: 'LayoutTemplateNode', children: [node('slot', { __class: 'SlotNode' })] }), node('sibling', { __class: 'WebPageNode', parentid: 'document' }));
     const graph = buildSourceGraph(input);

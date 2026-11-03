@@ -25,6 +25,15 @@ function missingProjectCursors(definitions) {
     const variables = master && nodes.get(master)?.variables;
     for (const [key, item] of Object.entries(value)) {
       if (key.startsWith('$control__') && Array.isArray(variables) && !variables.some(variable => variable?.id === key.slice(10))) continue;
+      if (key === 'replicaInfo' && item && typeof item === 'object' && item.overrides && typeof item.overrides === 'object') {
+        scan({ ...item, overrides: undefined });
+        for (const [id, override] of Object.entries(item.overrides)) {
+          const target = nodes.get(id);
+          if (target?.__class === 'CodeComponentNode' && override && typeof override === 'object') scan({ __class: target.__class, codeComponentIdentifier: target.codeComponentIdentifier, ...override });
+          else scan(override);
+        }
+        continue;
+      }
       scan(item);
     }
   };

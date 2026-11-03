@@ -144,6 +144,16 @@ function readReferences(node: SourceNode, nodes?: Map<string, SourceNode>): Sour
       for (const [key, item] of Object.entries(object)) {
         if (key === 'children' || key === 'renamedIds') continue;
         if (property === 'replicaInfo' && (key === 'master' || key === 'inheritsFrom') && typeof item === 'string') add(item, `replicaInfo.${key}`);
+        if (property === 'replicaInfo.overrides') {
+          const target = nodes?.get(key), override = sourceRecord(item);
+          const masterId = target?.kind === 'CodeComponentNode' ? /^local-module:canvasComponent\/([^:]+):/.exec(String(target.raw.codeComponentIdentifier ?? ''))?.[1] : undefined;
+          const variables = masterId ? nodes?.get(masterId)?.raw.variables : undefined;
+          if (override && (Array.isArray(variables) || target && isSourceCodeComponent(target))) {
+            const filtered = Object.fromEntries(Object.entries(override).filter(([name]) => !name.startsWith('$control__') || name === '$control__variant' || Array.isArray(variables) && variables.some(variable => sourceRecord(variable)?.id === name.slice(10))));
+            scan(filtered, `${property}.${key}`, key);
+            continue;
+          }
+        }
         scan(item, property ? `${property}.${key}` : key, key);
       }
     }

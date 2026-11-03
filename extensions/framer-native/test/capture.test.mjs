@@ -54,10 +54,23 @@ test('does not reject a present cursor or deleted component control', async () =
   source.readDefinitions = async ids => {
     const definitions = await read(ids);
     definitions[1].data.__class = 'SmartComponentNode';
-    definitions[0].data.children = [{ id: 'button', __class: 'FrameNode', customCursorType: 'component', customCursorSmartComponentId: 'cursor', children: [] }, { id: 'instance', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/master:default', $control__deleted: { value: { customCursorType: 'component', customCursorSmartComponentId: 'old' } }, children: [] }, { id: 'cursor', __class: 'SmartComponentNode', children: [] }];
+    definitions[0].data.children = [{ id: 'button', __class: 'FrameNode', customCursorType: 'component', customCursorSmartComponentId: 'cursor', children: [] }, { id: 'instance', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/master:default', $control__deleted: { value: { customCursorType: 'component', customCursorSmartComponentId: 'old' } }, children: [] }, { id: 'phone', __class: 'FrameNode', children: [], replicaInfo: { overrides: { instance: { $control__deleted: { value: { customCursorType: 'component', customCursorSmartComponentId: 'old-replica' } } } } } }, { id: 'cursor', __class: 'SmartComponentNode', children: [] }];
     return definitions;
   };
   assert.equal((await captureNativeTransfer(source, { mode: 'project' }, new AbortController().signal)).complete, true);
+});
+
+test('detects a missing cursor assigned on a replica through a declared control', async () => {
+  const source = adapter(), read = source.readDefinitions;
+  source.readDefinitions = async ids => {
+    const definitions = await read(ids);
+    definitions[1].data.__class = 'SmartComponentNode';
+    definitions[1].data.variables = [{ id: 'cursor', type: 'customcursor' }];
+    definitions[0].data.children = [{ id: 'instance', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/master:default', children: [] }, { id: 'phone', __class: 'FrameNode', children: [], replicaInfo: { overrides: { instance: { $control__cursor: { value: { customCursorType: 'component', customCursorSmartComponentId: 'missing-phone' } } } } } }];
+    return definitions;
+  };
+  const result = await captureNativeTransfer(source, { mode: 'project' }, new AbortController().signal);
+  assert(result.diagnostics.some(item => item.sourceId === 'missing-phone'));
 });
 
 test('retries a changing revision and emits only a stable capture', async () => {
