@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec, sourceMountEffects } from './effects';
+import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec, sourceMountEffects, sourceGlobalPageEffect } from './effects';
 import { buildSourceGraph } from './source-graph';
 import type { NativeTransfer } from './types';
 
@@ -31,4 +31,17 @@ it('retains source transition modes and rejects malformed or unsupported animati
   expect(sourceTransitionSpec({ type: 'spring', durationBasedSpring: true, duration: 0.8, bounce: 0.2, stiffness: 400, damping: 30, mass: 1, delay: 0.1 })).toEqual({ type: 'spring', duration: '0.8', bounce: '0.2', delay: '0.1' });
   expect(sourceTransitionSpec({ type: 'spring', durationBasedSpring: false, duration: 0.8, bounce: 0.2, stiffness: 400, damping: 30, mass: 1 })).toEqual({ type: 'spring', stiffness: '400', damping: '30', mass: '1' });
   for (const value of [{ type: 'tween', duration: 'slow' }, { type: 'tween', duration: -1 }, { type: 'spring', mass: 0 }, { type: 'tween', custom: true }, { type: 'tween', ease: [2, 0, 1, 1] }]) expect(() => sourceTransitionSpec(value)).toThrow();
+});
+
+it('decodes document globalPageEffect into native page-effects config with per-axis units', () => {
+  const effect = sourceGlobalPageEffect({
+    enter: { opacity: 1, scale: 1, rotate: 0, rotate3d: false, rotateX: 0, rotateY: 0, x: '0px', y: '100%', transition: { type: 'tween', duration: 1.4, delay: 0, ease: [0.77, 0, 0.175, 1] } },
+    exit: { opacity: 0, scale: 1, rotate: 0, rotate3d: false, rotateX: 0, rotateY: 0, x: '0px', y: '-25%', transition: { type: 'tween', duration: 1.4, delay: 0, ease: [0.77, 0, 0.175, 1] } },
+  });
+  expect(effect).toMatchObject({
+    preset: 'custom', target: 'all',
+    enter: { opacity: 1, offsetX: 0, offsetXUnit: 'fixed', offsetY: 100, offsetYUnit: 'relative', transition: { kind: 'ease', ease: 'custom', bezier: [0.77, 0, 0.175, 1], duration: 1.4, delay: 0 } },
+    exit: { opacity: 0, offsetX: 0, offsetXUnit: 'fixed', offsetY: -25, offsetYUnit: 'relative', transition: { kind: 'ease', ease: 'custom', bezier: [0.77, 0, 0.175, 1], duration: 1.4, delay: 0 } },
+  });
+  expect(() => sourceGlobalPageEffect({ enter: { opacity: 1, scale: 1, rotate: 0, rotate3d: false, rotateX: 10, rotateY: 0, x: '0px', y: '0px', transition: { type: 'tween', duration: 0.4 } } })).toThrow();
 });

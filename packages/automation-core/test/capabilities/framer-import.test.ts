@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
+import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '@/code/generation/page-transitions-gen';
+import { createDefaultSide, serializePageEffects } from '@/code/project/page-effects-config';
 import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
@@ -293,5 +295,22 @@ describe('deterministic Framer full-file import boundary', () => {
     const removed = input.files.map(file => file.path.endsWith('page.client.tsx') ? { ...file, code: page.replace('data-id="imported-card"', 'data-id="new-card"') } : file);
     await expect(framerImportSubmitOperation.execute(base, { ...input, files: removed }, context)).rejects.toThrow(/PASTE/);
     await expect(framerImportSubmitOperation.execute(base, { ...input, target: { ...input.target, parentNodeId: 'absent' } }, context)).rejects.toThrow(/PASTE/);
+  });
+  it('accepts canonical page-transitions runtime files in a route group and rejects tampered runtime sources', async () => {
+    const input = bundle();
+    const layoutClient = injectPageTransitionsInCode(`'use client';\n${canvas}\nexport default function LayoutClient({ children }: { children: React.ReactNode }) {\n  return <div data-id="root" style={{ position: 'relative', width: '100%' }}>{children}</div>;\n}`);
+    const layoutWrapper = "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n";
+    const enter = createDefaultSide(); enter.offsetY = 100;
+    const pageEffects = serializePageEffects({ __default: { preset: 'custom', target: 'all', enter }, pages: {} });
+    input.files.push(
+      { path: 'app/(site)/LayoutClient.tsx', code: layoutClient },
+      { path: 'app/(site)/layout.tsx', code: layoutWrapper },
+      { path: 'app/(site)/page-effects.ts', code: pageEffects },
+      { path: 'app/(site)/page-effects-runtime.ts', code: PAGE_EFFECTS_RUNTIME_SOURCE },
+      { path: 'app/(site)/page-transitions.tsx', code: PAGE_TRANSITIONS_SOURCE },
+    );
+    expect((await framerImportSubmitOperation.execute(snapshot(), input, context)).changes).toHaveLength(12);
+    const tampered = { ...input, files: input.files.map(file => file.path === 'app/(site)/page-effects-runtime.ts' ? { ...file, code: '// tampered' } : file) };
+    await expect(framerImportSubmitOperation.execute(snapshot(), tampered, context)).rejects.toThrow(/PAGE_EFFECTS_RUNTIME_INVALID/);
   });
 });

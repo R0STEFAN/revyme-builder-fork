@@ -3,6 +3,7 @@ import { updateMotionPropInCode } from '../../generation/generator-motion-props'
 import { emitObj } from '../../generation/generator-motion-compose';
 import { composeLoopInCode, setLoopInCode } from '../../generation/generator-motion-loop';
 import { ensureNamedImport } from '../../generation/generator-utils';
+import { createDefaultSide, DEFAULT_BEZIER, type PageEffect, type SideConfig, type TransitionConfig } from '../../project/page-effects-config';
 import { sourceRecord } from './source-graph';
 import { trace } from '../../../shared/debug-trace';
 import type { SourceGraph, SourceProperties } from './types';
@@ -112,4 +113,50 @@ export function sourceTransitionSpec(value: unknown): Record<string, string> | u
   }
   if (typeof transition.stagger === 'number' && transition.stagger !== 0) throw new Error('Source stagger requires the motion emitter');
   return output;
+}
+
+export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {
+  if (value == null) return;
+  trace.fn('framer-native.sourceGlobalPageEffect');
+  const raw = sourceRecord(value);
+  if (!raw || Object.keys(raw).some(key => !['enter', 'exit'].includes(key))) throw new Error('Unsupported source global page effect');
+  const parseOffset = (input: unknown): { value: number; unit: 'fixed' | 'relative' } => {
+    if (input === 0) return { value: 0, unit: 'fixed' };
+    const match = typeof input === 'string' ? /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|%)$/.exec(input.trim()) : null;
+    const parsed = match ? Number(match[1]) : NaN;
+    if (!match || !Number.isFinite(parsed)) throw new Error(`Invalid source page effect offset ${String(input)}`);
+    return { value: parsed, unit: match[2] === '%' ? 'relative' : 'fixed' };
+  };
+  const parseSide = (input: unknown): SideConfig | undefined => {
+    if (input == null) return;
+    const s = sourceRecord(input);
+    const known = new Set(['opacity', 'scale', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'x', 'y', 'transition']);
+    if (!s || Object.keys(s).some(key => !known.has(key))) throw new Error('Unsupported source page effect side');
+    if (typeof s.opacity !== 'number' || !Number.isFinite(s.opacity) || s.opacity < 0 || s.opacity > 1) throw new Error('Invalid source page effect opacity');
+    if (typeof s.scale !== 'number' || !Number.isFinite(s.scale) || s.scale < 0) throw new Error('Invalid source page effect scale');
+    if (typeof s.rotate !== 'number' || !Number.isFinite(s.rotate) || typeof s.rotate3d !== 'boolean' || typeof s.rotateX !== 'number' || !Number.isFinite(s.rotateX) || typeof s.rotateY !== 'number' || !Number.isFinite(s.rotateY)) throw new Error('Invalid source page effect rotation');
+    if (!s.rotate3d && (s.rotateX !== 0 || s.rotateY !== 0)) throw new Error('Inactive 3D page effect rotation requires verification');
+    const x = parseOffset(s.x), y = parseOffset(s.y);
+    const transitionRecord = sourceRecord(s.transition), spec = sourceTransitionSpec(s.transition);
+    if (!transitionRecord || !spec) throw new Error('Missing source page effect transition');
+    let transition: TransitionConfig;
+    if (spec.type === 'tween') {
+      const bezier = spec.ease?.startsWith('[') ? JSON.parse(spec.ease) as [number, number, number, number] : undefined;
+      if (spec.ease !== undefined && !bezier) throw new Error(`Source page effect easing ${spec.ease} requires a bezier adapter`);
+      transition = { kind: 'ease', ease: bezier ? 'custom' : 'easeInOut', bezier: bezier ?? [...DEFAULT_BEZIER], duration: Number(spec.duration ?? 0.4), delay: Number(spec.delay ?? 0) };
+    } else if (spec.type === 'spring' && transitionRecord.durationBasedSpring !== true) {
+      transition = { kind: 'spring', stiffness: Number(spec.stiffness ?? 100), damping: Number(spec.damping ?? 10), mass: Number(spec.mass ?? 1), duration: Number(spec.duration ?? 0.4), delay: Number(spec.delay ?? 0) };
+    } else throw new Error('Source page effect transition mode requires its native timing adapter');
+    const side = createDefaultSide();
+    side.opacity = s.opacity; side.scale = s.scale;
+    side.rotate = s.rotate3d ? '3d' : '2d'; side.rotateZ = s.rotate; side.rotateX = s.rotate3d ? s.rotateX : 0; side.rotateY = s.rotate3d ? s.rotateY : 0;
+    side.offsetX = x.value; side.offsetXUnit = x.unit; side.offsetY = y.value; side.offsetYUnit = y.unit;
+    side.transition = transition;
+    return side;
+  };
+  const enter = parseSide(raw.enter), exit = parseSide(raw.exit);
+  if (!enter && !exit) throw new Error('Empty source global page effect');
+  const moves = [exit, enter].some(s => s && (s.offsetX !== 0 || s.offsetY !== 0 || s.scale !== 1 || s.rotateZ !== 0 || s.rotateX !== 0 || s.rotateY !== 0));
+  const sequenced = !moves && !!exit && !!enter && (exit.transition.delay >= enter.transition.delay + enter.transition.duration || enter.transition.delay >= exit.transition.delay + exit.transition.duration);
+  return { preset: moves ? 'custom' : sequenced ? 'fade-out-in' : 'crossfade', target: 'all', ...(exit ? { exit } : {}), ...(enter ? { enter } : {}) };
 }

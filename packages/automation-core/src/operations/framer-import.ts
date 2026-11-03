@@ -20,6 +20,8 @@ import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
+import { PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '@/code/generation/page-transitions-gen';
+import { isEmptyPageEffects, parsePageEffects, serializePageEffects } from '@/code/project/page-effects-config';
 import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
 
 export const framerImportSubmitInputSchema = z.object({
@@ -58,7 +60,7 @@ function assertNativeFamily(path: string): void {
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^app\/(?:[^/]+\/)*(?:page\.client|page|LayoutClient)\.tsx$/.test(path) ||
-      /^app\/\([A-Za-z0-9_-]+\)\/layout\.tsx$/.test(path) ||
+      /^app\/\([A-Za-z0-9_-]+\)\/(?:layout\.tsx|page-transitions\.tsx|page-effects(?:-runtime)?\.ts)$/.test(path) ||
       /^cms\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\.schema)?\.json$/.test(path) ||
       /^public\/assets\/(?:[^/]+\/)*[^/]+\.(?:avif|gif|ico|jpeg|jpg|png|svg|webp|mp4|webm|mov|mp3|wav|ogg|pdf|woff2?|ttf|otf)$/i.test(path)) return;
   fail('FILE_FAMILY_UNSUPPORTED', path);
@@ -216,7 +218,14 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
         const oldIds = previous === undefined ? new Set<string>() : nodeIds(previous, file.path);
         for (const id of nodeIds(file.code, file.path)) if (!oldIds.has(id)) createdIds.add(id);
       } else if (file.path.startsWith('overrides/')) validateNativeOverrideSource(file.code);
-      else if (file.path !== 'app/layout.tsx' && /\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
+      else if (file.path.endsWith('/page-effects-runtime.ts')) {
+        if (file.code !== PAGE_EFFECTS_RUNTIME_SOURCE || !projected.has(file.path.replace(/page-effects-runtime\.ts$/, 'LayoutClient.tsx'))) fail('PAGE_EFFECTS_RUNTIME_INVALID', file.path);
+      } else if (file.path.endsWith('/page-transitions.tsx')) {
+        if (file.code !== PAGE_TRANSITIONS_SOURCE || !projected.has(file.path.replace(/page-transitions\.tsx$/, 'LayoutClient.tsx'))) fail('PAGE_TRANSITIONS_RUNTIME_INVALID', file.path);
+      } else if (file.path.endsWith('/page-effects.ts')) {
+        const parsed = parsePageEffects(file.code);
+        if (isEmptyPageEffects(parsed) || serializePageEffects(parsed) !== file.code || !projected.has(file.path.replace(/page-effects\.ts$/, 'LayoutClient.tsx')) || !projected.has(file.path.replace(/page-effects\.ts$/, 'page-effects-runtime.ts')) || !projected.has(file.path.replace(/page-effects\.ts$/, 'page-transitions.tsx'))) fail('PAGE_EFFECTS_CONFIG_INVALID', file.path);
+      } else if (file.path !== 'app/layout.tsx' && /\/(?:page|layout)\.tsx$/.test(file.path)) validateWrapper(file.path, file.code, projected);
     }
     for (const id of validateFramerImportCms(projected, seen)) createdIds.add(id);
     // Reuse the ordinary syntax, duplicate data-id and projected import checks as well as later commit CAS.

@@ -242,3 +242,20 @@ it('skips missing section targets used only by inactive Scroll Variant metadata'
   transfer.definitions[0].data.$control__anchor = { value: { target: 123 } };
   expect(emit(transfer).result.diagnostics.length).toBeGreaterThan(0);
 });
+it('emits native PageTransitions and page-effects runtime when a templated page has a globalPageEffect', () => {
+  const transfer = input();
+  transfer.definitions[1].data.layoutTemplateIdentifier = 'local-module:layoutTemplate/navigation:default';
+  transfer.definitions[1].data.globalPageEffect = {
+    enter: { opacity: 1, scale: 1, rotate: 0, rotate3d: false, rotateX: 0, rotateY: 0, x: '0px', y: '100%', transition: { type: 'tween', duration: 1.4, delay: 0, ease: [0.77, 0, 0.175, 1] } },
+    exit: { opacity: 0, scale: 1, rotate: 0, rotate3d: false, rotateX: 0, rotateY: 0, x: '0px', y: '-25%', transition: { type: 'tween', duration: 1.4, delay: 0, ease: [0.77, 0, 0.175, 1] } },
+  };
+  const data = { id: 'navigation', __class: 'LayoutTemplateNode', baseVariantId: 'template-desktop', children: [{ id: 'template-desktop', __class: 'FrameNode', width: 1200, widthType: 0, heightType: 2, children: [{ id: 'template-slot', __class: 'SlotNode', children: [] }] }] };
+  transfer.definitions.push({ id: data.id, kind: data.__class, data });
+  const { result, identity } = emit(transfer);
+  expect(result.diagnostics).toEqual([]);
+  const group = identity.navigation;
+  expect(result.files.find(file => file.path === `app/(${group})/LayoutClient.tsx`)?.code).toContain('<PageTransitions>{children}</PageTransitions>');
+  expect(result.files.find(file => file.path === `app/(${group})/page-effects.ts`)?.code).toContain('"offsetY": 100');
+  expect(result.files.some(file => file.path === `app/(${group})/page-effects-runtime.ts`)).toBe(true);
+  expect(result.files.some(file => file.path === `app/(${group})/page-transitions.tsx`)).toBe(true);
+});

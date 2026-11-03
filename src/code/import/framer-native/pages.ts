@@ -14,8 +14,10 @@ import { sourceStaticLinkValue } from './links';
 import { emitSourceQueryInCode, resolveSourceBinding } from './bindings';
 import { nativeCollectionSlug, nativeFieldId, sourceCollectionId } from './cms';
 import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
+import { serializePageEffects, type PageEffect } from '../../project/page-effects-config';
+import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '../../generation/page-transitions-gen';
 import { wrapInstanceForPresence } from '../../generation/instance-presence-gen';
-import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceMountEffects, applySourceMountEffects } from './effects';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect } from './effects';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceInstanceStateName } from './interactions';
@@ -183,6 +185,19 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       }
       pageProps.set(pageId, values);
     }
+    const templatePageEffects = new Map<string, PageEffect>();
+    for (const pageId of pageIds) {
+      active = pageId;
+      const page = graph.nodes.get(pageId)!, document = documentFor(graph, page);
+      if (Array.isArray(page.raw.pageEffects) && page.raw.pageEffects.length) throw new Error('Source per-page transition effects require their native runtime adapter');
+      const effect = sourceGlobalPageEffect(document?.raw.globalPageEffect);
+      if (!effect) continue;
+      const templateId = templateForPage.get(pageId);
+      if (!templateId) throw new Error('Source global page effects require their native runtime adapter');
+      const prior = templatePageEffects.get(templateId);
+      if (prior && JSON.stringify(prior) !== JSON.stringify(effect)) throw new Error('Conflicting source global page effects across template pages');
+      templatePageEffects.set(templateId, effect);
+    }
     for (const id of ids) {
       active = id;
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
@@ -194,7 +209,6 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (!isTemplate && sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
       const props = isTemplate ? templateProps.get(id)! : [];
       const group = isTemplate ? groups.get(id) : groups.get(templateForPage.get(id) ?? '');
-      if (!isTemplate && document?.raw.globalPageEffect) throw new Error('Source global page effects require their native runtime adapter');
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
@@ -340,13 +354,15 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         }
       }
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
+      const pageEffect = isTemplate ? templatePageEffects.get(id) : undefined;
+      if (pageEffect) code = injectPageTransitionsInCode(code);
       const route = result.routes[id], folder = 'app' + (group ? `/(${group})` : '') + (isTemplate || route === '/' ? '' : route);
       const path = `${folder}/${isTemplate ? 'LayoutClient' : 'page.client'}.tsx`;
-      const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`)]);
+      const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`), ...[...templatePageEffects.keys()].flatMap(tid => { const g = groups.get(tid)!; return [`app/(${g})/page-effects.ts`, `app/(${g})/page-effects-runtime.ts`, `app/(${g})/page-transitions.tsx`]; })]);
       const violations = checkFile(code, { kind: isTemplate ? 'template' : 'page', path, projectFiles: projectedPaths });
       if (violations.length) throw new Error(`Native page validation: ${violations.map(violation => violation.code).join(', ')}`);
       if (isTemplate) {
-        result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" });
+        result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" }, ...(pageEffect ? [{ path: `${folder}/page-effects.ts`, code: serializePageEffects({ __default: pageEffect, pages: {} }) }, { path: `${folder}/page-effects-runtime.ts`, code: PAGE_EFFECTS_RUNTIME_SOURCE }, { path: `${folder}/page-transitions.tsx`, code: PAGE_TRANSITIONS_SOURCE }] : []));
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]));
         continue;
       }
