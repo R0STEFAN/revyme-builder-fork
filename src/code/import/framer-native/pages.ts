@@ -188,7 +188,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const isTemplate = page.kind === 'LayoutTemplateNode';
       const isDetail = !isTemplate && page.raw.dataIdentifier !== undefined;
       if (isDetail && !result.routes[id]?.endsWith('/[slug]')) throw new Error('Source CMS page requires its native page-context adapter');
-      if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).some(key => !['title', 'description'].includes(key))) throw new Error('Source CMS page metadata requires its native per-record adapter');
+      if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).some(key => !['title', 'description', 'socialImage'].includes(key))) throw new Error('Source CMS page metadata requires its native per-record adapter');
       const collection = isDetail ? nativeCollectionSlug(identity, sourceCollectionId(page.raw.dataIdentifier)) : undefined;
       if (!isTemplate && sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
       const props = isTemplate ? templateProps.get(id)! : [];
@@ -341,13 +341,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (isDetail) {
         const globalMeta = sourceRecord(document?.raw.webMetadata);
         const defaults = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
-        if (globalMeta?.socialImage !== undefined) {
-          const image = typeof globalMeta.socialImage === 'string' ? options.assets?.[globalMeta.socialImage] : undefined;
+        const pageMeta = sourceRecord(page.raw.webMetadata);
+        const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
+        if (socialImage !== undefined) {
+          const image = typeof socialImage === 'string' ? options.assets?.[socialImage] : undefined;
           if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
           defaults.ogImage = image;
         }
         const expressions: Record<string, string> = {};
-        const pageMeta = sourceRecord(page.raw.webMetadata);
         const collectionId = sourceCollectionId(page.raw.dataIdentifier);
         for (const key of ['title', 'description']) {
           const value = pageMeta?.[key];

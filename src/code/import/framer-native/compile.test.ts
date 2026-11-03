@@ -380,6 +380,14 @@ it('imports a CMS detail route with live record bindings into a native page pair
   expect(parseCmsSeoDefaults(withImage.files.find(file => file.path === server.path)!.code)?.ogImage).toBe('/api/uploads/global.webp');
   const imageTarget = { projectId: 'destination', branchId: 'main' };
   expect((await framerImportSubmitOperation.execute(createSnapshot(imageTarget, 0, {}), { files: withImage.files, mode: 'create', target: imageTarget, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  const localImage = 'data:framer/asset-reference,local.png';
+  page.webMetadata = { socialImage: localImage };
+  source.assets.push({ key: 'local', extension: '.png', mimeType: 'image/png', url: 'https://example.com/local.png' });
+  const local = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create', uploadedAssets: { local: '/api/uploads/local.webp' } });
+  expect(local.diagnostics).toEqual([]);
+  expect(parseCmsSeoDefaults(local.files.find(file => file.path === server.path)!.code)?.ogImage).toBe('/api/uploads/local.webp');
+  expect((await framerImportSubmitOperation.execute(createSnapshot(imageTarget, 0, {}), { files: local.files, mode: 'create', target: imageTarget, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
+  delete page.webMetadata;
   source.definitions[2].data.webMetadata = { title: 'Site title', description: 'Site description' };
   source.assets = [];
   expect(server.code).toContain('Site title');
