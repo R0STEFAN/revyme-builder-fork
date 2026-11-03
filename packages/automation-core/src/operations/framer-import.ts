@@ -114,7 +114,7 @@ function validateWrapper(path: string, code: string, projected: ReadonlyMap<stri
       if (Array.isArray(schema.fields)) fields = new Set(schema.fields.filter((field: any) => field?.type === 'text' && typeof field.id === 'string').map((field: any) => field.id));
     } catch { /* CMS validation rejects malformed schema. */ }
     if (meta?.kind === 'detail' && typeof collection === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(collection) &&
-        Object.entries(defaults).every(([key, value]) => typeof value === 'string' && (['title', 'description'].includes(key) || key === 'ogImage' && isSafeCmsImage(value))) &&
+        Object.entries(defaults).every(([key, value]) => typeof value === 'string' && (['title', 'description'].includes(key) || key === 'ogImage' && isSafeCmsImage(value)) || key === 'robotsIndex' && typeof value === 'boolean') &&
         Object.entries(expressions).every(([key, value]) => ['title', 'description'].includes(key) && typeof value === 'string' && isSafeCmsSeoExpression(value, fields)) &&
         projected.has(`cms/${collection}.schema.json`) && projected.has(`cms/${collection}.json`) &&
         code === buildCmsDetailServerWrapper({ collection, defaults, expressions, apiConfig: null })) return;

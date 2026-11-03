@@ -244,6 +244,8 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
     ['twitterDescription', defaults.twitterDescription],
     ['twitterImage', defaults.twitterImage],
     ['canonical', defaults.canonical],
+    ['robotsIndex', defaults.robotsIndex],
+    ['robotsFollow', defaults.robotsFollow],
   ]);
   const bindingsLiteral = inlineObject(CMS_SEO_SLOTS.map(({ key }) => [key, bindings[key as CmsSeoSlot]]));
 
@@ -258,7 +260,7 @@ export function buildCmsDetailServerWrapper(input: BuildDetailWrapperInput): str
     ? `\nconst schemaOrg = ${JSON.stringify(schemaOrg, null, 2)};\n`
     : '';
 
-  const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
+  const robots = typeof defaults.robotsIndex === 'boolean' || typeof defaults.robotsFollow === 'boolean'
     ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
     : '';
 
@@ -827,7 +829,7 @@ export function buildStandardPageServerWrapper(input: BuildStandardWrapperInput)
       'twitterTitle', 'twitterDescription', 'twitterImage',
     ];
     const expressionsLiteral = inlineObject(allExpressionSlots.map((key) => [key, expressions[key]]));
-    const robots = defaults.robotsIndex === false || defaults.robotsFollow === false
+    const robots = typeof defaults.robotsIndex === 'boolean' || typeof defaults.robotsFollow === 'boolean'
       ? `\n    robots: { index: ${defaults.robotsIndex !== false}, follow: ${defaults.robotsFollow !== false} },`
       : '';
 
