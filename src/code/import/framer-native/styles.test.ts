@@ -6,13 +6,21 @@ const node = (properties: Record<string, unknown>): ResolvedSourceNode => ({ id:
 const context = (extra = {}) => ({ diagnostics: [] as TransferDiagnostic[], ...extra });
 
 describe('editor source styles', () => {
+  it('ignores a retained cursor identity when the component cursor is inactive', () => {
+    for (const customCursorType of [undefined, null]) {
+      const c = context();
+      const result = mapSourceStyles(node({ customCursorType, customCursorSmartComponentId: 'old-cursor', width: 100, widthType: 0 }), c);
+      expect(c.diagnostics).toEqual([]);
+      expect(result.width).toBe('100px');
+    }
+  });
   it('retains static scale, sticky offset and text selection', () => {
     expect(mapSourceStyles(node({ position: 'sticky', positionStickyTop: 120, scale: 2, rotation: 10, userSelect: 'none' }), context())).toMatchObject({ top: '120px', transform: 'rotate(10deg) scale(2)', userSelect: 'none' });
     expect(mapSourceStyles(node({ scale: 0 }), context()).transform).toBe('scale(0)');
   });
   it('reports active masks, effects, forms and custom cursors until their native adapters exist', () => {
     const c = context();
-    mapSourceStyles(node({ masks: [{ maskType: 'image' }], enterEffectEnabled: true, appearEffectEnabled: true, isFormContainer: true, customCursorSmartComponentId: 'cursor' }), c);
+    mapSourceStyles(node({ masks: [{ maskType: 'image' }], enterEffectEnabled: true, appearEffectEnabled: true, isFormContainer: true, customCursorType: 'component', customCursorSmartComponentId: 'cursor' }), c);
     expect(c.diagnostics.map(item => item.property)).toEqual(expect.arrayContaining(['masks', 'enterEffectEnabled', 'appearEffectEnabled', 'isFormContainer', 'customCursorSmartComponentId']));
     const inactive = context();
     mapSourceStyles(node({ masks: [], enterEffectEnabled: false, enterEffectOpacity: 0, isFormContainer: false }), inactive);

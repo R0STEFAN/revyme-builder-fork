@@ -57,7 +57,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
-  if (p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+  if (p.customCursorType === 'component' && p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   const result: Record<string, string> = { boxSizing: 'border-box', position: 'relative', display: 'block' };
   if (Array.isArray(p.masks) && p.masks.length) {
     const mask = p.masks.length === 1 ? sourceRecord(p.masks[0]) : undefined;
