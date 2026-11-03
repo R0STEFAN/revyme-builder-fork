@@ -40,7 +40,26 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
   }
   for (const id of graph.reachable) {
     const node = graph.nodes.get(id)!;
-    for (const [property, value] of Object.entries(node.raw)) if (property !== 'children' && !(isSourceCodeComponent(node) && property.startsWith('$control__'))) scan(value, isSourceCodeComponent(node));
+    const master = node.kind === 'CodeComponentNode' ? /^local-module:canvasComponent\/([^:]+):/.exec(String(node.raw.codeComponentIdentifier ?? ''))?.[1] : undefined;
+    const variables = master ? graph.nodes.get(master)?.raw.variables : undefined;
+    for (const [property, value] of Object.entries(node.raw)) {
+      if (property.startsWith('$control__') && property !== '$control__variant' && Array.isArray(variables) && !variables.some(variable => sourceRecord(variable)?.id === property.slice(10))) continue;
+      const replica = property === 'replicaInfo' ? sourceRecord(value) : undefined;
+      const overrides = sourceRecord(replica?.overrides);
+      if (replica && overrides) {
+        scan({ ...replica, overrides: undefined });
+        for (const [targetId, raw] of Object.entries(overrides)) {
+          const target = graph.nodes.get(targetId), record = sourceRecord(raw);
+          const component = target?.kind === 'CodeComponentNode' ? /^local-module:canvasComponent\/([^:]+):/.exec(String(target.raw.codeComponentIdentifier ?? ''))?.[1] : undefined;
+          const declared = component ? graph.nodes.get(component)?.raw.variables : undefined;
+          if (record && target && (isSourceCodeComponent(target) || Array.isArray(declared))) {
+            scan(Object.fromEntries(Object.entries(record).filter(([key]) => !key.startsWith('$control__') || !isSourceCodeComponent(target) && (key === '$control__variant' || Array.isArray(declared) && declared.some(variable => sourceRecord(variable)?.id === key.slice(10))))));
+          } else scan(raw);
+        }
+        continue;
+      }
+      if (property !== 'children' && !(isSourceCodeComponent(node) && property.startsWith('$control__'))) scan(value, isSourceCodeComponent(node));
+    }
     if (node.kind === 'WebPageNode' && sourceRecord(node.raw.webMetadata)?.socialImage === undefined) {
       let parent = node.raw.parentid;
       const seen = new Set<string>();

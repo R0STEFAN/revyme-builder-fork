@@ -22,6 +22,23 @@ function model(input = source(), existing = new Set<string>()) {
 }
 
 describe('native Framer assets', () => {
+  it('does not download images referenced only by deleted design-component controls', () => {
+    const input = source();
+    input.definitions[0].data.children[0].children[0] = { id: 'video', __class: 'CodeComponentNode', codeComponentIdentifier: 'local-module:canvasComponent/card:default', '$control__deleted': { value: video }, children: [] } as any;
+    input.definitions.push({ id: 'card', kind: 'SmartComponentNode', data: { id: 'card', __class: 'SmartComponentNode', variables: [], children: [] } } as any);
+    input.assets = input.assets.filter(asset => asset.key !== 'video-key');
+    const { graph, identity } = model(input);
+    const plan = planNativeAssets(graph, identity);
+    expect(plan.diagnostics).toEqual([]);
+    expect(plan.requests.map(request => request.key)).toEqual(['image-key']);
+    (input.definitions[0].data.children as any[]).push({ id: 'phone', __class: 'FrameNode', children: [], replicaInfo: { master: 'frame', overrides: { video: { $control__deleted: { value: video } } } } });
+    const replica = model(input);
+    expect(planNativeAssets(replica.graph, replica.identity).diagnostics).toEqual([]);
+    (input.definitions[1].data as any).variables = [{ id: 'deleted', type: 'file' }];
+    input.assets.push({ key: 'video-key', extension: '.mp4', mimeType: 'video/mp4', url: 'https://native.example/assets/video-key.mp4' });
+    const active = model(input);
+    expect(planNativeAssets(active.graph, active.identity).requests.map(request => request.key)).toContain('video-key');
+  });
   it('binds native uploaded media URLs without emitting duplicate embedded originals', () => {
     const { graph, identity } = model();
     const result = resolveUploadedNativeAssets(graph, identity, { 'image-key': '/api/uploads/photo.webp', 'video-key': 'https://cdn.example.com/movie.mp4' });
