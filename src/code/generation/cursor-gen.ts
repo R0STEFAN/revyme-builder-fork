@@ -18,6 +18,8 @@ import { insertAfterLastImportLine, ensureNamedImport } from './generator-utils'
 import { escapeRegExp } from '@/shared/regex-utils';
 import { parseComponentCursorCalls, getComponentCursorForNode } from '@/code/parsing/cursor-parser';
 import { trace } from '@/shared/debug-trace';
+import * as t from '@babel/types';
+import { parseJSX } from '@/code/parsing/ast-utils';
 
 export interface AddComponentCursorOpts {
   /** Local identifier name for the imported component, e.g. "Pointer". */
@@ -59,6 +61,17 @@ export interface UpdateComponentCursorOpts {
 }
 
 const RUNTIME_IMPORT_PATH = '@revyme/runtime';
+
+export function hasNativeCursorPortal(code: string): boolean {
+  const ast = parseJSX(code);
+  if (!ast) return false;
+  const imported = ast.program.body.some(node => t.isImportDeclaration(node) && ['@revyme/runtime', '@/lib/cursor-runtime'].includes(node.source.value) && node.specifiers.some(spec => t.isImportSpecifier(spec) && t.isIdentifier(spec.imported, { name: 'CursorPortal' }) && spec.local.name === 'CursorPortal'));
+  let mounted = false;
+  t.traverseFast(ast, node => {
+    if (t.isJSXElement(node) && t.isJSXIdentifier(node.openingElement.name, { name: 'body' }) && node.children.some(child => t.isJSXElement(child) && t.isJSXIdentifier(child.openingElement.name, { name: 'CursorPortal' }))) mounted = true;
+  });
+  return imported && mounted;
+}
 
 // ─── Page file: add / update / remove the spread call ───────────────────────
 

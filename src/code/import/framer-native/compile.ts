@@ -18,6 +18,7 @@ import { applyFramerFontFaces } from '../../generation/framer-font-gen';
 import type { WorkspaceFontFaceSpec } from '../../project/preset-ops';
 import { addGoogleFontImportsToCss } from '../../../shared/google-font-import';
 import { sourceGoogleFontRequests } from './fonts';
+import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '../../generation/cursor-gen';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
@@ -68,7 +69,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const options = { assets: assets.assets, overrides: overrides.overrides };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
-    if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code))) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require the native cursor portal and assignment adapter.' });
+    if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code))) {
+      const original = target.existingFiles.get('app/layout.tsx');
+      const updated = original === undefined ? undefined : ensureCursorPortalInLayout(original);
+      if (!updated || !hasNativeCursorPortal(updated)) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require a valid native root layout and cursor portal.' });
+      else if (updated !== original) result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, cursorPortal: true });
+    }
     const relocatedRoutes = new Map(Object.entries(pages.routes).map(([id, route]) => [sourcePageRoute(graph, graph.nodes.get(id)!), route] as const).filter(([before, after]) => before !== after));
     for (const emitted of [originals, overrides, cms, components, pages]) {
       result.files.push(...emitted.files); result.createdIds.push(...emitted.createdIds); result.diagnostics.push(...emitted.diagnostics);
@@ -114,7 +120,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();
     for (const file of result.files) {
-      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces || file.googleFonts))) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces || file.googleFonts)) && !(file.path === 'app/layout.tsx' && file.cursorPortal)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;

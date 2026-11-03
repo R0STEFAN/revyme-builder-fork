@@ -52,6 +52,10 @@ export function applySourceInstances(code: string, scene: SourceScene, graph: So
         trace.action('framer-native.skipDeletedInstanceProp', { sourceId: id, masterId, prop: sourceProp });
         continue;
       }
+      if (variable.type === 'customcursor') {
+        if (value != null && value !== '') throw new Error(`Cursor assignment on ${id} requires its native component adapter`);
+        continue;
+      }
       if (variable.type === 'eventhandler' && sourceShowOverlayTarget(value)) {
         if (!options.allowOverlayEvents) throw new Error(`Source instance overlay event on ${id} requires its native scope adapter`);
         continue;

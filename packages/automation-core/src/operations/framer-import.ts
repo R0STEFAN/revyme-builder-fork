@@ -19,7 +19,7 @@ import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
-import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
+import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
@@ -47,16 +47,6 @@ export interface FramerImportSubmitOutput { changes: FileChange[]; createdIds: s
 
 const sha256 = (code: string) => createHash('sha256').update(code).digest('hex');
 function fail(code: string, message: string): never { throw new Error(`${code}: ${message}`); }
-
-function hasNativeCursorPortal(code: string): boolean {
-  const ast = astFor(code, 'app/layout.tsx');
-  const imported = ast.program.body.some(node => t.isImportDeclaration(node) && ['@revyme/runtime', '@/lib/cursor-runtime'].includes(node.source.value) && node.specifiers.some(spec => t.isImportSpecifier(spec) && t.isIdentifier(spec.imported, { name: 'CursorPortal' }) && spec.local.name === 'CursorPortal'));
-  let mounted = false;
-  t.traverseFast(ast, node => {
-    if (t.isJSXElement(node) && t.isJSXIdentifier(node.openingElement.name, { name: 'body' }) && node.children.some(child => t.isJSXElement(child) && t.isJSXIdentifier(child.openingElement.name, { name: 'CursorPortal' }))) mounted = true;
-  });
-  return imported && mounted;
-}
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
