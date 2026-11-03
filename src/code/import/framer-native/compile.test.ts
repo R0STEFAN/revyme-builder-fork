@@ -192,6 +192,23 @@ it('binds a page social image to the uploaded native media URL', async () => {
   const target = { projectId: 'destination', branchId: 'main' };
   expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, {}), { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } }, createOperationContext())).diagnostics).toEqual([]);
 });
+it('imports a document favicon through uploaded media and a validated root-layout update', async () => {
+  const source = transfer(), ref = 'data:framer/asset-reference,icon.png';
+  source.context.mode = 'project';
+  source.definitions[2].data.webMetadata = { favicon: ref };
+  source.assets = [{ key: 'icon', extension: '.png', mimeType: 'image/png', url: 'https://example.com/icon.png' }];
+  const layout = `export const metadata = { title: 'Existing', description: 'Keep me' }; export default function Layout({ children }) { return <html><body>{children}</body></html>; }`;
+  const result = compileNativeTransfer(source, { mode: 'create', existingFiles: new Map([['app/layout.tsx', layout]]), uploadedAssets: { icon: '/api/uploads/icon.webp' } });
+  expect(result.diagnostics).toEqual([]);
+  const patch = result.files.find(file => file.path === 'app/layout.tsx')!;
+  expect(patch).toMatchObject({ baseCode: layout, favicon: '/api/uploads/icon.webp' });
+  expect(parseMetadataFromCode(patch.code)).toMatchObject({ title: 'Existing', description: 'Keep me', icons: { icon: '/api/uploads/icon.webp' } });
+  const target = { projectId: 'destination', branchId: 'main' };
+  const input = { files: result.files, mode: 'create' as const, target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
+  expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext())).changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
+  patch.code += '\n// unexpected change';
+  await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext())).rejects.toThrow();
+});
 it('inherits a document social image through native media and permits a page override', () => {
   const source = transfer(), global = 'data:framer/asset-reference,global.png', local = 'data:framer/asset-reference,local.png';
   source.definitions[2].data.webMetadata = { socialImage: global };

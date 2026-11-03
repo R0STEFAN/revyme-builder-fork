@@ -20,6 +20,7 @@ import { addGoogleFontImportsToCss } from '../../../shared/google-font-import';
 import { sourceGoogleFontRequests } from './fonts';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '../../generation/cursor-gen';
 import { parseSiteConfigFromCode } from '../../generation/metadata-gen';
+import { updateNativeFavicon } from './favicon';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
@@ -74,12 +75,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const node = graph.nodes.get(id)!;
       const metadata = sourceRecord(node.raw.webMetadata);
       if (node.kind === 'WebPageNode' && typeof metadata?.noIndexSite === 'boolean') trace.action('framer-native.skipSiteIndexFlag', { sourceId: id, value: metadata.noIndexSite });
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(node.kind === 'WebPageNode' && ['noIndex', 'noIndexSite'].includes(key) && typeof value === 'boolean') && !(['WebPageNode', 'RootNode'].includes(node.kind) && key === 'socialImage' && typeof value === 'string') && !(node.kind === 'RootNode' && key === 'favicon' && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(node.kind === 'RootNode' && key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Source metadata beyond supported page fields needs its native metadata adapter.' });
     }
     // Document metadata is inherited without importing all sibling pages.
     if (graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
+      if (metadata && Object.entries(metadata).some(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(key === 'favicon' && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'language' && destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value)))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: 'webMetadata', message: 'Inherited source document settings need their native metadata adapter.' });
     }
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
@@ -93,6 +94,19 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const updated = original === undefined ? undefined : ensureCursorPortalInLayout(original);
       if (!updated || !hasNativeCursorPortal(updated)) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require a valid native root layout and cursor portal.' });
       else if (updated !== original) result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, cursorPortal: true });
+    }
+    if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
+      const refs = (graph.byKind.get('RootNode') ?? []).map(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.favicon).filter(value => value !== undefined);
+      if (refs.length) {
+        const url = refs.length === 1 && typeof refs[0] === 'string' ? assets.assets[refs[0]] : undefined;
+        const original = target.existingFiles.get('app/layout.tsx'), prior = result.files.find(file => file.path === 'app/layout.tsx');
+        const updated = original !== undefined && url ? updateNativeFavicon(prior?.code ?? original, url) : undefined;
+        if (!updated || !url || original === undefined) result.diagnostics.push({ code: 'SOURCE_FAVICON_ADAPTER_REQUIRED', message: 'The source favicon or native root metadata cannot be safely updated.' });
+        else if (updated !== original) {
+          if (prior) { prior.code = updated; prior.favicon = url; }
+          else result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, favicon: url });
+        }
+      }
     }
     const relocatedRoutes = new Map(Object.entries(pages.routes).map(([id, route]) => [sourcePageRoute(graph, graph.nodes.get(id)!), route] as const).filter(([before, after]) => before !== after));
     for (const emitted of [originals, overrides, cms, components, pages]) {
@@ -139,7 +153,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();
     for (const file of result.files) {
-      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces || file.googleFonts)) && !(file.path === 'app/layout.tsx' && file.cursorPortal)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces || file.googleFonts)) && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;

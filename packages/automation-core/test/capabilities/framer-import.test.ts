@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ensureCursorPortalInLayout } from '@/code/generation/cursor-gen';
+import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
 import { describe, expect, it, vi } from 'vitest';
 import capturedCms from '@/code/import/framer-native/fixtures/captured-cms.json';
 import capturedComponents from '@/code/import/framer-native/fixtures/captured-components.json';
@@ -65,6 +66,18 @@ function replaceFile(input: ReturnType<typeof bundle>, path: string, code: strin
 const run = (input = bundle(), base = snapshot()) => framerImportSubmitOperation.execute(base, input, context);
 
 describe('deterministic Framer full-file import boundary', () => {
+  it('accepts only the combined native favicon and cursor update against the current layout', async () => {
+    const original = `export const metadata = { title: 'Site' }; export default function Layout({children}) { return <html><body>{children}</body></html>; }`;
+    const input = bundle(), base = snapshot({ 'app/layout.tsx': original });
+    const patch = { path: 'app/layout.tsx', code: updateNativeFavicon(ensureCursorPortalInLayout(original), '/api/uploads/icon.webp')!, baseCode: original, cursorPortal: true, favicon: '/api/uploads/icon.webp' };
+    input.files.push(patch as any);
+    expect((await run(input, base)).changes.find(change => change.path === patch.path)?.content).toBe(patch.code);
+    patch.code += '\n// unrelated edit';
+    await expect(run(input, base)).rejects.toThrow(/CURSOR_PORTAL_PATCH_INVALID/);
+    patch.favicon = 'javascript:alert(1)';
+    patch.code = updateNativeFavicon(ensureCursorPortalInLayout(original), patch.favicon)!;
+    await expect(run(input, base)).rejects.toThrow(/CURSOR_PORTAL_PATCH_INVALID/);
+  });
   it('permits only the exact native cursor portal patch against the current root layout', async () => {
     const original = `import React from 'react';\nexport default function Layout({children}) { return <html><body>{children}</body></html>; }`;
     const input = bundle(), base = snapshot({ 'app/layout.tsx': original });

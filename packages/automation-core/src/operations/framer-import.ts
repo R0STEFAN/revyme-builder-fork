@@ -20,12 +20,14 @@ import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
+import { updateNativeFavicon } from '@/code/import/framer-native/favicon';
 
 export const framerImportSubmitInputSchema = z.object({
   files: z.array(z.object({
     path: z.string().min(1), code: z.string(), baseHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     baseCode: z.string().optional(),
     cursorPortal: z.literal(true).optional(),
+    favicon: z.string().min(1).optional(),
     colorTokens: z.array(z.object({ name: z.string(), value: z.string(), dark: z.string().optional() }).strict()).min(1).max(10000).optional(),
     fontFaces: z.array(z.object({ family: z.string(), url: z.string(), weight: z.number(), style: z.enum(['normal', 'italic']), ext: z.enum(['woff2', 'woff', 'otf', 'ttf']), weightRange: z.object({ min: z.number(), max: z.number() }).strict().optional(), unicodeRange: z.string().optional() }).strict()).min(1).max(10000).optional(),
     googleFonts: z.array(z.object({ family: z.string(), axes: z.record(z.string(), z.number()) }).strict()).min(1).max(10000).optional(),
@@ -164,15 +166,22 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
     if (input.target.projectId !== snapshot.scope.projectId || input.target.branchId !== snapshot.scope.branchId) fail('SCOPE_MISMATCH', 'Import target does not match snapshot');
     const seen = new Set<string>(), projected = new Map(snapshot.files), changes: FileChange[] = [];
     for (const file of input.files) {
-      if (!(file.path === 'app/layout.tsx' && file.cursorPortal)) assertNativeFamily(file.path);
+      if (!(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) assertNativeFamily(file.path);
       if (seen.has(file.path)) fail('DUPLICATE_FILE_CHANGE', file.path);
       seen.add(file.path);
       const existing = snapshot.files.get(file.path);
       const tokenPatch = file.path === 'app/globals.css';
-      const cursorPatch = file.path === 'app/layout.tsx' && file.cursorPortal === true;
+      const cursorPatch = file.path === 'app/layout.tsx' && (file.cursorPortal === true || file.favicon !== undefined);
       if (cursorPatch) {
-        if (existing === undefined || file.baseCode !== existing || file.code === existing || ensureCursorPortalInLayout(existing) !== file.code || !hasNativeCursorPortal(file.code) || file.colorTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
-      } else if (file.cursorPortal) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+        let expected = existing;
+        if (expected !== undefined && file.cursorPortal) expected = ensureCursorPortalInLayout(expected);
+        if (file.favicon) {
+          let valid = false;
+          try { const url = new URL(file.favicon, 'https://revyme.invalid'); valid = (file.favicon.startsWith('/api/uploads/') || file.favicon.startsWith('/assets/') || file.favicon.startsWith('https://')) && url.protocol === 'https:' && !url.username && !url.password; } catch { /* invalid URL */ }
+          expected = valid && expected !== undefined ? updateNativeFavicon(expected, file.favicon) : undefined;
+        }
+        if (existing === undefined || file.baseCode !== existing || file.code === existing || expected !== file.code || file.cursorPortal && !hasNativeCursorPortal(file.code) || file.colorTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+      } else if (file.cursorPortal || file.favicon !== undefined) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
       else if (tokenPatch) {
         if (!(file.colorTokens?.length || file.fontFaces?.length || file.googleFonts?.length) || file.baseCode !== existing || addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.fontFaces ?? []), file.googleFonts ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
