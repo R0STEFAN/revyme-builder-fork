@@ -1,6 +1,8 @@
 import { trace } from '../../../shared/debug-trace';
+import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
 import { checkFile } from '../../oracle/check-file';
 import { setTagAttr } from '../../generation/generator-utils';
+import { setGlideInCode } from '../../generation/glide-gen';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
 import { FORM_ROUTE_CONTENT, FORM_ROUTE_PATH, wireFormSubmitInCode } from '../../generation/form-gen';
@@ -20,8 +22,8 @@ import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { serializePageEffects, type PageEffect } from '../../project/page-effects-config';
 import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '../../generation/page-transitions-gen';
 import { wrapInstanceForPresence } from '../../generation/instance-presence-gen';
-import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect } from './effects';
-import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceFlowEffect, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect } from './effects';
+import { findJSXElementByDataId, findClosingTag, setStyleEntryInCode } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceInstanceStateName } from './interactions';
 import { setResponsiveOverride, setResponsiveBindingOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
@@ -216,12 +218,13 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
+      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
-        if (!isTemplate || binding.kind !== 'variable' || binding.providerId !== id || binding.valueType !== 'boolean') throw new Error(`Source visibility on ${node.sourceId} requires its native adapter`);
-        return binding;
+        if (isTemplate && binding.kind === 'variable' && binding.providerId === id && binding.valueType === 'boolean') return binding;
+        if (!isTemplate && ((binding.kind === 'field' && binding.valueType === 'boolean') || (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field'))) return binding;
+        throw new Error(`Source visibility on ${node.sourceId} requires its native adapter`);
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
@@ -404,8 +407,17 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         if (!binding) continue;
         const display = stylesFor(node, context).display;
         for (const viewport of viewports.slice(1)) if (stylesFor(resolveSourceNode(graph, nodeId, viewport.sourceStateId), context).display !== display) throw new Error(`Responsive display with a visibility binding on ${nodeId} requires its native adapter`);
-        const prop = props.find(prop => prop.name === binding.name)!;
-        code = createConditionalVariableInCode(code, identity[nodeId], 'display', prop.name, display || 'block', 'none', prop.initial === true ? 'true' : 'false');
+        if (binding.kind === 'variable') {
+          const prop = props.find(prop => prop.name === binding.name)!;
+          code = createConditionalVariableInCode(code, identity[nodeId], 'display', prop.name, display || 'block', 'none', prop.initial === true ? 'true' : 'false');
+        } else if (binding.kind === 'field' || (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field')) {
+          const field = binding.kind === 'field' ? binding : binding.input;
+          if (field.kind !== 'field') throw new Error(`Missing visibility field on ${nodeId}`);
+          const expr = binding.kind === 'field'
+            ? `${field.itemVar}.${field.fieldId}`
+            : `(${cmsPropBindingExpression(field.itemVar, { field: field.fieldId, transform: 'isSet' })})`;
+          code = setStyleEntryInCode(code, identity[nodeId], 'display', `${expr} ? ${JSON.stringify(display || 'block')} : "none"`);
+        }
       }
       if (isTemplate) for (const [pageId, templateId] of templateForPage) if (templateId === id) for (const [name, value] of Object.entries(pageProps.get(pageId)!)) code = setTemplateRouteValueInCode(code, result.routes[pageId], name, value, props.map(prop => prop.name));
       if (!isTemplate) code = updateTemplatePropsInCode(code, pageProps.get(id) ?? {});
@@ -435,6 +447,16 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (!['FrameNode', 'RichTextNode'].includes(node.kind)) throw new Error(`Loop on source component ${nodeId} requires its native adapter`);
           assertLoopOutsideSourceList(graph, nodeId);
           code = applySourceRotationLoop(code, identity[nodeId], spec);
+        }
+        const flow = sourceFlowEffect(node.properties);
+        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceFlowEffect(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(flow)) throw new Error(`Responsive flow effect on ${nodeId} requires its native adapter`);
+        if (flow) {
+          if (node.kind !== 'FrameNode' || mount || spec) throw new Error(`Flow effect composition on ${nodeId} requires its native adapter`);
+          for (const childId of node.children) {
+            const visibility = [resolveSourceNode(graph, childId).properties.visible, ...viewports.slice(1).map(viewport => resolveSourceNode(graph, childId, viewport.sourceStateId).properties.visible)];
+            if (visibility.some(value => value === false)) throw new Error(`CSS-only child visibility with a flow effect on ${childId} requires its native adapter`);
+          }
+          code = setGlideInCode(code, identity[nodeId], flow);
         }
       }
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }

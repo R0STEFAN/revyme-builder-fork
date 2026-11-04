@@ -191,8 +191,9 @@ export function emitSourceQueryInCode(code: string, parentId: string, providerId
   const filters: FilterConfig[] = query.predicates.map(predicate => {
     if (predicate.kind !== 'transform' || predicate.input.kind !== 'field' || predicate.input.providerId !== providerId) return unsupported();
     const argument = predicate.argument;
-    if (argument?.kind === 'variable' && (predicate.name === 'equals' || predicate.name === 'isIncludedIn')) {
-      return { field: predicate.input.fieldId, operator: predicate.name === 'equals' ? 'equals' : 'in', value: '', valueSource: 'variable', valueVar: argument.name };
+    if ((argument?.kind === 'variable' || (argument?.kind === 'field' && argument.providerId !== providerId)) && (predicate.name === 'equals' || predicate.name === 'isIncludedIn')) {
+      const valueVar = argument.kind === 'variable' ? argument.name : `${argument.itemVar}.${argument.fieldId}`;
+      return { field: predicate.input.fieldId, operator: predicate.name === 'equals' ? 'equals' : 'in', value: '', valueSource: 'variable', valueVar };
     }
     if (!argument || argument.kind !== 'literal' && argument.kind !== 'reference') return unsupported();
     const value = argument.kind === 'literal' ? argument.value : argument.rowId;

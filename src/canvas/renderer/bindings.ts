@@ -126,6 +126,11 @@ export function applyNodeCmsBindings(
       const field = (ov && 'field' in ov) ? ov.field : node.styleBindings?.find(b => b.styleProp === cssProp)?.field;
       value = field ? getNestedBindingValue(bindingData, field) : undefined;
     }
+    const visibility = node.styleBindings?.find(b => b.styleProp === cssProp)?.visibility;
+    if (visibility && !(ov && 'value' in ov)) {
+      try { el.style.display = formatBoundStyleValue(cssProp, value, visibility); } catch { /* skip invalid */ }
+      continue;
+    }
     if (value !== undefined && value !== null && value !== '') {
       try { (el.style as any)[cssProp] = formatBoundStyleValue(cssProp, value); } catch { /* skip invalid */ }
     } else if (opts.resetEmptyStyleToDefault) {

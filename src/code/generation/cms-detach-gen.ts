@@ -19,7 +19,9 @@ import { getEnclosingMapIteratorForNode } from './map-gen';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { getCollectionSchema } from '@/code/project/cms-ops';
 import { trace } from '@/shared/debug-trace';
-import { applyCmsPropBinding, cmsPropBindingExpression, parseCmsPropBindingStash, serializeCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop-bindings';
+import { applyCmsPropBinding, cmsPropBindingExpression, parseCmsPropBindingStash, serializeCmsPropBindingStash, type CmsPropBinding, type CmsStyleBinding } from '@/shared/cms-prop-bindings';
+import { getNestedValue } from '@/shared/cms-accessor';
+import { setStyleEntryInCode } from './cms-gen';
 import { findFirstElementByDataId, parseJSX } from '../parsing/ast-utils';
 import { readCmsPropBindingExpression } from '../parsing/cms-prop-binding';
 
@@ -89,6 +91,7 @@ function stripDanglingMapAttrs(openTag: string, iterVar: string): string {
 }
 
 export function dormantizeCmsBindings(code: string, nodeId: string, iterVar: string): string {
+  code = dormantizeCmsStyleBinding(code, nodeId, iterVar);
   const tag = findOpeningTag(code, nodeId);
   if (!tag) return code;
   let openTag = code.slice(tag.tagStart, tag.tagEnd + 1);
@@ -197,14 +200,14 @@ export function dormantizeCloneTextBinding(
  *  `__style.<prop>:<field>` (Fill shows "Missing" + re-entry rebinds). The text twin
  *  is {@link dormantizeCloneTextBinding}; both run in buildCanvasCloneDescriptor. */
 export function dormantizeCloneStyleBindings(
-  styleBindings: Array<{ styleProp: string; field: string }> | undefined,
+  styleBindings: CmsStyleBinding[] | undefined,
   styles: Record<string, string>,
   attrs: Record<string, string> | undefined,
 ): { styles: Record<string, string>; attrs: Record<string, string> | undefined } {
   const nextStyles = { ...styles };
   const orphans: string[] = [];
   for (const sb of styleBindings ?? []) {
-    if (nextStyles[sb.styleProp] !== undefined) orphans.push(`__style.${sb.styleProp}:${sb.field}`);
+    if (nextStyles[sb.styleProp] !== undefined) orphans.push(serializeOrphanBindings([{ prop: `__style.${sb.styleProp}`, field: sb.field, ...(sb.visibility ? { visibility: sb.visibility } : {}) }]));
   }
   // Strip ANY `${…}` interpolation from style values (covers url(${item.image}) +
   // bare ${item.field}) so nothing references the out-of-scope iterator.
@@ -279,7 +282,7 @@ export function dormantizeCloneBindings(input: {
   attrs: Record<string, string> | undefined;
   textField?: string;
   attrBindings?: Array<{ property: string; field: string }>;
-  styleBindings?: Array<{ styleProp: string; field: string }>;
+  styleBindings?: CmsStyleBinding[];
   propBindings?: CmsPropBinding[];
 }): { textContent: string | undefined; styles: Record<string, string>; attrs: Record<string, string> | undefined } {
   const t = dormantizeCloneTextBinding(input.textContent, input.attrs, input.textField);
@@ -410,7 +413,12 @@ export function bakeCmsOrphanValuesInCode(code: string, nodeId: string, row: Rec
   let textField: string | null = null;
   let baked = 0;
   for (const e of parseOrphanBindings(stashM[1])) {
-    const raw = row[e.field];
+    const raw = getNestedValue(row, e.field);
+    if (e.visibility) {
+      openTag = setStyleEntryInCode(openTag, nodeId, 'display', JSON.stringify(applyCmsPropBinding(raw, e)));
+      baked++;
+      continue;
+    }
     if (e.transform) {
       const literal = String(applyCmsPropBinding(raw, e));
       if (!new RegExp(`\\s${e.prop}=`).test(openTag)) {
@@ -527,12 +535,13 @@ function dormantizeCmsTextBinding(code: string, nodeId: string, iterVar: string)
 
 /** Merge a single `prop:field` entry into an opening tag's `data-cms-orphan` attr
  *  (last write per prop wins). Returns the new opening-tag string. */
-function mergeOrphanIntoOpenTag(openTag: string, prop: string, field: string): string {
+function mergeOrphanIntoOpenTag(openTag: string, prop: string, field: string, visibility?: CmsStyleBinding['visibility']): string {
   const existing = openTag.match(new RegExp(`\\s${CMS_ORPHAN_ATTR}="([^"]*)"`));
   const merged = existing ? parseOrphanBindings(existing[1]) : [];
   const i = merged.findIndex((e) => e.prop === prop);
-  if (i >= 0) merged[i] = { prop, field };
-  else merged.push({ prop, field });
+  const binding = { prop, field, ...(visibility ? { visibility } : {}) };
+  if (i >= 0) merged[i] = binding;
+  else merged.push(binding);
   const stash = ` ${CMS_ORPHAN_ATTR}="${serializeOrphanBindings(merged)}"`;
   return existing
     ? openTag.replace(existing[0], stash)
@@ -552,7 +561,22 @@ function dormantizeCmsStyleBinding(code: string, nodeId: string, iterVar: string
   if (!tag) return code;
   let openTag = code.slice(tag.tagStart, tag.tagEnd + 1);
   const before = openTag;
-  const stashed: Array<{ cssProp: string; field: string }> = [];
+  const stashed: Array<{ cssProp: string; field: string; visibility?: CmsStyleBinding['visibility'] }> = [];
+
+  const ast = parseJSX(code);
+  if (ast) findFirstElementByDataId(ast, nodeId, (_path, element) => {
+    const style = element.openingElement.attributes.find(attr => attr.type === 'JSXAttribute' && attr.name.type === 'JSXIdentifier' && attr.name.name === 'style');
+    if (style?.type !== 'JSXAttribute' || style.value?.type !== 'JSXExpressionContainer' || style.value.expression.type !== 'ObjectExpression') return;
+    for (const prop of style.value.expression.properties) {
+      if (prop.type !== 'ObjectProperty' || !((prop.key.type === 'Identifier' && prop.key.name === 'display') || (prop.key.type === 'StringLiteral' && prop.key.value === 'display'))) continue;
+      const value = prop.value;
+      if (value.type !== 'ConditionalExpression' || value.consequent.type !== 'StringLiteral' || value.alternate.type !== 'StringLiteral' || value.alternate.value !== 'none') continue;
+      const binding = readCmsPropBindingExpression(value.test, iterVar);
+      if (!binding || binding.urlWrap || prop.start == null || prop.end == null) continue;
+      stashed.push({ cssProp: 'display', field: binding.field, visibility: { display: value.consequent.value, ...(binding.transform ? { transform: binding.transform } : {}) } });
+      openTag = openTag.replace(code.slice(prop.start, prop.end), "display: ''");
+    }
+  });
 
   // Template form first (strips the `${iterVar.field}` interpolation, keeps the rest).
   const tplRe = new RegExp(`([a-zA-Z_$][\\w$]*)\\s*:\\s*\`([^\`]*)\\$\\{\\s*${iterVar}\\.([a-zA-Z_$][\\w$]*)\\s*\\}([^\`]*)\``, 'g');
@@ -568,7 +592,7 @@ function dormantizeCmsStyleBinding(code: string, nodeId: string, iterVar: string
   });
 
   if (!stashed.length || openTag === before) return code;
-  for (const s of stashed) openTag = mergeOrphanIntoOpenTag(openTag, `__style.${s.cssProp}`, s.field);
+  for (const s of stashed) openTag = mergeOrphanIntoOpenTag(openTag, `__style.${s.cssProp}`, s.field, s.visibility);
   trace.action('cms-detach:dormantize-style', { nodeId, iterVar, props: stashed.map((s) => s.cssProp) });
   return code.slice(0, tag.tagStart) + openTag + code.slice(tag.tagEnd + 1);
 }
@@ -730,6 +754,10 @@ export function rehydrateCmsBindings(code: string, nodeId: string): string {
   for (const o of orphans) {
     if (!o.prop.startsWith('__style.')) continue;
     const cssProp = o.prop.slice('__style.'.length);
+    if (o.visibility) {
+      openTag = setStyleEntryInCode(openTag, nodeId, cssProp, cmsPropBindingExpression(dstIter, o));
+      continue;
+    }
     const imgRe = new RegExp(`(${cssProp}\\s*:\\s*\`url\\()\\)`);
     if (imgRe.test(openTag)) {
       openTag = openTag.replace(imgRe, `$1\${${dstIter}.${o.field}})`);

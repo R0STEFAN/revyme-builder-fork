@@ -22,6 +22,7 @@ import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import type { CanvasNode } from '@/code/parsing/parser';
 import { trace } from '@/shared/debug-trace';
 import { applyCmsPropBinding, type CmsPropBinding } from '@/shared/cms-prop-bindings';
+import { getNestedValue } from '@/shared/cms-accessor';
 
 /**
  * Resolved CMS field values for a node inside a collection-list `.map()`,
@@ -38,7 +39,7 @@ export function resolveCmsRowValues(node: CanvasNode, nodes: Map<string, CanvasN
   const bindings: CmsPropBinding[] = [
     ...(node.binding?.property === 'text' ? [{ prop: '__text', field: node.binding.field }] : []),
     ...(node.attrBindings ?? []).map(b => ({ prop: b.property, field: b.field })),
-    ...(node.styleBindings ?? []).map(b => ({ prop: `__style.${b.styleProp}`, field: b.field })),
+    ...(node.styleBindings ?? []).map(b => ({ prop: `__style.${b.styleProp}`, field: b.field, ...(b.visibility ? { visibility: b.visibility } : {}) })),
     ...(node.propBindings ?? []),
   ];
   if (bindings.length === 0) return {};
@@ -82,7 +83,7 @@ export function resolveCmsRowValues(node: CanvasNode, nodes: Map<string, CanvasN
 
   const values: Record<string, string> = {};
   for (const b of bindings) {
-    const v = applyCmsPropBinding(row[b.field], b);
+    const v = applyCmsPropBinding(getNestedValue(row, b.field), b);
     if (v != null && v !== '') values[b.prop] = String(v);
   }
   trace.action('cms-detach:row-values-resolved', { nodeId: node.id, source: source ?? 'detail-page', props: Object.keys(values) });

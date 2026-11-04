@@ -6,7 +6,7 @@ import _traverse from '@babel/traverse';
 import type { JSXElement, JSXAttribute, JSXExpressionContainer, ObjectExpression, ObjectProperty, StringLiteral, NumericLiteral, JSXText } from '@babel/types';
 import { isTruthy, evaluate } from '@/code/values/value-eval';
 import { trace } from '@/shared/debug-trace';
-import { parseCmsPropBindingStash, type CmsPropBinding } from '@/shared/cms-prop-bindings';
+import { parseCmsPropBindingStash, type CmsPropBinding, type CmsStyleBinding } from '@/shared/cms-prop-bindings';
 import { readCmsPropBindingExpression } from './cms-prop-binding';
 import { isSvgTag, isCustomDataAttr } from '@/shared/constants';
 import { cleanJsxText } from '@/shared/jsx-whitespace';
@@ -528,10 +528,7 @@ export interface CanvasNode {
     property: 'src' | 'href' | 'alt';
   }>;
   // Style bindings: style properties bound to map data fields (e.g. backgroundColor: item.bgColor)
-  styleBindings?: Array<{
-    styleProp: string;        // CSS property in camelCase ('backgroundColor', 'borderRadius')
-    field: string;            // data field name ('bgColor', 'radius')
-  }>;
+  styleBindings?: CmsStyleBinding[];
   // Prop bindings: component props bound to map data fields (e.g. endValue={item.value})
   propBindings?: CmsPropBinding[];
   // Detached prop bindings retain their transform for re-entry into a list.
@@ -4038,6 +4035,7 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
   if (!arg || (arg.type !== 'ArrowFunctionExpression' && arg.type !== 'FunctionExpression')) return null;
   const body = arg.body;
   if (!body) return null;
+  const filterParam = arg.params?.[0]?.type === 'Identifier' ? arg.params[0].name : 'item';
 
   const filters: import('@/shared/types').FilterConfig[] = [];
   let combinator: 'and' | 'or' = 'and';
@@ -4167,8 +4165,25 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
       }
       cur = cur.object;
     }
-    if (cur && cur.type === 'Identifier' && cur.name === 'item' && parts.length > 0) {
+    if (cur && cur.type === 'Identifier' && cur.name === filterParam && parts.length > 0) {
       return parts.join('.');
+    }
+    return null;
+  }
+
+  function extractVarPathFromNode(node: any): string | null {
+    const n = unwrapStringCoerce(node);
+    if (!n) return null;
+    if (n.type === 'Identifier') return n.name !== filterParam && n.name !== 'params' ? n.name : null;
+    const parts: string[] = [];
+    let cur = n;
+    while (cur && (cur.type === 'MemberExpression' || cur.type === 'OptionalMemberExpression')) {
+      if (cur.computed || cur.property?.type !== 'Identifier') return null;
+      parts.unshift(cur.property.name);
+      cur = cur.object;
+    }
+    if (cur?.type === 'Identifier' && cur.name !== filterParam && cur.name !== 'params' && parts.length > 0) {
+      return `${cur.name}.${parts.join('.')}`;
     }
     return null;
   }
@@ -4242,7 +4257,8 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
       };
       const op = opMap[n.operator];
       if (!op) return null;
-      if (v?.type === 'Identifier' && (n.operator === '===' || n.operator === '!==')) return { field, operator: op, value: '', valueSource: 'variable', valueVar: v.name };
+      const rhsVar = extractVarPathFromNode(v);
+      if (rhsVar && (n.operator === '===' || n.operator === '!==')) return { field, operator: op, value: '', valueSource: 'variable', valueVar: rhsVar };
       return { field, operator: op, value };
     }
     return null;
@@ -4288,10 +4304,15 @@ function parseFilterCallback(arg: any): import('@/shared/types').FilterGroup | n
     const setExpression = negated ? n.argument : n;
     if (setExpression?.type === 'LogicalExpression' && setExpression.operator === '&&') {
       const guard = setExpression.left, includes = setExpression.right;
-      if (guard?.type === 'CallExpression' && guard.callee?.type === 'MemberExpression' && guard.callee.object?.name === 'Array' && guard.callee.property?.name === 'isArray' && guard.arguments?.length === 1 && guard.arguments[0]?.type === 'Identifier' &&
-          includes?.type === 'CallExpression' && includes.callee?.type === 'MemberExpression' && includes.callee.object?.type === 'Identifier' && includes.callee.object.name === guard.arguments[0].name && includes.callee.property?.name === 'includes' && includes.arguments?.length === 1) {
+      const guardVar = guard?.type === 'CallExpression' && guard.callee?.type === 'MemberExpression' && guard.callee.object?.name === 'Array' && guard.callee.property?.name === 'isArray' && guard.arguments?.length === 1
+        ? extractVarPathFromNode(guard.arguments[0])
+        : null;
+      const includesVar = includes?.type === 'CallExpression' && includes.callee?.type === 'MemberExpression' && includes.callee.property?.name === 'includes' && includes.arguments?.length === 1
+        ? extractVarPathFromNode(includes.callee.object)
+        : null;
+      if (guardVar && guardVar === includesVar) {
         const field = extractFieldPathFromNode(includes.arguments[0]);
-        if (field) return { field, operator: negated ? 'not_in' : 'in', value: '', valueSource: 'variable', valueVar: guard.arguments[0].name };
+        if (field) return { field, operator: negated ? 'not_in' : 'in', value: '', valueSource: 'variable', valueVar: guardVar };
       }
     }
     if (n?.type !== 'LogicalExpression' || n.operator !== '||') return null;
@@ -4634,8 +4655,8 @@ function parseComputedResponsiveAttr(expr: any, overlayState?: string): { litera
 }
 
 /** Detect item.field references inside style={{ ... }} for .map() style bindings. */
-function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): Array<{ styleProp: string; field: string }> {
-  const bindings: Array<{ styleProp: string; field: string }> = [];
+function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): CmsStyleBinding[] {
+  const bindings: CmsStyleBinding[] = [];
   for (const attr of attrs) {
     if (attr.type !== 'JSXAttribute' || attr.name?.name !== 'style') continue;
     if (attr.value?.type !== 'JSXExpressionContainer') continue;
@@ -4652,6 +4673,17 @@ function extractStyleBindings(attrs: (JSXAttribute | any)[], itemVar: string): A
         const directMemberPath = extractItemMemberPath(prop.value, itemVar);
         if (directMemberPath) {
           bindings.push({ styleProp: key, field: directMemberPath });
+          continue;
+        }
+      } else if (
+        key === 'display'
+        && prop.value.consequent?.type === 'StringLiteral'
+        && prop.value.alternate?.type === 'StringLiteral'
+        && prop.value.alternate.value === 'none'
+      ) {
+        const parsed = readCmsPropBindingExpression(prop.value.test, itemVar);
+        if (parsed && !parsed.urlWrap) {
+          bindings.push({ styleProp: 'display', field: parsed.field, visibility: { display: prop.value.consequent.value, ...(parsed.transform ? { transform: parsed.transform } : {}) } });
           continue;
         }
       }
@@ -4914,6 +4946,14 @@ function extractStyles(attrs: (JSXAttribute | any)[], ctx: ParseCtx): { styles: 
             : cursor?.type === 'NumericLiteral' ? String((cursor as any).value) : null;
           if (bm === null) continue;
           value = `mqvars:${bm}` + segs.map((s) => `||${s}`).join('');
+        }
+        else if (
+          key === 'display'
+          && cond.consequent?.type === 'StringLiteral'
+          && cond.alternate?.type === 'StringLiteral'
+          && cond.alternate.value === 'none'
+        ) {
+          value = cond.consequent.value;
         }
         else continue;
       }

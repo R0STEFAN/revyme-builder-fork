@@ -2,7 +2,7 @@ import { normalizeTransparent } from '../../../shared/css-utils';
 import { trace } from '../../../shared/debug-trace';
 import { simulatedVpHeight } from '../../../shared/responsive-units';
 import { sourceRecord } from './source-graph';
-import { sourceRotationLoop, sourceMountEffects } from './effects';
+import { sourceFlowEffect, sourceRotationLoop, sourceMountEffects } from './effects';
 import { parseSourceGoogleFont } from './fonts';
 import type { ResolvedSourceNode, SourceGraph, TransferDiagnostic } from './types';
 
@@ -16,6 +16,7 @@ export interface SourceMappingContext {
   assets?: Record<string, string>;
   supportedLoops?: boolean;
   supportedMountEffects?: boolean;
+  supportedFlowEffects?: boolean;
   supportedForms?: boolean;
 }
 
@@ -57,7 +58,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   const mount = context.supportedMountEffects && sourceMountEffects(p);
   // These are active source behaviors, not decorative metadata; never drop them.
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'appearEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
-    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key)) && !(key === 'isFormContainer' && context.supportedForms && node.kind === 'FrameNode')) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key)) && !(key === 'flowEffectEnabled' && context.supportedFlowEffects && sourceFlowEffect(p)) && !(key === 'isFormContainer' && context.supportedForms && node.kind === 'FrameNode')) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   for (const key of ['boxShadows', 'pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');

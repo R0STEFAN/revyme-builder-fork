@@ -10,6 +10,8 @@
 //     pages — same parser shape as a .map() template, same formatting
 //     needs at apply time)
 
+import { applyCmsPropBinding, type CmsStyleBinding } from '@/shared/cms-prop-bindings';
+
 /** URL-bearing CSS properties that need `url("...")` wrapping. */
 const URL_WRAPPED_STYLE_PROPS = new Set([
   'backgroundImage',
@@ -23,7 +25,8 @@ const URL_WRAPPED_STYLE_PROPS = new Set([
 /** Format a CMS-bound style value for the given style property. Wraps in
  *  `url("...")` for URL-bearing props if the value isn't already wrapped.
  *  Other props pass through as a plain string. */
-export function formatBoundStyleValue(styleProp: string, raw: unknown): string {
+export function formatBoundStyleValue(styleProp: string, raw: unknown, visibility?: CmsStyleBinding['visibility']): string {
+  if (visibility) return applyCmsPropBinding(raw, visibility) ? visibility.display : 'none';
   const s = String(raw);
   if (URL_WRAPPED_STYLE_PROPS.has(styleProp) && !/^url\(/i.test(s.trim())) {
     return `url("${s.replace(/"/g, '\\"')}")`;

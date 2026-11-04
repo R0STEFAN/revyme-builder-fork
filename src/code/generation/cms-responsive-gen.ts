@@ -32,8 +32,7 @@ import {
   findClosingTag,
   COLLECTION_MAP_CALL_RE,
   findCollectionChainHead,
-  buildFilterExpression,
-  buildSortKeyExpr,
+  buildChainCode,
   insertConstIntoEnclosingFn,
 } from './cms-gen';
 
@@ -221,16 +220,7 @@ function buildSliceSuffix(opts: WriteListConfigOpts): string {
 
 /** Inline `.filter(...).sort(...)` for the DOWNGRADE path (no overrides → plain chain). */
 function buildInlineFilterSort(base: ListConfigDims): string {
-  let s = '';
-  if (base.filterGroup && base.filterGroup.filters.length > 0) {
-    s += `.filter(item => ${buildFilterExpression(base.filterGroup)})`;
-  }
-  const keys = base.sort ?? [];
-  if (keys.length > 0) {
-    if (!base.filterGroup?.filters.length) s += '.slice()';
-    s += `.sort((a, b) => ${keys.map(k => buildSortKeyExpr(k.field, k.direction)).join(' || ')})`;
-  }
-  return s;
+  return buildChainCode('rows', base.filterGroup ?? undefined, base.sort).slice('rows'.length);
 }
 
 /** Insert a `const`/hook line at the top of the function body that ENCLOSES the
@@ -278,7 +268,7 @@ function variableFilterArgs(cfg: ResponsiveListConfig): string {
   const names = new Set<string>();
   for (const dims of [cfg.base, ...Object.values(cfg.viewport), ...Object.values(cfg.variants)]) for (const filter of dims.filterGroup?.filters ?? []) {
     if (filter.valueSource !== 'variable') continue;
-    if (!filter.valueVar || !/^[A-Za-z_$][\w$]*$/.test(filter.valueVar)) throw new Error('CMS_FILTER_VARIABLE_INVALID');
+    if (!filter.valueVar || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(filter.valueVar)) throw new Error('CMS_FILTER_VARIABLE_INVALID');
     names.add(filter.valueVar);
   }
   return names.size ? `, {${[...names].sort().map(name => `${JSON.stringify(name)}: ${name}`).join(', ')}}` : '';

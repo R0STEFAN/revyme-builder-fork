@@ -21,6 +21,7 @@ import { trace } from '@/shared/debug-trace';
 import { isSvgTag, isTextTag } from '@/shared/constants';
 import { formattedBranchesOfDangerAttr } from '@/shared/rich-message';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { cmsItemVarForPath } from './checks/cms-safe-text';
 import { parseComponentCursorCalls } from '@/code/parsing/cursor-parser';
 import { parseCodeComponentDefaultSize, parseComponentControlsMeta, hasComponentControls, CONTROL_TYPES } from '@/code/components/controls-parser';
 import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
@@ -984,6 +985,7 @@ export function checkFile(
             // per-instance toggle the builder resolves when it expands the
             // master — not someone hiding with CSS.
             booleanProps: fileBooleanProps,
+            cmsItemVar: cmsItemVarForPath(path, isCmsDetail),
             // The bg-video child is builder-authored and not a canvas node, so the
             // Position tool never edits its pins — `inset: '0'` is the correct
             // spelling for "fill my parent" there (Renderer.syncBgVideoChild).

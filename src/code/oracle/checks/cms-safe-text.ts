@@ -1,6 +1,36 @@
 // Recognize the builder's editable CMS text formatter in its CMS scope.
 import * as t from '@babel/types';
 import type { NodePath } from '@babel/traverse';
+import { readCmsPropBindingExpression } from '../../parsing/cms-prop-binding';
+
+export function cmsItemVarForPath(path: NodePath, detailPage: boolean): string | undefined {
+  const callback = path.findParent(p => {
+    const parent = p.parentPath;
+    return (p.isArrowFunctionExpression() || p.isFunctionExpression()) && !!parent?.isCallExpression() &&
+      t.isMemberExpression(parent.node.callee) && t.isIdentifier(parent.node.callee.property, { name: 'map' });
+  });
+  if (callback && (callback.isArrowFunctionExpression() || callback.isFunctionExpression())) {
+    const call = callback.parentPath;
+    if (!call.isCallExpression() || !t.isMemberExpression(call.node.callee)) return;
+    let source: t.Node = call.node.callee.object;
+    while (t.isCallExpression(source)) {
+      if (t.isMemberExpression(source.callee)) source = source.callee.object;
+      else if (t.isIdentifier(source.callee) && ['localizeRows', '__applyListConfig'].includes(source.callee.name) && t.isExpression(source.arguments[0])) source = source.arguments[0];
+      else return;
+    }
+    const binding = t.isIdentifier(source) ? call.scope.getBinding(source.name) : undefined;
+    const declaration = binding?.path.parentPath;
+    if (!binding?.path.isImportDefaultSpecifier() || !declaration?.isImportDeclaration() || !/^@\/cms\/[^/]+\.json$/.test(declaration.node.source.value)) return;
+    return t.isIdentifier(callback.node.params[0]) ? callback.node.params[0].name : undefined;
+  }
+  return detailPage ? 'item' : undefined;
+}
+
+export function isSafeCmsVisibility(expr: t.Node, itemVar?: string): boolean {
+  if (!itemVar || !t.isConditionalExpression(expr) || !t.isStringLiteral(expr.consequent) || !t.isStringLiteral(expr.alternate, { value: 'none' })) return false;
+  const binding = readCmsPropBindingExpression(expr.test, itemVar);
+  return !!binding && !binding.urlWrap;
+}
 
 export function isSafeCmsText(expr: t.Node, path: NodePath, detailPage: boolean): boolean {
   if (!t.isConditionalExpression(expr) || !t.isCallExpression(expr.alternate) ||

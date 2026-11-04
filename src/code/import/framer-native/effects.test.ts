@@ -1,7 +1,15 @@
 import { expect, it } from 'vitest';
-import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec, sourceMountEffects, sourceGlobalPageEffect } from './effects';
+import { assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec, sourceMountEffects, sourceGlobalPageEffect, sourceFlowEffect } from './effects';
 import { buildSourceGraph } from './source-graph';
 import type { NativeTransfer } from './types';
+
+it('maps enabled Flow effects to native Glide timing and rejects unknown active settings', () => {
+  const source = { flowEffectEnabled: true, flowEffectTransition: { type: 'spring', durationBasedSpring: false, damping: 60, stiffness: 500, mass: 1 } };
+  expect(sourceFlowEffect(source)).toEqual({ transition: { type: 'spring', damping: '60', stiffness: '500', mass: '1' } });
+  expect(sourceFlowEffect({ ...source, flowEffectEnabled: false, flowEffectOther: true })).toBeUndefined();
+  expect(() => sourceFlowEffect({ flowEffectEnabled: true })).toThrow(/transition/i);
+  expect(() => sourceFlowEffect({ ...source, flowEffectOther: true })).toThrow(/unsupported/i);
+});
 
 it('reads separate on-mount entry and exit settings without substituting the legacy appearance values', () => {
   const p = { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, styleAppearEffectScale: 0.5, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectScale: 1, enterEffectTransition: { type: 'tween', duration: 1.5, delay: 0.1, ease: [0.6, 0.2, 0, 1], stagger: 0.05 }, exitEffectEnabled: true, exitEffectOpacity: 0, exitEffectY: 200, exitEffectTransition: { type: 'tween', duration: 0.8, delay: 0.3 } };

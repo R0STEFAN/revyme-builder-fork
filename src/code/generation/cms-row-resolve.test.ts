@@ -127,6 +127,17 @@ describe('resolveCmsRowValues — detail ([slug]) page', () => {
     });
   });
 
+  it('resolves copied visibility to CSS rather than the raw boolean or file value', () => {
+    store.set(cmsPageMetaAtom, { kind: 'detail', collection: 'collection-1' });
+    store.set(activePreviewItemAtom, { visible: false, cover: [] });
+    const visible = { ...boundNode, binding: undefined, styleBindings: [{ styleProp: 'display', field: 'visible', visibility: { display: 'flex' } }] };
+    const present = { ...boundNode, binding: undefined, styleBindings: [{ styleProp: 'display', field: 'cover', visibility: { display: 'grid', transform: 'isSet' as const } }] };
+    expect(resolveCmsRowValues(visible, nodes)).toEqual({ '__style.display': 'none' });
+    expect(resolveCmsRowValues(present, nodes)).toEqual({ '__style.display': 'none' });
+    store.set(activePreviewItemAtom, { cover: false });
+    expect(resolveCmsRowValues(present, nodes)).toEqual({ '__style.display': 'grid' });
+  });
+
   test('a page that is NOT a detail page still resolves nothing', () => {
     store.set(cmsPageMetaAtom, null);
     store.set(activePreviewItemAtom, { untitled: 'Body' });

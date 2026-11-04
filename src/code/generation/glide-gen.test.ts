@@ -20,6 +20,24 @@ const FAQ_LIST = `export default function Page() {
 
 const SPEC = { transition: { type: 'spring', duration: '0.5', bounce: '0.25', delay: '0' } };
 
+test('a CMS-hidden child also removes its Glide wrapper from layout before and after healing', () => {
+  const code = `export default function Page({ item }) { return <div data-id="list" style={{ display: 'flex', gap: '20px' }}><div data-id="photo" style={{ display: item.visible ? 'grid' : 'none' }}>Photo</div></div>; }`;
+  const added = setGlideInCode(code, 'list', SPEC);
+  for (const output of [added, healGlideItemWrappers(added)]) {
+    const ast = parse(output, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    const page = ast.program.body.find(n => n.type === 'ExportDefaultDeclaration') as any;
+    const container = page.declaration.body.body[0].argument;
+    const group = container.children.find((n: any) => n.type === 'JSXElement');
+    const wrapper = group.children.find((n: any) => n.type === 'JSXElement');
+    const style = wrapper.openingElement.attributes.find((a: any) => a.name?.name === 'style').value.expression;
+    const display = style.properties.find((p: any) => p.key.name === 'display')?.value;
+    expect(display).toBeDefined();
+    const resolve = new Function('item', `return (${output.slice(display.start, display.end)})`);
+    expect(resolve({ visible: false })).toBe('none');
+    expect(resolve({ visible: true })).toBe('block');
+  }
+});
+
 describe('glide-gen — add', () => {
   const out = setGlideInCode(FAQ_LIST, 'faq-list', SPEC);
 

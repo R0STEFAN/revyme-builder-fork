@@ -1,4 +1,81 @@
-# Framer native transfer — continuation checkpoint, 2026-11-03
+# Framer native transfer — continuation checkpoint, 2026-11-04
+
+## Current continuation — 2026-11-04 (parent `c549d35`)
+
+This section supersedes the historical status below. The Orca hint stopped at
+`bc3bb36`, but the original session continued through `06355d1` and `c549d35`,
+then left **9 modified files**. The inherited importer suite passed 284 tests;
+the inherited TypeScript check failed on two visibility-binding narrowing errors.
+Those edits have now been completed and verified as one coherent adapter slice.
+The full Framer import plan remains **pending completion**; no complete project
+import or visual/source parity is claimed.
+
+### Completed in this continuation
+
+- CMS boolean and canonical `isSet` visibility now retain their distinct semantics
+  through source generation, parsing, detail-page and collection preview, copying,
+  detach/bake and re-entry. A missing field on the next previewed record hides the
+  node correctly. Plain CSS display bindings and responsive unbind literals keep
+  working. Visibility metadata is retained in the native orphan stash.
+- Enclosing detail-record fields can drive native list equality/membership
+  filters. Filter iterators avoid shadowing those variables, including mixed
+  static/dynamic predicates and downgrade from responsive configuration. Detail
+  preview resolves base, responsive and variant filter values without modifying
+  the parser cache. Existing CMS import aliases are reused.
+- Framer `flowEffectEnabled`/`flowEffectTransition` map to native Glide. Hidden
+  children also hide their layout wrappers, including after healing. CSS-only
+  breakpoint visibility on direct Glide children remains an explicit adapter
+  error because native wrapper media-rule propagation is not implemented.
+- Oracle accepts only exact parser-readable CMS visibility expressions within
+  an actual CMS map or detail-page scope. Arbitrary logical predicates, helper
+  calls and unrelated array maps remain rejected; no validation bypass was added.
+- Regression tests cover published expression results, whole-page Oracle
+  validation, responsive filter editing, preview changes and detach/clone round
+  trips. Independent review found three issues, each reproduced and fixed; its
+  final recheck reported no remaining Important findings.
+
+### Verification and baseline
+
+- Final focused suite: **99 test files / 1650 tests passed**. This includes native
+  Framer import and submit, CMS generators/parser/preview/detach, Glide and Oracle;
+  the known-failing `sections-blueprints.test.ts` is explicitly excluded.
+- `npx tsc --noEmit`: **0 errors**. `npm run build`: passed, with existing build
+  warnings about bundle sizes, browser externalization, direct eval and imports.
+- A full `npx vitest run` before the final review fixes reported **15689 passed,
+  68 failed, 36 skipped, 5 todo** across **1123 files**. All 68 failing cases were
+  reproduced by running their 20 files against a pristine archive of `c549d35`:
+  **current-only failures: 0; baseline-only failures: 0**. The full suite is not
+  green. Final fixes were verified with the affected suite above.
+- Detailed commands/results, all failing case names, the baseline comparison and
+  the source audit are retained in the ignored plan workspace under
+  `.superpowers/sdd/2026-11-01-framer-editor-native-transfer/codex-resume-*`.
+
+### Exact remaining work (pending)
+
+1. **`j0BXZ81Wn` (`/blog/[slug]`)**: visibility, related-record filtering and Flow
+   no longer block the isolated page audit. The next blockers are live CMS image
+   fills (`fillImage` variable references, starting at `eBHcHKg5W`) and intrinsic
+   fit-image sizing (`heightType: 5` with no captured pixel dimensions/aspect ratio,
+   starting at `h2m_SJ5VH`). The audit currently returns 39 diagnostics across these
+   image nodes, including the final aggregate diagnostic. Preserve dynamic image
+   semantics; do not bake one record's URL or dimensions.
+2. **`HHDTVO_oW` (`/works`)**: declare the optional page reference variable
+   `XRE0xiPqt` (`Category`, collection `DwP_tmnNO`) and preserve its use in
+   `LLVrpIqCM`'s filter. Do not guess how an unset optional reference behaves.
+3. **Design master `GInvxXvf2`**: per-state controls on instance `Lw_yKEUUO` remain
+   an explicit native conditional-prop adapter gap. The earlier historical claim
+   that every design master passed was too strong.
+4. **Fresh source capture**: the saved `0.1.6` capture lacks active cursor master
+   `jsUV7E_LN` referenced by `Fculmw_Oh`; reader `0.1.7` includes the closure fix,
+   but a fresh complete live capture is still needed for full-project acceptance.
+5. **Plan Tasks 8–10**: selection/replace placement modes, final reader packaging
+   and browser/full-project acceptance remain pending.
+
+The diagnostic audit still compiles four isolated page bodies (`/`, `/about`,
+`/contact`, `/404`) with zero diagnostics. It uses mock uploaded-media URLs,
+stubs sibling page bodies and removes the known missing cursor reference **only
+in memory** to inspect downstream adapters. It is not evidence of a complete
+project import, acquired media, destination persistence or browser parity.
 
 ## Continuation checkpoint — 2026-11-03 (HEAD `61a30a0`)
 

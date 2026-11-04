@@ -24,6 +24,7 @@
 // findMatchingCloseTagIndex from generator-utils (no duplication).
 
 import { trace } from '@/shared/debug-trace';
+import { parseExpression } from '@babel/parser';
 import { ensureMotionTag, getOpeningTag } from './generator-motion';
 import { findMatchingCloseTagIndex, insertAfterLastImportLine, getJsonAttr } from './generator-utils';
 
@@ -112,6 +113,19 @@ function styleBodyOf(openTag: string): string {
 function extractStyleVal(styleBody: string, prop: string): string | null {
   const m = styleBody.match(new RegExp(`\\b${prop}\\s*:\\s*('[^']*'|"[^"]*"|[^,}]+)`));
   return m ? m[1].trim() : null;
+}
+
+/** A hidden child must not leave an empty flex/grid item and its gap behind. */
+function wrapperVisibility(styleBody: string): string | null {
+  const display = extractStyleVal(styleBody, 'display');
+  if (!display) return null;
+  try {
+    const expr = parseExpression(display);
+    if (expr.type === 'ConditionalExpression' && expr.consequent.type === 'StringLiteral' && expr.alternate.type === 'StringLiteral' && expr.alternate.value === 'none') {
+      return `(${display.slice(expr.test.start!, expr.test.end!)}) ? '${expr.consequent.value === 'none' ? 'none' : 'block'}' : 'none'`;
+    }
+  } catch { /* Other display expressions are not visibility toggles. */ }
+  return null;
 }
 
 // ─── children walking ─────────────────────────────────────────────────────────
@@ -265,6 +279,8 @@ function applyGlide(code: string, nodeId: string, spec: GlideSpec): string {
       const styleParts = [`order: ${order}`, `flex: ${flex}`];
       if (width) styleParts.push(`width: ${width}`);
       if (alignSelf) styleParts.push(`alignSelf: ${alignSelf}`);
+      const display = wrapperVisibility(sb);
+      if (display) styleParts.push(`display: ${display}`);
       const wrapper =
         `<motion.div data-glide-item layout transition={${transBody}} style={{ ${styleParts.join(', ')} }}>` +
         childText + `</motion.div>`;
@@ -499,6 +515,7 @@ export function syncEnclosingGlideItem(
   nodeId: string,
   styleChanges: Record<string, string>
 ): string {
+  if ('display' in styleChanges) return healGlideItemWrappers(code);
   const hasRelevant = GLIDE_SYNC_KEYS.some((k) => k in styleChanges);
   if (!hasRelevant) return code;
 
@@ -596,6 +613,8 @@ export function healGlideItemWrappers(code: string): string {
       const parts = [`order: ${childOrder}`, `flex: ${childFlex}`];
       if (childWidth) parts.push(`width: ${childWidth}`);
       if (childAlignSelf) parts.push(`alignSelf: ${childAlignSelf}`);
+      const display = wrapperVisibility(childSb);
+      if (display) parts.push(`display: ${display}`);
       const targetStyleBody = parts.join(', ');
 
       const wrapperSb = styleBodyOf(match.tag);

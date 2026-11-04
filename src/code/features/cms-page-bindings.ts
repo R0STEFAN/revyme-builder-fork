@@ -135,6 +135,11 @@ export function applyDetailPageBindings(
     if (node.styleBindings) {
       for (const sb of node.styleBindings) {
         const rawVal = getNestedValue(item, sb.field);
+        if (sb.visibility) {
+          if (!cloned) cloned = { ...node };
+          cloned.styles = { ...cloned.styles, display: formatBoundStyleValue(sb.styleProp, rawVal, sb.visibility) };
+          continue;
+        }
         if (rawVal === undefined) continue;
         const resolved = formatBoundStyleValue(sb.styleProp, (rawVal as any) ?? '');
         if (!cloned) cloned = { ...node };
@@ -154,16 +159,40 @@ export function applyDetailPageBindings(
     if (node.orphanBindings) {
       for (const ob of node.orphanBindings) {
         const rawVal = getNestedValue(item, ob.field);
-        if (rawVal === undefined) continue;
+        if (rawVal === undefined && !ob.visibility) continue;
         if (!cloned) cloned = { ...node };
         if (ob.prop === '__text') {
           cloned.textContent = formatTextValue(rawVal);
         } else if (ob.prop.startsWith('__style.')) {
           const cssProp = ob.prop.slice('__style.'.length);
-          cloned.styles = { ...cloned.styles, [cssProp]: formatBoundStyleValue(cssProp, (rawVal as any) ?? '') };
+          cloned.styles = { ...cloned.styles, [cssProp]: formatBoundStyleValue(cssProp, (rawVal as any) ?? '', ob.visibility) };
         } else {
           cloned.attrs = { ...cloned.attrs, [ob.prop]: formatAttrValue(rawVal) };
         }
+      }
+    }
+
+    if (node.collectionList) {
+      const resolveFilterGroup = (fg: import('@/shared/types').FilterGroup | null | undefined) => {
+        if (!fg?.filters.some(f => f.valueSource === 'variable' && f.valueVar?.startsWith('item.'))) return fg;
+        return {
+          ...fg,
+          filters: fg.filters.map(f => f.valueSource === 'variable' && f.valueVar?.startsWith('item.')
+            ? { ...f, value: getNestedValue(item, f.valueVar.slice('item.'.length)) }
+            : f),
+        };
+      };
+      const resolveConfig = <T extends { filterGroup?: import('@/shared/types').FilterGroup | null }>(config: T): T => {
+        const filterGroup = resolveFilterGroup(config.filterGroup);
+        return filterGroup === config.filterGroup ? config : { ...config, filterGroup };
+      };
+      const list = node.collectionList;
+      const next = resolveConfig(list);
+      const responsive = Object.fromEntries(Object.entries(list.responsive ?? {}).map(([key, config]) => [key, resolveConfig(config)]));
+      const variantConfigs = Object.fromEntries(Object.entries(list.variantConfigs ?? {}).map(([key, config]) => [key, resolveConfig(config)]));
+      if (next !== list || Object.keys(responsive).some(key => responsive[Number(key)] !== list.responsive?.[Number(key)]) || Object.keys(variantConfigs).some(key => variantConfigs[key] !== list.variantConfigs?.[key])) {
+        if (!cloned) cloned = { ...node };
+        cloned.collectionList = { ...next, ...(list.responsive ? { responsive } : {}), ...(list.variantConfigs ? { variantConfigs } : {}) };
       }
     }
 

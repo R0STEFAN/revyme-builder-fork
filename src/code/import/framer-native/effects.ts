@@ -3,6 +3,7 @@ import { ensureTransformTemplateInCode, setMotionPropScopedValue, updateMotionPr
 import { emitObj } from '../../generation/generator-motion-compose';
 import { composeLoopInCode, setLoopInCode } from '../../generation/generator-motion-loop';
 import { ensureNamedImport } from '../../generation/generator-utils';
+import type { GlideSpec } from '../../generation/glide-gen';
 import { createDefaultSide, DEFAULT_BEZIER, type PageEffect, type SideConfig, type TransitionConfig } from '../../project/page-effects-config';
 import { sourceRecord } from './source-graph';
 import { trace } from '../../../shared/debug-trace';
@@ -141,6 +142,16 @@ export function sourceTransitionSpec(value: unknown): Record<string, string> | u
     else throw new Error('Unsupported source easing');
   }
   return output;
+}
+
+export function sourceFlowEffect(p: SourceProperties): GlideSpec | undefined {
+  if (p.flowEffectEnabled !== true) return;
+  trace.fn('framer-native.sourceFlowEffect');
+  const known = new Set(['flowEffectEnabled', 'flowEffectTransition']);
+  if (Object.keys(p).some(key => key.startsWith('flowEffect') && !known.has(key))) throw new Error('Unsupported source flowEffect setting');
+  const transition = sourceTransitionSpec(p.flowEffectTransition);
+  if (!transition) throw new Error('Missing source flowEffectTransition');
+  return { transition };
 }
 
 export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {

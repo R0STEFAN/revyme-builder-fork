@@ -4,7 +4,7 @@
 // All code moved VERBATIM from check-file.ts (Phase 7.1 god-file split).
 
 import * as t from '@babel/types';
-import { isSafeCmsText } from './cms-safe-text';
+import { isSafeCmsText, isSafeCmsVisibility, cmsItemVarForPath } from './cms-safe-text';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, hasAttr, isCodeComponentSource } from './shared';
 import type { OracleViolation } from './shared';
 import { isTogglePropTernary } from './style-object';
@@ -102,7 +102,7 @@ function checkUnresolvableTernary(ast: t.File, v: OracleViolation[], isCmsDetail
       const val = path.node.value;
       if (val?.type !== 'JSXExpressionContainer' || !t.isObjectExpression(val.expression)) return;
       for (const prop of val.expression.properties) {
-        if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key, { name: 'display' }) || t.isStringLiteral(prop.key, { value: 'display' })) && isTogglePropTernary(prop.value, templateBooleanProps)) continue;
+        if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key, { name: 'display' }) || t.isStringLiteral(prop.key, { value: 'display' })) && (isTogglePropTernary(prop.value, templateBooleanProps) || isSafeCmsVisibility(prop.value, cmsItemVarForPath(path, isCmsDetail)))) continue;
         if (t.isObjectProperty(prop) && t.isConditionalExpression(prop.value) && isValueTernary(prop.value)) {
           flag(prop.loc?.start.line, 'a style value');
         }

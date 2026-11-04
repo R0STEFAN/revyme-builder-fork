@@ -16,6 +16,8 @@ import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { hasMountPresenceMotion } from '../../../editor/tools/AnimationTool/appear-utils';
+import { sourceVariableKey } from './source-graph';
+import { applyDetailPageBindings } from '../../features/cms-page-bindings';
 
 function input(): NativeTransfer {
   const label = { id: 'heading', __class: 'RichTextNode', parentid: 'desktop', children: [], html: '<h1>Привіт</h1>' };
@@ -29,6 +31,33 @@ function emit(transfer = input(), paths = new Set<string>()) {
   const graph = buildSourceGraph(transfer), identity = allocateTargetIdentity(graph, paths);
   return { result: emitNativePages(graph, identity, { existingPaths: paths }), identity };
 }
+it('rejects CSS-only responsive child visibility inside Flow instead of leaving an empty layout wrapper', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  Object.assign(states[0], { flowEffectEnabled: true, flowEffectTransition: { type: 'tween', duration: 0.4 } });
+  states[1].replicaInfo.overrides.heading.visible = false;
+  expect(emit(source).result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/flow.*visibility|visibility.*flow/i) }));
+});
+it('imports CMS detail visibility, enclosing-item filters and flow layout as native editable code', () => {
+  const source = input(), page = source.definitions[0].data, states = page.children as Record<string, any>[];
+  page.dataIdentifier = 'local-module:collection/posts:default';
+  page.pagePath = '/posts/:slug';
+  source.definitions[1].data.homePageNodeId = 'other';
+  Object.assign(states[0], { flowEffectEnabled: true, flowEffectTransition: { type: 'spring', durationBasedSpring: false, stiffness: 500, damping: 60, mass: 1 } });
+  const reference = (field: string) => ({ type: 'variableReference', providerId: 'home', id: field });
+  Object.assign(states[0].children[0], { visible: { type: 'computedValue', startValue: reference('cover'), transforms: [{ name: 'isSet' }] } });
+  states[0].children.push({ id: 'related-list', __class: 'FrameNode', parentid: 'desktop', dataIdentifier: 'local-module:collection/posts:default', collectionFilters: { filters: [{ itemKey: 'id', transforms: [{ name: 'isIncludedIn', value: reference('related') }] }] }, width: 600, widthType: 0, heightType: 2, children: [{ id: 'related-label', __class: 'RichTextNode', parentid: 'related-list', html: '<p>Related</p>', children: [] }] });
+  source.definitions.push({ id: 'posts', kind: 'CollectionNode', data: { id: 'posts', __class: 'CollectionNode', children: [], variables: [{ id: 'slug', name: 'Slug', type: 'slug' }, { id: 'cover', name: 'Cover', type: 'file' }, { id: 'related', name: 'Related', type: 'multicollectionreference', dataIdentifier: 'local-module:collection/posts:default' }] } });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files.find(file => file.path.endsWith('page.client.tsx'))!;
+  expect(checkFile(client.code, { kind: 'page', path: client.path })).toEqual([]);
+  const nodes = parseJSXToNodes(client.code), field = identity[sourceVariableKey('posts', 'cover')];
+  expect(nodes.get(identity.heading)?.styleBindings).toContainEqual({ styleProp: 'display', field, visibility: { display: 'block', transform: 'isSet' } });
+  expect(JSON.parse(nodes.get(identity.desktop)?.attrs['data-glide'] ?? '{}').transition).toMatchObject({ stiffness: '500', damping: '60' });
+  const preview = applyDetailPageBindings(nodes, { [field]: '', [identity[sourceVariableKey('posts', 'related')]]: ['post-a'] });
+  expect(preview.get(identity.heading)?.styles.display).toBe('none');
+  expect(preview.get(identity['related-list'])?.collectionList?.filterGroup?.filters[0].value).toEqual(['post-a']);
+});
 it.each([true, false])('imports on-mount presence with exit enabled %s as editable native motion', exitEnabled => {
   const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
   Object.assign(states[0].children[0], { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectTransition: { type: 'tween', duration: 0.8, delay: 0.1 }, exitEffectEnabled: exitEnabled, exitEffectOpacity: 0, exitEffectY: 100, exitEffectTransition: { type: 'tween', duration: 0.4, delay: 0.3 } });
