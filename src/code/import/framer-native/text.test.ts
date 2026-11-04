@@ -45,6 +45,9 @@ describe('editable original rich text', () => {
     expect(text.plainText).toBe('First\nSecond');
     expect(text.jsx).toContain('<p>');
     expect(text.runs.map(run => run.text)).toEqual(['First', 'Second']);
+    const identified = mapSourceText(node('<p dir="auto">First</p><p dir="auto"><strong>Second</strong></p>'), context(), 'framer-rich');
+    expect(identified.blockIds).toEqual(['framer-rich-block-1', 'framer-rich-block-2']);
+    expect(identified.jsx).toContain('<p data-id="framer-rich-block-1" dir="auto">First</p><p data-id="framer-rich-block-2" dir="auto"><strong>Second</strong></p>');
   });
   it('retains the direction and link attributes of the outer text block', () => {
     expect(mapSourceText(node('<p dir="rtl">שלום</p>'), context()).attributes).toEqual({ dir: 'rtl' });

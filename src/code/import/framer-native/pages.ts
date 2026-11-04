@@ -399,7 +399,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
         if (mount) {
           if ((!['FrameNode', 'RichTextNode'].includes(node.kind) && !scene.nested.has(nodeId)) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
-          if (scene.nested.has(nodeId)) code = wrapInstanceForPresence(code, identity[nodeId]).code;
+          if (scene.nested.has(nodeId)) {
+            const wrapped = wrapInstanceForPresence(code, identity[nodeId]);
+            code = wrapped.code; scene.optionIds.push(wrapped.contentId);
+          }
           code = applySourceMountEffects(code, identity[nodeId], mount);
         }
         if (isSourceCodeComponent(node)) continue;

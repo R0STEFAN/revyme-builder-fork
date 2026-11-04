@@ -22,7 +22,8 @@ export interface SourceMountEffects {
 export function sourceMountEffects(p: SourceProperties): SourceMountEffects | undefined {
   trace.fn('framer-native.sourceMountEffects');
   if (p.styleAppearEffectEnabled !== true) return;
-  if (p.styleAppearEffectTrigger !== 'onMount' || p.styleAppearEffectLocked !== false || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
+  if (p.styleAppearEffectTrigger !== 'onMount' || typeof p.styleAppearEffectLocked !== 'boolean' || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
+  if (p.styleAppearEffectLocked && Object.keys(p).some(key => key.startsWith('exitEffect') && key !== 'exitEffectEnabled')) throw new Error('Source appearance mode requires its native lifecycle adapter');
   if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) throw new Error('Source appearance with a base transform requires its native composition adapter');
   const axes = { Opacity: 'opacity', X: 'x', Y: 'y', Scale: 'scale', Rotate: 'rotate', RotateX: 'rotateX', RotateY: 'rotateY', SkewX: 'skewX', SkewY: 'skewY' };
   const target: Record<string, string> = {};
@@ -37,12 +38,10 @@ export function sourceMountEffects(p: SourceProperties): SourceMountEffects | un
       if (['rotateX', 'rotateY'].includes(prop) && value !== 0 && p[`${prefix}Rotate3d`] !== true) throw new Error(`Inactive 3D source ${prefix}${suffix} requires verification`);
       values[prop] = String(value); target[prop] = String(neutral);
     }
-    const transition = sourceRecord(p[`${prefix}Transition`]);
-    if (transition?.stagger !== undefined && transition.stagger !== 0) throw new Error('Source stagger requires its native timing adapter');
     return { values, transition: sourceTransitionSpec(p[`${prefix}Transition`]) };
   };
   const enter = channel('enterEffect');
-  const exit = p.exitEffectEnabled ? channel('exitEffect') : undefined;
+  const exit = p.exitEffectEnabled ? (p.styleAppearEffectLocked ? enter : channel('exitEffect')) : undefined;
   return { initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
 }
 
@@ -111,7 +110,6 @@ export function sourceTransitionSpec(value: unknown): Record<string, string> | u
     else if (typeof transition.ease === 'string' && ['linear', 'easeIn', 'easeOut', 'easeInOut', 'circIn', 'circOut', 'circInOut', 'backIn', 'backOut', 'backInOut', 'anticipate'].includes(transition.ease)) output.ease = transition.ease;
     else throw new Error('Unsupported source easing');
   }
-  if (typeof transition.stagger === 'number' && transition.stagger !== 0) throw new Error('Source stagger requires the motion emitter');
   return output;
 }
 

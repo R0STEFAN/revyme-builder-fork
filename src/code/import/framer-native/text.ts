@@ -17,6 +17,7 @@ export interface NativeText {
   attributes: Record<string, string>;
   presetId?: string;
   binding?: SourceProperties;
+  blockIds?: string[];
 }
 const tags = new Set(['p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 's', 'a', 'br', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'li']);
 const cssNames: Record<string, string> = {
@@ -56,7 +57,7 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
   return out;
 }
 
-export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingContext): NativeText {
+export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingContext, targetId?: string): NativeText {
   trace.fn('framer-native.mapSourceText', { sourceId: node.sourceId });
   const fragment = parseFragment(typeof node.properties.html === 'string' ? node.properties.html : '');
   const blocks = fragment.childNodes.filter(child => child.nodeName !== '#comment');
@@ -84,7 +85,7 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
     normalizeSourceLineHeight(styles);
     return { attrs, styles };
   };
-  const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {
+  const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string, blockId?: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {
     if (child.nodeName === '#text' && 'value' in child) {
       output.runs.push({ text: child.value, tag: parentTag });
       return { jsx: escapeJsxText(child.value), text: child.value };
@@ -105,7 +106,12 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       } else if (['target', 'rel', 'dir', 'title'].includes(key)) safeAttributes[key] = value;
       else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_ATTRIBUTE_UNSUPPORTED');
     }
-    const attributes = Object.entries(safeAttributes).map(([key, value]) => `${key}="${escapeJsxText(value).replace(/"/g, '&quot;')}"`);
+    const attributes: string[] = [];
+    if (blockId && child.tagName !== 'br') {
+      output.blockIds = [...(output.blockIds ?? []), blockId];
+      attributes.push(`data-id="${escapeJsxText(blockId).replace(/"/g, '&quot;')}"`);
+    }
+    for (const [key, value] of Object.entries(safeAttributes)) attributes.push(`${key}="${escapeJsxText(value).replace(/"/g, '&quot;')}"`);
     if (Object.keys(styles).length) attributes.push(`style={${JSON.stringify(styles)}}`);
     const opening = `<${child.tagName}${attributes.length ? ` ${attributes.join(' ')}` : ''}`;
     return child.tagName === 'br'
@@ -121,7 +127,7 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
     output.attributes = whole.attributes ?? {};
     output.plainText = whole.text;
   } else {
-    const parts = blocks.map(child => visit(child, 'div'));
+    const parts = blocks.map((child, index) => visit(child, 'div', targetId ? `${targetId}-block-${index + 1}` : undefined));
     output.jsx = parts.map(part => part.jsx).join('');
     output.plainText = parts.map(part => part.text).join('\n');
   }

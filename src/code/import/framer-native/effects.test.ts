@@ -4,8 +4,10 @@ import { buildSourceGraph } from './source-graph';
 import type { NativeTransfer } from './types';
 
 it('reads separate on-mount entry and exit settings without substituting the legacy appearance values', () => {
-  const p = { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, styleAppearEffectScale: 0.5, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectScale: 1, enterEffectTransition: { type: 'tween', duration: 1.5, delay: 0.1, ease: [0.6, 0.2, 0, 1] }, exitEffectEnabled: true, exitEffectOpacity: 0, exitEffectY: 200, exitEffectTransition: { type: 'tween', duration: 0.8, delay: 0.3 } };
+  const p = { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, styleAppearEffectScale: 0.5, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectScale: 1, enterEffectTransition: { type: 'tween', duration: 1.5, delay: 0.1, ease: [0.6, 0.2, 0, 1], stagger: 0.05 }, exitEffectEnabled: true, exitEffectOpacity: 0, exitEffectY: 200, exitEffectTransition: { type: 'tween', duration: 0.8, delay: 0.3 } };
   expect(sourceMountEffects(p)).toMatchObject({ initial: { opacity: '0', y: '200', scale: '1' }, animate: { opacity: '1', y: '0', scale: '1' }, exit: { opacity: '0', y: '200' }, enterTransition: { duration: '1.5', delay: '0.1' }, exitTransition: { duration: '0.8', delay: '0.3' } });
+  expect(sourceMountEffects({ styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: true, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 90, enterEffectTransition: { type: 'tween', duration: 1.4, ease: [0.16, 1, 0.3, 1] }, exitEffectEnabled: true })).toMatchObject({ initial: { opacity: '0', y: '90' }, exit: { opacity: '0', y: '90' }, enterTransition: { duration: '1.4' }, exitTransition: { duration: '1.4' } });
+  expect(() => sourceMountEffects({ ...p, styleAppearEffectLocked: true })).toThrow(/lifecycle adapter/);
   expect(sourceMountEffects({ ...p, styleAppearEffectEnabled: false })).toBeUndefined();
   expect(() => sourceMountEffects({ ...p, enterEffectY: NaN })).toThrow();
   expect(() => sourceMountEffects({ ...p, styleAppearEffectTrigger: 'inView' })).toThrow();

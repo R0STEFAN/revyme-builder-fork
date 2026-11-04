@@ -58,7 +58,8 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
     }
     let tag = 'div', content = '', attributes = '';
     if (node.kind === 'RichTextNode') {
-      const text = mapSourceText(node, context);
+      const text = mapSourceText(node, context, targetId);
+      if (text.blockIds?.length) result.optionIds.push(...text.blockIds);
       tag = text.tag;
       attributes = Object.entries(text.attributes).map(([key, value]) => ` ${key}=${JSON.stringify(value)}`).join('');
       content = text.binding ? `{${options.expressionFor(text.binding, node, 'textContent')}}` : text.jsx;
