@@ -327,8 +327,10 @@ export function ensureMediaGate(code: string, query: string): { code: string; ga
   // 2026-07-03: replica FIT commit blocked by the validator).
   const inserted = insertBeforeRenderReturn(code, `  const ${gateVar} = useMediaQuery('${query}');`);
   if (inserted !== null) return { code: inserted, gateVar };
-  // Fallback (no render return found): first function body, as before.
-  const fn = code.match(/(?:export default function\s+\w+|function\s+\w+)\s*\([^)]*\)\s*\{/);
+  // Fallback (no render return found): exported component body first, never an
+  // earlier injected helper function (e.g. useResponsiveText).
+  const fn = code.match(/export default function\s+\w+\s*\([^)]*\)\s*\{/)
+    ?? code.match(/function\s+\w+\s*\([^)]*\)\s*\{/);
   if (!fn || fn.index === undefined) return { code, gateVar };
   const bodyStart = fn.index + fn[0].length;
   return { code: code.slice(0, bodyStart) + `\n  const ${gateVar} = useMediaQuery('${query}');` + code.slice(bodyStart), gateVar };

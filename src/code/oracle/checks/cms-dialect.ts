@@ -332,7 +332,7 @@ function checkCmsNavDialect(code: string, ast: t.File, v: OracleViolation[], kin
         return;
       }
       const itemVar = hrefExpr?.match(/\$\{\s*([A-Za-z_$][\w$]*)\s*\?\._slug/)?.[1] || importMatch?.[1] || 'item';
-      if (mode === 'row' && !new RegExp(`\\.map\\(\\s*\\(\\s*${itemVar}\\b`).test(code)) {
+      if (mode === 'row' && !new RegExp(`\\.map\\(\\s*(?:\\(\\s*)?${itemVar}\\b`).test(code)) {
         v.push({
           code: 'CMS_NAV_CONTEXT_MISSING', tier: 2, line,
           message: `[CMS nav] data-cms-nav="row" links each rendered row to its own detail page, so it must live inside a ".map((${itemVar}) => …)" over the collection. No such map iterator was found.`,
@@ -341,7 +341,9 @@ function checkCmsNavDialect(code: string, ast: t.File, v: OracleViolation[], kin
       }
 
       // href must equal the canonical generator output for this mode.
-      const expected = cmsNavHrefExpr(authCollection || 'COLLECTION', detailColVar || 'COLLECTION_VAR', mode, itemVar);
+      const rowRouteSegment = mode === 'row' ? hrefExpr?.match(/^`\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+)\/\$\{/)?.[1] : undefined;
+      const effectiveCollection = rowRouteSegment || authCollection || 'COLLECTION';
+      const expected = cmsNavHrefExpr(effectiveCollection, detailColVar || 'COLLECTION_VAR', mode, itemVar);
       if (!hrefExpr) {
         v.push({
           code: 'CMS_NAV_HREF_MISMATCH', tier: 2, line,
@@ -350,7 +352,7 @@ function checkCmsNavDialect(code: string, ast: t.File, v: OracleViolation[], kin
         return;
       }
       const legacyExpected = mode === 'row'
-        ? ((isRootMounted(authCollection || 'COLLECTION') ? '`/' : '`/' + (authCollection || 'COLLECTION') + '/') + '${' + itemVar + "?._slug ?? ''}`")
+        ? ((isRootMounted(effectiveCollection) ? '`/' : '`/' + effectiveCollection + '/') + '${' + itemVar + "?._slug ?? ''}`")
         : null;
       if (norm(hrefExpr) !== norm(expected) && (!legacyExpected || norm(hrefExpr) !== norm(legacyExpected))) {
         v.push({

@@ -360,6 +360,23 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
           continue;
         }
+        if (pageLink?.type === 'webPage' && pageLink.pathVariables !== undefined) {
+          if (Object.keys(pageLink).some(key => !['type', 'webPageId', 'pathVariables'].includes(key)) || typeof pageLink.webPageId !== 'string') throw new Error('Source page link parameters/section require their native adapter');
+          const targetPage = graph.nodes.get(pageLink.webPageId), targetRoute = result.routes[pageLink.webPageId];
+          if (targetPage?.kind !== 'WebPageNode' || targetPage.raw.dataIdentifier === undefined || !targetRoute?.endsWith('/[slug]')) throw new Error(`Source page link on ${nodeId} requires a CMS detail route`);
+          const targetCollectionId = sourceCollectionId(targetPage.raw.dataIdentifier);
+          const entries = Object.entries(sourceRecord(pageLink.pathVariables) ?? {});
+          if (entries.length !== 1) throw new Error(`Source page link parameters on ${nodeId} require their native adapter`);
+          const [paramId, rawBinding] = entries[0];
+          const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId });
+          if (binding.kind !== 'field' || binding.collectionId !== targetCollectionId || binding.sourceId !== paramId || binding.valueType !== 'slug' || graph.nodes.get(binding.providerId)?.kind === 'WebPageNode') throw new Error(`Source page link binding on ${nodeId} requires its native adapter`);
+          const prefix = targetRoute.slice(0, -'/[slug]'.length);
+          code = convertToMotionLinkInCode(code, identity[nodeId]);
+          code = setTagAttr(code, identity[nodeId], 'data-cms-nav', '"row"');
+          code = setTagAttr(code, identity[nodeId], 'href', `{\`${prefix}/\${${binding.itemVar}?._slug ?? ''}\`}`);
+          if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
+          continue;
+        }
         const resolvedLink = sourceStaticLinkValue(node.properties.link, result.routes);
         if (typeof resolvedLink !== 'string') throw new Error(`Source link on ${nodeId} requires its native route adapter`);
         let href: string = resolvedLink;
@@ -396,14 +413,19 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
         const mount = sourceMountEffects(node.properties);
-        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
+        const responsiveMounts: Array<{ width: number; spec: NonNullable<ReturnType<typeof sourceMountEffects>> }> = [];
+        for (const viewport of viewports.slice(1)) {
+          const viewportMount = sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties);
+          if (Boolean(viewportMount) !== Boolean(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
+          if (viewportMount) responsiveMounts.push({ width: viewport.width, spec: viewportMount });
+        }
         if (mount) {
           if ((!['FrameNode', 'RichTextNode'].includes(node.kind) && !scene.nested.has(nodeId)) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
           if (scene.nested.has(nodeId)) {
             const wrapped = wrapInstanceForPresence(code, identity[nodeId]);
             code = wrapped.code; scene.optionIds.push(wrapped.contentId);
           }
-          code = applySourceMountEffects(code, identity[nodeId], mount);
+          code = applySourceMountEffects(code, identity[nodeId], mount, responsiveMounts);
         }
         if (isSourceCodeComponent(node)) continue;
         const spec = sourceRotationLoop(node.properties);

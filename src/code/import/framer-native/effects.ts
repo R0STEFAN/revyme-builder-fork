@@ -1,5 +1,5 @@
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
-import { updateMotionPropInCode } from '../../generation/generator-motion-props';
+import { ensureTransformTemplateInCode, setMotionPropScopedValue, updateMotionPropInCode } from '../../generation/generator-motion-props';
 import { emitObj } from '../../generation/generator-motion-compose';
 import { composeLoopInCode, setLoopInCode } from '../../generation/generator-motion-loop';
 import { ensureNamedImport } from '../../generation/generator-utils';
@@ -45,12 +45,42 @@ export function sourceMountEffects(p: SourceProperties): SourceMountEffects | un
   return { initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
 }
 
-export function applySourceMountEffects(code: string, nodeId: string, spec: SourceMountEffects): string {
+export function applySourceMountEffects(
+  code: string,
+  nodeId: string,
+  spec: SourceMountEffects,
+  responsive: Array<{ width: number; spec: SourceMountEffects }> = [],
+): string {
   trace.fn('framer-native.applySourceMountEffects', { nodeId });
   let result = updateMotionPropInCode(code, nodeId, 'initial', spec.initial);
   result = updateMotionPropInCode(result, nodeId, 'animate', spec.animate);
   if (spec.enterTransition) result = updateMotionPropInCode(result, nodeId, 'transition', spec.enterTransition);
-  return updateMotionPropInCode(result, nodeId, 'exit', spec.exit ? { ...spec.exit, ...(spec.exitTransition ? { transition: emitObj(spec.exitTransition) } : {}) } : { transition: '{ duration: 0 }' });
+  result = updateMotionPropInCode(result, nodeId, 'exit', spec.exit ? { ...spec.exit, ...(spec.exitTransition ? { transition: emitObj(spec.exitTransition) } : {}) } : { transition: '{ duration: 0 }' });
+  const ordered = [...responsive].sort((a, b) => b.width - a.width);
+  for (const entry of ordered) {
+    if (JSON.stringify(entry.spec.exit) !== JSON.stringify(spec.exit) || JSON.stringify(entry.spec.exitTransition) !== JSON.stringify(spec.exitTransition)) {
+      throw new Error(`Responsive on-mount exit effect on ${nodeId} requires its native adapter`);
+    }
+  }
+  for (const [propName, pick] of [
+    ['initial', (item: SourceMountEffects) => item.initial],
+    ['animate', (item: SourceMountEffects) => item.animate],
+    ['transition', (item: SourceMountEffects) => item.enterTransition],
+  ] as const) {
+    let current = pick(spec);
+    const branches: Array<{ width: number; props: Record<string, string> }> = [];
+    for (const entry of ordered) {
+      const next = pick(entry.spec);
+      if (JSON.stringify(next) === JSON.stringify(current)) continue;
+      if (!next || !current) throw new Error(`Responsive on-mount ${propName} presence on ${nodeId} requires its native adapter`);
+      branches.push({ width: entry.width, props: next });
+      current = next;
+    }
+    for (const branch of [...branches].reverse()) {
+      result = setMotionPropScopedValue(result, nodeId, propName, branch.props, { query: `(max-width: ${branch.width}px)` });
+    }
+  }
+  return ensureTransformTemplateInCode(result, nodeId);
 }
 
 /** The captured editor defaults to pausing loops offscreen. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import capturedUnderline from './fixtures/captured-underline.json';
 import type { NativeTransfer } from '../../../shared/framer-transfer-envelope.mjs';
-import { allocateTargetIdentity, buildSourceGraph, resolveSourceNode, sourceVariableKey } from './source-graph';
+import { allocateTargetIdentity, buildSourceGraph, resolveSourceNode, sourceCssImageVariables, sourceVariableKey } from './source-graph';
 
 const node = (id: string, properties: Record<string, unknown> = {}) => ({
   id, __class: 'FrameNode', children: [], ...properties,
@@ -185,5 +185,12 @@ describe('original editor source graph', () => {
     expect(field).toMatch(/^[a-zA-Z][a-zA-Z0-9_]*$/);
     expect(identity[sourceVariableKey('component', 'title')]).not.toBe(field);
     expect(identity[sourceVariableKey('collection', 'slug')]).toBe('_slug');
+  });
+  it('resolves CSS image variables across replica variant states without walking outside the master subtree', () => {
+    const master = node('master', { fillEnabled: true, fillType: 'image', fillImage: { type: 'variableReference', providerId: 'component', id: 'cover' } });
+    const replica = node('replica', { replicaInfo: { master: 'master', overrides: {} } });
+    const comp = node('component', { __class: 'SmartComponentNode', baseVariantId: 'master', variables: [{ id: 'cover', type: 'image' }], children: [master, replica] });
+    const graph = buildSourceGraph(transfer(comp));
+    expect([...sourceCssImageVariables(graph, 'component')]).toEqual(['cover']);
   });
 });

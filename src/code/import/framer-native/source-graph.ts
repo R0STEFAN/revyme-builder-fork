@@ -94,7 +94,8 @@ export function sourceCssImageVariables(graph: SourceGraph, scopeId: string): Se
   if (!scope) throw new Error(`Missing source image scope ${scopeId}`);
   for (const state of scope.children) {
     const seen = new Set<string>();
-    const replicaState = sourceRecord(graph.nodes.get(state)?.raw.replicaInfo) ? state : undefined;
+    const replica = sourceRecord(graph.nodes.get(state)?.raw.replicaInfo);
+    const replicaState = replica ? state : undefined;
     const walk = (id: string) => {
       if (seen.has(id)) return;
       seen.add(id);
@@ -103,7 +104,7 @@ export function sourceCssImageVariables(graph: SourceGraph, scopeId: string): Se
       if (node.properties.fillEnabled === true && node.properties.fillType === 'image' && ref?.type === 'variableReference' && ref.providerId === scopeId && typeof ref.id === 'string') result.add(ref.id);
       if (!isSourceCodeComponent(node)) node.children.forEach(walk);
     };
-    walk(state);
+    walk(typeof replica?.master === 'string' ? replica.master : state);
   }
   return result;
 }

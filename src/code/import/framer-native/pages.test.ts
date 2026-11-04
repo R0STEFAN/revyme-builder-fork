@@ -259,3 +259,26 @@ it('emits native PageTransitions and page-effects runtime when a templated page 
   expect(result.files.some(file => file.path === `app/(${group})/page-effects-runtime.ts`)).toBe(true);
   expect(result.files.some(file => file.path === `app/(${group})/page-transitions.tsx`)).toBe(true);
 });
+it('emits responsive on-mount effects and dynamic CMS detail row links', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  Object.assign(states[0].children[0], { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, enterEffectEnabled: true, enterEffectOpacity: 1, enterEffectY: 700, enterEffectTransition: { type: 'tween', duration: 0.8 }, exitEffectEnabled: true, exitEffectOpacity: 1, exitEffectY: 0, exitEffectTransition: { type: 'tween', duration: 0.4 } });
+  states[1].replicaInfo.overrides.heading.enterEffectY = 200;
+  const list = {
+    id: 'works-list', __class: 'FrameNode', parentid: 'desktop', dataIdentifier: 'local-module:collection/works:default', width: 600, widthType: 0, heightType: 2,
+    children: [{ id: 'work-row', __class: 'FrameNode', parentid: 'works-list', width: 300, widthType: 0, height: 80, heightType: 0, link: { type: 'webPage', webPageId: 'detail', pathVariables: { slugField: { type: 'variableReference', providerId: 'works-list', id: 'slugField' } } }, children: [] }],
+  };
+  states[0].children.push(list);
+  const detailPage = { id: 'detail', __class: 'WebPageNode', parentid: 'document', pagePath: '/works/:slugField', dataIdentifier: 'local-module:collection/works:default', baseVariantId: 'detail-desktop', children: [{ id: 'detail-desktop', __class: 'FrameNode', parentid: 'detail', name: 'Desktop', width: 1200, widthType: 0, heightType: 2, children: [] }] };
+  const collection = { id: 'works', __class: 'CollectionNode', children: [], variables: [{ id: 'slugField', type: 'slug', name: 'Slug' }] };
+  source.definitions.push({ id: detailPage.id, kind: detailPage.__class, data: detailPage }, { id: collection.id, kind: collection.__class, data: collection });
+  source.rootIds.push(detailPage.id, collection.id);
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const homeClient = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  const props = parseJSXToNodes(homeClient.code).get(identity.heading)!.motionProps!;
+  expect(hasMountPresenceMotion(props)).toBe(true);
+  expect(props.initial).toMatchObject({ y: '200', _scope: 'gate:__mq0' });
+  expect(JSON.parse(props.initial!._base)).toMatchObject({ y: '700' });
+  expect(homeClient.code).toContain('data-cms-nav="row"');
+  expect(homeClient.code).toContain('/works/${');
+});
