@@ -61,6 +61,15 @@ these active source behaviors for unrelated projects.
 - Focused importer/submit/paste suite: **25 files / 303 tests passed**;
   `npx tsc --noEmit` and production build passed.
 
+### Reader installation archive
+
+- The Node reader build now writes a deterministic ZIP beside its unpacked
+  install directory. The generated `dist/framer-native-reader-0.1.8.zip`
+  contains the ten expected extension files and passes `unzip -t`.
+- Two independent builds were byte identical. All **42 extension tests** and
+  `npx tsc --noEmit` passed. Live browser loading and full import acceptance
+  remain unverified.
+
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
 This section supersedes the historical status below. The Orca hint stopped at

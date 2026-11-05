@@ -13,6 +13,10 @@ node --test extensions/framer-native/test/*.test.mjs
 npx vitest run src/shared/framer-transfer-envelope.test.ts
 ```
 
+Збірка створює директорію для `Load unpacked` і поруч однойменний `.zip`.
+Архів містить лише файли розширення; повторна збірка того самого source дає
+байтово однаковий результат. Перед встановленням архів треба розпакувати.
+
 ## Встановлення і перший доказ
 
 1. У Chrome відкрий сторінку керування розширеннями та увімкни Developer mode.

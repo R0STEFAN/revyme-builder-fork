@@ -19,3 +19,15 @@ test('packages a standalone extension with the same validated transfer decoder',
     assert.equal(await readFile(join(output, 'user-notes.txt'), 'utf8'), 'keep');
   } finally { await rm(output, { recursive: true, force: true }); }
 });
+
+test('emits a repeatable installable archive containing only reader files', async () => {
+  const output = await mkdtemp(join(tmpdir(), 'framer-reader-archive-'));
+  try {
+    const first = await buildNativeReader(join(output, 'first'));
+    const second = await buildNativeReader(join(output, 'second'));
+    assert.deepEqual(await readFile(first.archive), await readFile(second.archive));
+    const archive = await readFile(first.archive);
+    for (const name of first.files) assert.ok(archive.includes(Buffer.from(name)), `${name} missing from archive`);
+    assert.ok(!archive.includes(Buffer.from('user-notes.txt')));
+  } finally { await rm(output, { recursive: true, force: true }); }
+});
