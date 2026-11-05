@@ -92,6 +92,16 @@ these active source behaviors for unrelated projects.
   assets, full visual parity, editor round trip, browser interactions or export.
   The browser automation host was unavailable, so unpacked extension loading
   remains unverified.
+- A separate one-image page in the same disposable project exercised a real
+  858 KB source JPEG download, quality-90 WebP conversion, local `/api/upload`,
+  native compile, live prepare/commit and persisted `codeFiles.read`. The
+  uploaded WebP is served as `image/webp` with 600,984 bytes; revision became 4.
+  This verifies the media route for one image, not all 22 Walker assets.
+- The user guide `docs/readme/framer-native-import.md` now documents the
+  install/capture/paste workflow, scope of verified transfer, the two explicit
+  omissions and the unresolved SVG/browser/selection/replace checks. The
+  extension popup no longer says conversion is disconnected. Reader tests:
+  **42 passed**; install archive rebuilt from the current popup source.
 
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
