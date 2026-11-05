@@ -21,7 +21,7 @@ import { forwardEventPropsToComponentRoot } from '../../variants/event-prop-forw
 import { parseVariantConfig, serializeVariantConfig, type VariantConfig } from '../../variants/variant-config';
 import { sourceStateNames } from './interactions';
 import { mapSourceConnections } from './interactions';
-import { activeSourceCodeOverride, isSourceCodeComponent, resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
+import { activeSourceCodeOverride, isSourceCodeComponent, resolveSourceNode, sourceRecord, sourceVariableKey, sourceVariables, sourceCssImageVariables } from './source-graph';
 import { mapSourceStyles, sourceStyleValue, type SourceMappingContext } from './styles';
 import { mapSourceText } from './text';
 import { emitSourceScene } from './scene';
@@ -29,6 +29,7 @@ import { applySourceInstances } from './scene-instances';
 import { sourceStaticLinkValue } from './links';
 import { setVariantAttrInCode } from '../../generation/responsive-attrs-gen';
 import { setVariantVisibilityInCode } from '../../generation/variant-visibility-gen';
+import { setConditionalInstanceProp, setConditionalInstancePropVarInCode } from '../../components/instance-prop-overrides';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceRotationLoop, sourceTransitionSpec } from './effects';
@@ -200,11 +201,38 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const override = (node: ResolvedSourceNode) => activeSourceCodeOverride(node.properties) ?? '';
           if (!isSourceCodeComponent(base) && override(state) !== override(base)) throw new Error(`Per-state code override replacement on ${id} requires its native adapter`);
           if (base.kind === 'CodeComponentNode' && !isSourceCodeComponent(base)) {
-            const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
-            if ([...controls].some(key => JSON.stringify(base.properties[key]) !== JSON.stringify(state.properties[key]))) {
-              throw new Error(`Per-state instance controls on ${id} require their native conditional-prop adapter`);
-            }
             if (state.properties.codeComponentIdentifier !== base.properties.codeComponentIdentifier) throw new Error(`Per-state instance master replacement on ${id} requires its native adapter`);
+            const childMaster = /^local-module:canvasComponent\/([^:]+):/.exec(String(base.properties.codeComponentIdentifier))?.[1];
+            if (!childMaster) throw new Error(`Missing design master for ${id}`);
+            const childName = nativeComponentName(identity, childMaster);
+            const childVariables = sourceVariables(graph, childMaster);
+            const controls = new Set([...Object.keys(base.properties), ...Object.keys(state.properties)].filter(key => key.startsWith('$control__')));
+            for (const key of controls) {
+              if (JSON.stringify(base.properties[key]) === JSON.stringify(state.properties[key])) continue;
+              const sourceProp = key.slice(10), raw = sourceRecord(state.properties[key])?.value;
+              if (sourceProp === 'variant') {
+                const target = sourceStateNames({ graph, scopeId: childMaster }, identity)[String(raw)];
+                if (!target) throw new Error(`Missing per-state child variant ${String(raw)} on ${id}`);
+                code = setConditionalInstanceProp(code, identity[id], childName, 'initialVariant', names[stateId], target);
+                continue;
+              }
+              const variable = childVariables.find(variable => variable.id === sourceProp);
+              if (!variable) { trace.action('framer-native.skipDeletedInstanceProp', { sourceId: id, childMaster, prop: sourceProp }); continue; }
+              if (variable.type === 'eventhandler' || variable.type === 'customcursor') throw new Error(`Per-state ${String(variable.type)} on ${id} requires its native callback adapter`);
+              const prop = nativePropName(identity, childMaster, sourceProp);
+              const binding = resolveSourceBinding(raw, { graph, identity, nodeId: id, ...(variable.type === 'collectionreference' ? { referenceCollectionId: sourceCollectionId(variable.dataIdentifier) } : {}) });
+              if (binding.kind === 'variable') {
+                code = setConditionalInstancePropVarInCode(code, identity[id], childName, prop, names[stateId], binding.name, String(sourceRecord(base.properties[key])?.value ?? variable.initialValue ?? ''));
+                continue;
+              }
+              if (binding.kind !== 'literal' && binding.kind !== 'reference') throw new Error(`Per-state ${sourceProp} on ${id} requires its native conditional-prop adapter`);
+              let mapped = binding.kind === 'reference' ? binding.rowId : binding.value;
+              if (variable.type === 'link') mapped = sourceStaticLinkValue(mapped, options.routes);
+              if ((variable.type === 'image' || variable.type === 'file') && typeof mapped === 'string' && mapped.startsWith('data:framer/asset-reference,')) mapped = options.assets?.[mapped];
+              if (mapped === undefined || mapped !== null && !['string', 'number', 'boolean'].includes(typeof mapped)) throw new Error(`Per-state ${sourceProp} on ${id} requires its native value adapter`);
+              if (variable.type === 'image' && sourceCssImageVariables(graph, childMaster).has(sourceProp) && mapped) mapped = `url(${mapped})`;
+              code = setConditionalInstanceProp(code, identity[id], childName, prop, names[stateId], String(mapped ?? ''));
+            }
           }
           const styles = stylesFor(state, parentId ? resolveSourceNode(graph, parentId, stateId) : undefined);
           const delta: Record<string, string> = {};

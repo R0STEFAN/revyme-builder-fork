@@ -23,7 +23,7 @@ import { serializePageEffects, type PageEffect } from '../../project/page-effect
 import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '../../generation/page-transitions-gen';
 import { wrapInstanceForPresence } from '../../generation/instance-presence-gen';
 import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceFlowEffect, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect } from './effects';
-import { findJSXElementByDataId, findClosingTag, setStyleEntryInCode } from '../../generation/cms-gen';
+import { bindFieldInCode, findJSXElementByDataId, findClosingTag, setStyleEntryInCode } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceInstanceStateName } from './interactions';
 import { setResponsiveOverride, setResponsiveBindingOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
@@ -218,7 +218,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
       if (resolveSourceNode(graph, primary).sourceId !== primary) throw new Error('A larger replica breakpoint requires its native baseline adapter');
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
+      const imageFieldFor = (value: unknown, node: ResolvedSourceNode) => {
+        if (isTemplate || sourceRecord(value)?.type !== 'variableReference') return;
+        const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
+        if (binding.kind === 'field' && ['image', 'file'].includes(binding.valueType)) return binding;
+      };
+      const intrinsicImageFieldFor = (node: ResolvedSourceNode) => node.kind === 'FrameNode' && !node.children.length && node.properties.fillEnabled === true && node.properties.fillType === 'image' && node.properties.heightType === 5 && !(typeof node.properties.fillImagePixelWidth === 'number' && typeof node.properties.fillImagePixelHeight === 'number' && node.properties.fillImagePixelHeight > 0) && !(typeof node.properties.aspectRatio === 'number' && node.properties.aspectRatio > 0)
+        ? imageFieldFor(node.properties.fillImage, node) : undefined;
+      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -228,6 +235,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
+        if (intrinsicImageFieldFor(node)) {
+          delete styles.backgroundImage; delete styles.backgroundPosition; delete styles.backgroundRepeat; delete styles.backgroundSize;
+          styles.objectFit = node.properties.fillImageResize === 'fit' ? 'contain' : 'cover';
+        }
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, ctx).styles);
         if (node.sourceId === primary) {
           styles.width = '100%'; styles.position = 'relative';
@@ -243,6 +254,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const scene = emitSourceScene(graph, identity, primary, context, {
         stylesFor: (node, parent) => stylesFor(node, { ...context, parent }), codeComponents: options.codeComponents, template: isTemplate,
+        intrinsicImageFor: node => { const field = intrinsicImageFieldFor(node); return field ? `${field.itemVar}.${field.fieldId}` : undefined; },
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
           if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
@@ -395,6 +407,19 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
+      for (const nodeId of scene.sourceIds) {
+        const node = resolveSourceNode(graph, nodeId);
+        const baseImage = node.properties.fillEnabled === true && node.properties.fillType === 'image';
+        const field = baseImage ? imageFieldFor(node.properties.fillImage, node) : undefined;
+        for (const viewport of viewports.slice(1)) {
+          const state = resolveSourceNode(graph, nodeId, viewport.sourceStateId);
+          const stateImage = state.properties.fillEnabled === true && state.properties.fillType === 'image';
+          const stateField = stateImage ? imageFieldFor(state.properties.fillImage, state) : undefined;
+          if ((field || stateField) && (!field || !stateField || field.fieldId !== stateField.fieldId || Boolean(intrinsicImageFieldFor(node)) !== Boolean(intrinsicImageFieldFor(state)))) throw new Error(`Responsive CMS image on ${nodeId} requires its native binding adapter`);
+        }
+        if (!field) continue;
+        code = bindFieldInCode(code, identity[nodeId], intrinsicImageFieldFor(node) ? 'src' : 'backgroundImage', field.fieldId, field.itemVar, field.valueType);
+      }
       for (const controlId of scene.formControls) {
         const controlNode = resolveSourceNode(graph, controlId);
         const pseudo = sourceFormControlPseudoStyles(controlNode, context);

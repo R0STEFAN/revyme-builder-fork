@@ -1,5 +1,29 @@
 # Framer native transfer — continuation checkpoint, 2026-11-04
 
+## Continuation — 2026-11-05
+
+The user explicitly excluded optional page/category filtering and custom cursor
+transfer from the required scope. All other plan requirements remain active.
+The exclusion must be explicit in import reporting; do not silently discard
+these active source behaviors for unrelated projects.
+
+- CMS file/image fields now stay live on detail pages and repeaters as native
+  `backgroundImage` bindings. For source image frames whose height comes from
+  the current CMS image and has no captured intrinsic ratio, the importer emits
+  an editable dynamic `<img src={item.field}>` with natural height. A responsive
+  image-field or intrinsic-mode change still diagnoses until it can be rebound
+  per viewport. The isolated Walker `/blog/[slug]` audit moved from 39
+  diagnostics to **0**, yielding 17 page files; this uses mock media and does
+  not prove destination persistence or visual parity.
+- Per-state literal design-instance controls now use Revyme's native
+  conditional-prop writer. Synthetic Menu/Close state round trips pass, and
+  isolated compilation of real Walker master `GInvxXvf2` plus its dependencies
+  yielded three component files with **0 diagnostics**. Changing eventhandler
+  or custom-cursor controls between states remains an explicit adapter error.
+- Focused regression suite: **5 files / 204 tests passed**. `npx tsc --noEmit`
+  passed after the implementation. Full project import, paste/replace modes,
+  reader packaging and live acceptance remain pending.
+
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
 This section supersedes the historical status below. The Orca hint stopped at

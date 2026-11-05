@@ -14,6 +14,8 @@ export interface SourceMappingContext {
   /** Values may be canonical whole-value `{prop}` expressions. */
   variables?: Record<string, string | number | boolean>;
   assets?: Record<string, string>;
+  /** The page adapter binds this image field after emitting the editable JSX tree. */
+  cmsImageField?: (value: unknown, node: ResolvedSourceNode) => boolean;
   supportedLoops?: boolean;
   supportedMountEffects?: boolean;
   supportedFlowEffects?: boolean;
@@ -117,6 +119,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     else if (type === 5) {
       const ratio = typeof p.fillImagePixelWidth === 'number' && typeof p.fillImagePixelHeight === 'number' && p.fillImagePixelHeight > 0 ? p.fillImagePixelWidth / p.fillImagePixelHeight : p.aspectRatio;
       if (typeof ratio === 'number' && ratio > 0) { result.aspectRatio = String(ratio); result[axis] = 'auto'; }
+      else if (axis === 'height' && p.fillEnabled === true && p.fillType === 'image' && context.cmsImageField?.(p.fillImage, node)) result.height = 'auto';
       else mappingDiagnostic(context, node, `${axis}Type`);
     } else if (type !== undefined) mappingDiagnostic(context, node, `${axis}Type`);
   }
@@ -154,11 +157,12 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   if (p.fillEnabled === true) {
     if (p.fillType === 'color') set('backgroundColor', value('fillColor'));
     else if (p.fillType === 'image') {
-      const image = value('fillImage');
+      const boundImage = context.cmsImageField?.(p.fillImage, node) === true;
+      const image = boundImage ? undefined : value('fillImage');
       const url = image && context.assets?.[image];
       const binding = image && /^\{[A-Za-z_$][\w$]*\}$/.test(image);
-      if (url || binding) {
-        result.backgroundImage = url ? `url(${JSON.stringify(url)})` : image!;
+      if (url || binding || boundImage) {
+        result.backgroundImage = boundImage ? 'none' : url ? `url(${JSON.stringify(url)})` : image!;
         result.backgroundPosition = 'center'; result.backgroundRepeat = 'no-repeat';
         result.backgroundSize = p.fillImageResize === 'fit' ? 'contain' : 'cover';
       } else mappingDiagnostic(context, node, 'fillImage', 'SOURCE_ASSET_UNRESOLVED');

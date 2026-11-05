@@ -34,6 +34,7 @@ export interface SourceSceneOptions {
   expressionFor(value: unknown, node: ResolvedSourceNode, property: string): string;
   codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>;
   template?: boolean;
+  intrinsicImageFor?: (node: ResolvedSourceNode) => string | undefined;
 }
 
 /** One source traversal for native page/template and design-master JSX. */
@@ -50,6 +51,12 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       return '{children}';
     }
     const styles = options.stylesFor(node, parent);
+    const intrinsicImage = options.intrinsicImageFor?.(node);
+    if (intrinsicImage) {
+      if (node.kind !== 'FrameNode' || node.children.length) throw new Error(`Intrinsic CMS image ${id} requires a leaf frame`);
+      const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
+      return `<img data-id="${targetId}"${label} src={${intrinsicImage}} style={${sourceStyleLiteral(styles)}} />`;
+    }
     if (isSourceCodeComponent(node)) {
       const identifier = String(node.properties.codeComponentIdentifier ?? '');
       const name = typeof node.properties.name === 'string' && node.properties.name ? node.properties.name : identifier.split(':').pop() || 'Code component';

@@ -58,6 +58,59 @@ it('imports CMS detail visibility, enclosing-item filters and flow layout as nat
   expect(preview.get(identity.heading)?.styles.display).toBe('none');
   expect(preview.get(identity['related-list'])?.collectionList?.filterGroup?.filters[0].value).toEqual(['post-a']);
 });
+it('keeps a CMS detail image fill bound to the current record', () => {
+  const source = input(), page = source.definitions[0].data, states = page.children as Record<string, any>[];
+  page.dataIdentifier = 'local-module:collection/posts:default';
+  page.pagePath = '/posts/:slug';
+  source.definitions[1].data.homePageNodeId = 'other';
+  Object.assign(states[0].children[0], {
+    __class: 'FrameNode', children: [], fillEnabled: true, fillType: 'image',
+    fillImage: { type: 'variableReference', providerId: 'home', id: 'cover' },
+    fillImageResize: 'fit', width: 400, widthType: 0, height: 300, heightType: 0,
+  });
+  delete states[0].children[0].html;
+  source.definitions.push({ id: 'posts', kind: 'CollectionNode', data: { id: 'posts', __class: 'CollectionNode', children: [], variables: [{ id: 'slug', name: 'Slug', type: 'slug' }, { id: 'cover', name: 'Cover', type: 'file' }] } });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files.find(file => file.path.endsWith('page.client.tsx'))!;
+  expect(client.code).toContain(`backgroundImage: \`url(\${item.${identity[sourceVariableKey('posts', 'cover')]}})\``);
+  expect(parseJSXToNodes(client.code).get(identity.heading)?.styleBindings).toContainEqual({ styleProp: 'backgroundImage', field: identity[sourceVariableKey('posts', 'cover')] });
+  expect(checkFile(client.code, { kind: 'page', path: client.path })).toEqual([]);
+});
+it('uses the current CMS image intrinsic height when the source image has no fixed ratio', () => {
+  const source = input(), page = source.definitions[0].data, states = page.children as Record<string, any>[];
+  page.dataIdentifier = 'local-module:collection/posts:default';
+  page.pagePath = '/posts/:slug';
+  source.definitions[1].data.homePageNodeId = 'other';
+  Object.assign(states[0].children[0], {
+    __class: 'FrameNode', children: [], fillEnabled: true, fillType: 'image',
+    fillImage: { type: 'variableReference', providerId: 'home', id: 'cover' },
+    fillImageResize: 'fill', width: 400, widthType: 0, height: 300, heightType: 5,
+    fillImagePixelWidth: null, fillImagePixelHeight: null, aspectRatio: null,
+  });
+  delete states[0].children[0].html;
+  source.definitions.push({ id: 'posts', kind: 'CollectionNode', data: { id: 'posts', __class: 'CollectionNode', children: [], variables: [{ id: 'slug', name: 'Slug', type: 'slug' }, { id: 'cover', name: 'Cover', type: 'file' }] } });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const client = result.files.find(file => file.path.endsWith('page.client.tsx'))!;
+  const image = parseJSXToNodes(client.code).get(identity.heading)!;
+  expect(client.code).toContain(`<img data-id="${identity.heading}"`);
+  expect(client.code).toContain(`src={item.${identity[sourceVariableKey('posts', 'cover')]}}`);
+  expect(image.styles).toMatchObject({ width: '400px', height: 'auto' });
+  expect(image.styles).not.toHaveProperty('aspectRatio');
+  expect(checkFile(client.code, { kind: 'page', path: client.path })).toEqual([]);
+});
+it('rejects a responsive CMS image field change until it can be rebound per viewport', () => {
+  const source = input(), page = source.definitions[0].data, states = page.children as Record<string, any>[];
+  page.dataIdentifier = 'local-module:collection/posts:default';
+  page.pagePath = '/posts/:slug';
+  source.definitions[1].data.homePageNodeId = 'other';
+  Object.assign(states[0].children[0], { __class: 'FrameNode', children: [], fillEnabled: true, fillType: 'image', fillImage: { type: 'variableReference', providerId: 'home', id: 'cover' } });
+  delete states[0].children[0].html;
+  states[1].replicaInfo.overrides.heading.fillImage = { type: 'variableReference', providerId: 'home', id: 'other' };
+  source.definitions.push({ id: 'posts', kind: 'CollectionNode', data: { id: 'posts', __class: 'CollectionNode', children: [], variables: [{ id: 'slug', type: 'slug' }, { id: 'cover', type: 'file' }, { id: 'other', type: 'file' }] } });
+  expect(emit(source).result.diagnostics).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/Responsive CMS image/) }));
+});
 it.each([true, false])('imports on-mount presence with exit enabled %s as editable native motion', exitEnabled => {
   const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
   Object.assign(states[0].children[0], { styleAppearEffectEnabled: true, styleAppearEffectTrigger: 'onMount', styleAppearEffectLocked: false, enterEffectEnabled: true, enterEffectOpacity: 0, enterEffectY: 200, enterEffectTransition: { type: 'tween', duration: 0.8, delay: 0.1 }, exitEffectEnabled: exitEnabled, exitEffectOpacity: 0, exitEffectY: 100, exitEffectTransition: { type: 'tween', duration: 0.4, delay: 0.3 } });
