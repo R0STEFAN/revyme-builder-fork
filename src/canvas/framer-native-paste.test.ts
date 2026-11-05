@@ -23,6 +23,19 @@ it('flushes before snapshot, validates real conversion and recovers a lost commi
   expect(result.operationId).toBe('op-one');
 });
 
+it('reports a user-approved cursor omission only after the native import is committed', async () => {
+  const input = structuredClone(transfer), scope = { projectId: 'destination', branchId: 'main' };
+  Object.assign((input.definitions[0].data.children as Record<string, unknown>[])[0], { customCursorType: 'component', customCursorSmartComponentId: 'missing' });
+  const result = await handleNativeTransferPaste(input, scope, {
+    skipFeatures: { customCursors: true }, operationId: () => 'op-omission', flush: async () => {},
+    snapshot: async () => ({ scope, revision: 0, files: new Map(), config: {} }), assetPayloads: async () => ({}), isCurrent: () => true,
+    prepare: async (candidate, operationId) => createPlan({ scope, baseRevision: 0, operationId, changes: candidate.files.map(file => ({ path: file.path, content: file.code, beforeHash: null })) }),
+    commit: async plan => ({ operationId: plan.operationId, projectId: scope.projectId, branchId: scope.branchId, revision: 1, planHash: plan.planHash, changedFiles: plan.changes.map(change => change.path) }),
+    status: async () => null, apply: async () => {},
+  });
+  expect(result.sourceOmissions).toContainEqual(expect.objectContaining({ code: 'SOURCE_FEATURE_OMITTED', property: 'customCursor' }));
+});
+
 it('leaves the destination alone when conversion fails or local context changes', async () => {
   let committed = false;
   const scope = { projectId: 'destination', branchId: 'main' };

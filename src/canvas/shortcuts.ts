@@ -77,8 +77,10 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
   const cleanups: (() => void)[] = [];
   const pasteFramer = (text: string) => {
     const notification = toast.loading('Імпортуємо з Framer…');
-    void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text)).then(() => {
-      toast.success('Імпорт із Framer завершено.', { id: notification });
+    void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text)).then(receipt => {
+      const omitted = receipt.sourceOmissions ?? [];
+      const names = [omitted.some(item => item.property === 'collectionFilters') && 'фільтри сторінки', omitted.some(item => item.property?.includes('Cursor') || item.property?.startsWith('$control__')) && 'користувацькі курсори'].filter(Boolean);
+      toast.success(names.length ? `Імпорт завершено. Пропущено: ${names.join(', ')}.` : 'Імпорт із Framer завершено.', { id: notification, duration: names.length ? 10000 : undefined });
     }).catch(error => {
       trace.error('framer-native.paste-failed', { error: String(error) });
       toast.error(String(error instanceof Error ? error.message : error).slice(0, 1200), { id: notification, duration: 12000 });

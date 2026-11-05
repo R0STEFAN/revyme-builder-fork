@@ -21,6 +21,8 @@ import { sourceGoogleFontRequests } from './fonts';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '../../generation/cursor-gen';
 import { parseSiteConfigFromCode } from '../../generation/metadata-gen';
 import { updateNativeFavicon } from './favicon';
+import { omitNativeSourceFeatures, type NativeSourceSkips } from './omissions';
+import { resolveMissingSourceTokenFallbacks } from './token-fallback';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
@@ -28,6 +30,7 @@ export interface NativeTargetContext {
   assetPayloads?: Readonly<Record<string, string>>;
   uploadedAssets?: Readonly<Record<string, string>>;
   fontFaces?: readonly WorkspaceFontFaceSpec[];
+  skipFeatures?: NativeSourceSkips;
 }
 
 function destinationLanguageMatches(code: string | undefined, language: unknown): boolean {
@@ -56,7 +59,11 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     return result;
   }
   let graph: SourceGraph;
-  try { graph = buildSourceGraph(input); }
+  try {
+    const prepared = target.skipFeatures ? omitNativeSourceFeatures(input, target.skipFeatures) : undefined;
+    if (prepared) result.omissions = prepared.omissions;
+    graph = buildSourceGraph(prepared?.transfer ?? input);
+  }
   catch (error) {
     result.diagnostics.push({ code: 'SOURCE_CAPTURE_INVALID', message: error instanceof Error ? error.message : String(error) });
     return result;
@@ -147,6 +154,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (t.isStringLiteral(node)) {
           const before = node.value;
           for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
+          node.value = resolveMissingSourceTokenFallbacks(node.value);
           changed ||= before !== node.value;
         } else if (t.isTemplateElement(node)) {
           const before = node.value.raw;
@@ -154,6 +162,8 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
             node.value.raw = renameCustomPropertyInText(node.value.raw, `token-${id}`, name, true);
             if (node.value.cooked != null) node.value.cooked = renameCustomPropertyInText(node.value.cooked, `token-${id}`, name, true);
           }
+          node.value.raw = resolveMissingSourceTokenFallbacks(node.value.raw);
+          if (node.value.cooked != null) node.value.cooked = resolveMissingSourceTokenFallbacks(node.value.cooked);
           changed ||= before !== node.value.raw;
         }
       });

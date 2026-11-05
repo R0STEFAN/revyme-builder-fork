@@ -24,6 +24,25 @@ these active source behaviors for unrelated projects.
   passed after the implementation. Full project import, paste/replace modes,
   reader packaging and live acceptance remain pending.
 
+### Explicit omissions and full-candidate audit
+
+- The editor paste now passes explicit `pageReferenceFilters` and `customCursors`
+  skip options, matching the user's 2026-11-05 scope decision. A pure source
+  copy removes only optional page-reference predicates and cursor assignments;
+  active page-variable uses outside a skipped filter still fail. The original
+  capture is unchanged. Omissions return separately from blocking diagnostics
+  and the paste success notice names the skipped feature types.
+- A source color token absent from the captured declaration graph now resolves
+  to its recorded CSS fallback; tokens without a fallback remain blocking.
+- A full-project pure compile of the saved Walker capture with the two explicit
+  skips, a synthetic English destination layout and mock uploaded-media URLs
+  produced **36 native files, zero compiler diagnostics and 16 reported source
+  omissions**. This is diagnostic evidence only: uploaded media, receiver
+  validation/persistence, editing and browser parity remain unverified.
+- Focused importer/submit/paste suite: **25 files / 300 tests passed**;
+  `npx tsc --noEmit` and `npm run build` passed. The full baseline suite is not
+  claimed green (see previous comparison).
+
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
 This section supersedes the historical status below. The Orca hint stopped at

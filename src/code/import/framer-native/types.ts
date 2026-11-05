@@ -36,4 +36,5 @@ export interface NativeCompileResult {
   createdIds: string[];
   identity: Record<string, string>;
   diagnostics: TransferDiagnostic[];
+  omissions?: TransferDiagnostic[];
 }

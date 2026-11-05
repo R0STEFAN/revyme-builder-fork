@@ -366,11 +366,18 @@ it.each(['metadata', 'font', 'token'])('does not report a complete candidate whi
   const source = transfer();
   if (kind === 'metadata') source.definitions[2].data.webMetadata = { language: 'uk' };
   const frame = (source.definitions[1].data.children as Record<string, any>[])[0];
-  if (kind === 'token') Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-theme, red)' });
+  if (kind === 'token') Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-theme)' });
   if (kind === 'font') frame.children[0].html = '<p style="font-family: Custom Font">Original text</p>';
   const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
   expect(result.files).toEqual([]);
-  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: kind === 'metadata' ? 'SOURCE_METADATA_ADAPTER_REQUIRED' : kind === 'font' ? 'SOURCE_FONT_ADAPTER_REQUIRED' : 'SOURCE_TOKEN_ADAPTER_REQUIRED' }));
+  expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: kind === 'metadata' ? 'SOURCE_METADATA_ADAPTER_REQUIRED' : kind === 'font' ? 'SOURCE_FONT_ADAPTER_REQUIRED' : 'SOURCE_REFERENCE_MISSING' }));
+});
+it('uses the captured CSS fallback for a color token absent from the source scope', () => {
+  const source = transfer(), frame = (source.definitions[1].data.children as Record<string, any>[])[0];
+  Object.assign(frame, { fillEnabled: true, fillType: 'color', fillColor: 'var(--token-theme, rgb(255, 255, 255))' });
+  const result = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  expect(result.files.find(file => file.path.startsWith('components/'))?.code).toContain('backgroundColor: "rgb(255, 255, 255)"');
 });
 it('accepts the source language only when the destination document already uses it', () => {
   const source = transfer(); source.definitions[2].data.webMetadata = { language: 'uk' };

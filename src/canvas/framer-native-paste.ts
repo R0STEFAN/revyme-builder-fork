@@ -3,11 +3,14 @@ import { decodeNativeTransfer } from '../code/import/framer-native/decode';
 import { compileNativeTransfer } from '../code/import/framer-native/compile';
 import { loadNativeTransferAssetPayloads } from '../code/import/framer-native/load-assets';
 import type { NativeTransfer } from '../code/import/framer-native/types';
+import type { TransferDiagnostic } from '../code/import/framer-native/types';
+import type { NativeSourceSkips } from '../code/import/framer-native/omissions';
 import type { Plan, Receipt, Scope, Snapshot } from '../../packages/automation-core/src/contracts';
 import type { FramerImportSubmitInput } from '../../packages/automation-core/src/operations/framer-import';
 
 export interface NativePasteServices {
   signal?: AbortSignal;
+  skipFeatures?: NativeSourceSkips;
   operationId(): string;
   flush(): Promise<void>;
   snapshot(): Promise<Snapshot>;
@@ -21,7 +24,7 @@ export interface NativePasteServices {
 }
 
 /** One user action owns one operation ID, including recovery of a lost response. */
-export async function handleNativeTransferPaste(input: unknown, target: Scope, services: NativePasteServices): Promise<Receipt> {
+export async function handleNativeTransferPaste(input: unknown, target: Scope, services: NativePasteServices): Promise<Receipt & { sourceOmissions?: TransferDiagnostic[] }> {
   const transfer = decodeNativeTransfer(input);
   services.signal?.throwIfAborted();
   const operationId = services.operationId();
@@ -31,7 +34,7 @@ export async function handleNativeTransferPaste(input: unknown, target: Scope, s
   if (snapshot.scope.projectId !== target.projectId || snapshot.scope.branchId !== target.branchId) throw new Error('TARGET_SCOPE_CHANGED');
   const uploaded = services.uploadAssets ? await services.uploadAssets(transfer, snapshot) : undefined;
   const payloads = uploaded ? undefined : services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
-  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads, uploadedAssets: uploaded });
+  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
   services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
@@ -53,5 +56,5 @@ export async function handleNativeTransferPaste(input: unknown, target: Scope, s
   }
   catch (error) { throw Object.assign(new Error(`IMPORT_COMMITTED_SYNC_PENDING: ${operationId}`), { receipt, cause: error }); }
   trace.action('framer-native.paste-applied', { operationId, revision: receipt.revision });
-  return receipt;
+  return compiled.omissions?.length ? { ...receipt, sourceOmissions: compiled.omissions } : receipt;
 }
