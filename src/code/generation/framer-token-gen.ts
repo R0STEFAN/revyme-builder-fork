@@ -13,7 +13,7 @@ export function applyFramerColorTokens(css: string, tokens: readonly FramerColor
   let result = css;
   if (/--[\w-]*\\/.test(css)) throw new Error('FRAMER_TOKEN_PATCH_ESCAPED_PROPERTY');
   for (const token of tokens) {
-    if (!/^color-framer-[a-z0-9-]+$/.test(token.name) || seen.has(token.name) || !color(token.value) || token.dark !== undefined && !color(token.dark)) throw new Error('FRAMER_TOKEN_PATCH_INVALID');
+    if (!/^color-[a-z0-9-]+$/.test(token.name) || seen.has(token.name) || !color(token.value) || token.dark !== undefined && !color(token.dark)) throw new Error('FRAMER_TOKEN_PATCH_INVALID');
     if (new RegExp(`--${token.name}(?![\\w-])`).test(css)) throw new Error('FRAMER_TOKEN_PATCH_COLLISION');
     seen.add(token.name);
     result = addPresetTokenToCSS(result, { name: token.name, value: token.value, category: 'color' });

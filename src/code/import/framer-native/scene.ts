@@ -44,13 +44,22 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
   const emit = (id: string, parent?: ResolvedSourceNode): string => {
     const node = resolveSourceNode(graph, id), targetId = identity[id];
     if (!targetId) throw new Error(`Missing node identity ${id}`);
-    result.sourceIds.push(id);
     if (node.kind === 'SlotNode' && options.template) {
       if (parent?.sourceId !== rootId || node.properties.visible === false || node.children.length) throw new Error(`Template slot ${id} requires a native layout adapter`);
+      result.sourceIds.push(id);
       result.slots.push(id);
       return '{children}';
     }
     const styles = options.stylesFor(node, parent);
+    if (isSourceCodeComponent(node)) {
+      const identifier = String(node.properties.codeComponentIdentifier ?? '');
+      const isZeroSize = (node.properties.width === 0 && node.properties.height === 0) ||
+        (styles.width === '0px' && styles.height === '0px');
+      if (isZeroSize || identifier.includes('SmoothScroll')) {
+        return '';
+      }
+    }
+    result.sourceIds.push(id);
     const intrinsicImage = options.intrinsicImageFor?.(node);
     if (intrinsicImage) {
       if (node.kind !== 'FrameNode' || node.children.length) throw new Error(`Intrinsic CMS image ${id} requires a leaf frame`);
@@ -101,6 +110,9 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
         const videoStyles = { objectFit: 'cover', ...styles };
         return `<video data-id="${targetId}"${label}${srcAttr}${posterAttr}${boolAttrs.map(a => ` ${a}`).join('')} style={${sourceStyleLiteral(videoStyles)}} />`;
       }
+      if (identifier.includes('SmoothScroll') || name === 'default') {
+        return '';
+      }
       const label = escapeJsxText(`Заглушка · ${name}`).replace(/"/g, '&quot;');
       return `<div data-id="${targetId}" data-name="${label}" style={${sourceStyleLiteral({ backgroundColor: '#eeeeee', ...styles })}}></div>`;
     }
@@ -117,9 +129,9 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       const identifier = String(node.properties.codeComponentIdentifier);
       const match = /^local-module:canvasComponent\/([^:]+):/.exec(identifier);
       if (match) result.nested.set(id, match[1]);
-      content = node.children.map(child => emit(child, node)).join('\n');
+      content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
     } else if (node.kind === 'OverlayNode') {
-      content = node.children.map(child => emit(child, node)).join('\n');
+      content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
     } else if (node.kind === 'FrameNode') {
       if (node.properties.isFormContainer === true) {
         if (!context.supportedForms || (node.properties.htmlTag != null && node.properties.htmlTag !== 'form') || Object.entries(node.properties).some(([key, value]) => key.startsWith('form') && value !== undefined && value !== false && !formContainerKeys.has(key))) {
@@ -132,7 +144,7 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
         if (typeof node.properties.htmlTag !== 'string' || !frameTags.has(node.properties.htmlTag)) throw new Error(`Frame tag ${String(node.properties.htmlTag)} on ${id} requires its native adapter`);
         tag = node.properties.htmlTag;
       }
-      content = node.children.map(child => emit(child, node)).join('\n');
+      content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
     } else if (node.kind === 'FormPlainTextInputNode') {
       if (!context.supportedForms || node.children.length) throw new Error(`Form input ${id} requires its native form adapter`);
       const inputType = node.properties.formTextInputType;

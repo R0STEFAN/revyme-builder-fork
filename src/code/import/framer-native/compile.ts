@@ -106,7 +106,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
   try {
     const paths = new Set(target.existingFiles.keys());
     const identityPaths = new Set(paths);
-    for (const match of (target.existingFiles.get('app/globals.css') ?? '').matchAll(/--color-(framer-[a-z0-9-]+)/g)) identityPaths.add(`__tokens__/${match[1]}.css`);
+    for (const match of (target.existingFiles.get('app/globals.css') ?? '').matchAll(/--color-([a-z0-9-]+)/g)) identityPaths.add(`__tokens__/${match[1]}.css`);
     const identity = result.identity = allocateTargetIdentity(graph, identityPaths);
     const colorNames = Object.fromEntries((graph.byKind.get('ColorStyleTokenNode') ?? []).filter(id => graph.reachable.has(id)).map(id => [id, `color-${identity[id]}`]));
     for (const id of graph.renderRootIds) {

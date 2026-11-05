@@ -228,6 +228,7 @@ export function applyBindingDataToTree(
   idPrefix: string = '',
   vpWidth?: number,
   variantName?: string | null,
+  resolveNestedItems?: (nodeId: string, collectionList: any, bindingData: CollectionItem) => CollectionItem[] | undefined,
 ): void {
   // Resolve + apply this row's bindings, honoring per-viewport rebind / per-variant
   // rebind / unbind→default at `vpWidth` (page replica) or `variantName` (component-
@@ -246,7 +247,22 @@ export function applyBindingDataToTree(
     if (!childNode) continue;
     const childEl = ghostEl.querySelector(`[data-node-id="${idPrefix + childNode.id + ghostSuffix}"]`) as HTMLElement;
     if (childEl) {
-      applyBindingDataToTree(childEl, childNode, allNodes, bindingData, ghostSuffix, idPrefix, vpWidth, variantName);
+      if (childNode.collectionList && resolveNestedItems) {
+        const items = resolveNestedItems(childNode.id, childNode.collectionList, bindingData);
+        if (items && items.length > 0) {
+          const nestedItem = items[0];
+          const tplId = childNode.collectionList.templateIds['default'] || Object.values(childNode.collectionList.templateIds)[0];
+          const tplNode = allNodes.get(tplId);
+          if (tplNode) {
+            const tplEl = childEl.querySelector(`[data-node-id="${idPrefix + tplNode.id + ghostSuffix}"]`) as HTMLElement;
+            if (tplEl) {
+              applyBindingDataToTree(tplEl, tplNode, allNodes, nestedItem, ghostSuffix, idPrefix, vpWidth, variantName, resolveNestedItems);
+              continue;
+            }
+          }
+        }
+      }
+      applyBindingDataToTree(childEl, childNode, allNodes, bindingData, ghostSuffix, idPrefix, vpWidth, variantName, resolveNestedItems);
     }
   }
 }

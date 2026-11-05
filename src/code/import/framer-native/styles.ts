@@ -108,9 +108,11 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   for (const axis of ['width', 'height'] as const) {
     const type = p[`${axis}Type`], size = p[axis];
     const main = parent?.layout === 'stack' && (axis === 'width' ? parent.stackDirection === 'horizontal' : parent.stackDirection !== 'horizontal');
-    if (type === 0) set(axis, px(size));
+    if (parent?.layout === 'grid' && (axis === 'width' ? p.gridItemFillCellWidth : p.gridItemFillCellHeight)) {
+      result[axis] = '100%';
+    } else if (type === 0) set(axis, px(size));
     else if (type === 1 && typeof size === 'number') result[axis] = `${size * 100}%`;
-    else if (type === 2) result[axis] = axis === 'height' ? 'auto' : 'min-content';
+    else if (type === 2) result[axis] = axis === 'height' ? 'auto' : 'fit-content';
     else if (type === 3 && typeof size === 'number') {
       if (main && !outOfFlow) {
         result.flexGrow = String(size); result.flexShrink = '1'; result.flexBasis = '0px';

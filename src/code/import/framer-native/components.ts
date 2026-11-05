@@ -86,6 +86,15 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const styleNode = visibilityFor(node) || node.properties.visible === false ? { ...node, properties: { ...node.properties, visible: true } } : node;
         const styles = mapSourceStyles(styleNode, { ...context, parent });
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, context).styles);
+        const vb = sourceRecord(node.properties.textFitViewBoxSize);
+        if (vb && typeof vb.width === 'number' && vb.width > 0) {
+          const maxFs = parseFloat(styles.fontSize) || 276;
+          const vwRate = ((maxFs / vb.width) * 100).toFixed(1);
+          const minFs = Math.round(maxFs * (390 / vb.width));
+          styles.fontSize = `clamp(${minFs}px, ${vwRate}vw, ${maxFs}px)`;
+          styles.width = '100%';
+          styles.maxWidth = '100%';
+        }
         if (parent && ['stack', 'grid'].includes(String(parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
           styles.order = String(parent.children.indexOf(node.sourceId));
           if (parent.properties.layout === 'stack') {

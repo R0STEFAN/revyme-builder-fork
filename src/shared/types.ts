@@ -296,6 +296,8 @@ export interface FilterConfig {
   valueSource?: 'static' | 'searchField' | 'dateField' | 'routeParam' | 'variable';
   /** Page-variable name driving a dynamic filter (when valueSource !== 'static'). */
   valueVar?: string;
+  /** Outer collection list field name bound to this filter variable (when inside a component instance or collection item). */
+  bindingField?: string;
 }
 
 export interface FilterGroup {

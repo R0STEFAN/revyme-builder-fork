@@ -189,9 +189,7 @@ export class OperationRegistry {
   private aliases = new Map<string, string>();
 
   register<I, O>(operation: Operation<I, O>): void {
-    if (this.operations.has(operation.name)) {
-      throw new Error(`Operation "${operation.name}" is already registered`);
-    }
+    // In dev / SSR reloads, replacing an already-registered operation prevents crashes.
     this.operations.set(operation.name, operation);
   }
 

@@ -344,9 +344,29 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
     const hash = simpleHash(`${graph.transfer.context.projectId}:${id}`).replace('-', 'n');
     let stem = field ? `field${hash}` : `framer-${hash}`;
     const node = graph.nodes.get(id);
-    if (!field && node?.kind === 'SmartComponentNode' && typeof node.raw.name === 'string' && node.raw.name.trim()) {
-      const clean = node.raw.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const rawName = typeof node?.raw.name === 'string' && node.raw.name.trim() ? node.raw.name : undefined;
+    if (!field && rawName) {
+      const clean = rawName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       if (/^[a-z][a-z0-9-]*$/.test(clean)) stem = clean;
+    }
+    if (!field && id.startsWith('["code-export"')) {
+      try {
+        const parsed = JSON.parse(id);
+        const identifier = String(parsed[1] ?? '');
+        const exportName = identifier.split(':').pop();
+        if (exportName) {
+          const clean = exportName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          if (/^[a-z][a-z0-9-]*$/.test(clean)) stem = clean;
+        }
+      } catch {}
+    }
+    if (!field) {
+      const codeFile = graph.transfer.codeFiles?.find(f => f.sourceId === id);
+      if (codeFile?.path) {
+        const fileName = codeFile.path.replace(/\.[^.]+$/, '');
+        const clean = fileName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        if (/^[a-z][a-z0-9-]*$/.test(clean)) stem = clean;
+      }
     }
     let candidate = stem;
     for (let suffix = 2; used.has(normalize(candidate)); suffix++) candidate = `${stem}${field ? '_' : '-'}${suffix}`;

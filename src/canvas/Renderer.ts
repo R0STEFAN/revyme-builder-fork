@@ -2020,9 +2020,15 @@ export function matchesValue(target: any, searchVal: any, exact: boolean): boole
   return false;
 }
 
-function evalFilter(item: CollectionItem, filter: FilterConfig): boolean {
+function evalFilter(item: CollectionItem, filter: FilterConfig, bindingData?: CollectionItem | null): boolean {
   let rhs = filter.value;
   if (filter.valueSource === 'variable') {
+    if (filter.bindingField && bindingData) {
+      const boundVal = getDeepFieldValue(bindingData, filter.bindingField);
+      if (boundVal !== undefined && boundVal !== null && boundVal !== '') {
+        rhs = boundVal as string;
+      }
+    }
     const lhs = getDeepFieldValue(item, filter.field);
     if (filter.operator === 'equals') return lhs === rhs;
     if (filter.operator === 'not_equals') return lhs !== rhs;
@@ -2083,7 +2089,7 @@ function evalFilter(item: CollectionItem, filter: FilterConfig): boolean {
 
 type ListOverride = { filterGroup?: FilterGroup | null; sort?: SortConfig[] | null };
 
-function applyChainConfig(
+export function applyChainConfig(
   raw: CollectionItem[],
   cfg: {
     filterGroup?: FilterGroup | null; sort?: SortConfig | SortConfig[] | null;
@@ -2096,6 +2102,7 @@ function applyChainConfig(
   /** Active variant (master artboard / resolved instance variant) — selects the
    *  per-variant override. */
   variantName?: string,
+  bindingData?: CollectionItem | null,
 ): { items: CollectionItem[]; matchingCount: number } {
   if (!cfg) return { items: raw, matchingCount: raw.length };
   let data = raw;
@@ -2121,8 +2128,8 @@ function applyChainConfig(
   if (filterGroup && filterGroup.filters.length > 0) {
     const { combinator, filters } = filterGroup;
     data = data.filter(item => combinator === 'or'
-      ? filters.some(f => evalFilter(item, f))
-      : filters.every(f => evalFilter(item, f)));
+      ? filters.some(f => evalFilter(item, f, bindingData))
+      : filters.every(f => evalFilter(item, f, bindingData)));
   }
   // Multi-key stable sort: first non-zero key delta wins (accepts legacy single config).
   const sortKeys = Array.isArray(sort) ? sort : sort ? [sort] : [];
@@ -3138,7 +3145,7 @@ export function patchElement(
     // Per-tile variant wins over base variantName, then componentVariant — shared resolve-core helper.
     // (`__listVariant ?? undefined` below normalizes the null fallback exactly as the old `?? undefined`.)
     const __listVariant = resolveActiveVariant(node, { vpWidth, variant: variantName });
-    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined, bindingData);
     syncPaginationVisibility(el, node.id, idPrefix, node.collectionList.pagination, node.collectionList.offset, matchingCount);
 
     // Template was dragged OUT / removed (`.map(() => null)` → templateIds empty, or
@@ -3257,7 +3264,14 @@ export function patchElement(
               if (!ghostEl) continue;
               const bindingItem = data[i] as CollectionItem;
               if (templateNodeEl) syncInlineStyles(templateNodeEl, ghostEl);
-              applyBindingDataToTree(ghostEl, templateNode, allNodes, bindingItem, ghostSuffix, idPrefix, vpWidth, variantName);
+              applyBindingDataToTree(
+                ghostEl, templateNode, allNodes, bindingItem, ghostSuffix, idPrefix, vpWidth, variantName,
+                (nId, cList, bData) => {
+                  const raw = resolveCollectionRawData(nId, cList.source);
+                  const v = resolveActiveVariant(node, { vpWidth, variant: variantName });
+                  return applyChainConfig(raw as CollectionItem[], cList, vpWidth, v ?? undefined, bData).items;
+                },
+              );
             }
             // Pin the template (data-0) AHEAD of its clones. A reorder drag can
             // park the dragged template element AMONG its clones on the PRIMARY
@@ -4203,7 +4217,7 @@ function buildNodeElement(
     // Per-tile variant wins over base variantName, then componentVariant — shared resolve-core helper.
     // (`__listVariant ?? undefined` below normalizes the null fallback exactly as the old `?? undefined`.)
     const __listVariant = resolveActiveVariant(node, { vpWidth, variant: variantName });
-    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined);
+    const { items: data, matchingCount } = applyChainConfig(rawData as CollectionItem[], node.collectionList, vpWidth, __listVariant ?? undefined, bindingData);
     syncPaginationVisibility(el, node.id, idPrefix, node.collectionList.pagination, node.collectionList.offset, matchingCount);
     const schema = getCollectionSchema(source);
     const hasLayouts = !!(schema?.layouts && schema.layouts.length > 1);

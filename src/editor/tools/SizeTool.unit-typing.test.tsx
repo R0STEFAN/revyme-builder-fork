@@ -131,4 +131,10 @@ describe('DimensionRow — Smart Unit Typing', () => {
     typeValue('100xyz');
     expect(onChange).toHaveBeenCalledWith('100px');
   });
+
+  it('renders 100% cleanly with % unit when not hijacked into fillCross', () => {
+    const { input, select } = renderRow({ value: '100%' });
+    expect(input.value).toBe('100');
+    expect(select?.value).toBe('%');
+  });
 });

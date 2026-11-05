@@ -283,4 +283,25 @@ describe('buildViewportTokensCSS', () => {
     expect(out).not.toContain('5vw');
     expect(out).not.toContain('10vw'); // from the comment
   });
+
+  it('binds responsive typography presets per viewport tile', () => {
+    const css = `:root {
+  --typo-h1-size: 64px;
+  --typo-h1-size-md: 32px;
+  --typo-h1-size-sm: 36px;
+  --typo-h1-min-default: 1200;
+  --typo-h1-min-md: 810;
+}`;
+    const out = buildViewportTokensCSS(css, VIEWPORTS);
+    // Desktop (1200) does not get overridden; uses :root
+    expect(out).not.toContain('[data-viewport="desktop"]');
+
+    // Tablet (810 < 1200) gets -md
+    expect(out).toContain('[data-viewport="tablet"], [data-overlay-portal="tablet"]');
+    expect(out).toContain('--typo-h1-size: var(--typo-h1-size-md);');
+
+    // Mobile (390 < 810) gets -sm
+    expect(out).toContain('[data-viewport="mobile"], [data-overlay-portal="mobile"]');
+    expect(out).toContain('--typo-h1-size: var(--typo-h1-size-sm);');
+  });
 });

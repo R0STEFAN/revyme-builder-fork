@@ -61,4 +61,11 @@ describe('extractCanvasGlobals', () => {
     const css = ':root.dark { --a: dark; }\n:root { --a: light; }';
     expect(extractCanvasGlobals(css, 'light').tokensCSS).toBe('[data-content-root] { --a: light; }');
   });
+
+  test('does not lift :root inside @media into unconditional globals', () => {
+    const css = ':root { --typo-size: 64px; }\n@media (max-width: 809px) {\n  :root { --typo-size: 32px; }\n}';
+    const { tokensCSS } = extractCanvasGlobals(css, 'light');
+    expect(tokensCSS).toContain('[data-content-root] { --typo-size: 64px; }');
+    expect(tokensCSS).not.toContain('32px');
+  });
 });

@@ -45,6 +45,7 @@ export function canUseFill(
   parentFlexDirection: string,
   axis: 'width' | 'height',
 ): boolean {
+  if (parentLayout === 'grid') return true;
   if (parentLayout !== 'flex') return false;
   // Fill is available on both axes — main axis uses flex grow, cross axis uses 100%
   return true;

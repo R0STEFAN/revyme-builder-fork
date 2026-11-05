@@ -572,6 +572,8 @@ export default function PreviewOverlay({ open, onClose }: Props) {
       if (rootMatch) rootBlocks.push(rootMatch[0]);
       const darkMatch = globalsCssContent.match(/:root\.dark\s*\{[\s\S]*?\}/);
       if (darkMatch) rootBlocks.push(darkMatch[0]);
+      const mediaMatches = globalsCssContent.match(/@media\s*\([^)]+\)\s*\{\s*:root\s*\{[\s\S]*?\}\s*\}/g);
+      if (mediaMatches) rootBlocks.push(...mediaMatches);
     }
     iframe.contentWindow.postMessage({
       type: 'preview:tokens',

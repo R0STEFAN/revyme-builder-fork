@@ -22,3 +22,20 @@ it('preserves semantic Frame tags and editable escaped text in shared scene emis
 it('rejects a Frame tag that requires a separate semantic adapter', () => {
   expect(() => scene('iframe')).toThrow(/tag.*adapter/i);
 });
+it('omits zero-size or SmoothScroll code components from generated scene and sourceIds', () => {
+  const data = {
+    id: 'wrapper',
+    __class: 'FrameNode',
+    children: [
+      { id: 'smooth-scroll', __class: 'CodeComponentNode', codeComponentIdentifier: 'module:util/SmoothScroll_Prod.js:default', width: 0, height: 0, children: [] },
+      { id: 'valid-text', __class: 'RichTextNode', html: '<p>Hello</p>', children: [] },
+    ],
+  };
+  const graph = buildSourceGraph({ ...captured, rootIds: [data.id], definitions: [{ id: data.id, kind: data.__class, data }] });
+  const identity = allocateTargetIdentity(graph, new Set());
+  const result = emitSourceScene(graph, identity, data.id, { graph, diagnostics: [] }, { stylesFor: node => mapSourceStyles(node, { diagnostics: [] }), expressionFor: () => { throw new Error('Unexpected binding'); } });
+  expect(result.sourceIds).not.toContain('smooth-scroll');
+  expect(result.jsx).not.toContain('SmoothScroll');
+  expect(result.jsx).not.toContain('Заглушка');
+  expect(result.jsx).toContain('Hello');
+});

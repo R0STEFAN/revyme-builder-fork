@@ -44,7 +44,9 @@ describe('editor source styles', () => {
   });
   it('maps fixed, percentage, fit, viewport and fit-image dimensions distinctly', () => {
     expect(mapSourceStyles(node({ widthType: 0, width: 0, heightType: 1, height: 0.5 }), context())).toMatchObject({ width: '0px', height: '50%' });
-    expect(mapSourceStyles(node({ widthType: 2, heightType: 4, height: 0.8 }), context())).toMatchObject({ width: 'min-content', height: '80vh' });
+    expect(mapSourceStyles(node({ widthType: 2, heightType: 4, height: 0.8 }), context())).toMatchObject({ width: 'fit-content', height: '80vh' });
+    expect(mapSourceStyles({ ...node({ widthType: 2, heightType: 2 }), kind: 'RichTextNode' }, context())).toMatchObject({ width: 'fit-content', height: 'auto' });
+    expect(mapSourceStyles(node({ width: 744, widthType: 0, height: 192, heightType: 0, gridItemFillCellWidth: true, gridItemFillCellHeight: true }), context({ parent: node({ layout: 'grid' }) }))).toMatchObject({ width: '100%', height: '100%' });
     expect(mapSourceStyles(node({ widthType: 0, width: 300, heightType: 5, fillImagePixelWidth: 1200, fillImagePixelHeight: 800 }), context())).toMatchObject({ aspectRatio: '1.5', height: 'auto' });
   });
   it('maps grid columns, row height and child spans', () => {

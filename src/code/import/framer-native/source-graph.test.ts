@@ -193,4 +193,18 @@ describe('original editor source graph', () => {
     const graph = buildSourceGraph(transfer(comp));
     expect([...sourceCssImageVariables(graph, 'component')]).toEqual(['cover']);
   });
+  it('allocates clean human-readable identities for color tokens, layout templates, and code overrides', () => {
+    const color = node('token-black', { __class: 'ColorStyleTokenNode', name: 'Black' });
+    const color2 = node('token-grey-100', { __class: 'ColorStyleTokenNode', name: 'Grey 100' });
+    const template = node('nav-template', { __class: 'LayoutTemplateNode', name: 'Global Navigation' });
+    const comp = node('comp', { __class: 'SmartComponentNode', name: 'Project Card', codeOverrideEnabled: true, codeOverrideIdentifier: 'local-module:codeFile/mod:withHover' });
+    const t = transfer(color, color2, template, comp);
+    t.rootIds = ['token-black', 'token-grey-100', 'nav-template', 'comp'];
+    const graph = buildSourceGraph(t);
+    const identity = allocateTargetIdentity(graph, new Set());
+    expect(identity['token-black']).toBe('black');
+    expect(identity['token-grey-100']).toBe('grey-100');
+    expect(identity['nav-template']).toBe('global-navigation');
+    expect(identity['comp']).toBe('project-card');
+  });
 });

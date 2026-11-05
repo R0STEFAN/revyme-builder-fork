@@ -706,6 +706,13 @@ function expandComponent(
   if (Object.keys(instanceProps).length > 0) {
     const stripQ = (s: string) => s.replace(/^["'](.*)["']$/s, '$1');
     for (const node of componentNodes.values()) {
+      if (node.collectionList?.filterGroup?.filters) {
+        for (const filter of node.collectionList.filterGroup.filters) {
+          if (filter.valueSource === 'variable' && filter.valueVar && filter.valueVar in instanceProps) {
+            filter.value = stripQ(instanceProps[filter.valueVar]);
+          }
+        }
+      }
       if (node.attrPropRefs) {
         if (!node.attrs) node.attrs = {};
         for (const [attrName, refName] of Object.entries(node.attrPropRefs)) {
@@ -836,6 +843,13 @@ function expandComponent(
             if (!node.attrBindings) node.attrBindings = [];
             if (!node.attrBindings.some(b => b.property === attrName)) {
               node.attrBindings.push({ field, property: attrName as 'src' | 'href' | 'alt' });
+            }
+          }
+        }
+        if (node.collectionList?.filterGroup?.filters) {
+          for (const filter of node.collectionList.filterGroup.filters) {
+            if (filter.valueSource === 'variable' && filter.valueVar === prop) {
+              filter.bindingField = field;
             }
           }
         }
@@ -1059,7 +1073,14 @@ function expandComponent(
       for (const [key, val] of Object.entries(node.collectionList.templateIds)) {
         prefixedTemplateIds[key] = `${instanceNode.id}:${val}`;
       }
-      prefixedCollectionList = { ...node.collectionList, templateIds: prefixedTemplateIds };
+      prefixedCollectionList = {
+        ...node.collectionList,
+        templateIds: prefixedTemplateIds,
+        filterGroup: node.collectionList.filterGroup ? {
+          ...node.collectionList.filterGroup,
+          filters: node.collectionList.filterGroup.filters.map(f => ({ ...f })),
+        } : undefined,
+      };
     }
 
     // Remap motionVariants by parent variant name. The Renderer keys variant

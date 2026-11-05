@@ -49,27 +49,23 @@ export default function TextStyleTool() {
           <TextFillControl />
           <AlignControl />
           <AdjustControl />
-          {!hasPreset && (
-            <>
-              <CreateVariableGate hidden={false}>
-                <TextPropertyControl property="fontSize" label="Font Size" />
-              </CreateVariableGate>
-              <FontFamilyControl />
-              <TextPropertyControl property="fontWeight" label="Weight" />
-              <TextPropertyControl property="fontStyle" label="Italic" />
-              <TextPropertyControl property="letterSpacing" label="Spacing" />
-              <TextPropertyControl property="lineHeight" label="Line Height" />
-              <ElementPropertyControl property="textTransform" label="Transform" />
-              <ElementPropertyControl property="whiteSpace" label="Whitespace" />
-              <ElementPropertyControl property="textOverflow" label="Overflow" />
-              <ElementPropertyControl property="writingMode" label="Mode" />
-              <ElementPropertyControl property="fontFeatureSettings" label="OpenType" />
-              <ElementPropertyControl property="fontVariationSettings" label="Font axes" />
-              <DecorationControl />
-              <ShadowControl />
-              <StrokeControl />
-            </>
-          )}
+          <CreateVariableGate hidden={false}>
+            <TextPropertyControl property="fontSize" label="Font Size" />
+          </CreateVariableGate>
+          <FontFamilyControl />
+          <TextPropertyControl property="fontWeight" label="Weight" />
+          <TextPropertyControl property="fontStyle" label="Italic" />
+          <TextPropertyControl property="letterSpacing" label="Spacing" />
+          <TextPropertyControl property="lineHeight" label="Line Height" />
+          <ElementPropertyControl property="textTransform" label="Transform" />
+          <ElementPropertyControl property="whiteSpace" label="Whitespace" />
+          <ElementPropertyControl property="textOverflow" label="Overflow" />
+          <ElementPropertyControl property="writingMode" label="Mode" />
+          <ElementPropertyControl property="fontFeatureSettings" label="OpenType" />
+          <ElementPropertyControl property="fontVariationSettings" label="Font axes" />
+          <DecorationControl />
+          <ShadowControl />
+          <StrokeControl />
         </ToolSection>
       </CreateVariableGate>
       </LocalizeGate>

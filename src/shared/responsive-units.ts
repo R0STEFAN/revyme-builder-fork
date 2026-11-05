@@ -32,6 +32,7 @@ const VH_INNER_RE = /([\d.]+)(svh|dvh|lvh|vh|svb|dvb|lvb|vb)\b/gi;
 const VMIN_INNER_RE = /([\d.]+)(svmin|dvmin|lvmin|vmin)\b/gi;
 const VMAX_INNER_RE = /([\d.]+)(svmax|dvmax|lvmax|vmax)\b/gi;
 export const ANY_VP_UNIT_RE = /[\d.](svw|dvw|lvw|vw|svi|dvi|lvi|vi|svh|dvh|lvh|vh|svb|dvb|lvb|vb|svmin|dvmin|lvmin|vmin|svmax|dvmax|lvmax|vmax)\b/i;
+export const RESPONSIVE_TYPO_TOKEN_RE = /--typo-[a-z0-9-]+-(?:size|line-height|spacing)-(?:md|sm)\b/;
 
 /** Simulated viewport height for a given width — the canvas has no real
  *  viewport, so vh resolves via a per-device-class ratio:
@@ -260,26 +261,35 @@ export function buildViewportTokensCSS(
   viewports: ViewportTileTarget[],
 ): string {
   if (!tokensCSS || !viewports || viewports.length === 0) return '';
-  if (!ANY_VP_UNIT_RE.test(tokensCSS)) return '';
+  if (!ANY_VP_UNIT_RE.test(tokensCSS) && !RESPONSIVE_TYPO_TOKEN_RE.test(tokensCSS)) return '';
 
   // Strip CSS comments first so commented-out declarations don't match
   const cleanCSS = tokensCSS.replace(/\/\*[\s\S]*?\*\//g, '');
 
-  // Extract all `--var-name: value` declarations that contain viewport units.
+  // Extract all `--var-name: value` declarations.
   // When a token is defined multiple times (e.g. light mode followed by dark mode),
   // the later declaration wins (mirroring CSS cascade order).
-  const tokenMap = new Map<string, string>();
+  const allTokensMap = new Map<string, string>();
+  const vpUnitTokens = new Map<string, string>();
   const declRegex = /(--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+);?/g;
   let match: RegExpExecArray | null;
   while ((match = declRegex.exec(cleanCSS)) !== null) {
     const name = match[1].trim();
     const value = match[2].trim();
+    allTokensMap.set(name, value);
     if (ANY_VP_UNIT_RE.test(value)) {
-      tokenMap.set(name, value);
+      vpUnitTokens.set(name, value);
     }
   }
 
-  if (tokenMap.size === 0) return '';
+  // Find typography groups with responsive tokens
+  const typoGroups = new Set<string>();
+  for (const name of allTokensMap.keys()) {
+    const m = /^--typo-([a-z0-9-]+)-(?:min-default|min-md|size-md|size-sm)$/.exec(name);
+    if (m) typoGroups.add(m[1]);
+  }
+
+  if (vpUnitTokens.size === 0 && typoGroups.size === 0) return '';
 
   let out = '';
   for (const vp of viewports) {
@@ -287,9 +297,37 @@ export function buildViewportTokensCSS(
     if (!Number.isFinite(tileW) || tileW <= 0) continue;
 
     const decls: string[] = [];
-    for (const [name, rawVal] of tokenMap.entries()) {
+    // 1. Viewport unit resolutions
+    for (const [name, rawVal] of vpUnitTokens.entries()) {
       const resolved = resolveResponsiveUnits(rawVal, tileW);
       decls.push(`  ${name}: ${resolved};`);
+    }
+
+    // 2. Responsive typography token rebinding per viewport tier
+    for (const group of typoGroups) {
+      const minDefault = parseInt(allTokensMap.get(`--typo-${group}-min-default`) || '1200', 10);
+      const minMd = parseInt(allTokensMap.get(`--typo-${group}-min-md`) || '810', 10);
+
+      const sizeToken = (tileW < minMd && allTokensMap.has(`--typo-${group}-size-sm`))
+        ? `--typo-${group}-size-sm`
+        : (tileW < minDefault && allTokensMap.has(`--typo-${group}-size-md`))
+        ? `--typo-${group}-size-md`
+        : undefined;
+      if (sizeToken) decls.push(`  --typo-${group}-size: var(${sizeToken});`);
+
+      const lhToken = (tileW < minMd && allTokensMap.has(`--typo-${group}-line-height-sm`))
+        ? `--typo-${group}-line-height-sm`
+        : (tileW < minDefault && allTokensMap.has(`--typo-${group}-line-height-md`))
+        ? `--typo-${group}-line-height-md`
+        : undefined;
+      if (lhToken) decls.push(`  --typo-${group}-line-height: var(${lhToken});`);
+
+      const spToken = (tileW < minMd && allTokensMap.has(`--typo-${group}-spacing-sm`))
+        ? `--typo-${group}-spacing-sm`
+        : (tileW < minDefault && allTokensMap.has(`--typo-${group}-spacing-md`))
+        ? `--typo-${group}-spacing-md`
+        : undefined;
+      if (spToken) decls.push(`  --typo-${group}-spacing: var(${spToken});`);
     }
 
     if (decls.length > 0) {

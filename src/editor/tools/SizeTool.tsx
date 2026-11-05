@@ -17,7 +17,7 @@ import { applyViewportWidthChange } from '@/code/generation/viewport-width-rewri
 import { activeFilePathAtom, isVectorSetComponentFile } from '@/code/project/active-file-store';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { setForceRender, queueMutation } from '@/code/mutation/mutation-queue';
-import { FIT_SIZE, isFitSize } from '@/shared/constants';
+import { FIT_SIZE, isFitSize, isTextTag } from '@/shared/constants';
 import { ToolSection, ToolInput, ToolSelect } from '../controls';
 import { isPrimaryViewport } from '@/canvas/node-ops';
 import { useControl } from '../controls/ControlProvider';
@@ -421,6 +421,7 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     onUpdateMultipleProp(updates);
   }, [isFitInnerRedirect, nodeIdProp, onUpdateMultipleProp]);
   const isTopLevel = !!(node?.isCanvasNode) || !node?.parentId;
+  const isText = isTextTag(node?.type ?? '') || isFitInnerRedirect;
   const isInteracting = useAtomValue(canvasInteractingAtom);
   const inset = useMemo(() => getInsetState(styles), [styles]);
   const isFitSvgWrapper = nodeId.endsWith('-svg') && styles.height === 'auto' && styles.width;
@@ -850,12 +851,14 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
   // base styles, so the size guard inside axisFillActive must be waived AND the
   // row must show the override accent + Reset Override (see axisFillActive).
   const flexFillOverridden = !isPrimary && hasOverride('flex') && isFillMode(flexVal);
+  const isWidthFillGrid = !isText && parentLayout === 'grid' && ((styles.width ?? '').trim() === '100%' || styles.alignSelf === 'stretch');
   const isWidthFillMain = axisFillActive(flexVal, styles.width, widthCanFill, widthIsMainAxis, flexFillOverridden);
-  const isWidthFillCross = widthCanFill && !widthIsMainAxis && isCrossAxisFillFor('width', styles.alignSelf, styles.width);
+  const isWidthFillCross = isWidthFillGrid || (!isText && widthCanFill && !widthIsMainAxis && isCrossAxisFillFor('width', styles.alignSelf, styles.width));
   const isWidthFill = isWidthFillMain || isWidthFillCross;
 
+  const isHeightFillGrid = !isText && parentLayout === 'grid' && ((styles.height ?? '').trim() === '100%' || styles.alignSelf === 'stretch');
   const isHeightFillMain = axisFillActive(flexVal, styles.height, heightCanFill, heightIsMainAxis, flexFillOverridden);
-  const isHeightFillCross = heightCanFill && !heightIsMainAxis && isCrossAxisFillFor('height', styles.alignSelf, styles.height);
+  const isHeightFillCross = isHeightFillGrid || (!isText && heightCanFill && !heightIsMainAxis && isCrossAxisFillFor('height', styles.alignSelf, styles.height));
   const isHeightFill = isHeightFillMain || isHeightFillCross;
 
   const fillMultiplier = getFillMultiplier(flexVal);
@@ -922,11 +925,11 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // (Fill / Fit Content greyed). auto/vw/vh/fill are disabled.
     if (isFitSvgWrapper) return UNIT_OPTIONS.map(o => o.value === 'px' || o.value === '%' ? o : { ...o, disabled: true });
     if (isTopLevel) {
-      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || o.value === 'auto' || o.value === 'min' ? o : { ...o, disabled: true }));
+      return disableAutoForCode(UNIT_OPTIONS.map(o => o.value === 'px' || (isText && o.value === '%') || o.value === 'auto' || o.value === 'min' ? o : { ...o, disabled: true }));
     }
     if (!widthCanFill) return disableAutoForCode(UNIT_OPTIONS);
     return disableAutoForCode([...UNIT_OPTIONS, { value: 'fill', label: 'fill' }]);
-  }, [widthCanFill, isTopLevel, pxOnly, disableAutoForCode, isFitSvgWrapper, isIconSetInstance]);
+  }, [widthCanFill, isTopLevel, pxOnly, disableAutoForCode, isFitSvgWrapper, isIconSetInstance, isText]);
 
   const heightUnitOptions = useMemo(() => {
     if (pxOnly) return UNIT_OPTIONS.map(o => o.value === 'px' ? o : { ...o, disabled: true });
@@ -949,9 +952,9 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
   // has no sizing parent to resolve against, so it's disabled there.
   const minMaxUnitOptions = useMemo(() => {
     const base = UNIT_OPTIONS.filter(o => o.value !== 'auto' && o.value !== 'min');
-    if (isTopLevel) return base.map(o => o.value === 'px' ? o : { ...o, disabled: true });
+    if (isTopLevel && !isText) return base.map(o => o.value === 'px' ? o : { ...o, disabled: true });
     return base;
-  }, [isTopLevel]);
+  }, [isTopLevel, isText]);
 
   // Unit switch for a min/max row.
   const minMaxUnitChange = useCallback((prop: 'minWidth' | 'maxWidth' | 'minHeight' | 'maxHeight', to: DimUnit) => {
@@ -1206,7 +1209,9 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // Switching TO fill
     if (toUnit === 'fill') {
       trace.action('size:width-fill', { nodeId, isMainAxis: widthIsMainAxis });
-      if (widthIsMainAxis) {
+      if (parentLayout === 'grid') {
+        onUpdateMultiple({ width: '100%', flex: '' });
+      } else if (widthIsMainAxis) {
         // Main axis: use flex grow
         onUpdateMultiple({ width: '', flex: makeFillFlex(1) });
       } else {
@@ -1392,7 +1397,9 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     // Switching TO fill
     if (toUnit === 'fill') {
       trace.action('size:height-fill', { nodeId, isMainAxis: heightIsMainAxis });
-      if (heightIsMainAxis) {
+      if (parentLayout === 'grid') {
+        onUpdateMultiple({ height: '100%', flex: '' });
+      } else if (heightIsMainAxis) {
         onUpdateMultiple({ height: '', flex: makeFillFlex(1) });
       } else {
         // Cross axis: a stretch — replica-flipped parent pairs the flex re-base

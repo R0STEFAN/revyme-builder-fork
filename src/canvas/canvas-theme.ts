@@ -49,6 +49,30 @@ function atRuleBlocks(css: string, name: string): string[] {
   return out;
 }
 
+function stripAtRuleBlocks(css: string, name: string): string {
+  let result = '';
+  let i = 0;
+  while (i < css.length) {
+    const start = css.indexOf(name, i);
+    if (start === -1) {
+      result += css.slice(i);
+      break;
+    }
+    result += css.slice(i, start);
+    let j = start + name.length;
+    while (j < css.length && css[j] !== '{') j++;
+    if (j >= css.length) break;
+    let depth = 1; j++;
+    while (j < css.length && depth > 0) {
+      if (css[j] === '{') depth++;
+      else if (css[j] === '}') depth--;
+      j++;
+    }
+    i = j;
+  }
+  return result;
+}
+
 /**
  * What the canvas lifts out of app/globals.css, and nothing else: the token
  * blocks for `mode`, `@keyframes`, and — separately, for the stable fonts
@@ -74,12 +98,15 @@ export function extractCanvasGlobals(
   const light: string[] = [];
   const dark: string[] = [];
   let m: RegExpExecArray | null;
+  // Strip @media blocks so responsive typography/overrides are not lifted as unconditional globals.
+  // Viewport-specific token assignments are resolved per-tile by buildViewportTokensCSS.
+  const baseCss = stripAtRuleBlocks(css, '@media');
   const rootRx = /:root\s*\{([^}]*)\}/g;
-  while ((m = rootRx.exec(css)) !== null) light.push(`[data-content-root] {${m[1]}}`);
+  while ((m = rootRx.exec(baseCss)) !== null) light.push(`[data-content-root] {${m[1]}}`);
   const darkRx = /:root\.dark\s*\{([^}]*)\}/g;
-  while ((m = darkRx.exec(css)) !== null) dark.push(`[data-content-root] {${m[1]}}`);
+  while ((m = darkRx.exec(baseCss)) !== null) dark.push(`[data-content-root] {${m[1]}}`);
   const themeRx = /\[data-theme([^\]]*)\]\s*\{([^}]*)\}/g;
-  while ((m = themeRx.exec(css)) !== null) {
+  while ((m = themeRx.exec(baseCss)) !== null) {
     (/dark/.test(m[1]) ? dark : light).push(`[data-content-root] {${m[2]}}`);
   }
   const tokens = [...light, ...(mode === 'dark' ? dark : []), ...atRuleBlocks(css, '@keyframes')];

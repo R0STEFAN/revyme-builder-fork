@@ -93,6 +93,15 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       } else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_STYLE_UNSUPPORTED');
     }
     normalizeSourceLineHeight(styles);
+    const vb = sourceRecord(node.properties.textFitViewBoxSize);
+    if (vb && typeof vb.width === 'number' && vb.width > 0) {
+      const maxFs = parseFloat(styles.fontSize) || 276;
+      const vwRate = ((maxFs / vb.width) * 100).toFixed(1);
+      const minFs = Math.round(maxFs * (390 / vb.width));
+      styles.fontSize = `clamp(${minFs}px, ${vwRate}vw, ${maxFs}px)`;
+      styles.width = '100%';
+      styles.maxWidth = '100%';
+    }
     if (context.graph && context.typographyIdentity && attrs['data-styles-preset']) {
       const sourceId = attrs['data-styles-preset'];
       const group = nativeTypographyGroup(context.graph, context.typographyIdentity, sourceId);
