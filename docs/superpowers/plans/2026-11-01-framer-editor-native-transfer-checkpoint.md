@@ -1,5 +1,62 @@
 # Framer native transfer — continuation checkpoint, 2026-11-04
 
+## Latest pause checkpoint — 2026-11-05
+
+The user asked to pause here and record the current state. The latest confirmed
+code commits are `a7117bf` (import Framer text styles as native Typography
+presets) and `11429a0` (repair `Providers` imports in imported layouts). The
+working tree was clean when this checkpoint was written.
+
+Typography import now emits native `--typo-framer-*` tokens, binds imported
+text to those tokens, validates the additive CSS recipe at the import receiver,
+and keeps replica-specific literal values when they differ from the master.
+The saved Walker full-project import was accepted into a disposable project
+with 36 compiled files, 0 diagnostics, 8 visible Typography groups and 72
+typography tokens. The existing audit project's Home page was subsequently
+migrated to use the presets; its revision advanced 49 → 50. Revyme's Presets
+panel showed the imported groups after reload. `integration.test.ts`,
+`compile.test.ts`, `text.test.ts` (50 tests total), and a full
+`npx tsc --noEmit` passed before the later i18n fix; `translation-ops.test.ts`
+(36 tests) and a second `npx tsc --noEmit` also passed.
+
+The Preview error `Providers is not defined` was traced to compact imported
+layouts that wrapped children in `<Providers>` without importing it. The
+`ensureIntlScaffold` repair now inserts that import and is idempotent; the test
+passes. After restarting the dev server, the existing audit project's layout
+was automatically healed. The user confirmed Preview now works.
+
+### Confirmed unresolved issues to resume
+
+- Typography preset labels still include generated technical identifiers
+  (for example `Framer H1 Ncqn96m`) instead of the original Framer names.
+- Responsive Typography values have not been transferred. The presets show a
+  single size, and text remains the same size across desktop/tablet/mobile.
+  Source replica sizes must be mapped to Revyme's responsive preset behavior
+  and checked at the actual viewport boundaries.
+- Imported component filenames/panel names are generated identifiers such as
+  `FramerOexjb2`, although the Framer master is named `Project Card`.
+- Project Card exposes fewer editable instance variables in Revyme than in
+  Framer: Thumbnail Video, Thumbnail Poster, Category, and Click were not all
+  visible in the reviewed panel. Inspect whether the props are missing from
+  generated code or hidden because the editor only shows variables applied in
+  the component body; retain all source controls with appropriate native UI.
+- Hero has an extra `div` wrapper around the Logo component in Revyme compared
+  with the Framer layer tree. Determine whether it comes from scene emission or
+  valid layout structure and remove it only if semantics/layout remain intact.
+
+Ignored one-off migration scripts and reports may exist under
+`.superpowers/sdd/2026-11-01-framer-editor-native-transfer/`; they are audit
+artifacts, not product code. The typography migration modified only Home and
+globals.css in the existing disposable audit project because importing its
+entire changed LayoutClient failed Oracle validation on pre-existing canvas
+edits. Do not treat that migration as the product implementation or as proof
+that every existing project is upgraded; verify a clean full import after
+resuming.
+
+The overall goal remains active but is paused at the user's request. Page
+filters and custom cursors remain explicitly excluded. Full Task 8–10 browser,
+asset and extension acceptance, plus the issues above, remain unfinished.
+
 ## Active continuation — 2026-11-05
 
 The local server accepted another selected-layer paste with a literal external
