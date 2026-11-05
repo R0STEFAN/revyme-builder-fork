@@ -225,7 +225,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const intrinsicImageFieldFor = (node: ResolvedSourceNode) => node.kind === 'FrameNode' && !node.children.length && node.properties.fillEnabled === true && node.properties.fillType === 'image' && node.properties.heightType === 5 && !(typeof node.properties.fillImagePixelWidth === 'number' && typeof node.properties.fillImagePixelHeight === 'number' && node.properties.fillImagePixelHeight > 0) && !(typeof node.properties.aspectRatio === 'number' && node.properties.aspectRatio > 0)
         ? imageFieldFor(node.properties.fillImage, node) : undefined;
-      const context: SourceMappingContext = { graph, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
+      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });

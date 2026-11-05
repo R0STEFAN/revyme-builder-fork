@@ -12,6 +12,8 @@ import { emitNativeCodeOverrides } from './code-adapters';
 import { emitNativePages, sourcePageRoute } from './pages';
 import type { NativeCompileResult, SourceGraph } from './types';
 import { applyFramerColorTokens, type FramerColorToken } from '../../generation/framer-token-gen';
+import { applyFramerTypographyTokens } from '../../generation/framer-typography-gen';
+import { sourceTypographyTokens } from './typography';
 import { renameCustomPropertyInText } from '../../generation/preset-refs-gen';
 import { generate } from '../../generation/generator-utils';
 import { applyFramerFontFaces } from '../../generation/framer-font-gen';
@@ -172,6 +174,17 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       fontNames.set(family, alias);
     }
     const fontFaces = (target.fontFaces ?? []).map(face => ({ ...face, family: fontNames.get(face.family)! }));
+    const typography = sourceTypographyTokens(graph, identity);
+    result.diagnostics.push(...typography.diagnostics);
+    const typographyTokens = typography.tokens.map(token => {
+      let value = token.value;
+      if (token.name.endsWith('-font')) {
+        const family = /^"([^"]+)"$/.exec(value)?.[1];
+        if (family && fontNames.has(family)) value = JSON.stringify(fontNames.get(family));
+      }
+      for (const [id, name] of Object.entries(colorNames)) value = renameCustomPropertyInText(value, `token-${id}`, name, true);
+      return { ...token, value: resolveMissingSourceTokenFallbacks(value) };
+    });
     const google = sourceGoogleFontRequests(graph);
     result.diagnostics.push(...google.diagnostics);
     for (const file of result.files.filter(file => file.path.endsWith('.tsx'))) {
@@ -201,14 +214,14 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       });
       if (ast && changed) file.code = generate(ast).code;
     }
-    if (colorTokens.length || fontFaces.length || google.requests.length) {
+    if (colorTokens.length || typographyTokens.length || fontFaces.length || google.requests.length) {
       const before = target.existingFiles.get('app/globals.css');
-      const code = addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerColorTokens(before ?? '', colorTokens), fontFaces), google.requests);
-      result.files.push({ path: 'app/globals.css', code, ...(before === undefined ? {} : { baseCode: before }), ...(colorTokens.length ? { colorTokens } : {}), ...(fontFaces.length ? { fontFaces } : {}), ...(google.requests.length ? { googleFonts: google.requests } : {}) });
+      const code = addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerTypographyTokens(applyFramerColorTokens(before ?? '', colorTokens), typographyTokens), fontFaces), google.requests);
+      result.files.push({ path: 'app/globals.css', code, ...(before === undefined ? {} : { baseCode: before }), ...(colorTokens.length ? { colorTokens } : {}), ...(typographyTokens.length ? { typographyTokens } : {}), ...(fontFaces.length ? { fontFaces } : {}), ...(google.requests.length ? { googleFonts: google.requests } : {}) });
     }
     const projected = new Set([...paths, ...result.files.map(file => file.path)]), emittedPaths = new Set<string>();
     for (const file of result.files) {
-      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.fontFaces || file.googleFonts)) && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !(file.path === 'app/globals.css' && (file.colorTokens || file.typographyTokens || file.fontFaces || file.googleFonts)) && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;
@@ -229,7 +242,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (!t.isObjectProperty(node) || !(t.isIdentifier(node.key, { name: 'fontFamily' }) || t.isStringLiteral(node.key, { value: 'fontFamily' })) || !t.isStringLiteral(node.value)) return;
         const families = node.value.value.split(',').map(family => family.trim().replace(/^["']|["']$/g, ''));
         const system = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'inherit']);
-        if (families.some(family => !system.has(family) && !fontFaces.some(face => face.family === family) && !google.requests.some(font => font.family === family))) result.diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', property: file.path, message: `Font registration is required for ${node.value.value}.` });
+        if (families.some(family => !system.has(family) && !fontFaces.some(face => face.family === family) && !google.requests.some(font => font.family === family) && !typographyTokens.some(token => token.name.endsWith('-font') && family === `var(--${token.name})`))) result.diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', property: file.path, message: `Font registration is required for ${node.value.value}.` });
       });
     }
   } catch (error) {

@@ -7,6 +7,8 @@ import { parseVariantConfig } from '../../variants/variant-config';
 import { parseConnections } from '../../variants/connection-config';
 import { nativeComponentName } from './components';
 import { parsePropMeta } from '../../components/prop-meta';
+import { parsePresetTokens } from '../../generation/preset-gen';
+import { detectActivePreset, groupTypoTokens } from '../../../editor/tools/typography-utils';
 
 it('sends a captured six-state design component through the shipped compiler and native receiver', async () => {
   const sourceTransfer = { ...capturedComponents, rootIds: [capturedComponents.rootIds[0]] };
@@ -15,6 +17,12 @@ it('sends a captured six-state design component through the shipped compiler and
   const underlinePath = `components/${nativeComponentName(compiled.identity, capturedComponents.rootIds[0])}.tsx`;
   const component = compiled.files.find(file => file.path === underlinePath)!;
   expect(component).toBeDefined();
+  expect(compiled.files.find(file => file.path === 'app/globals.css')?.code).toContain('--typo-framer-');
+  expect(component.code).toMatch(/fontFamily:[^\n]*var\(--typo-framer-[^)]*-font\)/);
+  const groups = groupTypoTokens(parsePresetTokens(compiled.files.find(file => file.path === 'app/globals.css')!.code));
+  expect(groups.length).toBeGreaterThan(0);
+  const fontRef = component.code.match(/var\(--typo-framer-[^)]*-font\)/)![0];
+  expect(detectActivePreset({ fontFamily: fontRef }, groups)).not.toBeNull();
   const variants = parseVariantConfig(component.code);
   expect(variants).toHaveLength(6);
   expect(parseConnections(component.code)).toHaveLength(8);

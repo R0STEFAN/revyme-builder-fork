@@ -4,7 +4,7 @@ import { trace } from '../../../shared/debug-trace';
 import { escapeJsxText } from '../../parsing/rich-text-runs';
 import { resolveSourceNode, sourceRecord } from './source-graph';
 import { mappingDiagnostic, sourceStyleValue, type SourceMappingContext } from './styles';
-import type { ResolvedSourceNode, SourceProperties } from './types';
+import type { ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 import { parseSourceGoogleFont } from './fonts';
 
 export interface NativeText {
@@ -28,6 +28,15 @@ const cssNames: Record<string, string> = {
   'text-stroke-width': 'WebkitTextStrokeWidth',
   'text-decoration-thickness': 'textDecorationThickness', 'font-open-type-features': 'fontFeatureSettings',
 };
+export const sourceTypographySuffixes: Record<string, string> = { fontFamily: 'font', fontWeight: 'weight', color: 'color', textTransform: 'transform', textDecoration: 'decoration', textShadow: 'shadow', fontSize: 'size', letterSpacing: 'spacing', lineHeight: 'line-height', WebkitTextStrokeWidth: 'stroke-width', WebkitTextStrokeColor: 'stroke-color' };
+
+export function nativeTypographyGroup(graph: SourceGraph, identity: Record<string, string>, sourceId: string): string {
+  const master = sourceRecord(graph.nodes.get(sourceId)?.raw.replicaInfo)?.master;
+  const id = typeof master === 'string' ? master : sourceId;
+  const source = graph.nodes.get(id);
+  const slug = String(source?.raw.name ?? 'text').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'text';
+  return `framer-${slug}-${String(identity[id] ?? '').replace(/^framer-/, '')}`;
+}
 
 function normalizeSourceLineHeight(styles: Record<string, string>): void {
   if (styles.lineHeight?.endsWith('em')) styles.lineHeight = styles.lineHeight.slice(0, -2);
@@ -66,8 +75,9 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
   const attributeStyle = (element: DefaultTreeAdapterTypes.Element) => {
     const attrs = Object.fromEntries(element.attrs.map(attr => [attr.name, attr.value]));
     let styles: Record<string, string> = {};
+    let presetStyles: Record<string, string> = {};
     if (attrs['data-styles-preset'] && context.graph) {
-      if (context.graph.nodes.has(attrs['data-styles-preset'])) styles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
+      if (context.graph.nodes.has(attrs['data-styles-preset'])) styles = presetStyles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
       else mappingDiagnostic(context, node, 'data-styles-preset', 'SOURCE_TYPOGRAPHY_MISSING');
     }
     const declarations = parseStyleString(attrs.style ?? '');
@@ -83,6 +93,13 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       } else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_STYLE_UNSUPPORTED');
     }
     normalizeSourceLineHeight(styles);
+    if (context.graph && context.typographyIdentity && attrs['data-styles-preset']) {
+      const sourceId = attrs['data-styles-preset'];
+      const group = nativeTypographyGroup(context.graph, context.typographyIdentity, sourceId);
+      const masterId = sourceRecord(context.graph.nodes.get(sourceId)?.raw.replicaInfo)?.master;
+      const masterStyles = typeof masterId === 'string' && context.graph.nodes.has(masterId) ? mapSourceTypography(resolveSourceNode(context.graph, masterId).properties) : presetStyles;
+      for (const [property, suffix] of Object.entries(sourceTypographySuffixes)) if (masterStyles[property] !== undefined && styles[property] === masterStyles[property]) styles[property] = `var(--typo-${group}-${suffix})`;
+    }
     return { attrs, styles };
   };
   const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string, blockId?: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {

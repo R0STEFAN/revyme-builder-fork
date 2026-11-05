@@ -75,7 +75,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       const name = nativeComponentName(identity, scopeId);
       const variables = sourceVariables(graph, scopeId).map(variable => variable.type === 'controlReference' && variable.expectedType === 'file' ? { ...variable, type: 'file' } : variable);
       const variableValues = Object.fromEntries(variables.map(variable => [`${scopeId}:${variable.id}`, `{${nativePropName(identity, scopeId, String(variable.id))}}`]));
-      const context: SourceMappingContext = { graph, diagnostics: componentDiagnostics, variables: variableValues, supportedLoops: true, ...options };
+      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: componentDiagnostics, variables: variableValues, supportedLoops: true, ...options };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });

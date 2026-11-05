@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { parseJSX } from '../../parsing/ast-utils';
 import { mapSourceText, mapSourceTypography } from './text';
+import { buildSourceGraph, resolveSourceNode } from './source-graph';
 import type { ResolvedSourceNode, TransferDiagnostic } from './types';
 const node = (html: string, extra = {}): ResolvedSourceNode => ({ id: 'text', sourceId: 'text', kind: 'RichTextNode', properties: { html, ...extra }, children: [], provenance: ['text'] });
 const context = () => ({ diagnostics: [] as TransferDiagnostic[] });
 
 describe('editable original rich text', () => {
+  it('binds the master preset while keeping a replica font-size override', () => {
+    const source = { format: 'revyme.framer.native', version: 1, complete: true, diagnostics: [], context: { projectId: 'source', branchId: 'main', revision: '1', editorBuild: 'test', scopeId: 'text', mode: 'selection' }, rootIds: ['text'], definitions: [
+      { id: 'text', kind: 'RichTextNode', data: { id: 'text', __class: 'RichTextNode', html: '<p data-styles-preset="replica">Title</p>', children: [] } },
+      { id: 'master', kind: 'TextStylePresetNode', data: { id: 'master', __class: 'TextStylePresetNode', name: 'Heading', font: 'GF;Zalando Sans-450', fontSize: '64px', children: [] } },
+      { id: 'replica', kind: 'TextStylePresetNode', data: { id: 'replica', __class: 'TextStylePresetNode', name: 'Heading', fontSize: '32px', replicaInfo: { master: 'master', overrides: { master: { fontSize: '32px' } } }, children: [] } },
+    ], assets: [] };
+    const graph = buildSourceGraph(source as never);
+    const result = mapSourceText(resolveSourceNode(graph, 'text'), { graph, typographyIdentity: { master: 'framer-master' }, diagnostics: [] });
+    expect(result.styles.fontFamily).toBe('var(--typo-framer-heading-master-font)');
+    expect(result.styles.fontSize).toBe('32px');
+  });
   it('uses the actual font CSS while treating --font-selector as editor metadata', () => {
     const c = context();
     const text = mapSourceText(node('<p style="--framer-font-family: Zalando Sans, sans-serif; --font-selector: R0Y7WmFsYW5kbyBTYW5zLTgwMA==; --framer-font-weight: 800">Title</p>'), c);

@@ -17,6 +17,7 @@ import { validateFramerImportCms } from './framer-import-cms';
 import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '@/code/project/cms-seo';
 import { parseCmsPageMeta } from '@/code/project/cms-page-meta';
 import { applyFramerColorTokens } from '@/code/generation/framer-token-gen';
+import { applyFramerTypographyTokens } from '@/code/generation/framer-typography-gen';
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
@@ -33,6 +34,7 @@ export const framerImportSubmitInputSchema = z.object({
     favicon: z.string().min(1).optional(),
     faviconDark: z.string().min(1).optional(),
     colorTokens: z.array(z.object({ name: z.string(), value: z.string(), dark: z.string().optional() }).strict()).min(1).max(10000).optional(),
+    typographyTokens: z.array(z.object({ name: z.string(), value: z.string() }).strict()).min(1).max(10000).optional(),
     fontFaces: z.array(z.object({ family: z.string(), url: z.string(), weight: z.number(), style: z.enum(['normal', 'italic']), ext: z.enum(['woff2', 'woff', 'otf', 'ttf']), weightRange: z.object({ min: z.number(), max: z.number() }).strict().optional(), unicodeRange: z.string().optional() }).strict()).min(1).max(10000).optional(),
     googleFonts: z.array(z.object({ family: z.string(), axes: z.record(z.string(), z.number()) }).strict()).min(1).max(10000).optional(),
   }).strict()).min(1).max(10000),
@@ -184,11 +186,11 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
         };
         if (file.favicon) expected = validUrl(file.favicon) && (!file.faviconDark || validUrl(file.faviconDark)) && expected !== undefined ? updateNativeFavicon(expected, file.favicon, file.faviconDark) : undefined;
         else if (file.faviconDark) expected = undefined;
-        if (existing === undefined || file.baseCode !== existing || file.code === existing || expected !== file.code || file.cursorPortal && !hasNativeCursorPortal(file.code) || file.colorTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+        if (existing === undefined || file.baseCode !== existing || file.code === existing || expected !== file.code || file.cursorPortal && !hasNativeCursorPortal(file.code) || file.colorTokens || file.typographyTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
       } else if (file.cursorPortal || file.favicon !== undefined || file.faviconDark !== undefined) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
       else if (tokenPatch) {
-        if (!(file.colorTokens?.length || file.fontFaces?.length || file.googleFonts?.length) || file.baseCode !== existing || addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.fontFaces ?? []), file.googleFonts ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
-      } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+        if (!(file.colorTokens?.length || file.typographyTokens?.length || file.fontFaces?.length || file.googleFonts?.length) || file.baseCode !== existing || addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerTypographyTokens(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.typographyTokens ?? []), file.fontFaces ?? []), file.googleFonts ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+      } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.typographyTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       if (existing !== undefined) {
         if (input.mode === 'create' && !tokenPatch && !cursorPatch) fail('ALREADY_EXISTS', file.path);
         if (input.mode === 'paste' && file.path !== input.target.filePath) fail('PASTE_TARGET_CONFLICT', file.path);

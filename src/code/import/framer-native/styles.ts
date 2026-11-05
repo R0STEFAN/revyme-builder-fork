@@ -9,6 +9,7 @@ import type { ResolvedSourceNode, SourceGraph, TransferDiagnostic } from './type
 export interface SourceMappingContext {
   diagnostics: TransferDiagnostic[];
   graph?: SourceGraph;
+  typographyIdentity?: Record<string, string>;
   parent?: ResolvedSourceNode;
   viewport?: { width: number; height?: number };
   /** Values may be canonical whole-value `{prop}` expressions. */
