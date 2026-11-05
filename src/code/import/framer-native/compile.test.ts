@@ -17,6 +17,7 @@ import * as motionRuntime from 'framer-motion';
 import * as revymeRuntime from '@revyme/runtime';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import ts from 'typescript';
+import { createHash } from 'node:crypto';
 
 function transfer(): NativeTransfer {
   const master = { id: 'card', __class: 'SmartComponentNode', baseVariantId: 'card-base', variables: [], children: [{ id: 'card-base', __class: 'FrameNode', width: 200, widthType: 0, heightType: 2, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Original text</p>', children: [] }] }] };
@@ -361,6 +362,26 @@ it('imports a simple source rotation loop as an editable native motion effect', 
 it('reports unsupported paste context and malformed captures without touching a destination', () => {
   expect(compileNativeTransfer(transfer(), { existingFiles: new Map(), mode: 'paste' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'NATIVE_TARGET_ADAPTER_REQUIRED' })] });
   expect(compileNativeTransfer({}, { existingFiles: new Map(), mode: 'create' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'SOURCE_CAPTURE_INVALID' })] });
+});
+it('replaces only the existing page at the same route and keeps dependent components new', async () => {
+  const source = transfer();
+  const first = compileNativeTransfer(source, { existingFiles: new Map(), mode: 'create' });
+  const priorPage = first.files.find(file => file.path === 'app/page.client.tsx')!;
+  const priorWrapper = first.files.find(file => file.path === 'app/page.tsx')!;
+  const existingFiles = new Map([[priorPage.path, priorPage.code], [priorWrapper.path, priorWrapper.code]]);
+  const replaced = compileNativeTransfer(source, { existingFiles, mode: 'replace', filePath: priorPage.path });
+  expect(replaced.diagnostics).toEqual([]);
+  expect(replaced.files.some(file => file.path === priorPage.path)).toBe(true);
+  expect(replaced.files.some(file => file.path === priorWrapper.path)).toBe(true);
+  expect(replaced.files.some(file => file.path.startsWith('components/'))).toBe(true);
+  const target = { projectId: 'destination', branchId: 'main', filePath: priorPage.path };
+  const input = { files: replaced.files.map(file => ({ ...file, ...(existingFiles.has(file.path) ? { baseHash: createHash('sha256').update(existingFiles.get(file.path)!).digest('hex') } : {}) })), mode: 'replace' as const, target, expectedRevision: 2, sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds } };
+  const prepared = await framerImportSubmitOperation.execute(createSnapshot(target, 2, Object.fromEntries(existingFiles)), input, createOperationContext());
+  expect(prepared.diagnostics).toEqual([]);
+  expect(prepared.changes).toHaveLength(replaced.files.length);
+  input.files[0] = { ...input.files[0], baseHash: '0'.repeat(64) };
+  await expect(framerImportSubmitOperation.execute(createSnapshot(target, 2, Object.fromEntries(existingFiles)), input, createOperationContext())).rejects.toThrow(/CAS_CONFLICT/);
+  expect(compileNativeTransfer(source, { existingFiles, mode: 'replace', filePath: 'app/other/page.client.tsx' }).diagnostics).toContainEqual(expect.objectContaining({ code: 'NATIVE_REPLACE_TARGET_INVALID' }));
 });
 it.each(['metadata', 'font', 'token'])('does not report a complete candidate while required %s semantics are missing', kind => {
   const source = transfer();

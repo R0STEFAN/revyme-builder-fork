@@ -2,6 +2,18 @@
 
 ## Continuation — 2026-11-05
 
+## Pause checkpoint — 2026-11-05
+
+The user explicitly paused work because power may be lost. Do not resume
+implementation until the user asks. The current `replace` slice is committed
+as a partial adapter: it compiles a single captured page for the same existing
+route, hashes existing target files before submit, and preserves the ordinary
+`create` clipboard path. Focused compile/paste/upload tests: **3 files / 51
+tests passed**. Live replace, UI mode selection, selected-tree paste, and
+full browser acceptance remain pending. The local audit project
+`framer-audit-1793874216514` is disposable and currently at revision 4.
+
+
 The user explicitly excluded optional page/category filtering and custom cursor
 transfer from the required scope. All other plan requirements remain active.
 The exclusion must be explicit in import reporting; do not silently discard

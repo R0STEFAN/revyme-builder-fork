@@ -11,7 +11,7 @@ import { flushSaveNow, setAutosaveHeld } from '../backend/autosave';
 import { getBaseRevision, setLoadedRevision } from '../backend/save-revision';
 import { getProjectId } from '../backend/project-id';
 import { createNativePasteHttpServices } from './framer-native-http';
-import { handleNativeTransferPaste } from './framer-native-paste';
+import { handleNativeTransferPaste, type NativeImportTarget } from './framer-native-paste';
 import type { Plan, Snapshot } from '../../packages/automation-core/src/contracts';
 import { trace } from '../shared/debug-trace';
 import { backend } from '../backend';
@@ -28,9 +28,9 @@ function projectedFiles(snapshot: Snapshot, plan: Plan): Map<string, string> {
 
 let importing = false;
 /** Apply a confirmed import through the existing snapshot/history/queue paths. */
-export async function pasteNativeTransferInEditor(input: unknown, read: typeof fetch = globalThis.fetch) {
+export async function pasteNativeTransferInEditor(input: unknown, read: typeof fetch = globalThis.fetch, mode: 'create' | 'replace' = 'create') {
   const store = getDefaultStore();
-  const scope = { projectId: getProjectId(), branchId: projectFS.getActiveBranchId(), filePath: store.get(activeFilePathAtom) };
+  const scope: NativeImportTarget & { filePath: string } = { projectId: getProjectId(), branchId: projectFS.getActiveBranchId(), filePath: store.get(activeFilePathAtom), mode };
   if (importing || isViewerMode() || isBranchLocked(scope.branchId) || store.get(canvasInteractingAtom) || store.get(isTextEditingAtom)) throw new Error('IMPORT_EDITOR_BUSY');
   importing = true;
   let held = false, baseline: Snapshot | undefined, prepared: Plan | undefined;
@@ -70,8 +70,13 @@ export async function pasteNativeTransferInEditor(input: unknown, read: typeof f
   }, read);
   services.skipFeatures = { pageReferenceFilters: true, customCursors: true };
   const prepare = services.prepare;
-  services.uploadAssets = (transfer, snapshot) => uploadNativeTransferAssets(transfer, snapshot.files, scope.projectId, backend, undefined, services.skipFeatures);
+  services.uploadAssets = (transfer, snapshot) => uploadNativeTransferAssets(transfer, snapshot.files, scope.projectId, backend, undefined, services.skipFeatures, { mode, filePath: scope.filePath });
   services.prepare = async (...args) => { prepared = await prepare(...args); return prepared; };
   try { return await handleNativeTransferPaste(input, scope, services); }
   finally { if (held) { setAutosaveHeld(false); unlockBranch(scope.branchId); } importing = false; }
+}
+
+/** Explicit replace action; ordinary clipboard paste remains create-only. */
+export function replaceNativePageInEditor(input: unknown, read: typeof fetch = globalThis.fetch) {
+  return pasteNativeTransferInEditor(input, read, 'replace');
 }

@@ -16,6 +16,7 @@ export interface NativePasteServices {
   snapshot(): Promise<Snapshot>;
   assetPayloads?(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
   uploadAssets?(transfer: NativeTransfer, snapshot: Snapshot): Promise<Record<string, string>>;
+  hash?(code: string): Promise<string>;
   isCurrent(snapshot: Snapshot): boolean;
   prepare(input: FramerImportSubmitInput, operationId: string): Promise<Plan>;
   commit(plan: Plan): Promise<Receipt>;
@@ -23,8 +24,16 @@ export interface NativePasteServices {
   apply(receipt: Receipt, plan: Plan): Promise<void>;
 }
 
+export type NativeImportTarget = Scope & { mode?: 'create' | 'replace' | 'paste'; parentNodeId?: string };
+
+async function hashNativeTarget(code: string): Promise<string> {
+  if (!globalThis.crypto?.subtle) throw new Error('NATIVE_TARGET_HASH_UNAVAILABLE');
+  const bytes = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)));
+  return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 /** One user action owns one operation ID, including recovery of a lost response. */
-export async function handleNativeTransferPaste(input: unknown, target: Scope, services: NativePasteServices): Promise<Receipt & { sourceOmissions?: TransferDiagnostic[] }> {
+export async function handleNativeTransferPaste(input: unknown, target: NativeImportTarget, services: NativePasteServices): Promise<Receipt & { sourceOmissions?: TransferDiagnostic[] }> {
   const transfer = decodeNativeTransfer(input);
   services.signal?.throwIfAborted();
   const operationId = services.operationId();
@@ -34,12 +43,17 @@ export async function handleNativeTransferPaste(input: unknown, target: Scope, s
   if (snapshot.scope.projectId !== target.projectId || snapshot.scope.branchId !== target.branchId) throw new Error('TARGET_SCOPE_CHANGED');
   const uploaded = services.uploadAssets ? await services.uploadAssets(transfer, snapshot) : undefined;
   const payloads = uploaded ? undefined : services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
-  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: 'create', assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
+  const importMode = target.mode ?? 'create';
+  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: importMode, filePath: target.filePath, assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
+  if (importMode === 'replace') for (const file of compiled.files) {
+    const prior = snapshot.files.get(file.path);
+    if (prior !== undefined && file.path !== 'app/globals.css' && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) file.baseHash = await (services.hash ?? hashNativeTarget)(prior);
+  }
   services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
   const { projectId, branchId, revision, editorBuild, scopeId, mode } = transfer.context;
-  const plan = await services.prepare({ files: compiled.files, mode: 'create', target: { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}) }, expectedRevision: snapshot.revision, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: { projectId, branchId, revision, editorBuild, scopeId, mode }, rootIds: transfer.rootIds } }, operationId);
+  const plan = await services.prepare({ files: compiled.files, mode: importMode, target: { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}), ...(target.parentNodeId ? { parentNodeId: target.parentNodeId } : {}) }, expectedRevision: snapshot.revision, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: { projectId, branchId, revision, editorBuild, scopeId, mode }, rootIds: transfer.rootIds } }, operationId);
   if (plan.operationId !== operationId || plan.scope.projectId !== target.projectId || plan.scope.branchId !== target.branchId || plan.baseRevision !== snapshot.revision) throw new Error('IMPORT_PLAN_CONTEXT_MISMATCH');
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
   let receipt: Receipt;

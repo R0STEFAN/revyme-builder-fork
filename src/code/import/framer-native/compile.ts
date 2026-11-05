@@ -27,6 +27,7 @@ import { resolveMissingSourceTokenFallbacks } from './token-fallback';
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
   mode: 'create' | 'replace' | 'paste';
+  filePath?: string;
   assetPayloads?: Readonly<Record<string, string>>;
   uploadedAssets?: Readonly<Record<string, string>>;
   fontFaces?: readonly WorkspaceFontFaceSpec[];
@@ -54,6 +55,34 @@ function destinationLanguageMatches(code: string | undefined, language: unknown)
 export function compileNativeTransfer(input: unknown, target: NativeTargetContext): NativeCompileResult {
   trace.fn('framer-native.compile', { mode: target.mode, existingFiles: target.existingFiles.size });
   const result: NativeCompileResult = { files: [], createdIds: [], identity: {}, diagnostics: [] };
+  if (target.mode === 'replace') {
+    const path = target.filePath;
+    if (!path || !/^app\/(?:[^/]+\/)*page\.client\.tsx$/.test(path) || !target.existingFiles.has(path)) {
+      result.diagnostics.push({ code: 'NATIVE_REPLACE_TARGET_INVALID', message: 'Replace requires an existing native page client file.' });
+      return result;
+    }
+    try {
+      const prepared = target.skipFeatures ? omitNativeSourceFeatures(input, target.skipFeatures).transfer : input;
+      const source = buildSourceGraph(prepared);
+      if (source.transfer.context.mode !== 'page' || source.renderRootIds.length !== 1 || source.nodes.get(source.renderRootIds[0])?.kind !== 'WebPageNode') {
+        result.diagnostics.push({ code: 'NATIVE_REPLACE_SOURCE_INVALID', message: 'Replace requires exactly one captured source page.' });
+        return result;
+      }
+    } catch (error) {
+      result.diagnostics.push({ code: 'SOURCE_CAPTURE_INVALID', message: error instanceof Error ? error.message : String(error) });
+      return result;
+    }
+    const wrapper = path.replace(/page\.client\.tsx$/, 'page.tsx');
+    const virtualExisting = new Map(target.existingFiles);
+    virtualExisting.delete(path);
+    virtualExisting.delete(wrapper);
+    const candidate = compileNativeTransfer(input, { ...target, mode: 'create', existingFiles: virtualExisting });
+    if (candidate.diagnostics.length) return candidate;
+    if (!candidate.files.some(file => file.path === path) || !candidate.files.some(file => file.path === wrapper)) {
+      return { ...result, omissions: candidate.omissions, diagnostics: [{ code: 'NATIVE_REPLACE_ROUTE_MISMATCH', message: `Source route does not match ${path}.` }] };
+    }
+    return candidate;
+  }
   if (target.mode !== 'create') {
     result.diagnostics.push({ code: 'NATIVE_TARGET_ADAPTER_REQUIRED', message: `The ${target.mode} target requires its native placement/CAS adapter.` });
     return result;

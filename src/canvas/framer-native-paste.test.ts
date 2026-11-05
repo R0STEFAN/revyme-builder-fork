@@ -4,6 +4,7 @@ import type { NativeTransfer } from '../code/import/framer-native/types';
 import { createPlan } from '../../packages/automation-core/src/plan';
 import type { Receipt } from '../../packages/automation-core/src/contracts';
 import { framerImportSubmitInputSchema } from '../../packages/automation-core/src/operations/framer-import';
+import { createHash } from 'node:crypto';
 
 const transfer: NativeTransfer = { format: 'revyme.framer.native', version: 1, complete: true, diagnostics: [], context: { projectId: 'source', branchId: 'main', revision: '1', editorBuild: 'test', scopeId: 'page', mode: 'page' }, rootIds: ['page'], assets: [], definitions: [{ id: 'page', kind: 'WebPageNode', data: { id: 'page', __class: 'WebPageNode', parentid: 'doc', baseVariantId: 'desktop', children: [{ id: 'desktop', __class: 'FrameNode', width: 1200, widthType: 0, children: [] }] } }, { id: 'doc', kind: 'RootNode', data: { id: 'doc', __class: 'RootNode', homePageNodeId: 'page', children: [] } }] };
 
@@ -22,6 +23,26 @@ it('flushes before snapshot, validates real conversion and recovers a lost commi
   expect(order).toEqual(['flush', 'snapshot', 'prepare', 'apply']);
   expect(commits).toBe(1);
   expect(result.operationId).toBe('op-one');
+});
+
+it('prepares page replacement with hashes of the fresh target files', async () => {
+  const scope = { projectId: 'destination', branchId: 'main', filePath: 'app/page.client.tsx', mode: 'replace' as const };
+  const targetFiles = new Map([['app/page.client.tsx', 'old client'], ['app/page.tsx', 'old wrapper']]);
+  const receipt = await handleNativeTransferPaste(transfer, scope, {
+    operationId: () => 'replace-one', flush: async () => {},
+    snapshot: async () => ({ scope, revision: 2, files: targetFiles, config: {} }),
+    assetPayloads: async () => ({}), isCurrent: () => true,
+    hash: async code => createHash('sha256').update(code).digest('hex'),
+    prepare: async (input, operationId) => {
+      expect(input.mode).toBe('replace');
+      expect(input.target.filePath).toBe(scope.filePath);
+      for (const file of input.files.filter(file => targetFiles.has(file.path))) expect(file.baseHash).toBe(createHash('sha256').update(targetFiles.get(file.path)!).digest('hex'));
+      return createPlan({ scope, baseRevision: 2, operationId, changes: input.files.map(file => ({ path: file.path, content: file.code, beforeHash: file.baseHash ?? null })) });
+    },
+    commit: async plan => ({ operationId: plan.operationId, projectId: scope.projectId, branchId: scope.branchId, revision: 3, planHash: plan.planHash, changedFiles: plan.changes.map(change => change.path) }),
+    status: async () => null, apply: async () => {},
+  });
+  expect(receipt.revision).toBe(3);
 });
 
 it('reports a user-approved cursor omission only after the native import is committed', async () => {

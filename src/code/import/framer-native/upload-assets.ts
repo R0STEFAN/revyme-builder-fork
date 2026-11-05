@@ -28,11 +28,11 @@ export async function convertNativeImageToWebp(blob: Blob): Promise<Blob> {
 }
 
 /** Upload once per source asset, then let the compiler bind every original reference. */
-export async function uploadNativeTransferAssets(input: unknown, files: ReadonlyMap<string, string>, projectId: string, media: { fetchMediaBytes(url: string): Promise<Blob>; uploadAsset(id: string, file: File): Promise<string> }, encode = convertNativeImageToWebp, skips?: NativeSourceSkips): Promise<Record<string, string>> {
+export async function uploadNativeTransferAssets(input: unknown, files: ReadonlyMap<string, string>, projectId: string, media: { fetchMediaBytes(url: string): Promise<Blob>; uploadAsset(id: string, file: File): Promise<string> }, encode = convertNativeImageToWebp, skips?: NativeSourceSkips, target?: { mode: 'create' | 'replace'; filePath?: string }): Promise<Record<string, string>> {
   const graph = buildSourceGraph(skips ? omitNativeSourceFeatures(input, skips).transfer : input), identity = allocateTargetIdentity(graph, new Set(files.keys()));
   const plan = planNativeAssets(graph, identity);
   if (plan.diagnostics.length) throw new Error(plan.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
-  const preflight = compileNativeTransfer(input, { existingFiles: files, mode: 'create', uploadedAssets: Object.fromEntries(plan.requests.map(request => [request.key, request.url])), skipFeatures: skips });
+  const preflight = compileNativeTransfer(input, { existingFiles: files, mode: target?.mode ?? 'create', filePath: target?.filePath, uploadedAssets: Object.fromEntries(plan.requests.map(request => [request.key, request.url])), skipFeatures: skips });
   if (preflight.diagnostics.length) throw new Error(preflight.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
   const uploaded: Record<string, string> = {};
   for (const request of plan.requests) {
