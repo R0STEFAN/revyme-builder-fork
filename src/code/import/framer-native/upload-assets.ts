@@ -2,6 +2,7 @@ import { trace } from '../../../shared/debug-trace';
 import { allocateTargetIdentity, buildSourceGraph } from './source-graph';
 import { planNativeAssets } from './assets';
 import { compileNativeTransfer } from './compile';
+import { omitNativeSourceFeatures, type NativeSourceSkips } from './omissions';
 
 export async function convertNativeImageToWebp(blob: Blob): Promise<Blob> {
   if (blob.type === 'image/gif') throw new Error('ANIMATED_IMAGE_WEBP_ADAPTER_REQUIRED');
@@ -27,11 +28,11 @@ export async function convertNativeImageToWebp(blob: Blob): Promise<Blob> {
 }
 
 /** Upload once per source asset, then let the compiler bind every original reference. */
-export async function uploadNativeTransferAssets(input: unknown, files: ReadonlyMap<string, string>, projectId: string, media: { fetchMediaBytes(url: string): Promise<Blob>; uploadAsset(id: string, file: File): Promise<string> }, encode = convertNativeImageToWebp): Promise<Record<string, string>> {
-  const graph = buildSourceGraph(input), identity = allocateTargetIdentity(graph, new Set(files.keys()));
+export async function uploadNativeTransferAssets(input: unknown, files: ReadonlyMap<string, string>, projectId: string, media: { fetchMediaBytes(url: string): Promise<Blob>; uploadAsset(id: string, file: File): Promise<string> }, encode = convertNativeImageToWebp, skips?: NativeSourceSkips): Promise<Record<string, string>> {
+  const graph = buildSourceGraph(skips ? omitNativeSourceFeatures(input, skips).transfer : input), identity = allocateTargetIdentity(graph, new Set(files.keys()));
   const plan = planNativeAssets(graph, identity);
   if (plan.diagnostics.length) throw new Error(plan.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
-  const preflight = compileNativeTransfer(input, { existingFiles: files, mode: 'create', uploadedAssets: Object.fromEntries(plan.requests.map(request => [request.key, request.url])) });
+  const preflight = compileNativeTransfer(input, { existingFiles: files, mode: 'create', uploadedAssets: Object.fromEntries(plan.requests.map(request => [request.key, request.url])), skipFeatures: skips });
   if (preflight.diagnostics.length) throw new Error(preflight.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
   const uploaded: Record<string, string> = {};
   for (const request of plan.requests) {

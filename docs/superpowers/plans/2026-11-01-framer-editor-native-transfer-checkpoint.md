@@ -43,6 +43,24 @@ these active source behaviors for unrelated projects.
   `npx tsc --noEmit` and `npm run build` passed. The full baseline suite is not
   claimed green (see previous comparison).
 
+### Receiver validation of the full candidate
+
+- The live reader's context includes its own `rootIds` field, while
+  `imports.framer.submit` accepts a narrow manifest context. The editor now
+  selects the six contract fields explicitly. A live-shape regression test
+  reproduced the Zod error before the fix.
+- The receiver's CMS validator now accepts the local backend's actual
+  `/api/uploads/<safe-filename>` URL for image/file fields, rejecting traversal
+  and unsupported relative paths. The source-media preflight applies the same
+  user-approved skips before deciding what to download/upload.
+- With a synthetic English layout and mock `/api/uploads/mock.webp` media URLs,
+  the complete saved Walker transfer compiled to **36 native files** and the
+  actual `imports.framer.submit` operation accepted **36 changes, 0 diagnostics**
+  in a disposable in-memory snapshot. No media was downloaded or persisted, so
+  this is a receiver-contract proof, not a live-project import.
+- Focused importer/submit/paste suite: **25 files / 303 tests passed**;
+  `npx tsc --noEmit` and production build passed.
+
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
 This section supersedes the historical status below. The Orca hint stopped at

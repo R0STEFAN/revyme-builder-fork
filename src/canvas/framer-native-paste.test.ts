@@ -3,6 +3,7 @@ import { handleNativeTransferPaste } from './framer-native-paste';
 import type { NativeTransfer } from '../code/import/framer-native/types';
 import { createPlan } from '../../packages/automation-core/src/plan';
 import type { Receipt } from '../../packages/automation-core/src/contracts';
+import { framerImportSubmitInputSchema } from '../../packages/automation-core/src/operations/framer-import';
 
 const transfer: NativeTransfer = { format: 'revyme.framer.native', version: 1, complete: true, diagnostics: [], context: { projectId: 'source', branchId: 'main', revision: '1', editorBuild: 'test', scopeId: 'page', mode: 'page' }, rootIds: ['page'], assets: [], definitions: [{ id: 'page', kind: 'WebPageNode', data: { id: 'page', __class: 'WebPageNode', parentid: 'doc', baseVariantId: 'desktop', children: [{ id: 'desktop', __class: 'FrameNode', width: 1200, widthType: 0, children: [] }] } }, { id: 'doc', kind: 'RootNode', data: { id: 'doc', __class: 'RootNode', homePageNodeId: 'page', children: [] } }] };
 
@@ -34,6 +35,20 @@ it('reports a user-approved cursor omission only after the native import is comm
     status: async () => null, apply: async () => {},
   });
   expect(result.sourceOmissions).toContainEqual(expect.objectContaining({ code: 'SOURCE_FEATURE_OMITTED', property: 'customCursor' }));
+});
+
+it('submits the live reader context through the narrow manifest contract', async () => {
+  const input = structuredClone(transfer), scope = { projectId: 'destination', branchId: 'main' };
+  (input.context as typeof input.context & { rootIds: string[] }).rootIds = ['page'];
+  await handleNativeTransferPaste(input, scope, {
+    operationId: () => 'op-live-context', flush: async () => {}, snapshot: async () => ({ scope, revision: 0, files: new Map(), config: {} }), assetPayloads: async () => ({}), isCurrent: () => true,
+    prepare: async (candidate, operationId) => {
+      framerImportSubmitInputSchema.parse(candidate);
+      return createPlan({ scope, baseRevision: 0, operationId, changes: candidate.files.map(file => ({ path: file.path, content: file.code, beforeHash: null })) });
+    },
+    commit: async plan => ({ operationId: plan.operationId, projectId: scope.projectId, branchId: scope.branchId, revision: 1, planHash: plan.planHash, changedFiles: plan.changes.map(change => change.path) }),
+    status: async () => null, apply: async () => {},
+  });
 });
 
 it('leaves the destination alone when conversion fails or local context changes', async () => {

@@ -70,7 +70,7 @@ export async function pasteNativeTransferInEditor(input: unknown, read: typeof f
   }, read);
   services.skipFeatures = { pageReferenceFilters: true, customCursors: true };
   const prepare = services.prepare;
-  services.uploadAssets = (transfer, snapshot) => uploadNativeTransferAssets(transfer, snapshot.files, scope.projectId, backend);
+  services.uploadAssets = (transfer, snapshot) => uploadNativeTransferAssets(transfer, snapshot.files, scope.projectId, backend, undefined, services.skipFeatures);
   services.prepare = async (...args) => { prepared = await prepare(...args); return prepared; };
   try { return await handleNativeTransferPaste(input, scope, services); }
   finally { if (held) { setAutosaveHeld(false); unlockBranch(scope.branchId); } importing = false; }

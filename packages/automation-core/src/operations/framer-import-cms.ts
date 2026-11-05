@@ -136,7 +136,7 @@ export function validateFramerImportCms(files: ReadonlyMap<string, string>, chan
       if ((type === 'image' || type === 'file') && value) {
         if (value.startsWith('/assets/')) {
           if (!files.has(`public${value}`)) fail(`Missing asset ${label}: ${value}`);
-        } else if (!/^https:\/\//.test(value)) fail(`Unresolved asset ${label}`);
+        } else if (!/^https:\/\//.test(value) && !/^\/api\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) fail(`Unresolved asset ${label}`);
       }
     }
   }

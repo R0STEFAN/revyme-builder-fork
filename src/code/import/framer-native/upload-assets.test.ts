@@ -32,6 +32,19 @@ it('uploads converted WebP once and binds the uploaded URL in the native page', 
   expect(result.files.some(file => file.path.startsWith('public/assets/'))).toBe(false);
   expect(result.files.find(file => file.path.endsWith('page.client.tsx'))!.code).toContain('/api/uploads/photo.webp');
 });
+it('preflights an approved cursor omission before uploading page media', async () => {
+  const input = structuredClone(source), image = input.definitions[0].data.children[0].children[0] as any;
+  image.customCursorType = 'component'; image.customCursorSmartComponentId = 'uncaptured-cursor';
+  let uploads = 0;
+  const media = {
+    fetchMediaBytes: async () => new Blob(['original'], { type: 'image/png' }),
+    uploadAsset: async () => { uploads++; return '/api/uploads/photo.webp'; },
+  };
+  await expect(uploadNativeTransferAssets(input, new Map(), 'destination', media, async () => new Blob(['webp'], { type: 'image/webp' }))).rejects.toThrow(/cursor/i);
+  const uploaded = await uploadNativeTransferAssets(input, new Map(), 'destination', media, async () => new Blob(['webp'], { type: 'image/webp' }), { customCursors: true });
+  expect(uploads).toBe(1);
+  expect(Object.values(uploaded)).toEqual(['/api/uploads/photo.webp']);
+});
 it('shares one uploaded image across page fills, component props and CMS defaults and rows', async () => {
   const input = structuredClone(source);
   const page = input.definitions[0].data;

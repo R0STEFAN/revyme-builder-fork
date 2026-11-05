@@ -38,7 +38,8 @@ export async function handleNativeTransferPaste(input: unknown, target: Scope, s
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
   services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
-  const plan = await services.prepare({ files: compiled.files, mode: 'create', target: { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}) }, expectedRevision: snapshot.revision, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: transfer.context, rootIds: transfer.rootIds } }, operationId);
+  const { projectId, branchId, revision, editorBuild, scopeId, mode } = transfer.context;
+  const plan = await services.prepare({ files: compiled.files, mode: 'create', target: { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}) }, expectedRevision: snapshot.revision, sourceManifest: { format: transfer.format, version: transfer.version, complete: true, context: { projectId, branchId, revision, editorBuild, scopeId, mode }, rootIds: transfer.rootIds } }, operationId);
   if (plan.operationId !== operationId || plan.scope.projectId !== target.projectId || plan.scope.branchId !== target.branchId || plan.baseRevision !== snapshot.revision) throw new Error('IMPORT_PLAN_CONTEXT_MISMATCH');
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');
   let receipt: Receipt;

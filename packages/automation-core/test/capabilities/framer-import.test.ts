@@ -268,6 +268,14 @@ describe('deterministic Framer full-file import boundary', () => {
     replaceFile(input, 'cms/works.json', JSON.stringify([row('work-a', { featured: '' })]));
     await expect(run(input)).rejects.toThrow(/Expected boolean/);
   });
+  it('accepts native uploaded CMS media URLs while rejecting traversal paths', async () => {
+    const input = bundle();
+    replaceFile(input, 'cms/works.schema.json', JSON.stringify({ name: 'Works', slug: 'works', fields: [{ id: 'category', name: 'Category', type: 'reference', referenceCollection: 'categories' }, { id: 'cover', name: 'Cover', type: 'image' }] }));
+    replaceFile(input, 'cms/works.json', JSON.stringify([row('work-a', { category: 'category-a', cover: '/api/uploads/cover.webp' })]));
+    expect((await run(input)).changes).toHaveLength(7);
+    replaceFile(input, 'cms/works.json', JSON.stringify([row('work-a', { category: 'category-a', cover: '/api/uploads/../secrets' })]));
+    await expect(run(input)).rejects.toThrow(/CMS_INVALID/);
+  });
   it('rejects missing collection pairs and dangling schema references without rows', async () => {
     const input = bundle(); input.files = input.files.filter(file => file.path !== 'cms/categories.json');
     await expect(run(input)).rejects.toThrow(/CMS/);
