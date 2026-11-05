@@ -95,9 +95,9 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
     normalizeSourceLineHeight(styles);
     const vb = sourceRecord(node.properties.textFitViewBoxSize);
     if (vb && typeof vb.width === 'number' && vb.width > 0) {
-      const maxFs = parseFloat(styles.fontSize) || 276;
+      const maxFs = parseFloat(styles.fontSize) || (typeof vb.height === 'number' && vb.height > 0 ? vb.height : 48);
       const vwRate = ((maxFs / vb.width) * 100).toFixed(1);
-      const minFs = Math.round(maxFs * (390 / vb.width));
+      const minFs = Math.max(12, Math.round(maxFs * (390 / vb.width)));
       styles.fontSize = `clamp(${minFs}px, ${vwRate}vw, ${maxFs}px)`;
       styles.width = '100%';
       styles.maxWidth = '100%';
