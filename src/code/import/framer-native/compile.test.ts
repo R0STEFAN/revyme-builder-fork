@@ -360,7 +360,7 @@ it('imports a simple source rotation loop as an editable native motion effect', 
 });
 
 it('reports unsupported paste context and malformed captures without touching a destination', () => {
-  expect(compileNativeTransfer(transfer(), { existingFiles: new Map(), mode: 'paste' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'NATIVE_TARGET_ADAPTER_REQUIRED' })] });
+  expect(compileNativeTransfer(transfer(), { existingFiles: new Map(), mode: 'paste' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'NATIVE_PASTE_TARGET_INVALID' })] });
   expect(compileNativeTransfer({}, { existingFiles: new Map(), mode: 'create' })).toMatchObject({ files: [], diagnostics: [expect.objectContaining({ code: 'SOURCE_CAPTURE_INVALID' })] });
 });
 it('replaces only the existing page at the same route and keeps dependent components new', async () => {

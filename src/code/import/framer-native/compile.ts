@@ -23,11 +23,13 @@ import { parseSiteConfigFromCode } from '../../generation/metadata-gen';
 import { updateNativeFavicon } from './favicon';
 import { omitNativeSourceFeatures, type NativeSourceSkips } from './omissions';
 import { resolveMissingSourceTokenFallbacks } from './token-fallback';
+import { compileNativeSelectionPaste } from './paste-selection';
 
 export interface NativeTargetContext {
   existingFiles: ReadonlyMap<string, string>;
   mode: 'create' | 'replace' | 'paste';
   filePath?: string;
+  parentNodeId?: string;
   assetPayloads?: Readonly<Record<string, string>>;
   uploadedAssets?: Readonly<Record<string, string>>;
   fontFaces?: readonly WorkspaceFontFaceSpec[];
@@ -55,6 +57,7 @@ function destinationLanguageMatches(code: string | undefined, language: unknown)
 export function compileNativeTransfer(input: unknown, target: NativeTargetContext): NativeCompileResult {
   trace.fn('framer-native.compile', { mode: target.mode, existingFiles: target.existingFiles.size });
   const result: NativeCompileResult = { files: [], createdIds: [], identity: {}, diagnostics: [] };
+  if (target.mode === 'paste') return compileNativeSelectionPaste(input, target);
   if (target.mode === 'replace') {
     const path = target.filePath;
     if (!path || !/^app\/(?:[^/]+\/)*page\.client\.tsx$/.test(path) || !target.existingFiles.has(path)) {

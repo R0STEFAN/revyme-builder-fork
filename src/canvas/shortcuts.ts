@@ -29,7 +29,7 @@ import {
 import { handleClipboardTextPaste } from './text-paste';
 import { readFigmaClipboard, handleFigmaPaste } from './figma-paste';
 import { readReshadersClipboard } from './reshaders-clipboard';
-import { isNativeTransferClipboardText } from './framer-native-clipboard';
+import { isNativeTransferClipboardText, nativeTransferPasteMode } from './framer-native-clipboard';
 import { hasClipboard as hasInternalClipboard, setExternalClipboardData } from '../code/features/paste-engine';
 import { parsePluginUrl } from '@/editor/command-palette/marketplace-client';
 import { paletteOpenAtom, paletteQueryAtom } from '@/code/stores/palette-store';
@@ -75,12 +75,12 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     setToolMode, setSelectedIds, commitTextEdit, handleNodeMouseDown, setPanHighlight,
   } = refs;
   const cleanups: (() => void)[] = [];
-  const pasteFramer = (text: string) => {
+  const pasteFramer = (text: string, mode: 'create' | 'replace' = 'create') => {
     const notification = toast.loading('Імпортуємо з Framer…');
-    void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text)).then(receipt => {
+    void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text, undefined, mode)).then(receipt => {
       const omitted = receipt.sourceOmissions ?? [];
       const names = [omitted.some(item => item.property === 'collectionFilters') && 'фільтри сторінки', omitted.some(item => item.property?.includes('Cursor') || item.property?.startsWith('$control__')) && 'користувацькі курсори'].filter(Boolean);
-      toast.success(names.length ? `Імпорт завершено. Пропущено: ${names.join(', ')}.` : 'Імпорт із Framer завершено.', { id: notification, duration: names.length ? 10000 : undefined });
+      toast.success(names.length ? `Імпорт завершено. Пропущено: ${names.join(', ')}.` : mode === 'replace' ? 'Сторінку замінено з Framer.' : 'Імпорт із Framer завершено.', { id: notification, duration: names.length ? 10000 : undefined });
     }).catch(error => {
       trace.error('framer-native.paste-failed', { error: String(error) });
       toast.error(String(error instanceof Error ? error.message : error).slice(0, 1200), { id: notification, duration: 12000 });
@@ -738,6 +738,14 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
   //      "Install" to add the cloud plugin to the project.
   // Both branches preventDefault + stopPropagation so the paste doesn't
   // additionally trigger node-paste / text-insert side effects.
+  let nativePasteMode: 'create' | 'replace' = 'create';
+  const rememberPasteShortcut = (e: KeyboardEvent) => {
+    if (e.key.toLowerCase() === 'v' && (e.ctrlKey || e.metaKey)) nativePasteMode = nativeTransferPasteMode(e);
+  };
+  const clearPasteShortcut = (e: KeyboardEvent) => { if (e.key.toLowerCase() === 'v') nativePasteMode = 'create'; };
+  window.addEventListener('keydown', rememberPasteShortcut, true);
+  window.addEventListener('keyup', clearPasteShortcut, true);
+  cleanups.push(() => { window.removeEventListener('keydown', rememberPasteShortcut, true); window.removeEventListener('keyup', clearPasteShortcut, true); });
   const handlePasteEvent = (e: ClipboardEvent) => {
     // Don't intercept if user is typing in an input/textarea/contenteditable
     const target = e.target as HTMLElement;
@@ -765,7 +773,7 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
     const text = e.clipboardData?.getData('text/plain')?.trim();
     if (!text) return;
     if (isNativeTransferClipboardText(text)) {
-      e.preventDefault(); e.stopPropagation(); pasteFramer(text); return;
+      e.preventDefault(); e.stopPropagation(); pasteFramer(text, nativePasteMode); nativePasteMode = 'create'; return;
     }
 
     if (isComponentUrl(text)) {

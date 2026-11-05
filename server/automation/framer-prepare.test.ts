@@ -34,7 +34,9 @@ it('prepares a validated atomic import and one reversible history entry without 
   expect(result.statusCode).toBe(200);
   expect((await repo.getSnapshot(target))!.files.has('app/imported/page.client.tsx')).toBe(false);
   expect(result.body.data.changes.map((change: any) => change.path)).toContain('_meta/history.json');
-  expect((await commit.commit(result.body.data)).ok).toBe(true);
+  const committed = await commit.commit(result.body.data);
+  expect(committed.ok).toBe(true);
+  expect(committed.data?.createdIds).toEqual(result.body.data.createdIds);
   const after = (await repo.getSnapshot(target))!;
   expect((await commit.commit(result.body.data)).data?.revision).toBe(after.revision);
   expect((await post({ operationId: 'stale', input })).statusCode).toBe(409);

@@ -1,6 +1,37 @@
 # Framer native transfer — continuation checkpoint, 2026-11-04
 
+## Paused at user request — 2026-11-05, latest state
+
+The user requested an immediate pause and commit before a power outage. This
+checkpoint supersedes the older pause and resume notes below. The workspace
+now includes explicit Ctrl/Cmd+Shift+V same-route replacement and an initial
+selection-paste adapter for static Frame/RichText subtrees. A live disposable
+project accepted selection paste into the existing `/asset-test` page, advancing
+revision 5 → 6 while retaining its earlier content. The commit receipt now
+returns `createdIds` so the editor can select the inserted subtree. Focused
+validation before the pause: 5 test files / 46 tests passed;
+`npx tsc --noEmit` passed.
+
+The full goal is **not complete**. Selection paste still diagnoses active
+interactions/bindings, responsive overrides and unsupported node kinds; these
+need native adapters. Browser acceptance and complete asset/visual parity also
+remain open. The saved Spinner Mask.svg source URL still returns 404/403.
+Resume from `git status`, the focused tests and `npx tsc --noEmit`, then continue
+the remaining plan. Filtering and custom cursor conversion are explicitly out
+of scope by user choice.
+
 ## Continuation — 2026-11-05
+
+## Resumed continuation — 2026-11-05
+
+The user reactivated the goal after the power-outage pause. The disposable
+project's existing `/asset-test` page was used for live `replace`: a forged
+stale base hash was rejected by the real prepare endpoint without changing the
+snapshot, then a valid prepare/commit replaced the page and advanced revision
+4 → 5 (three changes including history). The native clipboard route now makes
+Ctrl/Cmd+Shift+V an explicit same-route page replacement; normal paste remains
+create. Selection paste, one-operation editor Undo/Redo and browser acceptance
+are still pending. Focused clipboard/paste/compile suite: 3 files / 46 passed.
 
 ## Pause checkpoint — 2026-11-05
 

@@ -343,6 +343,7 @@ export class LocalProjectRepository implements ProjectRepository {
       revision: nextRevision,
       planHash: plan.planHash,
       changedFiles,
+      createdIds: [...plan.createdIds],
     };
 
     if (!record.receipts) record.receipts = {};

@@ -44,9 +44,9 @@ export async function handleNativeTransferPaste(input: unknown, target: NativeIm
   const uploaded = services.uploadAssets ? await services.uploadAssets(transfer, snapshot) : undefined;
   const payloads = uploaded ? undefined : services.assetPayloads ? await services.assetPayloads(transfer, snapshot) : await loadNativeTransferAssetPayloads(transfer, snapshot.files, { signal: services.signal });
   const importMode = target.mode ?? 'create';
-  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: importMode, filePath: target.filePath, assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
+  const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: importMode, filePath: target.filePath, parentNodeId: target.parentNodeId, assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
-  if (importMode === 'replace') for (const file of compiled.files) {
+  if (importMode === 'replace' || importMode === 'paste') for (const file of compiled.files) {
     const prior = snapshot.files.get(file.path);
     if (prior !== undefined && file.path !== 'app/globals.css' && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) file.baseHash = await (services.hash ?? hashNativeTarget)(prior);
   }
