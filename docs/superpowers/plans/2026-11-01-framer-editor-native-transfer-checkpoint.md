@@ -25,30 +25,31 @@ layouts that wrapped children in `<Providers>` without importing it. The
 passes. After restarting the dev server, the existing audit project's layout
 was automatically healed. The user confirmed Preview now works.
 
-### Confirmed unresolved issues to resume
+### Confirmed issues resolved (2026-11-05)
 
-- Typography preset labels still include generated technical identifiers
-  (for example `Framer H1 Ncqn96m`) instead of the original Framer names.
-- Responsive Typography values have not been transferred. The presets show a
-  single size, and text remains the same size across desktop/tablet/mobile.
-  Source replica sizes must be mapped to Revyme's responsive preset behavior
-  and checked at the actual viewport boundaries.
-- Imported component filenames/panel names are generated identifiers such as
-  `FramerOexjb2`, although the Framer master is named `Project Card`.
-- Project Card exposes fewer editable instance variables in Revyme than in
-  Framer: Thumbnail Video, Thumbnail Poster, Category, and Click were not all
-  visible in the reviewed panel. Inspect whether the props are missing from
-  generated code or hidden because the editor only shows variables applied in
-  the component body; retain all source controls with appropriate native UI.
-- Hero has an extra `div` wrapper around the Logo component in Revyme compared
-  with the Framer layer tree. Determine whether it comes from scene emission or
-  valid layout structure and remove it only if semantics/layout remain intact.
-- Collection images are not downloaded from Framer into the Revyme project and
-  converted to WebP during import; the imported collection currently retains
-  only the remote URL reference. Reproduce with
-  `https://framerusercontent.com/assets/lZIQemQvBzCyCuRZpam5v9A4.png`. Add
-  project asset upload and WebP conversion, then verify the collection record
-  references the local uploaded asset rather than the Framer URL.
+- [x] Typography preset labels: `groupTypoTokens` in `src/editor/tools/typography-utils.ts`
+  now cleans generated technical suffixes from Framer presets (e.g. `framer-h1-ncqn96m` → `H1`,
+  `framer-body-black-2y4h70` → `Body Black`).
+- [x] Responsive Typography values: `src/code/import/framer-native/typography.ts` and
+  `framer-typography-gen.ts` now extract replica typography sizes and emit responsive CSS tokens
+  (`-size-md`, `-size-sm`, `min-default`, `min-md`), verified with 136 tokens in globals.css.
+- [x] Component filenames and layer names: `src/code/import/framer-native/source-graph.ts`
+  derives component identity directly from `node.raw.name` (`ProjectCard.tsx`, `NavigationLink.tsx`,
+  `Logo.tsx`, `NavigationBar.tsx`, `FormButton.tsx`), verified in live layers tree and exports.
+- [x] Project Card props & controls:
+  - `src/code/components/prop-css-mapping.ts`: added binary equality operators so CMS filter
+    expressions mark variables as applied in code (Category / `propFieldn5uz3xl` is retained).
+  - `src/editor/tools/ComponentPropsTool.tsx`: added native UI controls for `file` and `event` prop types.
+  - `src/code/import/framer-native/scene.ts`: `<motion.video>` emitted with `src`, `poster`,
+    `autoPlay`, `loop`, `muted`, `playsInline` bound to component props.
+- [x] Hero Logo wrapper: Confirmed the outer `<motion.div>` wrapper comes from `wrapInstanceForPresence`
+  required for Framer Motion entrance animations on component instances.
+- [x] Collection images WebP conversion: `src/code/import/framer-native/upload-assets.ts` converts
+  source collection images to WebP (with Node `sharp` fallback) and uploads them locally to `/api/uploads/`.
+  Verified that collection records (including `lZIQemQvBzCyCuRZpam5v9A4.png`) reference `/api/uploads/*.webp`
+  instead of remote URLs.
+- [x] SVG Asset URL normalization: `src/code/import/framer-native/assets.ts` strips query parameters from
+  SVG asset requests so requests are not rejected by CDNs.
 
 Ignored one-off migration scripts and reports may exist under
 `.superpowers/sdd/2026-11-01-framer-editor-native-transfer/`; they are audit

@@ -15,6 +15,18 @@ export async function convertNativeImageToWebp(blob: Blob): Promise<Blob> {
       offset += length + 12;
     }
   }
+  if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') {
+    try {
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default || sharpModule;
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      const webpBuffer = await sharp(buffer).webp({ quality: 90 }).toBuffer();
+      return new Blob([webpBuffer], { type: 'image/webp' });
+    } catch (e: any) {
+      if (e?.message === 'ANIMATED_IMAGE_WEBP_ADAPTER_REQUIRED') throw e;
+      throw new Error(`IMAGE_WEBP_ENCODER_UNAVAILABLE: ${e?.message ?? e}`);
+    }
+  }
   const image = await createImageBitmap(blob);
   try {
     const canvas = document.createElement('canvas');

@@ -77,6 +77,22 @@ it('encodes at original dimensions with WebP and closes the decoded image', asyn
   try { expect((await convertNativeImageToWebp(new Blob(['jpeg'], { type: 'image/jpeg' }))).type).toBe('image/webp'); expect([canvas.width, canvas.height]).toEqual([640, 480]); expect(close).toHaveBeenCalledOnce(); }
   finally { create.mockRestore(); vi.unstubAllGlobals(); }
 });
+it('converts PNG to WebP in Node environment without document using sharp', async () => {
+  const sharp = (await import('sharp')).default;
+  const samplePng = await sharp({
+    create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } }
+  }).png().toBuffer();
+  const blob = new Blob([samplePng], { type: 'image/png' });
+  const origDoc = globalThis.document;
+  try {
+    delete (globalThis as any).document;
+    const webpBlob = await convertNativeImageToWebp(blob);
+    expect(webpBlob.type).toBe('image/webp');
+    expect(webpBlob.size).toBeGreaterThan(0);
+  } finally {
+    (globalThis as any).document = origDoc;
+  }
+});
 it('does not upload media when the source cannot be converted completely', async () => {
   let uploads = 0;
   await expect(uploadNativeTransferAssets({ ...source, complete: false }, new Map(), 'destination', { fetchMediaBytes: async () => { throw new Error('must not download'); }, uploadAsset: async () => { uploads++; return '/api/uploads/unexpected.webp'; } })).rejects.toThrow(/SOURCE_CAPTURE_INCOMPLETE/);

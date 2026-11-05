@@ -60,6 +60,47 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
     if (isSourceCodeComponent(node)) {
       const identifier = String(node.properties.codeComponentIdentifier ?? '');
       const name = typeof node.properties.name === 'string' && node.properties.name ? node.properties.name : identifier.split(':').pop() || 'Code component';
+      if (identifier.endsWith(':Video') || name === 'Video') {
+        const unwrapControl = (ctrl: unknown) => {
+          const rec = sourceRecord(ctrl);
+          return rec && 'value' in rec ? rec.value : ctrl;
+        };
+        const srcRaw = unwrapControl(node.properties.$control__srcFile ?? node.properties.$control__srcUrl ?? node.properties.$control__url ?? node.properties.$control__src);
+        const posterRaw = unwrapControl(node.properties.$control__poster);
+        const autoPlay = unwrapControl(node.properties.$control__autoPlay) ?? true;
+        const loop = unwrapControl(node.properties.$control__loop) ?? true;
+        const muted = unwrapControl(node.properties.$control__muted) ?? true;
+        const playsInline = unwrapControl(node.properties.$control__playsInline) ?? true;
+        const controls = unwrapControl(node.properties.$control__controls) ?? false;
+
+        const formatAttr = (attr: string, rawVal: unknown) => {
+          if (rawVal === undefined || rawVal === null || rawVal === '') return '';
+          if (typeof rawVal === 'string') {
+            return ` ${attr}=${JSON.stringify(rawVal)}`;
+          }
+          try {
+            const expr = options.expressionFor(rawVal, node, attr);
+            if (expr.startsWith('"')) return ` ${attr}=${expr}`;
+            return ` ${attr}={${expr}}`;
+          } catch {
+            return '';
+          }
+        };
+
+        const srcAttr = formatAttr('src', srcRaw);
+        const posterAttr = formatAttr('poster', posterRaw);
+        const boolAttrs: string[] = [];
+        if (autoPlay === true || autoPlay === 'true') boolAttrs.push('autoPlay');
+        if (loop === true || loop === 'true') boolAttrs.push('loop');
+        if (muted === true || muted === 'true') boolAttrs.push('muted');
+        if (playsInline === true || playsInline === 'true') boolAttrs.push('playsInline');
+        if (controls === true || controls === 'true') boolAttrs.push('controls');
+
+        if (node.properties.link !== undefined && node.properties.link !== null && node.properties.link !== '') result.links.push(id);
+        const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
+        const videoStyles = { objectFit: 'cover', ...styles };
+        return `<video data-id="${targetId}"${label}${srcAttr}${posterAttr}${boolAttrs.map(a => ` ${a}`).join('')} style={${sourceStyleLiteral(videoStyles)}} />`;
+      }
       const label = escapeJsxText(`Заглушка · ${name}`).replace(/"/g, '&quot;');
       return `<div data-id="${targetId}" data-name="${label}" style={${sourceStyleLiteral({ backgroundColor: '#eeeeee', ...styles })}}></div>`;
     }

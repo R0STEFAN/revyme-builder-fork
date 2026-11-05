@@ -99,6 +99,9 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
     if (url.protocol !== 'https:' || url.username || url.password) {
       diagnostic('ASSET_URL_UNAVAILABLE', `No usable native original URL for ${filename}`); continue;
     }
+    if (mimeType === 'image/svg+xml' && url.search) {
+      url.search = '';
+    }
     // Reader 0.1.1 recorded the native FILE helper (X/l). SVG image sources
     // use L/i without bitmap sizing instead (verified against rendered mask
     // URLs in the original editor). This compatibility rule reproduces that

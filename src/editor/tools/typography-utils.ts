@@ -82,11 +82,22 @@ export function groupTypoTokens(tokens: PresetToken[]): TypoGroup[] {
     if (!groups.has(groupName)) groups.set(groupName, []);
     groups.get(groupName)!.push(token);
   }
-  return Array.from(groups.entries()).map(([name, grpTokens]) => ({
-    name,
-    label: name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    tokens: grpTokens,
-  }));
+  return Array.from(groups.entries()).map(([name, grpTokens]) => {
+    let displayStem = name;
+    if (name.startsWith('framer-')) {
+      const parts = name.split('-');
+      if (parts.length >= 3 && /^[a-z0-9]{5,9}$/.test(parts[parts.length - 1])) {
+        displayStem = parts.slice(1, -1).join('-');
+      } else {
+        displayStem = parts.slice(1).join('-');
+      }
+    }
+    return {
+      name,
+      label: displayStem.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      tokens: grpTokens,
+    };
+  });
 }
 
 // ─── Token value helpers ─────────────────────────────────────────────────────

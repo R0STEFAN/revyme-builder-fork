@@ -342,7 +342,12 @@ export function allocateTargetIdentity(graph: SourceGraph, existingPaths: Readon
   for (const { id, field, slug } of entries.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
     if (slug) { identity[id] = '_slug'; continue; }
     const hash = simpleHash(`${graph.transfer.context.projectId}:${id}`).replace('-', 'n');
-    const stem = field ? `field${hash}` : `framer-${hash}`;
+    let stem = field ? `field${hash}` : `framer-${hash}`;
+    const node = graph.nodes.get(id);
+    if (!field && node?.kind === 'SmartComponentNode' && typeof node.raw.name === 'string' && node.raw.name.trim()) {
+      const clean = node.raw.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (/^[a-z][a-z0-9-]*$/.test(clean)) stem = clean;
+    }
     let candidate = stem;
     for (let suffix = 2; used.has(normalize(candidate)); suffix++) candidate = `${stem}${field ? '_' : '-'}${suffix}`;
     used.add(normalize(candidate));

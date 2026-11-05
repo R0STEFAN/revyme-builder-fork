@@ -156,6 +156,8 @@ function Header({ content = "AI Intelligence" }) {
     expect(isVariableAppliedInCode('myCursor', `{...withCursor(myCursor, {})}`)).toBe(true);                // cursor call arg
     expect(isVariableAppliedInCode('shadowV', `boxShadow: 'var(--shadowV)'`)).toBe(true);                   // CSS custom property
     expect(isVariableAppliedInCode('onCardClick', `onClick={() => setTimeout(onCardClick, 500)}`)).toBe(true); // delayed event call
+    expect(isVariableAppliedInCode('category', `{items.filter(item => item._id === category).map(...)}`)).toBe(true); // CMS filter condition (===)
+    expect(isVariableAppliedInCode('category', `{items.filter(item => category !== item.catId).map(...)}`)).toBe(true); // CMS filter condition (!==)
   });
 
   it('does NOT false-match member access or a longer identifier', () => {

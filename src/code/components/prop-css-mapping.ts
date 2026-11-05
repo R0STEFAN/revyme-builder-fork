@@ -227,6 +227,8 @@ export function isVariableAppliedInCode(name: string, code: string): boolean {
                                // `(?<!\\?)` excludes the NULLISH `?? name` (template boilerplate `x = __tp.x
                                // ?? x` must NOT count as a use). Safe: `a?.name` is excluded by E's
                                // `(?<![\\w$.])` guard; `prop?: T` has `:` (not the ident) right after `?`.
+    + `|[!=]==?\\s*${E}`       // === name / !== name / == name / != name — equality comparison in CMS filters / conditions
+    + `|${E}\\s*[!=]==?`       // name === / name !== / name == / name !=
     + `|\\(\\s*${E}`           // (name       — call arg (withCursor / setTimeout)
     + `|--${esc}(?![\\w-])`,   // var(--name) — CSS custom property. `(?![\\w-])` is CRITICAL: a bare `\\b`
                                // makes a DESIGN TOKEN like var(--color-white) false-match a variable `color`

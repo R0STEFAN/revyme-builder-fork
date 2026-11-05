@@ -2,8 +2,8 @@ import { addPresetTokenToCSS } from './preset-gen';
 import { trace } from '../../shared/debug-trace';
 
 export interface FramerTypographyToken { name: string; value: string }
-const suffix = '(?:line-height|stroke-width|stroke-color|decoration|transform|shadow|weight|color|font|size|spacing|tag)';
-const namePattern = new RegExp(`^typo-framer-[a-z0-9-]+-${suffix}$`);
+const suffix = '(?:line-height(?:-(?:md|sm))?|stroke-width|stroke-color|decoration|transform|shadow|weight|color|font|size(?:-(?:md|sm))?|spacing(?:-(?:md|sm))?|tag|min-default|min-md)';
+const namePattern = new RegExp(`^typo-(?:framer-)?[a-z0-9-]+-${suffix}$`);
 
 /** Exact additive recipe shared by compiler and import receiver. */
 export function applyFramerTypographyTokens(css: string, tokens: readonly FramerTypographyToken[]): string {

@@ -2439,7 +2439,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
   //   var(--name)    (CSS custom property, e.g. border/shadow overlays)
   // Default-to-HIDE when none match. Shared with the Template tool via isVariableAppliedInCode.
   const visibleProps = componentInfo.props.filter(
-    p => p.name !== 'style' && p.name !== 'initialVariant' && p.varType !== 'event'
+    p => p.name !== 'style' && p.name !== 'initialVariant'
       // A cursor variable's paired `<prop>Opts` param is popup-managed
       // per-instance machinery, never a standalone row.
       && !(p.name.endsWith('Opts')
@@ -2913,6 +2913,37 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                             </button>
                           </div>
                         )}
+                      </LocalePropPillOr>
+                    </div>
+                  </HoistMenuItemProvider>
+                );
+              }
+              if (prop.varType === 'file') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <div className="flex items-center justify-between w-full">
+                      <ControlLabel label={prop.label || prop.name} property={cssProp ?? ''} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel={humanizeStylePropName(cssProp) ?? undefined} />
+                      <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <div className="flex-1 min-w-0">
+                            <ToolInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} placeholder="File URL / upload" text />
+                          </div>
+                          <UploadControl value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} accept="video/*,audio/*,image/*,application/*" label="Upload" />
+                        </div>
+                      </LocalePropPillOr>
+                    </div>
+                  </HoistMenuItemProvider>
+                );
+              }
+              if (prop.varType === 'event') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <div className="flex items-center justify-between w-full">
+                      <ControlLabel label={prop.label || prop.name} property="" plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel="Event" />
+                      <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
+                        <div className="flex items-center gap-2 w-full">
+                          <ToolInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} placeholder="Event trigger" text />
+                        </div>
                       </LocalePropPillOr>
                     </div>
                   </HoistMenuItemProvider>
