@@ -4,7 +4,13 @@ import { parseJSX, findFirstElementByDataId, traverse } from '../../parsing/ast-
 import { generate } from '../../generation/generator-utils';
 import { checkFile } from '../../oracle/check-file';
 import { oracleFileKind } from '../../oracle/file-kind';
-import { buildSourceGraph, allocateTargetIdentity, sourceRecord } from './source-graph';
+import { parseCanvasConfig } from '../../project/canvas-config';
+import { CSS_NEUTRAL_FALLBACK, updateContainerQueryStyle } from '../../generation/generator-styles';
+import { normalizeTransparent } from '../../../shared/css-utils';
+import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
+import { setTagAttr } from '../../generation/generator-utils';
+import { sourceStaticLinkValue } from './links';
+import { buildSourceGraph, allocateTargetIdentity, resolveSourceNode, sourceRecord } from './source-graph';
 import { emitSourceScene } from './scene';
 import { mapSourceStyles, type SourceMappingContext } from './styles';
 import { emitNativeAssets, resolveUploadedNativeAssets } from './assets';
@@ -33,16 +39,25 @@ export function compileNativeSelectionPaste(input: unknown, target: NativeTarget
     if (graph.transfer.context.mode !== 'selection' || !graph.renderRootIds.length) result.diagnostics.push({ code: 'NATIVE_PASTE_SOURCE_INVALID', message: 'Paste requires selected source layers.' });
     for (const id of graph.reachable) {
       const node = graph.nodes.get(id)!;
-      if (!['FrameNode', 'RichTextNode'].includes(node.kind) || Object.entries(node.raw).some(([key, value]) => activeBehavior.test(key) && value === true || key === 'link' && value != null && value !== '' || sourceRecord(value)?.type === 'variableReference')) {
+      if (!['FrameNode', 'RichTextNode'].includes(node.kind) || Object.entries(node.raw).some(([key, value]) => activeBehavior.test(key) && value === true || sourceRecord(value)?.type === 'variableReference')) {
         result.diagnostics.push({ code: 'NATIVE_PASTE_BEHAVIOR_ADAPTER_REQUIRED', sourceId: id, message: 'Selected layer has behavior or bindings that need the native paste adapter.' });
       }
+      if (node.raw.link != null && node.raw.link !== '') {
+        const ref = sourceRecord(node.raw.link);
+        if (ref?.type === 'webPage') result.diagnostics.push({ code: 'NATIVE_PASTE_LINK_ROUTE_REQUIRED', sourceId: id, message: 'The destination route for this selected page link is unavailable.' });
+        else {
+          try {
+            const href = sourceStaticLinkValue(node.raw.link);
+            if (typeof href !== 'string' || !/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(href) || /[\u0000-\u0020]/.test(href)) throw new Error('Unsupported selected link');
+          } catch (error) { result.diagnostics.push({ code: 'NATIVE_PASTE_LINK_ADAPTER_REQUIRED', sourceId: id, message: error instanceof Error ? error.message : String(error) }); }
+        }
+      } else if (node.raw.linkOpenInNewTab === true) result.diagnostics.push({ code: 'NATIVE_PASTE_LINK_ADAPTER_REQUIRED', sourceId: id, message: 'A selected link target has no link.' });
     }
     const selected = new Set(graph.reachable);
-    for (const node of graph.nodes.values()) {
+    const replicas = [...graph.nodes.values()].filter(node => {
       const info = sourceRecord(node.raw.replicaInfo);
-      const overrides = sourceRecord(info?.overrides);
-      if (overrides && Object.keys(overrides).some(id => selected.has(id))) result.diagnostics.push({ code: 'NATIVE_PASTE_RESPONSIVE_ADAPTER_REQUIRED', sourceId: node.id, message: 'Selected layer has responsive state overrides.' });
-    }
+      return Object.keys(sourceRecord(info?.overrides) ?? {}).some(id => selected.has(id));
+    });
     const ast = parseJSX(before);
     if (!ast) throw new Error('Target source cannot be parsed');
     let parent: t.JSXElement | undefined;
@@ -59,7 +74,9 @@ export function compileNativeSelectionPaste(input: unknown, target: NativeTarget
     const assetResult = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     result.diagnostics.push(...assetResult.diagnostics);
     if (result.diagnostics.length) return result;
-    const context: SourceMappingContext = { graph, diagnostics: result.diagnostics, assets: assetResult.assets, viewport: { width: 1200 } };
+    const viewports = parseCanvasConfig(before)?.viewports ?? [];
+    const primaryWidth = viewports.find(viewport => viewport.isPrimary)?.designWidth ?? viewports.find(viewport => viewport.isPrimary)?.width ?? 1200;
+    const context: SourceMappingContext = { graph, diagnostics: result.diagnostics, assets: assetResult.assets, viewport: { width: primaryWidth } };
     const scenes = graph.renderRootIds.map(id => emitSourceScene(graph, identity, id, context, {
       stylesFor: (node, parent) => mapSourceStyles(node, { ...context, parent }),
       expressionFor: () => { throw new Error('Selected dynamic bindings require the native paste adapter'); },
@@ -76,7 +93,50 @@ export function compileNativeSelectionPaste(input: unknown, target: NativeTarget
       parent!.closingElement = t.jsxClosingElement(t.cloneNode(parent!.openingElement.name, true));
     }
     parent!.children.push(...elements);
-    const code = generate(ast).code;
+    let code = generate(ast).code;
+    for (const scene of scenes) for (const id of scene.links) {
+      const node = graph.nodes.get(id)!;
+      const href = sourceStaticLinkValue(node.raw.link);
+      code = convertToMotionLinkInCode(code, identity[id]);
+      code = setTagAttr(code, identity[id], 'href', JSON.stringify(href));
+      if (typeof node.raw.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[id], 'target', JSON.stringify(node.raw.linkOpenInNewTab ? '_blank' : '_self'));
+    }
+    const parentOf = new Map<string, string>();
+    for (const scene of scenes) for (const id of scene.sourceIds) for (const child of resolveSourceNode(graph, id).children) parentOf.set(child, id);
+    for (const replica of replicas) {
+      const info = sourceRecord(replica.raw.replicaInfo)!;
+      const sourceWidth = replica.raw.width;
+      const viewport = viewports.find(item => !item.isPrimary && (item.designWidth ?? item.width) === sourceWidth);
+      if (typeof info.master !== 'string' || !selected.has(info.master) || !viewport) {
+        result.diagnostics.push({ code: 'NATIVE_PASTE_RESPONSIVE_ADAPTER_REQUIRED', sourceId: replica.id, message: 'Selected responsive state has no matching destination breakpoint.' });
+        continue;
+      }
+      for (const [id, rawOverride] of Object.entries(sourceRecord(info.overrides) ?? {})) {
+        if (!selected.has(id)) continue;
+        const override = sourceRecord(rawOverride);
+        if (!override || Object.keys(override).some(key => key === 'children' || key === 'itemsOrder' || key === '_deleted')) {
+          result.diagnostics.push({ code: 'NATIVE_PASTE_RESPONSIVE_ADAPTER_REQUIRED', sourceId: id, message: 'Selected responsive structure needs its native adapter.' });
+          continue;
+        }
+        const base = resolveSourceNode(graph, id), state = resolveSourceNode(graph, id, replica.id);
+        const parentId = parentOf.get(id);
+        const baseParent = parentId ? resolveSourceNode(graph, parentId) : undefined;
+        const stateParent = parentId ? resolveSourceNode(graph, parentId, replica.id) : undefined;
+        const baseContext = { ...context, viewport: { width: primaryWidth }, parent: baseParent };
+        const stateContext = { ...context, viewport: { width: Number(sourceWidth) }, parent: stateParent };
+        const baseStyles = mapSourceStyles(base, baseContext);
+        const styles = mapSourceStyles(state, stateContext);
+        for (const [key, value] of Object.entries(override)) {
+          if (JSON.stringify(value) === JSON.stringify(base.properties[key])) continue;
+          const isolated = mapSourceStyles({ ...base, properties: { ...base.properties, [key]: value } }, baseContext);
+          if (JSON.stringify(isolated) === JSON.stringify(baseStyles)) result.diagnostics.push({ code: 'NATIVE_PASTE_RESPONSIVE_ADAPTER_REQUIRED', sourceId: id, property: key, message: `Selected responsive ${key} needs its native adapter.` });
+        }
+        if (result.diagnostics.length) continue;
+        const changes: Record<string, string> = {};
+        for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) if (styles[key] !== baseStyles[key]) changes[key] = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+        if (Object.keys(changes).length) code = updateContainerQueryStyle(code, identity[id], viewport.width, normalizeTransparent(changes), { viewportWidths: viewports.map(item => item.width) });
+      }
+    }
     const kind = oracleFileKind(path, code);
     if (!kind) throw new Error('Target canvas kind is unavailable');
     const projected = new Set([...target.existingFiles.keys(), ...assetResult.files.map(file => file.path)]);

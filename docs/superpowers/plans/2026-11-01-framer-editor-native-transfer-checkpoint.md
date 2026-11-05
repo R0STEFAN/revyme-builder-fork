@@ -1,5 +1,14 @@
 # Framer native transfer — continuation checkpoint, 2026-11-04
 
+## Active continuation — 2026-11-05
+
+The user immediately reactivated the goal. Selected-layer paste now preserves
+literal URL links via the native MotionLink writer and applies style-only source
+replica overrides to an exactly matching destination breakpoint. Unresolved
+page links, structural/semantic responsive overrides and unmatched breakpoints
+remain explicit diagnostics. Focused paste/editor tests: 3 files / 13 passed;
+`npx tsc --noEmit` passed. The full Task 8–10 acceptance remains open.
+
 ## Paused at user request — 2026-11-05, latest state
 
 The user requested an immediate pause and commit before a power outage. This
