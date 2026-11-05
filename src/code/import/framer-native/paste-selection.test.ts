@@ -32,6 +32,20 @@ it('inserts a selected native subtree under the explicit parent and preserves ol
   expect(compileNativeTransfer(source, { existingFiles, mode: 'paste', filePath: path, parentNodeId: 'missing' }).diagnostics).toContainEqual(expect.objectContaining({ code: 'NATIVE_PASTE_TARGET_INVALID' }));
 });
 
+it('allocates fresh identities when the same selection is pasted twice', () => {
+  const base = compileNativeTransfer(page(), { existingFiles: new Map(), mode: 'create' });
+  const files = new Map(base.files.map(file => [file.path, file.code]));
+  const path = 'app/page.client.tsx';
+  const target = { existingFiles: files, mode: 'paste' as const, filePath: path, parentNodeId: base.identity.desktop };
+  const first = compileNativeTransfer(selection(), target);
+  expect(first.diagnostics).toEqual([]);
+  files.set(path, first.files[0].code);
+  const second = compileNativeTransfer(selection(), target);
+  expect(second.diagnostics).toEqual([]);
+  expect(second.createdIds).not.toContain(first.identity.selected);
+  expect(second.files[0].code.match(/Selected text/g)).toHaveLength(2);
+});
+
 it('keeps literal links in selected layers and diagnoses unresolved page links', () => {
   const base = compileNativeTransfer(page(), { existingFiles: new Map(), mode: 'create' });
   const existingFiles = new Map(base.files.map(file => [file.path, file.code]));
@@ -74,6 +88,7 @@ it('maps a captured selected replica to the matching destination breakpoint', ()
   expect(result.files[0].code).toContain('max-width: 1199px');
   expect(result.files[0].code).toContain('width: 100px');
   const semantic = structuredClone(responsive);
-  Object.assign((semantic.definitions[1].data.replicaInfo as { overrides: Record<string, Record<string, unknown>> }).overrides.selected, { link: '/contact' });
+  const replicaData = semantic.definitions[1].data as unknown as { replicaInfo: { overrides: Record<string, Record<string, unknown>> } };
+  Object.assign(replicaData.replicaInfo.overrides.selected, { link: '/contact' });
   expect(compileNativeTransfer(semantic, { existingFiles: files, mode: 'paste', filePath: path, parentNodeId: base.identity.desktop }).diagnostics).toContainEqual(expect.objectContaining({ code: 'NATIVE_PASTE_RESPONSIVE_ADAPTER_REQUIRED', property: 'link' }));
 });

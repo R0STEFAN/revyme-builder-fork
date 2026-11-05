@@ -68,6 +68,7 @@ it('pastes a selected subtree as one undoable edit in the active page', async ()
   setLoadedRevision(7);
   initHistory('', () => {}, () => store.get(activeFilePathAtom), undefined, { get: () => [], set: () => {}, getNodeIds: () => new Set([base.identity.desktop]), navigateToFile: path => { store.set(activeFilePathAtom, path); return true; } });
   const captured = { format: 'revyme.framer.native', version: 1, complete: true, diagnostics: [], context: { projectId: 'source', branchId: 'main', revision: '1', editorBuild: 'test', scopeId: 'page', mode: 'selection' }, rootIds: ['selected'], assets: [], definitions: [{ id: 'selected', kind: 'FrameNode', data: { id: 'selected', __class: 'FrameNode', width: 200, widthType: 0, height: 100, heightType: 0, children: [{ id: 'label', __class: 'RichTextNode', html: '<p>Inserted selection</p>', children: [] }] } }] };
+  const createdId = compileNativeTransfer(captured, { existingFiles: before, mode: 'paste', filePath: 'app/page.client.tsx', parentNodeId: base.identity.desktop }).identity.selected;
   const originalCrypto = globalThis.crypto;
   Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
   let revision = 7;
@@ -79,14 +80,15 @@ it('pastes a selected subtree as one undoable edit in the active page', async ()
         expect(body.input.mode).toBe('paste');
         expect(body.input.target.parentNodeId).toBe(base.identity.desktop);
         expect(body.input.files[0].baseHash).toBe(createHash('sha256').update(before.get('app/page.client.tsx')!).digest('hex'));
-        return Response.json({ ok: true, data: createPlan({ scope: body.input.target, operationId: body.operationId, baseRevision: 7, changes: body.input.files.map((f: any) => ({ path: f.path, content: f.code, beforeHash: body.input.files[0].baseHash })) }) });
+        return Response.json({ ok: true, data: createPlan({ scope: body.input.target, operationId: body.operationId, baseRevision: 7, changes: body.input.files.map((f: any) => ({ path: f.path, content: f.code, beforeHash: body.input.files[0].baseHash })), createdIds: [createdId] }) });
       }
       for (const change of body.changes) files.set(change.path, change.content);
       revision = 8;
-      return Response.json({ ok: true, data: { operationId: body.operationId, projectId: 'local', branchId: 'main', revision, planHash: body.planHash, changedFiles: body.changes.map((change: any) => change.path), createdIds: [] } });
+      return Response.json({ ok: true, data: { operationId: body.operationId, projectId: 'local', branchId: 'main', revision, planHash: body.planHash, changedFiles: body.changes.map((change: any) => change.path), createdIds: body.createdIds } });
     });
   } finally { Object.defineProperty(globalThis, 'crypto', { configurable: true, value: originalCrypto }); }
   expect(projectFS.readFile('app/page.client.tsx')).toContain('Inserted selection');
+  expect(store.get(selectedIdsAtom)).toEqual([createdId]);
   expect(getHistoryState().undoSize).toBe(1);
   expect(undo()).toBe(true); finishPendingRestore();
   expect([...projectFS.getSnapshot()]).toEqual([...before]);

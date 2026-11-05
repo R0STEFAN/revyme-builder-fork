@@ -8,6 +8,10 @@ replica overrides to an exactly matching destination breakpoint. Unresolved
 page links, structural/semantic responsive overrides and unmatched breakpoints
 remain explicit diagnostics. Focused paste/editor tests: 3 files / 13 passed;
 `npx tsc --noEmit` passed. The full Task 8–10 acceptance remains open.
+Repeated selected-layer paste now has a regression proof for fresh IDs, and
+the editor test verifies that a committed receipt selects the inserted root
+while preserving one-operation Undo/Redo. The two focused files pass 8 tests;
+typecheck passed after this addition.
 
 ## Paused at user request — 2026-11-05, latest state
 
