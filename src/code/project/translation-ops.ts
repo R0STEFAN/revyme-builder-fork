@@ -653,14 +653,17 @@ export function ensureIntlScaffold(): void {
   }
   // Root layout — inject the Providers import + wrap when missing.
   const layout = projectFS.readFile('app/layout.tsx');
-  if (layout && !layout.includes('Providers')) {
+  if (layout) {
     let healed = layout;
-    if (!healed.includes("./providers")) {
-      healed = healed.replace(/^(import[^\n]*\n)/, `$1import { Providers } from './providers';\n`);
+    if (healed.includes('<Providers>') && !healed.includes("import { Providers } from './providers'")) {
+      healed = `import { Providers } from './providers';\n${healed}`;
     }
-    // Wrap the body children: <body>{children}</body> (with optional attrs).
-    healed = healed.replace(/(<body[^>]*>)([\s\S]*?)(<\/body>)/, (_m, open, inner, close) =>
-      `${open}<Providers>${inner}</Providers>${close}`);
+    if (!healed.includes('<Providers>')) {
+      if (!healed.includes("import { Providers } from './providers'")) healed = `import { Providers } from './providers';\n${healed}`;
+      // Wrap the body children: <body>{children}</body> (with optional attrs).
+      healed = healed.replace(/(<body[^>]*>)([\s\S]*?)(<\/body>)/, (_m, open, inner, close) =>
+        `${open}<Providers>${inner}</Providers>${close}`);
+    }
     if (healed !== layout && healed.includes('<Providers>')) {
       projectFS.writeFile('app/layout.tsx', healed);
       trace.action('ensureIntlScaffold:layout-healed', {});

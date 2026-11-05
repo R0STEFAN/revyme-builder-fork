@@ -38,6 +38,7 @@ import {
   listTranslatableTexts,
   readSeoOverrides,
   writeSeoOverrides,
+  ensureIntlScaffold,
 } from './translation-ops';
 
 const PAGE = `'use client';
@@ -58,6 +59,15 @@ beforeEach(() => {
   fsStore.set(FILE, PAGE);
   fsStore.set('messages/en.json', '{}');
   fsStore.set('messages/fr.json', '{}');
+});
+
+test('repairs a compact imported layout that wraps Providers without importing it', () => {
+  fsStore.set('app/layout.tsx', 'export default function Layout({ children }) { return <html><body><Providers>{children}</Providers></body></html>; }');
+  ensureIntlScaffold();
+  expect(fsStore.get('app/layout.tsx')).toContain("import { Providers } from './providers';");
+  const first = fsStore.get('app/layout.tsx');
+  ensureIntlScaffold();
+  expect(fsStore.get('app/layout.tsx')).toBe(first);
 });
 
 describe('commitTranslationText', () => {
