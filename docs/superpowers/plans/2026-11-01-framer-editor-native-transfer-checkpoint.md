@@ -43,6 +43,12 @@ was automatically healed. The user confirmed Preview now works.
 - Hero has an extra `div` wrapper around the Logo component in Revyme compared
   with the Framer layer tree. Determine whether it comes from scene emission or
   valid layout structure and remove it only if semantics/layout remain intact.
+- Collection images are not downloaded from Framer into the Revyme project and
+  converted to WebP during import; the imported collection currently retains
+  only the remote URL reference. Reproduce with
+  `https://framerusercontent.com/assets/lZIQemQvBzCyCuRZpam5v9A4.png`. Add
+  project asset upload and WebP conversion, then verify the collection record
+  references the local uploaded asset rather than the Framer URL.
 
 Ignored one-off migration scripts and reports may exist under
 `.superpowers/sdd/2026-11-01-framer-editor-native-transfer/`; they are audit
