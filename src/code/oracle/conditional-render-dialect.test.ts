@@ -179,6 +179,18 @@ const HANDWRITTEN = `  const [isCompact, setIsCompact] = useState(false);
 `;
 
 describe('RESPONSIVE_JS_HANDWRITTEN', () => {
+  it('accepts the builder-owned responsive open variant on a template overlay', () => {
+    const code = `'use client';
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+export default function LayoutClient({ children }: { children: React.ReactNode }) {
+  const [ovOpen, setOvOpen] = useState(false);
+  return <div data-id="root"><Thing data-id="trigger" initialVariant={ovOpen ? window.innerWidth <= 809 ? 'mobile' : 'desktop' : 'default'} />
+    <AnimatePresence>{ovOpen && <motion.div data-id="ov" data-overlay='{"type":"fixed","triggerId":"trigger","onOpenVariant":"desktop","responsive":{"809":{"onOpenVariant":"mobile"}},"responsiveBp":[809]}' />}</AnimatePresence>{children}</div>;
+}`;
+    expect(checkFile(code, { kind: 'template', path: 'app/(framer)/LayoutClient.tsx' }).map(item => item.code)).not.toContain('RESPONSIVE_JS_HANDWRITTEN');
+  });
+
   it('rejects a hand-written matchMedia listener', () => {
     const code = page(`${HANDWRITTEN}${ROOT_OPEN}
       <div data-id="x" style={{ width: '10px', height: '10px' }} />

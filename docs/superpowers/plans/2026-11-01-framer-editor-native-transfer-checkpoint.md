@@ -70,6 +70,29 @@ these active source behaviors for unrelated projects.
   `npx tsc --noEmit` passed. Live browser loading and full import acceptance
   remain unverified.
 
+### Local server persistence audit
+
+- A disposable project `framer-audit-1793874216514` received the entire saved
+  Walker candidate through the actual `/api/automation/framer/prepare` and
+  `/api/automation/commit` endpoints. With 16 explicit user-approved omissions
+  and source media URLs (not uploads), 36 compiled files yielded 37 committed
+  file changes including history; revision moved 2 → 3. `codeFiles.read` via
+  the shipped CLI returned the persisted 1,458-line template client. Evidence
+  is in ignored `.superpowers/sdd/.../live-persistence-audit.json`.
+- The first live prepare exposed a real SSR Babel interop bug in Oracle's
+  responsive overlay exemption: direct `@babel/generator` import was not
+  callable under Vite SSR, and a caught exception became a false
+  `RESPONSIVE_JS_HANDWRITTEN` violation. Oracle now uses the project's shared
+  normalized generator. The actual prepare/commit passed after this change;
+  82 focused Oracle/import tests passed.
+- Media preflight found 22 referenced assets. One captured SVG mask URL
+  (`pGiXYozQ3mE4cilNOItfe2L2fUA`) returns HTTP 404 at its captured image URL;
+  its alternative `/assets/` URL returns 403. The other originals total roughly
+  347 MB before image conversion. Thus this audit does not prove uploaded
+  assets, full visual parity, editor round trip, browser interactions or export.
+  The browser automation host was unavailable, so unpacked extension loading
+  remains unverified.
+
 ## Current continuation — 2026-11-04 (parent `c549d35`)
 
 This section supersedes the historical status below. The Orca hint stopped at

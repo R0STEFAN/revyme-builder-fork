@@ -37,7 +37,7 @@
 
 import * as t from '@babel/types';
 import { parseExpression } from '@babel/parser';
-import generate from '@babel/generator';
+import { generate } from '../../generation/generator-utils';
 import { parseOverlayCalls } from '../../parsing/overlay-parser';
 import { buildOnOpenVariantExpr, stateVarName } from '../../generation/overlay-gen';
 import { traverse, jsxTagName, jsxAttrs, stringAttr, hasAttr } from './shared';
