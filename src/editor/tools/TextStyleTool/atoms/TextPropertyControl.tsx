@@ -13,7 +13,7 @@ import { useRef } from 'react';
 import { getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
 import { selectedNodeAtom, selectedIdsAtom, getNodesSnapshot } from '@/code/stores/store';
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
-import { isReplicaViewportAtom, interactingViewportWidthAtom, interactingViewportRenderWidthAtom } from '@/code/stores/viewport-store';
+import { isReplicaViewportAtom, interactingViewportWidthAtom, interactingViewportRenderWidthAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
 import { containerOverridesAtom, getOverrideValue, hasOverrideAtWidth } from '@/code/stores/container-query-store';
 import { findNodeComputedStyle, getInteractingViewport, forceCanvasRender, updateNodeStyles, getContentRoot } from '@/canvas/node-ops';
 import { trace } from '@/shared/debug-trace';
@@ -315,20 +315,56 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     }
     return null;
   }, [fitWrapperNode]);
-  // PER-VIEWPORT Fit% (design-tool parity): on a replica the scale reads/writes a
-  // per-breakpoint @media override on the INNER text node — desktop keeps its
-  // own value. Blue label + Reset Override mirror every other replica control.
+  // PER-VIEWPORT & PER-VARIANT Fit% (design-tool parity): on a replica or variant
+  // the scale reads/writes a per-breakpoint override or variant entry on the INNER
+  // text node — base/desktop keeps its own value. Blue label + Reset Override mirror
+  // every other replica/variant control.
   const isReplicaVp = useAtomValue(isReplicaViewportAtom);
   const interactingW = useAtomValue(interactingViewportWidthAtom);
   const containerOverrides = useAtomValue(containerOverridesAtom);
-  const fitScaleOverridden = !!(isReplicaVp && fitTextNode
-    && hasOverrideAtWidth(containerOverrides, fitTextNode.id, 'transform', interactingW));
+  const isComponentVariantVp = useAtomValue(isComponentVariantViewportAtom);
+  const activeVariant = useAtomValue(activeComponentVariantAtom);
+
+  const isVariantOverride = !!(
+    isComponentVariantVp &&
+    activeVariant &&
+    activeVariant !== 'default' &&
+    fitTextNode?.motionVariants?.[activeVariant] &&
+    (fitTextNode.motionVariants[activeVariant].scale !== undefined ||
+      fitTextNode.motionVariants[activeVariant].transform !== undefined)
+  );
+  const fitScaleOverridden = !!(
+    (isReplicaVp && fitTextNode && hasOverrideAtWidth(containerOverrides, fitTextNode.id, 'transform', interactingW)) ||
+    isVariantOverride
+  );
   const fitScalePct = (() => {
+    if (isComponentVariantVp && activeVariant && activeVariant !== 'default' && fitTextNode) {
+      const vEntry = fitTextNode.motionVariants?.[activeVariant];
+      if (vEntry?.scale !== undefined) {
+        return Math.round(parseFloat(vEntry.scale) * 100);
+      }
+      if (vEntry?.transform !== undefined) {
+        const m = vEntry.transform.match(/scale\(\s*([\d.]+)/);
+        if (m) return Math.round(parseFloat(m[1]) * 100);
+      }
+      const defEntry = fitTextNode.motionVariants?.['default'];
+      if (defEntry?.scale !== undefined) {
+        return Math.round(parseFloat(defEntry.scale) * 100);
+      }
+      if (defEntry?.transform !== undefined) {
+        const m = defEntry.transform.match(/scale\(\s*([\d.]+)/);
+        if (m) return Math.round(parseFloat(m[1]) * 100);
+      }
+    }
     const ovTransform = (isReplicaVp && fitTextNode)
       ? getOverrideValue(containerOverrides, fitTextNode.id, 'transform', interactingW)
       : null;
-    const m = (ovTransform ?? fitTextNode?.styles?.transform ?? '').match(/scale\(\s*([\d.]+)/);
-    return m ? Math.round(parseFloat(m[1]) * 100) : 100;
+    const rawTransform = ovTransform ?? fitTextNode?.styles?.transform ?? '';
+    const m = rawTransform.match(/scale\(\s*([\d.]+)/);
+    if (m) return Math.round(parseFloat(m[1]) * 100);
+    const defScale = fitTextNode?.motionVariants?.['default']?.scale;
+    if (defScale !== undefined) return Math.round(parseFloat(defScale) * 100);
+    return 100;
   })();
 
   // FIT re-fit on metric commits: Weight / Spacing change the text's measured
@@ -644,7 +680,14 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     const commitFitScale = (v: string) => {
       if (!fitTextNode) return;
       const { pct, styles } = fitScaleStyles(v);
-      if (isReplicaVp) {
+      if (isComponentVariantVp && activeVariant && activeVariant !== 'default') {
+        queueMutation({
+          type: 'updateVariantStyle',
+          nodeId: fitTextNode.id,
+          variantName: activeVariant,
+          styles,
+        });
+      } else if (isReplicaVp) {
         // Per-breakpoint override — desktop/base keeps its own Fit%.
         queueMutation({ type: 'updateContainerStyle', nodeId: fitTextNode.id, maxWidth: interactingW, styles });
       } else {
@@ -654,16 +697,35 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
       // its own → flush code + force a re-render so it's committed live.
       flushNow();
       forceCanvasRender();
-      trace.action('font-size:fit-scale', { textId: fitTextNode.id, pct, perViewport: isReplicaVp, vpWidth: isReplicaVp ? interactingW : undefined });
+      trace.action('font-size:fit-scale', {
+        textId: fitTextNode.id,
+        pct,
+        perViewport: isReplicaVp,
+        vpWidth: isReplicaVp ? interactingW : undefined,
+        variantName: isComponentVariantVp ? activeVariant : undefined,
+      });
     };
-    // Reset Override (replica chevron): drop THIS breakpoint's transform pair —
-    // the tile falls back to the base Fit%.
+    // Reset Override (replica chevron / variant override): drop THIS breakpoint or variant's transform
+    // — the tile falls back to the base Fit%.
     const resetFitScaleOverride = () => {
       if (!fitTextNode) return;
-      queueMutation({ type: 'updateContainerStyle', nodeId: fitTextNode.id, maxWidth: interactingW, styles: { transform: '', transformOrigin: '' } });
+      if (isComponentVariantVp && activeVariant && activeVariant !== 'default') {
+        queueMutation({
+          type: 'updateVariantStyle',
+          nodeId: fitTextNode.id,
+          variantName: activeVariant,
+          styles: { transform: '' },
+        });
+      } else if (isReplicaVp) {
+        queueMutation({ type: 'updateContainerStyle', nodeId: fitTextNode.id, maxWidth: interactingW, styles: { transform: '', transformOrigin: '' } });
+      }
       flushNow();
       forceCanvasRender();
-      trace.action('font-size:fit-scale-reset-override', { textId: fitTextNode.id, vpWidth: interactingW });
+      trace.action('font-size:fit-scale-reset-override', {
+        textId: fitTextNode.id,
+        vpWidth: isReplicaVp ? interactingW : undefined,
+        variantName: isComponentVariantVp ? activeVariant : undefined,
+      });
     };
 
     return (

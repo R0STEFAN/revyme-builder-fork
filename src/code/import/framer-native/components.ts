@@ -29,6 +29,7 @@ import { applySourceInstances } from './scene-instances';
 import { sourceStaticLinkValue } from './links';
 import { setVariantAttrInCode } from '../../generation/responsive-attrs-gen';
 import { setVariantVisibilityInCode } from '../../generation/variant-visibility-gen';
+import { wrapInFitSVGInCode } from '../../generation/fit-text-gen';
 import { setConditionalInstanceProp, setConditionalInstancePropVarInCode } from '../../components/instance-prop-overrides';
 import { nativeCollectionSlug, sourceCollectionId } from './cms';
 import { resolveSourceBinding, emitSourceQueryInCode } from './bindings';
@@ -89,9 +90,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const vb = sourceRecord(node.properties.textFitViewBoxSize);
         if (vb && typeof vb.width === 'number' && vb.width > 0) {
           const maxFs = parseFloat(styles.fontSize) || (typeof vb.height === 'number' && vb.height > 0 ? vb.height : 48);
-          const vwRate = ((maxFs / vb.width) * 100).toFixed(1);
-          const minFs = Math.max(12, Math.round(maxFs * (390 / vb.width)));
-          styles.fontSize = `clamp(${minFs}px, ${vwRate}vw, ${maxFs}px)`;
+          styles.fontSize = `${maxFs}px`;
           styles.width = '100%';
           styles.maxWidth = '100%';
         }
@@ -373,6 +372,21 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (id === primaryId) throw new Error('Source root visibility requires its native component lifecycle adapter');
         code = setVariantVisibilityInCode(code, identity[id], hidden, Object.values(names));
         code = setTagAttr(code, identity[primaryId], 'layout', '{true}');
+      }
+      for (const id of sourceIds) {
+        const base = resolveSourceNode(graph, id);
+        if (base.kind === 'RichTextNode') {
+          const vb = sourceRecord(base.properties.textFitViewBoxSize);
+          if (vb && typeof vb.width === 'number' && vb.width > 0) {
+            const baseStyles = stylesFor(base);
+            const maxFs = parseFloat(baseStyles.fontSize) || (typeof vb.height === 'number' && vb.height > 0 ? vb.height : 48);
+            code = wrapInFitSVGInCode(code, identity[id], {
+              width: vb.width,
+              height: typeof vb.height === 'number' && vb.height > 0 ? vb.height : 218,
+              fontSize: maxFs,
+            });
+          }
+        }
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');

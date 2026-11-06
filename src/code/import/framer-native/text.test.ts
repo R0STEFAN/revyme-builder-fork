@@ -81,4 +81,12 @@ describe('editable original rich text', () => {
     expect(mapSourceText(node('<p style="--framer-text-decoration-thickness: 2px; --framer-font-open-type-features: &quot;cv09&quot;">Link</p>'), c).styles).toMatchObject({ textDecorationThickness: '2px', fontFeatureSettings: '"cv09"' });
     expect(c.diagnostics).toEqual([]);
   });
+  it('maps textFitViewBoxSize with static font-size and 100% width instead of clamp', () => {
+    const c = context();
+    const t = mapSourceText(node('<p style="--framer-font-size: 272px">WALKER</p>', { textFitViewBoxSize: { width: 1096.32, height: 218 } }), c);
+    expect(t.styles.fontSize).toBe('272px');
+    expect(t.styles.width).toBe('100%');
+    expect(t.styles.maxWidth).toBe('100%');
+    expect(t.styles.fontSize).not.toContain('clamp');
+  });
 });

@@ -2,6 +2,7 @@ import { trace } from '../../../shared/debug-trace';
 import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
 import { checkFile } from '../../oracle/check-file';
 import { setTagAttr, ensureNamedImport } from '../../generation/generator-utils';
+import { wrapInFitSVGInCode } from '../../generation/fit-text-gen';
 import { setGlideInCode } from '../../generation/glide-gen';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
@@ -502,6 +503,21 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
             if (visibility.some(value => value === false)) throw new Error(`CSS-only child visibility with a flow effect on ${childId} requires its native adapter`);
           }
           code = setGlideInCode(code, identity[nodeId], flow);
+        }
+      }
+      for (const nodeId of scene.sourceIds) {
+        const node = resolveSourceNode(graph, nodeId);
+        if (node.kind === 'RichTextNode') {
+          const vb = sourceRecord(node.properties.textFitViewBoxSize);
+          if (vb && typeof vb.width === 'number' && vb.width > 0) {
+            const nodeStyles = stylesFor(node, context);
+            const maxFs = parseFloat(nodeStyles.fontSize) || (typeof vb.height === 'number' && vb.height > 0 ? vb.height : 48);
+            code = wrapInFitSVGInCode(code, identity[nodeId], {
+              width: vb.width,
+              height: typeof vb.height === 'number' && vb.height > 0 ? vb.height : 218,
+              fontSize: maxFs,
+            });
+          }
         }
       }
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }

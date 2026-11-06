@@ -47,6 +47,24 @@ it('preserves removal of a text direction attribute in a component state', () =>
   expect(checkFile(result.files[0].code, { kind: 'component', path: result.files[0].path })).toEqual([]);
 });
 
+it('wraps text with textFitViewBoxSize into native SVG foreignObject in components', () => {
+  const data = { id: 'logo', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [
+    { id: 'base', __class: 'FrameNode', children: [{ id: 'walker', __class: 'RichTextNode', parentid: 'base', html: '<p style="--framer-font-size: 272px; --framer-font-weight: 800">WALKER</p>', textFitViewBoxSize: { width: 1096.32, height: 218 }, children: [] }] },
+    { id: 'variant-2', __class: 'FrameNode', children: [], replicaInfo: { master: 'base', overrides: {} } },
+  ] };
+  const graph = buildSourceGraph({ ...capture, rootIds: ['logo'], definitions: [{ id: data.id, kind: data.__class, data }] });
+  const identity = allocateTargetIdentity(graph, new Set());
+  const result = emitNativeComponents(graph, identity);
+  expect(result.diagnostics).toEqual([]);
+  const code = result.files[0].code;
+  expect(code).toContain(`data-id="${identity.walker}-svg"`);
+  expect(code).toContain('viewBox="0 0 1096.32 218"');
+  expect(code).toContain('<foreignObject');
+  expect(code).toContain(`data-id="${identity.walker}"`);
+  expect(code).toContain('WALKER');
+  expect(checkFile(code, { kind: 'component', path: result.files[0].path })).toEqual([]);
+});
+
 it.each([true, false])('converts static per-state visibility with base hidden %s into native presence', baseHidden => {
   const data = { id: 'button', __class: 'SmartComponentNode', baseVariantId: 'base', variables: [], children: [
     { id: 'base', __class: 'FrameNode', children: [{ id: 'spinner', __class: 'FrameNode', parentid: 'base', layout: 'stack', visible: !baseHidden, children: [] }] },
