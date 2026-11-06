@@ -607,8 +607,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
         continue;
       }
-      const pageMeta = sourceRecord(page.raw.webMetadata), globalMeta = sourceRecord(document?.raw.webMetadata);
-      const metadata = { title: pageMeta?.title ?? globalMeta?.title ?? page.raw.name ?? 'Page', ...(typeof (pageMeta?.description ?? globalMeta?.description) === 'string' ? { description: pageMeta?.description ?? globalMeta?.description } : {}) };
+      const pageMeta = sourceRecord(page.raw.webMetadata);
+      const isProject = graph.transfer.context.mode === 'project';
+      const globalMeta = isProject ? undefined : sourceRecord(document?.raw.webMetadata);
+      const title = pageMeta?.title ?? globalMeta?.title ?? (isProject ? undefined : page.raw.name ?? 'Page');
+      const description = pageMeta?.description ?? globalMeta?.description;
+      const metadata: Record<string, unknown> = {};
+      if (typeof title === 'string' && title.trim()) metadata.title = title;
+      if (typeof description === 'string' && description.trim()) metadata.description = description;
       const fields = Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
       if (typeof pageMeta?.noIndex === 'boolean') fields.push(`robots: { index: ${!pageMeta.noIndex} }`);
       const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;

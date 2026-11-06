@@ -14,7 +14,16 @@ export function updateNativeFavicon(code: string, url: string, darkUrl?: string)
       ? statement.declaration.declarations.filter(decl => t.isIdentifier(decl.id, { name: 'metadata' })) : [])[0];
     if (!t.isObjectExpression(declaration?.init)) return undefined;
     const icons = declaration.init.properties.find(property => t.isObjectProperty(property) && (t.isIdentifier(property.key, { name: 'icons' }) || t.isStringLiteral(property.key, { value: 'icons' })));
-    if (!t.isObjectProperty(icons) || !t.isObjectExpression(icons.value) || icons.value.properties.some(property => !t.isObjectProperty(property) || property.computed || t.isIdentifier(property.key, { name: 'other' }) || t.isStringLiteral(property.key, { value: 'other' }))) return undefined;
+    if (!t.isObjectProperty(icons) || !t.isObjectExpression(icons.value) || icons.value.properties.some(property => !t.isObjectProperty(property) || property.computed)) return undefined;
+    const otherProp = icons.value.properties.find(property => t.isObjectProperty(property) && (t.isIdentifier(property.key, { name: 'other' }) || t.isStringLiteral(property.key, { value: 'other' })));
+    if (otherProp) {
+      if (!t.isObjectProperty(otherProp) || !t.isObjectExpression(otherProp.value)) return undefined;
+      const start = otherProp.value.start;
+      const end = otherProp.value.end;
+      if (start == null || end == null) return undefined;
+      const updated = lightCode.slice(0, start) + JSON.stringify({ rel: 'icon', url: darkUrl, media: '(prefers-color-scheme: dark)' }) + lightCode.slice(end);
+      return parseJSX(updated) ? updated : undefined;
+    }
     const end = icons.value.end;
     if (end == null) return undefined;
     const last = icons.value.properties[icons.value.properties.length - 1];

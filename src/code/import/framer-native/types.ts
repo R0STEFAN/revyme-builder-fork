@@ -30,7 +30,7 @@ export interface ResolvedSourceNode {
   children: string[];
   provenance: string[];
 }
-export interface NativeFile { path: string; code: string; baseCode?: string; baseHash?: string; cursorPortal?: true; favicon?: string; faviconDark?: string; colorTokens?: import('../../generation/framer-token-gen').FramerColorToken[]; typographyTokens?: import('../../generation/framer-typography-gen').FramerTypographyToken[]; fontFaces?: import('../../project/preset-ops').WorkspaceFontFaceSpec[]; googleFonts?: import('../../../shared/google-font-import').GoogleFontRequest[] }
+export interface NativeFile { path: string; code: string; baseCode?: string; baseHash?: string; cursorPortal?: true; favicon?: string; faviconDark?: string; siteTitle?: string; siteDescription?: string; socialImage?: string; siteLanguage?: string; colorTokens?: import('../../generation/framer-token-gen').FramerColorToken[]; typographyTokens?: import('../../generation/framer-typography-gen').FramerTypographyToken[]; fontFaces?: import('../../project/preset-ops').WorkspaceFontFaceSpec[]; googleFonts?: import('../../../shared/google-font-import').GoogleFontRequest[] }
 export interface NativeCompileResult {
   files: NativeFile[];
   createdIds: string[];

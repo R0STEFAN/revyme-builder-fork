@@ -4,7 +4,7 @@ import { parseJSXToNodes } from '../../parsing/parser';
 import type { NativeTransfer } from './types';
 import { framerImportSubmitOperation, framerImportSubmitInputSchema } from '../../../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext, createSnapshot } from '../../../../packages/automation-core/src/session';
-import { parseMetadataFromCode } from '../../generation/metadata-gen';
+import { parseMetadataFromCode, parseSiteConfigFromCode } from '../../generation/metadata-gen';
 import { buildCmsDetailServerWrapper, parseCmsSeoDefaults, parseCmsSeoExpressions } from '../../project/cms-seo';
 import { nativeCollectionSlug, nativeFieldId } from './cms';
 import { decomposeLoopInCode, getLoopAnimate } from '../../generation/generator-motion-loop';
@@ -236,6 +236,60 @@ it('imports a document favicon through uploaded media and a validated root-layou
   expect((await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext())).changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
   patch.code += '\n// unexpected change';
   await expect(framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext())).rejects.toThrow();
+});
+it('imports document title, description, social image, and language into root layout in project mode', async () => {
+  const source = transfer(), iconRef = 'data:framer/asset-reference,icon.png', socialRef = 'data:framer/asset-reference,social.png';
+  source.context.mode = 'project';
+  source.definitions[2].data.webMetadata = {
+    title: 'Site Title',
+    description: 'Site Description',
+    language: 'uk',
+    favicon: iconRef,
+    socialImage: socialRef,
+  };
+  source.assets = [
+    { key: 'icon', extension: '.png', mimeType: 'image/png', url: 'https://example.com/icon.png' },
+    { key: 'social', extension: '.png', mimeType: 'image/png', url: 'https://example.com/social.png' },
+  ];
+  const layout = `export const metadata = { title: '', description: '' }; export const siteConfig = { language: 'en' }; export default function Layout({ children }) { return <html lang={siteConfig.language || 'en'}><body>{children}</body></html>; }`;
+  const result = compileNativeTransfer(source, {
+    mode: 'create',
+    existingFiles: new Map([['app/layout.tsx', layout]]),
+    uploadedAssets: { icon: '/api/uploads/icon.webp', social: '/api/uploads/social.webp' },
+  });
+  expect(result.diagnostics).toEqual([]);
+  const patch = result.files.find(file => file.path === 'app/layout.tsx')!;
+  expect(patch).toMatchObject({
+    baseCode: layout,
+    siteTitle: 'Site Title',
+    siteDescription: 'Site Description',
+    socialImage: '/api/uploads/social.webp',
+    siteLanguage: 'uk',
+    favicon: '/api/uploads/icon.webp',
+  });
+  const meta = parseMetadataFromCode(patch.code);
+  expect(meta).toMatchObject({
+    title: 'Site Title',
+    description: 'Site Description',
+    openGraph: { images: ['/api/uploads/social.webp'] },
+    icons: { icon: '/api/uploads/icon.webp' },
+  });
+  const config = parseSiteConfigFromCode(patch.code);
+  expect(config.language).toBe('uk');
+
+  const page = result.files.find(file => file.path === 'app/page.tsx')!;
+  expect(parseMetadataFromCode(page.code).title).toBeUndefined();
+
+  const target = { projectId: 'destination', branchId: 'main' };
+  const input = {
+    files: result.files,
+    mode: 'create' as const,
+    target,
+    expectedRevision: 0,
+    sourceManifest: { format: source.format, version: source.version, complete: true as const, context: source.context, rootIds: source.rootIds },
+  };
+  const executed = await framerImportSubmitOperation.execute(createSnapshot(target, 0, { 'app/layout.tsx': layout }), input, createOperationContext());
+  expect(executed.changes.find(change => change.path === 'app/layout.tsx')?.content).toBe(patch.code);
 });
 it('inherits a document social image through native media and permits a page override', () => {
   const source = transfer(), global = 'data:framer/asset-reference,global.png', local = 'data:framer/asset-reference,local.png';

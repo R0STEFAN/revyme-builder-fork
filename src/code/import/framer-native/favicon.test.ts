@@ -32,4 +32,14 @@ describe('native favicon update', () => {
     expect(parseMetadataFromCode(updateMetadataInCode(code!, { title: 'New title' })).icons).toMatchObject({ icon: '/assets/light.webp', other: { url: '/assets/dark.webp', media: '(prefers-color-scheme: dark)' } });
     expect(updateNativeFavicon('export const metadata = { icons: { other: existing } };', '/assets/light.webp', '/assets/dark.webp')).toBeUndefined();
   });
+
+  it('updates both light and dark icons when other already exists', () => {
+    const original = `export const metadata = { icons: { icon: '/old-light.webp', other: { rel: 'icon', url: '/old-dark.webp', media: '(prefers-color-scheme: dark)' } } };\nexport default function Layout() { return null; }`;
+    const updated = updateNativeFavicon(original, '/new-light.webp', '/new-dark.webp');
+    expect(updated).toBeDefined();
+    expect(updated).toContain('"/new-light.webp"');
+    expect(updated).toContain('"/new-dark.webp"');
+    expect(updated).not.toContain('/old-light.webp');
+    expect(updated).not.toContain('/old-dark.webp');
+  });
 });

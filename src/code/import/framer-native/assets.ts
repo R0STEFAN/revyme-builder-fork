@@ -69,12 +69,17 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
         if (ancestor?.kind === 'RootNode') { scan(sourceRecord(ancestor.raw.webMetadata)?.socialImage); break; }
         parent = ancestor?.raw.parentid;
       }
+      if (!parent) {
+        for (const rootId of graph.byKind.get('RootNode') ?? []) {
+          scan(sourceRecord(graph.nodes.get(rootId)?.raw.webMetadata)?.socialImage);
+        }
+      }
     }
   }
   if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
     for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      scan(metadata?.favicon); scan(metadata?.faviconDark);
+      scan(metadata?.favicon); scan(metadata?.faviconDark); scan(metadata?.socialImage);
     }
   }
   const requested = new Set<string>();
