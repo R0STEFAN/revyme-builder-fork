@@ -93,11 +93,21 @@ describe('groupTypoTokens', () => {
       makeToken('typo-framer-h1-ncqn96m-font', "'Inter'"),
       makeToken('typo-framer-body-black-2y4h70-font', "'Inter'"),
       makeToken('typo-framer-h1-xl-ncqn96m-font', "'Inter'"),
+      makeToken('typo-framer-h1-h1-8-font', "'Inter'"),
+      makeToken('typo-framer-h2-h2-3-font', "'Inter'"),
+      makeToken('typo-framer-h1-xl-h1-xl-4-font', "'Inter'"),
+      makeToken('typo-framer-nav-links-nav-links-font', "'Inter'"),
+      makeToken('typo-framer-body-black-body-black-2-font', "'Inter'"),
     ];
     const groups = groupTypoTokens(tokens);
     expect(groups.find(g => g.name === 'framer-h1-ncqn96m')?.label).toBe('H1');
     expect(groups.find(g => g.name === 'framer-body-black-2y4h70')?.label).toBe('Body Black');
     expect(groups.find(g => g.name === 'framer-h1-xl-ncqn96m')?.label).toBe('H1 Xl');
+    expect(groups.find(g => g.name === 'framer-h1-h1-8')?.label).toBe('H1');
+    expect(groups.find(g => g.name === 'framer-h2-h2-3')?.label).toBe('H2');
+    expect(groups.find(g => g.name === 'framer-h1-xl-h1-xl-4')?.label).toBe('H1 Xl');
+    expect(groups.find(g => g.name === 'framer-nav-links-nav-links')?.label).toBe('Nav Links');
+    expect(groups.find(g => g.name === 'framer-body-black-body-black-2')?.label).toBe('Body Black');
   });
 
   test('responsive suffix tokens belong to the same group (not a separate one)', () => {

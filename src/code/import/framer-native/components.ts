@@ -197,7 +197,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const base = resolveSourceNode(graph, id);
         const parentId = typeof base.properties.parentid === 'string' && sourceIds.includes(base.properties.parentid) ? base.properties.parentid : undefined;
         const baseStyles = stylesFor(base, parentId ? resolveSourceNode(graph, parentId) : undefined);
-        let changed = false;
+        let changed = false, hasLayoutPropChange = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
           if (!isSourceCodeComponent(base)) for (const property of ['link', 'linkOpenInNewTab']) if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
@@ -253,11 +253,17 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           if (Object.keys(delta).length) {
             changed = true;
             for (const key of Object.keys(delta)) if (PROJECTION_STYLE_PROPS.has(key) || ['fontFamily', 'fontFeatureSettings', 'fontVariationSettings'].includes(key)) {
+              if (PROJECTION_STYLE_PROPS.has(key) || ['left', 'top', 'right', 'bottom', 'position'].includes(key)) {
+                hasLayoutPropChange = true;
+              }
               code = setConditionalStyleInCode(code, identity[id], key, names[stateId], delta[key]);
               delete delta[key];
             }
             if (Object.keys(delta).length) code = updateVariantStyleInCode(code, identity[id], names[stateId], normalizeTransparent(delta));
           }
+        }
+        if (hasLayoutPropChange) {
+          code = setTagAttr(code, identity[id], 'layout', '{true}');
         }
         if (changed) {
           let hasVariants = false;

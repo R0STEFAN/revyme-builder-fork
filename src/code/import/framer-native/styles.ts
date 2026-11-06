@@ -103,6 +103,9 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   if (outOfFlow || p.position === 'sticky') {
     result.position = String(p.position);
     for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null) set(key, px(p[key]));
+    if (outOfFlow && p.left == null && p.right == null && (p.widthType === 1 || p.width === 1)) {
+      result.left = '0px';
+    }
   }
   if (p.position === 'sticky' && p.positionStickyTop != null) set('top', px(p.positionStickyTop));
   for (const axis of ['width', 'height'] as const) {

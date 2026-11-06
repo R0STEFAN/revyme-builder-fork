@@ -86,15 +86,33 @@ export function groupTypoTokens(tokens: PresetToken[]): TypoGroup[] {
     let displayStem = name;
     if (name.startsWith('framer-')) {
       const parts = name.split('-');
-      if (parts.length >= 3 && /^[a-z0-9]{5,9}$/.test(parts[parts.length - 1])) {
+      const last = parts[parts.length - 1];
+      const isTechId = /^\d+$/.test(last) || (/^[a-z0-9]{5,9}$/.test(last) && /\d/.test(last));
+      if (parts.length >= 3 && isTechId) {
         displayStem = parts.slice(1, -1).join('-');
       } else {
         displayStem = parts.slice(1).join('-');
       }
     }
+    const words = displayStem.split('-').filter(Boolean);
+    if (words.length >= 2 && words.length % 2 === 0) {
+      const half = words.length / 2;
+      const firstHalf = words.slice(0, half).join('-');
+      const secondHalf = words.slice(half).join('-');
+      if (firstHalf === secondHalf) {
+        words.splice(half);
+      }
+    }
+    const dedupedWords: string[] = [];
+    for (const w of words) {
+      if (dedupedWords.length > 0 && dedupedWords[dedupedWords.length - 1].toLowerCase() === w.toLowerCase()) {
+        continue;
+      }
+      dedupedWords.push(w);
+    }
     return {
       name,
-      label: displayStem.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      label: dedupedWords.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
       tokens: grpTokens,
     };
   });

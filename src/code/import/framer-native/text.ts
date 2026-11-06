@@ -37,7 +37,10 @@ export function nativeTypographyGroup(graph: SourceGraph, identity: Record<strin
   const id = typeof master === 'string' ? master : sourceId;
   const source = graph.nodes.get(id);
   const slug = String(source?.raw.name ?? 'text').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'text';
-  return `framer-${slug}-${String(identity[id] ?? '').replace(/^framer-/, '')}`;
+  const ident = String(identity[id] ?? '').replace(/^framer-/, '');
+  if (!ident || ident === slug) return `framer-${slug}`;
+  if (ident.startsWith(`${slug}-`)) return `framer-${ident}`;
+  return `framer-${slug}-${ident}`;
 }
 
 function normalizeSourceLineHeight(styles: Record<string, string>): void {
