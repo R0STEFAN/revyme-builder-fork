@@ -3,6 +3,7 @@ import { isFitSize } from '@/shared/constants';
 import { splitStyleProps } from '@/shared/css-utils';
 import { findMatchingCloseTagIndex } from './generator-utils';
 import { measureFitRefit, fitHtmlToPlainLines } from '@/shared/fit-measure';
+import { updateVariantStyleInCode } from './generator-styles';
 
 /**
  * Calculate the optimal viewBox dimensions for FIT text.
@@ -173,7 +174,7 @@ export function wrapInFitSVGInCode(
   const openStart = code.lastIndexOf('<', idIdx);
   if (openStart === -1) return code;
 
-  const tagMatch = code.slice(openStart + 1, idIdx).match(/^(\w+)/);
+  const tagMatch = code.slice(openStart + 1, idIdx).match(/^([a-zA-Z][\w.:-]*)/);
   if (!tagMatch) return code;
   const tagName = tagMatch[1];
 
@@ -249,7 +250,22 @@ export function wrapInFitSVGInCode(
 </svg>`;
 
   trace.fn('fit-text:wrapInSVG', { nodeId, viewBox, wrappedLength: svgWrapper.length });
-  return code.slice(0, openStart) + svgWrapper + code.slice(closePos);
+  let nextCode = code.slice(0, openStart) + svgWrapper + code.slice(closePos);
+
+  // If the wrapped element carries Motion variants (variants={someVariants}),
+  // keep the default variant's fontSize aligned with the calculated viewBox.fontSize
+  // so Framer Motion doesn't override the SVG scaling with the stale variant fontSize.
+  const variantsMatch = elementCode.match(/variants=\{([A-Za-z0-9_$]+)\}/);
+  if (variantsMatch) {
+    const varName = variantsMatch[1];
+    const varDefRegex = new RegExp(`const\\s+${varName}\\s*=\\s*\\{([\\s\\S]*?)\\};`);
+    const varDefMatch = nextCode.match(varDefRegex);
+    if (varDefMatch && varDefMatch[1].includes('default:')) {
+      nextCode = updateVariantStyleInCode(nextCode, nodeId, 'default', { fontSize: `${viewBox.fontSize}px` });
+    }
+  }
+
+  return nextCode;
 }
 
 /**
@@ -278,7 +294,7 @@ export function unwrapFitSVGInCode(
   if (innerIdIdx === -1 || innerIdIdx >= svgEnd) return code;
 
   const innerOpenStart = code.lastIndexOf('<', innerIdIdx);
-  const innerTagMatch = code.slice(innerOpenStart + 1, innerIdIdx).match(/^(\w+)/);
+  const innerTagMatch = code.slice(innerOpenStart + 1, innerIdIdx).match(/^([a-zA-Z][\w.:-]*)/);
   if (!innerTagMatch) return code;
   const innerTag = innerTagMatch[1];
 
@@ -319,7 +335,7 @@ export function unwrapFitSVGInCode(
       const merged = serializePairs([...map.values()]);
       innerElement = innerStyleMatch
         ? innerElement.replace(innerStyleMatch[0], `style={{${merged}}}`)
-        : innerElement.replace(/^<(\w+)/, `<$1 style={{${merged}}}`);
+        : innerElement.replace(/^<([a-zA-Z][\w.:-]*)/, `<$1 style={{${merged}}}`);
       trace.action('fit-text:lower-from-wrapper', { nodeId, keys: lower.map(x => x.key) });
     }
   }

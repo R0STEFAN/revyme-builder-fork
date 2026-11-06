@@ -323,3 +323,52 @@ describe('wrapInFitSVGInCode — a text whose FIRST style pair is removed', () =
     expect(out).toMatch(/data-id="t"[^>]*style=\{\{fontSize: '64px'/);
   });
 });
+
+describe('wrapInFitSVGInCode — motion tags and component variants', () => {
+  it('wraps and unwraps motion.p elements properly', () => {
+    const code = `export default function Logo() {
+  return (
+    <motion.div data-id="root">
+      <motion.p layout={true} data-id="logo-text" dir="auto" style={{ boxSizing: 'border-box', fontSize: '200px', fontWeight: '800', width: '100%' }}>WALKER</motion.p>
+    </motion.div>
+  );
+}`;
+    const wrapped = wrapInFitSVGInCode(code, 'logo-text', { width: 1096, height: 218, fontSize: 272 });
+    expect(wrapped).toContain('data-id="logo-text-svg"');
+    expect(wrapped).toContain('viewBox="0 0 1096 218"');
+    expect(wrapped).toContain('<foreignObject');
+    expect(wrapped).toContain('<motion.p layout={true} data-id="logo-text"');
+    expect(wrapped).toContain("fontSize: '272px'");
+
+    const unwrapped = unwrapFitSVGInCode(wrapped, 'logo-text');
+    expect(unwrapped).not.toContain('logo-text-svg');
+    expect(unwrapped).not.toContain('<foreignObject');
+    expect(unwrapped).toContain('<motion.p');
+    expect(unwrapped).toContain('</motion.p>');
+  });
+
+  it('updates default variant fontSize when motion variants are present', () => {
+    const code = `const logoVariants = {
+  default: {
+    minWidth: '0px',
+    fontSize: '200px',
+  },
+  hover: {
+    fontSize: '220px',
+  }
+};
+
+export default function Logo() {
+  return (
+    <motion.div data-id="root">
+      <motion.p data-id="logo-text" variants={logoVariants} initial={['default', 'default']} animate={['default', 'default']} style={{ fontSize: '200px' }}>WALKER</motion.p>
+    </motion.div>
+  );
+}`;
+    const wrapped = wrapInFitSVGInCode(code, 'logo-text', { width: 1096, height: 218, fontSize: 272 });
+    expect(wrapped).toContain('data-id="logo-text-svg"');
+    expect(wrapped).toContain("fontSize: '272px'");
+    // Verify default in logoVariants was also updated
+    expect(wrapped).toMatch(/default:\s*\{[^}]*fontSize:\s*'272px'/);
+  });
+});
