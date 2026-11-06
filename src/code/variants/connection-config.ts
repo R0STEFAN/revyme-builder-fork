@@ -241,7 +241,7 @@ export function rebuildConnections(code: string, connections: Connection[]): str
     updated = updated.replace(/\s*const \[variant, setVariant\] = useState\([^)]*\);\n?/g, '');
     updated = updated.replace(/\s*const \[prevInitial, setPrevInitial\] = useState\([^)]*\);\n?/g, '');
     updated = updated.replace(/\s*if\s*\(\s*(?:initialVariant|variant)\s*!==\s*prevInitial\s*\)\s*\{[\s\S]*?\}\n?/g, '');
-    updated = updated.replace(/\s*const \[isInView, setIsInView\] = useState\(false\);\n?/g, '');
+    updated = updated.replace(/\s*const \[isInView, setIsInView\] = useState\([^)]*\);\n?/g, '');
     updated = updated.replace(/\s*const __afterDelayClock = useRef\(\{ variant: '', remaining: 0 \}\);\n?/g, '');
     updated = updated.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant, isInView\]\);\n?/g, '');
     updated = updated.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant\]\);\n?/g, match => match.includes('__afterDelayChain') ? '' : match);
@@ -535,7 +535,7 @@ export function generateConnectionCode(code: string, connections: Connection[]):
   // but never made it into the runtime `chain` map, so the cycle stopped
   // at variant-1. Mirrors the strip+regenerate pattern used for event
   // handlers below.
-  result = result.replace(/\s*const \[isInView, setIsInView\] = useState\(false\);\n?/g, '');
+  result = result.replace(/\s*const \[isInView, setIsInView\] = useState\([^)]*\);\n?/g, '');
   result = result.replace(/\s*const __afterDelayClock = useRef\(\{ variant: '', remaining: 0 \}\);\n?/g, '');
   result = result.replace(/\s+onViewportLeave=\{\(\) => setIsInView\(false\)\}/g, '');
   result = result.replace(/\s*useEffect\(\(\) => \{[\s\S]*?\}, \[variant, isInView\]\);\n?/g, '');

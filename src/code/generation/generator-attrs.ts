@@ -290,7 +290,7 @@ export function convertToMotionLinkInCode(code: string, nodeId: string): string 
  *  working; the LEGACY `motion.create(Link)` form is still accepted
  *  everywhere and upgraded in place by syncImports. */
 export const MOTION_LINK_DECL =
-  'const MotionLink = motion.create(React.forwardRef(function MotionLinkBase({ href, ...props }: any, ref: any) { return href ? <Link ref={ref} href={href} {...props} /> : <div ref={ref} {...props} />; }));';
+  'const MotionLink = motion.create(React.forwardRef(function MotionLinkBase({ href, ...props }: any, ref: any) { return href ? <Link ref={ref} href={href} {...props} /> : <div ref={ref} {...props} style={{ ...props.style, ...(props.onClick && !props.style?.cursor ? { cursor: \'pointer\' } : {}) }} />; }));';
 
 /** Matches EITHER declaration form (legacy one-liner or the href-aware
  *  wrapper) — every "is MotionLink set up" gate must accept both, or old

@@ -61,8 +61,11 @@ export const OVERLAY_TOP_LAYER_CSS =
 function topLayerLiftJs(el: string, indent: string): string {
   return `${indent}if (${el} && ${el}.showPopover) {
 ${indent}  try {
-${indent}    if (!document.getElementById('${OVERLAY_TOP_LAYER_STYLE_ID}')) { const s = document.createElement('style'); s.id = '${OVERLAY_TOP_LAYER_STYLE_ID}'; s.textContent = '${OVERLAY_TOP_LAYER_CSS}'; document.head.appendChild(s); }
-${indent}    if (!${el}.matches(':popover-open')) { ${el}.setAttribute('popover', 'manual'); ${el}.showPopover(); }
+${indent}    const _cfg = JSON.parse(${el}.getAttribute('data-overlay') || '{}');
+${indent}    if (_cfg.topLayer !== false && (_cfg.zIndex == null || _cfg.zIndex >= 100)) {
+${indent}      if (!document.getElementById('${OVERLAY_TOP_LAYER_STYLE_ID}')) { const s = document.createElement('style'); s.id = '${OVERLAY_TOP_LAYER_STYLE_ID}'; s.textContent = '${OVERLAY_TOP_LAYER_CSS}'; document.head.appendChild(s); }
+${indent}      if (!${el}.matches(':popover-open')) { ${el}.setAttribute('popover', 'manual'); ${el}.showPopover(); }
+${indent}    }
 ${indent}  } catch {}
 ${indent}}
 `;

@@ -239,6 +239,8 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     }
   }
   if (p.userSelect !== undefined) set('userSelect', value('userSelect'));
+  if (p.cursor !== undefined) set('cursor', value('cursor'));
+  else if (Array.isArray(p.onTap) && p.onTap.length > 0) result.cursor = 'pointer';
   if (p.visible === false) result.display = 'none';
   else if (p.visible !== undefined && p.visible !== true) {
     const visible = value('visible');

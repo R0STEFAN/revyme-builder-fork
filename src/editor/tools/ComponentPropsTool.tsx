@@ -2948,8 +2948,16 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
               }
               if (prop.varType === 'event') {
                 const eventVars = parentVars.filter(v => v.family === 'event');
+                const isOverlayTrigger = (typeof propValue === 'string' && propValue.trim().startsWith('() => set'))
+                  || (node?.attrs?.['data-overlay-trigger'] && (() => {
+                    try {
+                      const tr = JSON.parse(node.attrs['data-overlay-trigger']);
+                      return tr?.eventName === prop.name;
+                    } catch { return false; }
+                  })());
                 const eventOptions = [
                   { value: '', label: 'None' },
+                  ...(isOverlayTrigger ? [{ value: propValue, label: '⚡ Opens Overlay' }] : []),
                   ...eventVars.map(v => ({ value: v.name, label: v.label })),
                 ];
                 return (
@@ -2958,7 +2966,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                       <ControlLabel label={prop.label || prop.name} property="" plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel="Event" />
                       <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
                         <div className="flex items-center gap-2 w-full">
-                          {eventVars.length > 0 ? (
+                          {eventVars.length > 0 || isOverlayTrigger ? (
                             <ToolSelect
                               value={propValue}
                               onChange={(v) => {

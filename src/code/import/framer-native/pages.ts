@@ -364,7 +364,27 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         }
       }
       code = transformAllResponsiveAttrs(code, model => { model.bp = viewports.map(viewport => viewport.width).sort((a, b) => a - b); });
+      const isRedundantAncestorLink = (nodeId: string): boolean => {
+        const hasDescendantWithLink = (checkId: string): boolean => {
+          const n = resolveSourceNode(graph, checkId);
+          for (const childId of n.children) {
+            const child = resolveSourceNode(graph, childId);
+            if (scene.links.includes(childId)) return true;
+            if (child.kind === 'CodeComponentNode') {
+              const hasLinkProp = Object.values(child.properties).some(val => {
+                const r = sourceRecord(val);
+                return r?.type === 'link' || (r?.type === 'webPage' && typeof r?.webPageId === 'string');
+              });
+              if (hasLinkProp) return true;
+            }
+            if (hasDescendantWithLink(childId)) return true;
+          }
+          return false;
+        };
+        return hasDescendantWithLink(nodeId);
+      };
       for (const nodeId of scene.links) {
+        if (isRedundantAncestorLink(nodeId)) continue;
         const node = resolveSourceNode(graph, nodeId);
         const pageLink = sourceRecord(node.properties.link);
         if (isTemplate && pageLink?.type === 'variableReference') {

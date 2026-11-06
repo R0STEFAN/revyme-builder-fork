@@ -2,6 +2,7 @@ import * as t from '@babel/types';
 import { trace } from '../../../shared/debug-trace';
 import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
+import { updateVariantStyleInCode } from '../../generation/generator-styles';
 import { cursorOptsPropName, serializeInstanceCursorOpts } from '../../generation/cursor-gen';
 import { bindSourcePropInCode } from './bindings';
 import { nativeComponentName, nativePropName } from './components';
@@ -76,6 +77,7 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
           if (typeof triggerId === 'string' && options.componentScopeId) {
             const parentProp = nativePropName(identity, options.componentScopeId, triggerId);
             result = setTagAttr(result, identity[id], nativePropName(identity, masterId, sourceProp), `{${parentProp}}`);
+            result = updateVariantStyleInCode(result, identity[id], 'default', { cursor: 'pointer' });
             continue;
           }
         }
