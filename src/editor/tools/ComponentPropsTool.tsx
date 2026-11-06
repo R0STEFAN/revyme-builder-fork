@@ -340,6 +340,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     propName: string;
     currentLiteral: string;
     inferredType: PageVariableType;
+    propVarType?: string;
     /** CSS property the prop binds to (e.g. `backgroundColor`). Passed to
      *  VariableModal so it renders the right default-value control (color
      *  picker / slider / etc.). Undefined for props with no CSS mapping —
@@ -689,6 +690,9 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     // this component (componentName is the JSX tag, e.g. "StartTrialButton"). See prop-meta `variantOf`.
     if (target.propName === 'initialVariant') {
       queueMutation({ type: 'setComponentPropVariantOf', propName: name, componentTag: componentName });
+    }
+    if (target.propVarType === 'event') {
+      queueMutation({ type: 'setComponentPropType', propName: name, varType: 'event' });
     }
     // A `transition` is NOT a valid @pageVariables type (the page-variables parser rejects it → null), so it's
     // hoisted with a 'text' @pageVariables type; record the real type in @propMeta instead so the variable modal
@@ -2586,6 +2590,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                       // its cursor icon + NO default row (inferTypeForProp would fall to 'text' = wrong icon + a
                       // default input). Mirrors the radius/transition type-preservation.
                       inferredType: prop.varType === 'componentCursor' ? 'componentCursor' : inferTypeForProp(cssProp, propValue),
+                      propVarType: prop.varType,
                       cssProp,
                     }),
                     show: true,
@@ -2612,8 +2617,14 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                 // binds the CSS PROPERTY (a conditional/inline STYLE on the instance) — wrong for an
                 // instance prop (it's how `hide` landed on `display` instead of `hide={…}`). Injecting this
                 // here auto-suppresses the generic one (ControlLabel dedups on an injected 'Set Variable').
-                if (componentInfo && selectedId && cssProp && !cmsBoundField) {
-                  const wantFamilies = acceptedVariableFamilies(cssProp);
+                if (componentInfo && selectedId && !cmsBoundField) {
+                  let wantFamilies: VariableIconKey[] = [];
+                  if (cssProp) {
+                    wantFamilies = acceptedVariableFamilies(cssProp);
+                  } else if (prop.varType) {
+                    const fam = getVariableType(prop.varType)?.iconKey;
+                    if (fam) wantFamilies = [fam];
+                  }
                   // NO `v.name !== prop.name` exclusion — the variable name coinciding with the prop name
                   // is the COMMON case (a hoisted `hide` var bound to the `hide` prop → `hide={hide}`).
                   // parentVars here are the page/template @pageVariables, a DIFFERENT namespace from the
@@ -2936,13 +2947,33 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                 );
               }
               if (prop.varType === 'event') {
+                const eventVars = parentVars.filter(v => v.family === 'event');
+                const eventOptions = [
+                  { value: '', label: 'None' },
+                  ...eventVars.map(v => ({ value: v.name, label: v.label })),
+                ];
                 return (
                   <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
                     <div className="flex items-center justify-between w-full">
                       <ControlLabel label={prop.label || prop.name} property="" plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel="Event" />
                       <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
                         <div className="flex items-center gap-2 w-full">
-                          <ToolInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} placeholder="Event trigger" text />
+                          {eventVars.length > 0 ? (
+                            <ToolSelect
+                              value={propValue}
+                              onChange={(v) => {
+                                if (v && selectedId) {
+                                  expediteStableAtomSync();
+                                  modifyProjectFile(activeFile, (c) => setInstanceProp(c, selectedId, instanceTagName ?? '', prop.name, v, true));
+                                } else {
+                                  handlePropChange(prop.name, '', prop.defaultValue);
+                                }
+                              }}
+                              options={eventOptions}
+                            />
+                          ) : (
+                            <ToolInput value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} placeholder="Event trigger" text />
+                          )}
                         </div>
                       </LocalePropPillOr>
                     </div>

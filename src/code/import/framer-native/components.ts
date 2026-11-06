@@ -177,7 +177,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         params.properties.push(t.objectProperty(t.identifier('children'), t.identifier('children'), false, true));
         const member = t.tsPropertySignature(t.identifier('children'), t.tsTypeAnnotation(t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ReactNode'))))); member.optional = true; types.members.push(member);
       }
-      code = applySourceInstances(generate(ast).code, { jsx: body, sourceIds, nested, codeInstances, links, slots }, graph, identity, options.assets, { routes: options.routes });
+      code = applySourceInstances(generate(ast).code, { jsx: body, sourceIds, nested, codeInstances, links, slots }, graph, identity, options.assets, { routes: options.routes, componentScopeId: scopeId });
       for (const variable of variables) {
         const prop = nativePropName(identity, scopeId, String(variable.id));
         code = setPropTypeInCode(code, prop, propTypes[String(variable.type)]);

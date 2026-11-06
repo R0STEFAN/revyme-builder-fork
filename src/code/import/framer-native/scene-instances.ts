@@ -14,7 +14,7 @@ import type { SourceGraph } from './types';
 import type { SourceScene } from './scene';
 
 /** Same imported instances and prop bindings in pages, templates and masters. */
-export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx' | 'sourceIds' | 'nested' | 'codeInstances' | 'links' | 'slots'>, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>> } = {}): string {
+export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx' | 'sourceIds' | 'nested' | 'codeInstances' | 'links' | 'slots'>, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>>; componentScopeId?: string } = {}): string {
   trace.fn('framer-native.applyInstances', { design: scene.nested.size, code: scene.codeInstances.size });
   let result = code;
   const imported = new Set<string>();
@@ -65,9 +65,20 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
         }
         continue;
       }
-      if (variable.type === 'eventhandler' && sourceShowOverlayTarget(value)) {
-        if (!options.allowOverlayEvents) throw new Error(`Source instance overlay event on ${id} requires its native scope adapter`);
-        continue;
+      if (variable.type === 'eventhandler') {
+        if (sourceShowOverlayTarget(value)) {
+          if (!options.allowOverlayEvents) throw new Error(`Source instance overlay event on ${id} requires its native scope adapter`);
+          continue;
+        }
+        const triggerAction = Array.isArray(value) ? value.map(sourceRecord).find(a => a?.actionIdentifier === 'framer/useTriggerEvent') : undefined;
+        if (triggerAction) {
+          const triggerId = sourceRecord(sourceRecord(triggerAction.controls)?.id)?.value;
+          if (typeof triggerId === 'string' && options.componentScopeId) {
+            const parentProp = nativePropName(identity, options.componentScopeId, triggerId);
+            result = setTagAttr(result, identity[id], nativePropName(identity, masterId, sourceProp), `{${parentProp}}`);
+            continue;
+          }
+        }
       }
       if (variable.type === 'image' && !imageDomains.has(masterId)) imageDomains.set(masterId, sourceCssImageVariables(graph, masterId));
       const cssImage = variable.type === 'image' && imageDomains.get(masterId)!.has(sourceProp);
