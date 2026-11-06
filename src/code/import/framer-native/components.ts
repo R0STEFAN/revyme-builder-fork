@@ -252,12 +252,18 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           if (id === primaryId) delete delta.position;
           if (Object.keys(delta).length) {
             changed = true;
-            for (const key of Object.keys(delta)) if (PROJECTION_STYLE_PROPS.has(key) || ['fontFamily', 'fontFeatureSettings', 'fontVariationSettings'].includes(key)) {
-              if (PROJECTION_STYLE_PROPS.has(key) || ['left', 'top', 'right', 'bottom', 'position'].includes(key)) {
-                hasLayoutPropChange = true;
+            const isAbsolute = baseStyles.position === 'absolute' || baseStyles.position === 'fixed';
+            for (const key of Object.keys(delta)) {
+              const isNonTweenable = PROJECTION_STYLE_PROPS.has(key)
+                || ['fontFamily', 'fontFeatureSettings', 'fontVariationSettings'].includes(key)
+                || (isAbsolute && (delta[key] === 'auto' || baseStyles[key] === 'auto' || ['left', 'top', 'right', 'bottom'].includes(key)));
+              if (isNonTweenable) {
+                if (PROJECTION_STYLE_PROPS.has(key) || ['left', 'top', 'right', 'bottom', 'position'].includes(key)) {
+                  hasLayoutPropChange = true;
+                }
+                code = setConditionalStyleInCode(code, identity[id], key, names[stateId], delta[key]);
+                delete delta[key];
               }
-              code = setConditionalStyleInCode(code, identity[id], key, names[stateId], delta[key]);
-              delete delta[key];
             }
             if (Object.keys(delta).length) code = updateVariantStyleInCode(code, identity[id], names[stateId], normalizeTransparent(delta));
           }

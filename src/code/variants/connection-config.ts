@@ -772,7 +772,7 @@ ${inViewConns.length ? `
     const [sourceKey, trigger] = key.split('|') as [string, ConnectionTrigger];
     const propName = triggerToPropName(trigger);
     if (!propName) continue;
-    const handler = buildTriggerHandler(trigger, conns);
+    const handler = buildTriggerHandler(trigger, conns, connections, pausesDelay);
     if (sourceKey === ROOT_KEY) {
       result = insertPropOnRootMotion(result, propName, handler);
     } else {
@@ -815,7 +815,7 @@ function triggerToPropName(trigger: ConnectionTrigger): string {
  *  → ternary keyed on the current `variant` so the right transition
  *  fires for the right starting state. inView always just flips the
  *  isInView flag — the chain useEffect handles delays / targets. */
-function buildTriggerHandler(trigger: ConnectionTrigger, conns: Connection[]): string {
+function buildTriggerHandler(trigger: ConnectionTrigger, conns: Connection[], allConnections: Connection[] = [], hasInView = false): string {
   if (trigger === 'inView') return '() => setIsInView(true)';
   // Gate EVERY connection by its `from` variant — a connection is per-variant
   // ("when in `from`, this trigger → `to`"). A single connection was
@@ -831,11 +831,24 @@ function buildTriggerHandler(trigger: ConnectionTrigger, conns: Connection[]): s
   // button does nothing; closed→open worked because there the ROOT owned
   // the transition", 2026-08-06). The `_n = … : null; if (_n)` guard keeps
   // every handler inert for states it declares no transition for.
-  const cases = conns.map(c => `variant === '${c.from}' ? '${c.to}'`).join(' : ');
+  const cases = conns.map(c => {
+    if (trigger === 'mouseEnter') {
+      const returnStates = allConnections
+        .filter(ac => ac.trigger === 'afterDelay' && ac.to === c.from)
+        .map(ac => ac.from)
+        .filter(rf => !conns.some(other => other.from === rf));
+      if (returnStates.length > 0) {
+        const conds = [`variant === '${c.from}'`, ...returnStates.map(s => `variant === '${s}'`)];
+        return `(${conds.join(' || ')}) ? '${c.to}'`;
+      }
+    }
+    return `variant === '${c.from}' ? '${c.to}'`;
+  }).join(' : ');
+  const inViewSet = trigger === 'mouseEnter' && hasInView ? 'setIsInView(true); ' : '';
   const delayed = conns.filter(c => (c.delay ?? 0) > 0);
-  if (delayed.length === 0) return `() => { const _n = ${cases} : null; if (_n) setVariant(_n); }`;
+  if (delayed.length === 0) return `() => { ${inViewSet}const _n = ${cases} : null; if (_n) setVariant(_n); }`;
   const delayCases = conns.map(c => `variant === '${c.from}' ? ${Math.round((c.delay ?? 0) * 1000)}`).join(' : ');
-  return `() => { const _n = ${cases} : null; if (_n) { const _d = ${delayCases} : 0; setTimeout(() => setVariant(_n), _d); } }`;
+  return `() => { ${inViewSet}const _n = ${cases} : null; if (_n) { const _d = ${delayCases} : 0; setTimeout(() => setVariant(_n), _d); } }`;
 }
 
 /** Strip every framer-motion event handler from every `<motion.*>` tag
