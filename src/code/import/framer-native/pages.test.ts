@@ -364,3 +364,101 @@ it('emits responsive on-mount effects and dynamic CMS detail row links', () => {
   expect(homeClient.code).toContain('data-cms-nav="row"');
   expect(homeClient.code).toContain('/works/${');
 });
+
+it('imports layer inView appear entrance as whileInView with viewport once', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  Object.assign(states[0].children[0], {
+    styleAppearEffectEnabled: true,
+    styleAppearEffectTrigger: 'inView',
+    styleAppearEffectLocked: true,
+    enterEffectEnabled: true,
+    enterEffectOpacity: 0,
+    enterEffectY: 80,
+    enterEffectTransition: { type: 'tween', duration: 0.6 },
+    exitEffectEnabled: false,
+  });
+  const { result, identity } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const homeClient = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(homeClient.code).toContain('whileInView={{');
+  expect(homeClient.code).toContain('y: 0');
+  expect(homeClient.code).toContain('viewport={{ once: true }}');
+  expect(checkFile(homeClient.code, { kind: 'page', path: homeClient.path })).toEqual([]);
+});
+
+it('imports hover and pressed gestures on standalone page elements', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  states[0].children.push({
+    id: 'btn',
+    __class: 'FrameNode',
+    parentid: 'desktop',
+    width: 200,
+    widthType: 0,
+    height: 50,
+    heightType: 0,
+    hoverEffectEnabled: true,
+    hoverEffectScale: 1.05,
+    hoverEffectOpacity: 0.9,
+    hoverEffectTransition: { type: 'tween', duration: 0.2 },
+    pressedEffectEnabled: true,
+    pressedEffectScale: 0.95,
+    children: [],
+  });
+  const { result } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const homeClient = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(homeClient.code).toContain('whileHover={{');
+  expect(homeClient.code).toContain('scale: 1.05');
+  expect(homeClient.code).toContain('opacity: 0.9');
+  expect(homeClient.code).toContain('whileTap={{ scale: 0.95 }}');
+  expect(homeClient.code).toContain("transition={{ type: 'tween', duration: 0.2 }}");
+  expect(checkFile(homeClient.code, { kind: 'page', path: homeClient.path })).toEqual([]);
+});
+
+it('imports scroll speed parallax on page elements', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  states[0].children.push({
+    id: 'parallax-box',
+    __class: 'FrameNode',
+    parentid: 'desktop',
+    width: 300,
+    widthType: 0,
+    height: 300,
+    heightType: 0,
+    scrollEffectEnabled: true,
+    scrollEffectSpeed: 120,
+    children: [],
+  });
+  const { result } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const homeClient = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(homeClient.code).toContain('useScroll();');
+  expect(homeClient.code).toContain('useTransform(');
+  expect(homeClient.code).toContain('120 / 100');
+  expect(checkFile(homeClient.code, { kind: 'page', path: homeClient.path })).toEqual([]);
+});
+
+it('imports pulse scale mirror loop on page elements', () => {
+  const source = input(), states = source.definitions[0].data.children as Record<string, any>[];
+  states[0].children.push({
+    id: 'pulse-badge',
+    __class: 'FrameNode',
+    parentid: 'desktop',
+    width: 100,
+    widthType: 0,
+    height: 100,
+    heightType: 0,
+    loopEffectEnabled: true,
+    loopEffectScale: 1.1,
+    loopEffectRepeatType: 'mirror',
+    loopEffectTransition: { type: 'tween', duration: 0.8 },
+    children: [],
+  });
+  const { result } = emit(source);
+  expect(result.diagnostics).toEqual([]);
+  const homeClient = result.files.find(file => file.path === 'app/page.client.tsx')!;
+  expect(homeClient.code).toContain('useMotionValue(1);');
+  expect(homeClient.code).toContain("repeatType: 'mirror'");
+  expect(homeClient.code).toContain(', 1.1,');
+  expect(checkFile(homeClient.code, { kind: 'page', path: homeClient.path })).toEqual([]);
+});

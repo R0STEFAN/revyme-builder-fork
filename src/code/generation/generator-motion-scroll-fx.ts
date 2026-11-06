@@ -6,7 +6,7 @@ import { escapeRegExp } from '@/shared/regex-utils';
 import { nodeIdToVarName } from '@/shared/id-utils';
 import { parseScrollHooks, getScrollDataForNode, parseScrollDirection, parseRange } from '../parsing/scroll-parser';
 import { trace } from '@/shared/debug-trace';
-import { findTagClose, findJSXDataIdIndex, insertBeforeRenderReturn, findStyleObjectEnd, stripTagAttrBalanced, readTagAttrRaw, getJsonAttr, opensAcrossLines } from './generator-utils';
+import { findTagClose, findJSXDataIdIndex, insertBeforeRenderReturn, findStyleObjectEnd, stripTagAttrBalanced, readTagAttrRaw, getJsonAttr, opensAcrossLines, ensureNamedImport } from './generator-utils';
 import { setScrollVariantInCode } from './scroll-variant-gen';
 import { setInstanceFxInCode } from './instance-fx-gen';
 import { type ResolvedScope } from '@/code/animations/animation-scope';
@@ -1065,6 +1065,7 @@ export function updateScrollSpeedInCode(code: string, config: ScrollSpeedConfig)
   const withHooks = insertBeforeRenderReturn(result, lines.join('\n'));
   if (withHooks === null) return code;
   result = withHooks;
+  result = ensureNamedImport(result, 'framer-motion', ['motion', 'useScroll', 'useTransform']);
   return injectStyleMotionBinding(result, nodeId, 'y', yVar);
 }
 

@@ -23,7 +23,10 @@ import { buildCmsDetailServerWrapper } from '../../project/cms-seo';
 import { serializePageEffects, type PageEffect } from '../../project/page-effects-config';
 import { injectPageTransitionsInCode, PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '../../generation/page-transitions-gen';
 import { wrapInstanceForPresence } from '../../generation/instance-presence-gen';
-import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceFlowEffect, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect } from './effects';
+import { updateMotionPropInCode } from '../../generation/generator-motion-props';
+import { updateScrollSpeedInCode } from '../../generation/generator-motion-scroll-fx';
+import type { SerScope } from '../../generation/scoped-expr';
+import { applySourceRotationLoop, assertLoopOutsideSourceList, sourceFlowEffect, sourceRotationLoop, sourceMountEffects, applySourceMountEffects, sourceGlobalPageEffect, sourceHoverEffect, sourceTapEffect, sourceScrollSpeed } from './effects';
 import { bindFieldInCode, findJSXElementByDataId, findClosingTag, setStyleEntryInCode } from '../../generation/cms-gen';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceInstanceStateName } from './interactions';
@@ -271,7 +274,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const reducedMotion = sourceRecord(document?.raw.webMetadata)?.reducedMotion;
       const motionPolicy = typeof reducedMotion === 'boolean' ? reducedMotion ? 'user' : 'never' : undefined;
       const pageJsx = motionPolicy ? `<MotionConfig reducedMotion="${motionPolicy}">${jsx}</MotionConfig>` : jsx;
-      let code = `"use client";\nimport React from 'react';\n${motionPolicy ? 'import { MotionConfig } from "framer-motion";\n' : ''}${detailSetup}export default function ${signature} { ${detailBody}return ${pageJsx}; }`;
+      const bodyPrefix = detailBody ? `${detailBody}\n  ` : '';
+      let code = `"use client";\nimport React from 'react';\n${motionPolicy ? 'import { MotionConfig } from "framer-motion";\n' : ''}${detailSetup}export default function ${signature} {\n  ${bodyPrefix}return ${pageJsx};\n}`;
       for (const prop of props) {
         code = setPropTypeInCode(code, prop.name, prop.type);
         code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
@@ -475,7 +479,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         for (const viewport of viewports.slice(1)) {
           const viewportMount = sourceMountEffects(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties);
           if (Boolean(viewportMount) !== Boolean(mount)) throw new Error(`Responsive on-mount effect on ${nodeId} requires its native adapter`);
-          if (viewportMount) responsiveMounts.push({ width: viewport.width, spec: viewportMount });
+          if (viewportMount) {
+            if (viewportMount.trigger !== mount?.trigger) throw new Error(`Responsive appearance trigger mismatch on ${nodeId} requires its native adapter`);
+            responsiveMounts.push({ width: viewport.width, spec: viewportMount });
+          }
         }
         if (mount) {
           if ((!['FrameNode', 'RichTextNode'].includes(node.kind) && !scene.nested.has(nodeId)) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
@@ -503,6 +510,35 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
             if (visibility.some(value => value === false)) throw new Error(`CSS-only child visibility with a flow effect on ${childId} requires its native adapter`);
           }
           code = setGlideInCode(code, identity[nodeId], flow);
+        }
+        const hover = sourceHoverEffect(node.properties);
+        if (hover) {
+          code = updateMotionPropInCode(code, identity[nodeId], 'whileHover', hover.props);
+          if (hover.transition) {
+            code = updateMotionPropInCode(code, identity[nodeId], 'transition', hover.transition);
+          }
+        }
+        const tap = sourceTapEffect(node.properties);
+        if (tap) {
+          code = updateMotionPropInCode(code, identity[nodeId], 'whileTap', tap.props);
+          if (tap.transition && !hover?.transition) {
+            code = updateMotionPropInCode(code, identity[nodeId], 'transition', tap.transition);
+          }
+        }
+        const speed = sourceScrollSpeed(node.properties);
+        if (typeof speed === 'number') {
+          const responsiveSpeeds: Array<{ scope: SerScope; speed: number }> = [];
+          for (const viewport of viewports.slice(1)) {
+            const vpSpeed = sourceScrollSpeed(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties);
+            if (typeof vpSpeed === 'number' && vpSpeed !== speed) {
+              responsiveSpeeds.push({ scope: { query: `(max-width: ${viewport.width}px)` }, speed: vpSpeed });
+            }
+          }
+          code = updateScrollSpeedInCode(code, {
+            nodeId: identity[nodeId],
+            speed,
+            ...(responsiveSpeeds.length ? { responsive: responsiveSpeeds } : {}),
+          });
         }
       }
       for (const nodeId of scene.sourceIds) {

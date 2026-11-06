@@ -12,6 +12,7 @@ import type { SourceGraph, SourceProperties } from './types';
 type LoopSpec = { props: Record<string, string>; transition: Record<string, string>; offscreen?: string };
 
 export interface SourceMountEffects {
+  trigger?: 'onMount' | 'inView';
   initial: Record<string, string>;
   animate: Record<string, string>;
   exit?: Record<string, string>;
@@ -19,11 +20,15 @@ export interface SourceMountEffects {
   exitTransition?: Record<string, string>;
 }
 
-/** onMount uses the explicit entry/exit channels, not the retained style-appear values. */
+/** onMount and inView use the explicit entry/exit channels, not the retained style-appear values. */
 export function sourceMountEffects(p: SourceProperties): SourceMountEffects | undefined {
   trace.fn('framer-native.sourceMountEffects');
   if (p.styleAppearEffectEnabled !== true) return;
-  if (p.styleAppearEffectTrigger !== 'onMount' || typeof p.styleAppearEffectLocked !== 'boolean' || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
+  const isMount = p.styleAppearEffectTrigger === 'onMount' || p.styleAppearEffectTrigger === 'onAppear' || p.styleAppearEffectTrigger === 'appear';
+  const isInView = p.styleAppearEffectTrigger === 'inView' || p.styleAppearEffectTrigger === 'onInView' || p.styleAppearEffectTrigger === 'view';
+  if (!isMount && !isInView) throw new Error('Source appearance mode requires its native lifecycle adapter');
+  const trigger: 'onMount' | 'inView' = isInView ? 'inView' : 'onMount';
+  if (typeof p.styleAppearEffectLocked !== 'boolean' || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
   if (p.styleAppearEffectLocked && Object.keys(p).some(key => key.startsWith('exitEffect') && key !== 'exitEffectEnabled')) throw new Error('Source appearance mode requires its native lifecycle adapter');
   if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) throw new Error('Source appearance with a base transform requires its native composition adapter');
   const axes = { Opacity: 'opacity', X: 'x', Y: 'y', Scale: 'scale', Rotate: 'rotate', RotateX: 'rotateX', RotateY: 'rotateY', SkewX: 'skewX', SkewY: 'skewY' };
@@ -43,7 +48,7 @@ export function sourceMountEffects(p: SourceProperties): SourceMountEffects | un
   };
   const enter = channel('enterEffect');
   const exit = p.exitEffectEnabled ? (p.styleAppearEffectLocked ? enter : channel('exitEffect')) : undefined;
-  return { initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
+  return { trigger, initial: enter.values, animate: target, enterTransition: enter.transition, ...(exit ? { exit: exit.values, exitTransition: exit.transition } : {}) };
 }
 
 export function applySourceMountEffects(
@@ -53,8 +58,12 @@ export function applySourceMountEffects(
   responsive: Array<{ width: number; spec: SourceMountEffects }> = [],
 ): string {
   trace.fn('framer-native.applySourceMountEffects', { nodeId });
+  const animProp = spec.trigger === 'inView' ? 'whileInView' : 'animate';
   let result = updateMotionPropInCode(code, nodeId, 'initial', spec.initial);
-  result = updateMotionPropInCode(result, nodeId, 'animate', spec.animate);
+  result = updateMotionPropInCode(result, nodeId, animProp, spec.animate);
+  if (spec.trigger === 'inView') {
+    result = updateMotionPropInCode(result, nodeId, 'viewport', { once: 'true' });
+  }
   if (spec.enterTransition) result = updateMotionPropInCode(result, nodeId, 'transition', spec.enterTransition);
   result = updateMotionPropInCode(result, nodeId, 'exit', spec.exit ? { ...spec.exit, ...(spec.exitTransition ? { transition: emitObj(spec.exitTransition) } : {}) } : { transition: '{ duration: 0 }' });
   const ordered = [...responsive].sort((a, b) => b.width - a.width);
@@ -65,7 +74,7 @@ export function applySourceMountEffects(
   }
   for (const [propName, pick] of [
     ['initial', (item: SourceMountEffects) => item.initial],
-    ['animate', (item: SourceMountEffects) => item.animate],
+    [animProp, (item: SourceMountEffects) => item.animate],
     ['transition', (item: SourceMountEffects) => item.enterTransition],
   ] as const) {
     let current = pick(spec);
@@ -84,20 +93,65 @@ export function applySourceMountEffects(
   return ensureTransformTemplateInCode(result, nodeId);
 }
 
-/** The captured editor defaults to pausing loops offscreen. */
+/** The captured editor defaults to pausing loops offscreen. Supports rotate, scale, y, x, opacity, skew. */
 export function sourceRotationLoop(p: SourceProperties): LoopSpec | undefined {
   if (p.loopEffectEnabled !== true) return;
   trace.fn('framer-native.sourceRotationLoop');
   const known = new Set(['loopEffectEnabled', 'loopEffectOpacity', 'loopEffectX', 'loopEffectY', 'loopEffectScale', 'loopEffectRotate3d', 'loopEffectRotate', 'loopEffectRotateX', 'loopEffectRotateY', 'loopEffectSkewX', 'loopEffectSkewY', 'loopEffectRepeatDelay', 'loopEffectRepeatType', 'loopEffectTransition', 'loopEffectPauseOffscreen']);
   if (Object.keys(p).some(key => key.startsWith('loopEffect') && !known.has(key))) return;
-  for (const [key, neutral] of Object.entries({ loopEffectOpacity: 1, loopEffectX: 0, loopEffectY: 0, loopEffectScale: 1, loopEffectRotateX: 0, loopEffectRotateY: 0, loopEffectSkewX: 0, loopEffectSkewY: 0 })) if (p[key] !== undefined && p[key] !== neutral) return;
-  if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1 || (p.loopEffectRotate3d !== undefined && p.loopEffectRotate3d !== false) || p.loopEffectRepeatType !== 'loop' || (p.loopEffectRepeatDelay ?? 0) !== 0 || (p.loopEffectPauseOffscreen !== undefined && typeof p.loopEffectPauseOffscreen !== 'boolean')) return;
-  if (typeof p.loopEffectRotate !== 'number' || !Number.isFinite(p.loopEffectRotate) || p.loopEffectRotate === 0) return;
-  const transition = sourceRecord(p.loopEffectTransition);
-  if (!transition || transition.type !== 'tween' || typeof transition.duration !== 'number' || !Number.isFinite(transition.duration) || transition.duration <= 0 || (transition.delay ?? 0) !== 0 || JSON.stringify(transition.ease) !== '[0,0,1,1]') return;
-  if (Object.keys(transition).some(key => !['type', 'duration', 'delay', 'ease', 'damping', 'mass', 'stiffness', 'durationBasedSpring', 'bounce'].includes(key))) return;
-  return { props: { rotate: String(p.loopEffectRotate) }, transition: { duration: String(transition.duration), repeat: 'Infinity', ease: 'linear' }, ...(p.loopEffectPauseOffscreen === false ? { offscreen: 'play' } : {}) };
+  if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) return;
+  if (p.loopEffectRotate3d !== undefined && typeof p.loopEffectRotate3d !== 'boolean') return;
+  if (!p.loopEffectRotate3d && ((typeof p.loopEffectRotateX === 'number' && p.loopEffectRotateX !== 0) || (typeof p.loopEffectRotateY === 'number' && p.loopEffectRotateY !== 0))) return;
+  if (p.loopEffectPauseOffscreen !== undefined && typeof p.loopEffectPauseOffscreen !== 'boolean') return;
+  if (p.loopEffectRepeatDelay !== undefined && (typeof p.loopEffectRepeatDelay !== 'number' || !Number.isFinite(p.loopEffectRepeatDelay) || p.loopEffectRepeatDelay < 0)) return;
+
+  if (p.loopEffectRepeatType !== undefined && !['loop', 'mirror', 'reverse'].includes(String(p.loopEffectRepeatType))) return;
+  const repeatType = (p.loopEffectRepeatType === 'mirror' || p.loopEffectRepeatType === 'reverse') ? p.loopEffectRepeatType : 'loop';
+
+  const axes: Record<string, { key: string; neutral: number }> = {
+    loopEffectOpacity: { key: 'opacity', neutral: 1 },
+    loopEffectScale: { key: 'scale', neutral: 1 },
+    loopEffectX: { key: 'x', neutral: 0 },
+    loopEffectY: { key: 'y', neutral: 0 },
+    loopEffectRotate: { key: 'rotate', neutral: 0 },
+    loopEffectRotateX: { key: 'rotateX', neutral: 0 },
+    loopEffectRotateY: { key: 'rotateY', neutral: 0 },
+    loopEffectSkewX: { key: 'skewX', neutral: 0 },
+    loopEffectSkewY: { key: 'skewY', neutral: 0 },
+  };
+
+  const props: Record<string, string> = {};
+  for (const [propName, { key, neutral }] of Object.entries(axes)) {
+    const val = p[propName];
+    if (val !== undefined && val !== null) {
+      if (typeof val !== 'number' || !Number.isFinite(val)) return;
+      if (val !== neutral) props[key] = String(val);
+    }
+  }
+  if (!Object.keys(props).length) return;
+
+  const transitionRecord = sourceRecord(p.loopEffectTransition);
+  if (!transitionRecord) return;
+  const spec = sourceTransitionSpec(transitionRecord);
+  if (!spec) return;
+
+  const trans: Record<string, string> = {
+    ...spec,
+    repeat: 'Infinity',
+    ...(repeatType !== 'loop' ? { repeatType } : {}),
+    ...(p.loopEffectRepeatDelay && p.loopEffectRepeatDelay > 0 ? { repeatDelay: String(p.loopEffectRepeatDelay) } : {}),
+  };
+  if (trans.ease === '[0,0,1,1]' || trans.ease === '[0, 0, 1, 1]') trans.ease = 'linear';
+  if (spec.type === 'tween' && !trans.ease && repeatType === 'loop') trans.ease = 'linear';
+
+  return {
+    props,
+    transition: trans,
+    ...(p.loopEffectPauseOffscreen === false ? { offscreen: 'play' } : {}),
+  };
 }
+
+export const sourceLoopEffect = sourceRotationLoop;
 
 export function applySourceRotationLoop(code: string, nodeId: string, spec: LoopSpec): string {
   trace.fn('framer-native.applySourceRotationLoop', { nodeId });
@@ -198,4 +252,75 @@ export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {
   const moves = [exit, enter].some(s => s && (s.offsetX !== 0 || s.offsetY !== 0 || s.scale !== 1 || s.rotateZ !== 0 || s.rotateX !== 0 || s.rotateY !== 0));
   const sequenced = !moves && !!exit && !!enter && (exit.transition.delay >= enter.transition.delay + enter.transition.duration || enter.transition.delay >= exit.transition.delay + exit.transition.duration);
   return { preset: moves ? 'custom' : sequenced ? 'fade-out-in' : 'crossfade', target: 'all', ...(exit ? { exit } : {}), ...(enter ? { enter } : {}) };
+}
+
+export interface SourceGestureEffect {
+  props: Record<string, string>;
+  transition?: Record<string, string>;
+}
+
+export function sourceHoverEffect(p: SourceProperties): SourceGestureEffect | undefined {
+  if (p.hoverEffectEnabled !== true) return undefined;
+  trace.fn('framer-native.sourceHoverEffect');
+  const axes: Record<string, { key: string; neutral: number }> = {
+    hoverEffectOpacity: { key: 'opacity', neutral: 1 },
+    hoverEffectScale: { key: 'scale', neutral: 1 },
+    hoverEffectX: { key: 'x', neutral: 0 },
+    hoverEffectY: { key: 'y', neutral: 0 },
+    hoverEffectRotate: { key: 'rotate', neutral: 0 },
+    hoverEffectRotateX: { key: 'rotateX', neutral: 0 },
+    hoverEffectRotateY: { key: 'rotateY', neutral: 0 },
+    hoverEffectSkewX: { key: 'skewX', neutral: 0 },
+    hoverEffectSkewY: { key: 'skewY', neutral: 0 },
+  };
+  const props: Record<string, string> = {};
+  for (const [propName, { key, neutral }] of Object.entries(axes)) {
+    const val = p[propName];
+    if (val !== undefined && val !== null) {
+      if (typeof val !== 'number' || !Number.isFinite(val)) return undefined;
+      if (val !== neutral) props[key] = String(val);
+    }
+  }
+  if (!Object.keys(props).length) return undefined;
+  const transition = p.hoverEffectTransition ? sourceTransitionSpec(p.hoverEffectTransition) : undefined;
+  return { props, ...(transition ? { transition } : {}) };
+}
+
+export function sourceTapEffect(p: SourceProperties): SourceGestureEffect | undefined {
+  const isEnabled = p.pressedEffectEnabled === true || p.tapEffectEnabled === true;
+  if (!isEnabled) return undefined;
+  trace.fn('framer-native.sourceTapEffect');
+  const prefix = p.pressedEffectEnabled === true ? 'pressedEffect' : 'tapEffect';
+  const axes: Record<string, { key: string; neutral: number }> = {
+    [`${prefix}Opacity`]: { key: 'opacity', neutral: 1 },
+    [`${prefix}Scale`]: { key: 'scale', neutral: 1 },
+    [`${prefix}X`]: { key: 'x', neutral: 0 },
+    [`${prefix}Y`]: { key: 'y', neutral: 0 },
+    [`${prefix}Rotate`]: { key: 'rotate', neutral: 0 },
+    [`${prefix}RotateX`]: { key: 'rotateX', neutral: 0 },
+    [`${prefix}RotateY`]: { key: 'rotateY', neutral: 0 },
+    [`${prefix}SkewX`]: { key: 'skewX', neutral: 0 },
+    [`${prefix}SkewY`]: { key: 'skewY', neutral: 0 },
+  };
+  const props: Record<string, string> = {};
+  for (const [propName, { key, neutral }] of Object.entries(axes)) {
+    const val = p[propName];
+    if (val !== undefined && val !== null) {
+      if (typeof val !== 'number' || !Number.isFinite(val)) return undefined;
+      if (val !== neutral) props[key] = String(val);
+    }
+  }
+  if (!Object.keys(props).length) return undefined;
+  const transVal = p[`${prefix}Transition`];
+  const transition = transVal ? sourceTransitionSpec(transVal) : undefined;
+  return { props, ...(transition ? { transition } : {}) };
+}
+
+export function sourceScrollSpeed(p: SourceProperties): number | undefined {
+  if (p.scrollEffectEnabled !== true) return undefined;
+  trace.fn('framer-native.sourceScrollSpeed');
+  const raw = p.scrollEffectSpeed ?? p.scrollSpeed ?? p.speed;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const speed = Math.abs(raw) <= 2 && raw !== 1 && raw !== 0 ? Math.round(raw * 100) : raw;
+  return speed;
 }
