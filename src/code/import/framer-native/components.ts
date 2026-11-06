@@ -11,7 +11,7 @@ import { updateVariantTextInCode } from '../../generation/generator-crud';
 import { bindTextVariableForVariantInCode, createConditionalVariableInCode } from '../../features/variable-ops';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { CSS_NEUTRAL_FALLBACK, setConditionalStyleInCode, updateVariantStyleInCode } from '../../generation/generator-styles';
-import { updateVariantEntryTransition } from '../../generation/generator-motion-transition';
+import { updateVariantEntryTransition, updateMotionConfigTransition, formatTransitionObj } from '../../generation/generator-motion-transition';
 import { ensureMotionTag } from '../../generation/generator-motion-scroll';
 import { addComponentCursorInCode, ensureCursorOptsForwardInCode, cursorOptsPropName } from '../../generation/cursor-gen';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
@@ -245,19 +245,21 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           const styles = stylesFor(state, parentId ? resolveSourceNode(graph, parentId, stateId) : undefined);
           const delta: Record<string, string> = {};
           for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) if (styles[key] !== baseStyles[key]) {
-            const mapped = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+            let mapped = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+            if (['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key) && (mapped === 'auto' || mapped === 'none' || mapped === 'initial')) mapped = '';
             delta[key] = /^\{([A-Za-z_$][\w$]*)\}$/.test(mapped) ? `var:${mapped.slice(1, -1)}` : mapped === 'transparent' ? TRANSPARENT_FILL : mapped;
           }
           if (id === primaryId) delete delta.position;
           if (Object.keys(delta).length) {
             changed = true;
-            const isAbsolute = baseStyles.position === 'absolute' || baseStyles.position === 'fixed';
+            const isAbsolute = baseStyles.position === 'absolute' || baseStyles.position === 'fixed' || styles.position === 'absolute' || styles.position === 'fixed';
             for (const key of Object.keys(delta)) {
               const isNonTweenable = PROJECTION_STYLE_PROPS.has(key)
                 || ['fontFamily', 'fontFeatureSettings', 'fontVariationSettings'].includes(key)
+                || ['position', 'order', 'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'zIndex', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key)
                 || (isAbsolute && (delta[key] === 'auto' || baseStyles[key] === 'auto' || ['left', 'top', 'right', 'bottom'].includes(key)));
               if (isNonTweenable) {
-                if (PROJECTION_STYLE_PROPS.has(key) || ['left', 'top', 'right', 'bottom', 'position'].includes(key)) {
+                if (PROJECTION_STYLE_PROPS.has(key) || ['left', 'top', 'right', 'bottom', 'position', 'order', 'flex', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key)) {
                   hasLayoutPropChange = true;
                 }
                 code = setConditionalStyleInCode(code, identity[id], key, names[stateId], delta[key]);
@@ -387,6 +389,23 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
             });
           }
         }
+      }
+      const variantTransitions: Record<string, Record<string, string>> = {};
+      for (const stateId of scope.children) {
+        const trans = sourceTransitionSpec(resolveSourceNode(graph, stateId).properties.variantTransition);
+        if (trans) variantTransitions[names[stateId]] = trans;
+      }
+      const nonDefaultTransitions = Object.entries(variantTransitions).filter(([variantName]) => variantName !== 'default');
+      const variantVar = code.includes('const [variant, setVariant]') ? 'variant' : code.includes('initialVariant') ? 'initialVariant' : null;
+      if (nonDefaultTransitions.length > 0 && variantVar) {
+        const defaultTrans = variantTransitions['default'] ? formatTransitionObj(variantTransitions['default']) : '{ duration: 0 }';
+        const motionConfigExpr = nonDefaultTransitions
+          .map(([variantName, trans]) => `${variantVar} === '${variantName}' ? ${formatTransitionObj(trans)}`)
+          .concat([defaultTrans])
+          .join(' : ');
+        code = updateMotionConfigTransition(code, null, motionConfigExpr);
+      } else if (variantTransitions['default']) {
+        code = updateMotionConfigTransition(code, null, formatTransitionObj(variantTransitions['default']));
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');

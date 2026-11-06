@@ -832,7 +832,7 @@ function buildTriggerHandler(trigger: ConnectionTrigger, conns: Connection[], al
   // the transition", 2026-08-06). The `_n = … : null; if (_n)` guard keeps
   // every handler inert for states it declares no transition for.
   const cases = conns.map(c => {
-    if (trigger === 'mouseEnter') {
+    if (trigger === 'mouseEnter' || trigger === 'mouseLeave') {
       const returnStates = allConnections
         .filter(ac => ac.trigger === 'afterDelay' && ac.to === c.from)
         .map(ac => ac.from)

@@ -24,6 +24,24 @@ const TRANSPARENT_INLINE_TAGS = new Set([
   'wbr',
   // Responsive CSS is editor-owned metadata, not a selectable canvas node.
   'style',
+  // SVG shape children and FIT-text wrapper inherit identity from their <svg data-id> wrapper.
+  'foreignobject',
+  'path',
+  'polygon',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'defs',
+  'g',
+  'text',
+  'pattern',
+  'stop',
+  'lineargradient',
+  'radialgradient',
+  'clippath',
+  'mask',
 ]);
 
 export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; issues: Issue[] } {

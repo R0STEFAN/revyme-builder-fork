@@ -4089,11 +4089,18 @@ export function setConditionalStyleInCode(
     }
 
     if (variantName === 'default') {
-      map.default = value !== '' ? value : (baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '');
+      let defVal = value !== '' ? value : (baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '');
+      if (['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(prop) && (defVal === 'auto' || defVal === 'none' || defVal === 'initial')) {
+        defVal = '';
+      }
+      map.default = defVal;
     } else {
       // Non-default variant write on an element with no prior inline value for this prop.
       // Prioritize existing base value from tag/variants, otherwise fall back to CSS_LAYOUT_DEFAULTS.
-      const fallback = baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '';
+      let fallback = baseVal ?? CSS_LAYOUT_DEFAULTS[prop] ?? '';
+      if (['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(prop) && (fallback === 'auto' || fallback === 'none' || fallback === 'initial')) {
+        fallback = '';
+      }
       map.default = value === fallback ? '' : fallback;
     }
   }

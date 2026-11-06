@@ -2,6 +2,7 @@
 // entry transitions, and transition VARIABLE bindings.
 // All code moved VERBATIM from generator-motion.ts (Phase 7.4 god-file split).
 import { trace } from '@/shared/debug-trace';
+import { parseJSX, traverse } from '../parsing/ast-utils';
 import { findTagClose, findJSXDataIdIndex, quoteStyleValue, findStyleObjectEnd, ensureNamedImport } from './generator-utils';
 
 // ─── MotionConfig Transition (root default) ────────────────────────────────
@@ -263,9 +264,26 @@ export function updateMotionConfigTransition(
     return wrapped;
   }
 
+  // Primary JSX return wrapping using AST: finds the component function's return statement that yields JSX.
+  const ast = parseJSX(code);
+  if (ast) {
+    let retNode: any = null;
+    traverse(ast, {
+      ReturnStatement(path) {
+        if (path.node.argument && (path.node.argument.type === 'JSXElement' || path.node.argument.type === 'JSXFragment')) {
+          retNode = path.node.argument;
+        }
+      }
+    });
+    if (retNode && typeof retNode.start === 'number' && typeof retNode.end === 'number') {
+      const inner = code.slice(retNode.start, retNode.end);
+      return ensureMotionConfigImport(code.slice(0, retNode.start) + `<MotionConfig transition={${transStr}}>${inner}</MotionConfig>` + code.slice(retNode.end));
+    }
+  }
+
   // Fallback: legacy `return ( ... )` form. Find the open paren and walk
   // the contents, then wrap.
-  const returnParenMatch = code.match(/return\s*\(\s*\n?/);
+  const returnParenMatch = code.match(/return\s*\(\s*</);
   if (returnParenMatch) {
     const idx = code.indexOf(returnParenMatch[0]) + returnParenMatch[0].length;
     const afterReturn = code.slice(idx);
@@ -289,8 +307,7 @@ export function updateMotionConfigTransition(
     return code;
   }
 
-  // Last-resort fallback: `return <Tag` (no parens, no LayoutGroup). Wrap
-  // around the bare top-level JSX.
+  // Last-resort fallback: regex match
   const bareReturnMatch = code.match(/return\s+(<[A-Za-z][^;]*?)(\s*;)/s);
   if (bareReturnMatch && bareReturnMatch.index !== undefined) {
     const inner = bareReturnMatch[1];
@@ -298,7 +315,7 @@ export function updateMotionConfigTransition(
     const start = bareReturnMatch.index + 'return '.length;
     const end = bareReturnMatch.index + bareReturnMatch[0].length;
     const replacement = `return <MotionConfig transition={${transStr}}>${inner}</MotionConfig>${semi}`;
-    return code.slice(0, bareReturnMatch.index) + replacement + code.slice(end);
+    return ensureMotionConfigImport(code.slice(0, bareReturnMatch.index) + replacement + code.slice(end));
   }
 
   return code;

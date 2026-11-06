@@ -133,7 +133,11 @@ export function compileNativeSelectionPaste(input: unknown, target: NativeTarget
         }
         if (result.diagnostics.length) continue;
         const changes: Record<string, string> = {};
-        for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) if (styles[key] !== baseStyles[key]) changes[key] = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+        for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) if (styles[key] !== baseStyles[key]) {
+          let val = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+          if (['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key) && (val === 'auto' || val === 'none' || val === 'initial')) val = '';
+          changes[key] = val;
+        }
         if (Object.keys(changes).length) code = updateContainerQueryStyle(code, identity[id], viewport.width, normalizeTransparent(changes), { viewportWidths: viewports.map(item => item.width) });
       }
     }
