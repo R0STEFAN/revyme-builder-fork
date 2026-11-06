@@ -1,7 +1,7 @@
 import { trace } from '../../../shared/debug-trace';
 import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
 import { checkFile } from '../../oracle/check-file';
-import { setTagAttr } from '../../generation/generator-utils';
+import { setTagAttr, ensureNamedImport } from '../../generation/generator-utils';
 import { setGlideInCode } from '../../generation/glide-gen';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
@@ -487,6 +487,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
       const pageEffect = isTemplate ? templatePageEffects.get(id) : undefined;
       if (pageEffect) code = injectPageTransitionsInCode(code);
+      if (code.includes('RevymeSplitText')) code = ensureNamedImport(code, '@revyme/runtime', ['RevymeSplitText']);
       const route = result.routes[id], folder = 'app' + (group ? `/(${group})` : '') + (isTemplate || route === '/' ? '' : route);
       const path = `${folder}/${isTemplate ? 'LayoutClient' : 'page.client'}.tsx`;
       const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`), ...[...templatePageEffects.keys()].flatMap(tid => { const g = groups.get(tid)!; return [`app/(${g})/page-effects.ts`, `app/(${g})/page-effects-runtime.ts`, `app/(${g})/page-transitions.tsx`]; })]);

@@ -3,6 +3,7 @@ import { escapeJsxText } from '../../parsing/rich-text-runs';
 import { serializeFormConfig } from '../../../editor/tools/FormTool/form-config';
 import { isSourceCodeComponent, resolveSourceNode, sourceRecord } from './source-graph';
 import { mapSourceText } from './text';
+import { buildSplitTextSpecSource, SPLIT_TEXT_TAG } from '../../generation/text-anim-gen';
 import type { SourceMappingContext } from './styles';
 import type { NativeCodeComponentRef } from './code-components';
 import type { ResolvedSourceNode, SourceGraph } from './types';
@@ -110,7 +111,7 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
         const videoStyles = { objectFit: 'cover', ...styles };
         return `<video data-id="${targetId}"${label}${srcAttr}${posterAttr}${boolAttrs.map(a => ` ${a}`).join('')} style={${sourceStyleLiteral(videoStyles)}} />`;
       }
-      if (identifier.includes('SmoothScroll') || name === 'default') {
+      if (identifier.includes('SmoothScroll') || name === 'default' || identifier.endsWith(':default') || identifier.toLowerCase().includes('default') || name.toLowerCase() === 'default') {
         return '';
       }
       const label = escapeJsxText(`Заглушка · ${name}`).replace(/"/g, '&quot;');
@@ -123,6 +124,10 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       tag = text.tag;
       attributes = Object.entries(text.attributes).map(([key, value]) => ` ${key}=${JSON.stringify(value)}`).join('');
       content = text.binding ? `{${options.expressionFor(text.binding, node, 'textContent')}}` : text.jsx;
+      if (text.textAnim) {
+        attributes += ` data-text-anim='${JSON.stringify(text.textAnim)}'`;
+        content = `<${SPLIT_TEXT_TAG} spec={${buildSplitTextSpecSource(text.textAnim)}}>${content}</${SPLIT_TEXT_TAG}>`;
+      }
     } else if (node.kind === 'SlotNode') {
       result.slots.push(id); content = '{children}';
     } else if (node.kind === 'CodeComponentNode') {

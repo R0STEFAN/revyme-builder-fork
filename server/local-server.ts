@@ -741,12 +741,10 @@ export class LocalServerManager {
         }
 
         const fileMeta = meta[file];
-        // If tagged for an explicit DIFFERENT project and not referenced, skip it
-        if (fileMeta?.projectId && fileMeta.projectId !== safeProjectId && fileMeta.projectId !== 'local') {
-          continue;
+        // Only include unreferenced uploads if explicitly tagged for this project
+        if (fileMeta?.projectId === safeProjectId) {
+          allowedUploads.add(file);
         }
-
-        allowedUploads.add(file);
       }
     }
 

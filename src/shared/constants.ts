@@ -419,7 +419,7 @@ export const ZERO_WIDTH_SPACE = '​';
  *  responsive replica. Pure leaf so canvas/drag/replica-context can use it
  *  without importing node-ops (cycle). node-ops re-exports it. */
 export function isPrimaryViewport(vpId: string): boolean {
-  return vpId === 'desktop' || vpId === 'default';
+  return !vpId || vpId === 'desktop' || vpId === 'default' || vpId === 'framer-vp-0';
 }
 
 /**

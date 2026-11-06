@@ -309,7 +309,12 @@ export function getViewportPrefix(viewportId: string): string {
   // dead-ended the Insert-panel drag's whole canvas-node drop branch (no
   // hover highlight, no drop line, drop landed free — user report
   // 2026-07-29; ToolbarDragStrategy's CANVAS_VP = '').
-  if (!viewportId || viewportId === 'desktop' || viewportId === 'default') return '';
+  if (!viewportId || viewportId === 'desktop' || viewportId === 'default' || viewportId === 'framer-vp-0') return '';
+  try {
+    const configs = getDefaultStore().get(viewportsConfigAtom);
+    const primary = configs.find(v => v.isPrimary) ?? configs[0];
+    if (primary && primary.id === viewportId) return '';
+  } catch {}
   return viewportId + '-';
 }
 

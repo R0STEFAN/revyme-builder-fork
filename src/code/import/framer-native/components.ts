@@ -364,6 +364,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
       if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');
+      if (code.includes('RevymeSplitText')) code = ensureNamedImport(code, '@revyme/runtime', ['RevymeSplitText']);
       result.files.push({ path: `components/${name}.tsx`, code });
       result.createdIds.push(identity[primaryId]);
     } catch (error) {

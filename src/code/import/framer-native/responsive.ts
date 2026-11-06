@@ -16,8 +16,11 @@ export function sourceViewports(graph: SourceGraph, scopeId: string): SourceView
   states.sort((a, b) => Number(b.properties.width) - Number(a.properties.width));
   if (!states.length || states.some(state => typeof state.properties.width !== 'number' || state.properties.width <= 0)) throw new Error(`FRAMER_SOURCE_INVALID: invalid breakpoint widths in ${scopeId}`);
   if (new Set(states.map(state => state.properties.width)).size !== states.length) throw new Error(`FRAMER_SOURCE_INVALID: duplicate breakpoint widths in ${scopeId}`);
+  const standardIds = ['desktop', 'tablet', 'mobile'];
   return states.map((state, index) => ({
-    sourceStateId: state.id, id: `framer-vp-${index}`, label: String(state.properties.name ?? `Breakpoint ${index + 1}`),
+    sourceStateId: state.id,
+    id: index < standardIds.length ? standardIds[index] : `breakpoint-${index + 1}`,
+    label: String(state.properties.name ?? (index < standardIds.length ? standardIds[index].charAt(0).toUpperCase() + standardIds[index].slice(1) : `Breakpoint ${index + 1}`)),
     width: index === 0 ? Number(state.properties.width) : Number(states[index - 1].properties.width) - 1,
     designWidth: Number(state.properties.width), isPrimary: index === 0, order: index,
     height: 'auto', x: Number(state.properties.left ?? 0), y: Number(state.properties.top ?? 0),

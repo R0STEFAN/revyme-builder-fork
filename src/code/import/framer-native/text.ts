@@ -6,6 +6,7 @@ import { resolveSourceNode, sourceRecord } from './source-graph';
 import { mappingDiagnostic, sourceStyleValue, type SourceMappingContext } from './styles';
 import type { ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 import { parseSourceGoogleFont } from './fonts';
+import type { TextAnimConfig } from '../../../editor/tools/AnimationTool/motion/text-anim-presets';
 
 export interface NativeText {
   plainText: string;
@@ -18,6 +19,7 @@ export interface NativeText {
   presetId?: string;
   binding?: SourceProperties;
   blockIds?: string[];
+  textAnim?: TextAnimConfig;
 }
 const tags = new Set(['p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 's', 'a', 'br', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'li']);
 const cssNames: Record<string, string> = {
@@ -66,18 +68,63 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
   return out;
 }
 
+export function mapSourceTextEffect(p: SourceProperties): TextAnimConfig | undefined {
+  if (p.textEffectEnabled !== true) return undefined;
+  const tokenization = String(p.textEffectTokenization ?? 'word');
+  const animationType: TextAnimConfig['animationType'] =
+    tokenization === 'character' ? 'character' :
+    tokenization === 'line' ? 'line' : 'word';
+  const triggerStr = String(p.textEffectTrigger ?? 'onInView');
+  const trigger: TextAnimConfig['trigger'] =
+    triggerStr === 'onMount' ? 'appear' :
+    triggerStr === 'onScroll' ? 'scroll' : 'view';
+
+  const config: TextAnimConfig = { animationType, trigger };
+  if (typeof p.textEffectOpacity === 'number') config.opacity = p.textEffectOpacity;
+  if (typeof p.textEffectScale === 'number' && p.textEffectScale !== 1) config.scale = p.textEffectScale;
+  if (typeof p.textEffectBlur === 'number' && p.textEffectBlur > 0) config.blur = p.textEffectBlur;
+  if (typeof p.textEffectRotate === 'number' && p.textEffectRotate !== 0) config.rotateZ = p.textEffectRotate;
+  if (typeof p.textEffectRotateX === 'number' && p.textEffectRotateX !== 0) config.rotateX = p.textEffectRotateX;
+  if (typeof p.textEffectRotateY === 'number' && p.textEffectRotateY !== 0) config.rotateY = p.textEffectRotateY;
+  if (typeof p.textEffectSkewX === 'number' && p.textEffectSkewX !== 0) config.skewX = p.textEffectSkewX;
+  if (typeof p.textEffectSkewY === 'number' && p.textEffectSkewY !== 0) config.skewY = p.textEffectSkewY;
+  if (typeof p.textEffectX === 'number' && p.textEffectX !== 0) config.x = p.textEffectX;
+  if (typeof p.textEffectY === 'number' && p.textEffectY !== 0) config.y = p.textEffectY;
+  if (typeof p.textEffectDelay === 'number' && p.textEffectDelay > 0) config.delay = p.textEffectDelay;
+  if (p.textEffectReplay === true) config.replay = true;
+  if (p.textEffectType === 'appear' && (typeof p.textEffectY === 'number' && p.textEffectY !== 0)) {
+    config.mask = true;
+  }
+  const trans = sourceRecord(p.textEffectTransition);
+  if (trans) {
+    config.transition = {};
+    if (trans.type === 'spring' || trans.type === 'tween') config.transition.type = trans.type;
+    if (typeof trans.duration === 'number') config.transition.duration = trans.duration;
+    if (typeof trans.delay === 'number') config.transition.delay = trans.delay;
+    if (typeof trans.stiffness === 'number') config.transition.stiffness = trans.stiffness;
+    if (typeof trans.damping === 'number') config.transition.damping = trans.damping;
+    if (typeof trans.mass === 'number') config.transition.mass = trans.mass;
+    if (Array.isArray(trans.ease) && trans.ease.length === 4) config.transition.ease = trans.ease as number[];
+    else if (typeof trans.ease === 'string') config.transition.ease = trans.ease;
+  }
+  return config;
+}
+
 export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingContext, targetId?: string): NativeText {
   trace.fn('framer-native.mapSourceText', { sourceId: node.sourceId });
   const fragment = parseFragment(typeof node.properties.html === 'string' ? node.properties.html : '');
   const blocks = fragment.childNodes.filter(child => child.nodeName !== '#comment');
   const single = blocks.length === 1 && 'tagName' in blocks[0] ? blocks[0] : undefined;
-  const output: NativeText = { tag: single && tags.has(single.tagName) ? single.tagName : 'div', plainText: '', jsx: '', runs: [], styles: {}, attributes: {} };
+  const output: NativeText = { tag: single && tags.has(single.tagName) ? single.tagName : 'div', plainText: '', jsx: '', runs: [], styles: {}, attributes: {}, textAnim: mapSourceTextEffect(node.properties) };
   const attributeStyle = (element: DefaultTreeAdapterTypes.Element) => {
     const attrs = Object.fromEntries(element.attrs.map(attr => [attr.name, attr.value]));
     let styles: Record<string, string> = {};
     let presetStyles: Record<string, string> = {};
     if (attrs['data-styles-preset'] && context.graph) {
-      if (context.graph.nodes.has(attrs['data-styles-preset'])) styles = presetStyles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
+      if (context.graph.nodes.has(attrs['data-styles-preset'])) {
+        presetStyles = mapSourceTypography(resolveSourceNode(context.graph, attrs['data-styles-preset']).properties);
+        styles = { ...presetStyles };
+      }
       else mappingDiagnostic(context, node, 'data-styles-preset', 'SOURCE_TYPOGRAPHY_MISSING');
     }
     const declarations = parseStyleString(attrs.style ?? '');
