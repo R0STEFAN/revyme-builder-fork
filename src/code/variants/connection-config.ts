@@ -557,7 +557,11 @@ export function generateConnectionCode(code: string, connections: Connection[]):
     if (clock.variant !== variant) { clock.variant = variant; clock.remaining = next.delay; }
     if (next.pauseOffscreen && !isInView) return;
     const started = performance.now();
-    const timer = setTimeout(() => setVariant(next.to), clock.remaining);
+    const timer = setTimeout(() => {
+      clock.variant = '';
+      clock.remaining = 0;
+      setVariant(next.to);
+    }, clock.remaining);
     return () => { clearTimeout(timer); clock.remaining = Math.max(0, clock.remaining - (performance.now() - started)); };` : `
     const timer = setTimeout(() => setVariant(next.to), next.delay);
     return () => clearTimeout(timer);`;
@@ -566,7 +570,7 @@ ${clock}
   useEffect(() => {
     const __afterDelayChain: Record<string, { to: string; delay: number${pausesDelay ? '; pauseOffscreen: boolean' : ''} }> = {\n${entries}\n    };
     const next = __afterDelayChain[variant];
-    if (!next) return;
+    if (!next) {${pausesDelay ? ' const clock = __afterDelayClock.current; clock.variant = \'\'; clock.remaining = 0;' : ''} return; }
 ${timer}
   }, [variant${pausesDelay ? ', isInView' : ''}]);
 ` + result.slice(at);

@@ -16,8 +16,12 @@ function loadGenerated(code: string): React.ComponentType {
   const output = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
   const exports: { default?: React.ComponentType } = {};
   const motion = { div: (props: Record<string, unknown>) => {
-    const { onViewportEnter, onViewportLeave, animate: _animate, initial: _initial, variants: _variants, ...rest } = props;
-    return React.createElement('div', { ...rest, onMouseEnter: onViewportEnter, onMouseLeave: onViewportLeave });
+    const { onViewportEnter, onViewportLeave, onHoverEnd, onHoverStart, animate: _animate, initial: _initial, variants: _variants, ...rest } = props;
+    return React.createElement('div', {
+      ...rest,
+      onMouseEnter: (e: any) => { if (onHoverStart) (onHoverStart as any)(e); else (onViewportEnter as any)?.(e); },
+      onMouseLeave: (e: any) => { if (onHoverEnd) (onHoverEnd as any)(e); else (onViewportLeave as any)?.(e); }
+    });
   } };
   new Function('require', 'exports', 'React', output)((name: string) => name === 'react' ? React : name === 'framer-motion' ? { motion } : { withResponsiveProps: (value: unknown) => value }, exports, React);
   return exports.default!;
@@ -76,5 +80,43 @@ describe('viewport-paused delayed native connections', () => {
     const mounted = render(React.createElement(loadGenerated(cleared)));
     expect(mounted.container.firstElementChild?.getAttribute('data-variant')).toBe('default');
     mounted.unmount();
+  });
+  it('resets clock on repeated transitions into delayed variant', () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [
+      { from: 'default', to: 'leaving', trigger: 'mouseLeave' },
+      { from: 'leaving', to: 'default', trigger: 'afterDelay', delay: 0.5, pauseOffscreen: true },
+    ];
+    const code = generateConnectionCode(source, connections);
+    const mounted = render(React.createElement(loadGenerated(code)));
+    try {
+      const root = mounted.container.firstElementChild!;
+      // Mark in view
+      fireEvent.mouseEnter(root); // onViewportEnter
+      expect(root.getAttribute('data-variant')).toBe('default');
+
+      // 1st cycle: mouseLeave -> leaving
+      fireEvent.mouseLeave(root);
+      expect(root.getAttribute('data-variant')).toBe('leaving');
+      // Advance partial time: 400ms (should not reset yet)
+      act(() => vi.advanceTimersByTime(400));
+      expect(root.getAttribute('data-variant')).toBe('leaving');
+      // Advance remaining: 100ms (now resets to default)
+      act(() => vi.advanceTimersByTime(100));
+      expect(root.getAttribute('data-variant')).toBe('default');
+
+      // 2nd cycle: mouseLeave -> leaving again
+      fireEvent.mouseLeave(root);
+      expect(root.getAttribute('data-variant')).toBe('leaving');
+      // Advance partial time: 400ms (MUST NOT reset yet! Previously it reset in 0ms!)
+      act(() => vi.advanceTimersByTime(400));
+      expect(root.getAttribute('data-variant')).toBe('leaving');
+      // Advance remaining: 100ms -> now resets to default
+      act(() => vi.advanceTimersByTime(100));
+      expect(root.getAttribute('data-variant')).toBe('default');
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
   });
 });
