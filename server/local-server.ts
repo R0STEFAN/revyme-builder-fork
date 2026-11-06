@@ -4,6 +4,7 @@ import { spawn, exec, execSync, type ChildProcess } from 'node:child_process';
 import sharp from 'sharp';
 import { getDataDirs, getProject, readUploadsMeta } from './storage';
 import { OPTIMIZE_IMAGES_SCRIPT, IMAGE_UTILS_TS } from '../src/shared/image-export-constants';
+import { ensureLinkResetInCss } from '../src/shared/link-reset';
 
 function extractReferencedUploads(files: Record<string, string> | Iterable<string>, allUploadFiles: string[]): Set<string> {
   const referenced = new Set<string>();
@@ -593,6 +594,9 @@ export class LocalServerManager {
         fs.mkdirSync(parentDir, { recursive: true });
       }
       let fileContent = content;
+      if (relativePath === 'app/globals.css') {
+        fileContent = ensureLinkResetInCss(fileContent);
+      }
       if (/\.(tsx|jsx)$/.test(relativePath)) {
         fileContent = fileContent.replace(/(<img\b[^>]*?)(\balt\b)(?!\s*=)([^>]*?>?)/gs, (match) => match.replace(/\balt\b(?!\s*=)/, 'alt=""'));
         fileContent = fileContent.replace(

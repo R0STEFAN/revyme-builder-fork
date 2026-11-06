@@ -115,7 +115,12 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       result[axis] = '100%';
     } else if (type === 0) set(axis, px(size));
     else if (type === 1 && typeof size === 'number') result[axis] = `${size * 100}%`;
-    else if (type === 2) result[axis] = axis === 'height' ? 'auto' : 'fit-content';
+    else if (type === 2) {
+      result[axis] = axis === 'height' ? 'auto' : 'fit-content';
+      if (axis === 'height' && typeof size === 'number' && size > 0 && size <= 4 && p.minHeight == null) {
+        result.minHeight = `${size}px`;
+      }
+    }
     else if (type === 3 && typeof size === 'number') {
       if (main && !outOfFlow) {
         result.flexGrow = String(size); result.flexShrink = '1'; result.flexBasis = '0px';

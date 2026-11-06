@@ -29,6 +29,7 @@ import { generate } from '../generation/generator-utils';
 import { healMissingOverlayEffectsInCode } from '../generation/overlay-gen';
 import { PAGE_TRANSITIONS_SOURCE, PAGE_EFFECTS_RUNTIME_SOURCE } from '../generation/page-transitions-gen';
 import { transformSiteFilesForNextFonts } from '../generation/next-font-gen';
+import { ensureLinkResetInCss } from '@/shared/link-reset';
 import { getUploadSrcSet, inferImageSizes, getCmsImageSrcSet, isSignedImageUrl } from '@/shared/image-utils';
 import { IMAGE_UTILS_TS, OPTIMIZE_IMAGES_SCRIPT } from '@/shared/image-export-constants';
 import {
@@ -1381,6 +1382,10 @@ export function prepareSiteFiles(
   options?: PrepareSiteFilesOptions,
 ): Record<string, string> {
   let files = { ...input };
+
+  if (files['app/globals.css']) {
+    files['app/globals.css'] = ensureLinkResetInCss(files['app/globals.css']);
+  }
 
   const isDynamicMode = options?.ssg === false || options?.buildMode === 'dynamic';
   const isHybridMode = options?.ssg === true || options?.buildMode === 'hybrid' || options?.buildMode === 'ssg';

@@ -17,6 +17,7 @@ import { findVariantRootId, insertAtRootRestSpread, stampRootDataVariantAttr } f
 import { ensureRootPerfIsolation, hasPerfIsolationPair } from '@/code/variants/variant-perf';
 import { nodeIdToVarName } from '@/shared/id-utils';
 import { healStyleBlockImportant } from '@/shared/media-important';
+import { ensureLinkResetInCss } from '@/shared/link-reset';
 import { ensureLayoutFile } from '@/code/generation/metadata-gen';
 import { DIRECTUS_SYNC_PLUGIN_SOURCE } from './default-plugins/DirectusSync';
 import { healSectionOffsets } from '@/code/generation/generator-motion-scroll';
@@ -676,6 +677,14 @@ export class InMemoryProjectFS implements ProjectFS {
       );
       trace.action('project-fs:migrated-html-position-relative', {});
     }
+    const globalsForLinks = this.activeFiles().get('app/globals.css');
+    if (globalsForLinks && globalsForLinks.includes(UNIVERSAL_SEED_RESET)) {
+      const ensured = ensureLinkResetInCss(globalsForLinks);
+      if (ensured !== globalsForLinks) {
+        this.activeFiles().set('app/globals.css', ensured);
+        trace.action('project-fs:migrated-link-seed-reset', {});
+      }
+    }
     for (const [path, src] of this.activeFiles()) {
       if (!path.endsWith('.tsx') || !(path.startsWith('app/') || path.startsWith('components/'))) continue;
       if (!src.includes('layout={true}')) continue;
@@ -789,8 +798,17 @@ export class InMemoryProjectFS implements ProjectFS {
     if (!b) return `Unknown branch "${branchId}".`;
     b.files = withoutShared(files);
     const globals = b.files.get('app/globals.css');
-    if (globals && globals.includes(LEGACY_SEED_RESET)) {
-      b.files.set('app/globals.css', globals.replace(LEGACY_SEED_RESET, UNIVERSAL_SEED_RESET));
+    if (globals) {
+      let nextGlobals = globals;
+      if (nextGlobals.includes(LEGACY_SEED_RESET)) {
+        nextGlobals = nextGlobals.replace(LEGACY_SEED_RESET, UNIVERSAL_SEED_RESET);
+      }
+      if (nextGlobals.includes(UNIVERSAL_SEED_RESET)) {
+        nextGlobals = ensureLinkResetInCss(nextGlobals);
+      }
+      if (nextGlobals !== globals) {
+        b.files.set('app/globals.css', nextGlobals);
+      }
     }
     this.refreshBranchStatus(branchId);
     trace.action('project-fs:load-branch-snapshot', { branch: branchId, fileCount: files.size });

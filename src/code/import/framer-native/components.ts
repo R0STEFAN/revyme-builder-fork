@@ -270,19 +270,8 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           }
         }
         if (hasLayoutPropChange) {
+          code = ensureMotionTag(code, identity[id]);
           code = setTagAttr(code, identity[id], 'layout', '{true}');
-        }
-        if (changed) {
-          let hasVariants = false;
-          const ast = parseJSX(code);
-          if (ast) findFirstElementByDataId(ast, identity[id], (_path, element) => {
-            hasVariants = element.openingElement.attributes.some(attribute => t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'variants' }));
-          });
-          if (!hasVariants) code = updateVariantStyleInCode(code, identity[id], names[scope.children.find(id => id !== primaryId)!], { opacity: baseStyles.opacity ?? '1' });
-          for (const stateId of scope.children) {
-          const transition = sourceTransitionSpec(resolveSourceNode(graph, stateId).properties.variantTransition);
-          if (transition) code = updateVariantEntryTransition(code, identity[id], names[stateId], transition);
-          }
         }
         if (base.kind === 'RichTextNode') {
           const baseText = mapSourceText(base, context);
