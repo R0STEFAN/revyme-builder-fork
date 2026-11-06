@@ -73,14 +73,17 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
 
 export function mapSourceTextEffect(p: SourceProperties): TextAnimConfig | undefined {
   if (p.textEffectEnabled !== true) return undefined;
-  const tokenization = String(p.textEffectTokenization ?? 'word');
+  const tokenization = String(p.textEffectTokenization ?? 'word').toLowerCase();
   const animationType: TextAnimConfig['animationType'] =
-    tokenization === 'character' ? 'character' :
-    tokenization === 'line' ? 'line' : 'word';
-  const triggerStr = String(p.textEffectTrigger ?? 'onInView');
+    tokenization === 'character' || tokenization === 'letter' ? 'character' :
+    tokenization === 'line' ? 'line' :
+    tokenization === 'all' || tokenization === 'full' ? 'full' : 'word';
+  const triggerRaw = String(p.textEffectTrigger ?? 'onInView');
+  const triggerStr = triggerRaw.toLowerCase();
   const trigger: TextAnimConfig['trigger'] =
-    triggerStr === 'onMount' ? 'appear' :
-    triggerStr === 'onScroll' ? 'scroll' : 'view';
+    triggerStr === 'onmount' || triggerStr === 'onappear' || triggerStr === 'appear' ? 'appear' :
+    triggerStr === 'onscroll' || triggerStr === 'scroll' ? 'scroll' :
+    triggerStr === 'onsectioninview' || triggerStr === 'sectioninview' || triggerStr === 'section' ? 'section' : 'view';
 
   const config: TextAnimConfig = { animationType, trigger };
   if (typeof p.textEffectOpacity === 'number') config.opacity = p.textEffectOpacity;
@@ -93,11 +96,38 @@ export function mapSourceTextEffect(p: SourceProperties): TextAnimConfig | undef
   if (typeof p.textEffectSkewY === 'number' && p.textEffectSkewY !== 0) config.skewY = p.textEffectSkewY;
   if (typeof p.textEffectX === 'number' && p.textEffectX !== 0) config.x = p.textEffectX;
   if (typeof p.textEffectY === 'number' && p.textEffectY !== 0) config.y = p.textEffectY;
-  if (typeof p.textEffectDelay === 'number' && p.textEffectDelay > 0) config.delay = p.textEffectDelay;
+
+  const stagger = typeof p.textEffectStagger === 'number' && p.textEffectStagger > 0 ? p.textEffectStagger
+    : typeof p.textEffectDelay === 'number' && p.textEffectDelay > 0 ? p.textEffectDelay
+    : undefined;
+  if (stagger !== undefined) config.delay = stagger;
+
   if (p.textEffectReplay === true) config.replay = true;
-  if (p.textEffectType === 'appear' && (typeof p.textEffectY === 'number' && p.textEffectY !== 0)) {
+  if (
+    p.textEffectMask === true ||
+    p.textEffectClip === true ||
+    (p.textEffectType === 'appear' && ((typeof p.textEffectY === 'number' && p.textEffectY !== 0) || (typeof p.textEffectX === 'number' && p.textEffectX !== 0)))
+  ) {
     config.mask = true;
   }
+
+  if (trigger === 'scroll') {
+    if (typeof p.textEffectScrollStart === 'number') config.scrollStart = p.textEffectScrollStart;
+    else if (typeof p.scrollStart === 'number') config.scrollStart = p.scrollStart;
+    if (typeof p.textEffectScrollEnd === 'number') config.scrollEnd = p.textEffectScrollEnd;
+    else if (typeof p.scrollEnd === 'number') config.scrollEnd = p.scrollEnd;
+    if (typeof p.textEffectScrollWindow === 'number') config.scrollWindow = p.textEffectScrollWindow;
+    else if (typeof p.textEffectOverlap === 'number') config.scrollWindow = p.textEffectOverlap;
+    else if (typeof p.scrollWindow === 'number') config.scrollWindow = p.scrollWindow;
+  }
+
+  if (typeof p.textEffectViewport === 'string' && ['top', 'middle', 'bottom'].includes(p.textEffectViewport)) {
+    config.viewport = p.textEffectViewport as 'top' | 'middle' | 'bottom';
+  }
+  if (typeof p.textEffectSectionId === 'string' && p.textEffectSectionId) {
+    config.sectionId = p.textEffectSectionId;
+  }
+
   const trans = sourceRecord(p.textEffectTransition);
   if (trans) {
     config.transition = {};
@@ -107,6 +137,7 @@ export function mapSourceTextEffect(p: SourceProperties): TextAnimConfig | undef
     if (typeof trans.stiffness === 'number') config.transition.stiffness = trans.stiffness;
     if (typeof trans.damping === 'number') config.transition.damping = trans.damping;
     if (typeof trans.mass === 'number') config.transition.mass = trans.mass;
+    if (typeof trans.bounce === 'number') config.transition.bounce = trans.bounce;
     if (Array.isArray(trans.ease) && trans.ease.length === 4) config.transition.ease = trans.ease as number[];
     else if (typeof trans.ease === 'string') config.transition.ease = trans.ease;
   }

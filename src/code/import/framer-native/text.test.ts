@@ -89,4 +89,38 @@ describe('editable original rich text', () => {
     expect(t.styles.maxWidth).toBe('100%');
     expect(t.styles.fontSize).not.toContain('clamp');
   });
+  it('maps various Framer text animation modes (scroll, letter, mask, stagger, bounce)', () => {
+    const c = context();
+    const tScroll = mapSourceText(node('<p>Reveal</p>', {
+      textEffectEnabled: true,
+      textEffectTokenization: 'word',
+      textEffectTrigger: 'onScroll',
+      textEffectScrollStart: 90,
+      textEffectScrollEnd: 35,
+      textEffectScrollWindow: 0.4,
+    }), c);
+    expect(tScroll.textAnim).toMatchObject({
+      animationType: 'word',
+      trigger: 'scroll',
+      scrollStart: 90,
+      scrollEnd: 35,
+      scrollWindow: 0.4,
+    });
+
+    const tLetter = mapSourceText(node('<p>Title</p>', {
+      textEffectEnabled: true,
+      textEffectTokenization: 'letter',
+      textEffectTrigger: 'appear',
+      textEffectStagger: 0.05,
+      textEffectMask: true,
+      textEffectTransition: { type: 'spring', bounce: 0.2, duration: 0.8 },
+    }), c);
+    expect(tLetter.textAnim).toMatchObject({
+      animationType: 'character',
+      trigger: 'appear',
+      delay: 0.05,
+      mask: true,
+      transition: { type: 'spring', bounce: 0.2, duration: 0.8 },
+    });
+  });
 });
