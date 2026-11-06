@@ -119,4 +119,13 @@ describe('viewport-paused delayed native connections', () => {
       vi.useRealTimers();
     }
   });
+  it('strips multiline formatted __afterDelayClock without duplicating it on rebuild', () => {
+    const formatted = source.replace(
+      'function Component() {',
+      `function Component() {\n  const __afterDelayClock = useRef({\n    variant: '',\n    remaining: 0\n  });`
+    );
+    const rebuilt = rebuildConnections(formatted, [{ from: 'default', to: 'open', trigger: 'afterDelay', pauseOffscreen: true }]);
+    const matches = rebuilt.match(/__afterDelayClock = useRef/g);
+    expect(matches?.length).toBe(1);
+  });
 });
