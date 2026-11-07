@@ -178,6 +178,16 @@ test('reads the L34ATHMB editor build through verified zc singleton and DSZG74H2
   assert.deepEqual((await adapter.readAssets()).map(asset => [asset.url, asset.imageUrl]), [['https://native.example/assets/original.svg', 'https://native.example/images/original.svg']]);
 });
 
+test('accepts treeVersion 129 serialization seamlessly', async () => {
+  const engine = makeEngine();
+  const original = engine.tree.toJS.bind(engine.tree);
+  engine.tree.toJS = () => { const raw = original(); raw.version = 129; return raw; };
+  const adapter = createEngineSourceAdapter(engine, { editorBuild: 'known', href });
+  await adapter.loadScopes(['master', 'document'], new AbortController().signal);
+  const [doc] = await adapter.readDefinitions(['document']);
+  assert.equal(doc.kind, 'RootNode');
+});
+
 test('does not add an image helper URL to ordinary downloadable files', async () => {
   const engine = makeEngine();
   engine.stores.assetStore.assetMap.image.mimeType = 'application/pdf';

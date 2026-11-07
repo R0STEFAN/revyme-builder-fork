@@ -9,10 +9,12 @@ const EDITOR_BUILDS = Object.freeze({
     assetModule: 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs', assetUrlExport: 'l', assetImageUrlExport: 'j',
   },
   'https://app.framerstatic.com/web.L34ATHMB.mjs': {
-    engineModule: 'https://app.framerstatic.com/chunk-AI7ZMCIE.mjs', engineExport: 'zc', treeVersion: 128,
+    engineModule: 'https://app.framerstatic.com/chunk-AI7ZMCIE.mjs', engineExport: 'zc', treeVersion: 129,
     assetModule: 'https://app.framerstatic.com/chunk-DSZG74H2.mjs', assetUrlExport: 'l', assetImageUrlExport: 'j',
   },
 });
+
+const SUPPORTED_TREE_VERSIONS = new Set([128, 129]);
 
 const ASSET_MODULES = new Set([
   'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs',
@@ -40,7 +42,7 @@ async function discoverCompatibleBuild(entry, fetchModuleText) {
     if (new RegExp(`\\b${local}\\.stores\\.projectStore\\b`).test(body) && new RegExp(`\\b${local}\\.loadScopesThenProcess\\s*\\(`).test(body)) candidates.push({ engineModule: item.url, engineExport: names[1] });
   }
   if (candidates.length !== 1) return;
-  return { ...candidates[0], treeVersion: 128, assetModule, assetUrlExport: 'l', assetImageUrlExport: 'j', discovered: true };
+  return { ...candidates[0], treeVersion: 129, assetModule, assetUrlExport: 'l', assetImageUrlExport: 'j', discovered: true };
 }
 
 export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = [], href, importModule, fetchModuleText }) {
@@ -93,7 +95,8 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
     const current = revision();
     if (current === cachedRevision && index) return index;
     const raw = engine.tree.toJS();
-    if (raw.version !== treeVersion || !raw.root) throw new Error('SOURCE_TREE_VERSION_UNSUPPORTED: Unexpected source serialization.');
+    const isSupported = raw && (raw.version === treeVersion || SUPPORTED_TREE_VERSIONS.has(raw.version));
+    if (!isSupported || !raw.root) throw new Error('SOURCE_TREE_VERSION_UNSUPPORTED: Unexpected source serialization.');
     const next = new Map(), queue = [raw.root];
     for (let offset = 0; offset < queue.length; offset++) {
       const node = queue[offset];
