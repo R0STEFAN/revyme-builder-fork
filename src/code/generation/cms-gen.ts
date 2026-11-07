@@ -4,7 +4,7 @@
 
 import { trace } from '@/shared/debug-trace';
 import { escapeJsxText } from '@/code/parsing/rich-text-runs';
-import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport, stripTagAttrBalanced, readTagAttrRaw } from './generator-utils';
+import { findTagClose, findMatchingCloseTagIndex, findStyleObjectEnd, insertAfterLastImportLine, ensureNamedImport, stripTagAttrBalanced, readTagAttrRaw, findJSXDataIdIndex } from './generator-utils';
 import type { FilterGroup, SortConfig } from '@/shared/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -15,27 +15,17 @@ import type { FilterGroup, SortConfig } from '@/shared/types';
  * Skips CSS selectors like [data-id="..."] in <style> blocks.
  */
 export function findJSXElementByDataId(code: string, nodeId: string): number {
-  const idStr = `data-id="${nodeId}"`;
-  let searchFrom = 0;
-  while (searchFrom < code.length) {
-    const found = code.indexOf(idStr, searchFrom);
-    if (found === -1) return -1;
-    // Check if this is inside a JSX tag (look back for <tagName, not [)
-    const before = code.lastIndexOf('<', found);
-    const bracket = code.lastIndexOf('[', found);
-    if (before > bracket) {
-      return before; // Preceded by < not [ → JSX element
-    }
-    searchFrom = found + idStr.length;
-  }
-  return -1;
+  const idIdx = findJSXDataIdIndex(code, nodeId);
+  if (idIdx === -1) return -1;
+  return code.lastIndexOf('<', idIdx);
 }
 
 /**
  * Find the matching closing tag for an element starting at `openTagStart`.
  * Returns the end index (after `</tag>`), or -1 if not found.
  */
-export function findClosingTag(code: string, openTagStart: number): { contentStart: number; closeTagStart: number; closeTagEnd: number } | null {
+export function findClosingTag(code: string, openTagStart: number): { tagStart: number; contentStart: number; closeTagStart: number; closeTagEnd: number } | null {
+  if (openTagStart === -1) return null;
   // Extract tag name
   const tagMatch = code.slice(openTagStart + 1).match(/^(\w[\w.-]*)/);
   if (!tagMatch) return null;
@@ -46,7 +36,14 @@ export function findClosingTag(code: string, openTagStart: number): { contentSta
   if (openTagEnd === -1) return null;
 
   // Self-closing?
-  if (code[openTagEnd - 1] === '/') return null;
+  if (code[openTagEnd - 1] === '/') {
+    return {
+      tagStart: openTagStart,
+      contentStart: openTagEnd,
+      closeTagStart: openTagEnd,
+      closeTagEnd: openTagEnd,
+    };
+  }
 
   const contentStart = openTagEnd + 1;
 
@@ -55,6 +52,7 @@ export function findClosingTag(code: string, openTagStart: number): { contentSta
   const closeTagStart = findMatchingCloseTagIndex(code, tagName, contentStart);
   if (closeTagStart === -1) return null;
   return {
+    tagStart: openTagStart,
     contentStart,
     closeTagStart,
     closeTagEnd: closeTagStart + `</${tagName}>`.length,
@@ -278,13 +276,28 @@ export function createCollectionListInCode(
   collectionSlug: string,
   templateJSX: string,
   itemVar = 'item',
+  templateTargetId?: string,
 ): string {
-  trace.fn('cms-gen:createCollectionList', { parentId, collectionSlug });
+  trace.fn('cms-gen:createCollectionList', { parentId, collectionSlug, templateTargetId });
   if (!/^[A-Za-z_$][\w$]*$/.test(itemVar)) throw new Error('Invalid collection iterator');
 
   // Step 1: Ensure import exists
   let result = ensureCmsImport(code, collectionSlug);
   const collectionVar = new RegExp(`import\\s+([A-Za-z_$][\\w$]*)\\s+from\\s+['"]@/cms/${collectionSlug}\\.json['"]`).exec(result)?.[1] ?? collectionSlug;
+
+  const mapExpr = `\n      {${collectionVar}.map(${itemVar} => (\n        ${templateJSX}\n      ))}\n    `;
+
+  if (templateTargetId) {
+    const itemStart = findJSXElementByDataId(result, templateTargetId);
+    if (itemStart !== -1) {
+      const itemClose = findClosingTag(result, itemStart);
+      if (itemClose) {
+        result = result.slice(0, itemClose.tagStart) + mapExpr + result.slice(itemClose.closeTagEnd);
+        trace.action('cms-gen:createCollectionList:done', { parentId, collectionSlug, templateTargetId });
+        return result;
+      }
+    }
+  }
 
   // Step 2: Find parent element
   const parentStart = findJSXElementByDataId(result, parentId);
@@ -300,8 +313,6 @@ export function createCollectionListInCode(
   }
 
   // Step 3: Replace children with .map() expression
-  const mapExpr = `\n      {${collectionVar}.map(${itemVar} => (\n        ${templateJSX}\n      ))}\n    `;
-
   result = result.slice(0, closing.contentStart) + mapExpr + result.slice(closing.closeTagStart);
 
   trace.action('cms-gen:createCollectionList:done', { parentId, collectionSlug });

@@ -21,7 +21,7 @@ export interface NativeText {
   blockIds?: string[];
   textAnim?: TextAnimConfig;
 }
-const tags = new Set(['p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 's', 'a', 'br', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'li']);
+const tags = new Set(['p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 's', 'a', 'br', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote']);
 const cssNames: Record<string, string> = {
   'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-weight': 'fontWeight',
   'font-style': 'fontStyle', 'text-color': 'color', 'text-alignment': 'textAlign',
@@ -67,7 +67,7 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
     const extraAxes = Object.entries(font.axes).filter(([axis]) => axis !== 'wght' && axis !== 'ital');
     if (extraAxes.length) out.fontVariationSettings = extraAxes.map(([axis, value]) => `"${axis}" ${value}`).join(', ');
   }
-  if (Array.isArray(p.openTypeFontFeatures) && p.openTypeFontFeatures.every(feature => typeof feature === 'string' && /^[a-zA-Z0-9]{4}$/.test(feature))) out.fontFeatureSettings = p.openTypeFontFeatures.map(feature => `"${feature}"`).join(', ');
+  if (Array.isArray(p.openTypeFontFeatures) && p.openTypeFontFeatures.length > 0 && p.openTypeFontFeatures.every(feature => typeof feature === 'string' && /^[a-zA-Z0-9]{4}$/.test(feature))) out.fontFeatureSettings = p.openTypeFontFeatures.map(feature => `"${feature}"`).join(', ');
   return out;
 }
 
@@ -147,7 +147,10 @@ export function mapSourceTextEffect(p: SourceProperties): TextAnimConfig | undef
 export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingContext, targetId?: string): NativeText {
   trace.fn('framer-native.mapSourceText', { sourceId: node.sourceId });
   const fragment = parseFragment(typeof node.properties.html === 'string' ? node.properties.html : '');
-  const blocks = fragment.childNodes.filter(child => child.nodeName !== '#comment');
+  const rawBlocks = fragment.childNodes.filter(child => child.nodeName !== '#comment');
+  const blocks = (rawBlocks.length === 1 && 'tagName' in rawBlocks[0] && (rawBlocks[0].tagName === 'ul' || rawBlocks[0].tagName === 'ol'))
+    ? (rawBlocks[0] as DefaultTreeAdapterTypes.Element).childNodes.filter(child => child.nodeName !== '#comment')
+    : rawBlocks;
   const single = blocks.length === 1 && 'tagName' in blocks[0] ? blocks[0] : undefined;
   const output: NativeText = { tag: single && tags.has(single.tagName) ? single.tagName : 'div', plainText: '', jsx: '', runs: [], styles: {}, attributes: {}, textAnim: mapSourceTextEffect(node.properties) };
   const attributeStyle = (element: DefaultTreeAdapterTypes.Element) => {
@@ -173,6 +176,18 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
         if (mapped !== undefined) styles[target] = mapped;
       } else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_STYLE_UNSUPPORTED');
     }
+    const rawSelector = declarations['--font-selector'];
+    if (rawSelector) {
+      try {
+        const decoded = rawSelector.startsWith('GF;') || rawSelector.startsWith('FR;') ? rawSelector : atob(rawSelector);
+        if (decoded.startsWith('FR;')) {
+          const parsed = parseSourceGoogleFont(decoded);
+          if (parsed) styles.fontFamily = JSON.stringify(parsed.family);
+        }
+      } catch {
+        // handled in fonts.ts
+      }
+    }
     normalizeSourceLineHeight(styles);
     const vb = sourceRecord(node.properties.textFitViewBoxSize);
     if (vb && typeof vb.width === 'number' && vb.width > 0) {
@@ -190,39 +205,89 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
     }
     return { attrs, styles };
   };
-  const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string, blockId?: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {
-    if (child.nodeName === '#text' && 'value' in child) {
-      output.runs.push({ text: child.value, tag: parentTag });
-      return { jsx: escapeJsxText(child.value), text: child.value };
-    }
-    if (!('tagName' in child)) return { jsx: '', text: '' };
-    if (!tags.has(child.tagName)) {
-      mappingDiagnostic(context, node, child.tagName, 'SOURCE_TEXT_TAG_UNSUPPORTED');
-      return { jsx: '', text: '' };
-    }
-    const { attrs, styles } = attributeStyle(child);
-    const rendered = child.childNodes.map(part => visit(part, child.tagName));
-    const safeAttributes: Record<string, string> = {};
-    for (const [key, value] of Object.entries(attrs)) {
-      if (['style', 'class', 'data-styles-preset'].includes(key)) continue;
-      if (key === 'href') {
-        if (/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(value) && !value.startsWith('//')) safeAttributes.href = value;
-        else mappingDiagnostic(context, node, 'href', 'SOURCE_TEXT_LINK_UNSUPPORTED');
-      } else if (['target', 'rel', 'dir', 'title'].includes(key)) safeAttributes[key] = value;
-      else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_ATTRIBUTE_UNSUPPORTED');
-    }
-    const attributes: string[] = [];
-    if (blockId && child.tagName !== 'br') {
-      output.blockIds = [...(output.blockIds ?? []), blockId];
-      attributes.push(`data-id="${escapeJsxText(blockId).replace(/"/g, '&quot;')}"`);
-    }
-    for (const [key, value] of Object.entries(safeAttributes)) attributes.push(`${key}="${escapeJsxText(value).replace(/"/g, '&quot;')}"`);
-    if (Object.keys(styles).length) attributes.push(`style={${JSON.stringify(styles)}}`);
-    const opening = `<${child.tagName}${attributes.length ? ` ${attributes.join(' ')}` : ''}`;
-    return child.tagName === 'br'
-      ? { jsx: `${opening} />`, text: '\n' }
-      : { jsx: `${opening}>${rendered.map(part => part.jsx).join('')}</${child.tagName}>`, inner: rendered.map(part => part.jsx).join(''), text: rendered.map(part => part.text).join(''), attributes: safeAttributes };
-  };
+    let inlineCounter = 0;
+    const visit = (child: DefaultTreeAdapterTypes.ChildNode, parentTag: string, blockId?: string): { jsx: string; text: string; inner?: string; attributes?: Record<string, string> } => {
+      if (child.nodeName === '#text' && 'value' in child) {
+        output.runs.push({ text: child.value, tag: parentTag });
+        return { jsx: escapeJsxText(child.value), text: child.value };
+      }
+      if (!('tagName' in child)) return { jsx: '', text: '' };
+      if (child.tagName === 'ul' || child.tagName === 'ol') {
+        const rendered = child.childNodes.map(part => visit(part, parentTag, blockId));
+        return {
+          jsx: rendered.map(r => r.jsx).join(''),
+          inner: rendered.map(r => r.inner ?? r.jsx).join(''),
+          text: rendered.map(r => r.text).join('\n'),
+        };
+      }
+      if (child.tagName === 'li') {
+        const elementChildren = child.childNodes.filter(c => 'tagName' in c);
+        if (elementChildren.length > 0) {
+          const rendered = child.childNodes.map(part => visit(part, parentTag, blockId));
+          return {
+            jsx: rendered.map(r => r.jsx).join(''),
+            inner: rendered.map(r => r.inner ?? r.jsx).join(''),
+            text: rendered.map(r => r.text).join('\n'),
+          };
+        }
+        child.tagName = 'p';
+      }
+      if (!tags.has(child.tagName)) {
+        mappingDiagnostic(context, node, child.tagName, 'SOURCE_TEXT_TAG_UNSUPPORTED');
+        return { jsx: '', text: '' };
+      }
+      const { attrs, styles } = attributeStyle(child);
+      const rendered = child.childNodes.map(part => visit(part, child.tagName));
+      const safeAttributes: Record<string, string> = {};
+      for (const [key, value] of Object.entries(attrs)) {
+        if (['style', 'class', 'data-styles-preset', 'data-preset-tag'].includes(key)) continue;
+        if (key === 'data-framer-open-in-new-tab') {
+          if (value === 'true') safeAttributes.target = '_blank';
+          continue;
+        }
+        if (key === 'data-framer-link') {
+          if (!attrs.href) {
+            const rawLink = value.startsWith('Link:') ? value.slice(5) : value;
+            try {
+              const linkObj = JSON.parse(rawLink);
+              if (linkObj.type === 'webPage' && typeof linkObj.webPageId === 'string') {
+                const route = context.routes?.[linkObj.webPageId];
+                if (route) safeAttributes.href = route;
+              } else if (linkObj.type === 'url' && typeof linkObj.url === 'string') {
+                safeAttributes.href = linkObj.url;
+              }
+              if (linkObj.openInNewTab === true) safeAttributes.target = '_blank';
+            } catch {
+              // ignore malformed inline link
+            }
+          }
+          continue;
+        }
+        if (key === 'href') {
+          if (/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(value) && !value.startsWith('//')) safeAttributes.href = value;
+          else mappingDiagnostic(context, node, 'href', 'SOURCE_TEXT_LINK_UNSUPPORTED');
+        } else if (['target', 'rel', 'dir', 'title'].includes(key)) safeAttributes[key] = value;
+        else mappingDiagnostic(context, node, key, 'SOURCE_TEXT_ATTRIBUTE_UNSUPPORTED');
+      }
+      const attributes: string[] = [];
+      if (blockId && child.tagName !== 'br') {
+        output.blockIds = [...(output.blockIds ?? []), blockId];
+        attributes.push(`data-id="${escapeJsxText(blockId).replace(/"/g, '&quot;')}"`);
+      } else if (child.tagName !== 'br' && !['span', 'strong', 'em', 'b', 'i', 'u', 'br', 'sup', 'sub'].includes(child.tagName)) {
+        inlineCounter++;
+        const base = targetId ? `${targetId}-${child.tagName}` : `${String(node.sourceId).toLowerCase().replace(/[^a-z0-9-]/g, '')}-${child.tagName}`;
+        const autoId = inlineCounter > 1 ? `${base}-${inlineCounter}` : base;
+        attributes.push(`data-id="${escapeJsxText(autoId).replace(/"/g, '&quot;')}"`);
+      }
+      for (const [key, value] of Object.entries(safeAttributes)) attributes.push(`${key}="${escapeJsxText(value).replace(/"/g, '&quot;')}"`);
+      if (Object.keys(styles).length) attributes.push(`style={${JSON.stringify(styles)}}`);
+      const isInternalLink = child.tagName === 'a' && Boolean(safeAttributes.href && !/^(https?:\/\/|mailto:|tel:)/i.test(safeAttributes.href));
+      const tag = isInternalLink ? 'Link' : child.tagName;
+      const opening = `<${tag}${attributes.length ? ` ${attributes.join(' ')}` : ''}`;
+      return child.tagName === 'br'
+        ? { jsx: `${opening} />`, text: '\n' }
+        : { jsx: `${opening}>${rendered.map(part => part.jsx).join('')}</${tag}>`, inner: rendered.map(part => part.jsx).join(''), text: rendered.map(part => part.text).join(''), attributes: safeAttributes };
+    };
   if (single && tags.has(single.tagName)) {
     const { attrs, styles } = attributeStyle(single);
     output.styles = styles; output.presetId = attrs['data-styles-preset'];

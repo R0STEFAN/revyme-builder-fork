@@ -1,6 +1,7 @@
 import { trace } from '../../../shared/debug-trace';
 import type { CollectionItem, CollectionSchema, FieldDefinition } from '../../../shared/types';
 import { sourceRecord, sourceVariableKey, sourceVariables } from './source-graph';
+import { sourceStaticLinkValue } from './links';
 import type { NativeCompileResult, SourceGraph, SourceProperties } from './types';
 import { renameCustomPropertyInText } from '../../generation/preset-refs-gen';
 
@@ -22,6 +23,10 @@ export function sourceCollectionId(identifier: unknown): string {
 }
 export function nativeFieldId(identity: Record<string, string>, collectionId: string, fieldId: string): string {
   if (fieldId === 'id') return '_id';
+  if (fieldId.includes('.')) {
+    const [head, tail] = fieldId.split('.', 2);
+    return `${nativeFieldId(identity, collectionId, head)}.${tail}`;
+  }
   const value = identity[sourceVariableKey(collectionId, fieldId)];
   if (!value) throw new Error(`Missing field identity ${collectionId}:${fieldId}`);
   return value;
@@ -31,6 +36,7 @@ const fieldTypes: Record<string, FieldDefinition['type']> = {
   string: 'text', richtext: 'richtext', number: 'number', boolean: 'boolean', date: 'date',
   image: 'image', file: 'file', link: 'link', url: 'url', color: 'color', enum: 'enum',
   collectionreference: 'reference', multicollectionreference: 'multi-reference',
+  array: 'json',
 };
 
 /** Pure, all-or-nothing CMS file generation. No clock or ProjectFS access. */
@@ -72,6 +78,12 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
         if (typeof value !== 'boolean') throw new Error(`Invalid boolean ${String(variable.id)}`);
       } else if (type === 'number') {
         if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Invalid number ${String(variable.id)}`);
+      } else if (type === 'array') {
+        return value;
+      } else if (type === 'link' || type === 'url') {
+        const resolvedLink = sourceStaticLinkValue(value);
+        if (typeof resolvedLink !== 'string') throw new Error(`Unsupported ${type} value in ${String(variable.id)}`);
+        return resolvedLink;
       } else if (typeof value !== 'string') throw new Error(`Unsupported ${type} value in ${String(variable.id)}`);
       if ((type === 'image' || type === 'file') && typeof value === 'string' && value.startsWith('data:framer/asset-reference,')) {
         if (!options.assets?.[value]) throw new Error(`Unresolved source asset in ${collectionId}:${String(variable.id)}`);

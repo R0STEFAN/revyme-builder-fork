@@ -14,7 +14,7 @@ export type NativeBinding =
   | { kind: 'variable'; providerId: string; sourceId: string; name: string; valueType: string }
   | { kind: 'field'; providerId: string; collectionId: string; fieldId: string; sourceId: string; itemVar: string; valueType: string }
   | { kind: 'reference'; collectionId: string; rowId: string | string[] | null }
-  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn'; input: NativeBinding; argument?: NativeBinding };
+  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn' | 'prefix'; input: NativeBinding; argument?: NativeBinding; value?: string };
 
 export interface BindingContext {
   graph: SourceGraph;
@@ -59,6 +59,27 @@ function assertLexicalProvider(context: BindingContext, providerId: string): voi
 function fieldBinding(context: BindingContext, providerId: string, collectionId: string, sourceId: string): NativeBinding & { kind: 'field' } {
   const collection = context.graph.nodes.get(collectionId);
   if (collection?.kind !== 'CollectionNode') throw new Error(`Missing source collection ${collectionId}`);
+  if (sourceId.includes('.')) {
+    const [head, tail] = sourceId.split('.', 2);
+    const headField = sourceVariables(context.graph, collectionId).find(variable => variable.id === head);
+    if (!headField) throw new Error(`Missing source field ${head} in ${collectionId}`);
+    let targetCollectionId = collectionId;
+    if (headField.type === 'collectionreference' && typeof headField.dataIdentifier === 'string') {
+      targetCollectionId = sourceCollectionId(headField.dataIdentifier);
+    }
+    const targetField = sourceVariables(context.graph, targetCollectionId).find(variable => variable.id === tail);
+    const headNative = nativeFieldId(context.identity, collectionId, head);
+    const tailNative = targetField ? nativeFieldId(context.identity, targetCollectionId, tail) : tail;
+    return {
+      kind: 'field',
+      providerId,
+      collectionId,
+      sourceId,
+      fieldId: `${headNative}.${tailNative}`,
+      itemVar: itemVariable(context, providerId),
+      valueType: String(targetField?.type ?? 'string'),
+    };
+  }
   const field = sourceVariables(context.graph, collectionId).find(variable => variable.id === sourceId);
   if (!field && sourceId !== 'id') throw new Error(`Missing source field ${sourceId} in ${collectionId}`);
   return { kind: 'field', providerId, collectionId, sourceId, fieldId: nativeFieldId(context.identity, collectionId, sourceId), itemVar: itemVariable(context, providerId), valueType: String(field?.type ?? 'string') };
@@ -69,9 +90,10 @@ function applyTransforms(input: NativeBinding, raw: unknown, context: BindingCon
   let result = input;
   for (const item of raw) {
     const transform = sourceRecord(item);
-    if (!transform || !['isSet', 'equals', 'isIncludedIn'].includes(String(transform.name))) throw new Error(`Unsupported source transform ${String(transform?.name)}`);
-    const name = transform.name as 'isSet' | 'equals' | 'isIncludedIn';
-    if (name === 'isSet') result = { kind: 'transform', name, input: result };
+    if (!transform || !['isSet', 'equals', 'isIncludedIn', 'prefix', 'arrayToArray', 'negate'].includes(String(transform.name))) throw new Error(`Unsupported source transform ${String(transform?.name)}`);
+    const name = transform.name as 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate';
+    if (name === 'isSet' || name === 'arrayToArray' || name === 'negate') result = { kind: 'transform', name, input: result };
+    else if (name === 'prefix') result = { kind: 'transform', name, input: result, value: String(transform.value ?? '') };
     else {
       if (!('value' in transform)) throw new Error(`Missing argument for ${name}`);
       result = { kind: 'transform', name, input: result, argument: resolveSourceBinding(transform.value, context) };
@@ -121,6 +143,10 @@ export function bindSourcePropInCode(code: string, nodeId: string, prop: string,
   if (binding.kind === 'field') expression = cmsPropBindingExpression(binding.itemVar, { field: binding.fieldId, ...(context.cssImage ? { urlWrap: true } : {}) });
   else if (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field') {
     expression = cmsPropBindingExpression(binding.input.itemVar, { field: binding.input.fieldId, transform: 'isSet' });
+  } else if (binding.kind === 'transform' && binding.name === 'arrayToArray' && binding.input.kind === 'field') {
+    expression = cmsPropBindingExpression(binding.input.itemVar, { field: binding.input.fieldId });
+  } else if (binding.kind === 'transform' && binding.name === 'prefix' && binding.input.kind === 'field') {
+    expression = `\`${binding.value}\${${cmsPropBindingExpression(binding.input.itemVar, { field: binding.input.fieldId })} ?? ''}\``;
   } else if (binding.kind === 'variable') {
     if (context.cssImage) throw new Error('Source image variable requires its native image-domain adapter');
     expression = binding.name;
@@ -183,25 +209,32 @@ export function resolveSourceQuery(providerId: string, context: BindingContext):
 }
 
 /** Source query → editable native collection config; unsupported semantics never disappear. */
-export function emitSourceQueryInCode(code: string, parentId: string, providerId: string, templateJSX: string, context: BindingContext): string {
+export function emitSourceQueryInCode(code: string, parentId: string, providerId: string, templateJSX: string, context: BindingContext, templateTargetId?: string): string {
   trace.fn('framer-native.emitQuery', { parentId, providerId });
   const query = resolveSourceQuery(providerId, context);
   const unsupported = (): never => { throw new Error(`A native source-query adapter is required for ${providerId}`); };
   if (query.reverse || query.limit === 0) unsupported();
   const filters: FilterConfig[] = query.predicates.map(predicate => {
-    if (predicate.kind !== 'transform' || predicate.input.kind !== 'field' || predicate.input.providerId !== providerId) return unsupported();
-    const argument = predicate.argument;
-    if ((argument?.kind === 'variable' || (argument?.kind === 'field' && argument.providerId !== providerId)) && (predicate.name === 'equals' || predicate.name === 'isIncludedIn')) {
+    let target = predicate;
+    let negated = false;
+    if (target.kind === 'transform' && target.name === 'negate') {
+      negated = true;
+      target = target.input;
+    }
+    if (target.kind !== 'transform' || target.input.kind !== 'field' || target.input.providerId !== providerId) return unsupported();
+    const argument = target.argument;
+    if ((argument?.kind === 'variable' || (argument?.kind === 'field' && argument.providerId !== providerId)) && (target.name === 'equals' || target.name === 'isIncludedIn')) {
       const valueVar = argument.kind === 'variable' ? argument.name : `${argument.itemVar}.${argument.fieldId}`;
-      return { field: predicate.input.fieldId, operator: predicate.name === 'equals' ? 'equals' : 'in', value: '', valueSource: 'variable', valueVar };
+      const operator: FilterConfig['operator'] = target.name === 'equals' ? (negated ? 'not_equals' : 'equals') : (negated ? 'not_in' : 'in');
+      return { field: target.input.fieldId, operator, value: '', valueSource: 'variable', valueVar };
     }
     if (!argument || argument.kind !== 'literal' && argument.kind !== 'reference') return unsupported();
     const value = argument.kind === 'literal' ? argument.value : argument.rowId;
-    if (predicate.name === 'equals') return { field: predicate.input.fieldId, operator: 'equals', value };
-    if (predicate.name === 'isIncludedIn' && Array.isArray(value)) return { field: predicate.input.fieldId, operator: 'in', value };
+    if (target.name === 'equals') return { field: target.input.fieldId, operator: negated ? 'not_equals' : 'equals', value };
+    if (target.name === 'isIncludedIn' && Array.isArray(value)) return { field: target.input.fieldId, operator: negated ? 'not_in' : 'in', value };
     return unsupported();
   });
   if (findJSXElementByDataId(code, parentId) < 0) throw new Error(`Native query target ${parentId} is missing`);
-  const list = createCollectionListInCode(code, parentId, query.slug, templateJSX, query.itemVar);
+  const list = createCollectionListInCode(code, parentId, query.slug, templateJSX, query.itemVar, templateTargetId);
   return updateCollectionListConfigInCode(list, parentId, { combinator: query.combinator, filters }, query.sorts, query.limit, query.offset);
 }

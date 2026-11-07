@@ -76,16 +76,36 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
   } = refs;
   const cleanups: (() => void)[] = [];
   const pasteFramer = (text: string, mode: 'create' | 'replace' = 'create') => {
-    const notification = toast.loading('Імпортуємо з Framer…');
+    const notification = toast.loading('Importing from Framer…');
     void import('./framer-native-editor').then(module => module.pasteNativeTransferInEditor(text, undefined, mode)).then(receipt => {
       const omitted = receipt.sourceOmissions ?? [];
-      const names = [omitted.some(item => item.property === 'collectionFilters') && 'фільтри сторінки', omitted.some(item => item.property?.includes('Cursor') || item.property?.startsWith('$control__')) && 'користувацькі курсори'].filter(Boolean);
-      toast.success(names.length ? `Імпорт завершено. Пропущено: ${names.join(', ')}.` : mode === 'replace' ? 'Сторінку замінено з Framer.' : 'Імпорт із Framer завершено.', { id: notification, duration: names.length ? 10000 : undefined });
+      const names = [
+        omitted.some(item => item.property === 'collectionFilters') && 'page filters',
+        omitted.some(item => item.property?.startsWith('variables.') || item.message.includes('fallback') || item.message.includes('Page variable')) && 'page variables',
+        omitted.some(item => item.property?.includes('Cursor') || item.property?.startsWith('$control__')) && 'custom cursors',
+      ].filter(Boolean);
+      toast.success(names.length ? `Import completed. Skipped: ${names.join(', ')}.` : mode === 'replace' ? 'Page replaced from Framer.' : 'Import from Framer completed.', { id: notification, duration: names.length ? 10000 : undefined });
     }).catch(error => {
       trace.error('framer-native.paste-failed', { error: String(error) });
       toast.error(String(error instanceof Error ? error.message : error).slice(0, 1200), { id: notification, duration: 12000 });
     });
   };
+
+  if (typeof window !== 'undefined') {
+    (window as any).__revymeImportFramerNative = (transferData: unknown, mode: 'create' | 'replace' = 'create') => {
+      pasteFramer(typeof transferData === 'string' ? transferData : JSON.stringify(transferData), mode);
+    };
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'revyme:framer-native-paste' && e.data.transfer) {
+        pasteFramer(typeof e.data.transfer === 'string' ? e.data.transfer : JSON.stringify(e.data.transfer), e.data.mode ?? 'create');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    cleanups.push(() => {
+      delete (window as any).__revymeImportFramerNative;
+      window.removeEventListener('message', handleMessage);
+    });
+  }
 
   // Helpers: focused-toolbar masters where most creators are no-ops.
   //   - Icon-set master: only shape tools (rect / circle / triangle /

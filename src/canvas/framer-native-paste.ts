@@ -46,9 +46,21 @@ export async function handleNativeTransferPaste(input: unknown, target: NativeIm
   const importMode = target.mode ?? 'create';
   const compiled = compileNativeTransfer(transfer, { existingFiles: snapshot.files, mode: importMode, filePath: target.filePath, parentNodeId: target.parentNodeId, assetPayloads: payloads, uploadedAssets: uploaded, skipFeatures: services.skipFeatures });
   if (compiled.diagnostics.length) throw new Error(compiled.diagnostics.map(item => `${item.code}: ${item.message}`).join('\n'));
+  const isLayoutPatch = (file: typeof compiled.files[number]) =>
+    file.path === 'app/layout.tsx' && (
+      file.cursorPortal === true ||
+      file.favicon !== undefined ||
+      file.faviconDark !== undefined ||
+      file.siteTitle !== undefined ||
+      file.siteDescription !== undefined ||
+      file.socialImage !== undefined ||
+      file.siteLanguage !== undefined
+    );
   if (importMode === 'replace' || importMode === 'paste') for (const file of compiled.files) {
     const prior = snapshot.files.get(file.path);
-    if (prior !== undefined && file.path !== 'app/globals.css' && !(file.path === 'app/layout.tsx' && (file.cursorPortal || file.favicon))) file.baseHash = await (services.hash ?? hashNativeTarget)(prior);
+    if (prior !== undefined && file.path !== 'app/globals.css' && !isLayoutPatch(file)) {
+      file.baseHash = await (services.hash ?? hashNativeTarget)(prior);
+    }
   }
   services.signal?.throwIfAborted();
   if (!services.isCurrent(snapshot)) throw new Error('LOCAL_CONTEXT_CHANGED');

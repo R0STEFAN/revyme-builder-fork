@@ -1,6 +1,6 @@
 import { trace } from '../../../shared/debug-trace';
 import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
-import { checkFile } from '../../oracle/check-file';
+import { checkFile, isAgentBlockingOracleViolation } from '../../oracle/check-file';
 import { setTagAttr, ensureNamedImport } from '../../generation/generator-utils';
 import { wrapInFitSVGInCode } from '../../generation/fit-text-gen';
 import { setGlideInCode } from '../../generation/glide-gen';
@@ -33,6 +33,7 @@ import { sourceInstanceStateName } from './interactions';
 import { setResponsiveOverride, setResponsiveBindingOverride, transformAllResponsiveAttrs } from '../../components/instance-prop-overrides';
 import { parseOverlayCalls, resolveOverlayConfigForWidth } from '../../parsing/overlay-parser';
 import { stateVarName } from '../../generation/overlay-gen';
+import { setTextOverrideInCode } from '../../generation/text-override-gen';
 import { setPropLabelInCode, setPropTypeInCode } from '../../components/prop-meta';
 import { createConditionalVariableInCode } from '../../features/variable-ops';
 import { updateTemplatePropsInCode } from '../../features/template-props';
@@ -100,12 +101,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
   try {
     const originalRoutes = new Map(pageIds.map(id => [id, sourcePageRoute(graph, graph.nodes.get(id)!)]));
     if (new Set(originalRoutes.values()).size !== pageIds.length) throw new Error('Duplicate source page routes');
+    const originalSet = new Set([...originalRoutes.values()].map(route => route.toLowerCase()));
     const used = new Set([...options.existingPaths].filter(path => /^app\/.+page(?:\.client)?\.tsx$|^app\/page(?:\.client)?\.tsx$/.test(path)).map(path => routeOfFile(path).toLowerCase()));
     let prefix = '';
-    const collides = (prefix: string) => [...originalRoutes.values()].some(route => used.has((prefix + (route === '/' ? '' : route) || '/').toLowerCase()) || /^\/api(?:\/|$)/.test(prefix + route));
+    const collides = (prefix: string) => (prefix !== '' && originalSet.has(prefix.toLowerCase())) || [...originalRoutes.values()].some(route => used.has((prefix + (route === '/' ? '' : route) || '/').toLowerCase()) || /^\/api(?:\/|$)/.test(prefix + route));
     if (collides(prefix)) {
-      prefix = `/${identity[pageIds[0]]}`;
-      for (let suffix = 2; collides(prefix); suffix++) prefix = `/${identity[pageIds[0]]}-${suffix}`;
+      const baseId = pageIds.find(id => originalRoutes.get(id) === '/') ?? pageIds[0];
+      prefix = `/${identity[baseId]}`;
+      for (let suffix = 2; collides(prefix); suffix++) prefix = `/${identity[baseId]}-${suffix}`;
     }
     for (const [id, route] of originalRoutes) result.routes[id] = prefix + (route === '/' ? '' : route) || '/';
     const groups = new Map<string, string>();
@@ -142,11 +145,18 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const node = graph.nodes.get(id)!;
       if (!isSourceCodeComponent(node)) scanConsumers(node.raw);
     }
-    const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', link: 'link', scrollsectionref: 'section' };
+    const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', link: 'link', scrollsectionref: 'section', controlReference: 'plainText', enum: 'plainText' };
     const templateValue = (providerId: string, variable: Record<string, unknown>, value: unknown): string | number | boolean => {
       const type = variable.type;
       if (value == null) value = type === 'boolean' ? false : type === 'number' ? 0 : '';
       if (type === 'boolean' && typeof value === 'boolean' || type === 'number' && typeof value === 'number' && Number.isFinite(value)) return value as number | boolean;
+      if (variable.type === 'controlReference' && variable.controlKey === 'variant') {
+        const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(variable.entityIdentifier ?? ''))?.[1];
+        if (master && typeof value === 'string') {
+          const variantName = sourceInstanceStateName({ graph, scopeId: master }, identity, value);
+          if (variantName) return variantName;
+        }
+      }
       if (type === 'scrollsectionref' && value !== '') {
         const target = sourceRecord(value)?.target;
         if (typeof target !== 'string') throw new Error(`Invalid template section target ${String(target)}`);
@@ -172,7 +182,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (!/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#|$)/i.test(String(value)) || String(value).includes('[slug]')) throw new Error(`Unsupported template link ${String(value)}`);
         }
       }
-      if (['string', 'color', 'link', 'scrollsectionref'].includes(String(type)) && typeof value === 'string') return value;
+      if (['string', 'color', 'link', 'scrollsectionref', 'controlReference', 'enum'].includes(String(type)) && typeof value === 'string') return value;
       throw new Error(`Invalid template ${String(type)} value for ${String(variable.id)}`);
     };
     const templateProps = new Map(templateIds.map(id => [id, sourceVariables(graph, id).map(variable => {
@@ -224,12 +234,16 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const variables = Object.fromEntries(props.map(prop => [`${id}:${String(prop.variable.id)}`, `{${prop.name}}`]));
       const imageFieldFor = (value: unknown, node: ResolvedSourceNode) => {
         if (isTemplate || sourceRecord(value)?.type !== 'variableReference') return;
-        const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
-        if (binding.kind === 'field' && ['image', 'file'].includes(binding.valueType)) return binding;
+        try {
+          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
+          if (binding.kind === 'field' && ['image', 'file'].includes(binding.valueType)) return binding;
+        } catch {
+          return undefined;
+        }
       };
       const intrinsicImageFieldFor = (node: ResolvedSourceNode) => node.kind === 'FrameNode' && !node.children.length && node.properties.fillEnabled === true && node.properties.fillType === 'image' && node.properties.heightType === 5 && !(typeof node.properties.fillImagePixelWidth === 'number' && typeof node.properties.fillImagePixelHeight === 'number' && node.properties.fillImagePixelHeight > 0) && !(typeof node.properties.aspectRatio === 'number' && node.properties.aspectRatio > 0)
         ? imageFieldFor(node.properties.fillImage, node) : undefined;
-      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } };
+      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight }, routes: result.routes };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -239,6 +253,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
+        if (styles.display === 'none') delete styles.display;
         if (intrinsicImageFieldFor(node)) {
           delete styles.backgroundImage; delete styles.backgroundPosition; delete styles.backgroundRepeat; delete styles.backgroundSize;
           styles.objectFit = node.properties.fillImageResize === 'fit' ? 'contain' : 'cover';
@@ -261,9 +276,15 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         intrinsicImageFor: node => { const field = intrinsicImageFieldFor(node); return field ? `${field.itemVar}.${field.fieldId}` : undefined; },
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
-          if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
-          if (isTemplate && binding.kind === 'variable' && binding.providerId === id) return binding.name;
-          throw new Error('Source page text requires its native binding adapter');
+          const expr = (b: import('./bindings').NativeBinding): string => {
+            if (b.kind === 'field') return `${b.itemVar}.${b.fieldId}`;
+            if (isTemplate && b.kind === 'variable' && b.providerId === id) return b.name;
+            if (b.kind === 'transform' && b.name === 'prefix') {
+              return `${b.value ?? ''}{${expr(b.input)}}`;
+            }
+            throw new Error('Source page text requires its native binding adapter');
+          };
+          return expr(binding);
         },
       });
       if (isTemplate ? scene.slots.length !== 1 : scene.slots.length !== 0) throw new Error('A native template requires one children slot; pages cannot own template slots');
@@ -348,22 +369,76 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if ([node.properties.visible, state.properties.visible].every(value => value === undefined || typeof value === 'boolean')) semanticProperties.delete('visible');
           if (isSourceCodeComponent(node)) for (const key of ['link', 'linkOpenInNewTab', 'codeComponentIdentifier', 'codeOverrideIdentifier', 'codeOverrideEnabled']) semanticProperties.delete(key);
           else for (const key of [...Object.keys(node.properties), ...Object.keys(state.properties)]) if (key.startsWith('$control__') || /^on[A-Z]/.test(key)) semanticProperties.add(key);
-          if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node) && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
+          if (node.kind === 'CodeComponentNode' && !isSourceCodeComponent(node)) {
             const master = /^local-module:canvasComponent\/([^:]+):/.exec(String(node.properties.codeComponentIdentifier))?.[1];
-            const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
-            const target = master && sourceInstanceStateName({ graph, scopeId: master }, identity, sourceVariant);
-            if (!master || !target) throw new Error(`Missing responsive component variant ${String(sourceVariant)} on ${nodeId}`);
-            if (node.properties.whileOpenEffectEnabled === true) {
-              const overlay = parseOverlayCalls(code).find(item => item.config.triggerId === identity[nodeId]);
-              const open = overlay && resolveOverlayConfigForWidth(overlay.config, viewport.width).onOpenVariant;
-              if (!overlay || !open) throw new Error(`Responsive overlay variant on ${nodeId} requires its native composition adapter`);
-              code = setResponsiveBindingOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', { kind: 'field', expr: `${stateVarName(overlay.overlayId)} ? ${JSON.stringify(open)} : ${JSON.stringify(target)}` });
-            } else code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', target, null);
-            semanticProperties.delete('$control__variant');
+            if (master && JSON.stringify(state.properties.$control__variant) !== JSON.stringify(node.properties.$control__variant)) {
+              const sourceVariant = sourceRecord(state.properties.$control__variant)?.value;
+              let target = master && typeof sourceVariant === 'string' ? sourceInstanceStateName({ graph, scopeId: master }, identity, sourceVariant) : undefined;
+              if (master && typeof sourceVariant === 'object' && sourceVariant !== null) {
+                const compVal = sourceVariant as Record<string, unknown>;
+                const transform = Array.isArray(compVal.transforms) ? sourceRecord(compVal.transforms[0]) : undefined;
+                if (transform?.name === 'convertFromBoolean') {
+                  const truthy = transform.truthy && sourceInstanceStateName({ graph, scopeId: master }, identity, String(transform.truthy));
+                  const falsy = transform.falsy && sourceInstanceStateName({ graph, scopeId: master }, identity, String(transform.falsy));
+                  const startRef = sourceRecord(compVal.startValue);
+                  const startProp = startRef?.type === 'variableReference' && typeof startRef.id === 'string'
+                    ? nativePropName(identity, String(startRef.providerId), startRef.id)
+                    : undefined;
+                  if (startProp && truthy && falsy) {
+                    code = setResponsiveBindingOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', { kind: 'field', expr: `${startProp} ? ${JSON.stringify(truthy)} : ${JSON.stringify(falsy)}` });
+                    semanticProperties.delete('$control__variant');
+                    target = undefined;
+                  } else if (falsy) {
+                    target = falsy;
+                  }
+                }
+              }
+              if (target) {
+                if (node.properties.whileOpenEffectEnabled === true) {
+                  const overlay = parseOverlayCalls(code).find(item => item.config.triggerId === identity[nodeId]);
+                  const open = overlay && resolveOverlayConfigForWidth(overlay.config, viewport.width).onOpenVariant;
+                  if (!overlay || !open) throw new Error(`Responsive overlay variant on ${nodeId} requires its native composition adapter`);
+                  code = setResponsiveBindingOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', { kind: 'field', expr: `${stateVarName(overlay.overlayId)} ? ${JSON.stringify(open)} : ${JSON.stringify(target)}` });
+                } else code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, 'initialVariant', target, null);
+              }
+              semanticProperties.delete('$control__variant');
+            }
+            if (master) {
+              const variables = sourceVariables(graph, master);
+              for (const prop of [...semanticProperties]) {
+                if (!prop.startsWith('$control__') || prop === '$control__variant') continue;
+                const sourceProp = prop.slice(10);
+                const variable = variables.find(v => v.id === sourceProp);
+                if (!variable) {
+                  semanticProperties.delete(prop);
+                  continue;
+                }
+                const extractVal = (raw: unknown) => {
+                  if (raw == null) return undefined;
+                  const rec = sourceRecord(raw);
+                  if (rec && 'value' in rec) return rec.value;
+                  return raw;
+                };
+                const stateVal = extractVal(state.properties[prop]);
+                const baseVal = extractVal(node.properties[prop]);
+                if (stateVal !== undefined && JSON.stringify(stateVal) !== JSON.stringify(baseVal)) {
+                  const propName = nativePropName(identity, master, sourceProp);
+                  const strVal = typeof stateVal === 'object' ? JSON.stringify(stateVal) : String(stateVal);
+                  const strBase = baseVal !== undefined ? (typeof baseVal === 'object' ? JSON.stringify(baseVal) : String(baseVal)) : null;
+                  code = setResponsiveOverride(code, identity[nodeId], nativeComponentName(identity, master), viewport.width, propName, strVal, strBase);
+                }
+                semanticProperties.delete(prop);
+              }
+            }
           }
           for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
           if (node.kind === 'RichTextNode') {
             const base = mapSourceText(node, context), text = mapSourceText(state, context);
+            if (base.tag === text.tag && !base.binding && !text.binding && (base.plainText !== text.plainText || base.jsx !== text.jsx)) {
+              const allWidths = viewports.map(v => v.width);
+              code = setTextOverrideInCode(code, identity[nodeId], viewport.width, viewports[0].width, text.plainText, allWidths);
+              continue;
+            }
             if (base.tag !== text.tag || base.jsx !== text.jsx || JSON.stringify(base.binding) !== JSON.stringify(text.binding) || JSON.stringify(base.attributes) !== JSON.stringify(text.attributes)) throw new Error(`Responsive text content on ${nodeId} requires its native text adapter`);
           }
         }
@@ -427,9 +502,30 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         if (typeof node.properties.linkOpenInNewTab === 'boolean') code = setTagAttr(code, identity[nodeId], 'target', JSON.stringify(node.properties.linkOpenInNewTab ? '_blank' : '_self'));
       }
       for (const nodeId of [...scene.sourceIds].reverse()) if (graph.nodes.get(nodeId)!.raw.dataIdentifier !== undefined) {
-        const range = findClosingTag(code, findJSXElementByDataId(code, identity[nodeId]));
-        if (!range) throw new Error('Native list container is missing');
-        code = emitSourceQueryInCode(code, identity[nodeId], nodeId, code.slice(range.contentStart, range.closeTagStart).trim(), { graph, identity, nodeId });
+        const rawNode = graph.nodes.get(nodeId)!.raw;
+        const repId = rawNode.repeatedItemId;
+        const repNode = typeof repId === 'string' && graph.nodes.has(repId) ? resolveSourceNode(graph, repId) : null;
+        const isDummy = repNode && repNode.properties.visible === false && (!repNode.properties.width || repNode.properties.width === 0) && (!repNode.properties.height || repNode.properties.height === 0) && (!repNode.children || repNode.children.length === 0);
+        if (isDummy) continue;
+
+        let templateJSX: string | undefined;
+        let templateTargetId: string | undefined;
+        if (typeof repId === 'string' && identity[repId]) {
+          const itemStart = findJSXElementByDataId(code, identity[repId]);
+          if (itemStart !== -1) {
+            const itemRange = findClosingTag(code, itemStart);
+            if (itemRange) {
+              templateJSX = code.slice(itemRange.tagStart, itemRange.closeTagEnd).trim();
+              templateTargetId = identity[repId];
+            }
+          }
+        }
+        if (!templateJSX) {
+          const range = findClosingTag(code, findJSXElementByDataId(code, identity[nodeId]));
+          if (!range) throw new Error('Native list container is missing');
+          templateJSX = code.slice(range.contentStart, range.closeTagStart).trim();
+        }
+        code = emitSourceQueryInCode(code, identity[nodeId], nodeId, templateJSX, { graph, identity, nodeId }, templateTargetId);
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
       for (const nodeId of scene.sourceIds) {
@@ -485,8 +581,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           }
         }
         if (mount) {
-          if ((!['FrameNode', 'RichTextNode'].includes(node.kind) && !scene.nested.has(nodeId)) || node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
-          if (scene.nested.has(nodeId)) {
+          if (node.properties.loopEffectEnabled === true) throw new Error(`On-mount effect composition on ${nodeId} requires its native adapter`);
+          if (scene.nested.has(nodeId) || scene.codeInstances.has(nodeId)) {
             const wrapped = wrapInstanceForPresence(code, identity[nodeId]);
             code = wrapped.code; scene.optionIds.push(wrapped.contentId);
           }
@@ -560,11 +656,13 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const pageEffect = isTemplate ? templatePageEffects.get(id) : undefined;
       if (pageEffect) code = injectPageTransitionsInCode(code);
       if (code.includes('RevymeSplitText')) code = ensureNamedImport(code, '@revyme/runtime', ['RevymeSplitText']);
+      if (/<Link[\s>]/.test(code)) code = ensureNamedImport(code, 'next/link', [], { ensureDefault: 'Link' });
       const route = result.routes[id], folder = 'app' + (group ? `/(${group})` : '') + (isTemplate || route === '/' ? '' : route);
       const path = `${folder}/${isTemplate ? 'LayoutClient' : 'page.client'}.tsx`;
       const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`), ...[...templatePageEffects.keys()].flatMap(tid => { const g = groups.get(tid)!; return [`app/(${g})/page-effects.ts`, `app/(${g})/page-effects-runtime.ts`, `app/(${g})/page-transitions.tsx`]; })]);
       const violations = checkFile(code, { kind: isTemplate ? 'template' : 'page', path, projectFiles: projectedPaths });
-      if (violations.length) throw new Error(`Native page validation: ${violations.map(violation => violation.code).join(', ')}`);
+      const blocking = violations.filter(v => v.tier === 3 || isAgentBlockingOracleViolation(v.code));
+      if (blocking.length) throw new Error(`Native page validation: ${blocking.map(violation => violation.code).join(', ')}`);
       if (isTemplate) {
         result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" }, ...(pageEffect ? [{ path: `${folder}/page-effects.ts`, code: serializePageEffects({ __default: pageEffect, pages: {} }) }, { path: `${folder}/page-effects-runtime.ts`, code: PAGE_EFFECTS_RUNTIME_SOURCE }, { path: `${folder}/page-transitions.tsx`, code: PAGE_TRANSITIONS_SOURCE }] : []));
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
@@ -575,14 +673,20 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         const defaults: Record<string, unknown> = Object.fromEntries(['title', 'description'].flatMap(key => typeof globalMeta?.[key] === 'string' ? [[key, globalMeta[key]]] : []));
         const pageMeta = sourceRecord(page.raw.webMetadata);
         if (typeof pageMeta?.noIndex === 'boolean') defaults.robotsIndex = !pageMeta.noIndex;
-        const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
-        if (socialImage !== undefined) {
-          const image = typeof socialImage === 'string' ? options.assets?.[socialImage] : undefined;
-          if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
-          defaults.ogImage = image;
-        }
         const expressions: Record<string, string> = {};
         const collectionId = sourceCollectionId(page.raw.dataIdentifier);
+        const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
+        if (socialImage !== undefined) {
+          if (typeof socialImage === 'string') {
+            const image = options.assets?.[socialImage];
+            if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
+            defaults.ogImage = image;
+          } else if (typeof socialImage === 'object' && socialImage !== null && (socialImage as any).type === 'variableReference') {
+            const varRef = socialImage as { id: string };
+            const fieldId = nativeFieldId(identity, collectionId, varRef.id);
+            expressions.ogImage = `item?.${fieldId} ?? ""`;
+          }
+        }
         for (const key of ['title', 'description']) {
           const value = pageMeta?.[key];
           if (value === undefined) continue;

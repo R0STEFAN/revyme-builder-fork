@@ -4,7 +4,7 @@ import { findFirstElementByDataId, parseJSX } from '../../parsing/ast-utils';
 import { ensureNamedImport, generate, setTagAttr } from '../../generation/generator-utils';
 import { updateVariantStyleInCode } from '../../generation/generator-styles';
 import { cursorOptsPropName, serializeInstanceCursorOpts } from '../../generation/cursor-gen';
-import { bindSourcePropInCode } from './bindings';
+import { bindSourcePropInCode, resolveSourceBinding } from './bindings';
 import { nativeComponentName, nativePropName } from './components';
 import { sourceStateNames, sourceInstanceStateName } from './interactions';
 import { sourceCollectionId } from './cms';
@@ -44,8 +44,15 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
       if (!key.startsWith('$control__')) continue;
       const sourceProp = key.slice(10), value = sourceRecord(control)?.value;
       if (sourceProp === 'variant') {
-        const variant = sourceInstanceStateName({ graph, scopeId: masterId }, identity, value);
-        result = setTagAttr(result, identity[id], 'initialVariant', JSON.stringify(variant));
+        if (value == null || value === '') continue;
+        const obj = sourceRecord(value);
+        if (obj?.type === 'variableReference' && typeof obj.providerId === 'string' && typeof obj.id === 'string') {
+          const propName = nativePropName(identity, obj.providerId, obj.id);
+          result = setTagAttr(result, identity[id], 'initialVariant', `{${propName}}`);
+        } else {
+          const variant = sourceInstanceStateName({ graph, scopeId: masterId }, identity, value);
+          result = setTagAttr(result, identity[id], 'initialVariant', JSON.stringify(variant));
+        }
         continue;
       }
       const variable = variables.find(variable => variable.id === sourceProp);
@@ -85,7 +92,39 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
       if (variable.type === 'image' && !imageDomains.has(masterId)) imageDomains.set(masterId, sourceCssImageVariables(graph, masterId));
       const cssImage = variable.type === 'image' && imageDomains.get(masterId)!.has(sourceProp);
       let mapped = assetValue(value, id, sourceProp);
-      if (variable.type === 'link') mapped = sourceStaticLinkValue(mapped, options.routes);
+      if (variable.type === 'border') {
+        const b = sourceRecord(mapped);
+        if (b && b.type !== 'variableReference' && b.type !== 'computedValue') {
+          mapped = `${b.borderWidth ?? b.borderTop ?? 1}px ${b.borderStyle ?? 'solid'} ${b.borderColor ?? 'transparent'}`;
+        }
+      } else if (variable.type === 'vectorsetitem') {
+        const vs = sourceRecord(mapped);
+        if (vs && vs.type !== 'variableReference' && vs.type !== 'computedValue') {
+          mapped = String(vs.identifier ?? '');
+        }
+      }
+      if (variable.type === 'link') {
+        const linkRec = sourceRecord(value);
+        if (linkRec?.type === 'webPage' && linkRec.pathVariables !== undefined && typeof linkRec.webPageId === 'string') {
+          const targetRoute = options.routes?.[linkRec.webPageId];
+          const targetPage = graph.nodes.get(linkRec.webPageId);
+          if (targetRoute?.endsWith('/[slug]') && targetPage?.raw.dataIdentifier !== undefined) {
+            const targetCollectionId = sourceCollectionId(targetPage.raw.dataIdentifier);
+            const entries = Object.entries(sourceRecord(linkRec.pathVariables) ?? {});
+            if (entries.length === 1) {
+              const [paramId, rawBinding] = entries[0];
+              const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId: id });
+              if (binding.kind === 'field' && binding.collectionId === targetCollectionId && binding.sourceId === paramId && binding.valueType === 'slug') {
+                const prefix = targetRoute.slice(0, -'/[slug]'.length);
+                const propName = nativePropName(identity, masterId, sourceProp);
+                result = setTagAttr(result, identity[id], propName, `{\`${prefix}/\${${binding.itemVar}?._slug ?? ''}\`}`);
+                continue;
+              }
+            }
+          }
+        }
+        mapped = sourceStaticLinkValue(mapped, options.routes);
+      }
       if (cssImage && typeof mapped === 'string' && mapped) mapped = `url(${mapped})`;
       result = bindSourcePropInCode(result, identity[id], nativePropName(identity, masterId, sourceProp), mapped, {
         graph, identity, nodeId: id,

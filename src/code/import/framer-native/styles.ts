@@ -21,6 +21,7 @@ export interface SourceMappingContext {
   supportedMountEffects?: boolean;
   supportedFlowEffects?: boolean;
   supportedForms?: boolean;
+  routes?: Readonly<Record<string, string>>;
 }
 
 export function mappingDiagnostic(context: SourceMappingContext, node: ResolvedSourceNode, property: string, code = 'SOURCE_STYLE_UNSUPPORTED'): void {
@@ -48,8 +49,9 @@ export function sourceStyleValue(value: unknown, node: ResolvedSourceNode, conte
   if (reference?.type === 'variableReference') {
     const key = `${reference.providerId}:${reference.id}`;
     if (Object.prototype.hasOwnProperty.call(context.variables ?? {}, key)) return String(context.variables![key]);
+    if (node.properties?.repeatArray) return;
   }
-  if (value !== null && value !== undefined) mappingDiagnostic(context, node, property, 'SOURCE_VALUE_UNRESOLVED');
+  if (value !== null && value !== undefined && !node.properties?.repeatArray) mappingDiagnostic(context, node, property, 'SOURCE_VALUE_UNRESOLVED');
 }
 
 const px = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? `${value}px` : typeof value === 'string' ? value : undefined;
@@ -61,13 +63,28 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   const mount = context.supportedMountEffects && sourceMountEffects(p);
   // These are active source behaviors, not decorative metadata; never drop them.
   for (const key of ['enterEffectEnabled', 'exitEffectEnabled', 'appearEffectEnabled', 'loopEffectEnabled', 'styleAppearEffectEnabled', 'flowEffectEnabled', 'isFormContainer']) {
-    if (p[key] === true && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key)) && !(key === 'flowEffectEnabled' && context.supportedFlowEffects && sourceFlowEffect(p)) && !(key === 'isFormContainer' && context.supportedForms && node.kind === 'FrameNode')) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    const isMountInactive = p.enterEffectEnabled === false && (key === 'exitEffectEnabled' || key === 'styleAppearEffectEnabled');
+    if (p[key] === true && !isMountInactive && !(key === 'loopEffectEnabled' && context.supportedLoops && sourceRotationLoop(p)) && !(mount && ['enterEffectEnabled', 'exitEffectEnabled', 'styleAppearEffectEnabled'].includes(key)) && !(key === 'flowEffectEnabled' && context.supportedFlowEffects && sourceFlowEffect(p)) && !(key === 'isFormContainer' && context.supportedForms && node.kind === 'FrameNode')) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
-  for (const key of ['boxShadows', 'pageEffects']) {
+  for (const key of ['pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   if (p.customCursorType === 'component' && p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   const result: Record<string, string> = { boxSizing: 'border-box', position: 'relative', display: 'block' };
+  if (Array.isArray(p.boxShadows) && p.boxShadows.length) {
+    const shadows = p.boxShadows.map(s => {
+      const shadow = sourceRecord(s);
+      if (!shadow) return undefined;
+      const inset = shadow.inset ? 'inset ' : '';
+      const x = px(shadow.x) ?? '0px';
+      const y = px(shadow.y) ?? '0px';
+      const blur = px(shadow.blur) ?? '0px';
+      const spread = px(shadow.spread) ?? '0px';
+      const color = typeof shadow.color === 'string' ? sourceStyleValue(shadow.color, node, context, 'boxShadow') ?? shadow.color : 'rgba(0,0,0,0.2)';
+      return `${inset}${x} ${y} ${blur} ${spread} ${color}`;
+    }).filter(Boolean);
+    if (shadows.length) result.boxShadow = shadows.join(', ');
+  }
   if (Array.isArray(p.masks) && p.masks.length) {
     const mask = p.masks.length === 1 ? sourceRecord(p.masks[0]) : undefined;
     const url = typeof mask?.maskImage === 'string' ? context.assets?.[mask.maskImage] : undefined;
@@ -75,6 +92,28 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     if (mask?.maskType === 'image' && Object.keys(mask).every(key => maskKeys.has(key)) && mask.maskMode === 'alpha' && mask.maskImageResize === 'cover' && mask.maskPosition === 'center' && mask.maskRepeat === 'no-repeat' && mask.maskComposite === 'add' && url) {
       result.maskImage = result.WebkitMaskImage = `url(${JSON.stringify(url)})`;
       result.maskSize = 'cover'; result.maskPosition = 'center'; result.maskRepeat = 'no-repeat';
+    } else if (mask?.maskType === 'linear-gradient') {
+      const gradient = sourceRecord(mask.maskLinearGradient);
+      const stops = Array.isArray(gradient?.stops) ? gradient!.stops.map(stop => {
+        const s = sourceRecord(stop);
+        const color = s && sourceStyleValue(s.value, node, context, 'maskLinearGradient');
+        return color && typeof s?.position === 'number' ? `${color} ${s.position * 100}%` : undefined;
+      }) : [];
+      if (stops.length && stops.every(Boolean) && typeof gradient?.angle === 'number') {
+        result.maskImage = result.WebkitMaskImage = `linear-gradient(${gradient.angle}deg, ${stops.join(', ')})`;
+      } else mappingDiagnostic(context, node, 'masks', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+    } else if (mask?.maskType === 'radial-gradient') {
+      const gradient = sourceRecord(mask.maskRadialGradient);
+      const stops = Array.isArray(gradient?.stops) ? gradient!.stops.map(stop => {
+        const s = sourceRecord(stop);
+        const color = s && sourceStyleValue(s.value, node, context, 'maskRadialGradient');
+        return color && typeof s?.position === 'number' ? `${color} ${s.position * 100}%` : undefined;
+      }) : [];
+      const x = typeof gradient?.centerAnchorX === 'number' ? gradient.centerAnchorX * 100 : 50;
+      const y = typeof gradient?.centerAnchorY === 'number' ? gradient.centerAnchorY * 100 : 50;
+      if (stops.length && stops.every(Boolean) && typeof gradient?.widthFactor === 'number' && typeof gradient?.heightFactor === 'number') {
+        result.maskImage = result.WebkitMaskImage = `radial-gradient(ellipse ${gradient.widthFactor * 100}% ${gradient.heightFactor * 100}% at ${x}% ${y}%, ${stops.join(', ')})`;
+      } else mappingDiagnostic(context, node, 'masks', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
     } else mappingDiagnostic(context, node, 'masks', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
   const set = (key: string, value: string | undefined) => { if (value !== undefined) result[key] = value; };
@@ -101,7 +140,11 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
 
   const outOfFlow = p.position === 'absolute' || p.position === 'fixed';
   if (outOfFlow || p.position === 'sticky') {
-    result.position = String(p.position);
+    let pos = String(p.position);
+    if (pos === 'fixed' && context.parent && context.parent.sourceId !== context.viewport?.sourceStateId) {
+      pos = 'absolute';
+    }
+    result.position = pos;
     for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null) set(key, px(p[key]));
     if (outOfFlow && p.left == null && p.right == null && (p.widthType === 1 || p.width === 1)) {
       result.left = '0px';
@@ -131,6 +174,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       const ratio = typeof p.fillImagePixelWidth === 'number' && typeof p.fillImagePixelHeight === 'number' && p.fillImagePixelHeight > 0 ? p.fillImagePixelWidth / p.fillImagePixelHeight : p.aspectRatio;
       if (typeof ratio === 'number' && ratio > 0) { result.aspectRatio = String(ratio); result[axis] = 'auto'; }
       else if (axis === 'height' && p.fillEnabled === true && p.fillType === 'image' && context.cmsImageField?.(p.fillImage, node)) result.height = 'auto';
+      else if (axis === 'width' && p.fillEnabled === true && p.fillType === 'image') result.width = 'auto';
       else mappingDiagnostic(context, node, `${axis}Type`);
     } else if (type !== undefined) mappingDiagnostic(context, node, `${axis}Type`);
   }
@@ -149,7 +193,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       const vpMatch = /^(\d*\.?\d+)(vw|vh)$/i.exec(trimmed);
       if (trimmed === '0' || /^\d*\.?\d+(?:px|%)$/.test(trimmed)) result[key] = trimmed;
       else if (vpMatch) {
-        const basis = vpMatch[2].toLowerCase() === 'vw' ? context.viewport?.width : (context.viewport?.height ?? (context.viewport?.width ? simulatedVpHeight(context.viewport.width) : undefined));
+        const basis = vpMatch[2].toLowerCase() === 'vw' ? (context.viewport?.width ?? 1200) : (context.viewport?.height ?? simulatedVpHeight(context.viewport?.width ?? 1200));
         if (basis && basis > 0) result[key] = `${Number(((Number(vpMatch[1]) / 100) * basis).toFixed(2))}px`;
         else mappingDiagnostic(context, node, key);
       } else mappingDiagnostic(context, node, key);
@@ -158,17 +202,17 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   if (typeof p.aspectRatio === 'number' && p.aspectRatio > 0) result.aspectRatio = String(p.aspectRatio);
   if (p.paddingPerSide) {
     for (const side of ['Top', 'Right', 'Bottom', 'Left']) set(`padding${side}`, px(p[`padding${side}`]));
-  } else set('padding', px(p.padding));
+  } else set('padding', px(p.padding) ?? value('padding'));
   if (p.radiusPerCorner) {
     for (const corner of ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft']) set(`border${corner}Radius`, px(p[`radius${corner}`]));
   } else if (p.radius != null || p.radiusTopLeft != null) {
     const radius = p.radius ?? p.radiusTopLeft;
-    if (!(node.kind === 'CodeComponentNode' && radius === 0)) set('borderRadius', p.radiusIsRelative && typeof radius === 'number' ? `${radius * 100}%` : px(radius));
+    if (!(node.kind === 'CodeComponentNode' && radius === 0)) set('borderRadius', p.radiusIsRelative && typeof radius === 'number' ? (radius === 0 ? '0px' : '9999px') : (px(radius) ?? sourceStyleValue(radius, node, context, 'radius')));
   }
   if (p.fillEnabled === true) {
     if (p.fillType === 'color') set('backgroundColor', value('fillColor'));
     else if (p.fillType === 'image') {
-      const boundImage = context.cmsImageField?.(p.fillImage, node) === true;
+      const boundImage = context.cmsImageField?.(p.fillImage, node) === true || Boolean(node.properties?.repeatArray);
       const image = boundImage ? undefined : value('fillImage');
       const url = image && context.assets?.[image];
       const binding = image && /^\{[A-Za-z_$][\w$]*\}$/.test(image);
@@ -176,7 +220,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
         result.backgroundImage = boundImage ? 'none' : url ? `url(${JSON.stringify(url)})` : image!;
         result.backgroundPosition = 'center'; result.backgroundRepeat = 'no-repeat';
         result.backgroundSize = p.fillImageResize === 'fit' ? 'contain' : 'cover';
-      } else mappingDiagnostic(context, node, 'fillImage', 'SOURCE_ASSET_UNRESOLVED');
+      } else if (!node.properties?.repeatArray) mappingDiagnostic(context, node, 'fillImage', 'SOURCE_ASSET_UNRESOLVED');
     } else if (['linear-gradient', 'radial-gradient', 'conic-gradient'].includes(String(p.fillType))) {
       const property = p.fillType === 'linear-gradient' ? 'fillLinearGradient' : p.fillType === 'radial-gradient' ? 'fillRadialGradient' : 'fillConicGradient';
       const gradient = sourceRecord(p[property]);
@@ -197,7 +241,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       } else mappingDiagnostic(context, node, property);
     } else mappingDiagnostic(context, node, 'fillType');
   }
-  if (p.borderEnabled === true) {
+  if (p.borderEnabled === true || sourceRecord(p.borderEnabled)?.type === 'variableReference') {
     const color = value('borderColor');
     if (color) {
       if (p.borderPerSide) {
@@ -205,7 +249,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       } else result.border = `${px(p.borderWidth) ?? '0px'} ${p.borderStyle ?? 'solid'} ${color}`;
     }
   }
-  if (p.overflow) result.overflow = p.overflow === 'clip' ? 'clip' : String(p.overflow);
+  if (p.overflow) result.overflow = p.overflow === 'clip' ? 'clip' : p.overflow === 'auto' ? 'scroll' : String(p.overflow);
   for (const key of ['opacity', 'zIndex']) if (p[key] !== undefined) set(key, value(key));
   if (p.blendingMode) result.mixBlendMode = String(p.blendingMode);
   const transforms: string[] = [];

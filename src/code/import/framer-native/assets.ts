@@ -79,7 +79,7 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
   if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
     for (const id of graph.byKind.get('RootNode') ?? []) {
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
-      scan(metadata?.favicon); scan(metadata?.faviconDark); scan(metadata?.socialImage);
+      scan(metadata?.favicon); scan(metadata?.faviconDark); scan(metadata?.socialImage); scan(metadata?.appleTouchIcon);
     }
   }
   const requested = new Set<string>();

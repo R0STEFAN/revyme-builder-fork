@@ -73,7 +73,7 @@ export async function pasteNativeTransferInEditor(input: unknown, read: typeof f
       });
     },
   }, read);
-  services.skipFeatures = { pageReferenceFilters: true, customCursors: true };
+  services.skipFeatures = { pageReferenceFilters: true, pageVariableFallbacks: true, customCursors: true, collectionLoops: true };
   const prepare = services.prepare;
   services.uploadAssets = (source, snapshot) => uploadNativeTransferAssets(source, snapshot.files, scope.projectId, backend, undefined, services.skipFeatures, { mode: importMode, filePath: scope.filePath, parentNodeId });
   services.prepare = async (...args) => { prepared = await prepare(...args); return prepared; };

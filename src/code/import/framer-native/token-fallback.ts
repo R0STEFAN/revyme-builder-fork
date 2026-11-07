@@ -22,5 +22,6 @@ export function resolveMissingSourceTokenFallbacks(value: string): string {
     cursor = close + 1;
     start.lastIndex = cursor;
   }
-  return result + value.slice(cursor);
+  const resolved = result + value.slice(cursor);
+  return resolved.replace(/var\(\s*--token-[a-zA-Z0-9-]+\s*\)/g, 'inherit');
 }

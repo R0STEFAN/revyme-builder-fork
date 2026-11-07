@@ -36,6 +36,7 @@ export interface SourceSceneOptions {
   codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>;
   template?: boolean;
   intrinsicImageFor?: (node: ResolvedSourceNode) => string | undefined;
+  plainTextFor?: (node: ResolvedSourceNode) => boolean;
 }
 
 /** One source traversal for native page/template and design-master JSX. */
@@ -111,10 +112,11 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
         const videoStyles = { objectFit: 'cover', ...styles };
         return `<video data-id="${targetId}"${label}${srcAttr}${posterAttr}${boolAttrs.map(a => ` ${a}`).join('')} style={${sourceStyleLiteral(videoStyles)}} />`;
       }
-      if (identifier.includes('SmoothScroll') || name === 'default' || identifier.endsWith(':default') || identifier.toLowerCase().includes('default') || name.toLowerCase() === 'default') {
+      if (identifier.includes('SmoothScroll') || name === 'SmoothScroll') {
         return '';
       }
-      const label = escapeJsxText(`Заглушка · ${name}`).replace(/"/g, '&quot;');
+      const displayName = name === 'default' || name.toLowerCase() === 'default' ? 'Code component' : name;
+      const label = escapeJsxText(`Заглушка · ${displayName}`).replace(/"/g, '&quot;');
       return `<div data-id="${targetId}" data-name="${label}" style={${sourceStyleLiteral({ backgroundColor: '#eeeeee', ...styles })}}></div>`;
     }
     let tag = 'div', content = '', attributes = '';
@@ -123,7 +125,14 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       if (text.blockIds?.length) result.optionIds.push(...text.blockIds);
       tag = text.tag;
       attributes = Object.entries(text.attributes).map(([key, value]) => ` ${key}=${JSON.stringify(value)}`).join('');
-      content = text.binding ? `{${options.expressionFor(text.binding, node, 'textContent')}}` : text.jsx;
+      if (text.binding) {
+        const expr = options.expressionFor(text.binding, node, 'textContent');
+        content = expr.includes('{') ? expr : `{${expr}}`;
+      } else if (options.plainTextFor?.(node)) {
+        content = escapeJsxText(text.plainText);
+      } else {
+        content = text.jsx;
+      }
       if (text.textAnim) {
         attributes += ` data-text-anim='${JSON.stringify(text.textAnim)}'`;
         content = `<${SPLIT_TEXT_TAG} spec={${buildSplitTextSpecSource(text.textAnim)}}>${content}</${SPLIT_TEXT_TAG}>`;

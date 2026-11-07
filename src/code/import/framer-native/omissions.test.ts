@@ -31,3 +31,13 @@ it('refuses to drop a page variable that also drives live content', () => {
   page.children[0].children.push({ id: 'label', __class: 'RichTextNode', textContent: { type: 'variableReference', providerId: 'works', id: 'categoryVar' }, children: [] });
   expect(() => omitNativeSourceFeatures(source, { pageReferenceFilters: true })).toThrow(/active uses outside/);
 });
+
+it('converts active page variable uses outside the omitted filter to static fallbacks when pageVariableFallbacks is enabled', () => {
+  const source = capturedPage(), page = source.definitions[0].data as any;
+  page.children[0].children.push({ id: 'label', __class: 'RichTextNode', textContent: { type: 'variableReference', providerId: 'works', id: 'categoryVar' }, children: [] });
+  const { transfer, omissions } = omitNativeSourceFeatures(source, { pageReferenceFilters: true, pageVariableFallbacks: true });
+  expect((transfer.definitions[0].data as any).variables).toEqual([]);
+  const label = (transfer.definitions[0].data as any).children[0].children.find((c: any) => c.id === 'label');
+  expect(label.textContent).toBeUndefined();
+  expect(omissions.some(o => o.property.includes('categoryVar'))).toBe(true);
+});

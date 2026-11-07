@@ -146,6 +146,10 @@ function needsDataId(tag: string, path: NodePath<t.JSXElement>): boolean {
       if (t.isJSXElement(n)) {
         const parentTag = jsxTagName(n.openingElement.name);
         const parentBase = parentTag.startsWith('motion.') ? parentTag.slice('motion.'.length) : parentTag;
+        if (TRANSPARENT_TAGS.has(parentTag) || TRANSPARENT_TAGS.has(parentBase)) {
+          p = p.parentPath;
+          continue;
+        }
         return !(TEXT_TAGS.has(parentBase));
       }
       if (t.isJSXFragment(n) || t.isJSXExpressionContainer(n) || t.isConditionalExpression(n)) {

@@ -3,7 +3,7 @@ import { trace } from '../../../shared/debug-trace';
 import type { ViewportConfig } from '../../../shared/types';
 import { CSS_NEUTRAL_FALLBACK, updateContainerQueryStyle } from '../../generation/generator-styles';
 import { updateCanvasConfigInCode } from '../../project/canvas-config';
-import { isSourceCodeComponent, resolveSourceNode } from './source-graph';
+import { isSourceCodeComponent, resolveSourceNode, sourceRecord } from './source-graph';
 import { mapSourceStyles, mappingDiagnostic, type SourceMappingContext } from './styles';
 import type { ResolvedSourceNode, SourceGraph } from './types';
 
@@ -12,7 +12,25 @@ export function sourceViewports(graph: SourceGraph, scopeId: string): SourceView
   trace.fn('framer-native.sourceViewports', { scopeId });
   const scope = graph.nodes.get(scopeId);
   if (!scope) throw new Error(`FRAMER_SOURCE_INVALID: missing scope ${scopeId}`);
-  const states = scope.children.map(id => resolveSourceNode(graph, id));
+  const rawChildren = scope.children.map(id => graph.nodes.get(id)!).filter(Boolean);
+  const masterCounts = new Map<string, number>();
+  for (const child of rawChildren) {
+    const info = sourceRecord(child.raw.replicaInfo);
+    if (typeof info?.master === 'string') {
+      masterCounts.set(info.master, (masterCounts.get(info.master) ?? 0) + 1);
+    }
+  }
+  let primaryId = rawChildren[0]?.id;
+  for (const [masterId] of masterCounts) {
+    if (rawChildren.some(c => c.id === masterId)) {
+      primaryId = masterId;
+      break;
+    }
+  }
+  const breakpointIds = masterCounts.size > 0
+    ? rawChildren.filter(c => c.id === primaryId || sourceRecord(c.raw.replicaInfo)?.master === primaryId).map(c => c.id)
+    : rawChildren.map(c => c.id);
+  const states = breakpointIds.map(id => resolveSourceNode(graph, id));
   states.sort((a, b) => Number(b.properties.width) - Number(a.properties.width));
   if (!states.length || states.some(state => typeof state.properties.width !== 'number' || state.properties.width <= 0)) throw new Error(`FRAMER_SOURCE_INVALID: invalid breakpoint widths in ${scopeId}`);
   if (new Set(states.map(state => state.properties.width)).size !== states.length) throw new Error(`FRAMER_SOURCE_INVALID: duplicate breakpoint widths in ${scopeId}`);
@@ -52,6 +70,18 @@ export function applyNativeResponsive(code: string, model: { graph: SourceGraph;
         if (styles[key] !== baseStyles[key]) changes[key] = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
       }
       if (parent && baseParent && parent.children.join(',') !== baseParent.children.join(',')) changes.order = String(parent.children.indexOf(id));
+      if (parent && baseParent) {
+        const parentBaseStyles = stylesFor(baseParent, { ...context, graph, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight } });
+        const parentStyles = stylesFor(parent, { ...context, graph, viewport: { width: viewport.designWidth!, height: viewport.viewportHeight } });
+        if (
+          parentStyles.flexDirection === 'column' &&
+          parentBaseStyles.flexDirection !== 'column' &&
+          baseStyles.flex && /^[1-9]\d*\s+\d+\s+0(px)?$/.test(baseStyles.flex.trim())
+        ) {
+          changes.flex = '0 0 auto';
+          if (!changes.width || changes.width === 'auto') changes.width = '100%';
+        }
+      }
       if (Object.values(changes).some(value => /^\{/.test(value))) mappingDiagnostic(context, state, 'responsiveBinding', 'SOURCE_RESPONSIVE_BINDING_UNSUPPORTED');
       if (!identity[id]) mappingDiagnostic(context, state, 'identity', 'SOURCE_IDENTITY_MISSING');
       else if (Object.keys(changes).length) result = updateContainerQueryStyle(result, identity[id], viewport.width, normalizeTransparent(changes), { viewportWidths: viewports.map(v => v.width) });

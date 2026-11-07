@@ -5,6 +5,35 @@ import { isSourceCodeComponent } from './source-graph';
 import type { SourceGraph, TransferDiagnostic } from './types';
 import { trace } from '../../../shared/debug-trace';
 export function parseSourceGoogleFont(value: string, variationAxes?: unknown): GoogleFontRequest | undefined {
+  if (value.startsWith('FR;') || value.startsWith('Inter-') || value === 'Inter') {
+    const raw = value.startsWith('FR;') ? value.slice(3) : value;
+    const [famPart, variantPart] = raw.includes('-') ? raw.split('-', 2) : [raw, 'Regular'];
+    let family = famPart.replace(/Display$/, '');
+    if (!family) family = 'Inter';
+    const weightMap: Record<string, number> = {
+      thin: 100,
+      extralight: 200,
+      ultralight: 200,
+      light: 300,
+      regular: 400,
+      book: 400,
+      medium: 500,
+      semibold: 600,
+      demibold: 600,
+      bold: 700,
+      extrabold: 800,
+      ultrabold: 800,
+      black: 900,
+      heavy: 900,
+    };
+    const varLower = (variantPart || 'Regular').toLowerCase();
+    const isItalic = varLower.includes('italic');
+    const cleanVar = varLower.replace('italic', '');
+    const wght = weightMap[cleanVar] ?? (parseInt(cleanVar, 10) || 400);
+    const axes: Record<string, number> = { wght };
+    if (isItalic) axes.ital = 1;
+    return { family, axes };
+  }
   const match = /^GF;(.+?)-(variable-)?(regular|italic|[1-9]\d{1,3}(?:italic)?)(?:VF=([A-Za-z0-9+/]+=*))?$/.exec(value);
   if (!match) return;
   const [, family, variable, variant, encoded] = match;
@@ -40,7 +69,7 @@ export function sourceGoogleFontRequests(graph: Pick<SourceGraph, 'nodes' | 'rea
     const node = graph.nodes.get(id)!;
     if (isSourceCodeComponent(node)) continue;
     const add = (selector: string, variationAxes?: unknown) => {
-      if (!selector.startsWith('GF;')) return;
+      if (!selector.startsWith('GF;') && !selector.startsWith('FR;') && !selector.startsWith('Inter')) return;
       const request = parseSourceGoogleFont(selector, variationAxes);
       if (request) requests.push(request);
       else diagnostics.push({ code: 'SOURCE_FONT_ADAPTER_REQUIRED', sourceId: id, message: `Unsupported Google font selector ${selector}.` });

@@ -3,8 +3,15 @@
   "name": "Framer Native → Revyme · Source Reader",
   "version": "0.1.9",
   "description": "Captures native Framer editor data for import into Revyme.",
-  "permissions": ["activeTab", "scripting", "clipboardWrite", "downloads"],
-  "action": { "default_popup": "popup.html", "default_title": "Захопити source Framer" },
+  "permissions": ["activeTab", "scripting", "clipboardWrite", "downloads", "tabs"],
+  "host_permissions": [
+    "https://framer.com/*",
+    "http://localhost/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1/*",
+    "http://127.0.0.1:*/*"
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Capture Framer source" },
   "web_accessible_resources": [{
     "resources": ["page-reader.mjs", "source-adapters.mjs", "capture.mjs"],
     "matches": ["https://framer.com/*"]

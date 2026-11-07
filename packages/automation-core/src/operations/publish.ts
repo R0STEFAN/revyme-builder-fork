@@ -241,7 +241,7 @@ export async function executePreflightChecks(
       if (path.startsWith('plugins/') || path.startsWith('_meta/') || path.startsWith('_revyme/')) continue;
 
       const isPage = /(^|\/)page(\.client)?\.tsx$/.test(path);
-      const isLayout = /(^|\/)(layout|LayoutClient)\.tsx$/.test(path);
+      const isLayout = /(^|\/)LayoutClient\.tsx$/.test(path);
       if (!isPage && !isLayout) continue;
 
       // In Next.js App Router, if page.client.tsx exists or page.tsx imports page.client,

@@ -37,7 +37,10 @@ export function mapSourceConnections(component: SourceComponent, identity: Recor
     const walk = (id: string) => {
       const node = resolveSourceNode(graph, id, stateId === root.sourceId ? undefined : stateId);
       if (isSourceCodeComponent(node)) return;
-      for (const [event, value] of Object.entries(node.properties)) {
+      for (const [rawEvent, rawVal] of Object.entries(node.properties)) {
+        const isControlEvent = rawEvent.startsWith('$control__') && sourceRecord(rawVal)?.type === 'eventhandler';
+        const event = isControlEvent ? 'onTap' : rawEvent;
+        const value = isControlEvent ? sourceRecord(rawVal)?.value : rawVal;
         if (!/^on[A-Z]/.test(event) || !Array.isArray(value) || value.length === 0) continue;
         if (!triggers[event]) throw new Error(`FRAMER_ACTION_UNSUPPORTED: ${event} on ${id}`);
         for (const raw of value) {
@@ -48,8 +51,14 @@ export function mapSourceConnections(component: SourceComponent, identity: Recor
           if (action.actionIdentifier !== 'framer/useSetVariant') throw new Error(`FRAMER_ACTION_UNSUPPORTED: ${String(action.actionIdentifier)} on ${id}`);
           const controls = sourceRecord(action.controls);
           const type = sourceRecord(controls?.type)?.value ?? 'set';
-          if (type !== 'set') throw new Error(`FRAMER_ACTION_UNSUPPORTED: variant ${String(type)} on ${id}`);
-          const target = sourceRecord(controls?.variantId)?.value;
+          let target = sourceRecord(controls?.variantId)?.value;
+          if (type === 'cycle') {
+            const stateIds = Object.keys(names);
+            const nextIdx = (stateIds.indexOf(stateId) + 1) % stateIds.length;
+            target = stateIds[nextIdx];
+          } else if (type !== 'set') {
+            throw new Error(`FRAMER_ACTION_UNSUPPORTED: variant ${String(type)} on ${id}`);
+          }
           if (typeof target !== 'string' || !names[target]) throw new Error(`FRAMER_ACTION_INVALID: missing variant target ${String(target)} on ${id}`);
           const delay = sourceRecord(action.meta)?.delay;
           if (delay !== undefined && (typeof delay !== 'number' || delay < 0 || !Number.isFinite(delay))) throw new Error(`FRAMER_ACTION_INVALID: delay on ${id}`);

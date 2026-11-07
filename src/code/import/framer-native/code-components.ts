@@ -14,7 +14,7 @@ export interface NativeCodeComponentRef { name: string; path: string; controls: 
 export interface NativeCodeComponentResult extends NativeCompileResult {
   components: Record<string, NativeCodeComponentRef>;
 }
-export function emitNativeCodeComponents(graph: SourceGraph, identity: Record<string, string>): NativeCodeComponentResult {
+export function emitNativeCodeComponents(graph: SourceGraph, identity: Record<string, string>, options: { skipUnsupported?: boolean } = {}): NativeCodeComponentResult {
   trace.fn('framer-native.emitCodeComponents');
   const result: NativeCodeComponentResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], components: {} };
   if (result.diagnostics.length) return result;
@@ -38,6 +38,10 @@ export function emitNativeCodeComponents(graph: SourceGraph, identity: Record<st
       if (violations.length) throw new Error(`CODE_NATIVE_VALIDATION_FAILED: ${violations.map(item => item.code).join(', ')}`);
       result.files.push({ path: target, code }); result.components[identifier] = { name, path: target, controls: parseComponentControlsMeta(code)!.controls };
     } catch (error) {
+      if (options.skipUnsupported) {
+        trace.action('framer-native.skipUnsupportedCodeComponent', { identifier });
+        continue;
+      }
       const message = error instanceof Error ? error.message : String(error);
       result.diagnostics.push({ code: message.startsWith('CODE_') ? message.split(':')[0] : 'CODE_ADAPTER_UNSUPPORTED', sourceId: identifier, property: 'codeComponentIdentifier', message });
     }

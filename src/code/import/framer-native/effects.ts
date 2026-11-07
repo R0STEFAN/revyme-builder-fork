@@ -23,14 +23,13 @@ export interface SourceMountEffects {
 /** onMount and inView use the explicit entry/exit channels, not the retained style-appear values. */
 export function sourceMountEffects(p: SourceProperties): SourceMountEffects | undefined {
   trace.fn('framer-native.sourceMountEffects');
-  if (p.styleAppearEffectEnabled !== true) return;
+  if (p.styleAppearEffectEnabled !== true || p.enterEffectEnabled !== true) return;
   const isMount = p.styleAppearEffectTrigger === 'onMount' || p.styleAppearEffectTrigger === 'onAppear' || p.styleAppearEffectTrigger === 'appear';
   const isInView = p.styleAppearEffectTrigger === 'inView' || p.styleAppearEffectTrigger === 'onInView' || p.styleAppearEffectTrigger === 'view';
   if (!isMount && !isInView) throw new Error('Source appearance mode requires its native lifecycle adapter');
   const trigger: 'onMount' | 'inView' = isInView ? 'inView' : 'onMount';
-  if (typeof p.styleAppearEffectLocked !== 'boolean' || p.enterEffectEnabled !== true || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
-  if (p.styleAppearEffectLocked && Object.keys(p).some(key => key.startsWith('exitEffect') && key !== 'exitEffectEnabled')) throw new Error('Source appearance mode requires its native lifecycle adapter');
-  if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) throw new Error('Source appearance with a base transform requires its native composition adapter');
+  if (typeof p.styleAppearEffectLocked !== 'boolean' || typeof p.exitEffectEnabled !== 'boolean') throw new Error('Source appearance mode requires its native lifecycle adapter');
+  if (p.styleAppearEffectLocked && Object.keys(p).some(key => key.startsWith('exitEffect') && key !== 'exitEffectEnabled' && !(key === 'exitEffectRotate3d' && typeof p[key] === 'boolean'))) throw new Error('Source appearance mode requires its native lifecycle adapter');
   const axes = { Opacity: 'opacity', X: 'x', Y: 'y', Scale: 'scale', Rotate: 'rotate', RotateX: 'rotateX', RotateY: 'rotateY', SkewX: 'skewX', SkewY: 'skewY' };
   const target: Record<string, string> = {};
   const channel = (prefix: 'enterEffect' | 'exitEffect') => {
@@ -38,7 +37,7 @@ export function sourceMountEffects(p: SourceProperties): SourceMountEffects | un
     if (Object.keys(p).some(key => key.startsWith(prefix) && !known.has(key)) || p[`${prefix}RotateAdditiveDynamicValue`] === true || p[`${prefix}Rotate3d`] !== undefined && typeof p[`${prefix}Rotate3d`] !== 'boolean') throw new Error(`Unsupported source ${prefix} setting`);
     const values: Record<string, string> = {};
     for (const [suffix, prop] of Object.entries(axes)) {
-      const neutral = prop === 'opacity' ? p.opacity ?? 1 : prop === 'scale' ? 1 : 0;
+      const neutral = prop === 'opacity' ? p.opacity ?? 1 : prop === 'scale' ? (typeof p.scale === 'number' ? p.scale : 1) : prop === 'rotate' ? (typeof p.rotation === 'number' ? p.rotation : 0) : 0;
       const value = p[prefix + suffix] ?? neutral;
       if (typeof value !== 'number' || !Number.isFinite(value) || prop === 'opacity' && (value < 0 || value > 1) || typeof neutral !== 'number' || !Number.isFinite(neutral)) throw new Error(`Invalid source ${prefix}${suffix}`);
       if (['rotateX', 'rotateY'].includes(prop) && value !== 0 && p[`${prefix}Rotate3d`] !== true) throw new Error(`Inactive 3D source ${prefix}${suffix} requires verification`);
@@ -67,11 +66,6 @@ export function applySourceMountEffects(
   if (spec.enterTransition) result = updateMotionPropInCode(result, nodeId, 'transition', spec.enterTransition);
   result = updateMotionPropInCode(result, nodeId, 'exit', spec.exit ? { ...spec.exit, ...(spec.exitTransition ? { transition: emitObj(spec.exitTransition) } : {}) } : { transition: '{ duration: 0 }' });
   const ordered = [...responsive].sort((a, b) => b.width - a.width);
-  for (const entry of ordered) {
-    if (JSON.stringify(entry.spec.exit) !== JSON.stringify(spec.exit) || JSON.stringify(entry.spec.exitTransition) !== JSON.stringify(spec.exitTransition)) {
-      throw new Error(`Responsive on-mount exit effect on ${nodeId} requires its native adapter`);
-    }
-  }
   for (const [propName, pick] of [
     ['initial', (item: SourceMountEffects) => item.initial],
     [animProp, (item: SourceMountEffects) => item.animate],
@@ -99,7 +93,7 @@ export function sourceRotationLoop(p: SourceProperties): LoopSpec | undefined {
   trace.fn('framer-native.sourceRotationLoop');
   const known = new Set(['loopEffectEnabled', 'loopEffectOpacity', 'loopEffectX', 'loopEffectY', 'loopEffectScale', 'loopEffectRotate3d', 'loopEffectRotate', 'loopEffectRotateX', 'loopEffectRotateY', 'loopEffectSkewX', 'loopEffectSkewY', 'loopEffectRepeatDelay', 'loopEffectRepeatType', 'loopEffectTransition', 'loopEffectPauseOffscreen']);
   if (Object.keys(p).some(key => key.startsWith('loopEffect') && !known.has(key))) return;
-  if ((p.rotation ?? 0) !== 0 || (p.scale ?? 1) !== 1) return;
+  if (((p.rotation ?? 0) !== 0 && (p.loopEffectRotate ?? 0) !== 0) || ((p.scale ?? 1) !== 1 && (p.loopEffectScale ?? 1) !== 1)) return;
   if (p.loopEffectRotate3d !== undefined && typeof p.loopEffectRotate3d !== 'boolean') return;
   if (!p.loopEffectRotate3d && ((typeof p.loopEffectRotateX === 'number' && p.loopEffectRotateX !== 0) || (typeof p.loopEffectRotateY === 'number' && p.loopEffectRotateY !== 0))) return;
   if (p.loopEffectPauseOffscreen !== undefined && typeof p.loopEffectPauseOffscreen !== 'boolean') return;
@@ -158,6 +152,7 @@ export function applySourceRotationLoop(code: string, nodeId: string, spec: Loop
   let result = ensureMotionTag(code, nodeId);
   result = setLoopInCode(result, nodeId, spec);
   result = composeLoopInCode(result, nodeId);
+  result = ensureTransformTemplateInCode(result, nodeId);
   result = ensureNamedImport(result, 'framer-motion', spec.offscreen === 'play' ? ['motion', 'useMotionValue', 'animate'] : ['motion', 'useMotionValue', 'useInView', 'animate']);
   return ensureNamedImport(result, 'react', spec.offscreen === 'play' ? ['useEffect'] : ['useEffect', 'useRef']);
 }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,22 +9,23 @@
   <body>
     <main>
       <h1>Framer → Revyme</h1>
-      <p class="intro">Захопи оригінальне дерево редактора, тоді встав JSON у Revyme.</p>
-      <label for="scope">Що захопити</label>
+      <p class="intro">Capture native editor tree, then send directly or paste JSON into Revyme.</p>
+      <label for="scope">Scope to capture</label>
       <select id="scope">
-        <option value="component">Відкритий компонент</option>
-        <option value="page">Відкриту сторінку</option>
-        <option value="selection">Вибрані шари</option>
-        <option value="project">Увесь проєкт</option>
+        <option value="component">Open component</option>
+        <option value="page">Open page</option>
+        <option value="selection">Selected layers</option>
+        <option value="project">Entire project</option>
       </select>
-      <button id="capture" type="button" class="primary">Захопити дерево</button>
-      <p id="status" role="status" aria-live="polite">Відкрий потрібний проєкт у Framer.</p>
+      <button id="capture" type="button" class="primary">Capture Tree</button>
+      <p id="status" role="status" aria-live="polite">Open the desired project in Framer.</p>
       <dl id="summary" hidden></dl>
+      <button id="send-revyme" type="button" class="primary" style="margin-top: 0; margin-bottom: 8px;" disabled>Send to Revyme</button>
       <div class="actions">
-        <button id="download" type="button" disabled>Зберегти JSON</button>
-        <button id="copy" type="button" disabled>Копіювати JSON</button>
+        <button id="download" type="button" disabled>Save JSON</button>
+        <button id="copy" type="button" disabled>Copy JSON</button>
       </div>
-      <p class="note">Дані залишаються локально. Reader читає source та завантажує його залежності без редагування документа.</p>
+      <p class="note">Data stays local. Reader inspects native source and dependencies without editing the document.</p>
     </main>
     <script type="module" src="popup.mjs"></script>
   </body>

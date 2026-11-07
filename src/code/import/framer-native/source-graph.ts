@@ -13,6 +13,11 @@ const supportedKinds = new Set([
   'ExternalModulesListNode', 'ContentManagementNode', 'ColorStyleTokenListNode',
   'LocalModulesListNode', 'RouteSegmentRootNode', 'PresetsListNode', 'ErrorListNode',
   'CustomCodeScopeNode', 'AssetsEntityTypeRootNode',
+  'LinkStylePresetNode', 'ImageStylePresetNode', 'DesignPageNode',
+  'DesignPageEntityTypeRootNode', 'ContentManagementEntityTypeRootNode',
+  'FunnelsEntityTypeRootNode', 'AbTestsEntityTypeRootNode',
+  'AnalyticsScopeNode', 'FunnelNode', 'FunnelStepNode', 'FunnelStepActionNode',
+  'AgentSkillsListNode', 'AgentSkillNode',
 ]);
 
 export function sourceRecord(value: unknown): SourceProperties | undefined {
@@ -76,16 +81,45 @@ export function sourceCodeOverrideIdentifiers(graph: SourceGraph): Set<string> {
 }
 
 export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
-  const value = requiredNode(graph, scopeId).raw.variables ?? [];
+  const node = requiredNode(graph, scopeId);
+  const value = node.raw.variables ?? [];
   const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
   const seen = new Set<string>();
-  return entries.map(([key, item]) => {
+  const vars: SourceProperties[] = entries.map(([key, item]) => {
     const record = sourceRecord(item);
     const id = record?.id ?? key;
     if (!record || typeof id !== 'string' || !id || seen.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: invalid/duplicate variable in ${scopeId}`);
     seen.add(id);
     return { ...record, id };
   });
+  if (node.kind === 'CollectionNode') {
+    for (const child of node.children) {
+      const childNode = graph.nodes.get(child);
+      if (!childNode) continue;
+      for (const [propKey, propVal] of Object.entries(childNode.raw)) {
+        if (!propKey.startsWith('$control__')) continue;
+        const fieldId = propKey.slice(10);
+        if (seen.has(fieldId)) continue;
+        seen.add(fieldId);
+        const valRec = sourceRecord(propVal);
+        const type = typeof valRec?.type === 'string' ? valRec.type : 'string';
+        let dataIdentifier: string | undefined;
+        if (type === 'collectionreference' || type === 'multicollectionreference') {
+          const refVal = valRec?.value;
+          const targetItem = typeof refVal === 'string' ? graph.nodes.get(refVal) : Array.isArray(refVal) && typeof refVal[0] === 'string' ? graph.nodes.get(refVal[0]) : undefined;
+          const targetParent = typeof targetItem?.raw.parentid === 'string' ? targetItem.raw.parentid : undefined;
+          if (targetParent) dataIdentifier = `local-module:collection/${targetParent}:default`;
+        }
+        vars.push({
+          id: fieldId,
+          name: fieldId,
+          type,
+          ...(dataIdentifier ? { dataIdentifier } : {}),
+        });
+      }
+    }
+  }
+  return vars;
 }
 
 /** Image props bound to fills use Revyme's whole CSS background-image value. */
@@ -132,7 +166,7 @@ function readReferences(node: SourceNode, nodes?: Map<string, SourceNode>): Sour
       if (codeFile) add(codeFile[1], property);
       const externalCode = !isSourceCodeComponent(node) && field === 'codeComponentIdentifier' && /^module:([^/]+)\/[^/]+\/[^:]+:/.exec(value);
       if (externalCode) add(externalCode[1], property);
-      for (const match of value.matchAll(/var\(--token-([^,\s)]+)\s*([,)])/g)) add(match[1], property, match[2] === ',');
+      for (const match of value.matchAll(/var\(--token-([^,\s)]+)\s*([,)])/g)) add(match[1], property, match[2] === ',' || field === 'html' || property === 'html' || property.endsWith('.html'));
       if (field === 'baseVariantId') add(value, property);
       if (field === 'html') for (const match of value.matchAll(/data-styles-preset=["']([^"']+)["']/g)) add(match[1], property);
     } else if (Array.isArray(value)) {
@@ -140,7 +174,7 @@ function readReferences(node: SourceNode, nodes?: Map<string, SourceNode>): Sour
     } else {
       const object = sourceRecord(value);
       if (!object) return;
-      if (object.type === 'variableReference' && typeof object.providerId === 'string') add(object.providerId, property);
+      if (object.type === 'variableReference' && typeof object.providerId === 'string' && object.providerId !== 'transform') add(object.providerId, property);
       if (object.customCursorType === 'component' && typeof object.customCursorSmartComponentId === 'string' && object.customCursorSmartComponentId) add(object.customCursorSmartComponentId, `${property}.customCursorSmartComponentId`);
       for (const [key, item] of Object.entries(object)) {
         if (key === 'children' || key === 'renamedIds') continue;
@@ -234,13 +268,22 @@ export function buildSourceGraph(input: unknown): SourceGraph {
     }
   }
   trace.action('framer-native.graphBuilt', { nodes: nodes.size, reachable: reachable.size, diagnostics: diagnostics.length });
-  const declarationKinds = new Set(['WebPageNode', 'SmartComponentNode', 'LayoutTemplateNode']);
+  const declarationKinds = new Set(['WebPageNode', 'SmartComponentNode', 'LayoutTemplateNode', 'CollectionNode']);
+  const nonRenderRoots = new Set([
+    'RootNode', 'ContentManagementNode', 'LocalModuleNode', 'ExternalModuleNode',
+    'RouteSegmentRootNode', 'CustomCodeScopeNode', 'AssetsEntityTypeRootNode',
+    'DesignPageNode',
+  ]);
   const renderRootIds = transfer.rootIds.filter(id => {
     const kind = nodes.get(id)?.kind;
-    return kind && (declarationKinds.has(kind) || !kind.endsWith('ListNode') && ![
-      'RootNode', 'ContentManagementNode', 'LocalModuleNode', 'ExternalModuleNode',
-      'RouteSegmentRootNode', 'CustomCodeScopeNode', 'AssetsEntityTypeRootNode',
-    ].includes(kind));
+    return kind && (
+      declarationKinds.has(kind) || (
+        !kind.endsWith('ListNode') &&
+        !kind.endsWith('EntityTypeRootNode') &&
+        !kind.endsWith('ScopeNode') &&
+        !nonRenderRoots.has(kind)
+      )
+    );
   });
   return { transfer, nodes, byKind, references, renderRootIds, reachable, diagnostics };
 }
