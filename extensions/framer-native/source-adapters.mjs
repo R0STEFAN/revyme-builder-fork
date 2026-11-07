@@ -8,9 +8,16 @@ const EDITOR_BUILDS = Object.freeze({
     engineModule: 'https://app.framerstatic.com/chunk-IIU4YMHS.mjs', engineExport: 'Ac', treeVersion: 128,
     assetModule: 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs', assetUrlExport: 'l', assetImageUrlExport: 'j',
   },
+  'https://app.framerstatic.com/web.L34ATHMB.mjs': {
+    engineModule: 'https://app.framerstatic.com/chunk-AI7ZMCIE.mjs', engineExport: 'zc', treeVersion: 128,
+    assetModule: 'https://app.framerstatic.com/chunk-DSZG74H2.mjs', assetUrlExport: 'l', assetImageUrlExport: 'j',
+  },
 });
 
-const ASSET_MODULE = 'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs';
+const ASSET_MODULES = new Set([
+  'https://app.framerstatic.com/chunk-ZNFBUDMT.mjs',
+  'https://app.framerstatic.com/chunk-DSZG74H2.mjs',
+]);
 
 async function discoverCompatibleBuild(entry, fetchModuleText) {
   if (!fetchModuleText) return;
@@ -22,7 +29,8 @@ async function discoverCompatibleBuild(entry, fetchModuleText) {
   const imports = [], pattern = /\s*import\s*(?:\{([^}]*)\}\s*from\s*)?["'](https:\/\/app\.framerstatic\.com\/chunk-[A-Za-z0-9_-]+\.mjs)["']\s*;?/gy;
   let match, end = 0;
   while ((match = pattern.exec(source))) { imports.push({ bindings: match[1] ?? '', url: match[2] }); end = pattern.lastIndex; }
-  if (!imports.some(item => item.url === ASSET_MODULE)) return;
+  const assetModule = imports.find(item => ASSET_MODULES.has(item.url))?.url;
+  if (!assetModule) return;
   const body = source.slice(end);
   const candidates = [];
   for (const item of imports) for (const binding of item.bindings.split(',')) {
@@ -32,7 +40,7 @@ async function discoverCompatibleBuild(entry, fetchModuleText) {
     if (new RegExp(`\\b${local}\\.stores\\.projectStore\\b`).test(body) && new RegExp(`\\b${local}\\.loadScopesThenProcess\\s*\\(`).test(body)) candidates.push({ engineModule: item.url, engineExport: names[1] });
   }
   if (candidates.length !== 1) return;
-  return { ...candidates[0], treeVersion: 128, assetModule: ASSET_MODULE, assetUrlExport: 'l', assetImageUrlExport: 'j', discovered: true };
+  return { ...candidates[0], treeVersion: 128, assetModule, assetUrlExport: 'l', assetImageUrlExport: 'j', discovered: true };
 }
 
 export async function resolveEditorSourceAdapter({ scriptUrls, resourceUrls = [], href, importModule, fetchModuleText }) {

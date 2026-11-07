@@ -158,6 +158,26 @@ test('reads the new editor through its verified singleton export and native imag
   assert.deepEqual((await adapter.readAssets()).map(asset => [asset.url, asset.imageUrl]), [['https://native.example/assets/original.svg', 'https://native.example/images/original.svg']]);
 });
 
+test('reads the L34ATHMB editor build through verified zc singleton and DSZG74H2 asset resolver', async () => {
+  const engine = makeEngine();
+  engine.stores.assetStore.assetMap.image.mimeType = 'image/svg+xml';
+  const calls = [];
+  const adapter = await resolveEditorSourceAdapter({ scriptUrls: ['https://app.framerstatic.com/web.L34ATHMB.mjs'], href,
+    async importModule(url) {
+      calls.push(url);
+      if (url.endsWith('chunk-AI7ZMCIE.mjs')) return { zc: engine };
+      if (url.endsWith('chunk-DSZG74H2.mjs')) return {
+        l: () => 'https://native.example/assets/original.svg',
+        j: () => 'https://native.example/images/original.svg',
+      };
+      throw new Error(`Unexpected module ${url}`);
+    },
+  });
+  assert.equal((await adapter.readContext({ mode: 'page' })).editorBuild, 'https://app.framerstatic.com/web.L34ATHMB.mjs');
+  assert.deepEqual(calls, ['https://app.framerstatic.com/chunk-AI7ZMCIE.mjs', 'https://app.framerstatic.com/chunk-DSZG74H2.mjs']);
+  assert.deepEqual((await adapter.readAssets()).map(asset => [asset.url, asset.imageUrl]), [['https://native.example/assets/original.svg', 'https://native.example/images/original.svg']]);
+});
+
 test('does not add an image helper URL to ordinary downloadable files', async () => {
   const engine = makeEngine();
   engine.stores.assetStore.assetMap.image.mimeType = 'application/pdf';

@@ -11,16 +11,16 @@ CMS, стилі, адаптивні правила, анімації та зв'�
 
 1. Запусти локальний Revyme через `npm run dev` і відкрий
    `http://localhost:3333` у Chrome.
-2. Збери reader: `node scripts/build-framer-native-extension.mjs dist/framer-native-reader-0.1.8`.
+2. Збери reader: `node scripts/build-framer-native-extension.mjs dist/framer-native-reader-0.1.9`.
    Збірка створить директорію та ZIP поруч. ZIP треба розпакувати перед
    встановленням.
 3. На сторінці керування розширеннями Chrome увімкни режим розробника й
-   завантаж директорію `dist/framer-native-reader-0.1.8` через **Load unpacked**.
+   завантаж директорію `dist/framer-native-reader-0.1.9` через **Load unpacked**.
 4. Відкрий проєкт Framer у цьому самому браузері та онови його вкладку.
 
 Reader потребує доступу до поточної вкладки Framer, а також дозволів на
 копіювання JSON і його завантаження. Захоплення не змінює source проєкту.
-Перевірена структура source — дерево версії 128. Reader 0.1.8 розпізнає
+Перевірена структура source — дерево версії 128. Reader 0.1.9 розпізнає
 перевірені entrypoint-збірки за engine fingerprint; невідому збірку завершує
 діагностикою `EDITOR_BUILD_UNSUPPORTED`.
 

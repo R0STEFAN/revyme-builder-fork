@@ -1,4 +1,4 @@
-# Framer Native → Revyme — source reader 0.1.8
+# Framer Native → Revyme — source reader 0.1.9
 
 Reader захоплює оригінальну модель редактора для імпортера Revyme. Повне
 перенесення всіх можливостей Framer ще перебуває в розробці.
@@ -69,6 +69,10 @@ source accessor перевірені за модулями цієї збірки
 Версія 0.1.8 намагається додатково завантажити відсутні компоненти курсорів,
 на які є активні посилання. Якщо джерело недоступне, capture залишається
 неповним. Цю зміну перевірено автоматичними тестами; жива перевірка потрібна окремо.
+
+Версія 0.1.9 додає підтримку нової збірки редактора Framer `web.L34ATHMB.mjs`
+(engine chunk `chunk-AI7ZMCIE.mjs` з експортом `zc`, asset chunk `chunk-DSZG74H2.mjs`)
+та динамічне розпізнавання сумісних модулів ресурсів.
 
 Перший adapter прив'язаний до спостереженого editor entrypoint
 `https://app.framerstatic.com/web.D7IYYINP.mjs` і source tree version 128.
