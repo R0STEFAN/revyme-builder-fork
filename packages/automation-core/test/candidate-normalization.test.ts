@@ -59,4 +59,27 @@ describe('canonical source normalization', () => {
     expect(normalized).toMatch(/data-id="faq-item-instance" style=\{\{[^}]*order: '1'[^}]*flex: '0 0 auto'/);
     expect(violations).toEqual([]);
   });
+
+  it('automatically injects missing data-ids into candidate changes so agents never need to create them', () => {
+    const rawPageWithoutDataIds = `export default function Page() {
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <section style={{ display: 'flex' }}>
+        <h1>Welcome</h1>
+        <p>Subtitle text</p>
+        <button>Click me</button>
+      </section>
+    </div>
+  );
+}`;
+    const candidate = createSnapshot({ projectId: 'auto-ids', branchId: 'main' }, 1, { [file]: '' });
+    const result = normalizeCandidateChanges(candidate, [{ path: file, beforeHash: null, content: rawPageWithoutDataIds }]);
+    const normalized = result.changes[0].content!;
+
+    expect(normalized).toContain('<div data-id="root" style');
+    expect(normalized).toMatch(/<section data-id="section-[a-z0-9-]+"/);
+    expect(normalized).toMatch(/<h1 data-id="text-[a-z0-9-]+"/);
+    expect(normalized).toMatch(/<p data-id="text-[a-z0-9-]+"/);
+    expect(normalized).toMatch(/<button data-id="btn-[a-z0-9-]+"/);
+  });
 });

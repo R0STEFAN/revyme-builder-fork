@@ -186,7 +186,7 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
             path: filePath,
             projectFiles: new Set(projectedFiles.keys()),
           })
-            .filter((v) => v.code !== 'CANVAS_CONFIG_MISSING');
+            .filter((v) => v.code !== 'CANVAS_CONFIG_MISSING' && v.code !== 'MISSING_DATA_ID');
           for (const v of oracleViolations) {
             issues.push({
               code: v.code,

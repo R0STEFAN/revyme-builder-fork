@@ -6,6 +6,7 @@ import { defaultRegistry } from '../registry';
 import { projectFS } from '@/code/project/project-fs';
 import { checkFile, type FileKind } from '@/code/oracle/check-file';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
+import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
 import { isLayoutFile } from '@/code/project/active-file-store';
 import { syncCodeSnapshotToProjectFS } from './code-components';
 
@@ -350,6 +351,13 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
         } else {
           // If kind is 'asset', 'config', or 'other', skip Oracle gate
           continue;
+        }
+
+        // Auto-inject missing data-ids for canvas files so agents never need to track them manually
+        const isCanvasFile = (kind === 'component' || f.path.startsWith('components/')) && !isCodeComponentSource(f.code);
+        if (isCanvasFile && f.code) {
+          const { code: autoCode } = autoInjectMissingDataIds(f.code, { isPage: false });
+          f.code = autoCode;
         }
 
         const violations = checkFile(f.code, {

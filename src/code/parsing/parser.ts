@@ -1087,6 +1087,16 @@ function extractElementStyles(attributes: any[], ctx: ParseCtx): { styles: Recor
   return { styles, conditionalStyles };
 }
 
+function fallbackStringFromExpr(expr: any): string | undefined {
+  if (!expr) return undefined;
+  if (expr.type === 'StringLiteral') return expr.value;
+  if (expr.type === 'NumericLiteral') return String(expr.value);
+  if (expr.type === 'ConditionalExpression') {
+    return fallbackStringFromExpr(expr.consequent) ?? fallbackStringFromExpr(expr.alternate);
+  }
+  return undefined;
+}
+
 /**
  * SVG attributes (cx, cy, d, points, fill, stroke, viewBox, etc.) into `attrs`.
  * Shared by BOTH walkers — without this on the canvasNodes path, shapes drawn
@@ -1120,13 +1130,18 @@ function extractSvgAttrsInto(
         attrs[attrName] = expr.value;
       } else if (expr.type === 'NumericLiteral') {
         attrs[attrName] = String(expr.value);
-      } else if (expr.type === 'ConditionalExpression' && responsiveAttrsAccum) {
-        const parsed = parseResponsiveAttrExpr(expr, ctx?.gateWidthMap);
+      } else if (expr.type === 'ConditionalExpression') {
+        const parsed = responsiveAttrsAccum ? parseResponsiveAttrExpr(expr, ctx?.gateWidthMap) : null;
         if (parsed) {
           attrs[attrName] = parsed.base;
           if (Object.keys(parsed.viewport).length > 0 || Object.keys(parsed.variant).length > 0) {
             responsiveAttrsAccum[attrName] = { viewport: parsed.viewport, variant: parsed.variant };
             trace.action('parser:svg-responsive-attr', { attrName, viewports: Object.keys(parsed.viewport), variants: Object.keys(parsed.variant) });
+          }
+        } else {
+          const fallback = fallbackStringFromExpr(expr);
+          if (fallback !== undefined) {
+            attrs[attrName] = fallback;
           }
         }
       }

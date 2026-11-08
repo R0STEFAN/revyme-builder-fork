@@ -4,6 +4,7 @@ import type { FileChange, Snapshot, Issue, Normalization } from '../contracts';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { SPACING_PX_KEYS } from '@/code/oracle/checks/style-object';
 import { applyRuntimeGuarantees } from '@/code/generation/runtime-guarantees';
+import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
 import { lowerUnits } from './units';
 import { IngestionReporter } from './report';
 
@@ -65,7 +66,14 @@ export function normalizeCandidateChanges(snapshot: Snapshot, changes: FileChang
     walk(ast.program);
     let content = source;
     for (const edit of edits.sort((a, b) => b.start - a.start)) content = content.slice(0, edit.start) + edit.text + content.slice(edit.end);
-    change.content = applyRuntimeGuarantees(content);
+    let guaranteed = applyRuntimeGuarantees(content);
+    const isPage = change.path.includes('page.client.') || change.path.endsWith('LayoutClient.tsx');
+    const isCanvasFile = isPage || (change.path.startsWith('components/') && !isCodeComponentSource(guaranteed));
+    if (isCanvasFile && guaranteed) {
+      const { code: autoCode } = autoInjectMissingDataIds(guaranteed, { isPage });
+      guaranteed = autoCode;
+    }
+    change.content = guaranteed;
   }
   return { changes: [...finalChanges.values()], issues, normalizations };
 }
