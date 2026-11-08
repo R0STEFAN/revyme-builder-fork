@@ -121,6 +121,91 @@ describe('agent-slice: extractTransferSlice', () => {
     const textContent = findText(slice);
     expect(typeof textContent).toBe('string');
   });
+
+  it('inlines local canvas component instances recursively with controls, text, and links', () => {
+    // Create a mock transfer with a page that instantiates a component via CodeComponentNode
+    const mockTransfer = {
+      ...capturedComponents,
+      definitions: [
+        ...(capturedComponents as any).definitions,
+        {
+          id: 'testPage',
+          kind: 'WebPageNode',
+          data: {
+            id: 'testPage',
+            __class: 'WebPageNode',
+            name: 'Home',
+            children: [
+              {
+                id: 'testDesktop',
+                __class: 'FrameNode',
+                name: 'Desktop',
+                children: [
+                  {
+                    id: 'headerInst',
+                    __class: 'CodeComponentNode',
+                    codeComponentIdentifier: 'local-module:canvasComponent/cardComp:default',
+                    $control__heading: { type: 'string', value: 'Hero Title' },
+                    $control__ctaLink: { type: 'link', value: { type: 'url', url: 'https://example.com' } },
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          id: 'cardComp',
+          kind: 'SmartComponentNode',
+          data: {
+            id: 'cardComp',
+            __class: 'SmartComponentNode',
+            name: 'HeaderCard',
+            baseVariantId: 'cardVariantDesktop',
+            variables: [
+              { id: 'heading', name: 'Heading', type: 'string', initialValue: 'Default Heading' },
+              { id: 'ctaLink', name: 'CTA Link', type: 'link', initialValue: '' },
+            ],
+            children: [
+              {
+                id: 'cardVariantDesktop',
+                __class: 'FrameNode',
+                name: 'Desktop',
+                children: [
+                  {
+                    id: 'headingNode',
+                    __class: 'RichTextNode',
+                    name: 'Title',
+                    textContent: { type: 'variableReference', id: 'heading' },
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      rootIds: [...(capturedComponents as any).rootIds, 'testPage', 'cardComp'],
+    };
+
+    const summary = inspectNativeTransfer(mockTransfer);
+    const testPageSummary = summary.pages.find(p => p.id === 'testPage');
+    expect(testPageSummary).toBeDefined();
+    expect(testPageSummary?.components).toBeDefined();
+    expect(testPageSummary?.components?.some(c => c.id === 'cardComp' && c.name === 'HeaderCard')).toBe(true);
+
+    const slice = extractTransferSlice(mockTransfer, 'testPage');
+    expect(slice.children.length).toBeGreaterThan(0);
+    const desktopSlice = slice.children[0];
+    expect(desktopSlice.children.length).toBeGreaterThan(0);
+    const headerSlice = desktopSlice.children[0];
+    expect(headerSlice.componentId).toBe('cardComp');
+    expect(headerSlice.componentName).toBe('HeaderCard');
+    expect(headerSlice.link?.href).toBe('https://example.com');
+    expect(headerSlice.children.length).toBeGreaterThan(0);
+    const headingSlice = headerSlice.children[0];
+    expect(headingSlice.text).toBe('Hero Title');
+  });
 });
 
 describe('agent-slice: extractTransferCms', () => {

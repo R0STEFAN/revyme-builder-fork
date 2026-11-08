@@ -95,4 +95,27 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
 - **Verification:**
   - Added test in `src/code/project/cms-ops.test.ts` verifying slug derivation from slug fields and field names. All 128 tests in `cms-ops` passed.
 
+---
+
+### Issue 6: Component Instances Opaque & Not Inlined (`framer.slice` & `framer.inspect`)
+- **Symptom:**
+  - When calling `framer.slice` on a page (such as `Home` / `augiA20Il`) or layout template, any Framer SmartComponent placed on the canvas (e.g. `Nav`, `Header`, `Portfolio Box`, `Header Box`) was output as an empty `<div class="CodeComponentNode">` with `children: []`.
+  - The agent could not inspect the inner elements of components (e.g. Bento Grid layout, card titles, text, images, and links), causing blind design assumptions and missing layout structures.
+  - In addition, `framer.inspect` only listed top-level page IDs and routes without indicating which components were utilized on each page or section.
+- **Root Cause:**
+  1. In Framer's AST, instances of SmartComponents on canvas frames are stored as `CodeComponentNode` with `codeComponentIdentifier: "local-module:canvasComponent/<componentId>:default"` and empty `children: []`.
+  2. In `src/code/import/framer-native/agent-slice.ts`, `extractTransferSlice` did not inspect or expand `CodeComponentNode`. It treated them as terminal leaf nodes.
+  3. Control values passed to instances (`$control__<varId>`) and variable references (`textContent: { type: "variableReference", id: ... }`, `fillImage`, `link`) were not propagated or resolved.
+  4. Media asset references (`data:framer/asset-reference,...`) and page links (`{ type: "webPage", webPageId: ... }`) were not converted to clean semantic URLs and routes.
+- **Fix:**
+  - Enhanced `agent-slice.ts` with recursive component inlining:
+    - Automatically detects `local-module:canvasComponent/<componentId>:default`, looks up the master `SmartComponentNode`, resolves the selected variant frame (or base variant / Desktop), and traverses all its child frames.
+    - Resolves instance control overrides (`$control__*`), mapping variable references in `textContent`, `fillImage`, and `link` down the component tree.
+    - Added `resolveAssetUrl` to map Framer asset references to real URLs (e.g. avatar portrait and tool icons).
+    - Added `resolveLink` to map Framer `webPage` and `url` objects to routes (`/about`, `/portfolio`, `/contact`).
+    - Added `components` list to `pages` and `sections` in `inspectNativeTransfer` so `framer.inspect` shows all components used on every page and template.
+- **Verification:**
+  - Added unit test in `src/code/import/framer-native/agent-slice.test.ts` verifying recursive component inlining, variable overrides, link resolution, and component listing in `inspectNativeTransfer`.
+  - Verified on live Framer JSON capture: `framer.inspect` reports exact component dependencies for all 6 pages and layout templates, and `framer.slice` successfully inlines the entire Bento Grid, cards, texts, and links.
+
 

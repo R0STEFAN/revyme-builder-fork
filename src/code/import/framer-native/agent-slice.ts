@@ -8,6 +8,11 @@ import { sourceTypographyTokens } from './typography';
 import { sourceGoogleFontRequests } from './fonts';
 import type { ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
 
+export interface FramerComponentRef {
+  id: string;
+  name: string;
+}
+
 export interface FramerProjectSummary {
   provenance: {
     projectId: string;
@@ -17,8 +22,8 @@ export interface FramerProjectSummary {
     scopeId: string;
     mode: string;
   };
-  pages: Array<{ id: string; name: string; route: string; breakpoints: string[] }>;
-  sections: Array<{ id: string; name: string; width?: number; height?: number; childCount: number }>;
+  pages: Array<{ id: string; name: string; route: string; breakpoints: string[]; components?: FramerComponentRef[] }>;
+  sections: Array<{ id: string; name: string; width?: number; height?: number; childCount: number; components?: FramerComponentRef[] }>;
   components: Array<{ id: string; name: string; variantCount: number; variants: string[] }>;
   tokens: { colors: number; typography: number; fonts: number };
   cms: Array<{ id: string; name: string; slug: string; itemCount: number }>;
@@ -59,7 +64,9 @@ export interface FramerSemanticSlice {
   styles: Record<string, string>;
   text?: string;
   link?: { href: string; target?: string };
-  media?: { type: 'image' | 'video' | 'vector'; url?: string; svg?: string };
+  media?: { type: 'image' | 'video' | 'vector'; url?: string; svg?: string; alt?: string };
+  componentId?: string;
+  componentName?: string;
   children: FramerSemanticSlice[];
 }
 
@@ -114,6 +121,74 @@ function inferSemanticTag(node: ResolvedSourceNode, isRoot: boolean): string {
   return 'div';
 }
 
+function findUsedComponents(graph: SourceGraph, rootId: string): FramerComponentRef[] {
+  const visited = new Set<string>();
+  const comps = new Map<string, string>();
+
+  function walk(id: string) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const node = graph.nodes.get(id);
+    if (!node) return;
+
+    if (node.kind === 'CodeComponentNode') {
+      const codeCompId = String(node.raw.codeComponentIdentifier ?? '');
+      const match = /^local-module:canvasComponent\/([^:]+):/.exec(codeCompId);
+      if (match) {
+        const compId = match[1];
+        const master = graph.nodes.get(compId);
+        comps.set(compId, String(master?.raw.name ?? compId));
+      }
+    }
+
+    for (const childId of node.children) {
+      walk(childId);
+    }
+  }
+
+  walk(rootId);
+  return Array.from(comps.entries()).map(([id, name]) => ({ id, name }));
+}
+
+function resolveAssetUrl(ref: unknown, assets: Array<{ key?: string; url?: string }>): string | undefined {
+  if (!ref || typeof ref !== 'string') return undefined;
+  if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
+  const match = /data:framer\/asset-reference,([^.?]+)/.exec(ref);
+  const key = match ? match[1] : ref;
+  const found = assets.find(a => a.key === key || (a.key && key.includes(a.key)) || (a.url && a.url.includes(key)));
+  return found?.url ?? (match ? `https://framerusercontent.com/assets/${match[1]}` : undefined);
+}
+
+function resolveLink(rawLink: unknown, graph: SourceGraph): { href: string; target?: string } | undefined {
+  if (!rawLink) return undefined;
+  if (typeof rawLink === 'string') {
+    if (rawLink.startsWith('/') || rawLink.startsWith('http://') || rawLink.startsWith('https://') || rawLink.startsWith('mailto:') || rawLink.startsWith('tel:') || rawLink.startsWith('#')) {
+      return { href: rawLink };
+    }
+    return undefined;
+  }
+  if (typeof rawLink === 'object' && rawLink !== null) {
+    const obj = rawLink as any;
+    if (obj.type === 'url' && typeof obj.url === 'string') {
+      return { href: obj.url, target: obj.newTab ? '_blank' : undefined };
+    }
+    if (obj.type === 'webPage' && typeof obj.webPageId === 'string') {
+      const pageNode = graph.nodes.get(obj.webPageId);
+      if (pageNode) {
+        try {
+          const route = sourcePageRoute(graph, pageNode);
+          return { href: route, target: obj.newTab ? '_blank' : undefined };
+        } catch {
+          const name = String(pageNode.raw.name ?? '').toLowerCase();
+          return { href: name === 'home' ? '/' : `/${name || obj.webPageId}`, target: obj.newTab ? '_blank' : undefined };
+        }
+      }
+      return { href: `/${obj.webPageId}` };
+    }
+  }
+  return undefined;
+}
+
 /** Summarize high-level structure and counts of a Framer export */
 export function inspectNativeTransfer(input: unknown): FramerProjectSummary {
   trace.fn('agent-slice.inspectNativeTransfer');
@@ -132,7 +207,7 @@ export function inspectNativeTransfer(input: unknown): FramerProjectSummary {
       // Fall back to raw path or /
     }
     const breakpoints = node.children.map(cid => String(graph.nodes.get(cid)?.raw.name ?? cid));
-    pages.push({ id, name, route, breakpoints });
+    pages.push({ id, name, route, breakpoints, components: findUsedComponents(graph, id) });
   }
 
   const components: FramerProjectSummary['components'] = [];
@@ -160,6 +235,7 @@ export function inspectNativeTransfer(input: unknown): FramerProjectSummary {
       width: typeof node.raw.width === 'number' ? node.raw.width : undefined,
       height: typeof node.raw.height === 'number' ? node.raw.height : undefined,
       childCount: node.children.length,
+      components: findUsedComponents(graph, rootId),
     });
   }
 
@@ -305,47 +381,183 @@ export function extractTransferSlice(
   const transfer = decodeNativeTransfer(input);
   const graph = buildSourceGraph(transfer);
   const maxDepth = options.maxDepth ?? 10;
+  const assets = transfer.assets ?? [];
 
   const mappingContext: SourceMappingContext = {
     diagnostics: [],
     graph,
   };
 
-  function buildSlice(currentId: string, depth: number, isRoot: boolean): FramerSemanticSlice {
+  function buildSlice(
+    currentId: string,
+    depth: number,
+    isRoot: boolean,
+    parentVars = new Map<string, unknown>()
+  ): FramerSemanticSlice {
     const node = graph.nodes.get(currentId);
     if (!node) {
       throw new Error(`FRAMER_NODE_NOT_FOUND: node ${currentId} does not exist in capture`);
     }
 
-    // If node is SmartComponentNode, default to its first variant frame or base variant
     let targetNodeId = currentId;
-    if (node.kind === 'SmartComponentNode') {
+    let componentId: string | undefined;
+    let componentName: string | undefined;
+    const scopedVars = new Map<string, unknown>(parentVars);
+
+    // If node is a CodeComponentNode pointing to a local SmartComponent
+    if (node.kind === 'CodeComponentNode') {
+      const codeId = String(node.raw.codeComponentIdentifier ?? '');
+      const match = /^local-module:canvasComponent\/([^:]+):/.exec(codeId);
+      if (match) {
+        componentId = match[1];
+        const master = graph.nodes.get(componentId);
+        if (master) {
+          componentName = String(master.raw.name ?? componentId);
+          // 1. Populate master variables defaults
+          if (Array.isArray(master.raw.variables)) {
+            for (const v of master.raw.variables) {
+              const record = sourceRecord(v);
+              const varId = typeof record?.id === 'string' ? record.id : undefined;
+              const varName = typeof record?.name === 'string' ? record.name : undefined;
+              if (varId) scopedVars.set(varId, record?.initialValue);
+              if (varName) scopedVars.set(varName, record?.initialValue);
+            }
+          }
+          // 2. Override with instance controls
+          for (const [k, val] of Object.entries(node.raw)) {
+            if (k.startsWith('$control__')) {
+              const varId = k.slice(10);
+              const unwrapped = val && typeof val === 'object' && 'value' in val ? (val as any).value : val;
+              if (unwrapped && typeof unwrapped === 'object' && (unwrapped as any).type === 'variableReference') {
+                const resolvedRef = parentVars.get((unwrapped as any).id);
+                scopedVars.set(varId, resolvedRef !== undefined ? resolvedRef : unwrapped);
+              } else {
+                scopedVars.set(varId, unwrapped);
+              }
+            }
+          }
+          // 3. Resolve target variant frame
+          const rawVariant = node.raw.$control__variant;
+          const variantControlValue = typeof rawVariant === 'object' && rawVariant !== null && 'value' in rawVariant
+            ? (rawVariant as any).value
+            : rawVariant;
+          const variantVal = scopedVars.get('variant') ?? variantControlValue ?? master.raw.baseVariantId ?? master.children[0];
+          const variantNode = (typeof variantVal === 'string' && graph.nodes.get(variantVal)) || graph.nodes.get(master.children[0]);
+          if (variantNode) {
+            targetNodeId = variantNode.id;
+          }
+        }
+      }
+    } else if (node.kind === 'SmartComponentNode') {
       const baseId = typeof node.raw.baseVariantId === 'string' ? node.raw.baseVariantId : node.children[0];
       if (baseId && graph.nodes.has(baseId)) {
         targetNodeId = baseId;
+      }
+      if (Array.isArray(node.raw.variables)) {
+        for (const v of node.raw.variables) {
+          const record = sourceRecord(v);
+          const varId = typeof record?.id === 'string' ? record.id : undefined;
+          const varName = typeof record?.name === 'string' ? record.name : undefined;
+          if (varId) scopedVars.set(varId, record?.initialValue);
+          if (varName) scopedVars.set(varName, record?.initialValue);
+        }
+      }
+    } else if (node.kind === 'LayoutTemplateNode') {
+      const desktopFrame = node.children.find(cid => {
+        const c = graph.nodes.get(cid);
+        return c?.raw.name === 'Desktop';
+      }) ?? node.children[0];
+      if (desktopFrame && graph.nodes.has(desktopFrame)) {
+        targetNodeId = desktopFrame;
       }
     }
 
     const resolved = resolveSourceNode(graph, targetNodeId);
     const rawStyles = mapSourceStyles(resolved, mappingContext);
+    if (targetNodeId !== currentId && node.kind === 'CodeComponentNode') {
+      const resolvedInstance = resolveSourceNode(graph, currentId);
+      const instanceStyles = mapSourceStyles(resolvedInstance, mappingContext);
+      Object.assign(rawStyles, instanceStyles);
+    }
     const styles = cleanStyles(rawStyles);
-    const name = String(node.raw.name ?? resolved.properties.name ?? node.kind);
+
+    const name = String(node.raw.name ?? resolved.properties.name ?? componentName ?? node.kind);
     const tag = inferSemanticTag(resolved, isRoot);
 
+    // Resolve text
     let text: string | undefined;
     if (resolved.kind === 'RichTextNode') {
-      const nativeText = mapSourceText(resolved, mappingContext);
-      text = nativeText.plainText;
-      if (nativeText.styles) {
-        Object.assign(styles, cleanStyles(nativeText.styles));
+      const textContent = resolved.properties.textContent;
+      if (textContent && typeof textContent === 'object' && (textContent as any).type === 'variableReference') {
+        const vVal = scopedVars.get((textContent as any).id);
+        if (typeof vVal === 'string') text = vVal;
+      }
+      if (!text) {
+        const nativeText = mapSourceText(resolved, mappingContext);
+        text = nativeText.plainText;
+        if (nativeText.styles) {
+          Object.assign(styles, cleanStyles(nativeText.styles));
+        }
+      }
+    }
+    if (!text && scopedVars.get('Label') && typeof scopedVars.get('Label') === 'string') {
+      text = scopedVars.get('Label') as string;
+    }
+
+    // Resolve link
+    let link: { href: string; target?: string } | undefined;
+    for (const [k, v] of Object.entries(node.raw)) {
+      if (k.startsWith('$control__') && v && typeof v === 'object') {
+        const isLinkControl = (v as any).type === 'link';
+        const unwrapped = 'value' in v ? (v as any).value : v;
+        if (isLinkControl || (unwrapped && typeof unwrapped === 'object' && ((unwrapped as any).type === 'url' || (unwrapped as any).type === 'webPage'))) {
+          const resolvedLink = resolveLink(unwrapped, graph);
+          if (resolvedLink) {
+            link = resolvedLink;
+            break;
+          }
+        }
+      }
+    }
+    if (!link && resolved.properties.link) {
+      link = resolveLink(resolved.properties.link, graph);
+    }
+
+    // Resolve media (image / video)
+    let media: FramerSemanticSlice['media'] | undefined;
+    const fillImg = resolved.properties.fillImage ?? node.raw.fillImage;
+    if (fillImg) {
+      const ref = typeof fillImg === 'object' && fillImg !== null && (fillImg as any).type === 'variableReference'
+        ? scopedVars.get((fillImg as any).id)
+        : fillImg;
+      const url = resolveAssetUrl(typeof ref === 'string' ? ref : (ref as any)?.value, assets);
+      if (url) {
+        media = {
+          type: 'image',
+          url,
+          alt: String(resolved.properties.altAttribute ?? node.raw.altAttribute ?? ''),
+        };
+      }
+    }
+    if (!media) {
+      for (const [k, v] of Object.entries(node.raw)) {
+        if (k.startsWith('$control__') && v && typeof v === 'object' && (v as any).type === 'image') {
+          const url = resolveAssetUrl((v as any).value, assets);
+          if (url) {
+            media = { type: 'image', url, alt: String((v as any).alt ?? '') };
+            break;
+          }
+        }
       }
     }
 
+    // Recurse children
     const children: FramerSemanticSlice[] = [];
-    if (depth < maxDepth && resolved.children && resolved.children.length > 0) {
-      for (const childId of resolved.children) {
+    const childIds = resolved.children ?? [];
+    if (depth < maxDepth && childIds.length > 0) {
+      for (const childId of childIds) {
         if (graph.nodes.has(childId)) {
-          children.push(buildSlice(childId, depth + 1, false));
+          children.push(buildSlice(childId, depth + 1, false, scopedVars));
         }
       }
     }
@@ -357,6 +569,10 @@ export function extractTransferSlice(
       tag,
       styles,
       text,
+      link,
+      media,
+      componentId,
+      componentName,
       children,
     };
   }
