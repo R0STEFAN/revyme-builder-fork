@@ -42,6 +42,31 @@ export interface SourceSceneOptions {
   isNeverVisible?: (node: ResolvedSourceNode) => boolean;
 }
 
+function pathSegmentsToSvgD(segments: unknown, closed: boolean): string {
+  if (!Array.isArray(segments) || segments.length === 0) return '';
+  const parts: string[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i] as any;
+    if (typeof s?.x !== 'number' || typeof s?.y !== 'number') continue;
+    if (parts.length === 0) {
+      parts.push(`M ${s.x} ${s.y}`);
+    } else {
+      const prev = segments[i - 1] as any;
+      if (prev?.handleOutX || prev?.handleOutY || s?.handleInX || s?.handleInY) {
+        const cp1x = (prev?.x || 0) + (prev?.handleOutX || 0);
+        const cp1y = (prev?.y || 0) + (prev?.handleOutY || 0);
+        const cp2x = s.x + (s.handleInX || 0);
+        const cp2y = s.y + (s.handleInY || 0);
+        parts.push(`C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${s.x.toFixed(2)} ${s.y.toFixed(2)}`);
+      } else {
+        parts.push(`L ${s.x.toFixed(2)} ${s.y.toFixed(2)}`);
+      }
+    }
+  }
+  if (closed && parts.length > 0) parts.push('Z');
+  return parts.join(' ');
+}
+
 /** One source traversal for native page/template and design-master JSX. */
 export function emitSourceScene(graph: SourceGraph, identity: Record<string, string>, rootId: string, context: SourceMappingContext, options: SourceSceneOptions): SourceScene {
   trace.fn('framer-native.emitScene', { rootId });
@@ -279,7 +304,16 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
     } else if (node.kind === 'OverlayNode') {
       content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
-    } else if (node.kind === 'FrameNode') {
+    } else if (node.kind === 'PathNode') {
+      const w = typeof node.properties.width === 'number' ? node.properties.width : 24;
+      const h = typeof node.properties.height === 'number' ? node.properties.height : 24;
+      const d = pathSegmentsToSvgD(node.properties.pathSegments, node.properties.pathClosed !== false);
+      const fill = typeof node.properties.fillColor === 'string' && node.properties.fillEnabled !== false ? node.properties.fillColor : 'currentColor';
+      const stroke = typeof node.properties.strokeColor === 'string' && node.properties.strokeEnabled === true ? node.properties.strokeColor : 'none';
+      const strokeWidth = typeof node.properties.strokeWidth === 'number' ? node.properties.strokeWidth : 1;
+      tag = 'span';
+      content = `<svg data-id="${targetId}-svg" width="100%" height="100%" viewBox="0 0 ${w} ${h}"><path data-id="${targetId}-path" d="${d}" fill="${fill}" stroke="${stroke}" strokeWidth="${strokeWidth}" /></svg>`;
+    } else if (node.kind === 'FrameNode' || node.kind === 'ShapeContainerNode' || node.kind === 'ShapeGroupNode' || node.kind === 'BooleanShapeNode' || node.kind === 'VectorNode' || node.kind === 'SvgNode' || node.kind === 'CanvasPageNode') {
       if (node.properties.isFormContainer === true) {
         if (!context.supportedForms || (node.properties.htmlTag != null && node.properties.htmlTag !== 'form') || Object.entries(node.properties).some(([key, value]) => key.startsWith('form') && value !== undefined && value !== false && !formContainerKeys.has(key))) {
           throw new Error(`Form container ${id} requires its native form adapter`);
@@ -342,7 +376,10 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       content = optionItems.join('');
       result.formControls.push(id);
     }
-    else throw new Error(`Unsupported source child ${node.kind} on ${id}`);
+    else {
+      trace.action('framer-native.unsupportedNodeFallback', { kind: node.kind, id });
+      content = node.children.map(child => emit(child, node)).filter(Boolean).join('\n');
+    }
     if (node.properties.link !== undefined && node.properties.link !== null && node.properties.link !== '') result.links.push(id);
     const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
     return `<${tag} data-id="${targetId}"${label}${attributes} style={${sourceStyleLiteral(styles)}}>${content}</${tag}>`;

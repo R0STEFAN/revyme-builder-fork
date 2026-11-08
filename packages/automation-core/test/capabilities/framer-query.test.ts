@@ -18,6 +18,7 @@ describe('automation-core: framer-query operations', () => {
     expect(defaultRegistry.get('framer.cms')).toBeDefined();
     expect(defaultRegistry.get('framer.component')).toBeDefined();
     expect(defaultRegistry.get('framer.normalize')).toBeDefined();
+    expect(defaultRegistry.get('framer.compile')).toBeDefined();
   });
 
   it('executes framer.inspect via defaultRegistry', async () => {
@@ -98,6 +99,22 @@ describe('automation-core: framer-query operations', () => {
     expect(result.format).toBe('revyme.ir.v1');
     expect(result.tokens.colors.length).toBeGreaterThanOrEqual(2);
     expect(result.components.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('executes framer.compile via defaultRegistry', async () => {
+    const op = defaultRegistry.get('framer.compile')!;
+    const result = await op.execute(
+      snapshot({
+        'app/layout.tsx': 'export default function RootLayout({ children }) { return <html><body>{children}</body></html>; }',
+        'app/globals.css': 'body { margin: 0; }',
+      }),
+      { rawJson: JSON.stringify(capturedComponents), commit: false },
+      context
+    ) as any;
+
+    expect(result.success).toBe(true);
+    expect(result.filesCount).toBeGreaterThanOrEqual(1);
+    expect(result.files.some((f: any) => f.path.startsWith('components/'))).toBe(true);
   });
 
   it('reads from snapshot files when filePath is provided', async () => {

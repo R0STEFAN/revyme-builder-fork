@@ -348,6 +348,8 @@ function checkFlexChildOrder(ast: t.File, v: OracleViolation[]): void {
       const flowChildren: Array<{ id: string; el: t.JSXElement; hasOrder: boolean; line?: number }> = [];
       for (const child of path.node.children) {
         if (!t.isJSXElement(child)) continue;
+        const childTag = jsxTagName(child.openingElement.name);
+        if (childTag === 'style') continue;
         const cAttrs = jsxAttrs(child.openingElement);
         const cId = stringAttr(cAttrs, 'data-id');
         if (!cId) continue;
@@ -484,6 +486,8 @@ function checkFlexChildShrink(ast: t.File, v: OracleViolation[]): void {
       const flow: Array<{ id: string; obj: t.ObjectExpression | null; line?: number }> = [];
       for (const child of path.node.children) {
         if (!t.isJSXElement(child)) continue;
+        const childTag = jsxTagName(child.openingElement.name);
+        if (childTag === 'style') continue;
         const cAttrs = jsxAttrs(child.openingElement);
         const cId = stringAttr(cAttrs, 'data-id');
         if (!cId) continue;
@@ -553,6 +557,8 @@ function checkFlexRowChildFullWidth(ast: t.File, v: OracleViolation[]): void {
       const flow: Array<{ id: string; width: string | null; line?: number }> = [];
       for (const child of path.node.children) {
         if (!t.isJSXElement(child)) continue;
+        const childTag = jsxTagName(child.openingElement.name);
+        if (childTag === 'style') continue;
         const cAttrs = jsxAttrs(child.openingElement);
         const cId = stringAttr(cAttrs, 'data-id');
         if (!cId) continue;
@@ -626,6 +632,8 @@ function checkNoLayoutParentRelativeChild(ast: t.File, v: OracleViolation[], exi
       const parentId = stringAttr(jsxAttrs(path.node.openingElement), 'data-id') ?? baseTag(jsxTagName(path.node.openingElement.name));
       for (const child of path.node.children) {
         if (!t.isJSXElement(child)) continue;
+        const childTag = jsxTagName(child.openingElement.name);
+        if (childTag === 'style') continue;
         const cAttrs = jsxAttrs(child.openingElement);
         const cId = stringAttr(cAttrs, 'data-id');
         if (!cId) continue;

@@ -218,7 +218,7 @@ export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {
   const parseSide = (input: unknown): SideConfig | undefined => {
     if (input == null) return;
     const s = sourceRecord(input);
-    const known = new Set(['opacity', 'scale', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'x', 'y', 'transition']);
+    const known = new Set(['opacity', 'scale', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'x', 'y', 'transition', 'mask']);
     if (!s || Object.keys(s).some(key => !known.has(key))) throw new Error('Unsupported source page effect side');
     if (typeof s.opacity !== 'number' || !Number.isFinite(s.opacity) || s.opacity < 0 || s.opacity > 1) throw new Error('Invalid source page effect opacity');
     if (typeof s.scale !== 'number' || !Number.isFinite(s.scale) || s.scale < 0) throw new Error('Invalid source page effect scale');
@@ -229,7 +229,8 @@ export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {
     if (!transitionRecord || !spec) throw new Error('Missing source page effect transition');
     let transition: TransitionConfig;
     if (spec.type === 'tween') {
-      const bezier = spec.ease?.startsWith('[') ? JSON.parse(spec.ease) as [number, number, number, number] : undefined;
+      const bezier = Array.isArray(spec.ease) ? (spec.ease as [number, number, number, number])
+        : typeof spec.ease === 'string' && spec.ease.startsWith('[') ? JSON.parse(spec.ease) as [number, number, number, number] : undefined;
       if (spec.ease !== undefined && !bezier) throw new Error(`Source page effect easing ${spec.ease} requires a bezier adapter`);
       transition = { kind: 'ease', ease: bezier ? 'custom' : 'easeInOut', bezier: bezier ?? [...DEFAULT_BEZIER], duration: Number(spec.duration ?? 0.4), delay: Number(spec.delay ?? 0) };
     } else if (spec.type === 'spring' && transitionRecord.durationBasedSpring !== true) {

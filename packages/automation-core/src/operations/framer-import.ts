@@ -67,7 +67,7 @@ function fail(code: string, message: string): never { throw new Error(`${code}: 
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
-  if (path === 'app/globals.css' || path === FORM_ROUTE_PATH || path === SMOOTH_SCROLL_DATA_PATH || path === SMOOTH_SCROLL_CONTROLLER_PATH) return;
+  if (path === 'app/globals.css' || path === FORM_ROUTE_PATH || path === SMOOTH_SCROLL_DATA_PATH || path === SMOOTH_SCROLL_CONTROLLER_PATH || path === '_meta/component-folders.json') return;
   if (PROTECTED_SYSTEM_FILES.has(path) || isSystemProtectedPath(path) || path === 'app/layout.tsx') fail('PROTECTED_PATH', path);
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||

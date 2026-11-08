@@ -18,6 +18,7 @@ const supportedKinds = new Set([
   'FunnelsEntityTypeRootNode', 'AbTestsEntityTypeRootNode',
   'AnalyticsScopeNode', 'FunnelNode', 'FunnelStepNode', 'FunnelStepActionNode',
   'AgentSkillsListNode', 'AgentSkillNode',
+  'PathNode', 'ShapeContainerNode', 'ShapeGroupNode', 'BooleanShapeNode', 'FormBooleanInputNode', 'CanvasPageNode', 'SvgNode', 'VectorNode',
 ]);
 
 export function sourceRecord(value: unknown): SourceProperties | undefined {
@@ -294,8 +295,7 @@ export function resolveSourceNode(graph: SourceGraph, id: string, stateId?: stri
         const stateNode = requiredNode(graph, state);
         const info = sourceRecord(stateNode.raw.replicaInfo);
         if (!info || typeof info.master !== 'string') {
-          if (nodeId === state) return resolve(nodeId);
-          throw new Error(`FRAMER_SOURCE_INVALID: ${state} is not a replica state`);
+          return resolve(nodeId);
         }
         const pending = [info.master];
         const descendants = new Set<string>();

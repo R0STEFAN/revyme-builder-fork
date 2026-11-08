@@ -161,7 +161,7 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
       // as canvas-authored JSX by the page dialect Oracle.
       const isGeneratedPageTransitionsRuntime =
         /^app\/(?:\([^)]+\)\/)?page-transitions\.tsx$/.test(filePath) &&
-        change.content.includes('@rt-v9');
+        /@rt-v\d+/.test(change.content);
       validateSourceCode(
         filePath,
         change.content,

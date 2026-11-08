@@ -39,7 +39,8 @@ const fieldTypes: Record<string, FieldDefinition['type']> = {
 export function emitNativeCms(graph: SourceGraph, identity: Record<string, string>, options: NativeCmsOptions = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeCms', { collections: graph.byKind.get('CollectionNode')?.length ?? 0 });
   const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
-  if (result.diagnostics.length) return result;
+  const fatalErrors = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
+  if (fatalErrors.length) return result;
   if (options.locale && options.locale !== options.defaultLocale) {
     result.diagnostics.push({ code: 'SOURCE_CMS_LOCALE_UNAVAILABLE', property: 'locale', message: `No original localized CMS values were captured for ${options.locale}.` });
     return result;
@@ -111,8 +112,10 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
         return resolvedLink;
       } else if (typeof value !== 'string') throw new Error(`Unsupported ${type} value in ${String(variable.id)}`);
       if ((type === 'image' || type === 'file') && typeof value === 'string' && value.startsWith('data:framer/asset-reference,')) {
-        if (!options.assets?.[value]) throw new Error(`Unresolved source asset in ${collectionId}:${String(variable.id)}`);
-        return options.assets[value];
+        if (!options.assets?.[value]) {
+          result.diagnostics.push({ code: 'SOURCE_CMS_INVALID', message: `Unresolved source asset in ${collectionId}:${String(variable.id)}` });
+        }
+        return options.assets?.[value] ?? value;
       }
       return value;
     };

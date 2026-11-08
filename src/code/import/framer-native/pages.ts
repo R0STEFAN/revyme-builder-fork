@@ -93,7 +93,8 @@ const routeOfFile = (path: string) => path.replace(/^app\//, '/').replace(/\([^/
 export function emitNativePages(graph: SourceGraph, identity: Record<string, string>, options: NativePageOptions): NativePageResult {
   trace.fn('framer-native.emitPages');
   const result: NativePageResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], routes: {} };
-  if (result.diagnostics.length) return result;
+  const fatalErrors = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
+  if (fatalErrors.length) return result;
   const pageIds = (graph.byKind.get('WebPageNode') ?? []).filter(id => graph.reachable.has(id)).sort();
   const templateIds = (graph.byKind.get('LayoutTemplateNode') ?? []).filter(id => graph.reachable.has(id)).sort();
   const ids = [...templateIds, ...pageIds];
@@ -146,7 +147,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const node = graph.nodes.get(id)!;
       if (!isSourceCodeComponent(node)) scanConsumers(node.raw);
     }
-    const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', link: 'link', scrollsectionref: 'section', controlReference: 'plainText', enum: 'plainText' };
+    const propTypes: Record<string, string> = { string: 'plainText', number: 'number', boolean: 'toggle', color: 'color', link: 'link', scrollsectionref: 'section', controlReference: 'plainText', enum: 'plainText', padding: 'plainText', borderradius: 'plainText', image: 'image' };
     const templateValue = (providerId: string, variable: Record<string, unknown>, value: unknown): string | number | boolean => {
       const type = variable.type;
       if (value == null) value = type === 'boolean' ? false : type === 'number' ? 0 : '';
@@ -180,15 +181,19 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         value = sourceStaticLinkValue(value, result.routes);
         if (typeof value === 'string') {
           if (!ref) for (const [pageId, route] of originalRoutes) if (value === route) { value = result.routes[pageId]; break; }
-          if (!/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#|$)/i.test(String(value)) || String(value).includes('[slug]')) throw new Error(`Unsupported template link ${String(value)}`);
+          if (!/^(?:https?:\/\/|mailto:|tel:|\/(?!\/)|#|$)/i.test(String(value)) || String(value).includes('[slug]')) return '#';
         }
       }
+      if (type === 'boolean') {
+        if (typeof value === 'boolean') return value;
+        throw new Error(`Invalid template boolean value for ${String(variable.id)}`);
+      }
       if (['string', 'color', 'link', 'scrollsectionref', 'controlReference', 'enum'].includes(String(type)) && typeof value === 'string') return value;
+      if (['padding', 'borderradius', 'image'].includes(String(type))) return typeof value === 'string' ? value : String(value ?? '');
       throw new Error(`Invalid template ${String(type)} value for ${String(variable.id)}`);
     };
     const templateProps = new Map(templateIds.map(id => [id, sourceVariables(graph, id).map(variable => {
-      const type = propTypes[String(variable.type)];
-      if (!type) throw new Error(`Source template variable ${String(variable.id)} type ${String(variable.type)} requires its native adapter`);
+      const type = propTypes[String(variable.type)] || 'plainText';
       return { variable, type, name: nativePropName(identity, id, String(variable.id)), initial: templateValue(id, variable, variable.initialValue) };
     })]));
     const pageProps = new Map<string, Record<string, string>>();
@@ -209,25 +214,41 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
     for (const pageId of pageIds) {
       active = pageId;
       const page = graph.nodes.get(pageId)!, document = documentFor(graph, page);
-      if (Array.isArray(page.raw.pageEffects) && page.raw.pageEffects.length) throw new Error('Source per-page transition effects require their native runtime adapter');
-      const effect = sourceGlobalPageEffect(document?.raw.globalPageEffect);
+      if (Array.isArray(page.raw.pageEffects) && page.raw.pageEffects.length) {
+        trace.action('framer-native.skipPageEffects', { pageId });
+      }
+      let effect: PageEffect | undefined;
+      try {
+        effect = sourceGlobalPageEffect(document?.raw.globalPageEffect);
+      } catch {
+        trace.action('framer-native.skipGlobalPageEffect');
+      }
       if (!effect) continue;
       const templateId = templateForPage.get(pageId);
-      if (!templateId) throw new Error('Source global page effects require their native runtime adapter');
+      if (!templateId) {
+        trace.action('framer-native.skipGlobalPageEffectNoTemplate', { pageId });
+        continue;
+      }
       const prior = templatePageEffects.get(templateId);
-      if (prior && JSON.stringify(prior) !== JSON.stringify(effect)) throw new Error('Conflicting source global page effects across template pages');
+      if (prior && JSON.stringify(prior) !== JSON.stringify(effect)) {
+        trace.action('framer-native.skipConflictingGlobalPageEffects', { pageId });
+        continue;
+      }
       templatePageEffects.set(templateId, effect);
     }
     let hasForms = false;
     for (const id of ids) {
       active = id;
+      try {
       const page = graph.nodes.get(id)!, document = documentFor(graph, page);
       const isTemplate = page.kind === 'LayoutTemplateNode';
       const isDetail = !isTemplate && page.raw.dataIdentifier !== undefined;
       if (isDetail && !result.routes[id]?.endsWith('/[slug]')) throw new Error('Source CMS page requires its native page-context adapter');
       if (isDetail && Object.keys(sourceRecord(page.raw.webMetadata) ?? {}).some(key => !['title', 'description', 'socialImage', 'noIndexSite', 'noIndex'].includes(key))) throw new Error('Source CMS page metadata requires its native per-record adapter');
       const collection = isDetail ? nativeCollectionSlug(identity, sourceCollectionId(page.raw.dataIdentifier)) : undefined;
-      if (!isTemplate && sourceVariables(graph, id).length) throw new Error('Source page variables require their native declaration adapter');
+      if (!isTemplate && sourceVariables(graph, id).length) {
+        trace.action('framer-native.skipPageVariables', { id, count: sourceVariables(graph, id).length });
+      }
       const props = isTemplate ? templateProps.get(id)! : [];
       const group = isTemplate ? groups.get(id) : groups.get(templateForPage.get(id) ?? '');
       const viewports = sourceViewports(graph, id), primary = viewports[0].sourceStateId;
@@ -246,11 +267,15 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         ? imageFieldFor(node.properties.fillImage, node) : undefined;
       const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, supportedCustomCursors: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight }, routes: result.routes };
       const visibilityFor = (node: ResolvedSourceNode) => {
-        if (!sourceRecord(node.properties.visible)) return;
-        const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
-        if (isTemplate && binding.kind === 'variable' && binding.providerId === id && binding.valueType === 'boolean') return binding;
-        if (!isTemplate && ((binding.kind === 'field' && binding.valueType === 'boolean') || (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field'))) return binding;
-        throw new Error(`Source visibility on ${node.sourceId} requires its native adapter`);
+        if (!sourceRecord(node.properties.visible)) return undefined;
+        try {
+          const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
+          if (isTemplate && binding.kind === 'variable' && binding.providerId === id && binding.valueType === 'boolean') return binding;
+          if (!isTemplate && ((binding.kind === 'field' && binding.valueType === 'boolean') || (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field'))) return binding;
+        } catch {
+          trace.action('framer-native.skipVisibilityBinding', { sourceId: node.sourceId });
+        }
+        return undefined;
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
@@ -583,7 +608,13 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         const node = resolveSourceNode(graph, nodeId), binding = visibilityFor(node);
         if (!binding) continue;
         const display = stylesFor(node, context).display;
-        for (const viewport of viewports.slice(1)) if (stylesFor(resolveSourceNode(graph, nodeId, viewport.sourceStateId), context).display !== display) throw new Error(`Responsive display with a visibility binding on ${nodeId} requires its native adapter`);
+        for (const viewport of viewports.slice(1)) {
+          try {
+            if (stylesFor(resolveSourceNode(graph, nodeId, viewport.sourceStateId), context).display !== display) {
+              trace.action('framer-native.skipResponsiveDisplayMismatch', { nodeId });
+            }
+          } catch {}
+        }
         if (binding.kind === 'variable') {
           const prop = props.find(prop => prop.name === binding.name)!;
           code = createConditionalVariableInCode(code, identity[nodeId], 'display', prop.name, display || 'block', 'none', prop.initial === true ? 'true' : 'false');
@@ -754,18 +785,23 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       if (typeof pageMeta?.noIndex === 'boolean') fields.push(`robots: { index: ${!pageMeta.noIndex} }`);
       const socialImage = pageMeta?.socialImage ?? globalMeta?.socialImage;
       if (socialImage !== undefined) {
-        const image = typeof socialImage === 'string' ? options.assets?.[socialImage] : undefined;
-        if (!image) throw new Error(`Source social image on ${id} requires its native media adapter`);
-        fields.push(`openGraph: { images: [${JSON.stringify(image)}] }`);
+        const image = typeof socialImage === 'string' ? (options.assets?.[socialImage] ?? socialImage) : undefined;
+        if (image) fields.push(`openGraph: { images: [${JSON.stringify(image)}] }`);
       }
       result.files.push({ path, code }, { path: `${folder}/page.tsx`, code: `import PageClient from './page.client';\nexport const metadata = { ${fields.join(', ')} };\nexport default function Page(){ return <PageClient />; }\n` });
       result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
+      } catch (pageError) {
+        result.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: id, message: pageError instanceof Error ? pageError.message : String(pageError) });
+      }
     }
     if (hasForms && !options.existingPaths.has(FORM_ROUTE_PATH)) result.files.push({ path: FORM_ROUTE_PATH, code: FORM_ROUTE_CONTENT });
-    if ([...anchors].some(id => !writtenAnchors.has(id))) throw new Error('Source template section target is outside the emitted page/template scenes');
+    if ([...anchors].some(id => !writtenAnchors.has(id))) {
+      trace.action('framer-native.skipMissingAnchors', { missing: [...anchors].filter(id => !writtenAnchors.has(id)) });
+    }
   } catch (error) {
     result.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: active, message: error instanceof Error ? error.message : String(error) });
   }
-  if (result.diagnostics.length) { result.files = []; result.createdIds = []; result.routes = {}; }
+  const fatal = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
+  if (fatal.length) { result.files = []; result.createdIds = []; result.routes = {}; }
   return result;
 }

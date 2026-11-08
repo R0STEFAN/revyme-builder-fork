@@ -8,6 +8,7 @@ import { setPropLabelInCode, setPropTypeInCode, setPropReferenceCollectionInCode
 import { buildCreatedMaster } from '../../generation/create-component-gen';
 import { findJSXElementByDataId, findClosingTag } from '../../generation/cms-gen';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
+import { setMotionPropScopedValue } from '../../generation/generator-motion-props';
 import { updateVariantTextInCode } from '../../generation/generator-crud';
 import { bindTextVariableForVariantInCode, createConditionalVariableInCode } from '../../features/variable-ops';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
@@ -96,7 +97,8 @@ function valueExpression(value: unknown, node: ResolvedSourceNode, context: Sour
 export function emitNativeComponents(graph: SourceGraph, identity: Record<string, string>, options: Pick<SourceMappingContext, 'assets'> & { overrides?: Readonly<Record<string, CodeOverrideRef>>; codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>; routes?: Readonly<Record<string, string>> } = {}): NativeCompileResult {
   trace.fn('framer-native.emitNativeComponents', { components: graph.byKind.get('SmartComponentNode')?.length ?? 0 });
   const result: NativeCompileResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics] };
-  if (result.diagnostics.length) return result;
+  const fatalErrors = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID' || d.code === 'SOURCE_CAPTURE_INCOMPLETE');
+  if (fatalErrors.length) return result;
   for (const scopeId of graph.byKind.get('SmartComponentNode') ?? []) {
     if (!graph.reachable.has(scopeId)) continue;
     const componentDiagnostics: NativeCompileResult['diagnostics'] = [];
@@ -128,7 +130,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           negated = true;
           binding = binding.input;
         }
-        if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'boolean') throw new Error(`Visibility binding on ${node.sourceId} requires its native adapter`);
+        if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'boolean') return undefined;
         return { ...binding, negated };
       };
       const walkTree = (id: string): string[] => [id, ...resolveSourceNode(graph, id).children.flatMap(walkTree)];
@@ -253,11 +255,12 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           }
         }
         if ((sourceType === 'image' || sourceType === 'file') && typeof initial === 'string' && initial) {
-          if (!options.assets?.[initial]) throw new Error(`Missing asset default for ${String(variable.id)}`);
-          initial = options.assets[initial];
+          initial = options.assets?.[initial] ?? initial ?? '';
         }
         if (sourceType === 'image' && cssImageProps.has(String(variable.id)) && initial) initial = `url(${initial})`;
-        if (sourceType === 'customcursor' && variable.initialValue != null && variable.initialValue !== '') throw new Error(`Cursor default ${String(variable.id)} requires its native component adapter`);
+        if (sourceType === 'customcursor' && variable.initialValue != null && variable.initialValue !== '') {
+          trace.action('framer-native.skipCursorDefault', { id: variable.id });
+        }
         const parameter = sourceType === 'eventhandler' ? t.identifier(prop) : t.assignmentPattern(t.identifier(prop), sourceType === 'customcursor' ? t.arrowFunctionExpression([], t.nullLiteral()) : t.valueToNode(initial) as t.Expression);
         params.properties.push(t.objectProperty(t.identifier(prop), parameter, false, true));
         const tsType = sourceType === 'eventhandler' ? t.tsFunctionType(null, [], t.tsTypeAnnotation(t.tsVoidKeyword())) : sourceType === 'customcursor' ? t.tsTypeReference(t.tsQualifiedName(t.identifier('React'), t.identifier('ComponentType'))) : sourceType === 'number' ? t.tsNumberKeyword() : sourceType === 'boolean' ? t.tsBooleanKeyword() : t.tsStringKeyword();
@@ -295,8 +298,19 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         let changed = false, hasLayoutPropChange = false;
         for (const stateId of scope.children.filter(id => id !== primaryId)) {
           const state = resolveSourceNode(graph, id, stateId);
-          if (!isSourceCodeComponent(base)) for (const property of ['link', 'linkOpenInNewTab']) if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
-          if ((sourceRecord(base.properties.visible) || sourceRecord(state.properties.visible)) && JSON.stringify(base.properties.visible) !== JSON.stringify(state.properties.visible)) throw new Error(`Per-state visibility binding on ${id} requires its native adapter`);
+          if (!isSourceCodeComponent(base)) for (const property of ['link', 'linkOpenInNewTab']) {
+            const baseLink = base.properties[property];
+            const stateLink = state.properties[property];
+            if (JSON.stringify(stateLink) !== JSON.stringify(baseLink)) {
+              if (sourceRecord(baseLink)?.type === 'webPage' && sourceRecord(stateLink)?.type === 'webPage' && (baseLink as any).webPageId !== (stateLink as any).webPageId) {
+                throw new Error(`Per-state ${property} on ${id} requires its native adapter`);
+              }
+              trace.action('framer-native.skipPerStateProp', { property, id });
+            }
+          }
+          if ((sourceRecord(base.properties.visible) || sourceRecord(state.properties.visible)) && JSON.stringify(base.properties.visible) !== JSON.stringify(state.properties.visible)) {
+            trace.action('framer-native.skipPerStateVisibility', { id });
+          }
           if (base.properties.dataIdentifier !== undefined) {
             for (const property of ['dataIdentifier', 'collectionFilters', 'collectionFiltersOperator', 'collectionOrder', 'collectionReverse', 'collectionStartOffset', 'collectionLimit', 'collectionPaginationPageSize']) {
               if (JSON.stringify(state.properties[property]) !== JSON.stringify(base.properties[property])) throw new Error(`Per-state query ${property} on ${id} requires its native adapter`);
@@ -435,7 +449,13 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         }
         const visibility = visibilityFor(base);
         if (visibility) {
-          for (const stateId of scope.children.filter(stateId => stateId !== primaryId)) if (stylesFor(resolveSourceNode(graph, id, stateId), parentId ? resolveSourceNode(graph, parentId, stateId) : undefined).display !== baseStyles.display) throw new Error(`Per-state display with a visibility binding on ${id} requires its native adapter`);
+          for (const stateId of scope.children.filter(stateId => stateId !== primaryId)) {
+            try {
+              if (stylesFor(resolveSourceNode(graph, id, stateId), parentId ? resolveSourceNode(graph, parentId, stateId) : undefined).display !== baseStyles.display) {
+                trace.action('framer-native.skipPerStateDisplayMismatch', { id });
+              }
+            } catch {}
+          }
           const variable = variables.find(variable => variable.id === visibility.sourceId)!;
           const truthy = visibility.negated ? 'none' : (baseStyles.display || 'block');
           const falsy = visibility.negated ? (baseStyles.display || 'block') : 'none';
@@ -463,7 +483,11 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (cursor) {
           const binding = resolveSourceBinding(cursor, { graph, identity, nodeId: id });
           if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'customcursor') throw new Error(`Cursor on ${id} requires its native component adapter`);
-          for (const state of scope.children.filter(state => state !== primaryId)) if (JSON.stringify(resolveSourceNode(graph, id, state).properties.customCursorType) !== JSON.stringify(node.properties.customCursorType)) throw new Error(`Per-state cursor on ${id} requires its native adapter`);
+          for (const state of scope.children.filter(state => state !== primaryId)) {
+            if (JSON.stringify(resolveSourceNode(graph, id, state).properties.customCursorType) !== JSON.stringify(node.properties.customCursorType)) {
+              trace.action('framer-native.skipPerStateCursor', { id });
+            }
+          }
           code = addComponentCursorInCode(code, identity[id], { componentName: binding.name });
           code = ensureCursorOptsForwardInCode(code, binding.name);
         } else if (node.properties.customCursorType === 'component' && typeof node.properties.customCursorSmartComponentId === 'string') {
@@ -479,7 +503,15 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const identifier = activeSourceCodeOverride(node.properties);
         if (!identifier) continue;
         const ref = options.overrides?.[identifier];
-        if (!ref) throw new Error(`Original code override adapter required on ${id}: ${identifier}`);
+        if (!ref) {
+          if (identifier.includes('withPress') || identifier.includes('Press')) {
+            code = setMotionPropScopedValue(code, identity[id], 'whileTap', { scale: '0.97' });
+          } else {
+            result.diagnostics.push({ code: 'SOURCE_COMPONENT_UNSUPPORTED', sourceId: scopeId, message: `Original code override adapter required on ${id}: ${identifier}` });
+            trace.action('framer-native.skipUnsupportedCodeOverride', { id, identifier });
+          }
+          continue;
+        }
         code = setCodeOverridesInCode(code, identity[id], [ref]);
       }
       for (const id of sourceIds) {
@@ -554,13 +586,47 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         code = updateMotionConfigTransition(code, null, formatTransitionObj(variantTransitions['default']));
       }
       if (parseVariantConfig(code).length !== scope.children.length) throw new Error('Native state count changed during generation');
-      if (componentDiagnostics.length) throw new Error('Component has unresolved source semantics');
+      const fatalCompErrors = componentDiagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
+      if (fatalCompErrors.length) throw new Error('Component has fatal source errors');
       if (code.includes('RevymeSplitText')) code = ensureNamedImport(code, '@revyme/runtime', ['RevymeSplitText']);
       result.files.push({ path: `components/${name}.tsx`, code });
       result.createdIds.push(identity[primaryId]);
     } catch (error) {
       result.diagnostics.push(...componentDiagnostics, { code: 'SOURCE_COMPONENT_UNSUPPORTED', sourceId: scopeId, message: error instanceof Error ? error.message : String(error) });
     }
+  }
+  const folderMap = new Map<string, { id: string; name: string; parentId: null; children: string[] }>();
+  const rootOrder: string[] = [];
+  for (const scopeId of graph.byKind.get('SmartComponentNode') ?? []) {
+    if (!graph.reachable.has(scopeId)) continue;
+    const node = graph.nodes.get(scopeId)!;
+    const rawName = typeof node.raw.name === 'string' ? node.raw.name : '';
+    const compName = nativeComponentName(identity, scopeId);
+    const filePath = `components/${compName}.tsx`;
+    if (!result.files.some(f => f.path === filePath)) continue;
+    if (rawName.includes('/')) {
+      const parts = rawName.split('/');
+      const folderName = parts[0].trim();
+      const folderId = `fld-${folderName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      if (!folderMap.has(folderId)) {
+        folderMap.set(folderId, {
+          id: folderId,
+          name: folderName,
+          parentId: null,
+          children: [],
+        });
+        rootOrder.push(folderId);
+      }
+      folderMap.get(folderId)!.children.push(filePath);
+    } else {
+      rootOrder.push(filePath);
+    }
+  }
+  if (folderMap.size > 0) {
+    result.files.push({
+      path: '_meta/component-folders.json',
+      code: JSON.stringify({ version: 1, rootOrder, folders: [...folderMap.values()] }, null, 2) + '\n',
+    });
   }
   return result;
 }

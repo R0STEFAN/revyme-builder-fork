@@ -40,6 +40,7 @@ export interface NativeTargetContext {
   uploadedAssets?: Readonly<Record<string, string>>;
   fontFaces?: readonly WorkspaceFontFaceSpec[];
   skipFeatures?: NativeSourceSkips;
+  tolerant?: boolean;
 }
 
 function destinationLanguageMatches(code: string | undefined, language: unknown): boolean {
@@ -127,7 +128,9 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const metadata = sourceRecord(graph.nodes.get(id)!.raw.webMetadata);
       for (const [metadataKey] of Object.entries(metadata ?? {}).filter(([key, value]) => !['title', 'description'].includes(key) && !(key === 'socialImage' && typeof value === 'string') && !(['favicon', 'faviconDark', 'appleTouchIcon'].includes(key) && typeof value === 'string' && graph.transfer.context.mode === 'project') && !(key === 'reducedMotion' && typeof value === 'boolean') && !(key === 'translatePagePaths' && value === false) && !(key === 'language' && (graph.transfer.context.mode === 'project' || destinationLanguageMatches(target.existingFiles.get('app/layout.tsx'), value))))) result.diagnostics.push({ code: 'SOURCE_METADATA_ADAPTER_REQUIRED', sourceId: id, property: `webMetadata.${metadataKey}`, message: 'Inherited source document settings need their native metadata adapter.' });
     }
-    if (result.diagnostics.length) return result;
+    if (!target.tolerant && result.diagnostics.length) return result;
+    const fatalInit = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
+    if (fatalInit.length) return result;
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
@@ -408,7 +411,12 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
   if (!result.files.length && !result.diagnostics.length) result.diagnostics.push({ code: 'SOURCE_EMPTY_IMPORT', message: 'The source closure contains no supported importable content.' });
   result.diagnostics = [...new Map(result.diagnostics.map(item => [JSON.stringify(item), item])).values()];
   result.createdIds = [...new Set(result.createdIds)];
-  if (result.diagnostics.length) { result.files = []; result.createdIds = []; }
+  if (target.tolerant) {
+    const fatalErrors = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID' || d.code === 'NATIVE_COMPILE_FAILED');
+    if (fatalErrors.length) { result.files = []; result.createdIds = []; }
+  } else if (result.diagnostics.length) {
+    result.files = []; result.createdIds = [];
+  }
   trace.action('framer-native.compiled', { files: result.files.length, diagnostics: result.diagnostics.length });
   return result;
 }

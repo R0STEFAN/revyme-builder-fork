@@ -6,7 +6,8 @@ import type { SourceGraph } from './types';
 export interface SourceComponent { graph: SourceGraph; scopeId: string }
 /** The editor renders the primary state when an instance retains a deleted variant ID. */
 export function sourceInstanceStateName(component: SourceComponent, identity: Record<string, string>, value: unknown): string {
-  if (typeof value !== 'string' || !value) throw new Error('FRAMER_INSTANCE_VARIANT_INVALID: expected a static variant identity');
+  if (value == null || value === '') return 'default';
+  if (typeof value !== 'string') throw new Error('FRAMER_INSTANCE_VARIANT_INVALID: expected a static variant identity');
   const names = sourceStateNames(component, identity);
   if (names[value]) return names[value];
   trace.action('framer-native.staleInstanceVariant', { componentId: component.scopeId, sourceVariant: value, fallback: 'default' });

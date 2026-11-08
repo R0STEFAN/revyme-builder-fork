@@ -1,9 +1,10 @@
 // packages/automation-core/src/operations/framer-query.ts
 import fs from 'node:fs';
 import { z } from 'zod';
-import type { Operation, Snapshot, OperationContext } from '../contracts';
+import type { Operation, Snapshot, OperationContext, FileChange } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { projectFS } from '@/code/project/project-fs';
+import { syncCodeSnapshotToProjectFS } from './code-components';
 import {
   inspectNativeTransfer,
   extractTransferTokens,
@@ -20,6 +21,8 @@ import {
   normalizeNativeTransfer,
   type RevymeTransferIR,
 } from '@/code/import/framer-native/normalizer';
+import { compileNativeTransfer } from '@/code/import/framer-native/compile';
+import { applyRuntimeGuarantees } from '@/code/generation/runtime-guarantees';
 
 const transferCache = new Map<string, unknown>();
 
@@ -233,6 +236,104 @@ export const framerNormalizeOperation: Operation<
   },
 };
 
+// 7. framer.compile
+export const framerCompileInputSchema = z.object({
+  filePath: z.string().optional(),
+  rawJson: z.string().optional(),
+  commit: z.boolean().optional(),
+}).refine(data => data.filePath || data.rawJson, {
+  message: 'Either filePath or rawJson must be provided',
+});
+
+export const framerCompileOperation: Operation<
+  z.infer<typeof framerCompileInputSchema>,
+  {
+    success: boolean;
+    filesCount: number;
+    files: Array<{ path: string }>;
+    diagnostics: Array<{ code: string; message: string; sourceId?: string; property?: string }>;
+  }
+> = {
+  name: 'framer.compile',
+  description: 'Compile Framer native transfer into 100% native Revyme Next.js components, CMS collections, and pages with automatic library folder organization',
+  category: 'framer',
+  kind: 'mutation',
+  permit: 'write',
+  environment: 'headless',
+  ownerTask: 'T-framer-mcp',
+  inputSchema: framerCompileInputSchema,
+  async execute(snapshot, input, context) {
+    let raw = getCachedTransfer(input, snapshot) as any;
+
+    if (raw && raw.format === 'revyme.ir.v1' && input.filePath) {
+      const candidates = [
+        input.filePath.replace('framer-clean-', 'framer-native-'),
+        input.filePath.replace(/clean/i, 'native'),
+        raw.metadata?.projectId ? `/home/rost/Завантажене/framer-native-${raw.metadata.projectId}.json` : '',
+      ].filter(Boolean);
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          try {
+            raw = JSON.parse(fs.readFileSync(cand, 'utf8'));
+            break;
+          } catch {}
+        }
+      }
+    }
+
+    const sync = syncCodeSnapshotToProjectFS(snapshot);
+
+    const uploadedAssets: Record<string, string> = {};
+    if (Array.isArray(raw?.assets)) {
+      for (const a of raw.assets) {
+        if (a && typeof a.key === 'string' && typeof a.url === 'string') {
+          uploadedAssets[a.key] = a.url;
+        }
+      }
+    }
+
+    const existingFiles = new Map<string, string>(snapshot.files);
+    if (!existingFiles.has('app/layout.tsx')) {
+      const fsLayout = projectFS.readFile('app/layout.tsx');
+      existingFiles.set('app/layout.tsx', fsLayout || `import './globals.css';\nexport default function RootLayout({ children }: { children: React.ReactNode }) { return (<html lang="en"><body>{children}</body></html>); }\n`);
+    }
+    if (!existingFiles.has('app/globals.css')) {
+      const fsCss = projectFS.readFile('app/globals.css');
+      existingFiles.set('app/globals.css', fsCss || 'body { margin: 0; }\n');
+    }
+
+    const compileResult = compileNativeTransfer(raw, {
+      mode: 'create',
+      existingFiles,
+      uploadedAssets,
+      tolerant: true,
+    });
+
+    const shouldCommit = input.commit !== false;
+    if (compileResult.files.length > 0) {
+      for (const file of compileResult.files) {
+        if (/\.(tsx|jsx)$/.test(file.path)) {
+          file.code = applyRuntimeGuarantees(file.code);
+        }
+        if (shouldCommit) {
+          projectFS.writeFile(file.path, file.code);
+        }
+      }
+    }
+
+    const changes = shouldCommit ? sync.collectChanges() : [];
+
+    return {
+      success: compileResult.files.length > 0,
+      filesCount: compileResult.files.length,
+      files: compileResult.files.map(f => ({ path: f.path })),
+      changes,
+      createdIds: compileResult.createdIds,
+      diagnostics: compileResult.diagnostics,
+    };
+  },
+};
+
 // Auto-register operations into defaultRegistry
 defaultRegistry.register(framerInspectOperation);
 defaultRegistry.register(framerTokensOperation);
@@ -240,3 +341,4 @@ defaultRegistry.register(framerSliceOperation);
 defaultRegistry.register(framerCmsOperation);
 defaultRegistry.register(framerComponentOperation);
 defaultRegistry.register(framerNormalizeOperation);
+defaultRegistry.register(framerCompileOperation);

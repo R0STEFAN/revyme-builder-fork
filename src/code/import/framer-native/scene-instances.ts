@@ -33,8 +33,7 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
   };
   const assetValue = (value: unknown, id: string, prop: string) => {
     if (typeof value !== 'string' || !value.startsWith('data:framer/asset-reference,')) return value;
-    if (!assets?.[value]) throw new Error(`Missing instance asset on ${id}:${prop}`);
-    return assets[value];
+    return assets?.[value] ?? value;
   };
   for (const [id, masterId] of scene.nested) {
     const name = nativeComponentName(identity, masterId);
