@@ -176,4 +176,62 @@ function Page() {
     expect(out).not.toMatch(/backgroundColor:\s*'#ccc'/);
     expect(out).not.toContain('data-cms-bind-target');
   });
+
+  it('correctly binds to the corresponding collection when multiple collections exist on the page', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+import artists from '@/cms/artists.json';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <div data-id="tattoos-section">
+        {tattoos.map((item, idx) => (
+          <div data-id="t-card" key={idx}>
+            <p data-id="t-title" data-cms-field="tattoos:title">Tattoo Title</p>
+          </div>
+        ))}
+      </div>
+      <div data-id="artists-section">
+        {artists.map((item, idx) => (
+          <div data-id="a-card" key={idx}>
+            <p data-id="a-name" data-cms-field="artists:name">Artist Name</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}`;
+    const boundTattoo = bindCmsFieldOnDropInCode(code, 't-title');
+    expect(boundTattoo).toContain('{item.title}');
+    expect(boundTattoo).not.toContain('data-cms-field="tattoos:title"');
+
+    const boundArtist = bindCmsFieldOnDropInCode(code, 'a-name');
+    expect(boundArtist).toContain('{item.name}');
+    expect(boundArtist).not.toContain('data-cms-field="artists:name"');
+  });
+
+  it('does not bind a field to a different collection when dropped into the wrong collection map', () => {
+    const code = `
+import tattoos from '@/cms/tattoos.json';
+import artists from '@/cms/artists.json';
+
+export default function Page() {
+  return (
+    <div data-id="root">
+      <div data-id="tattoos-section">
+        {tattoos.map((item, idx) => (
+          <div data-id="t-card" key={idx}>
+            <p data-id="wrong-drop" data-cms-field="artists:bio">Bio placeholder</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}`;
+    const out = bindCmsFieldOnDropInCode(code, 'wrong-drop');
+    // Should NOT rewrite to item.bio because tattoos is not artists
+    expect(out).not.toContain('{item.bio}');
+    expect(out).toBe(code);
+  });
 });

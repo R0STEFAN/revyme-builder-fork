@@ -692,8 +692,27 @@ export function bindCmsFieldOnDropInCode(code: string, nodeId: string): string {
   const [, attrValue] = fieldAttrMatch;
   const sepIdx = attrValue.indexOf(':');
   if (sepIdx === -1) return code;
+  const slug = attrValue.slice(0, sepIdx);
   const fieldId = attrValue.slice(sepIdx + 1);
   if (!fieldId) return code;
+
+  // When multiple collections exist on a page, verify that the enclosing map's collection matches this field's slug
+  const mapSrc = getEnclosingMapSourceForNode(code, nodeId);
+  if (mapSrc) {
+    const importRe = /import\s+([A-Za-z_$][\w$]*)\s+from\s+['"]@\/cms\/([\w-]+)\.json['"]/g;
+    let im: RegExpExecArray | null;
+    let enclosingSlug: string | null = null;
+    while ((im = importRe.exec(code)) !== null) {
+      if (new RegExp(`(?:^|[^\\w$])${im[1]}(?:[^\\w$]|$)`).test(mapSrc.sourceExpr)) {
+        enclosingSlug = im[2];
+        break;
+      }
+    }
+    if (enclosingSlug && enclosingSlug !== slug) {
+      trace.action('map-gen:bindCmsField:collection-mismatch', { nodeId, fieldSlug: slug, enclosingSlug });
+      return code;
+    }
+  }
 
   // Nearest enclosing `<varName>.map((iter, …) =>` ancestor (shared helper).
   let iterVar: string | null = getEnclosingMapIteratorForNode(code, nodeId);

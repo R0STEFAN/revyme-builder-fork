@@ -20,6 +20,8 @@ import { SHADER_THUMBS } from '@/shared/insert-items/shader-thumb-map';
 import { collectionSchemasAtom } from '@/code/stores/cms-store';
 import { cmsPageMetaAtom } from '@/code/stores/cms-page-store';
 import { leftPanelAtom } from '@/code/stores/left-panel-store';
+import { nodesAtom, selectedNodeAtom } from '@/code/stores/store';
+import { findCmsListScope } from '@/editor/controls/cms-binding-scope';
 
 // ─── Chevron Right ─────────────────────────────────────────────────────────
 
@@ -575,65 +577,94 @@ export default function InsertOverlay() {
     };
   }, [cmsSchemas]);
 
-  // Fields are scoped to the active detail page's collection. The row
-  // is ALWAYS visible in the CMS group (so the affordance is
-  // discoverable), but when the active file isn't a detail page the
-  // secondary panel renders an empty-state message instead of cards —
-  // there's no binding target outside a CMS context, so we explain
-  // rather than silently show nothing.
+  // Fields are available across all CMS collections. When on a detail page,
+  // the detail page's collection is prioritized and includes navigation links (← Previous, Next →).
+  // When inside a collection list or with a collection item selected, that collection
+  // is prioritized. All collections with fields are displayed in distinct sections so
+  // users can drag fields into their corresponding collection lists on any page.
   const cmsPageMeta = useAtomValue(cmsPageMetaAtom);
+  const selectedNodeId = useAtomValue(selectedNodeAtom);
+  const nodes = useAtomValue(nodesAtom);
+
+  const selectedNode = selectedNodeId ? nodes.get(selectedNodeId) : null;
+  const activeScope = findCmsListScope(selectedNode, nodes);
+  const activeCollection = cmsPageMeta?.kind === 'detail' ? cmsPageMeta.collection : (activeScope?.slug ?? null);
+
   const cmsFieldsCategory = useMemo<InsertCategory>(() => {
-    if (cmsPageMeta?.kind !== 'detail') {
+    if (cmsSchemas.size === 0) {
       return {
         id: 'cms-fields',
         label: 'Fields',
         iconKey: 'cmsFields',
         columns: 1,
         sections: [],
-        emptyStateMessage: 'Fields available only on detail pages.',
+        emptyStateMessage: 'No CMS collections found. Create a collection first.',
       };
     }
-    const schema = cmsSchemas.get(cmsPageMeta.collection);
-    if (!schema) {
+
+    const sections: Array<{ id: string; label: string; items: InsertItem[] }> = [];
+
+    // Order collections: active collection first, then other collections
+    const orderedEntries = Array.from(cmsSchemas.entries()).sort(([slugA], [slugB]) => {
+      if (slugA === activeCollection) return -1;
+      if (slugB === activeCollection) return 1;
+      return 0;
+    });
+
+    for (const [slug, schema] of orderedEntries) {
+      const items: InsertItem[] = (schema.fields ?? []).map(f => ({
+        id: `cmsField:${slug}:${f.id}`,
+        name: f.name,
+        iconKey: 'collectionField',
+        cmsFieldType: f.type,
+      }));
+
+      // On a detail page, only the detail page's own collection gets Prev/Next nav links
+      if (cmsPageMeta?.kind === 'detail' && slug === cmsPageMeta.collection) {
+        items.push(
+          {
+            id: `cmsFieldNav:${slug}:prev`,
+            name: '← Previous',
+            iconKey: 'collectionField',
+            cmsNav: 'prev',
+          },
+          {
+            id: `cmsFieldNav:${slug}:next`,
+            name: 'Next →',
+            iconKey: 'collectionField',
+            cmsNav: 'next',
+          },
+        );
+      }
+
+      if (items.length > 0) {
+        sections.push({
+          id: `fields-${slug}`,
+          label: schema.name || slug,
+          items,
+        });
+      }
+    }
+
+    if (sections.length === 0) {
       return {
         id: 'cms-fields',
         label: 'Fields',
         iconKey: 'cmsFields',
         columns: 1,
         sections: [],
-        emptyStateMessage: `No schema found for collection "${cmsPageMeta.collection}".`,
+        emptyStateMessage: 'No fields defined in collections yet.',
       };
     }
-    const items: InsertItem[] = (schema.fields ?? []).map(f => ({
-      id: `cmsField:${cmsPageMeta.collection}:${f.id}`,
-      name: f.name,
-      iconKey: 'collectionField',
-      cmsFieldType: f.type,
-    }));
-    // Prev/Next nav links — drop an <a> that navigates to the adjacent
-    // item's detail page (resolved from the collection order).
-    items.push(
-      {
-        id: `cmsFieldNav:${cmsPageMeta.collection}:prev`,
-        name: '← Previous',
-        iconKey: 'collectionField',
-        cmsNav: 'prev',
-      },
-      {
-        id: `cmsFieldNav:${cmsPageMeta.collection}:next`,
-        name: 'Next →',
-        iconKey: 'collectionField',
-        cmsNav: 'next',
-      },
-    );
+
     return {
       id: 'cms-fields',
       label: 'Fields',
       iconKey: 'cmsFields',
       columns: 1,
-      sections: [{ id: 'fields', label: 'Fields', items }],
+      sections,
     };
-  }, [cmsSchemas, cmsPageMeta]);
+  }, [cmsSchemas, cmsPageMeta, activeCollection]);
 
   const cmsCategories = useMemo(() => [cmsCollectionsCategory, cmsFieldsCategory], [cmsCollectionsCategory, cmsFieldsCategory]);
 
