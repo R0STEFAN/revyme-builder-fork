@@ -1,15 +1,18 @@
 import { captureTabSource } from './transport.mjs';
 import { decodeNativeTransfer } from './envelope.mjs';
-import { normalizeNativeTransfer } from './normalizer.mjs';
 
 const get = id => document.getElementById(id);
 const capture = get('capture'), status = get('status'), summary = get('summary');
 const download = get('download'), downloadClean = get('download-clean'), copy = get('copy'), sendRevyme = get('send-revyme'), scope = get('scope');
 let transfer, text;
 
+console.debug('[framer-native] popup script initialized');
+
 function report(message, error = false) {
   status.textContent = message;
   status.toggleAttribute('data-error', error);
+  if (error) console.error('[framer-native]', message);
+  else console.debug('[framer-native]', message);
 }
 
 capture.addEventListener('click', async () => {
@@ -49,6 +52,7 @@ if (downloadClean) {
     downloadClean.disabled = true;
     report('Normalizing transfer to clean Revyme IR…');
     try {
+      const { normalizeNativeTransfer } = await import('./normalizer.mjs');
       const ir = normalizeNativeTransfer(transfer);
       const irText = JSON.stringify(ir, null, 2);
       const url = URL.createObjectURL(new Blob([irText], { type: 'application/json' }));

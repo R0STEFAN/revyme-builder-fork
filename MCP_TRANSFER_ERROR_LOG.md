@@ -189,4 +189,23 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
 
 ---
 
+### Issue 11: Chrome Extension Popup Freeze & Unresponsive "Capture Tree" Button
+- **Symptom:**
+  - In Chrome extension v0.2.0, clicking "Capture Tree" produced no reaction, no logs, and no status text change.
+- **Root Cause:**
+  - `popup.mjs` statically imported `normalizer.mjs` on startup. The normalizer bundle contained references to Node globals (`process.env.BABEL_TYPES_8_BREAKING`) which caused an immediate top-level `ReferenceError: process is not defined` during Chrome's module evaluation of the popup script.
+  - As a result, `popup.mjs` execution halted before event listeners (including `capture.addEventListener('click')`) were ever registered.
+  - Additionally, `envelope.mjs` was only generated in `dist/` but missing from the raw development folder `extensions/framer-native/`.
+- **Fix:**
+  - Converted the `normalizer.mjs` import in `popup.mjs` into a dynamic `await import('./normalizer.mjs')` inside the `downloadClean` click handler so the popup initialization is lightweight and resilient.
+  - Added esbuild defines (`process.env.NODE_ENV: "production"`, `process.env: {}`, `global: window`) in `scripts/build-framer-native-extension.mjs` and re-bundled `normalizer.mjs`.
+  - Copied `envelope.mjs` directly into `extensions/framer-native/` to support loading unpacked from either root or dist.
+  - Broadened Framer host URL validation in `transport.mjs` with descriptive error guidance.
+- **Verification:**
+  - Verified `popup.mjs`, `envelope.mjs`, and `normalizer.mjs` load with zero errors in a pure browser context without `process`.
+  - Verified clean compilation of extension package `dist/framer-native-reader-0.2.0` and test suite (12/12 passed).
+
+---
+
+
 

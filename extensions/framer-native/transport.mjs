@@ -1,7 +1,8 @@
 export async function captureTabSource(api, tab, request) {
   const url = new URL(tab?.url || 'about:blank');
-  if (!Number.isInteger(tab?.id) || url.origin !== 'https://framer.com' || !url.pathname.startsWith('/projects/')) {
-    throw new Error('FRAMER_EDITOR_REQUIRED: Відкрий потрібний проєкт у редакторі Framer.');
+  const isFramer = url.hostname === 'framer.com' || url.hostname.endsWith('.framer.com') || url.hostname === 'framer.cloud';
+  if (!Number.isInteger(tab?.id) || !isFramer) {
+    throw new Error(`FRAMER_EDITOR_REQUIRED: Переконайся, що активна вкладка — це редактор Framer (поточна вкладка: ${url.hostname || 'невідомо'}).`);
   }
   const responses = await api.scripting.executeScript({
     target: { tabId: tab.id }, world: 'MAIN',

@@ -1,10 +1,11 @@
 import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, join } from 'node:path';
+import esbuild from 'esbuild';
 
 const root = fileURLToPath(new URL('../extensions/framer-native/', import.meta.url));
 const files = ['manifest.json', 'popup.html', 'popup.css', 'popup.mjs', 'transport.mjs',
-  'page-reader.mjs', 'capture.mjs', 'source-adapters.mjs', 'normalizer.mjs', 'README.md'];
+  'page-reader.mjs', 'capture.mjs', 'source-adapters.mjs', 'README.md'];
 
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -66,10 +67,32 @@ export async function buildNativeReader(output) {
   const directory = resolve(output);
   if (directory === resolve(root)) throw new Error('Build output must differ from the extension source.');
   await mkdir(directory, { recursive: true });
+
+  // Ensure envelope.mjs exists in both source and output
+  const envelopeSource = fileURLToPath(new URL('../src/shared/framer-transfer-envelope.mjs', import.meta.url));
+  await copyFile(envelopeSource, join(directory, 'envelope.mjs'));
+  await copyFile(envelopeSource, join(root, 'envelope.mjs'));
+
   for (const name of files) await copyFile(join(root, name), join(directory, name));
-  await copyFile(fileURLToPath(new URL('../src/shared/framer-transfer-envelope.mjs', import.meta.url)), join(directory, 'envelope.mjs'));
+
+  // Bundle normalizer for clean browser execution without Node globals
+  await esbuild.build({
+    entryPoints: [fileURLToPath(new URL('../src/code/import/framer-native/normalizer.ts', import.meta.url))],
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.env.BABEL_TYPES_8_BREAKING': 'false',
+      'process.env': '{}',
+      'global': 'window',
+    },
+    outfile: join(directory, 'normalizer.mjs'),
+  });
+  await copyFile(join(directory, 'normalizer.mjs'), join(root, 'normalizer.mjs'));
+
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
-  const packagedFiles = [...files, 'envelope.mjs'];
+  const packagedFiles = [...files, 'envelope.mjs', 'normalizer.mjs'];
   const archive = await writeArchive(directory, packagedFiles);
   return { directory, archive, version: manifest.version, files: packagedFiles };
 }

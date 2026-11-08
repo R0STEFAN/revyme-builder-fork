@@ -40,6 +40,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// <define:process.env>
+var define_process_env_default;
+var init_define_process_env = __esm({
+  "<define:process.env>"() {
+    define_process_env_default = {};
+  }
+});
+
 // src/shared/debug-trace.ts
 async function saveDebugCode(code, filename = "debug-code.jsx") {
   try {
@@ -59,6 +67,7 @@ var DebugTrace, trace;
 var init_debug_trace = __esm({
   "src/shared/debug-trace.ts"() {
     "use strict";
+    init_define_process_env();
     DebugTrace = class {
       constructor() {
         /** Whether trace is enabled at all (false = all methods are no-ops) */
@@ -398,6 +407,7 @@ var TRANSPARENT_FILL, SHORTHAND_LONGHANDS;
 var init_css_utils = __esm({
   "src/shared/css-utils.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     TRANSPARENT_FILL = "rgba(0, 0, 0, 0)";
     SHORTHAND_LONGHANDS = {
@@ -418,6 +428,7 @@ function escapeRegExp(s) {
 var init_regex_utils = __esm({
   "src/shared/regex-utils.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -428,6 +439,7 @@ function nodeIdToVarName(nodeId) {
 var init_id_utils = __esm({
   "src/shared/id-utils.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -436,6 +448,7 @@ var SCROLL_TARGET_EXPR;
 var init_scroll_target = __esm({
   "src/shared/scroll-target.ts"() {
     "use strict";
+    init_define_process_env();
     SCROLL_TARGET_EXPR = String.raw`(?:[^?,{}()]*?\?\s*)?([A-Za-z_$][\w$]*)(?:\s*:\s*undefined)?`;
   }
 });
@@ -444,6 +457,7 @@ var init_scroll_target = __esm({
 var init_scroll_parser = __esm({
   "src/code/parsing/scroll-parser.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_scroll_target();
     init_id_utils();
@@ -453,6 +467,7 @@ var init_scroll_parser = __esm({
 // node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.umd.js
 var require_sourcemap_codec_umd = __commonJS({
   "node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.umd.js"(exports, module) {
+    init_define_process_env();
     (function(global2, factory) {
       if (typeof exports === "object" && typeof module !== "undefined") {
         factory(module);
@@ -914,6 +929,7 @@ var require_sourcemap_codec_umd = __commonJS({
 // node_modules/@jridgewell/resolve-uri/dist/resolve-uri.umd.js
 var require_resolve_uri_umd = __commonJS({
   "node_modules/@jridgewell/resolve-uri/dist/resolve-uri.umd.js"(exports, module) {
+    init_define_process_env();
     (function(global2, factory) {
       typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory() : typeof define === "function" && define.amd ? define(factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, global2.resolveURI = factory());
     })(exports, (function() {
@@ -1093,6 +1109,7 @@ var require_resolve_uri_umd = __commonJS({
 // node_modules/@jridgewell/trace-mapping/dist/trace-mapping.umd.js
 var require_trace_mapping_umd = __commonJS({
   "node_modules/@jridgewell/trace-mapping/dist/trace-mapping.umd.js"(exports, module) {
+    init_define_process_env();
     (function(global2, factory) {
       if (typeof exports === "object" && typeof module !== "undefined") {
         factory(module, require_resolve_uri_umd(), require_sourcemap_codec_umd());
@@ -1633,6 +1650,7 @@ var require_trace_mapping_umd = __commonJS({
 // node_modules/@jridgewell/gen-mapping/dist/gen-mapping.umd.js
 var require_gen_mapping_umd = __commonJS({
   "node_modules/@jridgewell/gen-mapping/dist/gen-mapping.umd.js"(exports, module) {
+    init_define_process_env();
     (function(global2, factory) {
       if (typeof exports === "object" && typeof module !== "undefined") {
         factory(module, require_sourcemap_codec_umd(), require_trace_mapping_umd());
@@ -1985,6 +2003,7 @@ var require_gen_mapping_umd = __commonJS({
 var require_source_map = __commonJS({
   "node_modules/@babel/generator/lib/source-map.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -2076,6 +2095,7 @@ var require_source_map = __commonJS({
 var require_buffer = __commonJS({
   "node_modules/@babel/generator/lib/buffer.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -2326,6 +2346,7 @@ var require_buffer = __commonJS({
 var require_shallowEqual = __commonJS({
   "node_modules/@babel/types/lib/utils/shallowEqual.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -2346,6 +2367,7 @@ var require_shallowEqual = __commonJS({
 var require_deprecationWarning = __commonJS({
   "node_modules/@babel/types/lib/utils/deprecationWarning.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -2394,6 +2416,7 @@ ${trace2}`);
 var require_generated = __commonJS({
   "node_modules/@babel/types/lib/validators/generated/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5194,6 +5217,7 @@ var require_generated = __commonJS({
 var require_matchesPattern = __commonJS({
   "node_modules/@babel/types/lib/validators/matchesPattern.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5241,6 +5265,7 @@ var require_matchesPattern = __commonJS({
 var require_buildMatchMemberExpression = __commonJS({
   "node_modules/@babel/types/lib/validators/buildMatchMemberExpression.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5257,6 +5282,7 @@ var require_buildMatchMemberExpression = __commonJS({
 var require_isReactComponent = __commonJS({
   "node_modules/@babel/types/lib/validators/react/isReactComponent.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5271,6 +5297,7 @@ var require_isReactComponent = __commonJS({
 var require_isCompatTag = __commonJS({
   "node_modules/@babel/types/lib/validators/react/isCompatTag.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5285,6 +5312,7 @@ var require_isCompatTag = __commonJS({
 var require_isType = __commonJS({
   "node_modules/@babel/types/lib/validators/isType.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5305,6 +5333,7 @@ var require_isType = __commonJS({
 var require_isPlaceholderType = __commonJS({
   "node_modules/@babel/types/lib/validators/isPlaceholderType.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5323,6 +5352,7 @@ var require_isPlaceholderType = __commonJS({
 var require_is = __commonJS({
   "node_modules/@babel/types/lib/validators/is.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5353,6 +5383,7 @@ var require_is = __commonJS({
 var require_identifier = __commonJS({
   "node_modules/@babel/helper-validator-identifier/lib/identifier.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5426,6 +5457,7 @@ var require_identifier = __commonJS({
 var require_keyword = __commonJS({
   "node_modules/@babel/helper-validator-identifier/lib/keyword.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5464,6 +5496,7 @@ var require_keyword = __commonJS({
 var require_lib = __commonJS({
   "node_modules/@babel/helper-validator-identifier/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5524,6 +5557,7 @@ var require_lib = __commonJS({
 var require_isValidIdentifier = __commonJS({
   "node_modules/@babel/types/lib/validators/isValidIdentifier.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5545,6 +5579,7 @@ var require_isValidIdentifier = __commonJS({
 var require_lib2 = __commonJS({
   "node_modules/@babel/helper-string-parser/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5841,6 +5876,7 @@ var require_lib2 = __commonJS({
 var require_constants = __commonJS({
   "node_modules/@babel/types/lib/constants/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5875,6 +5911,7 @@ var require_constants = __commonJS({
 var require_utils = __commonJS({
   "node_modules/@babel/types/lib/definitions/utils.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -5945,7 +5982,7 @@ var require_utils = __commonJS({
       return validate(arrayOfType(...typeNames));
     }
     function assertEach(callback) {
-      const childValidator = process.env.BABEL_TYPES_8_BREAKING ? _validate.validateChild : () => {
+      const childValidator = false ? _validate.validateChild : () => {
       };
       function validator(node, key, val) {
         if (!Array.isArray(val)) return;
@@ -6176,6 +6213,7 @@ ${errors.join("\n")}`);
 var require_core = __commonJS({
   "node_modules/@babel/types/lib/definitions/core.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -6214,7 +6252,7 @@ var require_core = __commonJS({
       fields: {
         elements: {
           validate: (0, _utils.arrayOf)((0, _utils.assertNodeOrValueType)("null", "Expression", "SpreadElement")),
-          default: !process.env.BABEL_TYPES_8_BREAKING ? [] : void 0
+          default: true ? [] : void 0
         }
       },
       visitor: ["elements"],
@@ -6223,7 +6261,7 @@ var require_core = __commonJS({
     defineType("AssignmentExpression", {
       fields: {
         operator: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertValueType)("string") : Object.assign((function() {
+          validate: true ? (0, _utils.assertValueType)("string") : Object.assign((function() {
             const identifier22 = (0, _utils.assertOneOf)(..._index.ASSIGNMENT_OPERATORS);
             const pattern = (0, _utils.assertOneOf)("=");
             return function(node, key, val) {
@@ -6235,7 +6273,7 @@ var require_core = __commonJS({
           })
         },
         left: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertNodeType)("LVal", "OptionalMemberExpression") : (0, _utils.assertNodeType)("Identifier", "MemberExpression", "OptionalMemberExpression", "ArrayPattern", "ObjectPattern", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
+          validate: true ? (0, _utils.assertNodeType)("LVal", "OptionalMemberExpression") : (0, _utils.assertNodeType)("Identifier", "MemberExpression", "OptionalMemberExpression", "ArrayPattern", "ObjectPattern", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
         },
         right: {
           validate: (0, _utils.assertNodeType)("Expression")
@@ -6330,7 +6368,7 @@ var require_core = __commonJS({
           validate: (0, _utils.assertNodeType)("TypeParameterInstantiation"),
           optional: true
         }
-      }, process.env.BABEL_TYPES_8_BREAKING ? {} : {
+      }, false ? {} : {
         optional: {
           validate: (0, _utils.assertValueType)("boolean"),
           optional: true
@@ -6415,7 +6453,7 @@ var require_core = __commonJS({
           validate: (0, _utils.assertNodeType)("Program")
         },
         comments: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? Object.assign(() => {
+          validate: true ? Object.assign(() => {
           }, {
             each: {
               oneOfNodeTypes: ["CommentBlock", "CommentLine"]
@@ -6437,7 +6475,7 @@ var require_core = __commonJS({
       aliases: ["Scopable", "Statement", "For", "BlockParent", "Loop", "ForXStatement"],
       fields: {
         left: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertNodeType)("VariableDeclaration", "LVal") : (0, _utils.assertNodeType)("VariableDeclaration", "Identifier", "MemberExpression", "ArrayPattern", "ObjectPattern", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
+          validate: true ? (0, _utils.assertNodeType)("VariableDeclaration", "LVal") : (0, _utils.assertNodeType)("VariableDeclaration", "Identifier", "MemberExpression", "ArrayPattern", "ObjectPattern", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
         },
         right: {
           validate: (0, _utils.assertNodeType)("Expression")
@@ -6513,7 +6551,7 @@ var require_core = __commonJS({
         }
       }),
       aliases: ["Scopable", "Function", "BlockParent", "FunctionParent", "Statement", "Pureish", "Declaration"],
-      validate: !process.env.BABEL_TYPES_8_BREAKING ? void 0 : (function() {
+      validate: true ? void 0 : (function() {
         const identifier22 = (0, _utils.assertNodeType)("Identifier");
         return function(parent, key, node) {
           if (!(0, _is.default)("ExportDefaultDeclaration", parent)) {
@@ -6560,7 +6598,7 @@ var require_core = __commonJS({
       aliases: ["Expression", "FunctionParameter", "PatternLike", "LVal", "TSEntityName"],
       fields: Object.assign({}, patternLikeCommon(), {
         name: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertValueType)("string"), Object.assign(function(node, key, val) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertValueType)("string"), Object.assign(function(node, key, val) {
             if (!(0, _isValidIdentifier.default)(val, false)) {
               throw new TypeError(`"${val}" is not a valid identifier name`);
             }
@@ -6569,7 +6607,7 @@ var require_core = __commonJS({
           })) : (0, _utils.assertValueType)("string")
         }
       }),
-      validate: process.env.BABEL_TYPES_8_BREAKING ? function(parent, key, node) {
+      validate: false ? function(parent, key, node) {
         const match = /\.(\w+)$/.exec(key.toString());
         if (!match) return;
         const [, parentKey] = match;
@@ -6672,7 +6710,7 @@ var require_core = __commonJS({
           validate: (0, _utils.assertValueType)("string")
         },
         flags: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertValueType)("string"), Object.assign(function(node, key, val) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertValueType)("string"), Object.assign(function(node, key, val) {
             const invalid = /[^dgimsuvy]/.exec(val);
             if (invalid) {
               throw new TypeError(`"${invalid[0]}" is not a valid RegExp flag`);
@@ -6701,7 +6739,7 @@ var require_core = __commonJS({
       }
     });
     defineType("MemberExpression", {
-      builder: ["object", "property", "computed", ...!process.env.BABEL_TYPES_8_BREAKING ? ["optional"] : []],
+      builder: ["object", "property", "computed", ...true ? ["optional"] : []],
       visitor: ["object", "property"],
       aliases: ["Expression", "LVal", "PatternLike"],
       unionShape: {
@@ -6743,7 +6781,7 @@ var require_core = __commonJS({
         computed: {
           default: false
         }
-      }, !process.env.BABEL_TYPES_8_BREAKING ? {
+      }, true ? {
         optional: {
           validate: (0, _utils.assertValueType)("boolean"),
           optional: true
@@ -6788,7 +6826,7 @@ var require_core = __commonJS({
       fields: Object.assign({}, functionCommon(), functionTypeAnnotationCommon(), {
         kind: Object.assign({
           validate: (0, _utils.assertOneOf)("method", "get", "set")
-        }, !process.env.BABEL_TYPES_8_BREAKING ? {
+        }, true ? {
           default: "method"
         } : {}),
         computed: {
@@ -6817,7 +6855,7 @@ var require_core = __commonJS({
       aliases: ["UserWhitespacable", "Function", "Scopable", "BlockParent", "FunctionParent", "Method", "ObjectMember"]
     }));
     defineType("ObjectProperty", {
-      builder: ["key", "value", "computed", "shorthand", ...!process.env.BABEL_TYPES_8_BREAKING ? ["decorators"] : []],
+      builder: ["key", "value", "computed", "shorthand", ...true ? ["decorators"] : []],
       unionShape: {
         discriminator: "computed",
         shapes: [{
@@ -6859,7 +6897,7 @@ var require_core = __commonJS({
           validate: (0, _utils.assertNodeType)("Expression", "PatternLike")
         },
         shorthand: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertValueType)("boolean"), Object.assign(function(node, key, shorthand) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertValueType)("boolean"), Object.assign(function(node, key, shorthand) {
             if (!shorthand) return;
             if (node.computed) {
               throw new TypeError("Property shorthand of ObjectProperty cannot be true if computed is true");
@@ -6879,7 +6917,7 @@ var require_core = __commonJS({
       },
       visitor: ["decorators", "key", "value"],
       aliases: ["UserWhitespacable", "Property", "ObjectMember"],
-      validate: !process.env.BABEL_TYPES_8_BREAKING ? void 0 : (function() {
+      validate: true ? void 0 : (function() {
         const pattern = (0, _utils.assertNodeType)("Identifier", "Pattern", "TSAsExpression", "TSSatisfiesExpression", "TSNonNullExpression", "TSTypeAssertion");
         const expression = (0, _utils.assertNodeType)("Expression");
         return function(parent, key, node) {
@@ -6895,10 +6933,10 @@ var require_core = __commonJS({
       deprecatedAlias: "RestProperty",
       fields: Object.assign({}, patternLikeCommon(), {
         argument: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "MemberExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression", "RestElement", "AssignmentPattern") : (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "MemberExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
+          validate: true ? (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "MemberExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression", "RestElement", "AssignmentPattern") : (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "MemberExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression")
         }
       }),
-      validate: process.env.BABEL_TYPES_8_BREAKING ? function(parent, key) {
+      validate: false ? function(parent, key) {
         const match = /(\w+)\[(\d+)\]/.exec(key.toString());
         if (!match) throw new Error("Internal Babel error: malformed key.");
         const [, listKey, index] = match;
@@ -6970,7 +7008,7 @@ var require_core = __commonJS({
       aliases: ["Statement"],
       fields: {
         block: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertNodeType)("BlockStatement"), Object.assign(function(node) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertNodeType)("BlockStatement"), Object.assign(function(node) {
             if (!node.handler && !node.finalizer) {
               throw new TypeError("TryStatement expects either a handler or finalizer, or both");
             }
@@ -7011,7 +7049,7 @@ var require_core = __commonJS({
           default: false
         },
         argument: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertNodeType)("Expression") : (0, _utils.assertNodeType)("Identifier", "MemberExpression")
+          validate: true ? (0, _utils.assertNodeType)("Expression") : (0, _utils.assertNodeType)("Identifier", "MemberExpression")
         },
         operator: {
           validate: (0, _utils.assertOneOf)(..._index.UPDATE_OPERATORS)
@@ -7034,7 +7072,7 @@ var require_core = __commonJS({
         },
         declarations: (0, _utils.validateArrayOfType)("VariableDeclarator")
       },
-      validate: process.env.BABEL_TYPES_8_BREAKING ? (() => {
+      validate: false ? (() => {
         const withoutInit = (0, _utils.assertNodeType)("Identifier", "Placeholder");
         const constOrLetOrVar = (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "Placeholder");
         const usingOrAwaitUsing = (0, _utils.assertNodeType)("Identifier", "VoidPattern", "Placeholder");
@@ -7069,7 +7107,7 @@ var require_core = __commonJS({
       visitor: ["id", "init"],
       fields: {
         id: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertNodeType)("LVal", "VoidPattern") : (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "VoidPattern")
+          validate: true ? (0, _utils.assertNodeType)("LVal", "VoidPattern") : (0, _utils.assertNodeType)("Identifier", "ArrayPattern", "ObjectPattern", "VoidPattern")
         },
         definite: {
           optional: true,
@@ -7237,7 +7275,7 @@ var require_core = __commonJS({
           optional: true
         }
       },
-      validate: !process.env.BABEL_TYPES_8_BREAKING ? void 0 : (function() {
+      validate: true ? void 0 : (function() {
         const identifier22 = (0, _utils.assertNodeType)("Identifier");
         return function(parent, key, node) {
           if (!(0, _is.default)("ExportDefaultDeclaration", parent)) {
@@ -7283,7 +7321,7 @@ var require_core = __commonJS({
       fields: Object.assign({
         declaration: {
           optional: true,
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertNodeType)("Declaration"), Object.assign(function(node, key, val) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertNodeType)("Declaration"), Object.assign(function(node, key, val) {
             if (val && node.specifiers.length) {
               throw new TypeError("Only declaration or specifiers is allowed on ExportNamedDeclaration");
             }
@@ -7300,7 +7338,7 @@ var require_core = __commonJS({
           validate: (0, _utils.arrayOf)((function() {
             const sourced = (0, _utils.assertNodeType)("ExportSpecifier", "ExportDefaultSpecifier", "ExportNamespaceSpecifier");
             const sourceless = (0, _utils.assertNodeType)("ExportSpecifier");
-            if (!process.env.BABEL_TYPES_8_BREAKING) return sourced;
+            if (true) return sourced;
             return Object.assign(function(node, key, val) {
               const validator = node.source ? sourced : sourceless;
               validator(node, key, val);
@@ -7339,7 +7377,7 @@ var require_core = __commonJS({
       fields: {
         left: {
           validate: (function() {
-            if (!process.env.BABEL_TYPES_8_BREAKING) {
+            if (true) {
               return (0, _utils.assertNodeType)("VariableDeclaration", "LVal");
             }
             const declaration = (0, _utils.assertNodeType)("VariableDeclaration");
@@ -7446,7 +7484,7 @@ var require_core = __commonJS({
       aliases: ["Expression"],
       fields: {
         meta: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertNodeType)("Identifier"), Object.assign(function(node, key, val) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertNodeType)("Identifier"), Object.assign(function(node, key, val) {
             let property;
             switch (val.name) {
               case "function":
@@ -7634,7 +7672,7 @@ Expected ${val.length + 1} quasis but got ${node.quasis.length}`);
       aliases: ["Expression", "Terminatorless"],
       fields: {
         delegate: {
-          validate: process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.chain)((0, _utils.assertValueType)("boolean"), Object.assign(function(node, key, val) {
+          validate: false ? (0, _utils.chain)((0, _utils.assertValueType)("boolean"), Object.assign(function(node, key, val) {
             if (val && !node.argument) {
               throw new TypeError("Property delegate of YieldExpression cannot be true if there is no argument");
             }
@@ -7705,7 +7743,7 @@ Expected ${val.length + 1} quasis but got ${node.quasis.length}`);
           default: false
         },
         optional: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertValueType)("boolean") : (0, _utils.chain)((0, _utils.assertValueType)("boolean"), (0, _utils.assertOptionalChainStart)())
+          validate: true ? (0, _utils.assertValueType)("boolean") : (0, _utils.chain)((0, _utils.assertValueType)("boolean"), (0, _utils.assertOptionalChainStart)())
         }
       }
     });
@@ -7719,7 +7757,7 @@ Expected ${val.length + 1} quasis but got ${node.quasis.length}`);
         },
         arguments: (0, _utils.validateArrayOfType)("Expression", "SpreadElement", "ArgumentPlaceholder"),
         optional: {
-          validate: !process.env.BABEL_TYPES_8_BREAKING ? (0, _utils.assertValueType)("boolean") : (0, _utils.chain)((0, _utils.assertValueType)("boolean"), (0, _utils.assertOptionalChainStart)())
+          validate: true ? (0, _utils.assertValueType)("boolean") : (0, _utils.chain)((0, _utils.assertValueType)("boolean"), (0, _utils.assertOptionalChainStart)())
         },
         typeArguments: {
           validate: (0, _utils.assertNodeType)("TypeParameterInstantiation"),
@@ -7907,6 +7945,7 @@ Expected ${val.length + 1} quasis but got ${node.quasis.length}`);
 var require_flow = __commonJS({
   "node_modules/@babel/types/lib/definitions/flow.js"() {
     "use strict";
+    init_define_process_env();
     var _core = require_core();
     var _utils = require_utils();
     var defineType = (0, _utils.defineAliasedType)("Flow");
@@ -8405,6 +8444,7 @@ var require_flow = __commonJS({
 var require_jsx = __commonJS({
   "node_modules/@babel/types/lib/definitions/jsx.js"() {
     "use strict";
+    init_define_process_env();
     var _utils = require_utils();
     var defineType = (0, _utils.defineAliasedType)("JSX");
     defineType("JSXAttribute", {
@@ -8565,6 +8605,7 @@ var require_jsx = __commonJS({
 var require_placeholders = __commonJS({
   "node_modules/@babel/types/lib/definitions/placeholders.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -8595,6 +8636,7 @@ var require_placeholders = __commonJS({
 var require_misc = __commonJS({
   "node_modules/@babel/types/lib/definitions/misc.js"() {
     "use strict";
+    init_define_process_env();
     var _utils = require_utils();
     var _placeholders = require_placeholders();
     var _core = require_core();
@@ -8629,12 +8671,13 @@ var require_misc = __commonJS({
 var require_experimental = __commonJS({
   "node_modules/@babel/types/lib/definitions/experimental.js"() {
     "use strict";
+    init_define_process_env();
     var _utils = require_utils();
     (0, _utils.default)("ArgumentPlaceholder", {});
     (0, _utils.default)("BindExpression", {
       visitor: ["object", "callee"],
       aliases: ["Expression"],
-      fields: !process.env.BABEL_TYPES_8_BREAKING ? {
+      fields: true ? {
         object: {
           validate: Object.assign(() => {
           }, {
@@ -8758,6 +8801,7 @@ var require_experimental = __commonJS({
 var require_typescript = __commonJS({
   "node_modules/@babel/types/lib/definitions/typescript.js"() {
     "use strict";
+    init_define_process_env();
     var _utils = require_utils();
     var _core = require_core();
     var _is = require_is();
@@ -9290,6 +9334,7 @@ Expected ${val.length + 1} quasis but got ${node.quasis.length}`);
 var require_deprecated_aliases = __commonJS({
   "node_modules/@babel/types/lib/definitions/deprecated-aliases.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -9304,6 +9349,7 @@ var require_deprecated_aliases = __commonJS({
 var require_definitions = __commonJS({
   "node_modules/@babel/types/lib/definitions/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -9413,6 +9459,7 @@ var require_definitions = __commonJS({
 var require_validate = __commonJS({
   "node_modules/@babel/types/lib/validators/validate.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -9458,6 +9505,7 @@ var require_validate = __commonJS({
 var require_lowercase = __commonJS({
   "node_modules/@babel/types/lib/builders/generated/lowercase.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12363,6 +12411,7 @@ var require_lowercase = __commonJS({
 var require_uppercase = __commonJS({
   "node_modules/@babel/types/lib/builders/generated/uppercase.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12638,6 +12687,7 @@ var require_uppercase = __commonJS({
 var require_generated2 = __commonJS({
   "node_modules/@babel/types/lib/builders/generated/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12670,6 +12720,7 @@ var require_generated2 = __commonJS({
 var require_cleanJSXElementLiteralChild = __commonJS({
   "node_modules/@babel/types/lib/utils/react/cleanJSXElementLiteralChild.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12713,6 +12764,7 @@ var require_cleanJSXElementLiteralChild = __commonJS({
 var require_buildChildren = __commonJS({
   "node_modules/@babel/types/lib/builders/react/buildChildren.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12740,6 +12792,7 @@ var require_buildChildren = __commonJS({
 var require_isNode = __commonJS({
   "node_modules/@babel/types/lib/validators/isNode.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12755,6 +12808,7 @@ var require_isNode = __commonJS({
 var require_assertNode = __commonJS({
   "node_modules/@babel/types/lib/asserts/assertNode.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -12774,6 +12828,7 @@ var require_assertNode = __commonJS({
 var require_generated3 = __commonJS({
   "node_modules/@babel/types/lib/asserts/generated/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14028,6 +14083,7 @@ var require_generated3 = __commonJS({
 var require_createTypeAnnotationBasedOnTypeof = __commonJS({
   "node_modules/@babel/types/lib/builders/flow/createTypeAnnotationBasedOnTypeof.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14062,6 +14118,7 @@ var require_createTypeAnnotationBasedOnTypeof = __commonJS({
 var require_removeTypeDuplicates = __commonJS({
   "node_modules/@babel/types/lib/modifications/flow/removeTypeDuplicates.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14130,6 +14187,7 @@ var require_removeTypeDuplicates = __commonJS({
 var require_createFlowUnionType = __commonJS({
   "node_modules/@babel/types/lib/builders/flow/createFlowUnionType.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14151,6 +14209,7 @@ var require_createFlowUnionType = __commonJS({
 var require_removeTypeDuplicates2 = __commonJS({
   "node_modules/@babel/types/lib/modifications/typescript/removeTypeDuplicates.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14220,6 +14279,7 @@ var require_removeTypeDuplicates2 = __commonJS({
 var require_createTSUnionType = __commonJS({
   "node_modules/@babel/types/lib/builders/typescript/createTSUnionType.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14245,6 +14305,7 @@ var require_createTSUnionType = __commonJS({
 var require_productions = __commonJS({
   "node_modules/@babel/types/lib/builders/productions.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14260,6 +14321,7 @@ var require_productions = __commonJS({
 var require_cloneNode = __commonJS({
   "node_modules/@babel/types/lib/clone/cloneNode.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14370,6 +14432,7 @@ var require_cloneNode = __commonJS({
 var require_clone = __commonJS({
   "node_modules/@babel/types/lib/clone/clone.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14385,6 +14448,7 @@ var require_clone = __commonJS({
 var require_cloneDeep = __commonJS({
   "node_modules/@babel/types/lib/clone/cloneDeep.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14400,6 +14464,7 @@ var require_cloneDeep = __commonJS({
 var require_cloneDeepWithoutLoc = __commonJS({
   "node_modules/@babel/types/lib/clone/cloneDeepWithoutLoc.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14415,6 +14480,7 @@ var require_cloneDeepWithoutLoc = __commonJS({
 var require_cloneWithoutLoc = __commonJS({
   "node_modules/@babel/types/lib/clone/cloneWithoutLoc.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14430,6 +14496,7 @@ var require_cloneWithoutLoc = __commonJS({
 var require_addComments = __commonJS({
   "node_modules/@babel/types/lib/comments/addComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14455,6 +14522,7 @@ var require_addComments = __commonJS({
 var require_addComment = __commonJS({
   "node_modules/@babel/types/lib/comments/addComment.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14473,6 +14541,7 @@ var require_addComment = __commonJS({
 var require_inherit = __commonJS({
   "node_modules/@babel/types/lib/utils/inherit.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14489,6 +14558,7 @@ var require_inherit = __commonJS({
 var require_inheritInnerComments = __commonJS({
   "node_modules/@babel/types/lib/comments/inheritInnerComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14504,6 +14574,7 @@ var require_inheritInnerComments = __commonJS({
 var require_inheritLeadingComments = __commonJS({
   "node_modules/@babel/types/lib/comments/inheritLeadingComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14519,6 +14590,7 @@ var require_inheritLeadingComments = __commonJS({
 var require_inheritTrailingComments = __commonJS({
   "node_modules/@babel/types/lib/comments/inheritTrailingComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14534,6 +14606,7 @@ var require_inheritTrailingComments = __commonJS({
 var require_inheritsComments = __commonJS({
   "node_modules/@babel/types/lib/comments/inheritsComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14554,6 +14627,7 @@ var require_inheritsComments = __commonJS({
 var require_removeComments = __commonJS({
   "node_modules/@babel/types/lib/comments/removeComments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14572,6 +14646,7 @@ var require_removeComments = __commonJS({
 var require_generated4 = __commonJS({
   "node_modules/@babel/types/lib/constants/generated/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14635,6 +14710,7 @@ var require_generated4 = __commonJS({
 var require_toBlock = __commonJS({
   "node_modules/@babel/types/lib/converters/toBlock.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14667,6 +14743,7 @@ var require_toBlock = __commonJS({
 var require_ensureBlock = __commonJS({
   "node_modules/@babel/types/lib/converters/ensureBlock.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14684,6 +14761,7 @@ var require_ensureBlock = __commonJS({
 var require_toIdentifier = __commonJS({
   "node_modules/@babel/types/lib/converters/toIdentifier.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14712,6 +14790,7 @@ var require_toIdentifier = __commonJS({
 var require_toBindingIdentifierName = __commonJS({
   "node_modules/@babel/types/lib/converters/toBindingIdentifierName.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14729,6 +14808,7 @@ var require_toBindingIdentifierName = __commonJS({
 var require_toComputedKey = __commonJS({
   "node_modules/@babel/types/lib/converters/toComputedKey.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14746,6 +14826,7 @@ var require_toComputedKey = __commonJS({
 var require_toExpression = __commonJS({
   "node_modules/@babel/types/lib/converters/toExpression.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14777,6 +14858,7 @@ var require_toExpression = __commonJS({
 var require_traverseFast = __commonJS({
   "node_modules/@babel/types/lib/traverse/traverseFast.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14820,6 +14902,7 @@ var require_traverseFast = __commonJS({
 var require_removeProperties = __commonJS({
   "node_modules/@babel/types/lib/modifications/removeProperties.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14847,6 +14930,7 @@ var require_removeProperties = __commonJS({
 var require_removePropertiesDeep = __commonJS({
   "node_modules/@babel/types/lib/modifications/removePropertiesDeep.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14864,6 +14948,7 @@ var require_removePropertiesDeep = __commonJS({
 var require_toKeyAlias = __commonJS({
   "node_modules/@babel/types/lib/converters/toKeyAlias.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14905,6 +14990,7 @@ var require_toKeyAlias = __commonJS({
 var require_toStatement = __commonJS({
   "node_modules/@babel/types/lib/converters/toStatement.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -14947,6 +15033,7 @@ var require_toStatement = __commonJS({
 var require_valueToNode = __commonJS({
   "node_modules/@babel/types/lib/converters/valueToNode.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15038,6 +15125,7 @@ var require_valueToNode = __commonJS({
 var require_appendToMemberExpression = __commonJS({
   "node_modules/@babel/types/lib/modifications/appendToMemberExpression.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15056,6 +15144,7 @@ var require_appendToMemberExpression = __commonJS({
 var require_inherits = __commonJS({
   "node_modules/@babel/types/lib/modifications/inherits.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15087,6 +15176,7 @@ var require_inherits = __commonJS({
 var require_prependToMemberExpression = __commonJS({
   "node_modules/@babel/types/lib/modifications/prependToMemberExpression.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15107,6 +15197,7 @@ var require_prependToMemberExpression = __commonJS({
 var require_getAssignmentIdentifiers = __commonJS({
   "node_modules/@babel/types/lib/retrievers/getAssignmentIdentifiers.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15158,6 +15249,7 @@ var require_getAssignmentIdentifiers = __commonJS({
 var require_getBindingIdentifiers = __commonJS({
   "node_modules/@babel/types/lib/retrievers/getBindingIdentifiers.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15263,6 +15355,7 @@ var require_getBindingIdentifiers = __commonJS({
 var require_getOuterBindingIdentifiers = __commonJS({
   "node_modules/@babel/types/lib/retrievers/getOuterBindingIdentifiers.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15279,6 +15372,7 @@ var require_getOuterBindingIdentifiers = __commonJS({
 var require_getFunctionName = __commonJS({
   "node_modules/@babel/types/lib/retrievers/getFunctionName.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15346,6 +15440,7 @@ var require_getFunctionName = __commonJS({
 var require_traverse = __commonJS({
   "node_modules/@babel/types/lib/traverse/traverse.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15399,6 +15494,7 @@ var require_traverse = __commonJS({
 var require_isBinding = __commonJS({
   "node_modules/@babel/types/lib/validators/isBinding.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15429,6 +15525,7 @@ var require_isBinding = __commonJS({
 var require_isLet = __commonJS({
   "node_modules/@babel/types/lib/validators/isLet.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15445,6 +15542,7 @@ var require_isLet = __commonJS({
 var require_isBlockScoped = __commonJS({
   "node_modules/@babel/types/lib/validators/isBlockScoped.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15461,6 +15559,7 @@ var require_isBlockScoped = __commonJS({
 var require_isImmutable = __commonJS({
   "node_modules/@babel/types/lib/validators/isImmutable.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15485,6 +15584,7 @@ var require_isImmutable = __commonJS({
 var require_isNodesEquivalent = __commonJS({
   "node_modules/@babel/types/lib/validators/isNodesEquivalent.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15545,6 +15645,7 @@ var require_isNodesEquivalent = __commonJS({
 var require_isReferenced = __commonJS({
   "node_modules/@babel/types/lib/validators/isReferenced.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15644,6 +15745,7 @@ var require_isReferenced = __commonJS({
 var require_isScope = __commonJS({
   "node_modules/@babel/types/lib/validators/isScope.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15665,6 +15767,7 @@ var require_isScope = __commonJS({
 var require_isSpecifierDefault = __commonJS({
   "node_modules/@babel/types/lib/validators/isSpecifierDefault.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15682,6 +15785,7 @@ var require_isSpecifierDefault = __commonJS({
 var require_isValidES3Identifier = __commonJS({
   "node_modules/@babel/types/lib/validators/isValidES3Identifier.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15698,6 +15802,7 @@ var require_isValidES3Identifier = __commonJS({
 var require_isVar = __commonJS({
   "node_modules/@babel/types/lib/validators/isVar.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15716,6 +15821,7 @@ var require_isVar = __commonJS({
 var require_gatherSequenceExpressions = __commonJS({
   "node_modules/@babel/types/lib/converters/gatherSequenceExpressions.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15784,6 +15890,7 @@ var require_gatherSequenceExpressions = __commonJS({
 var require_toSequenceExpression = __commonJS({
   "node_modules/@babel/types/lib/converters/toSequenceExpression.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -15806,6 +15913,7 @@ var require_toSequenceExpression = __commonJS({
 var require_lib3 = __commonJS({
   "node_modules/@babel/types/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -16381,7 +16489,7 @@ var require_lib3 = __commonJS({
       buildChildren: _buildChildren.default
     };
     exports.toSequenceExpression = _toSequenceExpression.default;
-    if (process.env.BABEL_TYPES_8_BREAKING) {
+    if (false) {
       console.warn("BABEL_TYPES_8_BREAKING is not supported anymore. Use the latest Babel 8.0.0 pre-release instead!");
     }
   }
@@ -16391,6 +16499,7 @@ var require_lib3 = __commonJS({
 var require_parentheses = __commonJS({
   "node_modules/@babel/generator/lib/node/parentheses.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -16690,6 +16799,7 @@ var require_parentheses = __commonJS({
 var require_template_literals = __commonJS({
   "node_modules/@babel/generator/lib/generators/template-literals.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -16731,6 +16841,7 @@ var require_template_literals = __commonJS({
 var require_expressions = __commonJS({
   "node_modules/@babel/generator/lib/generators/expressions.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -17043,6 +17154,7 @@ var require_expressions = __commonJS({
 var require_statements = __commonJS({
   "node_modules/@babel/generator/lib/generators/statements.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -17343,6 +17455,7 @@ var require_statements = __commonJS({
 var require_methods = __commonJS({
   "node_modules/@babel/generator/lib/generators/methods.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -17553,6 +17666,7 @@ var require_methods = __commonJS({
 var require_typescript2 = __commonJS({
   "node_modules/@babel/generator/lib/generators/typescript.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -18282,6 +18396,7 @@ var require_typescript2 = __commonJS({
 var require_modules = __commonJS({
   "node_modules/@babel/generator/lib/generators/modules.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -18574,6 +18689,7 @@ Please specify the "importAttributesKeyword" generator option, whose value can b
 var require_jsesc = __commonJS({
   "node_modules/jsesc/jsesc.js"(exports, module) {
     "use strict";
+    init_define_process_env();
     var object = {};
     var hasOwnProperty2 = object.hasOwnProperty;
     var forOwn = (object2, callback) => {
@@ -18850,6 +18966,7 @@ var require_jsesc = __commonJS({
 var require_types = __commonJS({
   "node_modules/@babel/generator/lib/generators/types.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -19036,6 +19153,7 @@ var require_types = __commonJS({
 var require_flow2 = __commonJS({
   "node_modules/@babel/generator/lib/generators/flow.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -19697,6 +19815,7 @@ var require_flow2 = __commonJS({
 var require_classes = __commonJS({
   "node_modules/@babel/generator/lib/generators/classes.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -19915,6 +20034,7 @@ var require_classes = __commonJS({
 var require_base = __commonJS({
   "node_modules/@babel/generator/lib/generators/base.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20004,6 +20124,7 @@ var require_base = __commonJS({
 var require_jsx2 = __commonJS({
   "node_modules/@babel/generator/lib/generators/jsx.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20131,6 +20252,7 @@ var require_jsx2 = __commonJS({
 var require_generators = __commonJS({
   "node_modules/@babel/generator/lib/generators/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20262,6 +20384,7 @@ var require_generators = __commonJS({
 var require_deprecated = __commonJS({
   "node_modules/@babel/generator/lib/generators/deprecated.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20339,6 +20462,7 @@ var require_deprecated = __commonJS({
 var require_nodes = __commonJS({
   "node_modules/@babel/generator/lib/nodes.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20361,6 +20485,7 @@ var require_nodes = __commonJS({
 var require_node = __commonJS({
   "node_modules/@babel/generator/lib/node/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20445,6 +20570,7 @@ var require_node = __commonJS({
 var require_token_map = __commonJS({
   "node_modules/@babel/generator/lib/token-map.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -20643,6 +20769,7 @@ var require_token_map = __commonJS({
 var require_printer = __commonJS({
   "node_modules/@babel/generator/lib/printer.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -21432,6 +21559,7 @@ ${" ".repeat(indentSize)}`);
 var require_lib4 = __commonJS({
   "node_modules/@babel/generator/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -21607,6 +21735,7 @@ var import_generator, generate;
 var init_generator_utils = __esm({
   "src/code/generation/generator-utils.ts"() {
     "use strict";
+    init_define_process_env();
     import_generator = __toESM(require_lib4());
     init_regex_utils();
     generate = normalizeBabelGenerator(import_generator.default);
@@ -21617,6 +21746,7 @@ var init_generator_utils = __esm({
 var require_lib5 = __commonJS({
   "node_modules/@babel/parser/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -36192,6 +36322,7 @@ var require_lib5 = __commonJS({
 var require_virtual_types = __commonJS({
   "node_modules/@babel/traverse/lib/path/lib/virtual-types.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -36220,6 +36351,7 @@ var require_virtual_types = __commonJS({
 // node_modules/ms/index.js
 var require_ms = __commonJS({
   "node_modules/ms/index.js"(exports, module) {
+    init_define_process_env();
     var s = 1e3;
     var m = s * 60;
     var h = m * 60;
@@ -36336,6 +36468,7 @@ var require_ms = __commonJS({
 // node_modules/debug/src/common.js
 var require_common = __commonJS({
   "node_modules/debug/src/common.js"(exports, module) {
+    init_define_process_env();
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -36513,6 +36646,7 @@ var require_common = __commonJS({
 // node_modules/debug/src/browser.js
 var require_browser = __commonJS({
   "node_modules/debug/src/browser.js"(exports, module) {
+    init_define_process_env();
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -36658,7 +36792,7 @@ var require_browser = __commonJS({
       } catch (error) {
       }
       if (!r && typeof process !== "undefined" && "env" in process) {
-        r = process.env.DEBUG;
+        r = define_process_env_default.DEBUG;
       }
       return r;
     }
@@ -36684,6 +36818,7 @@ var require_browser = __commonJS({
 var require_virtual_types_validator = __commonJS({
   "node_modules/@babel/traverse/lib/path/lib/virtual-types-validator.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -36849,6 +36984,7 @@ var require_virtual_types_validator = __commonJS({
 var require_visitors = __commonJS({
   "node_modules/@babel/traverse/lib/visitors.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -37104,6 +37240,7 @@ var require_visitors = __commonJS({
 var require_renamer = __commonJS({
   "node_modules/@babel/traverse/lib/scope/lib/renamer.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -37239,6 +37376,7 @@ var require_renamer = __commonJS({
 var require_traverseForScope = __commonJS({
   "node_modules/@babel/traverse/lib/scope/traverseForScope.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -37308,6 +37446,7 @@ var require_traverseForScope = __commonJS({
 var require_binding = __commonJS({
   "node_modules/@babel/traverse/lib/scope/binding.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -37395,6 +37534,7 @@ var require_binding = __commonJS({
 var require_cache = __commonJS({
   "node_modules/@babel/traverse/lib/cache.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -37513,6 +37653,7 @@ var require_builtin_upper = __commonJS({
 var require_scope = __commonJS({
   "node_modules/@babel/traverse/lib/scope/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -38536,6 +38677,7 @@ var require_scope = __commonJS({
 var require_ancestry = __commonJS({
   "node_modules/@babel/traverse/lib/path/ancestry.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -38678,6 +38820,7 @@ var require_ancestry = __commonJS({
 var require_util = __commonJS({
   "node_modules/@babel/traverse/lib/path/inference/util.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -38709,6 +38852,7 @@ var require_util = __commonJS({
 var require_inferer_reference = __commonJS({
   "node_modules/@babel/traverse/lib/path/inference/inferer-reference.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -38864,6 +39008,7 @@ var require_inferer_reference = __commonJS({
 var require_inferers = __commonJS({
   "node_modules/@babel/traverse/lib/path/inference/inferers.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39075,6 +39220,7 @@ var require_inferers = __commonJS({
 var require_inference = __commonJS({
   "node_modules/@babel/traverse/lib/path/inference/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39226,6 +39372,7 @@ var require_inference = __commonJS({
 // node_modules/picocolors/picocolors.browser.js
 var require_picocolors_browser = __commonJS({
   "node_modules/picocolors/picocolors.browser.js"(exports, module) {
+    init_define_process_env();
     var x = String;
     var create = function() {
       return { isColorSupported: false, reset: x, bold: x, dim: x, italic: x, underline: x, inverse: x, hidden: x, strikethrough: x, black: x, red: x, green: x, yellow: x, blue: x, magenta: x, cyan: x, white: x, gray: x, bgBlack: x, bgRed: x, bgGreen: x, bgYellow: x, bgBlue: x, bgMagenta: x, bgCyan: x, bgWhite: x, blackBright: x, redBright: x, greenBright: x, yellowBright: x, blueBright: x, magentaBright: x, cyanBright: x, whiteBright: x, bgBlackBright: x, bgRedBright: x, bgGreenBright: x, bgYellowBright: x, bgBlueBright: x, bgMagentaBright: x, bgCyanBright: x, bgWhiteBright: x };
@@ -39238,6 +39385,7 @@ var require_picocolors_browser = __commonJS({
 // node_modules/js-tokens/index.js
 var require_js_tokens = __commonJS({
   "node_modules/js-tokens/index.js"(exports) {
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39261,12 +39409,13 @@ var require_js_tokens = __commonJS({
 var require_lib6 = __commonJS({
   "node_modules/@babel/code-frame/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", { value: true });
     var picocolors = require_picocolors_browser();
     var jsTokens = require_js_tokens();
     var helperValidatorIdentifier = require_lib();
     function isColorSupported() {
-      return typeof process === "object" && (process.env.FORCE_COLOR === "0" || process.env.FORCE_COLOR === "false") ? false : picocolors.isColorSupported;
+      return typeof process === "object" && (define_process_env_default.FORCE_COLOR === "0" || define_process_env_default.FORCE_COLOR === "false") ? false : picocolors.isColorSupported;
     }
     var compose = (f, g) => (v) => f(g(v));
     function buildDefs(colors) {
@@ -39477,6 +39626,7 @@ ${frame}`;
 var require_removal_hooks = __commonJS({
   "node_modules/@babel/traverse/lib/path/lib/removal-hooks.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39518,6 +39668,7 @@ var require_removal_hooks = __commonJS({
 var require_removal = __commonJS({
   "node_modules/@babel/traverse/lib/path/removal.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39588,6 +39739,7 @@ var require_removal = __commonJS({
 var require_hoister = __commonJS({
   "node_modules/@babel/traverse/lib/path/lib/hoister.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39763,6 +39915,7 @@ var require_hoister = __commonJS({
 var require_modification = __commonJS({
   "node_modules/@babel/traverse/lib/path/modification.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -39995,6 +40148,7 @@ var require_modification = __commonJS({
 var require_replacement = __commonJS({
   "node_modules/@babel/traverse/lib/path/replacement.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -40262,6 +40416,7 @@ var require_replacement = __commonJS({
 var require_evaluation = __commonJS({
   "node_modules/@babel/traverse/lib/path/evaluation.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -40576,13 +40731,13 @@ var require_evaluation = __commonJS({
         let context;
         let func;
         if (callee.isIdentifier() && !path.scope.getBinding(callee.node.name) && (isValidObjectCallee(callee.node.name) || isValidIdentifierCallee(callee.node.name))) {
-          func = global[callee.node.name];
+          func = window[callee.node.name];
         }
         if (callee.isMemberExpression()) {
           const object = callee.get("object");
           const property = callee.get("property");
           if (object.isIdentifier() && property.isIdentifier() && isValidObjectCallee(object.node.name) && !isInvalidMethod(property.node.name)) {
-            context = global[object.node.name];
+            context = window[object.node.name];
             const key = property.node.name;
             if (hasOwnProperty.call(context, key)) {
               func = context[key];
@@ -40638,6 +40793,7 @@ var require_evaluation = __commonJS({
 var require_formatters = __commonJS({
   "node_modules/@babel/template/lib/formatters.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -40707,6 +40863,7 @@ ${str}
 var require_options = __commonJS({
   "node_modules/@babel/template/lib/options.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -40789,6 +40946,7 @@ var require_options = __commonJS({
 var require_parse = __commonJS({
   "node_modules/@babel/template/lib/parse.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -40955,6 +41113,7 @@ var require_parse = __commonJS({
 var require_populate = __commonJS({
   "node_modules/@babel/template/lib/populate.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41096,6 +41255,7 @@ var require_populate = __commonJS({
 var require_string = __commonJS({
   "node_modules/@babel/template/lib/string.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41119,6 +41279,7 @@ var require_string = __commonJS({
 var require_literal = __commonJS({
   "node_modules/@babel/template/lib/literal.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41191,6 +41352,7 @@ var require_literal = __commonJS({
 var require_builder = __commonJS({
   "node_modules/@babel/template/lib/builder.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41265,6 +41427,7 @@ ${rootStack}`;
 var require_lib7 = __commonJS({
   "node_modules/@babel/template/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41291,6 +41454,7 @@ var require_lib7 = __commonJS({
 var require_conversion = __commonJS({
   "node_modules/@babel/traverse/lib/path/conversion.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -41903,6 +42067,7 @@ var require_conversion = __commonJS({
 var require_introspection = __commonJS({
   "node_modules/@babel/traverse/lib/path/introspection.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -42302,6 +42467,7 @@ var require_introspection = __commonJS({
 var require_family = __commonJS({
   "node_modules/@babel/traverse/lib/path/family.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -42651,6 +42817,7 @@ var require_family = __commonJS({
 var require_comments = __commonJS({
   "node_modules/@babel/traverse/lib/path/comments.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -42706,6 +42873,7 @@ var require_comments = __commonJS({
 var require_path = __commonJS({
   "node_modules/@babel/traverse/lib/path/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43000,6 +43168,7 @@ var require_path = __commonJS({
 var require_hub = __commonJS({
   "node_modules/@babel/traverse/lib/hub.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43024,6 +43193,7 @@ var require_hub = __commonJS({
 var require_context = __commonJS({
   "node_modules/@babel/traverse/lib/context.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43152,6 +43322,7 @@ var require_context = __commonJS({
 var require_traverse_node = __commonJS({
   "node_modules/@babel/traverse/lib/traverse-node.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43186,6 +43357,7 @@ var require_traverse_node = __commonJS({
 var require_context2 = __commonJS({
   "node_modules/@babel/traverse/lib/path/context.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43443,6 +43615,7 @@ var require_context2 = __commonJS({
 var require_lib8 = __commonJS({
   "node_modules/@babel/traverse/lib/index.js"(exports) {
     "use strict";
+    init_define_process_env();
     Object.defineProperty(exports, "__esModule", {
       value: true
     });
@@ -43546,6 +43719,7 @@ var import_parser, import_traverse, traverse;
 var init_ast_utils = __esm({
   "src/code/parsing/ast-utils.ts"() {
     "use strict";
+    init_define_process_env();
     import_parser = __toESM(require_lib5());
     import_traverse = __toESM(require_lib8());
     init_debug_trace();
@@ -43557,6 +43731,7 @@ var init_ast_utils = __esm({
 var init_scoped_expr = __esm({
   "src/code/generation/scoped-expr.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_debug_trace();
     init_generator_utils();
@@ -43568,6 +43743,7 @@ var init_scoped_expr = __esm({
 var init_generator_motion_transition = __esm({
   "src/code/generation/generator-motion-transition.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_ast_utils();
     init_generator_utils();
@@ -43601,6 +43777,7 @@ var VIEWPORT_GAP, DEFAULT_VIEWPORT_WIDTH, DEFAULT_BREAKPOINT_STARTS, ACCENT_COLO
 var init_constants = __esm({
   "src/shared/constants.ts"() {
     "use strict";
+    init_define_process_env();
     VIEWPORT_GAP = 160;
     DEFAULT_VIEWPORT_WIDTH = 1440;
     DEFAULT_BREAKPOINT_STARTS = { desktop: 1200, tablet: 810, mobile: 390 };
@@ -43772,6 +43949,7 @@ var init_constants = __esm({
 var init_svg_path_parser = __esm({
   "src/shared/svg-path/svg-path-parser.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
   }
 });
@@ -43780,6 +43958,7 @@ var init_svg_path_parser = __esm({
 var init_svg_geometry = __esm({
   "src/shared/svg-geometry.ts"() {
     "use strict";
+    init_define_process_env();
     init_svg_path_parser();
   }
 });
@@ -43789,6 +43968,7 @@ var t;
 var init_generator_attrs = __esm({
   "src/code/generation/generator-attrs.ts"() {
     "use strict";
+    init_define_process_env();
     t = __toESM(require_lib3());
     init_ast_utils();
     init_constants();
@@ -43803,6 +43983,7 @@ var init_generator_attrs = __esm({
 var init_animation_scope = __esm({
   "src/code/animations/animation-scope.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -43810,6 +43991,7 @@ var init_animation_scope = __esm({
 var init_presence = __esm({
   "src/code/animations/presence.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -43879,6 +44061,7 @@ function substituteScrollVariantFromVarForCanvas(code, routeValues) {
 var init_scroll_variant_gen = __esm({
   "src/code/generation/scroll-variant-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_id_utils();
     init_generator_utils();
@@ -43892,6 +44075,7 @@ var init_scroll_variant_gen = __esm({
 var init_instance_fx_gen = __esm({
   "src/code/generation/instance-fx-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_id_utils();
     init_ast_utils();
@@ -43905,6 +44089,7 @@ var init_instance_fx_gen = __esm({
 var init_generator_motion_scroll_fx = __esm({
   "src/code/generation/generator-motion-scroll-fx.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_id_utils();
     init_scroll_parser();
@@ -43924,6 +44109,7 @@ var init_generator_motion_scroll_fx = __esm({
 var init_generator_motion_compose = __esm({
   "src/code/generation/generator-motion-compose.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_id_utils();
     init_scroll_parser();
@@ -43941,6 +44127,7 @@ var init_generator_motion_compose = __esm({
 var init_generator_motion_loop = __esm({
   "src/code/generation/generator-motion-loop.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_id_utils();
     init_generator_utils();
@@ -43954,6 +44141,7 @@ var init_generator_motion_loop = __esm({
 var init_parse_utils = __esm({
   "src/code/parsing/parse-utils.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -43965,6 +44153,7 @@ var t2;
 var init_rich_text_runs = __esm({
   "src/code/parsing/rich-text-runs.ts"() {
     "use strict";
+    init_define_process_env();
     t2 = __toESM(require_lib3());
     init_ast_utils();
     init_debug_trace();
@@ -43975,6 +44164,7 @@ var init_rich_text_runs = __esm({
 var init_cms_gen = __esm({
   "src/code/generation/cms-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_rich_text_runs();
     init_generator_utils();
@@ -44072,6 +44262,7 @@ var CANVAS_BLOCK_REGEX;
 var init_canvas_config = __esm({
   "src/code/project/canvas-config.ts"() {
     "use strict";
+    init_define_process_env();
     init_constants();
     init_debug_trace();
     CANVAS_BLOCK_REGEX = /\/\*\*\s*@canvas\s*(\{[\s\S]*?\})\s*\*\/\s*\n?/;
@@ -44195,6 +44386,7 @@ function buildStore(...partialBuildingBlocks) {
 var BUILDING_BLOCK_atomRead, BUILDING_BLOCK_atomWrite, BUILDING_BLOCK_atomOnInit, BUILDING_BLOCK_atomOnMount, BUILDING_BLOCK_ensureAtomState, BUILDING_BLOCK_flushCallbacks, BUILDING_BLOCK_recomputeInvalidatedAtoms, storeMutationSet, BUILDING_BLOCK_readAtomState, BUILDING_BLOCK_invalidateDependents, BUILDING_BLOCK_writeAtomState, BUILDING_BLOCK_mountDependencies, BUILDING_BLOCK_mountAtom, BUILDING_BLOCK_unmountAtom, BUILDING_BLOCK_setAtomStateValueOrPromise, BUILDING_BLOCK_storeGet, BUILDING_BLOCK_storeSet, BUILDING_BLOCK_storeSub, BUILDING_BLOCK_registerAbortHandler, BUILDING_BLOCK_abortPromise, buildingBlockMap;
 var init_internals = __esm({
   "node_modules/jotai/esm/vanilla/internals.mjs"() {
+    init_define_process_env();
     BUILDING_BLOCK_atomRead = (_buildingBlocks, _store, atom2, ...params) => atom2.read(...params);
     BUILDING_BLOCK_atomWrite = (_buildingBlocks, _store, atom2, ...params) => atom2.write(...params);
     BUILDING_BLOCK_atomOnInit = (_buildingBlocks, store, atom2) => atom2.INTERNAL_onInit(store);
@@ -44843,980 +45035,451 @@ function getDefaultStore() {
 var keyCount, overriddenCreateStore, defaultStore;
 var init_vanilla = __esm({
   "node_modules/jotai/esm/vanilla.mjs"() {
+    init_define_process_env();
     init_internals();
     keyCount = 0;
   }
 });
 
-// node_modules/react/cjs/react.development.js
-var require_react_development = __commonJS({
-  "node_modules/react/cjs/react.development.js"(exports, module) {
+// node_modules/react/cjs/react.production.js
+var require_react_production = __commonJS({
+  "node_modules/react/cjs/react.production.js"(exports) {
     "use strict";
-    (function() {
-      function defineDeprecationWarning(methodName, info) {
-        Object.defineProperty(Component.prototype, methodName, {
-          get: function() {
-            console.warn(
-              "%s(...) is deprecated in plain JavaScript React classes. %s",
-              info[0],
-              info[1]
-            );
-          }
-        });
+    init_define_process_env();
+    var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element");
+    var REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
+    var REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment");
+    var REACT_STRICT_MODE_TYPE = /* @__PURE__ */ Symbol.for("react.strict_mode");
+    var REACT_PROFILER_TYPE = /* @__PURE__ */ Symbol.for("react.profiler");
+    var REACT_CONSUMER_TYPE = /* @__PURE__ */ Symbol.for("react.consumer");
+    var REACT_CONTEXT_TYPE = /* @__PURE__ */ Symbol.for("react.context");
+    var REACT_FORWARD_REF_TYPE = /* @__PURE__ */ Symbol.for("react.forward_ref");
+    var REACT_SUSPENSE_TYPE = /* @__PURE__ */ Symbol.for("react.suspense");
+    var REACT_MEMO_TYPE = /* @__PURE__ */ Symbol.for("react.memo");
+    var REACT_LAZY_TYPE = /* @__PURE__ */ Symbol.for("react.lazy");
+    var REACT_ACTIVITY_TYPE = /* @__PURE__ */ Symbol.for("react.activity");
+    var MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
+    function getIteratorFn(maybeIterable) {
+      if (null === maybeIterable || "object" !== typeof maybeIterable) return null;
+      maybeIterable = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable["@@iterator"];
+      return "function" === typeof maybeIterable ? maybeIterable : null;
+    }
+    var ReactNoopUpdateQueue = {
+      isMounted: function() {
+        return false;
+      },
+      enqueueForceUpdate: function() {
+      },
+      enqueueReplaceState: function() {
+      },
+      enqueueSetState: function() {
       }
-      function getIteratorFn(maybeIterable) {
-        if (null === maybeIterable || "object" !== typeof maybeIterable)
-          return null;
-        maybeIterable = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable["@@iterator"];
-        return "function" === typeof maybeIterable ? maybeIterable : null;
-      }
-      function warnNoop(publicInstance, callerName) {
-        publicInstance = (publicInstance = publicInstance.constructor) && (publicInstance.displayName || publicInstance.name) || "ReactClass";
-        var warningKey = publicInstance + "." + callerName;
-        didWarnStateUpdateForUnmountedComponent[warningKey] || (console.error(
-          "Can't call %s on a component that is not yet mounted. This is a no-op, but it might indicate a bug in your application. Instead, assign to `this.state` directly or define a `state = {};` class property with the desired state in the %s component.",
-          callerName,
-          publicInstance
-        ), didWarnStateUpdateForUnmountedComponent[warningKey] = true);
-      }
-      function Component(props, context, updater) {
-        this.props = props;
-        this.context = context;
-        this.refs = emptyObject;
-        this.updater = updater || ReactNoopUpdateQueue;
-      }
-      function ComponentDummy() {
-      }
-      function PureComponent(props, context, updater) {
-        this.props = props;
-        this.context = context;
-        this.refs = emptyObject;
-        this.updater = updater || ReactNoopUpdateQueue;
-      }
-      function noop() {
-      }
-      function testStringCoercion(value) {
-        return "" + value;
-      }
-      function checkKeyStringCoercion(value) {
-        try {
-          testStringCoercion(value);
-          var JSCompiler_inline_result = false;
-        } catch (e2) {
-          JSCompiler_inline_result = true;
-        }
-        if (JSCompiler_inline_result) {
-          JSCompiler_inline_result = console;
-          var JSCompiler_temp_const = JSCompiler_inline_result.error;
-          var JSCompiler_inline_result$jscomp$0 = "function" === typeof Symbol && Symbol.toStringTag && value[Symbol.toStringTag] || value.constructor.name || "Object";
-          JSCompiler_temp_const.call(
-            JSCompiler_inline_result,
-            "The provided key is an unsupported type %s. This value must be coerced to a string before using it here.",
-            JSCompiler_inline_result$jscomp$0
-          );
-          return testStringCoercion(value);
-        }
-      }
-      function getComponentNameFromType(type) {
-        if (null == type) return null;
-        if ("function" === typeof type)
-          return type.$$typeof === REACT_CLIENT_REFERENCE ? null : type.displayName || type.name || null;
-        if ("string" === typeof type) return type;
-        switch (type) {
-          case REACT_FRAGMENT_TYPE:
-            return "Fragment";
-          case REACT_PROFILER_TYPE:
-            return "Profiler";
-          case REACT_STRICT_MODE_TYPE:
-            return "StrictMode";
-          case REACT_SUSPENSE_TYPE:
-            return "Suspense";
-          case REACT_SUSPENSE_LIST_TYPE:
-            return "SuspenseList";
-          case REACT_ACTIVITY_TYPE:
-            return "Activity";
-        }
-        if ("object" === typeof type)
-          switch ("number" === typeof type.tag && console.error(
-            "Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue."
-          ), type.$$typeof) {
-            case REACT_PORTAL_TYPE:
-              return "Portal";
-            case REACT_CONTEXT_TYPE:
-              return type.displayName || "Context";
-            case REACT_CONSUMER_TYPE:
-              return (type._context.displayName || "Context") + ".Consumer";
-            case REACT_FORWARD_REF_TYPE:
-              var innerType = type.render;
-              type = type.displayName;
-              type || (type = innerType.displayName || innerType.name || "", type = "" !== type ? "ForwardRef(" + type + ")" : "ForwardRef");
-              return type;
-            case REACT_MEMO_TYPE:
-              return innerType = type.displayName || null, null !== innerType ? innerType : getComponentNameFromType(type.type) || "Memo";
-            case REACT_LAZY_TYPE:
-              innerType = type._payload;
-              type = type._init;
-              try {
-                return getComponentNameFromType(type(innerType));
-              } catch (x) {
-              }
-          }
-        return null;
-      }
-      function getTaskName(type) {
-        if (type === REACT_FRAGMENT_TYPE) return "<>";
-        if ("object" === typeof type && null !== type && type.$$typeof === REACT_LAZY_TYPE)
-          return "<...>";
-        try {
-          var name = getComponentNameFromType(type);
-          return name ? "<" + name + ">" : "<...>";
-        } catch (x) {
-          return "<...>";
-        }
-      }
-      function getOwner() {
-        var dispatcher = ReactSharedInternals.A;
-        return null === dispatcher ? null : dispatcher.getOwner();
-      }
-      function UnknownOwner() {
-        return Error("react-stack-top-frame");
-      }
-      function hasValidKey(config) {
-        if (hasOwnProperty2.call(config, "key")) {
-          var getter = Object.getOwnPropertyDescriptor(config, "key").get;
-          if (getter && getter.isReactWarning) return false;
-        }
-        return void 0 !== config.key;
-      }
-      function defineKeyPropWarningGetter(props, displayName) {
-        function warnAboutAccessingKey() {
-          specialPropKeyWarningShown || (specialPropKeyWarningShown = true, console.error(
-            "%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://react.dev/link/special-props)",
-            displayName
-          ));
-        }
-        warnAboutAccessingKey.isReactWarning = true;
-        Object.defineProperty(props, "key", {
-          get: warnAboutAccessingKey,
-          configurable: true
-        });
-      }
-      function elementRefGetterWithDeprecationWarning() {
-        var componentName = getComponentNameFromType(this.type);
-        didWarnAboutElementRef[componentName] || (didWarnAboutElementRef[componentName] = true, console.error(
-          "Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release."
-        ));
-        componentName = this.props.ref;
-        return void 0 !== componentName ? componentName : null;
-      }
-      function ReactElement(type, key, props, owner, debugStack, debugTask) {
-        var refProp = props.ref;
-        type = {
-          $$typeof: REACT_ELEMENT_TYPE,
-          type,
-          key,
-          props,
-          _owner: owner
-        };
-        null !== (void 0 !== refProp ? refProp : null) ? Object.defineProperty(type, "ref", {
-          enumerable: false,
-          get: elementRefGetterWithDeprecationWarning
-        }) : Object.defineProperty(type, "ref", { enumerable: false, value: null });
-        type._store = {};
-        Object.defineProperty(type._store, "validated", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: 0
-        });
-        Object.defineProperty(type, "_debugInfo", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: null
-        });
-        Object.defineProperty(type, "_debugStack", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: debugStack
-        });
-        Object.defineProperty(type, "_debugTask", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: debugTask
-        });
-        Object.freeze && (Object.freeze(type.props), Object.freeze(type));
-        return type;
-      }
-      function cloneAndReplaceKey(oldElement, newKey) {
-        newKey = ReactElement(
-          oldElement.type,
-          newKey,
-          oldElement.props,
-          oldElement._owner,
-          oldElement._debugStack,
-          oldElement._debugTask
+    };
+    var assign = Object.assign;
+    var emptyObject = {};
+    function Component(props, context, updater) {
+      this.props = props;
+      this.context = context;
+      this.refs = emptyObject;
+      this.updater = updater || ReactNoopUpdateQueue;
+    }
+    Component.prototype.isReactComponent = {};
+    Component.prototype.setState = function(partialState, callback) {
+      if ("object" !== typeof partialState && "function" !== typeof partialState && null != partialState)
+        throw Error(
+          "takes an object of state variables to update or a function which returns an object of state variables."
         );
-        oldElement._store && (newKey._store.validated = oldElement._store.validated);
-        return newKey;
-      }
-      function validateChildKeys(node) {
-        isValidElement3(node) ? node._store && (node._store.validated = 1) : "object" === typeof node && null !== node && node.$$typeof === REACT_LAZY_TYPE && ("fulfilled" === node._payload.status ? isValidElement3(node._payload.value) && node._payload.value._store && (node._payload.value._store.validated = 1) : node._store && (node._store.validated = 1));
-      }
-      function isValidElement3(object) {
-        return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
-      }
-      function escape(key) {
-        var escaperLookup = { "=": "=0", ":": "=2" };
-        return "$" + key.replace(/[=:]/g, function(match) {
-          return escaperLookup[match];
-        });
-      }
-      function getElementKey(element, index) {
-        return "object" === typeof element && null !== element && null != element.key ? (checkKeyStringCoercion(element.key), escape("" + element.key)) : index.toString(36);
-      }
-      function resolveThenable(thenable) {
-        switch (thenable.status) {
-          case "fulfilled":
-            return thenable.value;
-          case "rejected":
-            throw thenable.reason;
-          default:
-            switch ("string" === typeof thenable.status ? thenable.then(noop, noop) : (thenable.status = "pending", thenable.then(
-              function(fulfilledValue) {
-                "pending" === thenable.status && (thenable.status = "fulfilled", thenable.value = fulfilledValue);
-              },
-              function(error) {
-                "pending" === thenable.status && (thenable.status = "rejected", thenable.reason = error);
-              }
-            )), thenable.status) {
-              case "fulfilled":
-                return thenable.value;
-              case "rejected":
-                throw thenable.reason;
-            }
-        }
-        throw thenable;
-      }
-      function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
-        var type = typeof children;
-        if ("undefined" === type || "boolean" === type) children = null;
-        var invokeCallback = false;
-        if (null === children) invokeCallback = true;
-        else
-          switch (type) {
-            case "bigint":
-            case "string":
-            case "number":
-              invokeCallback = true;
-              break;
-            case "object":
-              switch (children.$$typeof) {
-                case REACT_ELEMENT_TYPE:
-                case REACT_PORTAL_TYPE:
-                  invokeCallback = true;
-                  break;
-                case REACT_LAZY_TYPE:
-                  return invokeCallback = children._init, mapIntoArray(
-                    invokeCallback(children._payload),
-                    array,
-                    escapedPrefix,
-                    nameSoFar,
-                    callback
-                  );
-              }
-          }
-        if (invokeCallback) {
-          invokeCallback = children;
-          callback = callback(invokeCallback);
-          var childKey = "" === nameSoFar ? "." + getElementKey(invokeCallback, 0) : nameSoFar;
-          isArrayImpl(callback) ? (escapedPrefix = "", null != childKey && (escapedPrefix = childKey.replace(userProvidedKeyEscapeRegex, "$&/") + "/"), mapIntoArray(callback, array, escapedPrefix, "", function(c) {
-            return c;
-          })) : null != callback && (isValidElement3(callback) && (null != callback.key && (invokeCallback && invokeCallback.key === callback.key || checkKeyStringCoercion(callback.key)), escapedPrefix = cloneAndReplaceKey(
-            callback,
-            escapedPrefix + (null == callback.key || invokeCallback && invokeCallback.key === callback.key ? "" : ("" + callback.key).replace(
-              userProvidedKeyEscapeRegex,
-              "$&/"
-            ) + "/") + childKey
-          ), "" !== nameSoFar && null != invokeCallback && isValidElement3(invokeCallback) && null == invokeCallback.key && invokeCallback._store && !invokeCallback._store.validated && (escapedPrefix._store.validated = 2), callback = escapedPrefix), array.push(callback));
-          return 1;
-        }
-        invokeCallback = 0;
-        childKey = "" === nameSoFar ? "." : nameSoFar + ":";
-        if (isArrayImpl(children))
-          for (var i = 0; i < children.length; i++)
-            nameSoFar = children[i], type = childKey + getElementKey(nameSoFar, i), invokeCallback += mapIntoArray(
-              nameSoFar,
-              array,
-              escapedPrefix,
-              type,
-              callback
-            );
-        else if (i = getIteratorFn(children), "function" === typeof i)
-          for (i === children.entries && (didWarnAboutMaps || console.warn(
-            "Using Maps as children is not supported. Use an array of keyed ReactElements instead."
-          ), didWarnAboutMaps = true), children = i.call(children), i = 0; !(nameSoFar = children.next()).done; )
-            nameSoFar = nameSoFar.value, type = childKey + getElementKey(nameSoFar, i++), invokeCallback += mapIntoArray(
-              nameSoFar,
-              array,
-              escapedPrefix,
-              type,
-              callback
-            );
-        else if ("object" === type) {
-          if ("function" === typeof children.then)
-            return mapIntoArray(
-              resolveThenable(children),
-              array,
-              escapedPrefix,
-              nameSoFar,
-              callback
-            );
-          array = String(children);
-          throw Error(
-            "Objects are not valid as a React child (found: " + ("[object Object]" === array ? "object with keys {" + Object.keys(children).join(", ") + "}" : array) + "). If you meant to render a collection of children, use an array instead."
-          );
-        }
-        return invokeCallback;
-      }
-      function mapChildren(children, func, context) {
-        if (null == children) return children;
-        var result = [], count = 0;
-        mapIntoArray(children, result, "", "", function(child) {
-          return func.call(context, child, count++);
-        });
-        return result;
-      }
-      function lazyInitializer(payload) {
-        if (-1 === payload._status) {
-          var ioInfo = payload._ioInfo;
-          null != ioInfo && (ioInfo.start = ioInfo.end = performance.now());
-          ioInfo = payload._result;
-          var thenable = ioInfo();
-          thenable.then(
-            function(moduleObject) {
-              if (0 === payload._status || -1 === payload._status) {
-                payload._status = 1;
-                payload._result = moduleObject;
-                var _ioInfo = payload._ioInfo;
-                null != _ioInfo && (_ioInfo.end = performance.now());
-                void 0 === thenable.status && (thenable.status = "fulfilled", thenable.value = moduleObject);
-              }
+      this.updater.enqueueSetState(this, partialState, callback, "setState");
+    };
+    Component.prototype.forceUpdate = function(callback) {
+      this.updater.enqueueForceUpdate(this, callback, "forceUpdate");
+    };
+    function ComponentDummy() {
+    }
+    ComponentDummy.prototype = Component.prototype;
+    function PureComponent(props, context, updater) {
+      this.props = props;
+      this.context = context;
+      this.refs = emptyObject;
+      this.updater = updater || ReactNoopUpdateQueue;
+    }
+    var pureComponentPrototype = PureComponent.prototype = new ComponentDummy();
+    pureComponentPrototype.constructor = PureComponent;
+    assign(pureComponentPrototype, Component.prototype);
+    pureComponentPrototype.isPureReactComponent = true;
+    var isArrayImpl = Array.isArray;
+    function noop() {
+    }
+    var ReactSharedInternals = { H: null, A: null, T: null, S: null };
+    var hasOwnProperty2 = Object.prototype.hasOwnProperty;
+    function ReactElement(type, key, props) {
+      var refProp = props.ref;
+      return {
+        $$typeof: REACT_ELEMENT_TYPE,
+        type,
+        key,
+        ref: void 0 !== refProp ? refProp : null,
+        props
+      };
+    }
+    function cloneAndReplaceKey(oldElement, newKey) {
+      return ReactElement(oldElement.type, newKey, oldElement.props);
+    }
+    function isValidElement3(object) {
+      return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
+    }
+    function escape(key) {
+      var escaperLookup = { "=": "=0", ":": "=2" };
+      return "$" + key.replace(/[=:]/g, function(match) {
+        return escaperLookup[match];
+      });
+    }
+    var userProvidedKeyEscapeRegex = /\/+/g;
+    function getElementKey(element, index) {
+      return "object" === typeof element && null !== element && null != element.key ? escape("" + element.key) : index.toString(36);
+    }
+    function resolveThenable(thenable) {
+      switch (thenable.status) {
+        case "fulfilled":
+          return thenable.value;
+        case "rejected":
+          throw thenable.reason;
+        default:
+          switch ("string" === typeof thenable.status ? thenable.then(noop, noop) : (thenable.status = "pending", thenable.then(
+            function(fulfilledValue) {
+              "pending" === thenable.status && (thenable.status = "fulfilled", thenable.value = fulfilledValue);
             },
             function(error) {
-              if (0 === payload._status || -1 === payload._status) {
-                payload._status = 2;
-                payload._result = error;
-                var _ioInfo2 = payload._ioInfo;
-                null != _ioInfo2 && (_ioInfo2.end = performance.now());
-                void 0 === thenable.status && (thenable.status = "rejected", thenable.reason = error);
-              }
+              "pending" === thenable.status && (thenable.status = "rejected", thenable.reason = error);
             }
+          )), thenable.status) {
+            case "fulfilled":
+              return thenable.value;
+            case "rejected":
+              throw thenable.reason;
+          }
+      }
+      throw thenable;
+    }
+    function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
+      var type = typeof children;
+      if ("undefined" === type || "boolean" === type) children = null;
+      var invokeCallback = false;
+      if (null === children) invokeCallback = true;
+      else
+        switch (type) {
+          case "bigint":
+          case "string":
+          case "number":
+            invokeCallback = true;
+            break;
+          case "object":
+            switch (children.$$typeof) {
+              case REACT_ELEMENT_TYPE:
+              case REACT_PORTAL_TYPE:
+                invokeCallback = true;
+                break;
+              case REACT_LAZY_TYPE:
+                return invokeCallback = children._init, mapIntoArray(
+                  invokeCallback(children._payload),
+                  array,
+                  escapedPrefix,
+                  nameSoFar,
+                  callback
+                );
+            }
+        }
+      if (invokeCallback)
+        return callback = callback(children), invokeCallback = "" === nameSoFar ? "." + getElementKey(children, 0) : nameSoFar, isArrayImpl(callback) ? (escapedPrefix = "", null != invokeCallback && (escapedPrefix = invokeCallback.replace(userProvidedKeyEscapeRegex, "$&/") + "/"), mapIntoArray(callback, array, escapedPrefix, "", function(c) {
+          return c;
+        })) : null != callback && (isValidElement3(callback) && (callback = cloneAndReplaceKey(
+          callback,
+          escapedPrefix + (null == callback.key || children && children.key === callback.key ? "" : ("" + callback.key).replace(
+            userProvidedKeyEscapeRegex,
+            "$&/"
+          ) + "/") + invokeCallback
+        )), array.push(callback)), 1;
+      invokeCallback = 0;
+      var nextNamePrefix = "" === nameSoFar ? "." : nameSoFar + ":";
+      if (isArrayImpl(children))
+        for (var i = 0; i < children.length; i++)
+          nameSoFar = children[i], type = nextNamePrefix + getElementKey(nameSoFar, i), invokeCallback += mapIntoArray(
+            nameSoFar,
+            array,
+            escapedPrefix,
+            type,
+            callback
           );
-          ioInfo = payload._ioInfo;
-          if (null != ioInfo) {
-            ioInfo.value = thenable;
-            var displayName = thenable.displayName;
-            "string" === typeof displayName && (ioInfo.name = displayName);
-          }
-          -1 === payload._status && (payload._status = 0, payload._result = thenable);
-        }
-        if (1 === payload._status)
-          return ioInfo = payload._result, void 0 === ioInfo && console.error(
-            "lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))\n\nDid you accidentally put curly braces around the import?",
-            ioInfo
-          ), "default" in ioInfo || console.error(
-            "lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))",
-            ioInfo
-          ), ioInfo.default;
-        throw payload._result;
-      }
-      function resolveDispatcher() {
-        var dispatcher = ReactSharedInternals.H;
-        null === dispatcher && console.error(
-          "Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:\n1. You might have mismatching versions of React and the renderer (such as React DOM)\n2. You might be breaking the Rules of Hooks\n3. You might have more than one copy of React in the same app\nSee https://react.dev/link/invalid-hook-call for tips about how to debug and fix this problem."
-        );
-        return dispatcher;
-      }
-      function releaseAsyncTransition() {
-        ReactSharedInternals.asyncTransitions--;
-      }
-      function enqueueTask(task) {
-        if (null === enqueueTaskImpl)
-          try {
-            var requireString = ("require" + Math.random()).slice(0, 7);
-            enqueueTaskImpl = (module && module[requireString]).call(
-              module,
-              "timers"
-            ).setImmediate;
-          } catch (_err) {
-            enqueueTaskImpl = function(callback) {
-              false === didWarnAboutMessageChannel && (didWarnAboutMessageChannel = true, "undefined" === typeof MessageChannel && console.error(
-                "This browser does not have a MessageChannel implementation, so enqueuing tasks via await act(async () => ...) will fail. Please file an issue at https://github.com/facebook/react/issues if you encounter this warning."
-              ));
-              var channel = new MessageChannel();
-              channel.port1.onmessage = callback;
-              channel.port2.postMessage(void 0);
-            };
-          }
-        return enqueueTaskImpl(task);
-      }
-      function aggregateErrors(errors) {
-        return 1 < errors.length && "function" === typeof AggregateError ? new AggregateError(errors) : errors[0];
-      }
-      function popActScope(prevActQueue, prevActScopeDepth) {
-        prevActScopeDepth !== actScopeDepth - 1 && console.error(
-          "You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. "
-        );
-        actScopeDepth = prevActScopeDepth;
-      }
-      function recursivelyFlushAsyncActWork(returnValue, resolve, reject) {
-        var queue = ReactSharedInternals.actQueue;
-        if (null !== queue)
-          if (0 !== queue.length)
-            try {
-              flushActQueue(queue);
-              enqueueTask(function() {
-                return recursivelyFlushAsyncActWork(returnValue, resolve, reject);
-              });
-              return;
-            } catch (error) {
-              ReactSharedInternals.thrownErrors.push(error);
-            }
-          else ReactSharedInternals.actQueue = null;
-        0 < ReactSharedInternals.thrownErrors.length ? (queue = aggregateErrors(ReactSharedInternals.thrownErrors), ReactSharedInternals.thrownErrors.length = 0, reject(queue)) : resolve(returnValue);
-      }
-      function flushActQueue(queue) {
-        if (!isFlushing) {
-          isFlushing = true;
-          var i = 0;
-          try {
-            for (; i < queue.length; i++) {
-              var callback = queue[i];
-              do {
-                ReactSharedInternals.didUsePromise = false;
-                var continuation = callback(false);
-                if (null !== continuation) {
-                  if (ReactSharedInternals.didUsePromise) {
-                    queue[i] = callback;
-                    queue.splice(0, i);
-                    return;
-                  }
-                  callback = continuation;
-                } else break;
-              } while (1);
-            }
-            queue.length = 0;
-          } catch (error) {
-            queue.splice(0, i + 1), ReactSharedInternals.thrownErrors.push(error);
-          } finally {
-            isFlushing = false;
-          }
-        }
-      }
-      "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-      var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = /* @__PURE__ */ Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = /* @__PURE__ */ Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = /* @__PURE__ */ Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = /* @__PURE__ */ Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = /* @__PURE__ */ Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = /* @__PURE__ */ Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = /* @__PURE__ */ Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = /* @__PURE__ */ Symbol.for("react.memo"), REACT_LAZY_TYPE = /* @__PURE__ */ Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = /* @__PURE__ */ Symbol.for("react.activity"), MAYBE_ITERATOR_SYMBOL = Symbol.iterator, didWarnStateUpdateForUnmountedComponent = {}, ReactNoopUpdateQueue = {
-        isMounted: function() {
-          return false;
-        },
-        enqueueForceUpdate: function(publicInstance) {
-          warnNoop(publicInstance, "forceUpdate");
-        },
-        enqueueReplaceState: function(publicInstance) {
-          warnNoop(publicInstance, "replaceState");
-        },
-        enqueueSetState: function(publicInstance) {
-          warnNoop(publicInstance, "setState");
-        }
-      }, assign = Object.assign, emptyObject = {};
-      Object.freeze(emptyObject);
-      Component.prototype.isReactComponent = {};
-      Component.prototype.setState = function(partialState, callback) {
-        if ("object" !== typeof partialState && "function" !== typeof partialState && null != partialState)
-          throw Error(
-            "takes an object of state variables to update or a function which returns an object of state variables."
+      else if (i = getIteratorFn(children), "function" === typeof i)
+        for (children = i.call(children), i = 0; !(nameSoFar = children.next()).done; )
+          nameSoFar = nameSoFar.value, type = nextNamePrefix + getElementKey(nameSoFar, i++), invokeCallback += mapIntoArray(
+            nameSoFar,
+            array,
+            escapedPrefix,
+            type,
+            callback
           );
-        this.updater.enqueueSetState(this, partialState, callback, "setState");
-      };
-      Component.prototype.forceUpdate = function(callback) {
-        this.updater.enqueueForceUpdate(this, callback, "forceUpdate");
-      };
-      var deprecatedAPIs = {
-        isMounted: [
-          "isMounted",
-          "Instead, make sure to clean up subscriptions and pending requests in componentWillUnmount to prevent memory leaks."
-        ],
-        replaceState: [
-          "replaceState",
-          "Refactor your code to use setState instead (see https://github.com/facebook/react/issues/3236)."
-        ]
-      };
-      for (fnName in deprecatedAPIs)
-        deprecatedAPIs.hasOwnProperty(fnName) && defineDeprecationWarning(fnName, deprecatedAPIs[fnName]);
-      ComponentDummy.prototype = Component.prototype;
-      deprecatedAPIs = PureComponent.prototype = new ComponentDummy();
-      deprecatedAPIs.constructor = PureComponent;
-      assign(deprecatedAPIs, Component.prototype);
-      deprecatedAPIs.isPureReactComponent = true;
-      var isArrayImpl = Array.isArray, REACT_CLIENT_REFERENCE = /* @__PURE__ */ Symbol.for("react.client.reference"), ReactSharedInternals = {
-        H: null,
-        A: null,
-        T: null,
-        S: null,
-        actQueue: null,
-        asyncTransitions: 0,
-        isBatchingLegacy: false,
-        didScheduleLegacyUpdate: false,
-        didUsePromise: false,
-        thrownErrors: [],
-        getCurrentStack: null,
-        recentlyCreatedOwnerStacks: 0
-      }, hasOwnProperty2 = Object.prototype.hasOwnProperty, createTask = console.createTask ? console.createTask : function() {
-        return null;
-      };
-      deprecatedAPIs = {
-        react_stack_bottom_frame: function(callStackForError) {
-          return callStackForError();
-        }
-      };
-      var specialPropKeyWarningShown, didWarnAboutOldJSXRuntime;
-      var didWarnAboutElementRef = {};
-      var unknownOwnerDebugStack = deprecatedAPIs.react_stack_bottom_frame.bind(
-        deprecatedAPIs,
-        UnknownOwner
-      )();
-      var unknownOwnerDebugTask = createTask(getTaskName(UnknownOwner));
-      var didWarnAboutMaps = false, userProvidedKeyEscapeRegex = /\/+/g, reportGlobalError = "function" === typeof reportError ? reportError : function(error) {
-        if ("object" === typeof window && "function" === typeof window.ErrorEvent) {
-          var event = new window.ErrorEvent("error", {
-            bubbles: true,
-            cancelable: true,
-            message: "object" === typeof error && null !== error && "string" === typeof error.message ? String(error.message) : String(error),
-            error
-          });
-          if (!window.dispatchEvent(event)) return;
-        } else if ("object" === typeof process && "function" === typeof process.emit) {
-          process.emit("uncaughtException", error);
-          return;
-        }
-        console.error(error);
-      }, didWarnAboutMessageChannel = false, enqueueTaskImpl = null, actScopeDepth = 0, didWarnNoAwaitAct = false, isFlushing = false, queueSeveralMicrotasks = "function" === typeof queueMicrotask ? function(callback) {
-        queueMicrotask(function() {
-          return queueMicrotask(callback);
-        });
-      } : enqueueTask;
-      deprecatedAPIs = Object.freeze({
-        __proto__: null,
-        c: function(size) {
-          return resolveDispatcher().useMemoCache(size);
-        }
+      else if ("object" === type) {
+        if ("function" === typeof children.then)
+          return mapIntoArray(
+            resolveThenable(children),
+            array,
+            escapedPrefix,
+            nameSoFar,
+            callback
+          );
+        array = String(children);
+        throw Error(
+          "Objects are not valid as a React child (found: " + ("[object Object]" === array ? "object with keys {" + Object.keys(children).join(", ") + "}" : array) + "). If you meant to render a collection of children, use an array instead."
+        );
+      }
+      return invokeCallback;
+    }
+    function mapChildren(children, func, context) {
+      if (null == children) return children;
+      var result = [], count = 0;
+      mapIntoArray(children, result, "", "", function(child) {
+        return func.call(context, child, count++);
       });
-      var fnName = {
-        map: mapChildren,
-        forEach: function(children, forEachFunc, forEachContext) {
-          mapChildren(
-            children,
-            function() {
-              forEachFunc.apply(this, arguments);
-            },
-            forEachContext
-          );
-        },
-        count: function(children) {
-          var n = 0;
-          mapChildren(children, function() {
-            n++;
-          });
-          return n;
-        },
-        toArray: function(children) {
-          return mapChildren(children, function(child) {
-            return child;
-          }) || [];
-        },
-        only: function(children) {
-          if (!isValidElement3(children))
-            throw Error(
-              "React.Children.only expected to receive a single React element child."
-            );
-          return children;
-        }
-      };
-      exports.Activity = REACT_ACTIVITY_TYPE;
-      exports.Children = fnName;
-      exports.Component = Component;
-      exports.Fragment = REACT_FRAGMENT_TYPE;
-      exports.Profiler = REACT_PROFILER_TYPE;
-      exports.PureComponent = PureComponent;
-      exports.StrictMode = REACT_STRICT_MODE_TYPE;
-      exports.Suspense = REACT_SUSPENSE_TYPE;
-      exports.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = ReactSharedInternals;
-      exports.__COMPILER_RUNTIME = deprecatedAPIs;
-      exports.act = function(callback) {
-        var prevActQueue = ReactSharedInternals.actQueue, prevActScopeDepth = actScopeDepth;
-        actScopeDepth++;
-        var queue = ReactSharedInternals.actQueue = null !== prevActQueue ? prevActQueue : [], didAwaitActCall = false;
-        try {
-          var result = callback();
-        } catch (error) {
-          ReactSharedInternals.thrownErrors.push(error);
-        }
-        if (0 < ReactSharedInternals.thrownErrors.length)
-          throw popActScope(prevActQueue, prevActScopeDepth), callback = aggregateErrors(ReactSharedInternals.thrownErrors), ReactSharedInternals.thrownErrors.length = 0, callback;
-        if (null !== result && "object" === typeof result && "function" === typeof result.then) {
-          var thenable = result;
-          queueSeveralMicrotasks(function() {
-            didAwaitActCall || didWarnNoAwaitAct || (didWarnNoAwaitAct = true, console.error(
-              "You called act(async () => ...) without await. This could lead to unexpected testing behaviour, interleaving multiple act calls and mixing their scopes. You should - await act(async () => ...);"
-            ));
-          });
-          return {
-            then: function(resolve, reject) {
-              didAwaitActCall = true;
-              thenable.then(
-                function(returnValue) {
-                  popActScope(prevActQueue, prevActScopeDepth);
-                  if (0 === prevActScopeDepth) {
-                    try {
-                      flushActQueue(queue), enqueueTask(function() {
-                        return recursivelyFlushAsyncActWork(
-                          returnValue,
-                          resolve,
-                          reject
-                        );
-                      });
-                    } catch (error$0) {
-                      ReactSharedInternals.thrownErrors.push(error$0);
-                    }
-                    if (0 < ReactSharedInternals.thrownErrors.length) {
-                      var _thrownError = aggregateErrors(
-                        ReactSharedInternals.thrownErrors
-                      );
-                      ReactSharedInternals.thrownErrors.length = 0;
-                      reject(_thrownError);
-                    }
-                  } else resolve(returnValue);
-                },
-                function(error) {
-                  popActScope(prevActQueue, prevActScopeDepth);
-                  0 < ReactSharedInternals.thrownErrors.length ? (error = aggregateErrors(
-                    ReactSharedInternals.thrownErrors
-                  ), ReactSharedInternals.thrownErrors.length = 0, reject(error)) : reject(error);
-                }
-              );
-            }
-          };
-        }
-        var returnValue$jscomp$0 = result;
-        popActScope(prevActQueue, prevActScopeDepth);
-        0 === prevActScopeDepth && (flushActQueue(queue), 0 !== queue.length && queueSeveralMicrotasks(function() {
-          didAwaitActCall || didWarnNoAwaitAct || (didWarnNoAwaitAct = true, console.error(
-            "A component suspended inside an `act` scope, but the `act` call was not awaited. When testing React components that depend on asynchronous data, you must await the result:\n\nawait act(() => ...)"
-          ));
-        }), ReactSharedInternals.actQueue = null);
-        if (0 < ReactSharedInternals.thrownErrors.length)
-          throw callback = aggregateErrors(ReactSharedInternals.thrownErrors), ReactSharedInternals.thrownErrors.length = 0, callback;
-        return {
-          then: function(resolve, reject) {
-            didAwaitActCall = true;
-            0 === prevActScopeDepth ? (ReactSharedInternals.actQueue = queue, enqueueTask(function() {
-              return recursivelyFlushAsyncActWork(
-                returnValue$jscomp$0,
-                resolve,
-                reject
-              );
-            })) : resolve(returnValue$jscomp$0);
+      return result;
+    }
+    function lazyInitializer(payload) {
+      if (-1 === payload._status) {
+        var ctor = payload._result;
+        ctor = ctor();
+        ctor.then(
+          function(moduleObject) {
+            if (0 === payload._status || -1 === payload._status)
+              payload._status = 1, payload._result = moduleObject;
+          },
+          function(error) {
+            if (0 === payload._status || -1 === payload._status)
+              payload._status = 2, payload._result = error;
           }
-        };
-      };
-      exports.cache = function(fn) {
-        return function() {
-          return fn.apply(null, arguments);
-        };
-      };
-      exports.cacheSignal = function() {
-        return null;
-      };
-      exports.captureOwnerStack = function() {
-        var getCurrentStack = ReactSharedInternals.getCurrentStack;
-        return null === getCurrentStack ? null : getCurrentStack();
-      };
-      exports.cloneElement = function(element, config, children) {
-        if (null === element || void 0 === element)
+        );
+        -1 === payload._status && (payload._status = 0, payload._result = ctor);
+      }
+      if (1 === payload._status) return payload._result.default;
+      throw payload._result;
+    }
+    var reportGlobalError = "function" === typeof reportError ? reportError : function(error) {
+      if ("object" === typeof window && "function" === typeof window.ErrorEvent) {
+        var event = new window.ErrorEvent("error", {
+          bubbles: true,
+          cancelable: true,
+          message: "object" === typeof error && null !== error && "string" === typeof error.message ? String(error.message) : String(error),
+          error
+        });
+        if (!window.dispatchEvent(event)) return;
+      } else if ("object" === typeof process && "function" === typeof process.emit) {
+        process.emit("uncaughtException", error);
+        return;
+      }
+      console.error(error);
+    };
+    var Children2 = {
+      map: mapChildren,
+      forEach: function(children, forEachFunc, forEachContext) {
+        mapChildren(
+          children,
+          function() {
+            forEachFunc.apply(this, arguments);
+          },
+          forEachContext
+        );
+      },
+      count: function(children) {
+        var n = 0;
+        mapChildren(children, function() {
+          n++;
+        });
+        return n;
+      },
+      toArray: function(children) {
+        return mapChildren(children, function(child) {
+          return child;
+        }) || [];
+      },
+      only: function(children) {
+        if (!isValidElement3(children))
           throw Error(
-            "The argument must be a React element, but you passed " + element + "."
+            "React.Children.only expected to receive a single React element child."
           );
-        var props = assign({}, element.props), key = element.key, owner = element._owner;
-        if (null != config) {
-          var JSCompiler_inline_result;
-          a: {
-            if (hasOwnProperty2.call(config, "ref") && (JSCompiler_inline_result = Object.getOwnPropertyDescriptor(
-              config,
-              "ref"
-            ).get) && JSCompiler_inline_result.isReactWarning) {
-              JSCompiler_inline_result = false;
-              break a;
-            }
-            JSCompiler_inline_result = void 0 !== config.ref;
-          }
-          JSCompiler_inline_result && (owner = getOwner());
-          hasValidKey(config) && (checkKeyStringCoercion(config.key), key = "" + config.key);
-          for (propName in config)
-            !hasOwnProperty2.call(config, propName) || "key" === propName || "__self" === propName || "__source" === propName || "ref" === propName && void 0 === config.ref || (props[propName] = config[propName]);
-        }
-        var propName = arguments.length - 2;
-        if (1 === propName) props.children = children;
-        else if (1 < propName) {
-          JSCompiler_inline_result = Array(propName);
-          for (var i = 0; i < propName; i++)
-            JSCompiler_inline_result[i] = arguments[i + 2];
-          props.children = JSCompiler_inline_result;
-        }
-        props = ReactElement(
-          element.type,
-          key,
-          props,
-          owner,
-          element._debugStack,
-          element._debugTask
+        return children;
+      }
+    };
+    exports.Activity = REACT_ACTIVITY_TYPE;
+    exports.Children = Children2;
+    exports.Component = Component;
+    exports.Fragment = REACT_FRAGMENT_TYPE;
+    exports.Profiler = REACT_PROFILER_TYPE;
+    exports.PureComponent = PureComponent;
+    exports.StrictMode = REACT_STRICT_MODE_TYPE;
+    exports.Suspense = REACT_SUSPENSE_TYPE;
+    exports.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = ReactSharedInternals;
+    exports.__COMPILER_RUNTIME = {
+      __proto__: null,
+      c: function(size) {
+        return ReactSharedInternals.H.useMemoCache(size);
+      }
+    };
+    exports.cache = function(fn) {
+      return function() {
+        return fn.apply(null, arguments);
+      };
+    };
+    exports.cacheSignal = function() {
+      return null;
+    };
+    exports.cloneElement = function(element, config, children) {
+      if (null === element || void 0 === element)
+        throw Error(
+          "The argument must be a React element, but you passed " + element + "."
         );
-        for (key = 2; key < arguments.length; key++)
-          validateChildKeys(arguments[key]);
-        return props;
+      var props = assign({}, element.props), key = element.key;
+      if (null != config)
+        for (propName in void 0 !== config.key && (key = "" + config.key), config)
+          !hasOwnProperty2.call(config, propName) || "key" === propName || "__self" === propName || "__source" === propName || "ref" === propName && void 0 === config.ref || (props[propName] = config[propName]);
+      var propName = arguments.length - 2;
+      if (1 === propName) props.children = children;
+      else if (1 < propName) {
+        for (var childArray = Array(propName), i = 0; i < propName; i++)
+          childArray[i] = arguments[i + 2];
+        props.children = childArray;
+      }
+      return ReactElement(element.type, key, props);
+    };
+    exports.createContext = function(defaultValue) {
+      defaultValue = {
+        $$typeof: REACT_CONTEXT_TYPE,
+        _currentValue: defaultValue,
+        _currentValue2: defaultValue,
+        _threadCount: 0,
+        Provider: null,
+        Consumer: null
       };
-      exports.createContext = function(defaultValue) {
-        defaultValue = {
-          $$typeof: REACT_CONTEXT_TYPE,
-          _currentValue: defaultValue,
-          _currentValue2: defaultValue,
-          _threadCount: 0,
-          Provider: null,
-          Consumer: null
-        };
-        defaultValue.Provider = defaultValue;
-        defaultValue.Consumer = {
-          $$typeof: REACT_CONSUMER_TYPE,
-          _context: defaultValue
-        };
-        defaultValue._currentRenderer = null;
-        defaultValue._currentRenderer2 = null;
-        return defaultValue;
+      defaultValue.Provider = defaultValue;
+      defaultValue.Consumer = {
+        $$typeof: REACT_CONSUMER_TYPE,
+        _context: defaultValue
       };
-      exports.createElement = function(type, config, children) {
-        for (var i = 2; i < arguments.length; i++)
-          validateChildKeys(arguments[i]);
-        i = {};
-        var key = null;
-        if (null != config)
-          for (propName in didWarnAboutOldJSXRuntime || !("__self" in config) || "key" in config || (didWarnAboutOldJSXRuntime = true, console.warn(
-            "Your app (or one of its dependencies) is using an outdated JSX transform. Update to the modern JSX transform for faster performance: https://react.dev/link/new-jsx-transform"
-          )), hasValidKey(config) && (checkKeyStringCoercion(config.key), key = "" + config.key), config)
-            hasOwnProperty2.call(config, propName) && "key" !== propName && "__self" !== propName && "__source" !== propName && (i[propName] = config[propName]);
-        var childrenLength = arguments.length - 2;
-        if (1 === childrenLength) i.children = children;
-        else if (1 < childrenLength) {
-          for (var childArray = Array(childrenLength), _i = 0; _i < childrenLength; _i++)
-            childArray[_i] = arguments[_i + 2];
-          Object.freeze && Object.freeze(childArray);
-          i.children = childArray;
-        }
-        if (type && type.defaultProps)
-          for (propName in childrenLength = type.defaultProps, childrenLength)
-            void 0 === i[propName] && (i[propName] = childrenLength[propName]);
-        key && defineKeyPropWarningGetter(
-          i,
-          "function" === typeof type ? type.displayName || type.name || "Unknown" : type
-        );
-        var propName = 1e4 > ReactSharedInternals.recentlyCreatedOwnerStacks++;
-        return ReactElement(
-          type,
-          key,
-          i,
-          getOwner(),
-          propName ? Error("react-stack-top-frame") : unknownOwnerDebugStack,
-          propName ? createTask(getTaskName(type)) : unknownOwnerDebugTask
-        );
+      return defaultValue;
+    };
+    exports.createElement = function(type, config, children) {
+      var propName, props = {}, key = null;
+      if (null != config)
+        for (propName in void 0 !== config.key && (key = "" + config.key), config)
+          hasOwnProperty2.call(config, propName) && "key" !== propName && "__self" !== propName && "__source" !== propName && (props[propName] = config[propName]);
+      var childrenLength = arguments.length - 2;
+      if (1 === childrenLength) props.children = children;
+      else if (1 < childrenLength) {
+        for (var childArray = Array(childrenLength), i = 0; i < childrenLength; i++)
+          childArray[i] = arguments[i + 2];
+        props.children = childArray;
+      }
+      if (type && type.defaultProps)
+        for (propName in childrenLength = type.defaultProps, childrenLength)
+          void 0 === props[propName] && (props[propName] = childrenLength[propName]);
+      return ReactElement(type, key, props);
+    };
+    exports.createRef = function() {
+      return { current: null };
+    };
+    exports.forwardRef = function(render) {
+      return { $$typeof: REACT_FORWARD_REF_TYPE, render };
+    };
+    exports.isValidElement = isValidElement3;
+    exports.lazy = function(ctor) {
+      return {
+        $$typeof: REACT_LAZY_TYPE,
+        _payload: { _status: -1, _result: ctor },
+        _init: lazyInitializer
       };
-      exports.createRef = function() {
-        var refObject = { current: null };
-        Object.seal(refObject);
-        return refObject;
+    };
+    exports.memo = function(type, compare) {
+      return {
+        $$typeof: REACT_MEMO_TYPE,
+        type,
+        compare: void 0 === compare ? null : compare
       };
-      exports.forwardRef = function(render) {
-        null != render && render.$$typeof === REACT_MEMO_TYPE ? console.error(
-          "forwardRef requires a render function but received a `memo` component. Instead of forwardRef(memo(...)), use memo(forwardRef(...))."
-        ) : "function" !== typeof render ? console.error(
-          "forwardRef requires a render function but was given %s.",
-          null === render ? "null" : typeof render
-        ) : 0 !== render.length && 2 !== render.length && console.error(
-          "forwardRef render functions accept exactly two parameters: props and ref. %s",
-          1 === render.length ? "Did you forget to use the ref parameter?" : "Any additional parameter will be undefined."
-        );
-        null != render && null != render.defaultProps && console.error(
-          "forwardRef render functions do not support defaultProps. Did you accidentally pass a React component?"
-        );
-        var elementType = { $$typeof: REACT_FORWARD_REF_TYPE, render }, ownName;
-        Object.defineProperty(elementType, "displayName", {
-          enumerable: false,
-          configurable: true,
-          get: function() {
-            return ownName;
-          },
-          set: function(name) {
-            ownName = name;
-            render.name || render.displayName || (Object.defineProperty(render, "name", { value: name }), render.displayName = name);
-          }
-        });
-        return elementType;
-      };
-      exports.isValidElement = isValidElement3;
-      exports.lazy = function(ctor) {
-        ctor = { _status: -1, _result: ctor };
-        var lazyType = {
-          $$typeof: REACT_LAZY_TYPE,
-          _payload: ctor,
-          _init: lazyInitializer
-        }, ioInfo = {
-          name: "lazy",
-          start: -1,
-          end: -1,
-          value: null,
-          owner: null,
-          debugStack: Error("react-stack-top-frame"),
-          debugTask: console.createTask ? console.createTask("lazy()") : null
-        };
-        ctor._ioInfo = ioInfo;
-        lazyType._debugInfo = [{ awaited: ioInfo }];
-        return lazyType;
-      };
-      exports.memo = function(type, compare) {
-        null == type && console.error(
-          "memo: The first argument must be a component. Instead received: %s",
-          null === type ? "null" : typeof type
-        );
-        compare = {
-          $$typeof: REACT_MEMO_TYPE,
-          type,
-          compare: void 0 === compare ? null : compare
-        };
-        var ownName;
-        Object.defineProperty(compare, "displayName", {
-          enumerable: false,
-          configurable: true,
-          get: function() {
-            return ownName;
-          },
-          set: function(name) {
-            ownName = name;
-            type.name || type.displayName || (Object.defineProperty(type, "name", { value: name }), type.displayName = name);
-          }
-        });
-        return compare;
-      };
-      exports.startTransition = function(scope) {
-        var prevTransition = ReactSharedInternals.T, currentTransition = {};
-        currentTransition._updatedFibers = /* @__PURE__ */ new Set();
-        ReactSharedInternals.T = currentTransition;
-        try {
-          var returnValue = scope(), onStartTransitionFinish = ReactSharedInternals.S;
-          null !== onStartTransitionFinish && onStartTransitionFinish(currentTransition, returnValue);
-          "object" === typeof returnValue && null !== returnValue && "function" === typeof returnValue.then && (ReactSharedInternals.asyncTransitions++, returnValue.then(releaseAsyncTransition, releaseAsyncTransition), returnValue.then(noop, reportGlobalError));
-        } catch (error) {
-          reportGlobalError(error);
-        } finally {
-          null === prevTransition && currentTransition._updatedFibers && (scope = currentTransition._updatedFibers.size, currentTransition._updatedFibers.clear(), 10 < scope && console.warn(
-            "Detected a large number of updates inside startTransition. If this is due to a subscription please re-write it to use React provided hooks. Otherwise concurrent mode guarantees are off the table."
-          )), null !== prevTransition && null !== currentTransition.types && (null !== prevTransition.types && prevTransition.types !== currentTransition.types && console.error(
-            "We expected inner Transitions to have transferred the outer types set and that you cannot add to the outer Transition while inside the inner.This is a bug in React."
-          ), prevTransition.types = currentTransition.types), ReactSharedInternals.T = prevTransition;
-        }
-      };
-      exports.unstable_useCacheRefresh = function() {
-        return resolveDispatcher().useCacheRefresh();
-      };
-      exports.use = function(usable) {
-        return resolveDispatcher().use(usable);
-      };
-      exports.useActionState = function(action, initialState, permalink) {
-        return resolveDispatcher().useActionState(
-          action,
-          initialState,
-          permalink
-        );
-      };
-      exports.useCallback = function(callback, deps) {
-        return resolveDispatcher().useCallback(callback, deps);
-      };
-      exports.useContext = function(Context) {
-        var dispatcher = resolveDispatcher();
-        Context.$$typeof === REACT_CONSUMER_TYPE && console.error(
-          "Calling useContext(Context.Consumer) is not supported and will cause bugs. Did you mean to call useContext(Context) instead?"
-        );
-        return dispatcher.useContext(Context);
-      };
-      exports.useDebugValue = function(value, formatterFn) {
-        return resolveDispatcher().useDebugValue(value, formatterFn);
-      };
-      exports.useDeferredValue = function(value, initialValue) {
-        return resolveDispatcher().useDeferredValue(value, initialValue);
-      };
-      exports.useEffect = function(create, deps) {
-        null == create && console.warn(
-          "React Hook useEffect requires an effect callback. Did you forget to pass a callback to the hook?"
-        );
-        return resolveDispatcher().useEffect(create, deps);
-      };
-      exports.useEffectEvent = function(callback) {
-        return resolveDispatcher().useEffectEvent(callback);
-      };
-      exports.useId = function() {
-        return resolveDispatcher().useId();
-      };
-      exports.useImperativeHandle = function(ref, create, deps) {
-        return resolveDispatcher().useImperativeHandle(ref, create, deps);
-      };
-      exports.useInsertionEffect = function(create, deps) {
-        null == create && console.warn(
-          "React Hook useInsertionEffect requires an effect callback. Did you forget to pass a callback to the hook?"
-        );
-        return resolveDispatcher().useInsertionEffect(create, deps);
-      };
-      exports.useLayoutEffect = function(create, deps) {
-        null == create && console.warn(
-          "React Hook useLayoutEffect requires an effect callback. Did you forget to pass a callback to the hook?"
-        );
-        return resolveDispatcher().useLayoutEffect(create, deps);
-      };
-      exports.useMemo = function(create, deps) {
-        return resolveDispatcher().useMemo(create, deps);
-      };
-      exports.useOptimistic = function(passthrough, reducer) {
-        return resolveDispatcher().useOptimistic(passthrough, reducer);
-      };
-      exports.useReducer = function(reducer, initialArg, init) {
-        return resolveDispatcher().useReducer(reducer, initialArg, init);
-      };
-      exports.useRef = function(initialValue) {
-        return resolveDispatcher().useRef(initialValue);
-      };
-      exports.useState = function(initialState) {
-        return resolveDispatcher().useState(initialState);
-      };
-      exports.useSyncExternalStore = function(subscribe2, getSnapshot, getServerSnapshot) {
-        return resolveDispatcher().useSyncExternalStore(
-          subscribe2,
-          getSnapshot,
-          getServerSnapshot
-        );
-      };
-      exports.useTransition = function() {
-        return resolveDispatcher().useTransition();
-      };
-      exports.version = "19.2.6";
-      "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
-    })();
+    };
+    exports.startTransition = function(scope) {
+      var prevTransition = ReactSharedInternals.T, currentTransition = {};
+      ReactSharedInternals.T = currentTransition;
+      try {
+        var returnValue = scope(), onStartTransitionFinish = ReactSharedInternals.S;
+        null !== onStartTransitionFinish && onStartTransitionFinish(currentTransition, returnValue);
+        "object" === typeof returnValue && null !== returnValue && "function" === typeof returnValue.then && returnValue.then(noop, reportGlobalError);
+      } catch (error) {
+        reportGlobalError(error);
+      } finally {
+        null !== prevTransition && null !== currentTransition.types && (prevTransition.types = currentTransition.types), ReactSharedInternals.T = prevTransition;
+      }
+    };
+    exports.unstable_useCacheRefresh = function() {
+      return ReactSharedInternals.H.useCacheRefresh();
+    };
+    exports.use = function(usable) {
+      return ReactSharedInternals.H.use(usable);
+    };
+    exports.useActionState = function(action, initialState, permalink) {
+      return ReactSharedInternals.H.useActionState(action, initialState, permalink);
+    };
+    exports.useCallback = function(callback, deps) {
+      return ReactSharedInternals.H.useCallback(callback, deps);
+    };
+    exports.useContext = function(Context) {
+      return ReactSharedInternals.H.useContext(Context);
+    };
+    exports.useDebugValue = function() {
+    };
+    exports.useDeferredValue = function(value, initialValue) {
+      return ReactSharedInternals.H.useDeferredValue(value, initialValue);
+    };
+    exports.useEffect = function(create, deps) {
+      return ReactSharedInternals.H.useEffect(create, deps);
+    };
+    exports.useEffectEvent = function(callback) {
+      return ReactSharedInternals.H.useEffectEvent(callback);
+    };
+    exports.useId = function() {
+      return ReactSharedInternals.H.useId();
+    };
+    exports.useImperativeHandle = function(ref, create, deps) {
+      return ReactSharedInternals.H.useImperativeHandle(ref, create, deps);
+    };
+    exports.useInsertionEffect = function(create, deps) {
+      return ReactSharedInternals.H.useInsertionEffect(create, deps);
+    };
+    exports.useLayoutEffect = function(create, deps) {
+      return ReactSharedInternals.H.useLayoutEffect(create, deps);
+    };
+    exports.useMemo = function(create, deps) {
+      return ReactSharedInternals.H.useMemo(create, deps);
+    };
+    exports.useOptimistic = function(passthrough, reducer) {
+      return ReactSharedInternals.H.useOptimistic(passthrough, reducer);
+    };
+    exports.useReducer = function(reducer, initialArg, init) {
+      return ReactSharedInternals.H.useReducer(reducer, initialArg, init);
+    };
+    exports.useRef = function(initialValue) {
+      return ReactSharedInternals.H.useRef(initialValue);
+    };
+    exports.useState = function(initialState) {
+      return ReactSharedInternals.H.useState(initialState);
+    };
+    exports.useSyncExternalStore = function(subscribe2, getSnapshot, getServerSnapshot) {
+      return ReactSharedInternals.H.useSyncExternalStore(
+        subscribe2,
+        getSnapshot,
+        getServerSnapshot
+      );
+    };
+    exports.useTransition = function() {
+      return ReactSharedInternals.H.useTransition();
+    };
+    exports.version = "19.2.6";
   }
 });
 
@@ -45824,10 +45487,11 @@ var require_react_development = __commonJS({
 var require_react = __commonJS({
   "node_modules/react/index.js"(exports, module) {
     "use strict";
-    if (false) {
-      module.exports = null;
+    init_define_process_env();
+    if (true) {
+      module.exports = require_react_production();
     } else {
-      module.exports = require_react_development();
+      module.exports = null;
     }
   }
 });
@@ -45837,6 +45501,7 @@ var import_react, StoreContext, attachPromiseStatus, use;
 var init_react = __esm({
   "node_modules/jotai/esm/react.mjs"() {
     "use client";
+    init_define_process_env();
     import_react = __toESM(require_react(), 1);
     StoreContext = (0, import_react.createContext)(
       void 0
@@ -45875,6 +45540,7 @@ var init_react = __esm({
 // node_modules/jotai/esm/index.mjs
 var init_esm = __esm({
   "node_modules/jotai/esm/index.mjs"() {
+    init_define_process_env();
     init_vanilla();
     init_react();
   }
@@ -45891,6 +45557,7 @@ var NullBridge, _activeBridge, _projectVersionReader;
 var init_canvas_bridge = __esm({
   "src/canvas/canvas-bridge.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     NullBridge = class {
       getRect() {
@@ -45942,6 +45609,7 @@ var RTL_LANGUAGES, TEXT_ELEMENTS, RTL_TEXT_CSS;
 var init_rtl_text = __esm({
   "src/shared/rtl-text.ts"() {
     "use strict";
+    init_define_process_env();
     RTL_LANGUAGES = [
       "ar",
       "arc",
@@ -46162,6 +45830,7 @@ var PROVIDERS_MARKER, PROVIDERS_IMPORT_LINE_RE, PROVIDERS_IMPORT_CHECK_RE, PROVI
 var init_providers_gen = __esm({
   "src/code/project/providers-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_rtl_text();
     PROVIDERS_MARKER = "@revyme-providers v5";
     PROVIDERS_IMPORT_LINE_RE = /^[ \t]*import\s*\{\s*Providers\s*\}\s*from\s*['"]\.\/providers['"];?[ \t]*\r?\n?/gm;
@@ -46236,6 +45905,7 @@ function stampRootDataVariantAttr(code) {
 var init_variant_root = __esm({
   "src/shared/variant-root.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -46380,6 +46050,7 @@ var LAYOUT_ANIMATED_PROPS, PAINT_HEAVY_ANIMATED_PROPS, snippetFor, PAIR_AT_STYLE
 var init_variant_perf = __esm({
   "src/code/variants/variant-perf.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_variant_root();
     LAYOUT_ANIMATED_PROPS = /* @__PURE__ */ new Set([
@@ -46519,6 +46190,7 @@ var STYLE_LITERAL_RE;
 var init_media_important = __esm({
   "src/shared/media-important.ts"() {
     "use strict";
+    init_define_process_env();
     STYLE_LITERAL_RE = /(<style>\s*\{`)([\s\S]*?)(`\}\s*<\/style>)/g;
   }
 });
@@ -46546,6 +46218,7 @@ var UNIVERSAL_SEED_RESET, LINK_SEED_RESET;
 var init_link_reset = __esm({
   "src/shared/link-reset.ts"() {
     "use strict";
+    init_define_process_env();
     UNIVERSAL_SEED_RESET = `*, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -46563,6 +46236,7 @@ var import_parser2;
 var init_metadata_gen = __esm({
   "src/code/generation/metadata-gen.ts"() {
     "use strict";
+    init_define_process_env();
     import_parser2 = __toESM(require_lib5());
     init_debug_trace();
     init_providers_gen();
@@ -46573,6 +46247,7 @@ var init_metadata_gen = __esm({
 var init_DirectusSync = __esm({
   "src/code/project/default-plugins/DirectusSync.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -46601,6 +46276,7 @@ var stateVarName;
 var init_event_overlay_heal = __esm({
   "src/code/generation/event-overlay-heal.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_id_utils();
     stateVarName = (overlayId) => `${nodeIdToVarName(overlayId)}Open`;
@@ -46673,6 +46349,7 @@ var _ovCallsCode, _ovCallsResult, _ovTrigCode, _ovTrigResult;
 var init_overlay_parser = __esm({
   "src/code/parsing/overlay-parser.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     _ovCallsCode = null;
     _ovCallsResult = [];
@@ -46877,6 +46554,7 @@ var OVERLAY_TOP_LAYER_STYLE_ID, OVERLAY_TOP_LAYER_CSS;
 var init_overlay_runtime_effects = __esm({
   "src/code/generation/overlay-runtime-effects.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_id_utils();
     init_regex_utils();
@@ -47008,6 +46686,7 @@ var TAG_NAME_RE, ATTR_NAME_RE, isWs;
 var init_jsx_tag_attrs = __esm({
   "src/code/components/jsx-tag-attrs.ts"() {
     "use strict";
+    init_define_process_env();
     TAG_NAME_RE = /[A-Za-z_$][\w$.:-]*/y;
     ATTR_NAME_RE = /[A-Za-z_$][\w$:.-]*/y;
     isWs = (c) => c === " " || c === "\n" || c === "	" || c === "\r";
@@ -47034,6 +46713,7 @@ function healDuplicateJsxAttributes(code) {
 var init_duplicate_attr_heal = __esm({
   "src/code/generation/duplicate-attr-heal.ts"() {
     "use strict";
+    init_define_process_env();
     init_jsx_tag_attrs();
     init_ast_utils();
     init_debug_trace();
@@ -47044,6 +46724,7 @@ var init_duplicate_attr_heal = __esm({
 var init_generator_motion_keyframes = __esm({
   "src/code/generation/generator-motion-keyframes.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_debug_trace();
   }
@@ -47053,6 +46734,7 @@ var init_generator_motion_keyframes = __esm({
 var init_generator_motion = __esm({
   "src/code/generation/generator-motion.ts"() {
     "use strict";
+    init_define_process_env();
     init_generator_motion_transition();
     init_generator_motion_keyframes();
     init_generator_motion_props();
@@ -47069,6 +46751,7 @@ var import_parser3;
 var init_glide_gen = __esm({
   "src/code/generation/glide-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     import_parser3 = __toESM(require_lib5());
     init_generator_motion();
@@ -47092,6 +46775,7 @@ var import_parser4, import_generator2;
 var init_format_override_source = __esm({
   "src/code/generation/format-override-source.ts"() {
     "use strict";
+    init_define_process_env();
     import_parser4 = __toESM(require_lib5());
     import_generator2 = __toESM(require_lib4());
     init_debug_trace();
@@ -47102,6 +46786,7 @@ var init_format_override_source = __esm({
 var init_element_wrapper = __esm({
   "src/code/generation/element-wrapper.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_generator_utils();
   }
@@ -47112,6 +46797,7 @@ var OVERRIDES_DIR;
 var init_code_override_gen = __esm({
   "src/code/generation/code-override-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_generator_utils();
     init_element_wrapper();
@@ -47148,6 +46834,7 @@ var SMOOTH_SCROLL_DATA_PATH, SMOOTH_SCROLL_CONTROLLER_PATH, SMOOTH_SCROLL_IMPORT
 var init_smooth_scroll_layout = __esm({
   "src/code/generation/smooth-scroll-layout.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     SMOOTH_SCROLL_DATA_PATH = "app/smooth-scroll.ts";
     SMOOTH_SCROLL_CONTROLLER_PATH = "app/smooth-scroll-controller.tsx";
@@ -47160,6 +46847,7 @@ var parts, MARKDOWN_ARTICLE_COMPONENT;
 var init_MarkdownArticle = __esm({
   "src/code/project/default-code-components/MarkdownArticle.ts"() {
     "use strict";
+    init_define_process_env();
     parts = [
       "'use client';",
       "",
@@ -47333,6 +47021,7 @@ var init_MarkdownArticle = __esm({
 var init_AnimatedCounter = __esm({
   "src/code/project/default-code-components/AnimatedCounter.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47340,6 +47029,7 @@ var init_AnimatedCounter = __esm({
 var init_TypingEffect = __esm({
   "src/code/project/default-code-components/TypingEffect.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47347,6 +47037,7 @@ var init_TypingEffect = __esm({
 var init_GradientText = __esm({
   "src/code/project/default-code-components/GradientText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47354,6 +47045,7 @@ var init_GradientText = __esm({
 var init_ImageSequence = __esm({
   "src/code/project/default-code-components/ImageSequence.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47361,6 +47053,7 @@ var init_ImageSequence = __esm({
 var init_ModelViewer = __esm({
   "src/code/project/default-code-components/ModelViewer.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47368,6 +47061,7 @@ var init_ModelViewer = __esm({
 var init_SplineScene = __esm({
   "src/code/project/default-code-components/SplineScene.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47375,6 +47069,7 @@ var init_SplineScene = __esm({
 var init_MorphingText = __esm({
   "src/code/project/default-code-components/MorphingText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47382,6 +47077,7 @@ var init_MorphingText = __esm({
 var init_WordRotate = __esm({
   "src/code/project/default-code-components/WordRotate.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47389,6 +47085,7 @@ var init_WordRotate = __esm({
 var init_SpinningText = __esm({
   "src/code/project/default-code-components/SpinningText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47396,6 +47093,7 @@ var init_SpinningText = __esm({
 var init_HangingCurved = __esm({
   "src/code/project/default-code-components/HangingCurved.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47403,6 +47101,7 @@ var init_HangingCurved = __esm({
 var init_MagneticText = __esm({
   "src/code/project/default-code-components/MagneticText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47410,6 +47109,7 @@ var init_MagneticText = __esm({
 var init_TextPressure = __esm({
   "src/code/project/default-code-components/TextPressure.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47417,6 +47117,7 @@ var init_TextPressure = __esm({
 var init_RollingText = __esm({
   "src/code/project/default-code-components/RollingText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47424,6 +47125,7 @@ var init_RollingText = __esm({
 var init_TypingText = __esm({
   "src/code/project/default-code-components/TypingText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47431,6 +47133,7 @@ var init_TypingText = __esm({
 var init_RotatingText3D = __esm({
   "src/code/project/default-code-components/RotatingText3D.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47438,6 +47141,7 @@ var init_RotatingText3D = __esm({
 var init_VideoText = __esm({
   "src/code/project/default-code-components/VideoText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47445,6 +47149,7 @@ var init_VideoText = __esm({
 var init_ParticleField = __esm({
   "src/code/project/default-code-components/ParticleField.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47452,6 +47157,7 @@ var init_ParticleField = __esm({
 var init_AuroraBackground = __esm({
   "src/code/project/default-code-components/AuroraBackground.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47459,6 +47165,7 @@ var init_AuroraBackground = __esm({
 var init_MatrixRain = __esm({
   "src/code/project/default-code-components/MatrixRain.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47466,6 +47173,7 @@ var init_MatrixRain = __esm({
 var init_WaveDistortion = __esm({
   "src/code/project/default-code-components/WaveDistortion.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47473,6 +47181,7 @@ var init_WaveDistortion = __esm({
 var init_GlitchText = __esm({
   "src/code/project/default-code-components/GlitchText.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47480,6 +47189,7 @@ var init_GlitchText = __esm({
 var init_FilmGrain = __esm({
   "src/code/project/default-code-components/FilmGrain.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47487,6 +47197,7 @@ var init_FilmGrain = __esm({
 var init_StaticTV = __esm({
   "src/code/project/default-code-components/StaticTV.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47494,6 +47205,7 @@ var init_StaticTV = __esm({
 var init_PerlinNoise = __esm({
   "src/code/project/default-code-components/PerlinNoise.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47501,6 +47213,7 @@ var init_PerlinNoise = __esm({
 var init_Halftone = __esm({
   "src/code/project/default-code-components/Halftone.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47508,6 +47221,7 @@ var init_Halftone = __esm({
 var init_Scanlines = __esm({
   "src/code/project/default-code-components/Scanlines.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47515,6 +47229,7 @@ var init_Scanlines = __esm({
 var init_ChromaticNoise = __esm({
   "src/code/project/default-code-components/ChromaticNoise.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47522,6 +47237,7 @@ var init_ChromaticNoise = __esm({
 var init_Pattern = __esm({
   "src/code/project/default-code-components/Pattern.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47529,6 +47245,7 @@ var init_Pattern = __esm({
 var init_WaveLines = __esm({
   "src/code/project/default-code-components/WaveLines.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47536,6 +47253,7 @@ var init_WaveLines = __esm({
 var init_WaveGradient = __esm({
   "src/code/project/default-code-components/WaveGradient.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47543,6 +47261,7 @@ var init_WaveGradient = __esm({
 var init_MeshGradient = __esm({
   "src/code/project/default-code-components/MeshGradient.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47550,6 +47269,7 @@ var init_MeshGradient = __esm({
 var init_PlasmaShader = __esm({
   "src/code/project/default-code-components/PlasmaShader.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47557,6 +47277,7 @@ var init_PlasmaShader = __esm({
 var init_LiquidMetal = __esm({
   "src/code/project/default-code-components/LiquidMetal.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47564,6 +47285,7 @@ var init_LiquidMetal = __esm({
 var init_CausticsLight = __esm({
   "src/code/project/default-code-components/CausticsLight.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47571,6 +47293,7 @@ var init_CausticsLight = __esm({
 var init_NeonParticleField = __esm({
   "src/code/project/default-code-components/NeonParticleField.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47578,6 +47301,7 @@ var init_NeonParticleField = __esm({
 var init_GemSmoke = __esm({
   "src/code/project/default-code-components/GemSmoke.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47585,6 +47309,7 @@ var init_GemSmoke = __esm({
 var init_GrainGradient = __esm({
   "src/code/project/default-code-components/GrainGradient.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47592,6 +47317,7 @@ var init_GrainGradient = __esm({
 var init_Metaballs = __esm({
   "src/code/project/default-code-components/Metaballs.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47599,6 +47325,7 @@ var init_Metaballs = __esm({
 var init_SmokeRing = __esm({
   "src/code/project/default-code-components/SmokeRing.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47606,6 +47333,7 @@ var init_SmokeRing = __esm({
 var init_LensBox = __esm({
   "src/code/project/default-code-components/LensBox.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47613,6 +47341,7 @@ var init_LensBox = __esm({
 var init_MagnetBox = __esm({
   "src/code/project/default-code-components/MagnetBox.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47620,6 +47349,7 @@ var init_MagnetBox = __esm({
 var init_Marquee = __esm({
   "src/code/project/default-code-components/Marquee.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47627,6 +47357,7 @@ var init_Marquee = __esm({
 var init_Carousel = __esm({
   "src/code/project/default-code-components/Carousel.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47634,6 +47365,7 @@ var init_Carousel = __esm({
 var init_EmblaCarousel = __esm({
   "src/code/project/default-code-components/EmblaCarousel.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47641,6 +47373,7 @@ var init_EmblaCarousel = __esm({
 var init_RibbonMarquee = __esm({
   "src/code/project/default-code-components/RibbonMarquee.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47648,6 +47381,7 @@ var init_RibbonMarquee = __esm({
 var init_Marquee3D = __esm({
   "src/code/project/default-code-components/Marquee3D.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47655,6 +47389,7 @@ var init_Marquee3D = __esm({
 var init_MotionTrail = __esm({
   "src/code/project/default-code-components/MotionTrail.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47662,6 +47397,7 @@ var init_MotionTrail = __esm({
 var init_HorizontalScroll = __esm({
   "src/code/project/default-code-components/HorizontalScroll.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47669,6 +47405,7 @@ var init_HorizontalScroll = __esm({
 var init_BlobCursor = __esm({
   "src/code/project/default-code-components/BlobCursor.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47676,6 +47413,7 @@ var init_BlobCursor = __esm({
 var init_DesignCursor = __esm({
   "src/code/project/default-code-components/DesignCursor.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47683,6 +47421,7 @@ var init_DesignCursor = __esm({
 var init_RibbonCursor = __esm({
   "src/code/project/default-code-components/RibbonCursor.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47690,6 +47429,7 @@ var init_RibbonCursor = __esm({
 var init_SplashCursor = __esm({
   "src/code/project/default-code-components/SplashCursor.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47697,6 +47437,7 @@ var init_SplashCursor = __esm({
 var init_YouTubeEmbed = __esm({
   "src/code/project/default-code-components/YouTubeEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47704,6 +47445,7 @@ var init_YouTubeEmbed = __esm({
 var init_VimeoEmbed = __esm({
   "src/code/project/default-code-components/VimeoEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47711,6 +47453,7 @@ var init_VimeoEmbed = __esm({
 var init_SoundCloudEmbed = __esm({
   "src/code/project/default-code-components/SoundCloudEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47718,6 +47461,7 @@ var init_SoundCloudEmbed = __esm({
 var init_SpotifyEmbed = __esm({
   "src/code/project/default-code-components/SpotifyEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47725,6 +47469,7 @@ var init_SpotifyEmbed = __esm({
 var init_GoogleMapsEmbed = __esm({
   "src/code/project/default-code-components/GoogleMapsEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47732,6 +47477,7 @@ var init_GoogleMapsEmbed = __esm({
 var init_FacebookEmbed = __esm({
   "src/code/project/default-code-components/FacebookEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47739,6 +47485,7 @@ var init_FacebookEmbed = __esm({
 var init_TwitterEmbed = __esm({
   "src/code/project/default-code-components/TwitterEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47746,6 +47493,7 @@ var init_TwitterEmbed = __esm({
 var init_InstagramEmbed = __esm({
   "src/code/project/default-code-components/InstagramEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47753,6 +47501,7 @@ var init_InstagramEmbed = __esm({
 var init_LinkedInEmbed = __esm({
   "src/code/project/default-code-components/LinkedInEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47760,6 +47509,7 @@ var init_LinkedInEmbed = __esm({
 var init_PinterestEmbed = __esm({
   "src/code/project/default-code-components/PinterestEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47767,6 +47517,7 @@ var init_PinterestEmbed = __esm({
 var init_TikTokEmbed = __esm({
   "src/code/project/default-code-components/TikTokEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47774,6 +47525,7 @@ var init_TikTokEmbed = __esm({
 var init_CalendlyEmbed = __esm({
   "src/code/project/default-code-components/CalendlyEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47781,6 +47533,7 @@ var init_CalendlyEmbed = __esm({
 var init_TypeformEmbed = __esm({
   "src/code/project/default-code-components/TypeformEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47788,6 +47541,7 @@ var init_TypeformEmbed = __esm({
 var init_GoogleFormEmbed = __esm({
   "src/code/project/default-code-components/GoogleFormEmbed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47795,6 +47549,7 @@ var init_GoogleFormEmbed = __esm({
 var init_ThemeToggle = __esm({
   "src/code/project/default-code-components/ThemeToggle.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47802,6 +47557,7 @@ var init_ThemeToggle = __esm({
 var init_CopyButton = __esm({
   "src/code/project/default-code-components/CopyButton.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47809,6 +47565,7 @@ var init_CopyButton = __esm({
 var init_Embed = __esm({
   "src/code/project/default-code-components/Embed.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47816,6 +47573,7 @@ var init_Embed = __esm({
 var init_LocaleSwitcher = __esm({
   "src/code/project/default-code-components/LocaleSwitcher.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47823,6 +47581,7 @@ var init_LocaleSwitcher = __esm({
 var init_Accordion = __esm({
   "src/code/project/default-code-components/Accordion.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47830,6 +47589,7 @@ var init_Accordion = __esm({
 var init_SilkRibbons = __esm({
   "src/code/project/default-code-components/SilkRibbons.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47837,6 +47597,7 @@ var init_SilkRibbons = __esm({
 var init_LightPillar = __esm({
   "src/code/project/default-code-components/LightPillar.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47844,6 +47605,7 @@ var init_LightPillar = __esm({
 var init_IridescentFilm = __esm({
   "src/code/project/default-code-components/IridescentFilm.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47851,6 +47613,7 @@ var init_IridescentFilm = __esm({
 var init_GodRays = __esm({
   "src/code/project/default-code-components/GodRays.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47858,6 +47621,7 @@ var init_GodRays = __esm({
 var init_GrainField = __esm({
   "src/code/project/default-code-components/GrainField.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47865,6 +47629,7 @@ var init_GrainField = __esm({
 var init_NebulaField = __esm({
   "src/code/project/default-code-components/NebulaField.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47872,6 +47637,7 @@ var init_NebulaField = __esm({
 var init_DotWave = __esm({
   "src/code/project/default-code-components/DotWave.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47879,6 +47645,7 @@ var init_DotWave = __esm({
 var init_ContourMap = __esm({
   "src/code/project/default-code-components/ContourMap.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47886,6 +47653,7 @@ var init_ContourMap = __esm({
 var init_FluidGradient = __esm({
   "src/code/project/default-code-components/FluidGradient.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47893,6 +47661,7 @@ var init_FluidGradient = __esm({
 var init_CyberGrid = __esm({
   "src/code/project/default-code-components/CyberGrid.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47900,6 +47669,7 @@ var init_CyberGrid = __esm({
 var init_RippleGrid = __esm({
   "src/code/project/default-code-components/RippleGrid.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47907,6 +47677,7 @@ var init_RippleGrid = __esm({
 var init_VoronoiCells = __esm({
   "src/code/project/default-code-components/VoronoiCells.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47914,6 +47685,7 @@ var init_VoronoiCells = __esm({
 var init_MetaballField = __esm({
   "src/code/project/default-code-components/MetaballField.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47921,6 +47693,7 @@ var init_MetaballField = __esm({
 var init_HalftoneScreen = __esm({
   "src/code/project/default-code-components/HalftoneScreen.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47928,6 +47701,7 @@ var init_HalftoneScreen = __esm({
 var init_ScanlineCRT = __esm({
   "src/code/project/default-code-components/ScanlineCRT.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47935,6 +47709,7 @@ var init_ScanlineCRT = __esm({
 var init_Smoke = __esm({
   "src/code/project/default-code-components/Smoke.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47942,6 +47717,7 @@ var init_Smoke = __esm({
 var init_Marble = __esm({
   "src/code/project/default-code-components/Marble.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47949,6 +47725,7 @@ var init_Marble = __esm({
 var init_WarpTunnel = __esm({
   "src/code/project/default-code-components/WarpTunnel.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47956,6 +47733,7 @@ var init_WarpTunnel = __esm({
 var init_StarWarp = __esm({
   "src/code/project/default-code-components/StarWarp.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47963,6 +47741,7 @@ var init_StarWarp = __esm({
 var init_HexGrid = __esm({
   "src/code/project/default-code-components/HexGrid.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47970,6 +47749,7 @@ var init_HexGrid = __esm({
 var init_Lightning = __esm({
   "src/code/project/default-code-components/Lightning.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47977,6 +47757,7 @@ var init_Lightning = __esm({
 var init_LiquidChrome = __esm({
   "src/code/project/default-code-components/LiquidChrome.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47984,6 +47765,7 @@ var init_LiquidChrome = __esm({
 var init_Bokeh = __esm({
   "src/code/project/default-code-components/Bokeh.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47991,6 +47773,7 @@ var init_Bokeh = __esm({
 var init_RainGlass = __esm({
   "src/code/project/default-code-components/RainGlass.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -47998,6 +47781,7 @@ var init_RainGlass = __esm({
 var init_Fireflies = __esm({
   "src/code/project/default-code-components/Fireflies.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48005,6 +47789,7 @@ var init_Fireflies = __esm({
 var init_Vortex = __esm({
   "src/code/project/default-code-components/Vortex.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48012,6 +47797,7 @@ var init_Vortex = __esm({
 var init_Sunset = __esm({
   "src/code/project/default-code-components/Sunset.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48019,6 +47805,7 @@ var init_Sunset = __esm({
 var init_Dunes = __esm({
   "src/code/project/default-code-components/Dunes.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48026,6 +47813,7 @@ var init_Dunes = __esm({
 var init_OilSlick = __esm({
   "src/code/project/default-code-components/OilSlick.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48033,6 +47821,7 @@ var init_OilSlick = __esm({
 var init_WaveStack = __esm({
   "src/code/project/default-code-components/WaveStack.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -48040,6 +47829,7 @@ var init_WaveStack = __esm({
 var init_default_code_components = __esm({
   "src/code/project/default-code-components/index.ts"() {
     "use strict";
+    init_define_process_env();
     init_MarkdownArticle();
     init_AnimatedCounter();
     init_TypingEffect();
@@ -48296,6 +48086,7 @@ var MAIN_BRANCH_ID, BRANCH_ID_RE, InMemoryProjectFS, LEGACY_SEED_RESET, UNIVERSA
 var init_project_fs = __esm({
   "src/code/project/project-fs.ts"() {
     "use strict";
+    init_define_process_env();
     init_canvas_config();
     init_esm();
     init_canvas_bridge();
@@ -49548,6 +49339,7 @@ var CMS_PAGE_REGEX;
 var init_cms_page_meta = __esm({
   "src/code/project/cms-page-meta.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     CMS_PAGE_REGEX = /\/\*\*\s*@cmsPage\s*(\{[\s\S]*?\})\s*\*\/\s*\n?/;
   }
@@ -49557,6 +49349,7 @@ var init_cms_page_meta = __esm({
 var init_cms_root_mount = __esm({
   "src/code/project/cms-root-mount.ts"() {
     "use strict";
+    init_define_process_env();
     init_project_fs();
     init_cms_page_meta();
   }
@@ -49566,6 +49359,7 @@ var init_cms_root_mount = __esm({
 var init_map_gen = __esm({
   "src/code/generation/map-gen.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_generator_utils();
     init_regex_utils();
@@ -49580,6 +49374,7 @@ var init_map_gen = __esm({
 var init_generator_motion_props = __esm({
   "src/code/generation/generator-motion-props.ts"() {
     "use strict";
+    init_define_process_env();
     init_debug_trace();
     init_generator_utils();
     init_generator_attrs();
@@ -49608,6 +49403,7 @@ var EDGE_PCT;
 var init_generator_motion_scroll = __esm({
   "src/code/generation/generator-motion-scroll.ts"() {
     "use strict";
+    init_define_process_env();
     init_regex_utils();
     init_id_utils();
     init_scroll_parser();
@@ -49621,247 +49417,153 @@ var init_generator_motion_scroll = __esm({
   }
 });
 
-// node_modules/react-dom/cjs/react-dom.development.js
-var require_react_dom_development = __commonJS({
-  "node_modules/react-dom/cjs/react-dom.development.js"(exports) {
+// node_modules/react-dom/cjs/react-dom.production.js
+var require_react_dom_production = __commonJS({
+  "node_modules/react-dom/cjs/react-dom.production.js"(exports) {
     "use strict";
-    (function() {
-      function noop() {
+    init_define_process_env();
+    var React4 = require_react();
+    function formatProdErrorMessage(code) {
+      var url2 = "https://react.dev/errors/" + code;
+      if (1 < arguments.length) {
+        url2 += "?args[]=" + encodeURIComponent(arguments[1]);
+        for (var i = 2; i < arguments.length; i++)
+          url2 += "&args[]=" + encodeURIComponent(arguments[i]);
       }
-      function testStringCoercion(value) {
-        return "" + value;
-      }
-      function createPortal$1(children, containerInfo, implementation) {
-        var key = 3 < arguments.length && void 0 !== arguments[3] ? arguments[3] : null;
-        try {
-          testStringCoercion(key);
-          var JSCompiler_inline_result = false;
-        } catch (e2) {
-          JSCompiler_inline_result = true;
-        }
-        JSCompiler_inline_result && (console.error(
-          "The provided key is an unsupported type %s. This value must be coerced to a string before using it here.",
-          "function" === typeof Symbol && Symbol.toStringTag && key[Symbol.toStringTag] || key.constructor.name || "Object"
-        ), testStringCoercion(key));
-        return {
-          $$typeof: REACT_PORTAL_TYPE,
-          key: null == key ? null : "" + key,
-          children,
-          containerInfo,
-          implementation
-        };
-      }
-      function getCrossOriginStringAs(as, input) {
-        if ("font" === as) return "";
-        if ("string" === typeof input)
-          return "use-credentials" === input ? input : "";
-      }
-      function getValueDescriptorExpectingObjectForWarning(thing) {
-        return null === thing ? "`null`" : void 0 === thing ? "`undefined`" : "" === thing ? "an empty string" : 'something with type "' + typeof thing + '"';
-      }
-      function getValueDescriptorExpectingEnumForWarning(thing) {
-        return null === thing ? "`null`" : void 0 === thing ? "`undefined`" : "" === thing ? "an empty string" : "string" === typeof thing ? JSON.stringify(thing) : "number" === typeof thing ? "`" + thing + "`" : 'something with type "' + typeof thing + '"';
-      }
-      function resolveDispatcher() {
-        var dispatcher = ReactSharedInternals.H;
-        null === dispatcher && console.error(
-          "Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:\n1. You might have mismatching versions of React and the renderer (such as React DOM)\n2. You might be breaking the Rules of Hooks\n3. You might have more than one copy of React in the same app\nSee https://react.dev/link/invalid-hook-call for tips about how to debug and fix this problem."
-        );
-        return dispatcher;
-      }
-      "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-      var React4 = require_react(), Internals = {
-        d: {
-          f: noop,
-          r: function() {
-            throw Error(
-              "Invalid form element. requestFormReset must be passed a form that was rendered by React."
-            );
-          },
-          D: noop,
-          C: noop,
-          L: noop,
-          m: noop,
-          X: noop,
-          S: noop,
-          M: noop
+      return "Minified React error #" + code + "; visit " + url2 + " for the full message or use the non-minified dev environment for full errors and additional helpful warnings.";
+    }
+    function noop() {
+    }
+    var Internals = {
+      d: {
+        f: noop,
+        r: function() {
+          throw Error(formatProdErrorMessage(522));
         },
-        p: 0,
-        findDOMNode: null
-      }, REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal"), ReactSharedInternals = React4.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
-      "function" === typeof Map && null != Map.prototype && "function" === typeof Map.prototype.forEach && "function" === typeof Set && null != Set.prototype && "function" === typeof Set.prototype.clear && "function" === typeof Set.prototype.forEach || console.error(
-        "React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills"
-      );
-      exports.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals;
-      exports.createPortal = function(children, container) {
-        var key = 2 < arguments.length && void 0 !== arguments[2] ? arguments[2] : null;
-        if (!container || 1 !== container.nodeType && 9 !== container.nodeType && 11 !== container.nodeType)
-          throw Error("Target container is not a DOM element.");
-        return createPortal$1(children, container, null, key);
+        D: noop,
+        C: noop,
+        L: noop,
+        m: noop,
+        X: noop,
+        S: noop,
+        M: noop
+      },
+      p: 0,
+      findDOMNode: null
+    };
+    var REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
+    function createPortal$1(children, containerInfo, implementation) {
+      var key = 3 < arguments.length && void 0 !== arguments[3] ? arguments[3] : null;
+      return {
+        $$typeof: REACT_PORTAL_TYPE,
+        key: null == key ? null : "" + key,
+        children,
+        containerInfo,
+        implementation
       };
-      exports.flushSync = function(fn) {
-        var previousTransition = ReactSharedInternals.T, previousUpdatePriority = Internals.p;
-        try {
-          if (ReactSharedInternals.T = null, Internals.p = 2, fn)
-            return fn();
-        } finally {
-          ReactSharedInternals.T = previousTransition, Internals.p = previousUpdatePriority, Internals.d.f() && console.error(
-            "flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task."
-          );
-        }
-      };
-      exports.preconnect = function(href, options) {
-        "string" === typeof href && href ? null != options && "object" !== typeof options ? console.error(
-          "ReactDOM.preconnect(): Expected the `options` argument (second) to be an object but encountered %s instead. The only supported option at this time is `crossOrigin` which accepts a string.",
-          getValueDescriptorExpectingEnumForWarning(options)
-        ) : null != options && "string" !== typeof options.crossOrigin && console.error(
-          "ReactDOM.preconnect(): Expected the `crossOrigin` option (second argument) to be a string but encountered %s instead. Try removing this option or passing a string value instead.",
-          getValueDescriptorExpectingObjectForWarning(options.crossOrigin)
-        ) : console.error(
-          "ReactDOM.preconnect(): Expected the `href` argument (first) to be a non-empty string but encountered %s instead.",
-          getValueDescriptorExpectingObjectForWarning(href)
-        );
-        "string" === typeof href && (options ? (options = options.crossOrigin, options = "string" === typeof options ? "use-credentials" === options ? options : "" : void 0) : options = null, Internals.d.C(href, options));
-      };
-      exports.prefetchDNS = function(href) {
-        if ("string" !== typeof href || !href)
-          console.error(
-            "ReactDOM.prefetchDNS(): Expected the `href` argument (first) to be a non-empty string but encountered %s instead.",
-            getValueDescriptorExpectingObjectForWarning(href)
-          );
-        else if (1 < arguments.length) {
-          var options = arguments[1];
-          "object" === typeof options && options.hasOwnProperty("crossOrigin") ? console.error(
-            "ReactDOM.prefetchDNS(): Expected only one argument, `href`, but encountered %s as a second argument instead. This argument is reserved for future options and is currently disallowed. It looks like the you are attempting to set a crossOrigin property for this DNS lookup hint. Browsers do not perform DNS queries using CORS and setting this attribute on the resource hint has no effect. Try calling ReactDOM.prefetchDNS() with just a single string argument, `href`.",
-            getValueDescriptorExpectingEnumForWarning(options)
-          ) : console.error(
-            "ReactDOM.prefetchDNS(): Expected only one argument, `href`, but encountered %s as a second argument instead. This argument is reserved for future options and is currently disallowed. Try calling ReactDOM.prefetchDNS() with just a single string argument, `href`.",
-            getValueDescriptorExpectingEnumForWarning(options)
-          );
-        }
-        "string" === typeof href && Internals.d.D(href);
-      };
-      exports.preinit = function(href, options) {
-        "string" === typeof href && href ? null == options || "object" !== typeof options ? console.error(
-          "ReactDOM.preinit(): Expected the `options` argument (second) to be an object with an `as` property describing the type of resource to be preinitialized but encountered %s instead.",
-          getValueDescriptorExpectingEnumForWarning(options)
-        ) : "style" !== options.as && "script" !== options.as && console.error(
-          'ReactDOM.preinit(): Expected the `as` property in the `options` argument (second) to contain a valid value describing the type of resource to be preinitialized but encountered %s instead. Valid values for `as` are "style" and "script".',
-          getValueDescriptorExpectingEnumForWarning(options.as)
-        ) : console.error(
-          "ReactDOM.preinit(): Expected the `href` argument (first) to be a non-empty string but encountered %s instead.",
-          getValueDescriptorExpectingObjectForWarning(href)
-        );
-        if ("string" === typeof href && options && "string" === typeof options.as) {
-          var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin), integrity = "string" === typeof options.integrity ? options.integrity : void 0, fetchPriority = "string" === typeof options.fetchPriority ? options.fetchPriority : void 0;
-          "style" === as ? Internals.d.S(
-            href,
-            "string" === typeof options.precedence ? options.precedence : void 0,
-            {
-              crossOrigin,
-              integrity,
-              fetchPriority
-            }
-          ) : "script" === as && Internals.d.X(href, {
+    }
+    var ReactSharedInternals = React4.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+    function getCrossOriginStringAs(as, input) {
+      if ("font" === as) return "";
+      if ("string" === typeof input)
+        return "use-credentials" === input ? input : "";
+    }
+    exports.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals;
+    exports.createPortal = function(children, container) {
+      var key = 2 < arguments.length && void 0 !== arguments[2] ? arguments[2] : null;
+      if (!container || 1 !== container.nodeType && 9 !== container.nodeType && 11 !== container.nodeType)
+        throw Error(formatProdErrorMessage(299));
+      return createPortal$1(children, container, null, key);
+    };
+    exports.flushSync = function(fn) {
+      var previousTransition = ReactSharedInternals.T, previousUpdatePriority = Internals.p;
+      try {
+        if (ReactSharedInternals.T = null, Internals.p = 2, fn) return fn();
+      } finally {
+        ReactSharedInternals.T = previousTransition, Internals.p = previousUpdatePriority, Internals.d.f();
+      }
+    };
+    exports.preconnect = function(href, options) {
+      "string" === typeof href && (options ? (options = options.crossOrigin, options = "string" === typeof options ? "use-credentials" === options ? options : "" : void 0) : options = null, Internals.d.C(href, options));
+    };
+    exports.prefetchDNS = function(href) {
+      "string" === typeof href && Internals.d.D(href);
+    };
+    exports.preinit = function(href, options) {
+      if ("string" === typeof href && options && "string" === typeof options.as) {
+        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin), integrity = "string" === typeof options.integrity ? options.integrity : void 0, fetchPriority = "string" === typeof options.fetchPriority ? options.fetchPriority : void 0;
+        "style" === as ? Internals.d.S(
+          href,
+          "string" === typeof options.precedence ? options.precedence : void 0,
+          {
             crossOrigin,
             integrity,
-            fetchPriority,
-            nonce: "string" === typeof options.nonce ? options.nonce : void 0
-          });
-        }
-      };
-      exports.preinitModule = function(href, options) {
-        var encountered = "";
-        "string" === typeof href && href || (encountered += " The `href` argument encountered was " + getValueDescriptorExpectingObjectForWarning(href) + ".");
-        void 0 !== options && "object" !== typeof options ? encountered += " The `options` argument encountered was " + getValueDescriptorExpectingObjectForWarning(options) + "." : options && "as" in options && "script" !== options.as && (encountered += " The `as` option encountered was " + getValueDescriptorExpectingEnumForWarning(options.as) + ".");
-        if (encountered)
-          console.error(
-            "ReactDOM.preinitModule(): Expected up to two arguments, a non-empty `href` string and, optionally, an `options` object with a valid `as` property.%s",
-            encountered
-          );
-        else
-          switch (encountered = options && "string" === typeof options.as ? options.as : "script", encountered) {
-            case "script":
-              break;
-            default:
-              encountered = getValueDescriptorExpectingEnumForWarning(encountered), console.error(
-                'ReactDOM.preinitModule(): Currently the only supported "as" type for this function is "script" but received "%s" instead. This warning was generated for `href` "%s". In the future other module types will be supported, aligning with the import-attributes proposal. Learn more here: (https://github.com/tc39/proposal-import-attributes)',
-                encountered,
-                href
-              );
+            fetchPriority
           }
-        if ("string" === typeof href)
-          if ("object" === typeof options && null !== options) {
-            if (null == options.as || "script" === options.as)
-              encountered = getCrossOriginStringAs(
-                options.as,
-                options.crossOrigin
-              ), Internals.d.M(href, {
-                crossOrigin: encountered,
-                integrity: "string" === typeof options.integrity ? options.integrity : void 0,
-                nonce: "string" === typeof options.nonce ? options.nonce : void 0
-              });
-          } else null == options && Internals.d.M(href);
-      };
-      exports.preload = function(href, options) {
-        var encountered = "";
-        "string" === typeof href && href || (encountered += " The `href` argument encountered was " + getValueDescriptorExpectingObjectForWarning(href) + ".");
-        null == options || "object" !== typeof options ? encountered += " The `options` argument encountered was " + getValueDescriptorExpectingObjectForWarning(options) + "." : "string" === typeof options.as && options.as || (encountered += " The `as` option encountered was " + getValueDescriptorExpectingObjectForWarning(options.as) + ".");
-        encountered && console.error(
-          'ReactDOM.preload(): Expected two arguments, a non-empty `href` string and an `options` object with an `as` property valid for a `<link rel="preload" as="..." />` tag.%s',
-          encountered
-        );
-        if ("string" === typeof href && "object" === typeof options && null !== options && "string" === typeof options.as) {
-          encountered = options.as;
-          var crossOrigin = getCrossOriginStringAs(
-            encountered,
-            options.crossOrigin
-          );
-          Internals.d.L(href, encountered, {
+        ) : "script" === as && Internals.d.X(href, {
+          crossOrigin,
+          integrity,
+          fetchPriority,
+          nonce: "string" === typeof options.nonce ? options.nonce : void 0
+        });
+      }
+    };
+    exports.preinitModule = function(href, options) {
+      if ("string" === typeof href)
+        if ("object" === typeof options && null !== options) {
+          if (null == options.as || "script" === options.as) {
+            var crossOrigin = getCrossOriginStringAs(
+              options.as,
+              options.crossOrigin
+            );
+            Internals.d.M(href, {
+              crossOrigin,
+              integrity: "string" === typeof options.integrity ? options.integrity : void 0,
+              nonce: "string" === typeof options.nonce ? options.nonce : void 0
+            });
+          }
+        } else null == options && Internals.d.M(href);
+    };
+    exports.preload = function(href, options) {
+      if ("string" === typeof href && "object" === typeof options && null !== options && "string" === typeof options.as) {
+        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin);
+        Internals.d.L(href, as, {
+          crossOrigin,
+          integrity: "string" === typeof options.integrity ? options.integrity : void 0,
+          nonce: "string" === typeof options.nonce ? options.nonce : void 0,
+          type: "string" === typeof options.type ? options.type : void 0,
+          fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0,
+          referrerPolicy: "string" === typeof options.referrerPolicy ? options.referrerPolicy : void 0,
+          imageSrcSet: "string" === typeof options.imageSrcSet ? options.imageSrcSet : void 0,
+          imageSizes: "string" === typeof options.imageSizes ? options.imageSizes : void 0,
+          media: "string" === typeof options.media ? options.media : void 0
+        });
+      }
+    };
+    exports.preloadModule = function(href, options) {
+      if ("string" === typeof href)
+        if (options) {
+          var crossOrigin = getCrossOriginStringAs(options.as, options.crossOrigin);
+          Internals.d.m(href, {
+            as: "string" === typeof options.as && "script" !== options.as ? options.as : void 0,
             crossOrigin,
-            integrity: "string" === typeof options.integrity ? options.integrity : void 0,
-            nonce: "string" === typeof options.nonce ? options.nonce : void 0,
-            type: "string" === typeof options.type ? options.type : void 0,
-            fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0,
-            referrerPolicy: "string" === typeof options.referrerPolicy ? options.referrerPolicy : void 0,
-            imageSrcSet: "string" === typeof options.imageSrcSet ? options.imageSrcSet : void 0,
-            imageSizes: "string" === typeof options.imageSizes ? options.imageSizes : void 0,
-            media: "string" === typeof options.media ? options.media : void 0
+            integrity: "string" === typeof options.integrity ? options.integrity : void 0
           });
-        }
-      };
-      exports.preloadModule = function(href, options) {
-        var encountered = "";
-        "string" === typeof href && href || (encountered += " The `href` argument encountered was " + getValueDescriptorExpectingObjectForWarning(href) + ".");
-        void 0 !== options && "object" !== typeof options ? encountered += " The `options` argument encountered was " + getValueDescriptorExpectingObjectForWarning(options) + "." : options && "as" in options && "string" !== typeof options.as && (encountered += " The `as` option encountered was " + getValueDescriptorExpectingObjectForWarning(options.as) + ".");
-        encountered && console.error(
-          'ReactDOM.preloadModule(): Expected two arguments, a non-empty `href` string and, optionally, an `options` object with an `as` property valid for a `<link rel="modulepreload" as="..." />` tag.%s',
-          encountered
-        );
-        "string" === typeof href && (options ? (encountered = getCrossOriginStringAs(
-          options.as,
-          options.crossOrigin
-        ), Internals.d.m(href, {
-          as: "string" === typeof options.as && "script" !== options.as ? options.as : void 0,
-          crossOrigin: encountered,
-          integrity: "string" === typeof options.integrity ? options.integrity : void 0
-        })) : Internals.d.m(href));
-      };
-      exports.requestFormReset = function(form) {
-        Internals.d.r(form);
-      };
-      exports.unstable_batchedUpdates = function(fn, a2) {
-        return fn(a2);
-      };
-      exports.useFormState = function(action, initialState, permalink) {
-        return resolveDispatcher().useFormState(action, initialState, permalink);
-      };
-      exports.useFormStatus = function() {
-        return resolveDispatcher().useHostTransitionStatus();
-      };
-      exports.version = "19.2.6";
-      "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
-    })();
+        } else Internals.d.m(href);
+    };
+    exports.requestFormReset = function(form) {
+      Internals.d.r(form);
+    };
+    exports.unstable_batchedUpdates = function(fn, a2) {
+      return fn(a2);
+    };
+    exports.useFormState = function(action, initialState, permalink) {
+      return ReactSharedInternals.H.useFormState(action, initialState, permalink);
+    };
+    exports.useFormStatus = function() {
+      return ReactSharedInternals.H.useHostTransitionStatus();
+    };
+    exports.version = "19.2.6";
   }
 });
 
@@ -49869,11 +49571,25 @@ var require_react_dom_development = __commonJS({
 var require_react_dom = __commonJS({
   "node_modules/react-dom/index.js"(exports, module) {
     "use strict";
-    if (false) {
+    init_define_process_env();
+    function checkDCE() {
+      if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ === "undefined" || typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE !== "function") {
+        return;
+      }
+      if (false) {
+        throw new Error("^_^");
+      }
+      try {
+        __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE(checkDCE);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (true) {
       checkDCE();
-      module.exports = null;
+      module.exports = require_react_dom_production();
     } else {
-      module.exports = require_react_dom_development();
+      module.exports = null;
     }
   }
 });
@@ -49883,6 +49599,7 @@ var CLOUD_ENABLED;
 var init_cloud_flag = __esm({
   "src/shared/cloud-flag.ts"() {
     "use strict";
+    init_define_process_env();
     CLOUD_ENABLED = import.meta.env?.VITE_REVYME_CLOUD === "true";
   }
 });
@@ -49894,6 +49611,7 @@ function isKnownProjectFormat(value) {
 var init_types = __esm({
   "src/backend/types.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -49910,6 +49628,7 @@ function getProjectId() {
 var init_project_id = __esm({
   "src/backend/project-id.ts"() {
     "use strict";
+    init_define_process_env();
   }
 });
 
@@ -49938,6 +49657,7 @@ var API_URL, RevymeBackend;
 var init_revyme_backend = __esm({
   "src/backend/revyme-backend.ts"() {
     "use strict";
+    init_define_process_env();
     init_types();
     init_debug_trace();
     API_URL = (import.meta.env?.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -50264,6 +49984,7 @@ var _capturing, _lastCapturedVersion, _lastCaptureTime, MIN_CAPTURE_INTERVAL_MS;
 var init_thumbnail_capture = __esm({
   "src/backend/thumbnail-capture.ts"() {
     "use strict";
+    init_define_process_env();
     init_cloud_flag();
     init_project_id();
     init_revyme_backend();
@@ -50278,260 +49999,34 @@ var init_thumbnail_capture = __esm({
   }
 });
 
-// node_modules/react/cjs/react-jsx-runtime.development.js
-var require_react_jsx_runtime_development = __commonJS({
-  "node_modules/react/cjs/react-jsx-runtime.development.js"(exports) {
+// node_modules/react/cjs/react-jsx-runtime.production.js
+var require_react_jsx_runtime_production = __commonJS({
+  "node_modules/react/cjs/react-jsx-runtime.production.js"(exports) {
     "use strict";
-    (function() {
-      function getComponentNameFromType(type) {
-        if (null == type) return null;
-        if ("function" === typeof type)
-          return type.$$typeof === REACT_CLIENT_REFERENCE ? null : type.displayName || type.name || null;
-        if ("string" === typeof type) return type;
-        switch (type) {
-          case REACT_FRAGMENT_TYPE:
-            return "Fragment";
-          case REACT_PROFILER_TYPE:
-            return "Profiler";
-          case REACT_STRICT_MODE_TYPE:
-            return "StrictMode";
-          case REACT_SUSPENSE_TYPE:
-            return "Suspense";
-          case REACT_SUSPENSE_LIST_TYPE:
-            return "SuspenseList";
-          case REACT_ACTIVITY_TYPE:
-            return "Activity";
-        }
-        if ("object" === typeof type)
-          switch ("number" === typeof type.tag && console.error(
-            "Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue."
-          ), type.$$typeof) {
-            case REACT_PORTAL_TYPE:
-              return "Portal";
-            case REACT_CONTEXT_TYPE:
-              return type.displayName || "Context";
-            case REACT_CONSUMER_TYPE:
-              return (type._context.displayName || "Context") + ".Consumer";
-            case REACT_FORWARD_REF_TYPE:
-              var innerType = type.render;
-              type = type.displayName;
-              type || (type = innerType.displayName || innerType.name || "", type = "" !== type ? "ForwardRef(" + type + ")" : "ForwardRef");
-              return type;
-            case REACT_MEMO_TYPE:
-              return innerType = type.displayName || null, null !== innerType ? innerType : getComponentNameFromType(type.type) || "Memo";
-            case REACT_LAZY_TYPE:
-              innerType = type._payload;
-              type = type._init;
-              try {
-                return getComponentNameFromType(type(innerType));
-              } catch (x) {
-              }
-          }
-        return null;
-      }
-      function testStringCoercion(value) {
-        return "" + value;
-      }
-      function checkKeyStringCoercion(value) {
-        try {
-          testStringCoercion(value);
-          var JSCompiler_inline_result = false;
-        } catch (e2) {
-          JSCompiler_inline_result = true;
-        }
-        if (JSCompiler_inline_result) {
-          JSCompiler_inline_result = console;
-          var JSCompiler_temp_const = JSCompiler_inline_result.error;
-          var JSCompiler_inline_result$jscomp$0 = "function" === typeof Symbol && Symbol.toStringTag && value[Symbol.toStringTag] || value.constructor.name || "Object";
-          JSCompiler_temp_const.call(
-            JSCompiler_inline_result,
-            "The provided key is an unsupported type %s. This value must be coerced to a string before using it here.",
-            JSCompiler_inline_result$jscomp$0
-          );
-          return testStringCoercion(value);
-        }
-      }
-      function getTaskName(type) {
-        if (type === REACT_FRAGMENT_TYPE) return "<>";
-        if ("object" === typeof type && null !== type && type.$$typeof === REACT_LAZY_TYPE)
-          return "<...>";
-        try {
-          var name = getComponentNameFromType(type);
-          return name ? "<" + name + ">" : "<...>";
-        } catch (x) {
-          return "<...>";
-        }
-      }
-      function getOwner() {
-        var dispatcher = ReactSharedInternals.A;
-        return null === dispatcher ? null : dispatcher.getOwner();
-      }
-      function UnknownOwner() {
-        return Error("react-stack-top-frame");
-      }
-      function hasValidKey(config) {
-        if (hasOwnProperty2.call(config, "key")) {
-          var getter = Object.getOwnPropertyDescriptor(config, "key").get;
-          if (getter && getter.isReactWarning) return false;
-        }
-        return void 0 !== config.key;
-      }
-      function defineKeyPropWarningGetter(props, displayName) {
-        function warnAboutAccessingKey() {
-          specialPropKeyWarningShown || (specialPropKeyWarningShown = true, console.error(
-            "%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://react.dev/link/special-props)",
-            displayName
-          ));
-        }
-        warnAboutAccessingKey.isReactWarning = true;
-        Object.defineProperty(props, "key", {
-          get: warnAboutAccessingKey,
-          configurable: true
-        });
-      }
-      function elementRefGetterWithDeprecationWarning() {
-        var componentName = getComponentNameFromType(this.type);
-        didWarnAboutElementRef[componentName] || (didWarnAboutElementRef[componentName] = true, console.error(
-          "Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release."
-        ));
-        componentName = this.props.ref;
-        return void 0 !== componentName ? componentName : null;
-      }
-      function ReactElement(type, key, props, owner, debugStack, debugTask) {
-        var refProp = props.ref;
-        type = {
-          $$typeof: REACT_ELEMENT_TYPE,
-          type,
-          key,
-          props,
-          _owner: owner
-        };
-        null !== (void 0 !== refProp ? refProp : null) ? Object.defineProperty(type, "ref", {
-          enumerable: false,
-          get: elementRefGetterWithDeprecationWarning
-        }) : Object.defineProperty(type, "ref", { enumerable: false, value: null });
-        type._store = {};
-        Object.defineProperty(type._store, "validated", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: 0
-        });
-        Object.defineProperty(type, "_debugInfo", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: null
-        });
-        Object.defineProperty(type, "_debugStack", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: debugStack
-        });
-        Object.defineProperty(type, "_debugTask", {
-          configurable: false,
-          enumerable: false,
-          writable: true,
-          value: debugTask
-        });
-        Object.freeze && (Object.freeze(type.props), Object.freeze(type));
-        return type;
-      }
-      function jsxDEVImpl(type, config, maybeKey, isStaticChildren, debugStack, debugTask) {
-        var children = config.children;
-        if (void 0 !== children)
-          if (isStaticChildren)
-            if (isArrayImpl(children)) {
-              for (isStaticChildren = 0; isStaticChildren < children.length; isStaticChildren++)
-                validateChildKeys(children[isStaticChildren]);
-              Object.freeze && Object.freeze(children);
-            } else
-              console.error(
-                "React.jsx: Static children should always be an array. You are likely explicitly calling React.jsxs or React.jsxDEV. Use the Babel transform instead."
-              );
-          else validateChildKeys(children);
-        if (hasOwnProperty2.call(config, "key")) {
-          children = getComponentNameFromType(type);
-          var keys = Object.keys(config).filter(function(k) {
-            return "key" !== k;
-          });
-          isStaticChildren = 0 < keys.length ? "{key: someKey, " + keys.join(": ..., ") + ": ...}" : "{key: someKey}";
-          didWarnAboutKeySpread[children + isStaticChildren] || (keys = 0 < keys.length ? "{" + keys.join(": ..., ") + ": ...}" : "{}", console.error(
-            'A props object containing a "key" prop is being spread into JSX:\n  let props = %s;\n  <%s {...props} />\nReact keys must be passed directly to JSX without using spread:\n  let props = %s;\n  <%s key={someKey} {...props} />',
-            isStaticChildren,
-            children,
-            keys,
-            children
-          ), didWarnAboutKeySpread[children + isStaticChildren] = true);
-        }
-        children = null;
-        void 0 !== maybeKey && (checkKeyStringCoercion(maybeKey), children = "" + maybeKey);
-        hasValidKey(config) && (checkKeyStringCoercion(config.key), children = "" + config.key);
-        if ("key" in config) {
-          maybeKey = {};
-          for (var propName in config)
-            "key" !== propName && (maybeKey[propName] = config[propName]);
-        } else maybeKey = config;
-        children && defineKeyPropWarningGetter(
-          maybeKey,
-          "function" === typeof type ? type.displayName || type.name || "Unknown" : type
-        );
-        return ReactElement(
-          type,
-          children,
-          maybeKey,
-          getOwner(),
-          debugStack,
-          debugTask
-        );
-      }
-      function validateChildKeys(node) {
-        isValidElement3(node) ? node._store && (node._store.validated = 1) : "object" === typeof node && null !== node && node.$$typeof === REACT_LAZY_TYPE && ("fulfilled" === node._payload.status ? isValidElement3(node._payload.value) && node._payload.value._store && (node._payload.value._store.validated = 1) : node._store && (node._store.validated = 1));
-      }
-      function isValidElement3(object) {
-        return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
-      }
-      var React4 = require_react(), REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = /* @__PURE__ */ Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = /* @__PURE__ */ Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = /* @__PURE__ */ Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = /* @__PURE__ */ Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = /* @__PURE__ */ Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = /* @__PURE__ */ Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = /* @__PURE__ */ Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = /* @__PURE__ */ Symbol.for("react.memo"), REACT_LAZY_TYPE = /* @__PURE__ */ Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = /* @__PURE__ */ Symbol.for("react.activity"), REACT_CLIENT_REFERENCE = /* @__PURE__ */ Symbol.for("react.client.reference"), ReactSharedInternals = React4.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, hasOwnProperty2 = Object.prototype.hasOwnProperty, isArrayImpl = Array.isArray, createTask = console.createTask ? console.createTask : function() {
-        return null;
+    init_define_process_env();
+    var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element");
+    var REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment");
+    function jsxProd(type, config, maybeKey) {
+      var key = null;
+      void 0 !== maybeKey && (key = "" + maybeKey);
+      void 0 !== config.key && (key = "" + config.key);
+      if ("key" in config) {
+        maybeKey = {};
+        for (var propName in config)
+          "key" !== propName && (maybeKey[propName] = config[propName]);
+      } else maybeKey = config;
+      config = maybeKey.ref;
+      return {
+        $$typeof: REACT_ELEMENT_TYPE,
+        type,
+        key,
+        ref: void 0 !== config ? config : null,
+        props: maybeKey
       };
-      React4 = {
-        react_stack_bottom_frame: function(callStackForError) {
-          return callStackForError();
-        }
-      };
-      var specialPropKeyWarningShown;
-      var didWarnAboutElementRef = {};
-      var unknownOwnerDebugStack = React4.react_stack_bottom_frame.bind(
-        React4,
-        UnknownOwner
-      )();
-      var unknownOwnerDebugTask = createTask(getTaskName(UnknownOwner));
-      var didWarnAboutKeySpread = {};
-      exports.Fragment = REACT_FRAGMENT_TYPE;
-      exports.jsx = function(type, config, maybeKey) {
-        var trackActualOwner = 1e4 > ReactSharedInternals.recentlyCreatedOwnerStacks++;
-        return jsxDEVImpl(
-          type,
-          config,
-          maybeKey,
-          false,
-          trackActualOwner ? Error("react-stack-top-frame") : unknownOwnerDebugStack,
-          trackActualOwner ? createTask(getTaskName(type)) : unknownOwnerDebugTask
-        );
-      };
-      exports.jsxs = function(type, config, maybeKey) {
-        var trackActualOwner = 1e4 > ReactSharedInternals.recentlyCreatedOwnerStacks++;
-        return jsxDEVImpl(
-          type,
-          config,
-          maybeKey,
-          true,
-          trackActualOwner ? Error("react-stack-top-frame") : unknownOwnerDebugStack,
-          trackActualOwner ? createTask(getTaskName(type)) : unknownOwnerDebugTask
-        );
-      };
-    })();
+    }
+    exports.Fragment = REACT_FRAGMENT_TYPE;
+    exports.jsx = jsxProd;
+    exports.jsxs = jsxProd;
   }
 });
 
@@ -50539,18 +50034,24 @@ var require_react_jsx_runtime_development = __commonJS({
 var require_jsx_runtime = __commonJS({
   "node_modules/react/jsx-runtime.js"(exports, module) {
     "use strict";
-    if (false) {
-      module.exports = null;
+    init_define_process_env();
+    if (true) {
+      module.exports = require_react_jsx_runtime_production();
     } else {
-      module.exports = require_react_jsx_runtime_development();
+      module.exports = null;
     }
   }
 });
 
 // src/code/import/framer-native/normalizer.ts
+init_define_process_env();
 init_debug_trace();
 
+// src/code/import/framer-native/decode.ts
+init_define_process_env();
+
 // src/shared/framer-transfer-envelope.mjs
+init_define_process_env();
 var MAX_BYTES = 50 * 1024 * 1024;
 var MODES = /* @__PURE__ */ new Set(["selection", "component", "page", "project"]);
 var FORBIDDEN_KEYS = /* @__PURE__ */ new Set(["__proto__", "prototype", "constructor"]);
@@ -50632,12 +50133,15 @@ function decodeNativeTransfer(input) {
 }
 
 // src/code/import/framer-native/agent-slice.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/import/framer-native/source-graph.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/shared/hash-utils.ts
+init_define_process_env();
 function simpleHash(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -51040,13 +50544,16 @@ function allocateTargetIdentity(graph, existingPaths) {
 }
 
 // src/code/import/framer-native/styles.ts
+init_define_process_env();
 init_css_utils();
 init_debug_trace();
 
 // src/shared/responsive-units.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/shared/canvas-band-queries.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/shared/responsive-units.ts
@@ -51056,6 +50563,7 @@ function simulatedVpHeight(vpWidthPx) {
 }
 
 // src/code/import/framer-native/effects.ts
+init_define_process_env();
 init_generator_motion_scroll();
 init_generator_motion_props();
 init_generator_motion_compose();
@@ -51063,6 +50571,7 @@ init_generator_motion_loop();
 init_generator_utils();
 
 // src/code/project/page-effects-config.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/import/framer-native/effects.ts
@@ -51177,7 +50686,23 @@ function sourceFlowEffect(p) {
   return { transition };
 }
 
+// src/code/import/framer-native/fonts.ts
+init_define_process_env();
+
+// node_modules/parse5/dist/index.js
+init_define_process_env();
+
+// node_modules/parse5/dist/parser/index.js
+init_define_process_env();
+
+// node_modules/parse5/dist/tokenizer/index.js
+init_define_process_env();
+
+// node_modules/parse5/dist/tokenizer/preprocessor.js
+init_define_process_env();
+
 // node_modules/parse5/dist/common/unicode.js
+init_define_process_env();
 var UNDEFINED_CODE_POINTS = /* @__PURE__ */ new Set([
   65534,
   65535,
@@ -51269,6 +50794,7 @@ function isUndefinedCodePoint(cp) {
 }
 
 // node_modules/parse5/dist/common/error-codes.js
+init_define_process_env();
 var ERR;
 (function(ERR2) {
   ERR2["controlCharacterInInputStream"] = "control-character-in-input-stream";
@@ -51503,6 +51029,7 @@ var Preprocessor = class {
 };
 
 // node_modules/parse5/dist/common/token.js
+init_define_process_env();
 var TokenType;
 (function(TokenType2) {
   TokenType2[TokenType2["CHARACTER"] = 0] = "CHARACTER";
@@ -51524,7 +51051,11 @@ function getTokenAttr(token, attrName) {
   return null;
 }
 
+// node_modules/entities/dist/decode.js
+init_define_process_env();
+
 // node_modules/entities/dist/decode-codepoint.js
+init_define_process_env();
 var decodeMap = /* @__PURE__ */ new Map([
   [0, 65533],
   // C1 Unicode control character reference replacements
@@ -51563,7 +51094,11 @@ function replaceCodePoint(codePoint) {
   return decodeMap.get(codePoint) ?? codePoint;
 }
 
+// node_modules/entities/dist/generated/decode-data-html.js
+init_define_process_env();
+
 // node_modules/entities/dist/internal/decode-shared.js
+init_define_process_env();
 function decodeBase64(input) {
   const binary = atob(input);
   const evenLength = binary.length & ~1;
@@ -51580,6 +51115,7 @@ function decodeBase64(input) {
 var htmlDecodeTree = /* @__PURE__ */ decodeBase64("QR08ALkAAgH6AYsDNQR2BO0EPgXZBQEGLAbdBxMISQrvCmQLfQurDKQNLw4fD4YPpA+6D/IPAAAAAAAAAAAAAAAAKhBMEY8TmxUWF2EYLBkxGuAa3RsJHDscWR8YIC8jSCSIJcMl6ie3Ku8rEC0CLjoupS7kLgAIRU1hYmNmZ2xtbm9wcnN0dVQAWgBeAGUAaQBzAHcAfgCBAIQAhwCSAJoAoACsALMAbABpAGcAO4DGAMZAUAA7gCYAJkBjAHUAdABlADuAwQDBQHIiZXZlAAJhAAFpeW0AcgByAGMAO4DCAMJAEGRyAADgNdgE3XIAYQB2AGUAO4DAAMBA8CFoYZFj4SFjcgBhZAAAoFMqAAFncIsAjgBvAG4ABGFmAADgNdg43fAlbHlGdW5jdGlvbgCgYSBpAG4AZwA7gMUAxUAAAWNzpACoAHIAAOA12Jzc6SFnbgCgVCJpAGwAZABlADuAwwDDQG0AbAA7gMQAxEAABGFjZWZvcnN1xQDYANoA7QDxAPYA+QD8AAABY3LJAM8AayNzbGFzaAAAoBYidgHTANUAAKDnKmUAZAAAoAYjeQARZIABY3J0AOAA5QDrAGEidXNlAACgNSLuI291bGxpcwCgLCFhAJJjcgAA4DXYBd1wAGYAAOA12Dnd5SF2ZdhiYwDyAOoAbSJwZXEAAKBOIgAHSE9hY2RlZmhpbG9yc3UXARoBHwE6AVIBVQFiAWQBZgGCAakB6QHtAfIBYwB5ACdkUABZADuAqQCpQIABY3B5ACUBKAE1AfUhdGUGYWmg0iJ0KGFsRGlmZmVyZW50aWFsRAAAoEUhbCJleXMAAKAtIQACYWVpb0EBRAFKAU0B8iFvbgxhZABpAGwAO4DHAMdAcgBjAAhhbiJpbnQAAKAwIm8AdAAKYQABZG5ZAV0BaSJsbGEAuGB0I2VyRG90ALdg8gA5AWkAp2NyImNsZQAAAkRNUFRwAXQBeQF9AW8AdAAAoJkiaSJudXMAAKCWIuwhdXMAoJUiaSJtZXMAAKCXIm8AAAFjc4cBlAFrKndpc2VDb250b3VySW50ZWdyYWwAAKAyImUjQ3VybHkAAAFEUZwBpAFvJXVibGVRdW90ZQAAoB0gdSJvdGUAAKAZIAACbG5wdbABtgHNAdgBbwBuAGWgNyIAoHQqgAFnaXQAvAHBAcUB8iJ1ZW50AKBhIm4AdAAAoC8i7yV1ckludGVncmFsAKAuIgABZnLRAdMBAKACIe8iZHVjdACgECJuLnRlckNsb2Nrd2lzZUNvbnRvdXJJbnRlZ3JhbAAAoDMi7yFzcwCgLypjAHIAAOA12J7ccABDoNMiYQBwAACgTSKABURKU1phY2VmaW9zAAsCEgIVAhgCGwIsAjQCOQI9AnMCfwNvoEUh9CJyYWhkAKARKWMAeQACZGMAeQAFZGMAeQAPZIABZ3JzACECJQIoAuchZXIAoCEgcgAAoKEhaAB2AACg5CoAAWF5MAIzAvIhb24OYRRkbAB0oAciYQCUY3IAAOA12AfdAAFhZkECawIAAWNtRQJnAvIjaXRpY2FsAAJBREdUUAJUAl8CYwJjInV0ZQC0YG8AdAFZAloC2WJiJGxlQWN1dGUA3WJyImF2ZQBgYGkibGRlANxi7yFuZACgxCJmJWVyZW50aWFsRAAAoEYhcAR9AgAAAAAAAIECjgIAABoDZgAA4DXYO91EoagAhQKJAm8AdAAAoNwgcSJ1YWwAAKBQIuIhbGUAA0NETFJVVpkCqAK1Au8C/wIRA28AbgB0AG8AdQByAEkAbgB0AGUAZwByAGEA7ADEAW8AdAKvAgAAAACwAqhgbiNBcnJvdwAAoNMhAAFlb7kC0AJmAHQAgAFBUlQAwQLGAs0CciJyb3cAAKDQIekkZ2h0QXJyb3cAoNQhZQDlACsCbgBnAAABTFLWAugC5SFmdAABQVLcAuECciJyb3cAAKD4J+kkZ2h0QXJyb3cAoPon6SRnaHRBcnJvdwCg+SdpImdodAAAAUFU9gL7AnIicm93AACg0iFlAGUAAKCoInAAQQIGAwAAAAALA3Iicm93AACg0SFvJHduQXJyb3cAAKDVIWUlcnRpY2FsQmFyAACgJSJuAAADQUJMUlRhJAM2AzoDWgNxA3oDciJyb3cAAKGTIUJVLAMwA2EAcgAAoBMpcCNBcnJvdwAAoPUhciJldmUAEWPlIWZ00gJDAwAASwMAAFIDaSVnaHRWZWN0b3IAAKBQKWUkZVZlY3RvcgAAoF4p5SJjdG9yQqC9IWEAcgAAoFYpaSJnaHQA1AFiAwAAaQNlJGVWZWN0b3IAAKBfKeUiY3RvckKgwSFhAHIAAKBXKWUAZQBBoKQiciJyb3cAAKCnIXIAcgBvAPcAtAIAAWN0gwOHA3IAAOA12J/c8iFvaxBhAAhOVGFjZGZnbG1vcHFzdHV4owOlA6kDsAO/A8IDxgPNA9ID8gP9AwEEFAQeBCAEJQRHAEphSAA7gNAA0EBjAHUAdABlADuAyQDJQIABYWl5ALYDuQO+A/Ihb24aYXIAYwA7gMoAykAtZG8AdAAWYXIAAOA12AjdcgBhAHYAZQA7gMgAyEDlIm1lbnQAoAgiAAFhcNYD2QNjAHIAEmF0AHkAUwLhAwAAAADpA20lYWxsU3F1YXJlAACg+yVlJ3J5U21hbGxTcXVhcmUAAKCrJQABZ3D2A/kDbwBuABhhZgAA4DXYPN3zImlsb26VY3UAAAFhaQYEDgRsAFSgdSppImxkZQAAoEIi7CNpYnJpdW0AoMwhAAFjaRgEGwRyAACgMCFtAACgcyphAJdjbQBsADuAywDLQAABaXApBC0E8yF0cwCgAyLvJG5lbnRpYWxFAKBHIYACY2Zpb3MAPQQ/BEMEXQRyBHkAJGRyAADgNdgJ3WwibGVkAFMCTAQAAAAAVARtJWFsbFNxdWFyZQAAoPwlZSdyeVNtYWxsU3F1YXJlAACgqiVwA2UEAABpBAAAAABtBGYAAOA12D3dwSFsbACgACLyI2llcnRyZgCgMSFjAPIAcQQABkpUYWJjZGZnb3JzdIgEiwSOBJMElwSkBKcEqwStBLIE5QTqBGMAeQADZDuAPgA+QO0hbWFkoJMD3GNyImV2ZQAeYYABZWl5AJ0EoASjBOQhaWwiYXIAYwAcYRNkbwB0ACBhcgAA4DXYCt0AoNkicABmAADgNdg+3eUiYXRlcgADRUZHTFNUvwTIBM8E1QTZBOAEcSJ1YWwATKBlIuUhc3MAoNsidSRsbEVxdWFsAACgZyJyI2VhdGVyAACgoirlIXNzAKB3IuwkYW50RXF1YWwAoH4qaSJsZGUAAKBzImMAcgAA4DXYotwAoGsiAARBYWNmaW9zdfkE/QQFBQgFCwUTBSIFKwVSIkRjeQAqZAABY3QBBQQFZQBrAMdiXmDpIXJjJGFyAACgDCFsJWJlcnRTcGFjZQAAoAsh8AEYBQAAGwVmAACgDSHpJXpvbnRhbExpbmUAoAAlAAFjdCYFKAXyABIF8iFvayZhbQBwAEQBMQU5BW8AdwBuAEgAdQBtAPAAAAFxInVhbAAAoE8iAAdFSk9hY2RmZ21ub3N0dVMFVgVZBVwFYwVtBXAFcwV6BZAFtgXFBckFzQVjAHkAFWTsIWlnMmFjAHkAAWRjAHUAdABlADuAzQDNQAABaXlnBWwFcgBjADuAzgDOQBhkbwB0ADBhcgAAoBEhcgBhAHYAZQA7gMwAzEAAoREhYXB/BYsFAAFjZ4MFhQVyACphaSNuYXJ5SQAAoEghbABpAGUA8wD6AvQBlQUAAKUFZaAsIgABZ3KaBZ4F8iFhbACgKyLzI2VjdGlvbgCgwiJpI3NpYmxlAAABQ1SsBbEFbyJtbWEAAKBjIGkibWVzAACgYiCAAWdwdAC8Bb8FwwVvAG4ALmFmAADgNdhA3WEAmWNjAHIAAKAQIWkibGRlAChh6wHSBQAA1QVjAHkABmRsADuAzwDPQIACY2Zvc3UA4QXpBe0F8gX9BQABaXnlBegFcgBjADRhGWRyAADgNdgN3XAAZgAA4DXYQd3jAfcFAAD7BXIAAOA12KXc8iFjeQhk6yFjeQRkgANISmFjZm9zAAwGDwYSBhUGHQYhBiYGYwB5ACVkYwB5AAxk8CFwYZpjAAFleRkGHAbkIWlsNmEaZHIAAOA12A7dcABmAADgNdhC3WMAcgAA4DXYptyABUpUYWNlZmxtb3N0AD0GQAZDBl4GawZkB2gHcAd0B80H2gdjAHkACWQ7gDwAPECAAmNtbnByAEwGTwZSBlUGWwb1IXRlOWHiIWRhm2NnAACg6ifsI2FjZXRyZgCgEiFyAACgniGAAWFleQBkBmcGagbyIW9uPWHkIWlsO2EbZAABZnNvBjQHdAAABUFDREZSVFVWYXKABp4GpAbGBssG3AYDByEHwQIqBwABbnKEBowGZyVsZUJyYWNrZXQAAKDoJ/Ihb3cAoZAhQlKTBpcGYQByAACg5CHpJGdodEFycm93AKDGIWUjaWxpbmcAAKAII28A9QGqBgAAsgZiJWxlQnJhY2tldAAAoOYnbgDUAbcGAAC+BmUkZVZlY3RvcgAAoGEp5SJjdG9yQqDDIWEAcgAAoFkpbCJvb3IAAKAKI2kiZ2h0AAABQVbSBtcGciJyb3cAAKCUIeUiY3RvcgCgTikAAWVy4AbwBmUAAKGjIkFW5gbrBnIicm93AACgpCHlImN0b3IAoFopaSNhbmdsZQBCorIi+wYAAAAA/wZhAHIAAKDPKXEidWFsAACgtCJwAIABRFRWAAoHEQcYB+8kd25WZWN0b3IAoFEpZSRlVmVjdG9yAACgYCnlImN0b3JCoL8hYQByAACgWCnlImN0b3JCoLwhYQByAACgUilpAGcAaAB0AGEAcgByAG8A9wDMAnMAAANFRkdMU1Q/B0cHTgdUB1gHXwfxJXVhbEdyZWF0ZXIAoNoidSRsbEVxdWFsAACgZiJyI2VhdGVyAACgdiLlIXNzAKChKuwkYW50RXF1YWwAoH0qaSJsZGUAAKByInIAAOA12A/dZaDYIuYjdGFycm93AKDaIWkiZG90AD9hgAFucHcAege1B7kHZwAAAkxSbHKCB5QHmwerB+UhZnQAAUFSiAeNB3Iicm93AACg9SfpJGdodEFycm93AKD3J+kkZ2h0QXJyb3cAoPYn5SFmdAABYXLcAqEHaQBnAGgAdABhAHIAcgBvAPcA5wJpAGcAaAB0AGEAcgByAG8A9wDuAmYAAOA12EPdZQByAAABTFK/B8YHZSRmdEFycm93AACgmSHpJGdodEFycm93AKCYIYABY2h0ANMH1QfXB/IAWgYAoLAh8iFva0FhAKBqIgAEYWNlZmlvc3XpB+wH7gf/BwMICQgOCBEIcAAAoAUpeQAcZAABZGzyB/kHaSR1bVNwYWNlAACgXyBsI2ludHJmAACgMyFyAADgNdgQ3e4jdXNQbHVzAKATInAAZgAA4DXYRN1jAPIA/gecY4AESmFjZWZvc3R1ACEIJAgoCDUIgQiFCDsKQApHCmMAeQAKZGMidXRlAENhgAFhZXkALggxCDQI8iFvbkdh5CFpbEVhHWSAAWdzdwA7CGEIfQjhInRpdmWAAU1UVgBECEwIWQhlJWRpdW1TcGFjZQAAoAsgaABpAAABY25SCFMIawBTAHAAYQBjAOUASwhlAHIAeQBUAGgAaQDuAFQI9CFlZAABR0xnCHUIcgBlAGEAdABlAHIARwByAGUAYQB0AGUA8gDrBGUAcwBzAEwAZQBzAPMA2wdMImluZQAKYHIAAOA12BHdAAJCbnB0jAiRCJkInAhyImVhawAAoGAgwiZyZWFraW5nU3BhY2WgYGYAAKAVIUOq7CqzCMIIzQgAAOcIGwkAAAAAAAAtCQAAbwkAAIcJAACdCcAJGQoAADQKAAFvdbYIvAjuI2dydWVudACgYiJwIkNhcAAAoG0ibyh1YmxlVmVydGljYWxCYXIAAKAmIoABbHF4ANII1wjhCOUibWVudACgCSL1IWFsVKBgImkibGRlAADgQiI4A2kic3RzAACgBCJyI2VhdGVyAACjbyJFRkdMU1T1CPoIAgkJCQ0JFQlxInVhbAAAoHEidSRsbEVxdWFsAADgZyI4A3IjZWF0ZXIAAOBrIjgD5SFzcwCgeSLsJGFudEVxdWFsAOB+KjgDaSJsZGUAAKB1IvUhbXBEASAJJwnvI3duSHVtcADgTiI4A3EidWFsAADgTyI4A2UAAAFmczEJRgn0JFRyaWFuZ2xlQqLqIj0JAAAAAEIJYQByAADgzyk4A3EidWFsAACg7CJzAICibiJFR0xTVABRCVYJXAlhCWkJcSJ1YWwAAKBwInIjZWF0ZXIAAKB4IuUhc3MA4GoiOAPsJGFudEVxdWFsAOB9KjgDaSJsZGUAAKB0IuUic3RlZAABR0x1CX8J8iZlYXRlckdyZWF0ZXIA4KIqOAPlI3NzTGVzcwDgoSo4A/IjZWNlZGVzAKGAIkVTjwmVCXEidWFsAADgryo4A+wkYW50RXF1YWwAoOAiAAFlaaAJqQl2JmVyc2VFbGVtZW50AACgDCLnJWh0VHJpYW5nbGVCousitgkAAAAAuwlhAHIAAODQKTgDcSJ1YWwAAKDtIgABcXXDCeAJdSNhcmVTdQAAAWJwywnVCfMhZXRF4I8iOANxInVhbAAAoOIi5SJyc2V0ReCQIjgDcSJ1YWwAAKDjIoABYmNwAOYJ8AkNCvMhZXRF4IIi0iBxInVhbAAAoIgi4yJlZWRzgKGBIkVTVAD6CQAKBwpxInVhbAAA4LAqOAPsJGFudEVxdWFsAKDhImkibGRlAADgfyI4A+UicnNldEXggyLSIHEidWFsAACgiSJpImxkZQCAoUEiRUZUACIKJwouCnEidWFsAACgRCJ1JGxsRXF1YWwAAKBHImkibGRlAACgSSJlJXJ0aWNhbEJhcgAAoCQiYwByAADgNdip3GkAbABkAGUAO4DRANFAnWMAB0VhY2RmZ21vcHJzdHV2XgphCmgKcgp2CnoKgQqRCpYKqwqtCrsKyArNCuwhaWdSYWMAdQB0AGUAO4DTANNAAAFpeWwKcQpyAGMAO4DUANRAHmRiImxhYwBQYXIAAOA12BLdcgBhAHYAZQA7gNIA0kCAAWFlaQCHCooKjQpjAHIATGFnAGEAqWNjInJvbgCfY3AAZgAA4DXYRt3lI25DdXJseQABRFGeCqYKbyV1YmxlUXVvdGUAAKAcIHUib3RlAACgGCAAoFQqAAFjbLEKtQpyAADgNdiq3GEAcwBoADuA2ADYQGkAbAHACsUKZABlADuA1QDVQGUAcwAAoDcqbQBsADuA1gDWQGUAcgAAAUJQ0wrmCgABYXLXCtoKcgAAoD4gYQBjAAABZWvgCuIKAKDeI2UAdAAAoLQjYSVyZW50aGVzaXMAAKDcI4AEYWNmaGlsb3JzAP0KAwsFCwkLCwsMCxELIwtaC3IjdGlhbEQAAKACInkAH2RyAADgNdgT3WkApmOgY/Ujc01pbnVzsWAAAWlwFQsgC24AYwBhAHIAZQBwAGwAYQBuAOUACgVmAACgGSGAobsqZWlvACoLRQtJC+MiZWRlc4CheiJFU1QANAs5C0ALcSJ1YWwAAKCvKuwkYW50RXF1YWwAoHwiaSJsZGUAAKB+Im0AZQAAoDMgAAFkcE0LUQv1IWN0AKAPIm8jcnRpb24AYaA3ImwAAKAdIgABY2leC2ILcgAA4DXYq9yoYwACVWZvc2oLbwtzC3cLTwBUADuAIgAiQHIAAOA12BTdcABmAACgGiFjAHIAAOA12KzcAAZCRWFjZWZoaW9yc3WPC5MLlwupC7YL2AvbC90LhQyTDJoMowzhIXJyAKAQKUcAO4CuAK5AgAFjbnIAnQugC6ML9SF0ZVRhZwAAoOsncgB0oKAhbAAAoBYpgAFhZXkArwuyC7UL8iFvblhh5CFpbFZhIGR2oBwhZSJyc2UAAAFFVb8LzwsAAWxxwwvIC+UibWVudACgCyL1JGlsaWJyaXVtAKDLIXAmRXF1aWxpYnJpdW0AAKBvKXIAAKAcIW8AoWPnIWh0AARBQ0RGVFVWYewLCgwQDDIMNwxeDHwM9gIAAW5y8Av4C2clbGVCcmFja2V0AACg6SfyIW93AKGSIUJM/wsDDGEAcgAAoOUhZSRmdEFycm93AACgxCFlI2lsaW5nAACgCSNvAPUBFgwAAB4MYiVsZUJyYWNrZXQAAKDnJ24A1AEjDAAAKgxlJGVWZWN0b3IAAKBdKeUiY3RvckKgwiFhAHIAAKBVKWwib29yAACgCyMAAWVyOwxLDGUAAKGiIkFWQQxGDHIicm93AACgpiHlImN0b3IAoFspaSNhbmdsZQBCorMiVgwAAAAAWgxhAHIAAKDQKXEidWFsAACgtSJwAIABRFRWAGUMbAxzDO8kd25WZWN0b3IAoE8pZSRlVmVjdG9yAACgXCnlImN0b3JCoL4hYQByAACgVCnlImN0b3JCoMAhYQByAACgUykAAXB1iQyMDGYAAKAdIe4kZEltcGxpZXMAoHAp6SRnaHRhcnJvdwCg2yEAAWNongyhDHIAAKAbIQCgsSHsJGVEZWxheWVkAKD0KYAGSE9hY2ZoaW1vcXN0dQC/DMgMzAzQDOIM5gwKDQ0NFA0ZDU8NVA1YDQABQ2PDDMYMyCFjeSlkeQAoZEYiVGN5ACxkYyJ1dGUAWmEAorwqYWVpedgM2wzeDOEM8iFvbmBh5CFpbF5hcgBjAFxhIWRyAADgNdgW3e8hcnQAAkRMUlXvDPYM/QwEDW8kd25BcnJvdwAAoJMhZSRmdEFycm93AACgkCHpJGdodEFycm93AKCSIXAjQXJyb3cAAKCRIechbWGjY+EkbGxDaXJjbGUAoBgicABmAADgNdhK3XICHw0AAAAAIg10AACgGiLhIXJlgKGhJUlTVQAqDTINSg3uJXRlcnNlY3Rpb24AoJMidQAAAWJwNw1ADfMhZXRFoI8icSJ1YWwAAKCRIuUicnNldEWgkCJxInVhbAAAoJIibiJpb24AAKCUImMAcgAA4DXYrtxhAHIAAKDGIgACYmNtcF8Nag2ODZANc6DQImUAdABFoNAicSJ1YWwAAKCGIgABY2huDYkNZSJlZHMAgKF7IkVTVAB4DX0NhA1xInVhbAAAoLAq7CRhbnRFcXVhbACgfSJpImxkZQAAoH8iVABoAGEA9ADHCwCgESIAodEiZXOVDZ8NciJzZXQARaCDInEidWFsAACghyJlAHQAAKDRIoAFSFJTYWNmaGlvcnMAtQ27Db8NyA3ODdsN3w3+DRgOHQ4jDk8AUgBOADuA3gDeQMEhREUAoCIhAAFIY8MNxg1jAHkAC2R5ACZkAAFidcwNzQ0JYKRjgAFhZXkA1A3XDdoN8iFvbmRh5CFpbGJhImRyAADgNdgX3QABZWnjDe4N8gHoDQAA7Q3lImZvcmUAoDQiYQCYYwABY27yDfkNayNTcGFjZQAA4F8gCiDTInBhY2UAoAkg7CFkZYChPCJFRlQABw4MDhMOcSJ1YWwAAKBDInUkbGxFcXVhbAAAoEUiaSJsZGUAAKBIInAAZgAA4DXYS93pI3BsZURvdACg2yAAAWN0Jw4rDnIAAOA12K/c8iFva2Zh4QpFDlYOYA5qDgAAbg5yDgAAAAAAAAAAAAB5DnwOqA6zDgAADg8RDxYPGg8AAWNySA5ODnUAdABlADuA2gDaQHIAb6CfIeMhaXIAoEkpcgDjAVsOAABdDnkADmR2AGUAbGEAAWl5Yw5oDnIAYwA7gNsA20AjZGIibGFjAHBhcgAA4DXYGN1yAGEAdgBlADuA2QDZQOEhY3JqYQABZGl/Dp8OZQByAAABQlCFDpcOAAFhcokOiw5yAF9gYQBjAAABZWuRDpMOAKDfI2UAdAAAoLUjYSVyZW50aGVzaXMAAKDdI28AbgBQoMMi7CF1cwCgjiIAAWdwqw6uDm8AbgByYWYAAOA12EzdAARBREVUYWRwc78O0g7ZDuEOBQPqDvMOBw9yInJvdwDCoZEhyA4AAMwOYQByAACgEilvJHduQXJyb3cAAKDFIW8kd25BcnJvdwAAoJUhcSV1aWxpYnJpdW0AAKBuKWUAZQBBoKUiciJyb3cAAKClIW8AdwBuAGEAcgByAG8A9wAQA2UAcgAAAUxS+Q4AD2UkZnRBcnJvdwAAoJYh6SRnaHRBcnJvdwCglyFpAGyg0gNvAG4ApWPpIW5nbmFjAHIAAOA12LDcaSJsZGUAaGFtAGwAO4DcANxAgAREYmNkZWZvc3YALQ8xDzUPNw89D3IPdg97D4AP4SFzaACgqyJhAHIAAKDrKnkAEmThIXNobKCpIgCg5ioAAWVyQQ9DDwCgwSKAAWJ0eQBJD00Paw9hAHIAAKAWIGmgFiDjIWFsAAJCTFNUWA9cD18PZg9hAHIAAKAjIukhbmV8YGUkcGFyYXRvcgAAoFgnaSJsZGUAAKBAItQkaGluU3BhY2UAoAogcgAA4DXYGd1wAGYAAOA12E3dYwByAADgNdix3GQiYXNoAACgqiKAAmNlZm9zAI4PkQ+VD5kPng/pIXJjdGHkIWdlAKDAInIAAOA12BrdcABmAADgNdhO3WMAcgAA4DXYstwAAmZpb3OqD64Prw+0D3IAAOA12BvdnmNwAGYAAOA12E/dYwByAADgNdiz3IAEQUlVYWNmb3N1AMgPyw/OD9EP2A/gD+QP6Q/uD2MAeQAvZGMAeQAHZGMAeQAuZGMAdQB0AGUAO4DdAN1AAAFpedwP3w9yAGMAdmErZHIAAOA12BzdcABmAADgNdhQ3WMAcgAA4DXYtNxtAGwAeGEABEhhY2RlZm9z/g8BEAUQDRAQEB0QIBAkEGMAeQAWZGMidXRlAHlhAAFheQkQDBDyIW9ufWEXZG8AdAB7YfIBFRAAABwQbwBXAGkAZAB0AOgAVAhhAJZjcgAAoCghcABmAACgJCFjAHIAAOA12LXc4QtCEEkQTRAAAGcQbRByEAAAAAAAAAAAeRCKEJcQ8hD9EAAAGxEhETIROREAAD4RYwB1AHQAZQA7gOEA4UByImV2ZQADYYCiPiJFZGl1eQBWEFkQWxBgEGUQAOA+IjMDAKA/InIAYwA7gOIA4kB0AGUAO4C0ALRAMGRsAGkAZwA7gOYA5kByoGEgAOA12B7dcgBhAHYAZQA7gOAA4EAAAWVwfBCGEAABZnCAEIQQ8yF5bQCgNSHoAIMQaABhALFjAAFhcI0QWwAAAWNskRCTEHIAAWFnAACgPypkApwQAAAAALEQAKInImFkc3ajEKcQqRCuEG4AZAAAoFUqAKBcKmwib3BlAACgWCoAoFoqAKMgImVsbXJzersQvRDAEN0Q5RDtEACgpCllAACgICJzAGQAYaAhImEEzhDQENIQ1BDWENgQ2hDcEACgqCkAoKkpAKCqKQCgqykAoKwpAKCtKQCgrikAoK8pdAB2oB8iYgBkoL4iAKCdKQABcHTpEOwQaAAAoCIixWDhIXJyAKB8IwABZ3D1EPgQbwBuAAVhZgAA4DXYUt0Ao0giRWFlaW9wBxEJEQ0RDxESERQRAKBwKuMhaXIAoG8qAKBKImQAAKBLInMAJ2DyIW94ZaBIIvEADhFpAG4AZwA7gOUA5UCAAWN0eQAmESoRKxFyAADgNdi23CpgbQBwAGWgSCLxAPgBaQBsAGQAZQA7gOMA40BtAGwAO4DkAORAAAFjaUERRxFvAG4AaQBuAPQA6AFuAHQAAKARKgAITmFiY2RlZmlrbG5vcHJzdWQRaBGXEZ8RpxGrEdIR1hErEjASexKKEn0RThNbE3oTbwB0AACg7SoAAWNybBGJEWsAAAJjZXBzdBF4EX0RghHvIW5nAKBMInAjc2lsb24A9mNyImltZQAAoDUgaQBtAGWgPSJxAACgzSJ2AY0RkRFlAGUAAKC9ImUAZABnoAUjZQAAoAUjcgBrAHSgtSPiIXJrAKC2IwABb3mjEaYRbgDnAHcRMWTxIXVvAKAeIIACY21wcnQAtBG5Eb4RwRHFEeEhdXPloDUi5ABwInR5dgAAoLApcwDpAH0RbgBvAPUA6gCAAWFodwDLEcwRzhGyYwCgNiHlIWVuAKBsInIAAOA12B/dZwCAA2Nvc3R1dncA4xHyEQUSEhIhEiYSKRKAAWFpdQDpEesR7xHwAKMFcgBjAACg7yVwAACgwyKAAWRwdAD4EfwRABJvAHQAAKAAKuwhdXMAoAEqaSJtZXMAAKACKnECCxIAAAAADxLjIXVwAKAGKmEAcgAAoAUm8iNpYW5nbGUAAWR1GhIeEu8hd24AoL0lcAAAoLMlcCJsdXMAAKAEKmUA5QBCD+UAkg9hInJvdwAAoA0pgAFha28ANhJoEncSAAFjbjoSZRJrAIABbHN0AEESRxJNEm8jemVuZ2UAAKDrKXEAdQBhAHIA5QBcBPIjaWFuZ2xlgKG0JWRscgBYElwSYBLvIXduAKC+JeUhZnQAoMIlaSJnaHQAAKC4JWsAAKAjJLEBbRIAAHUSsgFxEgAAcxIAoJIlAKCRJTQAAKCTJWMAawAAoIglAAFlb38ShxJx4D0A5SD1IWl2AOBhIuUgdAAAoBAjAAJwdHd4kRKVEpsSnxJmAADgNdhT3XSgpSJvAG0AAKClIvQhaWUAoMgiAAZESFVWYmRobXB0dXayEsES0RLgEvcS+xIKExoTHxMjEygTNxMAAkxSbHK5ErsSvRK/EgCgVyUAoFQlAKBWJQCgUyUAolAlRFVkdckSyxLNEs8SAKBmJQCgaSUAoGQlAKBnJQACTFJsctgS2hLcEt4SAKBdJQCgWiUAoFwlAKBZJQCjUSVITFJobHLrEu0S7xLxEvMS9RIAoGwlAKBjJQCgYCUAoGslAKBiJQCgXyVvAHgAAKDJKQACTFJscgITBBMGEwgTAKBVJQCgUiUAoBAlAKAMJQCiACVEVWR1EhMUExYTGBMAoGUlAKBoJQCgLCUAoDQlaSJudXMAAKCfIuwhdXMAoJ4iaSJtZXMAAKCgIgACTFJsci8TMRMzEzUTAKBbJQCgWCUAoBglAKAUJQCjAiVITFJobHJCE0QTRhNIE0oTTBMAoGolAKBhJQCgXiUAoDwlAKAkJQCgHCUAAWV2UhNVE3YA5QD5AGIAYQByADuApgCmQAACY2Vpb2ITZhNqE24TcgAA4DXYt9xtAGkAAKBPIG0A5aA9IogRbAAAoVwAYmh0E3YTAKDFKfMhdWIAoMgnbAF+E4QTbABloCIgdAAAoCIgcAAAoU4iRWWJE4sTAKCuKvGgTyI8BeEMqRMAAN8TABQDFB8UAAAjFDQUAAAAAIUUAAAAAI0UAAAAANcU4xT3FPsUAACIFQAAlhWAAWNwcgCuE7ET1RP1IXRlB2GAoikiYWJjZHMAuxO/E8QTzhPSE24AZAAAoEQqciJjdXAAAKBJKgABYXXIE8sTcAAAoEsqcAAAoEcqbwB0AACgQCoA4CkiAP4AAWVv2RPcE3QAAKBBIO4ABAUAAmFlaXXlE+8T9RP4E/AB6hMAAO0TcwAAoE0qbwBuAA1hZABpAGwAO4DnAOdAcgBjAAlhcABzAHOgTCptAACgUCpvAHQAC2GAAWRtbgAIFA0UEhRpAGwAO4C4ALhAcCJ0eXYAAKCyKXQAAIGiADtlGBQZFKJAcgBkAG8A9ABiAXIAAOA12CDdgAFjZWkAKBQqFDIUeQBHZGMAawBtoBMn4SFyawCgEyfHY3IAAKPLJUVjZWZtcz8UQRRHFHcUfBSAFACgwykAocYCZWxGFEkUcQAAoFciZQBhAlAUAAAAAGAUciJyb3cAAAFsclYUWhTlIWZ0AKC6IWkiZ2h0AACguyGAAlJTYWNkAGgUaRRrFG8UcxSuYACgyCRzAHQAAKCbIukhcmMAoJoi4SFzaACgnSJuImludAAAoBAqaQBkAACg7yrjIWlyAKDCKfUhYnN1oGMmaQB0AACgYybsApMUmhS2FAAAwxRvAG4AZaA6APGgVCKrAG0CnxQAAAAAoxRhAHSgLABAYAChASJmbKcUqRTuABMNZQAAAW14rhSyFOUhbnQAoAEiZQDzANIB5wG6FAAAwBRkoEUibwB0AACgbSpuAPQAzAGAAWZyeQDIFMsUzhQA4DXYVN1vAOQA1wEAgakAO3MeAdMUcgAAoBchAAFhb9oU3hRyAHIAAKC1IXMAcwAAoBcnAAFjdeYU6hRyAADgNdi43AABYnDuFPIUZaDPKgCg0SploNAqAKDSKuQhb3QAoO8igANkZWxwcnZ3AAYVEBUbFSEVRBVlFYQV4SFycgABbHIMFQ4VAKA4KQCgNSlwAhYVAAAAABkVcgAAoN4iYwAAoN8i4SFycnCgtiEAoD0pgKIqImJjZG9zACsVMBU6FT4VQRVyImNhcAAAoEgqAAFhdTQVNxVwAACgRipwAACgSipvAHQAAKCNInIAAKBFKgDgKiIA/gACYWxydksVURVuFXMVcgByAG2gtyEAoDwpeQCAAWV2dwBYFWUVaRVxAHACXxUAAAAAYxVyAGUA4wAXFXUA4wAZFWUAZQAAoM4iZSJkZ2UAAKDPImUAbgA7gKQApEBlI2Fycm93AAABbHJ7FX8V5SFmdACgtiFpImdodAAAoLchZQDkAG0VAAFjaYsVkRVvAG4AaQBuAPQAkwFuAHQAAKAxImwiY3R5AACgLSOACUFIYWJjZGVmaGlqbG9yc3R1d3oAuBW7Fb8V1RXgFegV+RUKFhUWHxZUFlcWZRbFFtsW7xb7FgUXChdyAPIAtAJhAHIAAKBlKQACZ2xyc8YVyhXOFdAV5yFlcgCgICDlIXRoAKA4IfIA9QxoAHagECAAoKMiawHZFd4VYSJyb3cAAKAPKWEA4wBfAgABYXnkFecV8iFvbg9hNGQAoUYhYW/tFfQVAAFnciEC8RVyAACgyiF0InNlcQAAoHcqgAFnbG0A/xUCFgUWO4CwALBAdABhALRjcCJ0eXYAAKCxKQABaXIOFhIW8yFodACgfykA4DXYId1hAHIAAAFschsWHRYAoMMhAKDCIYACYWVnc3YAKBauAjYWOhY+Fm0AAKHEIm9zLhY0Fm4AZABzoMQi9SFpdACgZiZhIm1tYQDdY2kAbgAAoPIiAKH3AGlvQxZRFmQAZQAAgfcAO29KFksW90BuI3RpbWVzAACgxyJuAPgAUBZjAHkAUmRjAG8CXhYAAAAAYhZyAG4AAKAeI28AcAAAoA0jgAJscHR1dwBuFnEWdRaSFp4W7CFhciRgZgAA4DXYVd0AotkCZW1wc30WhBaJFo0WcQBkoFAibwB0AACgUSJpIm51cwAAoDgi7CF1cwCgFCLxInVhcmUAoKEiYgBsAGUAYgBhAHIAdwBlAGQAZwDlANcAbgCAAWFkaAClFqoWtBZyAHIAbwD3APUMbwB3AG4AYQByAHIAbwB3APMA8xVhI3Jwb29uAAABbHK8FsAWZQBmAPQAHBZpAGcAaAD0AB4WYgHJFs8WawBhAHIAbwD3AJILbwLUFgAAAADYFnIAbgAAoB8jbwBwAACgDCOAAWNvdADhFukW7BYAAXJ55RboFgDgNdi53FVkbAAAoPYp8iFvaxFhAAFkcvMW9xZvAHQAAKDxImkA5qC/JVsSAAFhaP8WAhdyAPIANQNhAPIA1wvhIm5nbGUAoKYpAAFjaQ4XEBd5AF9k5yJyYXJyAKD/JwAJRGFjZGVmZ2xtbm9wcXJzdHV4MRc4F0YXWxcyBF4XaRd5F40XrBe0F78X2RcVGCEYLRg1GEAYAAFEbzUXgRZvAPQA+BUAAWNzPBdCF3UAdABlADuA6QDpQPQhZXIAoG4qAAJhaW95TRdQF1YXWhfyIW9uG2FyAGOgViI7gOoA6kDsIW9uAKBVIk1kbwB0ABdhAAFEcmIXZhdvAHQAAKBSIgDgNdgi3XKhmipuF3QXYQB2AGUAO4DoAOhAZKCWKm8AdAAAoJgqgKGZKmlscwCAF4UXhxfuInRlcnMAoOcjAKATIWSglSpvAHQAAKCXKoABYXBzAJMXlheiF2MAcgATYXQAeQBzogUinxcAAAAAoRdlAHQAAKAFInAAMaADIDMBqRerFwCgBCAAoAUgAAFnc7AXsRdLYXAAAKACIAABZ3C4F7sXbwBuABlhZgAA4DXYVt2AAWFscwDFF8sXzxdyAHOg1SJsAACg4yl1AHMAAKBxKmkAAKG1A2x21RfYF28AbgC1Y/VjAAJjc3V24BfoF/0XEBgAAWlv5BdWF3IAYwAAoFYiaQLuFwAAAADwF+0ADQThIW50AAFnbPUX+Rd0AHIAAKCWKuUhc3MAoJUqgAFhZWkAAxgGGAoYbABzAD1gcwB0AACgXyJ2AESgYSJEAACgeCrwImFyc2wAoOUpAAFEYRkYHRhvAHQAAKBTInIAcgAAoHEpgAFjZGkAJxgqGO0XcgAAoC8hbwD0AIwCAAFhaDEYMhi3YzuA8ADwQAABbXI5GD0YbAA7gOsA60BvAACgrCCAAWNpcABGGEgYSxhsACFgcwD0ACwEAAFlb08YVxhjAHQAYQB0AGkAbwDuABoEbgBlAG4AdABpAGEAbADlADME4Ql1GAAAgRgAAIMYiBgAAAAAoRilGAAAqhgAALsYvhjRGAAA1xgnGWwAbABpAG4AZwBkAG8AdABzAGUA8QBlF3kARGRtImFsZQAAoEAmgAFpbHIAjRiRGJ0Y7CFpZwCgA/tpApcYAAAAAJoYZwAAoAD7aQBnAACgBPsA4DXYI93sIWlnAKAB++whaWcA4GYAagCAAWFsdACvGLIYthh0AACgbSZpAGcAAKAC+24AcwAAoLElbwBmAJJh8AHCGAAAxhhmAADgNdhX3QABYWvJGMwYbADsAGsEdqDUIgCg2SphI3J0aW50AACgDSoAAWFv2hgiGQABY3PeGB8ZsQPnGP0YBRkSGRUZAAAdGbID7xjyGPQY9xj5GAAA+xg7gL0AvUAAoFMhO4C8ALxAAKBVIQCgWSEAoFshswEBGQAAAxkAoFQhAKBWIbQCCxkOGQAAAAAQGTuAvgC+QACgVyEAoFwhNQAAoFghtgEZGQAAGxkAoFohAKBdITgAAKBeIWwAAKBEIHcAbgAAoCIjYwByAADgNdi73IAIRWFiY2RlZmdpamxub3JzdHYARhlKGVoZXhlmGWkZkhmWGZkZnRmgGa0ZxhnLGc8Z4BkjGmygZyIAoIwqgAFjbXAAUBlTGVgZ9SF0ZfVhbQBhAOSgswM6FgCghipyImV2ZQAfYQABaXliGWUZcgBjAB1hM2RvAHQAIWGAoWUibHFzAMYEcBl6GfGhZSLOBAAAdhlsAGEAbgD0AN8EgKF+KmNkbACBGYQZjBljAACgqSpvAHQAb6CAKmyggioAoIQqZeDbIgD+cwAAoJQqcgAA4DXYJN3noGsirATtIWVsAKA3IWMAeQBTZIChdyJFYWoApxmpGasZAKCSKgCgpSoAoKQqAAJFYWVztBm2Gb0ZwhkAoGkicABwoIoq8iFveACgiipxoIgq8aCIKrUZaQBtAACg5yJwAGYAAOA12FjdYQB2AOUAYwIAAWNp0xnWGXIAAKAKIW0AAKFzImVs3BneGQCgjioAoJAqAIM+ADtjZGxxco0E6xn0GfgZ/BkBGgABY2nvGfEZAKCnKnIAAKB6Km8AdAAAoNci0CFhcgCglSl1ImVzdAAAoHwqgAJhZGVscwAKGvQZFhrVBCAa8AEPGgAAFBpwAHIAbwD4AFkZcgAAoHgpcQAAAWxxxAQbGmwAZQBzAPMASRlpAO0A5AQAAWVuJxouGnIjdG5lcXEAAOBpIgD+xQAsGgAFQWFiY2Vma29zeUAaQxpmGmoabRqDGocalhrCGtMacgDyAMwCAAJpbG1yShpOGlAaVBpyAHMA8ABxD2YAvWBpAGwA9AASBQABZHJYGlsaYwB5AEpkAKGUIWN3YBpkGmkAcgAAoEgpAKCtIWEAcgAAoA8h6SFyYyVhgAFhbHIAcxp7Gn8a8iF0c3WgZSZpAHQAAKBlJuwhaXAAoCYg4yFvbgCguSJyAADgNdgl3XMAAAFld4wakRphInJvdwAAoCUpYSJyb3cAAKAmKYACYW1vcHIAnxqjGqcauhq+GnIAcgAAoP8h9CFodACgOyJrAAABbHKsGrMaZSRmdGFycm93AACgqSHpJGdodGFycm93AKCqIWYAAOA12Fnd4iFhcgCgFSCAAWNsdADIGswa0BpyAADgNdi93GEAcwDoAGka8iFvaydhAAFicNca2xr1IWxsAKBDIOghZW4AoBAg4Qr2GgAA/RoAAAgbExsaGwAAIRs7GwAAAAA+G2IbmRuVG6sbAACyG80b0htjAHUAdABlADuA7QDtQAChYyBpeQEbBhtyAGMAO4DuAO5AOGQAAWN4CxsNG3kANWRjAGwAO4ChAKFAAAFmcssCFhsA4DXYJt1yAGEAdgBlADuA7ADsQIChSCFpbm8AJxsyGzYbAAFpbisbLxtuAHQAAKAMKnQAAKAtIuYhaW4AoNwpdABhAACgKSHsIWlnM2GAAWFvcABDG1sbXhuAAWNndABJG0sbWRtyACthgAFlbHAAcQVRG1UbaQBuAOUAyAVhAHIA9AByBWgAMWFmAACgtyJlAGQAtWEAoggiY2ZvdGkbbRt1G3kb4SFyZQCgBSFpAG4AdKAeImkAZQAAoN0pZABvAPQAWxsAoisiY2VscIEbhRuPG5QbYQBsAACguiIAAWdyiRuNG2UAcgDzACMQ4wCCG2EicmhrAACgFyryIW9kAKA8KgACY2dwdJ8boRukG6gbeQBRZG8AbgAvYWYAAOA12FrdYQC5Y3UAZQBzAHQAO4C/AL9AAAFjabUbuRtyAADgNdi+3G4AAKIIIkVkc3bCG8QbyBvQAwCg+SJvAHQAAKD1Inag9CIAoPMiaaBiIOwhZGUpYesB1hsAANkbYwB5AFZkbAA7gO8A70AAA2NmbW9zdeYb7hvyG/Ub+hsFHAABaXnqG+0bcgBjADVhOWRyAADgNdgn3eEhdGg3YnAAZgAA4DXYW93jAf8bAAADHHIAAOA12L/c8iFjeVhk6yFjeVRkAARhY2ZnaGpvcxUcGhwiHCYcKhwtHDAcNRzwIXBhdqC6A/BjAAFleR4cIRzkIWlsN2E6ZHIAAOA12CjdciJlZW4AOGFjAHkARWRjAHkAXGRwAGYAAOA12FzdYwByAADgNdjA3IALQUJFSGFiY2RlZmdoamxtbm9wcnN0dXYAXhxtHHEcdRx5HN8cBx0dHTwd3B3tHfEdAR4EHh0eLB5FHrwewx7hHgkfPR9LH4ABYXJ0AGQcZxxpHHIA8gBvB/IAxQLhIWlsAKAbKeEhcnIAoA4pZ6BmIgCgiyphAHIAAKBiKWMJjRwAAJAcAACVHAAAAAAAAAAAAACZHJwcAACmHKgcrRwAANIc9SF0ZTph7SJwdHl2AKC0KXIAYQDuAFoG4iFkYbtjZwAAoegnZGyhHKMcAKCRKeUAiwYAoIUqdQBvADuAqwCrQHIAgKOQIWJmaGxwc3QAuhy/HMIcxBzHHMoczhxmoOQhcwAAoB8pcwAAoB0p6wCyGnAAAKCrIWwAAKA5KWkAbQAAoHMpbAAAoKIhAKGrKmFl1hzaHGkAbAAAoBkpc6CtKgDgrSoA/oABYWJyAOUc6RztHHIAcgAAoAwpcgBrAACgcicAAWFr8Rz4HGMAAAFla/Yc9xx7YFtgAAFlc/wc/hwAoIspbAAAAWR1Ax0FHQCgjykAoI0pAAJhZXV5Dh0RHRodHB3yIW9uPmEAAWRpFR0YHWkAbAA8YewAowbiAPccO2QAAmNxcnMkHScdLB05HWEAAKA2KXUAbwDyoBwgqhEAAWR1MB00HeghYXIAoGcpcyJoYXIAAKBLKWgAAKCyIQCiZCJmZ3FzRB1FB5Qdnh10AIACYWhscnQATh1WHWUdbB2NHXIicm93AHSgkCFhAOkAzxxhI3Jwb29uAAABZHVeHWId7yF3bgCgvSFwAACgvCHlJGZ0YXJyb3dzAKDHIWkiZ2h0AIABYWhzAHUdex2DHXIicm93APOglCGdBmEAcgBwAG8AbwBuAPMAzgtxAHUAaQBnAGEAcgByAG8A9wBlGugkcmVldGltZXMAoMsi8aFkIk0HAACaHWwAYQBuAPQAXgcAon0qY2Rnc6YdqR2xHbcdYwAAoKgqbwB0AG+gfypyoIEqAKCDKmXg2iIA/nMAAKCTKoACYWRlZ3MAwB3GHcod1h3ZHXAAcAByAG8A+ACmHG8AdAAAoNYicQAAAWdxzx3SHXQA8gBGB2cAdADyAHQcdADyAFMHaQDtAGMHgAFpbHIA4h3mHeod8yFodACgfClvAG8A8gDKBgDgNdgp3UWgdiIAoJEqYQH1Hf4dcgAAAWR1YB35HWygvCEAoGopbABrAACghCVjAHkAWWQAomoiYWNodAweDx4VHhkecgDyAGsdbwByAG4AZQDyAGAW4SFyZACgaylyAGkAAKD6JQABaW8hHiQe5CFvdEBh9SFzdGGgsCPjIWhlAKCwIwACRWFlczMeNR48HkEeAKBoInAAcKCJKvIhb3gAoIkqcaCHKvGghyo0HmkAbQAAoOYiAARhYm5vcHR3elIeXB5fHoUelh6mHqsetB4AAW5yVh5ZHmcAAKDsJ3IAAKD9IXIA6wCwBmcAgAFsbXIAZh52Hnse5SFmdAABYXKIB2weaQBnAGgAdABhAHIAcgBvAPcAkwfhInBzdG8AoPwnaQBnAGgAdABhAHIAcgBvAPcAmgdwI2Fycm93AAABbHKNHpEeZQBmAPQAxhxpImdodAAAoKwhgAFhZmwAnB6fHqIecgAAoIUpAOA12F3ddQBzAACgLSppIm1lcwAAoDQqYQGvHrMecwB0AACgFyLhAIoOZaHKJbkeRhLuIWdlAKDKJWEAcgBsoCgAdAAAoJMpgAJhY2htdADMHs8e1R7bHt0ecgDyAJ0GbwByAG4AZQDyANYWYQByAGSgyyEAoG0pAKAOIHIAaQAAoL8iAANhY2hpcXTrHu8e1QfzHv0eBh/xIXVvAKA5IHIAAOA12MHcbQDloXIi+h4AAPweAKCNKgCgjyoAAWJ19xwBH28AcqAYIACgGiDyIW9rQmEAhDwAO2NkaGlscXJCBhcfxh0gHyQfKB8sHzEfAAFjaRsfHR8AoKYqcgAAoHkqcgBlAOUAkx3tIWVzAKDJIuEhcnIAoHYpdSJlc3QAAKB7KgABUGk1HzkfYQByAACglillocMlAgdfEnIAAAFkdUIfRx9zImhhcgAAoEop6CFhcgCgZikAAWVuTx9WH3IjdG5lcXEAAOBoIgD+xQBUHwAHRGFjZGVmaGlsbm9wc3VuH3Ifoh+rH68ftx+7H74f5h/uH/MfBwj/HwsgxCFvdACgOiIAAmNscHJ5H30fiR+eH3IAO4CvAK9AAAFldIEfgx8AoEImZaAgJ3MAZQAAoCAnc6CmIXQAbwCAoaYhZGx1AJQfmB+cH28AdwDuAHkDZQBmAPQA6gbwAOkO6yFlcgCgriUAAW95ph+qH+0hbWEAoCkqPGThIXNoAKAUIOElc3VyZWRhbmdsZQCgISJyAADgNdgq3W8AAKAnIYABY2RuAMQfyR/bH3IAbwA7gLUAtUBhoiMi0B8AANMf1x9zAPQAKxFpAHIAAKDwKm8AdAA7gLcAt0B1AHMA4qESIh4TAADjH3WgOCIAoCoqYwHqH+0fcAAAoNsq8gB+GnAAbAB1APMACAgAAWRw9x/7H+UhbHMAoKciZgAA4DXYXt0AAWN0AyAHIHIAAOA12MLc8CFvcwCgPiJsobwDECAVIPQiaW1hcACguCJhAPAAEyAADEdMUlZhYmNkZWZnaGlqbG1vcHJzdHV2dzwgRyBmIG0geSCqILgg2iDeIBEhFSEyIUMhTSFQIZwhnyHSIQAiIyKLIrEivyIUIwABZ3RAIEMgAODZIjgD9uBrItIgBwmAAWVsdABNIF8gYiBmAHQAAAFhclMgWCByInJvdwAAoM0h6SRnaHRhcnJvdwCgziEA4NgiOAP24Goi0iBfCekkZ2h0YXJyb3cAoM8hAAFEZHEgdSDhIXNoAKCvIuEhc2gAoK4igAJiY25wdACCIIYgiSCNIKIgbABhAACgByL1IXRlRGFnAADgICLSIACiSSJFaW9wlSCYIJwgniAA4HAqOANkAADgSyI4A3MASWFyAG8A+AAyCnUAcgBhoG4mbADzoG4mmwjzAa8gAACzIHAAO4CgAKBAbQBwAOXgTiI4AyoJgAJhZW91eQDBIMogzSDWINkg8AHGIAAAyCAAoEMqbwBuAEhh5CFpbEZhbgBnAGSgRyJvAHQAAOBtKjgDcAAAoEIqPWThIXNoAKATIACjYCJBYWRxc3jpIO0g+SD+IAIhDCFyAHIAAKDXIXIAAAFocvIg9SBrAACgJClvoJch9wAGD28AdAAA4FAiOAN1AGkA9gC7CAABZWkGIQohYQByAACgKCntAN8I6SFzdPOgBCLlCHIAAOA12CvdAAJFZXN0/wgcISshLiHxoXEiIiEAABMJ8aFxIgAJAAAnIWwAYQBuAPQAEwlpAO0AGQlyoG8iAKBvIoABQWFwADghOyE/IXIA8gBeIHIAcgAAoK4hYQByAACg8ipzogsiSiEAAAAAxwtkoPwiAKD6ImMAeQBaZIADQUVhZGVzdABcIV8hYiFmIWkhkyGWIXIA8gBXIADgZiI4A3IAcgAAoJohcgAAoCUggKFwImZxcwBwIYQhjiF0AAABYXJ1IXohcgByAG8A9wBlIWkAZwBoAHQAYQByAHIAbwD3AD4h8aFwImAhAACKIWwAYQBuAPQAZwlz4H0qOAMAoG4iaQDtAG0JcqBuImkA5aDqIkUJaQDkADoKAAFwdKMhpyFmAADgNdhf3YCBrAA7aW4AriGvIcchrEBuAIChCSJFZHYAtyG6Ib8hAOD5IjgDbwB0AADg9SI4A+EB1gjEIcYhAKD3IgCg9iJpAHagDCLhAagJzyHRIQCg/iIAoP0igAFhb3IA2CHsIfEhcgCAoSYiYXN0AOAh5SHpIWwAbABlAOwAywhsAADg/SrlIADgAiI4A2wiaW50AACgFCrjoYAi9yEAAPohdQDlAJsJY+CvKjgDZaCAIvEAkwkAAkFhaXQHIgoiFyIeInIA8gBsIHIAcgAAoZshY3cRIhQiAOAzKTgDAOCdITgDZyRodGFycm93AACgmyFyAGkA5aDrIr4JgANjaGltcHF1AC8iPCJHIpwhTSJQIloigKGBImNlcgA2Iv0JOSJ1AOUABgoA4DXYw9zvIXJ0bQKdIQAAAABEImEAcgDhAOEhbQBloEEi8aBEIiYKYQDyAMsIcwB1AAABYnBWIlgi5QDUCeUA3wmAAWJjcABgInMieCKAoYQiRWVzAGci7glqIgDgxSo4A2UAdABl4IIi0iBxAPGgiCJoImMAZaCBIvEA/gmAoYUiRWVzAH8iFgqCIgDgxio4A2UAdABl4IMi0iBxAPGgiSKAIgACZ2lscpIilCKaIpwi7AAMCWwAZABlADuA8QDxQOcAWwlpI2FuZ2xlAAABbHKkIqoi5SFmdGWg6iLxAEUJaSJnaHQAZaDrIvEAvgltoL0DAKEjAGVzuCK8InIAbwAAoBYhcAAAoAcggARESGFkZ2lscnMAziLSItYi2iLeIugi7SICIw8j4SFzaACgrSLhIXJyAKAEKXAAAOBNItIg4SFzaACgrCIAAWV04iLlIgDgZSLSIADgPgDSIG4iZmluAACg3imAAUFldADzIvci+iJyAHIAAKACKQDgZCLSIHLgPADSIGkAZQAA4LQi0iAAAUF0BiMKI3IAcgAAoAMp8iFpZQDgtSLSIGkAbQAA4Dwi0iCAAUFhbgAaIx4jKiNyAHIAAKDWIXIAAAFociMjJiNrAACgIylvoJYh9wD/DuUhYXIAoCcpUxJqFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVCMAAF4jaSN/I4IjjSOeI8AUAAAAAKYjwCMAANoj3yMAAO8jHiQvJD8kRCQAAWNzVyNsFHUAdABlADuA8wDzQAABaXlhI2cjcgBjoJoiO4D0APRAPmSAAmFiaW9zAHEjdCN3I3EBeiNzAOgAdhTsIWFjUWF2AACgOCrvIWxkAKC8KewhaWdTYQABY3KFI4kjaQByAACgvykA4DXYLN1vA5QjAAAAAJYjAACcI24A22JhAHYAZQA7gPIA8kAAoMEpAAFibaEjjAphAHIAAKC1KQACYWNpdKwjryO6I70jcgDyAFkUAAFpcrMjtiNyAACgvinvIXNzAKC7KW4A5QDZCgCgwCmAAWFlaQDFI8gjyyNjAHIATWFnAGEAyWOAAWNkbgDRI9Qj1iPyIW9uv2MAoLYpdQDzAHgBcABmAADgNdhg3YABYWVsAOQj5yPrI3IAAKC3KXIAcAAAoLkpdQDzAHwBAKMoImFkaW9zdvkj/CMPJBMkFiQbJHIA8gBeFIChXSplZm0AAyQJJAwkcgBvoDQhZgAAoDQhO4CqAKpAO4C6ALpA5yFvZgCgtiJyAACgVipsIm9wZQAAoFcqAKBbKoABY2xvACMkJSQrJPIACCRhAHMAaAA7gPgA+EBsAACgmCJpAGwBMyQ4JGQAZQA7gPUA9UBlAHMAYaCXInMAAKA2Km0AbAA7gPYA9kDiIWFyAKA9I+EKXiQAAHokAAB8JJQkAACYJKkkAAAAALUkEQsAAPAkAAAAAAQleiUAAIMlcgCAoSUiYXN0AGUkbyQBCwCBtgA7bGokayS2QGwAZQDsABgDaQJ1JAAAAAB4JG0AAKDzKgCg/Sp5AD9kcgCAAmNpbXB0AIUkiCSLJJkSjyRuAHQAJWBvAGQALmBpAGwAAKAwIOUhbmsAoDEgcgAA4DXYLd2AAWltbwCdJKAkpCR2oMYD1WNtAGEA9AD+B24AZQAAoA4m9KHAA64kAAC0JGMjaGZvcmsAAKDUItZjAAFhdbgkxCRuAAABY2u9JMIkawBooA8hAKAOIfYAaRpzAACkKwBhYmNkZW1zdNMkIRPXJNsk4STjJOck6yTjIWlyAKAjKmkAcgAAoCIqAAFvdYsW3yQAoCUqAKByKm4AO4CxALFAaQBtAACgJip3AG8AAKAnKoABaXB1APUk+iT+JO4idGludACgFSpmAADgNdhh3W4AZAA7gKMAo0CApHoiRWFjZWlub3N1ABMlFSUYJRslTCVRJVklSSV1JQCgsypwAACgtyp1AOUAPwtjoK8qgKJ6ImFjZW5zACclLSU0JTYlSSVwAHAAcgBvAPgAFyV1AHIAbAB5AGUA8QA/C/EAOAuAAWFlcwA8JUElRSXwInByb3gAoLkqcQBxAACgtSppAG0AAKDoImkA7QBEC20AZQDzoDIgIguAAUVhcwBDJVclRSXwAEAlgAFkZnAATwtfJXElgAFhbHMAZSVpJW0l7CFhcgCgLiPpIW5lAKASI/UhcmYAoBMjdKAdIu8AWQvyIWVsAKCwIgABY2l9JYElcgAA4DXYxdzIY24iY3NwAACgCCAAA2Zpb3BzdZElKxuVJZolnyWkJXIAAOA12C7dcABmAADgNdhi3XIiaW1lAACgVyBjAHIAAOA12MbcgAFhZW8AqiW6JcAldAAAAWVpryW2JXIAbgBpAG8AbgDzABkFbgB0AACgFipzAHQAZaA/APEACRj0AG0LgApBQkhhYmNkZWZoaWxtbm9wcnN0dXgA4yXyJfYl+iVpJpAmpia9JtUm5ib4JlonaCdxJ3UnnietJ7EnyCfiJ+cngAFhcnQA6SXsJe4lcgDyAJkM8gD6AuEhaWwAoBwpYQByAPIA3BVhAHIAAKBkKYADY2RlbnFydAAGJhAmEyYYJiYmKyZaJgABZXUKJg0mAOA9IjEDdABlAFVhaQDjACAN7SJwdHl2AKCzKWcAgKHpJ2RlbAAgJiImJCYAoJIpAKClKeUA9wt1AG8AO4C7ALtAcgAApZIhYWJjZmhscHN0dz0mQCZFJkcmSiZMJk4mUSZVJlgmcAAAoHUpZqDlIXMAAKAgKQCgMylzAACgHinrALka8ACVHmwAAKBFKWkAbQAAoHQpbAAAoKMhAKCdIQABYWleJmImaQBsAACgGilvAG6gNiJhAGwA8wB2C4ABYWJyAG8mciZ2JnIA8gAvEnIAawAAoHMnAAFha3omgSZjAAABZWt/JoAmfWBdYAABZXOFJocmAKCMKWwAAAFkdYwmjiYAoI4pAKCQKQACYWV1eZcmmiajJqUm8iFvbllhAAFkaZ4moSZpAGwAV2HsAA8M4gCAJkBkAAJjbHFzrSawJrUmuiZhAACgNylkImhhcgAAoGkpdQBvAPKgHSCjAWgAAKCzIYABYWNnAMMm0iaUC2wAgKEcIWlwcwDLJs4migxuAOUAoAxhAHIA9ADaC3QAAKCtJYABaWxyANsm3ybjJvMhaHQAoH0pbwBvAPIANgwA4DXYL90AAWFv6ib1JnIAAAFkde8m8SYAoMEhbKDAIQCgbCl2oMED8WOAAWducwD+Jk4nUCdoAHQAAANhaGxyc3QKJxInISc1Jz0nRydyInJvdwB0oJIhYQDpAFYmYSNycG9vbgAAAWR1GiceJ28AdwDuAPAmcAAAoMAh5SFmdAABYWgnJy0ncgByAG8AdwDzAAkMYQByAHAAbwBvAG4A8wATBGklZ2h0YXJyb3dzAACgySFxAHUAaQBnAGEAcgByAG8A9wBZJugkcmVldGltZXMAoMwiZwDaYmkAbgBnAGQAbwB0AHMAZQDxABwYgAFhaG0AYCdjJ2YncgDyAAkMYQDyABMEAKAPIG8idXN0AGGgsSPjIWhlAKCxI+0haWQAoO4qAAJhYnB0fCeGJ4knmScAAW5ygCeDJ2cAAKDtJ3IAAKD+IXIA6wAcDIABYWZsAI8nkieVJ3IAAKCGKQDgNdhj3XUAcwAAoC4qaSJtZXMAAKA1KgABYXCiJ6gncgBnoCkAdAAAoJQp7yJsaW50AKASKmEAcgDyADwnAAJhY2hxuCe8J6EMwCfxIXVvAKA6IHIAAOA12MfcAAFidYAmxCdvAPKgGSCoAYABaGlyAM4n0ifWJ3IAZQDlAE0n7SFlcwCgyiJpAIChuSVlZmwAXAxjEt4n9CFyaQCgzinsInVoYXIAoGgpAKAeIWENBSgJKA0oSyhVKIYoAACLKLAoAAAAAOMo5ygAABApJCkxKW0pcSmHKaYpAACYKgAAAACxKmMidXRlAFthcQB1AO8ABR+ApHsiRWFjZWlucHN5ABwoHignKCooLygyKEEoRihJKACgtCrwASMoAAAlKACguCpvAG4AYWF1AOUAgw1koLAqaQBsAF9hcgBjAF1hgAFFYXMAOCg6KD0oAKC2KnAAAKC6KmkAbQAAoOki7yJsaW50AKATKmkA7QCIDUFkbwB0AGKixSKRFgAAAABTKACgZiqAA0FhY21zdHgAYChkKG8ocyh1KHkogihyAHIAAKDYIXIAAAFocmkoayjrAJAab6CYIfcAzAd0ADuApwCnQGkAO2D3IWFyAKApKW0AAAFpbn4ozQBuAHUA8wDOAHQAAKA2J3IA7+A12DDdIxkAAmFjb3mRKJUonSisKHIAcAAAoG8mAAFoeZkonChjAHkASWRIZHIAdABtAqUoAAAAAKgoaQDkAFsPYQByAGEA7ABsJDuArQCtQAABZ22zKLsobQBhAAChwwNmdroouijCY4CjPCJkZWdsbnByAMgozCjPKNMo1yjaKN4obwB0AACgairxoEMiCw5FoJ4qAKCgKkWgnSoAoJ8qZQAAoEYi7CF1cwCgJCrhIXJyAKByKWEAcgDyAPwMAAJhZWl07Sj8KAEpCCkAAWxz8Sj4KGwAcwBlAHQAbQDpAH8oaABwAACgMyrwImFyc2wAoOQpAAFkbFoPBSllAACgIyNloKoqc6CsKgDgrCoA/oABZmxwABUpGCkfKfQhY3lMZGKgLwBhoMQpcgAAoD8jZgAA4DXYZN1hAAABZHIoKRcDZQBzAHWgYCZpAHQAAKBgJoABY3N1ADYpRilhKQABYXU6KUApcABzoJMiAOCTIgD+cABzoJQiAOCUIgD+dQAAAWJwSylWKQChjyJlcz4NUCllAHQAZaCPIvEAPw0AoZAiZXNIDVspZQB0AGWgkCLxAEkNAKGhJWFmZilbBHIAZQFrKVwEAKChJWEAcgDyAAMNAAJjZW10dyl7KX8pgilyAADgNdjI3HQAbQDuAM4AaQDsAAYpYQByAOYAVw0AAWFyiimOKXIA5qAGJhESAAFhbpIpoylpImdodAAAAWVwmSmgKXAAcwBpAGwAbwDuANkXaADpAKAkcwCvYIACYmNtbnAArin8KY4NJSooKgCkgiJFZGVtbnByc7wpvinCKcgpzCnUKdgp3CkAoMUqbwB0AACgvSpkoIYibwB0AACgwyr1IWx0AKDBKgABRWXQKdIpAKDLKgCgiiLsIXVzAKC/KuEhcnIAoHkpgAFlaXUA4inxKfQpdAAAoYIiZW7oKewpcQDxoIYivSllAHEA8aCKItEpbQAAoMcqAAFicPgp+ikAoNUqAKDTKmMAgKJ7ImFjZW5zAAcqDSoUKhYqRihwAHAAcgBvAPgAIyh1AHIAbAB5AGUA8QCDDfEAfA2AAWFlcwAcKiIqPShwAHAAcgBvAPgAPChxAPEAOShnAACgaiYApoMiMTIzRWRlaGxtbnBzPCo/KkIqRSpHKlIqWCpjKmcqaypzKncqO4C5ALlAO4CyALJAO4CzALNAAKDGKgABb3NLKk4qdAAAoL4qdQBiAACg2CpkoIcibwB0AACgxCpzAAABb3VdKmAqbAAAoMknYgAAoNcq4SFycgCgeyn1IWx0AKDCKgABRWVvKnEqAKDMKgCgiyLsIXVzAKDAKoABZWl1AH0qjCqPKnQAAKGDImVugyqHKnEA8aCHIkYqZQBxAPGgiyJwKm0AAKDIKgABYnCTKpUqAKDUKgCg1iqAAUFhbgCdKqEqrCpyAHIAAKDZIXIAAAFocqYqqCrrAJUab6CZIfcAxQf3IWFyAKAqKWwAaQBnADuA3wDfQOELzyrZKtwq6SrsKvEqAAD1KjQrAAAAAAAAAAAAAEwrbCsAAHErvSsAAAAAAADRK3IC1CoAAAAA2CrnIWV0AKAWI8RjcgDrAOUKgAFhZXkA4SrkKucq8iFvbmVh5CFpbGNhQmRvAPQAIg5sInJlYwAAoBUjcgAA4DXYMd0AAmVpa2/7KhIrKCsuK/IBACsAAAkrZQAAATRm6g0EK28AcgDlAOsNYQBzorgDECsAAAAAEit5AG0A0WMAAWNuFislK2sAAAFhcxsrIStwAHAAcgBvAPgAFw5pAG0AAKA8InMA8AD9DQABYXMsKyEr8AAXDnIAbgA7gP4A/kDsATgrOyswG2QA5QBnAmUAcwCAgdcAO2JkAEMrRCtJK9dAYaCgInIAAKAxKgCgMCqAAWVwcwBRK1MraSvhAAkh4qKkIlsrXysAAAAAYytvAHQAAKA2I2kAcgAAoPEqb+A12GXdcgBrAACg2irhAHgociJpbWUAAKA0IIABYWlwAHYreSu3K2QA5QC+DYADYWRlbXBzdACFK6MrmiunK6wrsCuzK24iZ2xlAACitSVkbHFykCuUK5ornCvvIXduAKC/JeUhZnRloMMl8QACBwCgXCJpImdodABloLkl8QBdDG8AdAAAoOwlaSJudXMAAKA6KuwhdXMAoDkqYgAAoM0p6SFtZQCgOyrlInppdW0AoOIjgAFjaHQAwivKK80rAAFyecYrySsA4DXYydxGZGMAeQBbZPIhb2tnYQABaW/UK9creAD0ANERaCJlYWQAAAFsct4r5ytlAGYAdABhAHIAcgBvAPcAXQbpJGdodGFycm93AKCgIQAJQUhhYmNkZmdobG1vcHJzdHV3CiwNLBEsHSwnLDEsQCxLLFIsYix6LIQsjyzLLOgs7Sz/LAotcgDyAAkDYQByAACgYykAAWNyFSwbLHUAdABlADuA+gD6QPIACQ1yAOMBIywAACUseQBeZHYAZQBtYQABaXkrLDAscgBjADuA+wD7QENkgAFhYmgANyw6LD0scgDyANEO7CFhY3FhYQDyAOAOAAFpckQsSCzzIWh0AKB+KQDgNdgy3XIAYQB2AGUAO4D5APlAYQFWLF8scgAAAWxyWixcLACgvyEAoL4hbABrAACggCUAAWN0Zix2LG8CbCwAAAAAcyxyAG4AZaAcI3IAAKAcI28AcAAAoA8jcgBpAACg+CUAAWFsfiyBLGMAcgBrYTuAqACoQAABZ3CILIssbwBuAHNhZgAA4DXYZt0AA2FkaGxzdZksniynLLgsuyzFLHIAcgBvAPcACQ1vAHcAbgBhAHIAcgBvAPcA2A5hI3Jwb29uAAABbHKvLLMsZQBmAPQAWyxpAGcAaAD0AF0sdQDzAKYOaQAAocUDaGzBLMIs0mNvAG4AxWPwI2Fycm93cwCgyCGAAWNpdADRLOEs5CxvAtcsAAAAAN4scgBuAGWgHSNyAACgHSNvAHAAAKAOI24AZwBvYXIAaQAAoPklYwByAADgNdjK3IABZGlyAPMs9yz6LG8AdAAAoPAi7CFkZWlhaQBmoLUlAKC0JQABYW0DLQYtcgDyAMosbAA7gPwA/EDhIm5nbGUAoKcpgAdBQkRhY2RlZmxub3Byc3oAJy0qLTAtNC2bLZ0toS2/LcMtxy3TLdgt3C3gLfwtcgDyABADYQByAHag6CoAoOkqYQBzAOgA/gIAAW5yOC08LechcnQAoJwpgANla25wcnN0AJkpSC1NLVQtXi1iLYItYQBwAHAA4QAaHG8AdABoAGkAbgDnAKEXgAFoaXIAoSmzJFotbwBwAPQAdCVooJUh7wD4JgABaXVmLWotZwBtAOEAuygAAWJwbi14LXMjZXRuZXEAceCKIgD+AODLKgD+cyNldG5lcQBx4IsiAP4A4MwqAP4AAWhyhi2KLWUAdADhABIraSNhbmdsZQAAAWxyki2WLeUhZnQAoLIiaSJnaHQAAKCzInkAMmThIXNoAKCiIoABZWxyAKcttC24LWKiKCKuLQAAAACyLWEAcgAAoLsicQAAoFoi7CFpcACg7iIAAWJ0vC1eD2EA8gBfD3IAAOA12DPddAByAOkAlS1zAHUAAAFicM0t0C0A4IIi0iAA4IMi0iBwAGYAAOA12GfdcgBvAPAAWQt0AHIA6QCaLQABY3XkLegtcgAA4DXYy9wAAWJw7C30LW4AAAFFZXUt8S0A4IoiAP5uAAABRWV/LfktAOCLIgD+6SJnemFnAKCaKYADY2Vmb3BycwANLhAuJS4pLiMuLi40LukhcmN1YQABZGkULiEuAAFiZxguHC5hAHIAAKBfKmUAcaAnIgCgWSLlIXJwAKAYIXIAAOA12DTdcABmAADgNdho3WWgQCJhAHQA6ABqD2MAcgAA4DXYzNzjCuQRUC4AAFQuAABYLmIuAAAAAGMubS5wLnQuAAAAAIguki4AAJouJxIqEnQAcgDpAB0ScgAA4DXYNd0AAUFhWy5eLnIA8gDnAnIA8gCTB75jAAFBYWYuaS5yAPIA4AJyAPIAjAdhAPAAeh5pAHMAAKD7IoABZHB0APgReS6DLgABZmx9LoAuAOA12GnddQDzAP8RaQBtAOUABBIAAUFhiy6OLnIA8gDuAnIA8gCaBwABY3GVLgoScgAA4DXYzdwAAXB0nS6hLmwAdQDzACUScgDpACASAARhY2VmaW9zdbEuvC7ELsguzC7PLtQu2S5jAAABdXm2LrsudABlADuA/QD9QE9kAAFpecAuwy5yAGMAd2FLZG4AO4ClAKVAcgAA4DXYNt1jAHkAV2RwAGYAAOA12GrdYwByAADgNdjO3AABY23dLt8ueQBOZGwAO4D/AP9AAAVhY2RlZmhpb3N38y73Lv8uAi8MLxAvEy8YLx0vIi9jInV0ZQB6YQABYXn7Lv4u8iFvbn5hN2RvAHQAfGEAAWV0Bi8KL3QAcgDmAB8QYQC2Y3IAAOA12DfdYwB5ADZk5yJyYXJyAKDdIXAAZgAA4DXYa91jAHIAAOA12M/cAAFqbiYvKC8AoA0gagAAoAwg");
 
 // node_modules/entities/dist/internal/bin-trie-flags.js
+init_define_process_env();
 var BinTrieFlags;
 (function(BinTrieFlags2) {
   BinTrieFlags2[BinTrieFlags2["VALUE_LENGTH"] = 49152] = "VALUE_LENGTH";
@@ -51959,6 +51495,7 @@ function determineBranch(decodeTree, current, nodeIndex, char) {
 }
 
 // node_modules/parse5/dist/common/html.js
+init_define_process_env();
 var NS;
 (function(NS2) {
   NS2["HTML"] = "http://www.w3.org/1999/xhtml";
@@ -55086,6 +54623,7 @@ var Tokenizer = class {
 };
 
 // node_modules/parse5/dist/parser/open-element-stack.js
+init_define_process_env();
 var IMPLICIT_END_TAG_REQUIRED = /* @__PURE__ */ new Set([TAG_ID.DD, TAG_ID.DT, TAG_ID.LI, TAG_ID.OPTGROUP, TAG_ID.OPTION, TAG_ID.P, TAG_ID.RB, TAG_ID.RP, TAG_ID.RT, TAG_ID.RTC]);
 var IMPLICIT_END_TAG_REQUIRED_THOROUGHLY = /* @__PURE__ */ new Set([
   ...IMPLICIT_END_TAG_REQUIRED,
@@ -55403,6 +54941,7 @@ var OpenElementStack = class {
 };
 
 // node_modules/parse5/dist/parser/formatting-element-list.js
+init_define_process_env();
 var NOAH_ARK_CAPACITY = 3;
 var EntryType;
 (function(EntryType2) {
@@ -55508,6 +55047,7 @@ var FormattingElementList = class {
 };
 
 // node_modules/parse5/dist/tree-adapters/default.js
+init_define_process_env();
 var defaultTreeAdapter = {
   //Node construction
   createDocument() {
@@ -55680,6 +55220,7 @@ var defaultTreeAdapter = {
 };
 
 // node_modules/parse5/dist/common/doctype.js
+init_define_process_env();
 var VALID_DOCTYPE_NAME = "html";
 var VALID_SYSTEM_ID = "about:legacy-compat";
 var QUIRKS_MODE_SYSTEM_ID = "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd";
@@ -55789,6 +55330,7 @@ function getDocumentMode(token) {
 }
 
 // node_modules/parse5/dist/common/foreign-content.js
+init_define_process_env();
 var MIME_TYPES = {
   TEXT_HTML: "text/html",
   APPLICATION_XML: "application/xhtml+xml"
@@ -59034,6 +58576,7 @@ function endTagInForeignContent(p, token) {
 }
 
 // node_modules/parse5/dist/serializer/index.js
+init_define_process_env();
 var VOID_ELEMENTS = /* @__PURE__ */ new Set([
   TAG_NAMES.AREA,
   TAG_NAMES.BASE,
@@ -59461,6 +59004,7 @@ function mapSourceStyles(node, context) {
 }
 
 // src/code/import/framer-native/text.ts
+init_define_process_env();
 init_css_utils();
 init_debug_trace();
 init_rich_text_runs();
@@ -59759,9 +59303,11 @@ function mapSourceText(node, context, targetId) {
 }
 
 // src/code/import/framer-native/pages.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/shared/cms-prop-bindings.ts
+init_define_process_env();
 init_debug_trace();
 function cmsPropBindingExpression(itemVar, binding) {
   trace.fn("cms-prop-binding.expression", { field: binding.field, transform: binding.transform });
@@ -59789,6 +59335,7 @@ function parseCmsPropBindingStash(value) {
 }
 
 // src/code/oracle/check-file.ts
+init_define_process_env();
 var import_parser31 = __toESM(require_lib5());
 var t53 = __toESM(require_lib3());
 init_project_fs();
@@ -59796,6 +59343,7 @@ init_debug_trace();
 init_constants();
 
 // src/shared/rich-message.ts
+init_define_process_env();
 init_css_utils();
 function formattedBranchesOfDangerAttr(attrValue) {
   const obj = attrValue?.type === "JSXExpressionContainer" ? attrValue.expression : null;
@@ -59831,10 +59379,12 @@ function formattedBranchesOfDangerAttr(attrValue) {
 }
 
 // src/code/parsing/parser.ts
+init_define_process_env();
 var import_parser8 = __toESM(require_lib5());
 var import_traverse2 = __toESM(require_lib8());
 
 // src/code/values/value-eval.ts
+init_define_process_env();
 var OFF_STATES = /* @__PURE__ */ new Set(["false", "", "0", "undefined", "null", "no", "No"]);
 function isTruthy(raw) {
   if (raw == null || raw === false || raw === 0) return false;
@@ -59874,6 +59424,7 @@ function evaluate(raw, type) {
 init_debug_trace();
 
 // src/code/parsing/cms-prop-binding.ts
+init_define_process_env();
 var import_parser7 = __toESM(require_lib5());
 var t3 = __toESM(require_lib3());
 init_debug_trace();
@@ -59907,6 +59458,7 @@ function readCmsPropBindingExpression(node, itemVar, readFieldPath = memberPath)
 init_constants();
 
 // src/shared/jsx-whitespace.ts
+init_define_process_env();
 function cleanJsxText(raw) {
   const lines = raw.split(/\r\n|\n|\r/);
   let lastNonEmptyLine = 0;
@@ -59934,6 +59486,7 @@ function cleanJsxText(raw) {
 init_id_utils();
 
 // src/shared/ticker-config.ts
+init_define_process_env();
 var TICKER_DEFAULTS = { speed: 80, hoverSpeed: 1, direction: "left", draggable: false, fade: 0 };
 var DIRECTIONS = ["left", "right", "up", "down"];
 var TICKER_RANGES = {
@@ -60028,9 +59581,11 @@ function tickerFromJsxAttributes(attributes) {
 }
 
 // src/code/features/page-variables.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/components/prop-meta.ts
+init_define_process_env();
 init_debug_trace();
 var PROP_META_REGEX = /\/\*\*\s*@propMeta\s*(\{[\s\S]*?\})\s*\*\/\s*\n?/;
 var _propMetaScanCache = /* @__PURE__ */ new Map();
@@ -63302,12 +62857,15 @@ function overrideNamesFromOpening(opening) {
 }
 
 // src/code/oracle/checks/cms-safe-text.ts
+init_define_process_env();
 var t4 = __toESM(require_lib3());
 
 // src/code/parsing/cursor-parser.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/components/controls-parser.ts
+init_define_process_env();
 init_debug_trace();
 var LABEL_REGEX = /\/\*\*?\s*@label\s*"([^"]*)"\s*\*\//;
 var COMMENT_REGEX = /\/\*\*?\s*@comment\s*"([^"]*)"\s*\*\//;
@@ -63339,9 +62897,11 @@ function hasComponentControls(code) {
 }
 
 // src/code/mutation/mutation-queue.ts
+init_define_process_env();
 init_code_override_gen();
 
 // src/code/generation/ticker-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_ast_utils();
 init_generator_utils();
@@ -63352,9 +62912,11 @@ init_code_override_gen();
 init_scroll_target();
 
 // src/code/stores/store.ts
+init_define_process_env();
 init_esm();
 
 // src/shared/flex-helpers.ts
+init_define_process_env();
 function cssOrderValue(v) {
   const n = parseInt(String(v ?? ""), 10);
   return Number.isFinite(n) ? n : 0;
@@ -63384,11 +62946,16 @@ function computeLayoutBrackets(mergedChildren) {
   return brackets;
 }
 
+// src/code/parsing/project-parser.ts
+init_define_process_env();
+
 // src/shared/hosts.ts
+init_define_process_env();
 var CDN_HOST = import.meta.env?.VITE_CDN_HOST || "https://assets.revyme.app";
 var CDN_HOST_BARE = CDN_HOST.replace(/^https?:\/\//, "");
 
 // src/code/components/import-resolver.ts
+init_define_process_env();
 init_debug_trace();
 function resolveImportPath(importSpec, currentFile) {
   let resolved;
@@ -63462,10 +63029,12 @@ function normalizePath(path) {
 }
 
 // src/code/components/component-registry.ts
+init_define_process_env();
 var t6 = __toESM(require_lib3());
 init_ast_utils();
 
 // src/code/variants/variant-config.ts
+init_define_process_env();
 init_debug_trace();
 var import_parser9 = __toESM(require_lib5());
 var t5 = __toESM(require_lib3());
@@ -63708,9 +63277,11 @@ function splitProps(str) {
 }
 
 // src/code/icons/icon-set-template.ts
+init_define_process_env();
 init_project_fs();
 
 // src/code/project/name-gen.ts
+init_define_process_env();
 init_project_fs();
 
 // src/code/icons/icon-set-template.ts
@@ -63721,6 +63292,7 @@ function isIconSetCode(code) {
 }
 
 // src/code/icons/icon-set-config.ts
+init_define_process_env();
 init_debug_trace();
 var ICON_DEFAULT_W = 240;
 var ICON_DEFAULT_H = 240;
@@ -64646,6 +64218,7 @@ function isComponentTag(tagName) {
 }
 
 // src/code/generation/template-route-parse.ts
+init_define_process_env();
 init_debug_trace();
 var MAP_RE = /const __templateProps = (\{[\s\S]*?\});\n?/;
 function findTemplatePropsSpan(code) {
@@ -64734,12 +64307,14 @@ function substituteTemplateVarAttrsForCanvas(code, routeValues) {
 init_scroll_variant_gen();
 
 // src/code/generation/slot-children.ts
+init_define_process_env();
 var import_parser11 = __toESM(require_lib5());
 var import_traverse3 = __toESM(require_lib8());
 var t7 = __toESM(require_lib3());
 init_ast_utils();
 
 // src/code/generation/jsx-child-slots.ts
+init_define_process_env();
 var babelTypes = __toESM(require_lib3());
 init_debug_trace();
 var tNode = babelTypes;
@@ -64845,6 +64420,7 @@ function findContentSlot(code) {
 }
 
 // src/code/generation/template-route-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_scoped_expr();
 var import_parser12 = __toESM(require_lib5());
@@ -64856,18 +64432,22 @@ function splitViewportKey(key) {
 }
 
 // src/code/parsing/async-parser.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/project/active-file-store.ts
+init_define_process_env();
 init_canvas_config();
 init_esm();
 init_project_fs();
 
 // src/code/stores/agent-run-lock-store.ts
+init_define_process_env();
 var import_react3 = __toESM(require_react());
 init_project_fs();
 
 // src/code/stores/viewer-mode-store.ts
+init_define_process_env();
 var import_react2 = __toESM(require_react());
 init_debug_trace();
 var _agentBusy = () => false;
@@ -64907,6 +64487,7 @@ function subscribe(fn) {
 registerAgentEditingSource({ busy: isCanvasBusy, locked: isActiveBranchLocked }, subscribe);
 
 // node_modules/sonner/dist/index.mjs
+init_define_process_env();
 var import_react4 = __toESM(require_react(), 1);
 var import_react_dom = __toESM(require_react_dom(), 1);
 function __insertCSS(code) {
@@ -65197,9 +64778,11 @@ var toast = Object.assign(basicToast, {
 __insertCSS("[data-sonner-toaster][dir=ltr],html[dir=ltr]{--toast-icon-margin-start:-3px;--toast-icon-margin-end:4px;--toast-svg-margin-start:-1px;--toast-svg-margin-end:0px;--toast-button-margin-start:auto;--toast-button-margin-end:0;--toast-close-button-start:0;--toast-close-button-end:unset;--toast-close-button-transform:translate(-35%, -35%)}[data-sonner-toaster][dir=rtl],html[dir=rtl]{--toast-icon-margin-start:4px;--toast-icon-margin-end:-3px;--toast-svg-margin-start:0px;--toast-svg-margin-end:-1px;--toast-button-margin-start:0;--toast-button-margin-end:auto;--toast-close-button-start:unset;--toast-close-button-end:0;--toast-close-button-transform:translate(35%, -35%)}[data-sonner-toaster]{position:fixed;width:var(--width);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,Noto Sans,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;--gray1:hsl(0, 0%, 99%);--gray2:hsl(0, 0%, 97.3%);--gray3:hsl(0, 0%, 95.1%);--gray4:hsl(0, 0%, 93%);--gray5:hsl(0, 0%, 90.9%);--gray6:hsl(0, 0%, 88.7%);--gray7:hsl(0, 0%, 85.8%);--gray8:hsl(0, 0%, 78%);--gray9:hsl(0, 0%, 56.1%);--gray10:hsl(0, 0%, 52.3%);--gray11:hsl(0, 0%, 43.5%);--gray12:hsl(0, 0%, 9%);--border-radius:8px;box-sizing:border-box;padding:0;margin:0;list-style:none;outline:0;z-index:999999999;transition:transform .4s ease}@media (hover:none) and (pointer:coarse){[data-sonner-toaster][data-lifted=true]{transform:none}}[data-sonner-toaster][data-x-position=right]{right:var(--offset-right)}[data-sonner-toaster][data-x-position=left]{left:var(--offset-left)}[data-sonner-toaster][data-x-position=center]{left:50%;transform:translateX(-50%)}[data-sonner-toaster][data-y-position=top]{top:var(--offset-top)}[data-sonner-toaster][data-y-position=bottom]{bottom:var(--offset-bottom)}[data-sonner-toast]{--y:translateY(100%);--lift-amount:calc(var(--lift) * var(--gap));z-index:var(--z-index);position:absolute;opacity:0;transform:var(--y);touch-action:none;transition:transform .4s,opacity .4s,height .4s,box-shadow .2s;box-sizing:border-box;outline:0;overflow-wrap:anywhere}[data-sonner-toast][data-styled=true]{padding:16px;background:var(--normal-bg);border:1px solid var(--normal-border);color:var(--normal-text);border-radius:var(--border-radius);box-shadow:0 4px 12px rgba(0,0,0,.1);width:var(--width);font-size:13px;display:flex;align-items:center;gap:6px}[data-sonner-toast]:focus-visible{box-shadow:0 4px 12px rgba(0,0,0,.1),0 0 0 2px rgba(0,0,0,.2)}[data-sonner-toast][data-y-position=top]{top:0;--y:translateY(-100%);--lift:1;--lift-amount:calc(1 * var(--gap))}[data-sonner-toast][data-y-position=bottom]{bottom:0;--y:translateY(100%);--lift:-1;--lift-amount:calc(var(--lift) * var(--gap))}[data-sonner-toast][data-styled=true] [data-description]{font-weight:400;line-height:1.4;color:#3f3f3f}[data-rich-colors=true][data-sonner-toast][data-styled=true] [data-description]{color:inherit}[data-sonner-toaster][data-sonner-theme=dark] [data-description]{color:#e8e8e8}[data-sonner-toast][data-styled=true] [data-title]{font-weight:500;line-height:1.5;color:inherit}[data-sonner-toast][data-styled=true] [data-icon]{display:flex;height:16px;width:16px;position:relative;justify-content:flex-start;align-items:center;flex-shrink:0;margin-left:var(--toast-icon-margin-start);margin-right:var(--toast-icon-margin-end)}[data-sonner-toast][data-promise=true] [data-icon]>svg{opacity:0;transform:scale(.8);transform-origin:center;animation:sonner-fade-in .3s ease forwards}[data-sonner-toast][data-styled=true] [data-icon]>*{flex-shrink:0}[data-sonner-toast][data-styled=true] [data-icon] svg{margin-left:var(--toast-svg-margin-start);margin-right:var(--toast-svg-margin-end)}[data-sonner-toast][data-styled=true] [data-content]{display:flex;flex-direction:column;gap:2px}[data-sonner-toast][data-styled=true] [data-button]{border-radius:4px;padding-left:8px;padding-right:8px;height:24px;font-size:12px;color:var(--normal-bg);background:var(--normal-text);margin-left:var(--toast-button-margin-start);margin-right:var(--toast-button-margin-end);border:none;font-weight:500;cursor:pointer;outline:0;display:flex;align-items:center;flex-shrink:0;transition:opacity .4s,box-shadow .2s}[data-sonner-toast][data-styled=true] [data-button]:focus-visible{box-shadow:0 0 0 2px rgba(0,0,0,.4)}[data-sonner-toast][data-styled=true] [data-button]:first-of-type{margin-left:var(--toast-button-margin-start);margin-right:var(--toast-button-margin-end)}[data-sonner-toast][data-styled=true] [data-cancel]{color:var(--normal-text);background:rgba(0,0,0,.08)}[data-sonner-toaster][data-sonner-theme=dark] [data-sonner-toast][data-styled=true] [data-cancel]{background:rgba(255,255,255,.3)}[data-sonner-toast][data-styled=true] [data-close-button]{position:absolute;left:var(--toast-close-button-start);right:var(--toast-close-button-end);top:0;height:20px;width:20px;display:flex;justify-content:center;align-items:center;padding:0;color:var(--gray12);background:var(--normal-bg);border:1px solid var(--gray4);transform:var(--toast-close-button-transform);border-radius:50%;cursor:pointer;z-index:1;transition:opacity .1s,background .2s,border-color .2s}[data-sonner-toast][data-styled=true] [data-close-button]:focus-visible{box-shadow:0 4px 12px rgba(0,0,0,.1),0 0 0 2px rgba(0,0,0,.2)}[data-sonner-toast][data-styled=true] [data-disabled=true]{cursor:not-allowed}[data-sonner-toast][data-styled=true]:hover [data-close-button]:hover{background:var(--gray2);border-color:var(--gray5)}[data-sonner-toast][data-swiping=true]::before{content:'';position:absolute;left:-100%;right:-100%;height:100%;z-index:-1}[data-sonner-toast][data-y-position=top][data-swiping=true]::before{bottom:50%;transform:scaleY(3) translateY(50%)}[data-sonner-toast][data-y-position=bottom][data-swiping=true]::before{top:50%;transform:scaleY(3) translateY(-50%)}[data-sonner-toast][data-swiping=false][data-removed=true]::before{content:'';position:absolute;inset:0;transform:scaleY(2)}[data-sonner-toast][data-expanded=true]::after{content:'';position:absolute;left:0;height:calc(var(--gap) + 1px);bottom:100%;width:100%}[data-sonner-toast][data-mounted=true]{--y:translateY(0);opacity:1}[data-sonner-toast][data-expanded=false][data-front=false]{--scale:var(--toasts-before) * 0.05 + 1;--y:translateY(calc(var(--lift-amount) * var(--toasts-before))) scale(calc(-1 * var(--scale)));height:var(--front-toast-height)}[data-sonner-toast]>*{transition:opacity .4s}[data-sonner-toast][data-x-position=right]{right:0}[data-sonner-toast][data-x-position=left]{left:0}[data-sonner-toast][data-expanded=false][data-front=false][data-styled=true]>*{opacity:0}[data-sonner-toast][data-visible=false]{opacity:0;pointer-events:none}[data-sonner-toast][data-mounted=true][data-expanded=true]{--y:translateY(calc(var(--lift) * var(--offset)));height:var(--initial-height)}[data-sonner-toast][data-removed=true][data-front=true][data-swipe-out=false]{--y:translateY(calc(var(--lift) * -100%));opacity:0}[data-sonner-toast][data-removed=true][data-front=false][data-swipe-out=false][data-expanded=true]{--y:translateY(calc(var(--lift) * var(--offset) + var(--lift) * -100%));opacity:0}[data-sonner-toast][data-removed=true][data-front=false][data-swipe-out=false][data-expanded=false]{--y:translateY(40%);opacity:0;transition:transform .5s,opacity .2s}[data-sonner-toast][data-removed=true][data-front=false]::before{height:calc(var(--initial-height) + 20%)}[data-sonner-toast][data-swiping=true]{transform:var(--y) translateY(var(--swipe-amount-y,0)) translateX(var(--swipe-amount-x,0));transition:none}[data-sonner-toast][data-swiped=true]{user-select:none}[data-sonner-toast][data-swipe-out=true][data-y-position=bottom],[data-sonner-toast][data-swipe-out=true][data-y-position=top]{animation-duration:.2s;animation-timing-function:ease-out;animation-fill-mode:forwards}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=left]{animation-name:swipe-out-left}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=right]{animation-name:swipe-out-right}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=up]{animation-name:swipe-out-up}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=down]{animation-name:swipe-out-down}@keyframes swipe-out-left{from{transform:var(--y) translateX(var(--swipe-amount-x));opacity:1}to{transform:var(--y) translateX(calc(var(--swipe-amount-x) - 100%));opacity:0}}@keyframes swipe-out-right{from{transform:var(--y) translateX(var(--swipe-amount-x));opacity:1}to{transform:var(--y) translateX(calc(var(--swipe-amount-x) + 100%));opacity:0}}@keyframes swipe-out-up{from{transform:var(--y) translateY(var(--swipe-amount-y));opacity:1}to{transform:var(--y) translateY(calc(var(--swipe-amount-y) - 100%));opacity:0}}@keyframes swipe-out-down{from{transform:var(--y) translateY(var(--swipe-amount-y));opacity:1}to{transform:var(--y) translateY(calc(var(--swipe-amount-y) + 100%));opacity:0}}@media (max-width:600px){[data-sonner-toaster]{position:fixed;right:var(--mobile-offset-right);left:var(--mobile-offset-left);width:100%}[data-sonner-toaster][dir=rtl]{left:calc(var(--mobile-offset-left) * -1)}[data-sonner-toaster] [data-sonner-toast]{left:0;right:0;width:calc(100% - var(--mobile-offset-left) * 2)}[data-sonner-toaster][data-x-position=left]{left:var(--mobile-offset-left)}[data-sonner-toaster][data-y-position=bottom]{bottom:var(--mobile-offset-bottom)}[data-sonner-toaster][data-y-position=top]{top:var(--mobile-offset-top)}[data-sonner-toaster][data-x-position=center]{left:var(--mobile-offset-left);right:var(--mobile-offset-right);transform:none}}[data-sonner-toaster][data-sonner-theme=light]{--normal-bg:#fff;--normal-border:var(--gray4);--normal-text:var(--gray12);--success-bg:hsl(143, 85%, 96%);--success-border:hsl(145, 92%, 87%);--success-text:hsl(140, 100%, 27%);--info-bg:hsl(208, 100%, 97%);--info-border:hsl(221, 91%, 93%);--info-text:hsl(210, 92%, 45%);--warning-bg:hsl(49, 100%, 97%);--warning-border:hsl(49, 91%, 84%);--warning-text:hsl(31, 92%, 45%);--error-bg:hsl(359, 100%, 97%);--error-border:hsl(359, 100%, 94%);--error-text:hsl(360, 100%, 45%)}[data-sonner-toaster][data-sonner-theme=light] [data-sonner-toast][data-invert=true]{--normal-bg:#000;--normal-border:hsl(0, 0%, 20%);--normal-text:var(--gray1)}[data-sonner-toaster][data-sonner-theme=dark] [data-sonner-toast][data-invert=true]{--normal-bg:#fff;--normal-border:var(--gray3);--normal-text:var(--gray12)}[data-sonner-toaster][data-sonner-theme=dark]{--normal-bg:#000;--normal-bg-hover:hsl(0, 0%, 12%);--normal-border:hsl(0, 0%, 20%);--normal-border-hover:hsl(0, 0%, 25%);--normal-text:var(--gray1);--success-bg:hsl(150, 100%, 6%);--success-border:hsl(147, 100%, 12%);--success-text:hsl(150, 86%, 65%);--info-bg:hsl(215, 100%, 6%);--info-border:hsl(223, 43%, 17%);--info-text:hsl(216, 87%, 65%);--warning-bg:hsl(64, 100%, 6%);--warning-border:hsl(60, 100%, 9%);--warning-text:hsl(46, 87%, 65%);--error-bg:hsl(358, 76%, 10%);--error-border:hsl(357, 89%, 16%);--error-text:hsl(358, 100%, 81%)}[data-sonner-toaster][data-sonner-theme=dark] [data-sonner-toast] [data-close-button]{background:var(--normal-bg);border-color:var(--normal-border);color:var(--normal-text)}[data-sonner-toaster][data-sonner-theme=dark] [data-sonner-toast] [data-close-button]:hover{background:var(--normal-bg-hover);border-color:var(--normal-border-hover)}[data-rich-colors=true][data-sonner-toast][data-type=success]{background:var(--success-bg);border-color:var(--success-border);color:var(--success-text)}[data-rich-colors=true][data-sonner-toast][data-type=success] [data-close-button]{background:var(--success-bg);border-color:var(--success-border);color:var(--success-text)}[data-rich-colors=true][data-sonner-toast][data-type=info]{background:var(--info-bg);border-color:var(--info-border);color:var(--info-text)}[data-rich-colors=true][data-sonner-toast][data-type=info] [data-close-button]{background:var(--info-bg);border-color:var(--info-border);color:var(--info-text)}[data-rich-colors=true][data-sonner-toast][data-type=warning]{background:var(--warning-bg);border-color:var(--warning-border);color:var(--warning-text)}[data-rich-colors=true][data-sonner-toast][data-type=warning] [data-close-button]{background:var(--warning-bg);border-color:var(--warning-border);color:var(--warning-text)}[data-rich-colors=true][data-sonner-toast][data-type=error]{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}[data-rich-colors=true][data-sonner-toast][data-type=error] [data-close-button]{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}.sonner-loading-wrapper{--size:16px;height:var(--size);width:var(--size);position:absolute;inset:0;z-index:10}.sonner-loading-wrapper[data-visible=false]{transform-origin:center;animation:sonner-fade-out .2s ease forwards}.sonner-spinner{position:relative;top:50%;left:50%;height:var(--size);width:var(--size)}.sonner-loading-bar{animation:sonner-spin 1.2s linear infinite;background:var(--gray11);border-radius:6px;height:8%;left:-10%;position:absolute;top:-3.9%;width:24%}.sonner-loading-bar:first-child{animation-delay:-1.2s;transform:rotate(.0001deg) translate(146%)}.sonner-loading-bar:nth-child(2){animation-delay:-1.1s;transform:rotate(30deg) translate(146%)}.sonner-loading-bar:nth-child(3){animation-delay:-1s;transform:rotate(60deg) translate(146%)}.sonner-loading-bar:nth-child(4){animation-delay:-.9s;transform:rotate(90deg) translate(146%)}.sonner-loading-bar:nth-child(5){animation-delay:-.8s;transform:rotate(120deg) translate(146%)}.sonner-loading-bar:nth-child(6){animation-delay:-.7s;transform:rotate(150deg) translate(146%)}.sonner-loading-bar:nth-child(7){animation-delay:-.6s;transform:rotate(180deg) translate(146%)}.sonner-loading-bar:nth-child(8){animation-delay:-.5s;transform:rotate(210deg) translate(146%)}.sonner-loading-bar:nth-child(9){animation-delay:-.4s;transform:rotate(240deg) translate(146%)}.sonner-loading-bar:nth-child(10){animation-delay:-.3s;transform:rotate(270deg) translate(146%)}.sonner-loading-bar:nth-child(11){animation-delay:-.2s;transform:rotate(300deg) translate(146%)}.sonner-loading-bar:nth-child(12){animation-delay:-.1s;transform:rotate(330deg) translate(146%)}@keyframes sonner-fade-in{0%{opacity:0;transform:scale(.8)}100%{opacity:1;transform:scale(1)}}@keyframes sonner-fade-out{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.8)}}@keyframes sonner-spin{0%{opacity:1}100%{opacity:.15}}@media (prefers-reduced-motion){.sonner-loading-bar,[data-sonner-toast],[data-sonner-toast]>*{transition:none!important;animation:none!important}}.sonner-loader{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transform-origin:center;transition:opacity .2s,transform .2s}.sonner-loader[data-visible=false]{opacity:0;transform:scale(.8) translate(-50%,-50%)}");
 
 // src/code/stores/overlay-store.ts
+init_define_process_env();
 init_esm();
 
 // node_modules/jotai/esm/vanilla/utils.mjs
+init_define_process_env();
 init_vanilla();
 var RESET = /* @__PURE__ */ Symbol(
   (import.meta.env ? import.meta.env.MODE : void 0) !== "production" ? "RESET" : ""
@@ -65327,6 +64910,7 @@ init_overlay_parser();
 init_debug_trace();
 
 // src/shared/deep-equal.ts
+init_define_process_env();
 function deepEqualPlain(a2, b) {
   if (Object.is(a2, b)) return true;
   if (a2 === null || b === null || a2 === void 0 || b === void 0) return false;
@@ -65384,7 +64968,11 @@ var overlayTriggerCallsRawAtom = atom((get) => {
 });
 var overlayTriggerCallsAtom = selectAtom(overlayTriggerCallsRawAtom, (v) => v, deepEqualPlain);
 
+// src/code/components/component-ops.ts
+init_define_process_env();
+
 // src/code/generation/cms-pagination-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_regex_utils();
 init_project_fs();
@@ -65392,6 +64980,7 @@ init_generator_utils();
 init_cms_gen();
 
 // src/code/generation/cms-responsive-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_parse_utils();
 init_cms_gen();
@@ -65460,19 +65049,29 @@ function __applyListConfig(arr, cfg) {
 }
 `.trim();
 
+// src/code/generation/label-nowrap.ts
+init_define_process_env();
+
 // src/code/project/cms-api-config.ts
+init_define_process_env();
 init_project_fs();
 
 // src/backend/autosave.ts
+init_define_process_env();
 init_esm();
 init_cloud_flag();
 
+// src/backend/index.ts
+init_define_process_env();
+
 // src/backend/local-backend.ts
+init_define_process_env();
 init_types();
 init_debug_trace();
 init_project_id();
 
 // src/backend/save-revision.ts
+init_define_process_env();
 init_debug_trace();
 var baseRevision = null;
 var inSync = false;
@@ -65872,6 +65471,7 @@ var backend = CLOUD_ENABLED ? new RevymeBackend() : new LocalBackend();
 init_project_id();
 
 // src/backend/save-store.ts
+init_define_process_env();
 init_esm();
 var saveStatusAtom = atom("saved");
 
@@ -65880,6 +65480,7 @@ init_project_fs();
 init_debug_trace();
 
 // src/backend/version-history-store.ts
+init_define_process_env();
 init_esm();
 var versionHistorySignalAtom = atom(0);
 function bumpVersionHistorySignal() {
@@ -66070,7 +65671,11 @@ init_project_fs();
 init_ast_utils();
 init_constants();
 
+// src/shared/motion-transform.ts
+init_define_process_env();
+
 // src/shared/position-utils.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/shared/motion-transform.ts
@@ -66098,11 +65703,13 @@ init_css_utils();
 init_regex_utils();
 
 // src/code/generation/generator-styles.ts
+init_define_process_env();
 init_variant_perf();
 init_css_utils();
 init_regex_utils();
 
 // src/code/generation/variant-const-scope.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/generation/generator-styles.ts
@@ -66113,6 +65720,7 @@ var import_parser17 = __toESM(require_lib5());
 var import_traverse4 = __toESM(require_lib8());
 
 // src/code/stores/container-query-store.ts
+init_define_process_env();
 init_esm();
 init_css_utils();
 init_debug_trace();
@@ -66205,6 +65813,7 @@ var containerOverridesAtom = atom((get) => {
 init_canvas_config();
 
 // src/code/stores/viewport-store.ts
+init_define_process_env();
 init_esm();
 init_project_fs();
 init_canvas_config();
@@ -66212,6 +65821,7 @@ init_constants();
 init_debug_trace();
 
 // src/code/mutation/external-write-registry.ts
+init_define_process_env();
 var refreshFn = null;
 function registerExternalWriteRefresh(fn) {
   refreshFn = fn;
@@ -66389,10 +65999,12 @@ var interactingViewportIdAtom = atom(
 );
 
 // src/code/components/instance-prop-overrides.ts
+init_define_process_env();
 var import_parser14 = __toESM(require_lib5());
 init_generator_utils();
 
 // src/code/components/instance-conditional-prop.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/components/instance-prop-overrides.ts
@@ -66403,6 +66015,7 @@ init_debug_trace();
 init_variant_root();
 
 // src/code/generation/locale-gen.ts
+init_define_process_env();
 init_css_utils();
 init_debug_trace();
 init_variant_root();
@@ -66411,6 +66024,7 @@ init_variant_root();
 init_generator_utils();
 
 // src/code/generation/generator-crud.ts
+init_define_process_env();
 var t10 = __toESM(require_lib3());
 init_id_utils();
 init_ast_utils();
@@ -66421,12 +66035,17 @@ init_glide_gen();
 init_generator_utils();
 
 // src/code/generation/move-fast.ts
+init_define_process_env();
 init_generator_utils();
 
 // src/code/generation/generator-crud.ts
 init_generator_motion();
 
+// src/code/generation/text-anim-gen.ts
+init_define_process_env();
+
 // src/shared/animation-utils.ts
+init_define_process_env();
 init_debug_trace();
 init_css_utils();
 
@@ -66437,6 +66056,7 @@ init_ast_utils();
 init_generator_utils();
 
 // src/code/generation/slot-ops.ts
+init_define_process_env();
 var t9 = __toESM(require_lib3());
 init_debug_trace();
 init_ast_utils();
@@ -66518,27 +66138,33 @@ init_instance_fx_gen();
 init_glide_gen();
 
 // src/code/project/translation-ops.ts
+init_define_process_env();
 init_project_fs();
 
 // src/code/mutation/history.ts
+init_define_process_env();
 init_debug_trace();
 init_project_fs();
 init_canvas_bridge();
 init_project_fs();
 
 // src/code/project/modify-file.ts
+init_define_process_env();
 init_project_fs();
 init_ast_utils();
 
 // src/code/parsing/heal-data-ids.ts
+init_define_process_env();
 var t13 = __toESM(require_lib3());
 init_id_utils();
 init_ast_utils();
 
 // src/code/oracle/checks/shared.ts
+init_define_process_env();
 var import_traverse5 = __toESM(require_lib8());
 
 // src/code/parsing/transparent-tags.ts
+init_define_process_env();
 var PARSER_TRANSPARENT_TAGS = /* @__PURE__ */ new Set([
   "LayoutGroup",
   "MotionConfig",
@@ -66566,6 +66192,7 @@ init_generator_utils();
 init_debug_trace();
 
 // src/canvas/drag/drag-state-store.ts
+init_define_process_env();
 var _isDragging = false;
 var listeners3 = /* @__PURE__ */ new Set();
 var dragStateOps = {
@@ -66592,6 +66219,7 @@ var dragStateOps = {
 init_debug_trace();
 
 // src/code/generation/i18n-gen.ts
+init_define_process_env();
 var t14 = __toESM(require_lib3());
 init_ast_utils();
 var import_traverse6 = __toESM(require_lib8());
@@ -66603,6 +66231,7 @@ var traverseAst2 = typeof import_traverse6.default === "function" ? import_trave
 init_rich_text_runs();
 
 // src/canvas/hooks/locale-override-map.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/project/translation-ops.ts
@@ -66610,11 +66239,13 @@ init_generator_attrs();
 init_constants();
 
 // src/code/project/locale-ops.ts
+init_define_process_env();
 init_project_fs();
 init_debug_trace();
 init_providers_gen();
 
 // src/code/project/locale-route-ops.ts
+init_define_process_env();
 init_project_fs();
 init_debug_trace();
 
@@ -66622,6 +66253,7 @@ init_debug_trace();
 init_scoped_expr();
 
 // src/code/generation/responsive-instance-prop-vars-gen.ts
+init_define_process_env();
 init_generator_motion();
 init_debug_trace();
 
@@ -66630,6 +66262,7 @@ init_providers_gen();
 init_debug_trace();
 
 // src/code/generation/text-override-gen.ts
+init_define_process_env();
 var t15 = __toESM(require_lib3());
 init_scoped_expr();
 init_ast_utils();
@@ -66701,15 +66334,21 @@ var HOOK_END_MARKER = `// @${HOOK_NAME}-end`;
 init_scroll_variant_gen();
 
 // src/code/generation/form-state-gen.ts
+init_define_process_env();
 var t16 = __toESM(require_lib3());
 init_debug_trace();
 init_generator_utils();
 init_ast_utils();
 
 // src/code/components/component-variable-transfer.ts
+init_define_process_env();
 init_debug_trace();
 
+// src/code/components/master-root-sizing.ts
+init_define_process_env();
+
 // src/code/features/variable-ops.ts
+init_define_process_env();
 init_ast_utils();
 init_generator_attrs();
 var t17 = __toESM(require_lib3());
@@ -66718,6 +66357,7 @@ init_debug_trace();
 var generate3 = typeof import_generator3.default === "function" ? import_generator3.default : import_generator3.default.default;
 
 // src/code/generation/overlay-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_generator_utils();
 init_variant_root();
@@ -66736,11 +66376,13 @@ var t18 = __toESM(require_lib3());
 init_debug_trace();
 
 // src/code/project/cms-ops.ts
+init_define_process_env();
 init_project_fs();
 init_debug_trace();
 init_cms_page_meta();
 
 // src/code/components/component-duplicate.ts
+init_define_process_env();
 init_project_fs();
 init_id_utils();
 init_ast_utils();
@@ -66751,6 +66393,7 @@ init_debug_trace();
 var wrapperKeys = /* @__PURE__ */ new Set(["width", "height", ...WRAPPER_ONLY_STYLE_PROPS]);
 
 // src/code/project/comments-config.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/project/active-file-store.ts
@@ -66758,6 +66401,7 @@ init_canvas_bridge();
 init_debug_trace();
 
 // src/code/generation/page-root-shell.ts
+init_define_process_env();
 init_debug_trace();
 var TEMPLATED_PAGE_ROOT_STYLE = {
   position: "relative",
@@ -66774,10 +66418,12 @@ var STANDALONE_PAGE_ROOT_STYLE = {
 };
 
 // src/code/generation/page-transitions-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_project_fs();
 
 // src/code/project/file-path-kind.ts
+init_define_process_env();
 function isComponentFilePath(path) {
   return path.startsWith("components/");
 }
@@ -67258,10 +66904,12 @@ var import_parser27 = __toESM(require_lib5());
 var import_traverse9 = __toESM(require_lib8());
 
 // src/code/mutation/use-before-declare.ts
+init_define_process_env();
 var import_traverse7 = __toESM(require_lib8());
 var traverse5 = typeof import_traverse7.default === "function" ? import_traverse7.default : import_traverse7.default.default;
 
 // src/code/generation/variant-visibility-gen.ts
+init_define_process_env();
 init_ast_utils();
 var import_generator4 = __toESM(require_lib4());
 var t19 = __toESM(require_lib3());
@@ -67282,6 +66930,7 @@ var generate4 = normalizeBabelGenerator2(import_generator4.default);
 init_generator_attrs();
 
 // src/code/generation/generator-video.ts
+init_define_process_env();
 var t20 = __toESM(require_lib3());
 init_ast_utils();
 init_debug_trace();
@@ -67295,11 +66944,13 @@ init_generator_motion();
 init_glide_gen();
 
 // src/code/generation/form-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_project_fs();
 init_generator_utils();
 
 // src/code/generation/form-submit-gen.ts
+init_define_process_env();
 var t21 = __toESM(require_lib3());
 init_generator_utils();
 init_debug_trace();
@@ -67309,6 +66960,7 @@ var FORMSUBMIT_COMPONENT_NAME = "FormSubmit";
 var FORMSUBMIT_IMPORT = `import ${FORMSUBMIT_COMPONENT_NAME} from '@/components/FormSubmit';`;
 
 // src/code/generation/responsive-attrs-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_generator_utils();
 init_generator_motion();
@@ -67318,6 +66970,7 @@ init_scoped_expr();
 init_generator_utils();
 
 // src/code/generation/replace-component-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_generator_utils();
 
@@ -67325,16 +66978,19 @@ init_generator_utils();
 init_generator_attrs();
 
 // src/code/generation/convert-to-image-gen.ts
+init_define_process_env();
 var t22 = __toESM(require_lib3());
 init_ast_utils();
 init_generator_utils();
 init_debug_trace();
 
 // src/code/features/delete-variable-pipeline.ts
+init_define_process_env();
 init_scroll_variant_gen();
 init_debug_trace();
 
 // src/code/features/hoist-prop.ts
+init_define_process_env();
 var t23 = __toESM(require_lib3());
 var import_generator5 = __toESM(require_lib4());
 init_ast_utils();
@@ -67342,6 +66998,7 @@ init_scroll_variant_gen();
 init_debug_trace();
 
 // src/code/generation/page-variables-gen.ts
+init_define_process_env();
 var t24 = __toESM(require_lib3());
 var import_generator6 = __toESM(require_lib4());
 init_ast_utils();
@@ -67350,21 +67007,25 @@ init_debug_trace();
 var generate6 = normalizeBabelGenerator(import_generator6.default);
 
 // src/code/generation/responsive-style-vars-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_generator_utils();
 init_generator_motion();
 
 // src/code/generation/responsive-text-vars-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_generator_utils();
 init_generator_motion();
 
 // src/code/generation/page-interactions-gen.ts
+init_define_process_env();
 var t26 = __toESM(require_lib3());
 init_ast_utils();
 init_generator_utils();
 
 // src/code/features/page-interactions.ts
+init_define_process_env();
 init_ast_utils();
 var t25 = __toESM(require_lib3());
 init_debug_trace();
@@ -67373,6 +67034,7 @@ init_debug_trace();
 init_debug_trace();
 
 // src/code/generation/close-overlay-gen.ts
+init_define_process_env();
 var t27 = __toESM(require_lib3());
 init_ast_utils();
 init_generator_utils();
@@ -67383,12 +67045,14 @@ init_debug_trace();
 init_map_gen();
 
 // src/code/generation/cms-detach-gen.ts
+init_define_process_env();
 init_generator_utils();
 init_map_gen();
 init_cms_page_meta();
 init_debug_trace();
 
 // src/shared/cms-accessor.ts
+init_define_process_env();
 function getNestedValue(obj, path) {
   if (obj == null) return void 0;
   if (!path) return obj;
@@ -67425,16 +67089,20 @@ init_cms_gen();
 init_ast_utils();
 
 // src/code/generation/cms-row-resolve.ts
+init_define_process_env();
 init_map_gen();
 
 // src/code/stores/cms-page-store.ts
+init_define_process_env();
 init_esm();
 
 // src/code/stores/cms-store.ts
+init_define_process_env();
 init_esm();
 init_project_fs();
 
 // src/code/stores/locale-store.ts
+init_define_process_env();
 init_esm();
 init_project_fs();
 var i18nConfigAtom = atom((get) => {
@@ -67461,12 +67129,17 @@ var isDefaultLocaleAtom = atom(
 );
 var localeOverridesAtom = atom(/* @__PURE__ */ new Map());
 
+// src/code/stores/cms-locale.ts
+init_define_process_env();
+
 // node_modules/@revyme/runtime/dist/index.js
+init_define_process_env();
 var React$1 = __toESM(require_react(), 1);
 var import_react5 = __toESM(require_react(), 1);
 var import_jsx_runtime = __toESM(require_jsx_runtime(), 1);
 
 // node_modules/perfect-freehand/dist/esm/index.mjs
+init_define_process_env();
 var { PI: e } = Math;
 var t28 = e + 1e-4;
 var { min: a } = Math;
@@ -67612,12 +67285,14 @@ var activeCmsCollectionAtom = atom(null);
 var editingCmsItemAtom = atom(null);
 
 // src/code/project/cms-page-ops.ts
+init_define_process_env();
 init_canvas_config();
 init_project_fs();
 init_debug_trace();
 init_cms_root_mount();
 
 // src/code/project/cms-seo.ts
+init_define_process_env();
 init_metadata_gen();
 var CMS_SEO_SLOTS = [
   { key: "title", label: "Title", kind: "text" },
@@ -67854,6 +67529,7 @@ init_cms_page_meta();
 init_debug_trace();
 
 // src/code/generation/component-var-detach-gen.ts
+init_define_process_env();
 var t29 = __toESM(require_lib3());
 init_ast_utils();
 init_generator_utils();
@@ -67861,6 +67537,7 @@ init_generator_motion();
 init_debug_trace();
 
 // src/code/generation/cms-locale-gen.ts
+init_define_process_env();
 init_scoped_expr();
 init_cms_gen();
 init_debug_trace();
@@ -67869,12 +67546,14 @@ init_debug_trace();
 init_cms_gen();
 
 // src/code/generation/expression-gen.ts
+init_define_process_env();
 init_debug_trace();
 var import_parser24 = __toESM(require_lib5());
 init_generator_utils();
 init_cms_gen();
 
 // src/code/generation/cms-search-field-gen.ts
+init_define_process_env();
 var t30 = __toESM(require_lib3());
 var import_generator7 = __toESM(require_lib4());
 init_ast_utils();
@@ -67902,18 +67581,21 @@ var SEARCH_INPUT_STYLE = {
 };
 
 // src/code/generation/cms-paste-gen.ts
+init_define_process_env();
 init_cms_gen();
 init_generator_utils();
 init_scoped_expr();
 init_debug_trace();
 
 // src/code/generation/instance-event-gen.ts
+init_define_process_env();
 var t31 = __toESM(require_lib3());
 var import_generator8 = __toESM(require_lib4());
 init_ast_utils();
 init_debug_trace();
 
 // src/code/features/instance-auto-size.ts
+init_define_process_env();
 init_debug_trace();
 init_ast_utils();
 var import_parser25 = __toESM(require_lib5());
@@ -67924,12 +67606,15 @@ init_generator_utils();
 init_metadata_gen();
 
 // src/code/project/preset-ops.ts
+init_define_process_env();
 init_project_fs();
 
 // src/code/generation/preset-gen.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/generation/preset-refs-gen.ts
+init_define_process_env();
 var import_parser26 = __toESM(require_lib5());
 init_regex_utils();
 
@@ -67941,12 +67626,14 @@ init_css_utils();
 var google_fonts_catalog_default = [{ family: "Roboto", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Open Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Google Sans", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Inter", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Montserrat", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Poppins", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Lato", category: "sans-serif", variants: ["100", "100i", "300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans JP", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Roboto Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Arimo", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Roboto Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Oswald", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "DM Sans", category: "sans-serif", variants: ["100", "1000", "1000i", "100i", "200", "200i", "300", "300i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Raleway", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Playfair Display", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Nunito", category: "sans-serif", variants: ["1000", "1000i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Nunito Sans", category: "sans-serif", variants: ["1000", "1000i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Roboto Slab", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Rubik", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Manrope", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Ubuntu", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Outfit", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Kanit", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Merriweather", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Work Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Plus Jakarta Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Lora", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Noto Sans KR", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Quicksand", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Figtree", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Archivo Black", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "PT Sans", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Bebas Neue", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "JetBrains Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Archivo", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Mulish", category: "sans-serif", variants: ["1000", "1000i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans TC", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Source Sans 3", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Barlow", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "IBM Plex Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Inconsolata", category: "monospace", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Jost", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Prompt", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Space Grotesk", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Bricolage Grotesque", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Fira Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Saira", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Libre Baskerville", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Noto Serif", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Karla", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Black Ops One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Titillium Web", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Heebo", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Cormorant Garamond", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Source Code Pro", category: "monospace", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "PT Serif", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Share Tech", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Smooch Sans", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Inter Tight", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "IBM Plex Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Barlow Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Color Emoji", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Josefin Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Libre Franklin", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Dancing Script", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Anton", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Public Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "EB Garamond", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Instrument Serif", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Cairo", category: "sans-serif", variants: ["1000", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Fraunces", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Fjalla One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans SC", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Sora", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Serif JP", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Lobster Two", category: "display", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Lexend", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Assistant", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Schibsted Grotesk", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Geist", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Rajdhani", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Urbanist", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Bitter", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Changa One", category: "display", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }] }, { family: "DM Serif Display", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Merriweather Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Cabin", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Caveat", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Roboto Flex", category: "sans-serif", variants: ["100", "1000", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Dosis", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Nanum Gothic", category: "sans-serif", variants: ["regular", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Hind Siliguri", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Red Hat Display", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Google Sans Flex", category: "sans-serif", variants: ["1", "100", "1000", "200", "300", "regular", "500", "600"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Instrument Sans", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Alfa Slab One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Source Serif 4", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Fredoka", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Oxygen", category: "sans-serif", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Exo 2", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans Khmer", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Newsreader", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Hind", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "M PLUS Rounded 1c", category: "sans-serif", variants: ["100", "300", "regular", "500", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Overpass", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Mukta", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Cinzel", category: "serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Orbitron", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Crimson Text", category: "serif", variants: ["regular", "italic", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Zeyada", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Tajawal", category: "sans-serif", variants: ["200", "300", "regular", "500", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Barlow Semi Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Pacifico", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans Telugu", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Slabo 27px", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Ramabhadra", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Geist Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Anek Telugu", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Comfortaa", category: "display", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Hanken Grotesk", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Lobster", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "PT Sans Narrow", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Bungee", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Arvo", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Domine", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "DM Mono", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Bodoni Moda", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Teko", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Chakra Petch", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Epilogue", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans Arabic", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Space Mono", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Abel", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Noto Sans Thai", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Maven Pro", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "M PLUS 1p", category: "sans-serif", variants: ["100", "300", "regular", "500", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Asap", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Questrial", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Satisfy", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Shadows Into Light", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Almarai", category: "sans-serif", variants: ["300", "regular", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Archivo Narrow", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Zilla Slab", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Zen Kaku Gothic New", category: "sans-serif", variants: ["300", "regular", "500", "700", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Play", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Lilita One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Great Vibes", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Abril Fatface", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Albert Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Onest", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "IBM Plex Sans Arabic", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "ABeeZee", category: "sans-serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Spectral", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Lexend Deca", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Gravitas One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Varela Round", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Marcellus", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "League Spartan", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Exo", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "IBM Plex Serif", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Unbounded", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Be Vietnam Pro", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Saira Condensed", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Permanent Marker", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Cormorant", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Syne", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Geologica", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Baloo 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Sanchez", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Indie Flower", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Nanum Myeongjo", category: "serif", variants: ["regular", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Oleo Script", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Encode Sans", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Kalam", category: "handwriting", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Noto Kufi Arabic", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Atkinson Hyperlegible", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Noto Serif KR", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Alegreya Sans", category: "sans-serif", variants: ["100", "100i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Doppio One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Slabo 13px", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Noto Serif TC", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Fira Code", category: "monospace", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Roboto Serif", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Frank Ruhl Libre", category: "serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Rethink Sans", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Sofia Sans", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Noto Sans Tamil", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Zen Maru Gothic", category: "sans-serif", variants: ["300", "regular", "500", "700", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Amiri", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Fira Sans Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Active", weight: 80 }] }, { family: "Courier Prime", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Montserrat Alternates", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Sarabun", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Titan One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Vollkorn", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Yanone Kaffeesatz", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Literata", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Noto Serif SC", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Red Hat Text", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Catamaran", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Press Start 2P", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Carlito", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Delius", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Luckiest Guy", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Crimson Pro", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Andada Pro", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Signika", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Cardo", category: "serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Righteous", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Bree Serif", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Hind Madurai", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "LINE Seed JP", category: "sans-serif", variants: ["100", "regular", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "Playfair", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Viga", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Google Sans Code", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Noto Naskh Arabic", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "DM Serif Text", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Prata", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Readex Pro", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Baskervville", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Tinos", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "News Cycle", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Calm", weight: 80 }] }, { family: "League Gothic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Devanagari", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "IBM Plex Sans Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Golos Text", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Courgette", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Alegreya", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Faustina", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Tenor Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Amatic SC", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Libre Caslon Text", category: "serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Comic Neue", category: "handwriting", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Shippori Mincho", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Aleo", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Hammersmith One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gothic A1", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Audiowide", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Russo One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Active", weight: 80 }] }, { family: "Patua One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Rowdies", category: "display", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Bangers", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Acme", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Display", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Chivo", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Noto Nastaliq Urdu", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Paytone One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Loud", weight: 80 }] }, { family: "Nanum Gothic Coding", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Creepster", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Rugged", weight: 80 }] }, { family: "Antic Slab", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Yellowtail", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Quattrocento", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Allura", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "STIX Two Text", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Oxanium", category: "display", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Active", weight: 80 }] }, { family: "Changa", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Active", weight: 80 }] }, { family: "Noto Sans Mono", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Khand", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Old Standard TT", category: "serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Alata", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Special Elite", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Kaushan Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noticia Text", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Kumbh Sans", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "VT323", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Antonio", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Loud", weight: 80 }] }, { family: "Patrick Hand", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Radio Canada", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Cantarell", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Sawarabi Mincho", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Rubik Mono One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Rugged", weight: 80 }] }, { family: "Share Tech Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Crete Round", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Sacramento", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "BIZ UDPGothic", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Passion One", category: "display", variants: ["regular", "700", "900"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Commissioner", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "PT Sans Caption", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Fugaz One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Martel", category: "serif", variants: ["200", "300", "regular", "600", "700", "800", "900"], tags: [] }, { family: "Sen", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Lexend Giga", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Amaranth", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Alexandria", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Fancy", weight: 80 }] }, { family: "Sawarabi Gothic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Yantramanav", category: "sans-serif", variants: ["100", "300", "regular", "500", "700", "900"], tags: [] }, { family: "Libre Barcode 39", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Michroma", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Philosopher", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Francois One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Asap Condensed", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Zen Old Mincho", category: "serif", variants: ["regular", "500", "600", "700", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Sofia Sans Condensed", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Didact Gothic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Unna", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Noto Sans Bengali", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Neuton", category: "serif", variants: ["200", "300", "regular", "italic", "700", "800"], tags: [] }, { family: "Berkshire Swash", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Chelsea Market", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Gruppo", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Pinyon Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Racing Sans One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Ubuntu Condensed", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Vazirmatn", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Sans HK", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Gilda Display", category: "serif", variants: ["regular"], tags: [] }, { family: "Krub", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Noto Sans Hebrew", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Rokkitt", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gelasio", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Rock Salt", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Rugged", weight: 80 }] }, { family: "Gabarito", category: "display", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Quantico", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Architects Daughter", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Gloria Hallelujah", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Homemade Apple", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "PT Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Signika Negative", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Volkhov", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Poiret One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Quattrocento Sans", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Josefin Slab", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Forum", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Blinker", category: "sans-serif", variants: ["100", "200", "300", "regular", "600", "700", "800", "900"], tags: [] }, { family: "Playball", category: "display", variants: ["regular"], tags: [] }, { family: "Istok Web", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Advent Pro", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Merienda", category: "handwriting", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bai Jamjuree", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Playfair Display SC", category: "serif", variants: ["regular", "italic", "700", "700i", "900", "900i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Alex Brush", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Tangerine", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Eczar", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "El Messiri", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Encode Sans Condensed", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Cutive Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Ubuntu Mono", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Cookie", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lustria", category: "serif", variants: ["regular"], tags: [] }, { family: "Kosugi Maru", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Fustat", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Andika", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Vidaloka", category: "serif", variants: ["regular"], tags: [] }, { family: "Saira Semi Condensed", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Active", weight: 80 }] }, { family: "Rammetto One", category: "display", variants: ["regular"], tags: [] }, { family: "Saira Extra Condensed", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Active", weight: 80 }] }, { family: "Reenie Beanie", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Damion", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Dela Gothic One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Reddit Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Cinzel Decorative", category: "display", variants: ["regular", "700", "900"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Staatliches", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Loud", weight: 80 }] }, { family: "Abhaya Libre", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "M PLUS 1", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Pathway Gothic One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Radio Canada Big", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Monoton", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Awkward", weight: 80 }] }, { family: "Yeseva One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Nanum Pen Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Concert One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Arsenal", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Fira Mono", category: "monospace", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Active", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Monda", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Italianno", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Parisienne", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Actor", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Libre Bodoni", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Nothing You Could Do", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Hind Guntur", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Biryani", category: "sans-serif", variants: ["200", "300", "regular", "600", "700", "800", "900"], tags: [] }, { family: "Mitr", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Caveat Brush", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Atkinson Hyperlegible Next", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Lusitana", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Host Grotesk", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Innovative", weight: 80 }] }, { family: "IBM Plex Sans Thai", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Syncopate", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Goldman", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Handlee", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lalezar", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Sofia Sans Extra Condensed", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Malayalam", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jua", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Sorts Mill Goudy", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Secular One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Cormorant Infant", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Cuprum", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Mrs Saint Delafield", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Afacad", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Georama", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Noto Serif Display", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Mona Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kaisei Decol", category: "serif", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "GFS Didot", category: "serif", variants: ["regular"], tags: [] }, { family: "Pirata One", category: "display", variants: ["regular"], tags: [] }, { family: "Petrona", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Unica One", category: "display", variants: ["regular"], tags: [] }, { family: "Sarala", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Belleza", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Balsamiq Sans", category: "display", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }] }, { family: "Anonymous Pro", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Limelight", category: "display", variants: ["regular"], tags: [] }, { family: "Rye", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Black Han Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Pangolin", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Ms Madi", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Mr Dafoe", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Leckerli One", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Potta One", category: "display", variants: ["regular"], tags: [] }, { family: "Mada", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Hachi Maru Pop", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Besley", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Sriracha", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Averia Serif Libre", category: "display", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Hind Vadodara", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Alice", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Comic Relief", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Calistoga", category: "display", variants: ["regular"], tags: [] }, { family: "Arapey", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Reem Kufi", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Skranji", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Pixelify Sans", category: "display", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Barriecito", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ropa Sans", category: "sans-serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bad Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Bowlby One SC", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Excited", weight: 80 }] }, { family: "Marck Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Fira Sans Extra Condensed", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Active", weight: 80 }] }, { family: "Cousine", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Cabin Sketch", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Noto Sans Symbols", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Funnel Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Pragati Narrow", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Palanquin Dark", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Jura", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Amita", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yuji Mai", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Varela", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Happy", weight: 80 }] }, { family: "Alegreya Sans SC", category: "sans-serif", variants: ["100", "100i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Red Hat Mono", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "REM", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Spline Sans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Sofia", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Shippori Mincho B1", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Murecho", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Lemonada", category: "display", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Alumni Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Mukta Malar", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Suez One", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Bengali", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Gochi Hand", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Tiro Bangla", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Wix Madefor Text", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Rozha One", category: "serif", variants: ["regular"], tags: [] }, { family: "Ultra", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Caprasimo", category: "display", variants: ["regular"], tags: [] }, { family: "Taviraj", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "IBM Plex Sans JP", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "M PLUS 2", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Cabin Condensed", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Averia Libre", category: "display", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Big Shoulders", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Kablammo", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Italiana", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Germania One", category: "display", variants: ["regular"], tags: [] }, { family: "K2D", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Original Surfer", category: "display", variants: ["regular"], tags: [] }, { family: "Azeret Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Wix Madefor Display", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Gudea", category: "sans-serif", variants: ["regular", "italic", "700"], tags: [] }, { family: "Palanquin", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Rakkas", category: "display", variants: ["regular"], tags: [] }, { family: "Zen Kaku Gothic Antique", category: "sans-serif", variants: ["300", "regular", "500", "700", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Anek Bangla", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Grandstander", category: "display", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Carter One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Excited", weight: 80 }] }, { family: "Ruda", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "MuseoModerno", category: "display", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Bowlby One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Excited", weight: 80 }] }, { family: "Economica", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Dongle", category: "sans-serif", variants: ["300", "regular", "700"], tags: [] }, { family: "Familjen Grotesk", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Innovative", weight: 80 }] }, { family: "Yrsa", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "IBM Plex Sans KR", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kulim Park", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "600", "600i"], tags: [] }, { family: "La Belle Aurore", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Jersey 25", category: "display", variants: ["regular"], tags: [] }, { family: "Julius Sans One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Funnel Display", category: "display", variants: ["300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Squada One", category: "display", variants: ["regular"], tags: [] }, { family: "Geo", category: "sans-serif", variants: ["regular", "italic"], tags: [] }, { family: "Cedarville Cursive", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gantari", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Bitcount Single", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bevan", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Mate", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Rufina", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Days One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Covered By Your Grace", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Coda", category: "display", variants: ["regular", "800"], tags: [] }, { family: "Do Hyeon", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Chewy", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "IM Fell English", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Belanosima", category: "sans-serif", variants: ["regular", "600", "700"], tags: [] }, { family: "Overpass Mono", category: "monospace", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Martel Sans", category: "sans-serif", variants: ["200", "300", "regular", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Fahkwang", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Chango", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Loud", weight: 80 }] }, { family: "Niramit", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gloock", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Adamina", category: "serif", variants: ["regular"], tags: [] }, { family: "Shrikhand", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Kreon", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Darker Grotesque", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Tektur", category: "display", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Khula", category: "sans-serif", variants: ["300", "regular", "600", "700", "800"], tags: [] }, { family: "BenchNine", category: "sans-serif", variants: ["300", "regular", "700"], tags: [] }, { family: "Akshar", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Marcellus SC", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Stardos Stencil", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Proza Libre", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "UnifrakturMaguntia", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Six Caps", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Georgian", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Aboreto", category: "display", variants: ["regular"], tags: [] }, { family: "Londrina Solid", category: "display", variants: ["100", "300", "regular", "900"], tags: [] }, { family: "Caladea", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Knewave", category: "display", variants: ["regular"], tags: [] }, { family: "DynaPuff", category: "display", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }] }, { family: "Oooh Baby", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Krona One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Pridi", category: "serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Charm", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Special Gothic Expanded One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Playpen Sans", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Tomorrow", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Eater", category: "display", variants: ["regular"], tags: [] }, { family: "Pontano Sans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Fredericka the Great", category: "display", variants: ["regular"], tags: [] }, { family: "Aref Ruqaa", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Ovo", category: "serif", variants: ["regular"], tags: [] }, { family: "Boogaloo", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Anuphan", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Sintony", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Itim", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Red Rose", category: "display", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Lateef", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Qwitcher Grypen", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Basic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Metamorphous", category: "display", variants: ["regular"], tags: [] }, { family: "Mandali", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Sansita", category: "sans-serif", variants: ["regular", "italic", "700", "700i", "800", "800i", "900", "900i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Young Serif", category: "serif", variants: ["regular"], tags: [] }, { family: "Baloo Bhai 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Quintessential", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ma Shan Zheng", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Agbalumo", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Just Another Hand", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Fuzzy Bubbles", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Glegoo", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Shadows Into Light Two", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Mansalva", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Silkscreen", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Awkward", weight: 80 }] }, { family: "Neucha", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Over the Rainbow", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Baloo Da 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Anek Latin", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Corben", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Aclonica", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Amarante", category: "display", variants: ["regular"], tags: [] }, { family: "Parkinsans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Glory", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Sofia Sans Semi Condensed", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Fragment Mono", category: "monospace", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Mali", category: "handwriting", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Spline Sans Mono", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Yatra One", category: "display", variants: ["regular"], tags: [] }, { family: "Cantata One", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Gujarati", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Trirong", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Niconne", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Armata", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Inria Serif", category: "serif", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [] }, { family: "Athiti", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Kameron", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Vast Shadow", category: "serif", variants: ["regular"], tags: [] }, { family: "Libre Caslon Display", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Enriqueta", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "BIZ UDGothic", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "New Rocker", category: "display", variants: ["regular"], tags: [] }, { family: "Libre Barcode 128", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Gowun Batang", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Sigmar One", category: "display", variants: ["regular"], tags: [] }, { family: "Chivo Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Noto Sans Sinhala", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Chonburi", category: "display", variants: ["regular"], tags: [] }, { family: "DotGothic16", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Sancreek", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Hepta Slab", category: "serif", variants: ["1", "100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "TikTok Sans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Kiwi Maru", category: "serif", variants: ["300", "regular", "500"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Graduate", category: "serif", variants: ["regular"], tags: [] }, { family: "Afacad Flux", category: "sans-serif", variants: ["100", "1000", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Telex", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Emoji", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Angkor", category: "display", variants: ["regular"], tags: [] }, { family: "Clarity City", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Castoro", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Karma", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Tilt Warp", category: "display", variants: ["regular"], tags: [] }, { family: "Livvic", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Ubuntu Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Birthstone", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Radley", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Train One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Arbutus Slab", category: "serif", variants: ["regular"], tags: [] }, { family: "Rubik Glitch", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Awkward", weight: 80 }] }, { family: "Aldrich", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Reddit Sans Condensed", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Spinnaker", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Oranienbaum", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Herr Von Muellerhoff", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cormorant SC", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Cal Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Libre Caslon Condensed", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Electrolize", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Markazi Text", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Nixie One", category: "display", variants: ["regular"], tags: [] }, { family: "Ribeye", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Myanmar", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Poller One", category: "display", variants: ["regular"], tags: [] }, { family: "Charis SIL", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Petit Formal Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Brygada 1918", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Iceberg", category: "display", variants: ["regular"], tags: [] }, { family: "Isometra", category: "serif", variants: ["regular"], tags: [] }, { family: "Alef", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "PT Serif Caption", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Zalando Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Eagle Lake", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lexend Exa", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Chicle", category: "display", variants: ["regular"], tags: [] }, { family: "Metrophobic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Caudex", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Share", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Zalando Sans Expanded", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kavivanar", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Pathway Extreme", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Norican", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Vina Sans", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Podkova", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Honk", category: "display", variants: ["regular"], tags: [] }, { family: "Nobile", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Seaweed Script", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Judson", category: "serif", variants: ["regular", "italic", "700"], tags: [] }, { family: "Coiny", category: "display", variants: ["regular"], tags: [] }, { family: "Whisper", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Music", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bona Nova SC", category: "serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Pattaya", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Bellefair", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Allerta Stencil", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Kosugi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Nanum Brush Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Tiro Devanagari Hindi", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Hahmlet", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Vujahday Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Rancho", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Klee One", category: "handwriting", variants: ["regular", "600"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Libre Barcode 39 Text", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Ibarra Real Nova", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Coming Soon", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Dawning of a New Day", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Halant", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Candal", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "ZCOOL XiaoWei", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Scada", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Martian Mono", category: "monospace", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Kripa", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Marvel", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Montagu Slab", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "BIZ UDPMincho", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Allison", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Schoolbell", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Noto Sans Kannada", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Alegreya SC", category: "serif", variants: ["regular", "italic", "500", "500i", "700", "700i", "800", "800i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Sans Gurmukhi", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Meetei Mayek", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tienne", category: "serif", variants: ["regular", "700", "900"], tags: [] }, { family: "Anton SC", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Loud", weight: 80 }] }, { family: "Hina Mincho", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Average Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Style Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Rosario", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Shantell Sans", category: "display", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Grand Hotel", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "ADLaM Display", category: "display", variants: ["regular"], tags: [] }, { family: "BioRhyme", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Overlock", category: "display", variants: ["regular", "italic", "700", "700i", "900", "900i"], tags: [] }, { family: "Antic Didone", category: "serif", variants: ["regular"], tags: [] }, { family: "Ruwudu", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Anybody", category: "display", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Alatsi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Mochiy Pop One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Ysabeau Office", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Sniglet", category: "display", variants: ["regular", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Happy", weight: 80 }] }, { family: "Hedvig Letters Serif", category: "serif", variants: ["regular"], tags: [] }, { family: "Mouse Memoirs", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "ZCOOL KuaiLe", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Rampart One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Inria Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tilt Neon", category: "display", variants: ["regular"], tags: [] }, { family: "AR One Sans", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Annie Use Your Telescope", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sedgwick Ave Display", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gowun Dodum", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Chiron GoRound TC", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Lexend Peta", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Kristi", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cormorant Upright", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Bellota Text", category: "display", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Faster One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Awkward", weight: 80 }] }, { family: "Laila", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Fondamento", category: "handwriting", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Encode Sans Expanded", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "IM Fell English SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Bentham", category: "serif", variants: ["regular"], tags: [] }, { family: "Inclusive Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Fjord One", category: "serif", variants: ["regular"], tags: [] }, { family: "Lexend Zetta", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Sans Math", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Goudy Bookletter 1911", category: "serif", variants: ["regular"], tags: [] }, { family: "Wallpoet", category: "display", variants: ["regular"], tags: [] }, { family: "Calligraffitti", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Arizonia", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Libertinus Serif", category: "serif", variants: ["regular", "italic", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Mountains of Christmas", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Oxygen Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Gabriela", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Cormorant Unicase", category: "serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "David Libre", category: "serif", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Hurricane", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bubblegum Sans", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Playful", weight: 80 }] }, { family: "Baloo Thambi 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Marmelad", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Allerta", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Lekton", category: "monospace", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Sometype Mono", category: "monospace", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Special Gothic", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Zalando Sans SemiExpanded", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Koulen", category: "display", variants: ["regular"], tags: [] }, { family: "Pompiere", category: "display", variants: ["regular"], tags: [] }, { family: "Nova Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "RocknRoll One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Waiting for the Sunrise", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Recursive", category: "sans-serif", variants: ["1000", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Monomaniac One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Flow Circular", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Amiko", category: "sans-serif", variants: ["regular", "600", "700"], tags: [] }, { family: "Kodchasan", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Playwrite CA Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Corinthia", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Monsieur La Doulaise", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Libertinus Math", category: "display", variants: ["regular"], tags: [] }, { family: "Baloo Bhaijaan 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Meddon", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Grenze Gotisch", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Bayon", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "B612 Mono", category: "monospace", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Kelly Slab", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Asul", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Love Ya Like A Sister", category: "display", variants: ["regular"], tags: [] }, { family: "Irish Grover", category: "display", variants: ["regular"], tags: [] }, { family: "Cairo Play", category: "sans-serif", variants: ["1000", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Inknut Antiqua", category: "serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Poetsen One", category: "display", variants: ["regular"], tags: [] }, { family: "Yesteryear", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "IBM Plex Sans Hebrew", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Scheherazade New", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Anaheim", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Yusei Magic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Kantumruy Pro", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Anek Devanagari", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Serif Devanagari", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Trocchi", category: "serif", variants: ["regular"], tags: [] }, { family: "Voltaire", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Nova Square", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Maitree", category: "serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Special Gothic Condensed One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Akatab", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Hi Melody", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Magra", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Turret Road", category: "display", variants: ["200", "300", "regular", "500", "700", "800"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Copse", category: "serif", variants: ["regular"], tags: [] }, { family: "Platypi", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Noto Serif Georgian", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Megrim", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Awkward", weight: 80 }] }, { family: "Farro", category: "sans-serif", variants: ["300", "regular", "500", "700"], tags: [] }, { family: "Average", category: "serif", variants: ["regular"], tags: [] }, { family: "Gaegu", category: "handwriting", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yuji Syuku", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "McLaren", category: "display", variants: ["regular"], tags: [] }, { family: "MedievalSharp", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Thai", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Short Stack", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rochester", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "B612", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Noto Sans Oriya", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rouge Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Serif Khojki", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Qwigley", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Boldonse", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Ruslan Display", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "STIX Two Math", category: "serif", variants: ["regular"], tags: [] }, { family: "Zen Dots", category: "display", variants: ["regular"], tags: [] }, { family: "Meow Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Manjari", category: "sans-serif", variants: ["100", "regular", "700"], tags: [] }, { family: "Bungee Spice", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Noto Sans Thai Looped", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Baloo Tamma 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Capriola", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "ZCOOL QingKe HuangYou", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Carrois Gothic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Beth Ellen", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Spectral SC", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Happy Monkey", category: "display", variants: ["regular"], tags: [] }, { family: "Delicious Handrawn", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ephesis", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Encode Sans Semi Condensed", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Bungee Inline", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Noto Sans Symbols 2", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Macondo", category: "display", variants: ["regular"], tags: [] }, { family: "Zain", category: "sans-serif", variants: ["200", "300", "300i", "regular", "italic", "700", "800", "900"], tags: [] }, { family: "Zen Kurenaido", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Mukta Mahee", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Libre Barcode 39 Extended Text", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Asar", category: "serif", variants: ["regular"], tags: [] }, { family: "Almendra", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Cambay", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Fauna One", category: "serif", variants: ["regular"], tags: [] }, { family: "Jockey One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "IM Fell DW Pica", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Rubik Doodle Shadow", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "KoHo", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Bungee Shade", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Jersey 10", category: "display", variants: ["regular"], tags: [] }, { family: "Rambla", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Prosto One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Puritan", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sarpanch", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Mukta Vaani", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Give You Glory", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Patrick Hand SC", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Just Me Again Down Here", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Balthazar", category: "serif", variants: ["regular"], tags: [] }, { family: "Hanuman", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Major Mono Display", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Miriam Libre", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Encode Sans Semi Expanded", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Croissant One", category: "display", variants: ["regular"], tags: [] }, { family: "Sansita Swashed", category: "display", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Della Respira", category: "serif", variants: ["regular"], tags: [] }, { family: "Syne Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Sophisticated", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Aguafina Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Slackey", category: "display", variants: ["regular"], tags: [] }, { family: "Alike", category: "serif", variants: ["regular"], tags: [] }, { family: "Mr De Haviland", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gulzar", category: "serif", variants: ["regular"], tags: [] }, { family: "Tiny5", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Lacquer", category: "display", variants: ["regular"], tags: [] }, { family: "Cherry Bomb One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Gluten", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Sue Ellen Francisco", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Solway", category: "serif", variants: ["300", "regular", "500", "700", "800"], tags: [] }, { family: "Freehand", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Atma", category: "display", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Poly", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Piazzolla", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Fasthand", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Vibur", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Kaisei Opti", category: "serif", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Zen Antique", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Fanwood Text", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Gotu", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Coustard", category: "serif", variants: ["regular", "900"], tags: [] }, { family: "Doto", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Jaldi", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Sarina", category: "display", variants: ["regular"], tags: [] }, { family: "Numans", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Fresca", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Armenian", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Protest Strike", category: "display", variants: ["regular"], tags: [] }, { family: "Xanh Mono", category: "monospace", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Kadwa", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Arima", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Euphoria Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Codystar", category: "display", variants: ["300", "regular"], tags: [] }, { family: "Libertinus Sans", category: "sans-serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Medula One", category: "display", variants: ["regular"], tags: [] }, { family: "Moon Dance", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Dirt", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "MonteCarlo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sunflower", category: "sans-serif", variants: ["300", "500", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "UnifrakturCook", category: "display", variants: ["700"], tags: [{ name: "/Expressive/Artistic", weight: 80 }] }, { family: "Mohave", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Walter Turncoat", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Reddit Mono", category: "monospace", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Libre Barcode 128 Text", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Alkatra", category: "display", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Crafty Girls", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Protest Revolution", category: "display", variants: ["regular"], tags: [] }, { family: "Teachers", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Metal Mania", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Battambang", category: "display", variants: ["100", "300", "regular", "700", "900"], tags: [] }, { family: "Montez", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Ol Chiki", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Frijole", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Excited", weight: 80 }] }, { family: "Contrail One", category: "display", variants: ["regular"], tags: [] }, { family: "Sedgwick Ave", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Allan", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Bagel Fat One", category: "display", variants: ["regular"], tags: [] }, { family: "Monofett", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Inder", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Duru Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Edu QLD Hand", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gurajada", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Reggae One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Fontdiner Swanky", category: "display", variants: ["regular"], tags: [] }, { family: "Rasa", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Junge", category: "serif", variants: ["regular"], tags: [] }, { family: "Finger Paint", category: "display", variants: ["regular"], tags: [] }, { family: "Cutive", category: "serif", variants: ["regular"], tags: [] }, { family: "Zen Antique Soft", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Orienta", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Thasadith", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Buenard", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Shippori Antique", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Expletus Sans", category: "display", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Padauk", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Vesper Libre", category: "serif", variants: ["regular", "500", "700", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Grape Nuts", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Carattere", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Nosifer", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Oregano", category: "display", variants: ["regular", "italic"], tags: [] }, { family: "Port Lligat Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Unkempt", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jomhuria", category: "display", variants: ["regular"], tags: [] }, { family: "Molengo", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "League Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Kurale", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Charmonman", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bona Nova", category: "serif", variants: ["regular", "italic", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Qahiri", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Quando", category: "serif", variants: ["regular"], tags: [] }, { family: "Prociono", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Ethiopic", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rosarivo", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Nata Sans", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Mallanna", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Modak", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Excited", weight: 80 }] }, { family: "Alkalami", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Antic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "IM Fell Great Primer", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Square Peg", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Galada", category: "display", variants: ["regular"], tags: [] }, { family: "Aladin", category: "display", variants: ["regular"], tags: [] }, { family: "Sour Gummy", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Elsie", category: "display", variants: ["regular", "900"], tags: [] }, { family: "Brawler", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Convergence", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Kalnia", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Stack Sans Headline", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Cherry Cream Soda", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Bilbo Swash Caps", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Arya", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Moderustic", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Song Myung", category: "serif", variants: ["regular"], tags: [] }, { family: "Wendy One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Stick No Bills", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Shojumaru", category: "display", variants: ["regular"], tags: [] }, { family: "Asta Sans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Averia Sans Libre", category: "display", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Sumana", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Borel", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Mirza", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Sulphur Point", category: "sans-serif", variants: ["300", "regular", "700"], tags: [] }, { family: "Noto Sans Lao", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Ledger", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Cambo", category: "serif", variants: ["regular"], tags: [] }, { family: "Bakbak One", category: "display", variants: ["regular"], tags: [] }, { family: "Abyssinica SIL", category: "serif", variants: ["regular"], tags: [] }, { family: "Orelega One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Redressed", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Stack Sans Text", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Vollkorn SC", category: "serif", variants: ["regular", "600", "700", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Anta", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "TASA Orbiter", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "East Sea Dokdo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Freeman", category: "display", variants: ["regular"], tags: [] }, { family: "Kranky", category: "display", variants: ["regular"], tags: [] }, { family: "Madimi One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Karantina", category: "display", variants: ["300", "regular", "700"], tags: [] }, { family: "Scope One", category: "serif", variants: ["regular"], tags: [] }, { family: "Salsa", category: "display", variants: ["regular"], tags: [] }, { family: "Supermercado One", category: "display", variants: ["regular"], tags: [] }, { family: "The Girl Next Door", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bubbler One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Dynalight", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Harmattan", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Lexend Mega", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Oleo Script Swash Caps", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Spicy Rice", category: "display", variants: ["regular"], tags: [] }, { family: "Gayathri", category: "sans-serif", variants: ["100", "regular", "700"], tags: [] }, { family: "Sunshiney", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Tenali Ramakrishna", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Atomic Age", category: "display", variants: ["regular"], tags: [] }, { family: "Gamja Flower", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Childlike", weight: 80 }] }, { family: "Uncial Antiqua", category: "display", variants: ["regular"], tags: [] }, { family: "Artifika", category: "serif", variants: ["regular"], tags: [] }, { family: "Holtwood One SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Bigshot One", category: "display", variants: ["regular"], tags: [] }, { family: "WindSong", category: "handwriting", variants: ["regular", "500"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Federo", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Wire One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Loved by the King", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Phudu", category: "display", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Serif HK", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Kaisei Tokumin", category: "serif", variants: ["regular", "500", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Imprima", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Samaritan", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Baloo Chettan 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Fuggles", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Trade Winds", category: "display", variants: ["regular"], tags: [] }, { family: "Gentium Book Plus", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Suranna", category: "serif", variants: ["regular"], tags: [] }, { family: "Road Rage", category: "display", variants: ["regular"], tags: [] }, { family: "Dokdo", category: "display", variants: ["regular"], tags: [] }, { family: "Kufam", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Modern Antiqua", category: "display", variants: ["regular"], tags: [] }, { family: "Mako", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Life Savers", category: "display", variants: ["regular", "700", "800"], tags: [] }, { family: "Atkinson Hyperlegible Mono", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Anek Malayalam", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "IM Fell Double Pica", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "IBM Plex Sans Thai Looped", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Alike Angular", category: "serif", variants: ["regular"], tags: [] }, { family: "Bellota", category: "display", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Swanky and Moo Moo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Baloo Paaji 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Edu SA Beginner", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Protest Riot", category: "display", variants: ["regular"], tags: [] }, { family: "Moul", category: "display", variants: ["regular"], tags: [] }, { family: "Rubik Bubbles", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Aoboshi One", category: "serif", variants: ["regular"], tags: [] }, { family: "Meie Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "The Nautigal", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "M PLUS 1 Code", category: "monospace", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Manuale", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Amethysta", category: "serif", variants: ["regular"], tags: [] }, { family: "Mochiy Pop P One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Poltawski Nowy", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [] }, { family: "Licorice", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Julee", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Nova Round", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Darumadrop One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Clicker Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Grenze", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Cactus Classical Serif", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Goblin One", category: "display", variants: ["regular"], tags: [] }, { family: "Alan Sans", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Viaoda Libre", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Birthstone Bounce", category: "handwriting", variants: ["regular", "500"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bonheur Royale", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Varta", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Nokora", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "IBM Plex Sans Devanagari", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Lovers Quarrel", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Henny Penny", category: "display", variants: ["regular"], tags: [] }, { family: "Ysabeau SC", category: "sans-serif", variants: ["1", "100", "1000", "200", "300", "regular", "500", "600"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Shanti", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Zhi Mang Xing", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Crushed", category: "display", variants: ["regular"], tags: [] }, { family: "SUSE", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Bokor", category: "display", variants: ["regular"], tags: [] }, { family: "Imbue", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Lily Script One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Baumans", category: "display", variants: ["regular"], tags: [] }, { family: "Ranchers", category: "display", variants: ["regular"], tags: [] }, { family: "Hedvig Letters Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Odibee Sans", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Sail", category: "display", variants: ["regular"], tags: [] }, { family: "IM Fell French Canon", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Mooli", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Faculty Glyphic", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Comme", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Amiri Quran", category: "serif", variants: ["regular"], tags: [] }, { family: "Playwrite US Trad", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Hubot Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Gasoek One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Maiden Orange", category: "serif", variants: ["regular"], tags: [] }, { family: "Nova Flat", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Iceland", category: "display", variants: ["regular"], tags: [] }, { family: "Raleway Dots", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Calm", weight: 80 }] }, { family: "Voces", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "IM Fell DW Pica SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Sansation", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Stick", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Bitcount Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Homenaje", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Imperial Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Kavoon", category: "display", variants: ["regular"], tags: [] }, { family: "LXGW WenKai TC", category: "handwriting", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Galindo", category: "display", variants: ["regular"], tags: [] }, { family: "Mozilla Headline", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Englebert", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Kode Mono", category: "monospace", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Esteban", category: "serif", variants: ["regular"], tags: [] }, { family: "Cantora One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Koh Santepheap", category: "serif", variants: ["100", "300", "regular", "700", "900"], tags: [] }, { family: "Long Cang", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "NTR", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Yomogi", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Baloo Tammudu 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Science Gothic", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Peralta", category: "serif", variants: ["regular"], tags: [] }, { family: "Momo Trust Sans", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Carme", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Overlock SC", category: "display", variants: ["regular"], tags: [] }, { family: "Waterfall", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cascadia Code", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Mina", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Montaga", category: "serif", variants: ["regular"], tags: [] }, { family: "Lemon", category: "display", variants: ["regular"], tags: [] }, { family: "Gemunu Libre", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kotta One", category: "serif", variants: ["regular"], tags: [] }, { family: "BIZ UDMincho", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Edu TAS Beginner", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Headland One", category: "serif", variants: ["regular"], tags: [] }, { family: "Chocolate Classical Sans", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Gugi", category: "display", variants: ["regular"], tags: [] }, { family: "Story Script", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Smythe", category: "display", variants: ["regular"], tags: [] }, { family: "Cherry Swash", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Elms Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Gupter", category: "serif", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Macondo Swash Caps", category: "display", variants: ["regular"], tags: [] }, { family: "Rubik Spray Paint", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Baloo Bhaina 2", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Playful", weight: 80 }] }, { family: "Freckle Face", category: "display", variants: ["regular"], tags: [] }, { family: "Denk One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Serif Tamil", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kdam Thmor Pro", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Emilys Candy", category: "display", variants: ["regular"], tags: [] }, { family: "Gafata", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Mozilla Text", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Miniver", category: "display", variants: ["regular"], tags: [] }, { family: "Trispace", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Kapakana", category: "handwriting", variants: ["300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Asset", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Jolly Lodger", category: "display", variants: ["regular"], tags: [] }, { family: "Nova Oval", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "BhuTuka Expanded One", category: "serif", variants: ["regular"], tags: [] }, { family: "Delius Swash Caps", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lancelot", category: "display", variants: ["regular"], tags: [] }, { family: "Beau Rivage", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Nova Slim", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Luxurious Script", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Ancizar Serif", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Ceviche One", category: "display", variants: ["regular"], tags: [] }, { family: "IM Fell Double Pica SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Genos", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Edu NSW ACT Cursive", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lavishly Yours", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Habibi", category: "serif", variants: ["regular"], tags: [] }, { family: "Pliant", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Sans Cypriot", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Anek Tamil", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Miltonian", category: "display", variants: ["regular"], tags: [] }, { family: "Fenix", category: "serif", variants: ["regular"], tags: [] }, { family: "Truculenta", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Grechen Fuemen", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Delius Unicase", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bodoni Moda SC", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Fancy", weight: 80 }] }, { family: "IM Fell French Canon SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Baskervville SC", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Mynerve", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Chau Philomene One", category: "sans-serif", variants: ["regular", "italic"], tags: [] }, { family: "Smooch", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ballet", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Marhey", category: "display", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Timmana", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Anek Kannada", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Belgrano", category: "serif", variants: ["regular"], tags: [] }, { family: "Solitreo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Akaya Kanadaka", category: "display", variants: ["regular"], tags: [] }, { family: "Redacted", category: "display", variants: ["regular"], tags: [] }, { family: "Akronim", category: "display", variants: ["regular"], tags: [] }, { family: "Tauri", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Barrio", category: "display", variants: ["regular"], tags: [] }, { family: "Dangrek", category: "display", variants: ["regular"], tags: [] }, { family: "Tiro Devanagari Sanskrit", category: "serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Liu Jian Mao Cao", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sura", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Climate Crisis", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Syne Tactile", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Sophisticated", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Sree Krushnadevaraya", category: "serif", variants: ["regular"], tags: [] }, { family: "IM Fell Great Primer SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Miltonian Tattoo", category: "display", variants: ["regular"], tags: [] }, { family: "Kenia", category: "display", variants: ["regular"], tags: [] }, { family: "Sekuya", category: "display", variants: ["regular"], tags: [] }, { family: "Mystery Quest", category: "display", variants: ["regular"], tags: [] }, { family: "Flamenco", category: "display", variants: ["300", "regular"], tags: [] }, { family: "Khmer", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Wittgenstein", category: "serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Huninn", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Astloch", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Agdasima", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Playwrite VN", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rationale", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Jomolhari", category: "serif", variants: ["regular"], tags: [] }, { family: "Shippori Antique B1", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Stalemate", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Strait", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Margarine", category: "display", variants: ["regular"], tags: [] }, { family: "Ruthie", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gentium Plus", category: "serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Anek Gujarati", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Caesar Dressing", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Benne", category: "serif", variants: ["regular"], tags: [] }, { family: "Erica One", category: "display", variants: ["regular"], tags: [] }, { family: "Devonshire", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Zilla Slab Highlight", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Stint Ultra Condensed", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Gorditas", category: "display", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Londrina Outline", category: "display", variants: ["regular"], tags: [] }, { family: "Pavanam", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Malayalam", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Sevillana", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Hebrew", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Yuji Boku", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Victor Mono", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Cute Font", category: "display", variants: ["regular"], tags: [] }, { family: "Nova Cut", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Joan", category: "serif", variants: ["regular"], tags: [] }, { family: "Dorsa", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Yeon Sung", category: "display", variants: ["regular"], tags: [] }, { family: "Shalimar", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Griffy", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Old Persian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Stint Ultra Expanded", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "National Park", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Geom", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Nova Script", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Futuristic", weight: 80 }] }, { family: "Jaro", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Stylish", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Playwrite CU", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Stoke", category: "serif", variants: ["300", "regular"], tags: [] }, { family: "Momo Trust Display", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "SN Pro", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Montserrat Underline", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Sophisticated", weight: 80 }] }, { family: "Playwrite BE WAL Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Liter", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Ysabeau", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Akaya Telivigala", category: "display", variants: ["regular"], tags: [] }, { family: "Port Lligat Slab", category: "serif", variants: ["regular"], tags: [] }, { family: "Water Brush", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Nerko One", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cagliostro", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Chilanka", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rum Raisin", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Metal", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Mate SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Engagement", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Single Day", category: "display", variants: ["regular"], tags: [] }, { family: "Notable", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Badeen Display", category: "display", variants: ["regular"], tags: [] }, { family: "Mea Culpa", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Autour One", category: "display", variants: ["regular"], tags: [] }, { family: "Gwendolyn", category: "handwriting", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Wet Paint", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Comforter", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Vampiro One", category: "display", variants: ["regular"], tags: [] }, { family: "Katibeh", category: "display", variants: ["regular"], tags: [] }, { family: "Braah One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Carrois Gothic SC", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Mongolian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Risque", category: "display", variants: ["regular"], tags: [] }, { family: "Passions Conflict", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sahitya", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Serif Kannada", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Geostar Fill", category: "display", variants: ["regular"], tags: [] }, { family: "Sono", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Aref Ruqaa Ink", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Srisakdi", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Island Moments", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Girassol", category: "display", variants: ["regular"], tags: [] }, { family: "Sigmar", category: "display", variants: ["regular"], tags: [] }, { family: "Ramaraja", category: "serif", variants: ["regular"], tags: [] }, { family: "Tourney", category: "display", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Linden Hill", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Maname", category: "serif", variants: ["regular"], tags: [] }, { family: "Suwannaphum", category: "serif", variants: ["100", "300", "regular", "700", "900"], tags: [] }, { family: "Romanesco", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sonsie One", category: "display", variants: ["regular"], tags: [] }, { family: "Content", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Offside", category: "display", variants: ["regular"], tags: [] }, { family: "Paprika", category: "display", variants: ["regular"], tags: [] }, { family: "Zen Tokyo Zoo", category: "display", variants: ["regular"], tags: [] }, { family: "Unlock", category: "display", variants: ["regular"], tags: [] }, { family: "Beiruti", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Playwrite VN Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Manufacturing Consent", category: "display", variants: ["regular"], tags: [] }, { family: "Kaisei HarunoUmi", category: "serif", variants: ["regular", "500", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Averia Gruesa Libre", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite IN", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Chathura", category: "sans-serif", variants: ["100", "300", "regular", "700", "800"], tags: [] }, { family: "Poor Story", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Warang Citi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Dekko", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yaldevi", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Konkhmer Sleokchher", category: "display", variants: ["regular"], tags: [] }, { family: "Jacques Francois", category: "serif", variants: ["regular"], tags: [] }, { family: "Vend Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playpen Sans Arabic", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Tillana", category: "display", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Text Me One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Lexend Tera", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Serif Khmer", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Luxurious Roman", category: "display", variants: ["regular"], tags: [] }, { family: "Smokum", category: "display", variants: ["regular"], tags: [] }, { family: "Iosevka Charon", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Bruno Ace SC", category: "display", variants: ["regular"], tags: [] }, { family: "Encode Sans SC", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Handjet", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Scribble", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noto Sans Tagalog", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Stack Sans Notch", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Amarna", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Noto Sans Sora Sompeng", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Innovative", weight: 80 }] }, { family: "Bilbo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Farsan", category: "display", variants: ["regular"], tags: [] }, { family: "Akt", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Spirax", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Telugu", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Inika", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Glass Antiqua", category: "display", variants: ["regular"], tags: [] }, { family: "Bungee Hairline", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Fascinate Inline", category: "display", variants: ["regular"], tags: [] }, { family: "Nabla", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Arbutus", category: "serif", variants: ["regular"], tags: [] }, { family: "Caramel", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Fascinate", category: "display", variants: ["regular"], tags: [] }, { family: "Ravi Prakash", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Ahom", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jim Nightshade", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Lugrasimo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NO", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Tac One", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Monomakh", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Buda", category: "display", variants: ["300"], tags: [] }, { family: "Orbit", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Donegal One", category: "serif", variants: ["regular"], tags: [] }, { family: "Sofadi One", category: "display", variants: ["regular"], tags: [] }, { family: "Bitcount Grid Double", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ysabeau Infant", category: "sans-serif", variants: ["1", "100", "1000", "1000i", "100i", "1i", "200", "200i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "LXGW WenKai Mono TC", category: "monospace", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Seymour One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Playwrite AU NSW", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Bhaiksuki", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Fleur De Leah", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Buhid", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Lao", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "BBH Bartle", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Preahvihear", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Canadian Aboriginal", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tiro Devanagari Marathi", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Butterfly Kids", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Tiro Gurmukhi", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Piedra", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite IS", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Felipa", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Mogra", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite DE Grund", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Butcherman", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Noto Serif Tibetan", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Siemreap", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Dai Banna SIL", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Neonderthaw", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Plaster", category: "display", variants: ["regular"], tags: [] }, { family: "Comforter Brush", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Winky Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Tai Viet", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Big Shoulders Stencil", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Texturina", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Condiment", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Anek Odia", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Princess Sofia", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Alumni Sans Pinstripe", category: "sans-serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Jacquarda Bastarda 9", category: "display", variants: ["regular"], tags: [] }, { family: "Kite One", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Underdog", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Festive", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Tulpen One", category: "display", variants: ["regular"], tags: [] }, { family: "Elsie Swash Caps", category: "display", variants: ["regular", "900"], tags: [] }, { family: "Londrina Sketch", category: "display", variants: ["regular"], tags: [] }, { family: "Simonetta", category: "display", variants: ["regular", "italic", "900", "900i"], tags: [] }, { family: "Almendra SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Bitcount Prop Single", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Praise", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Oi", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "New Amsterdam", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Milonga", category: "display", variants: ["regular"], tags: [] }, { family: "Trykker", category: "serif", variants: ["regular"], tags: [] }, { family: "Tilt Prism", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Thaana", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Libre Barcode 39 Extended", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Noto Serif Armenian", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kumar One", category: "display", variants: ["regular"], tags: [] }, { family: "Edu AU VIC WA NT Hand", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Jacquard 12", category: "display", variants: ["regular"], tags: [] }, { family: "Castoro Titling", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Moonrocks", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Intel One Mono", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Bruno Ace", category: "display", variants: ["regular"], tags: [] }, { family: "Ruluko", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Chela One", category: "display", variants: ["regular"], tags: [] }, { family: "Marko One", category: "serif", variants: ["regular"], tags: [] }, { family: "Libre Barcode EAN13 Text", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Miranda Sans", category: "sans-serif", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "New Tegomin", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Gujarati", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Londrina Shadow", category: "display", variants: ["regular"], tags: [] }, { family: "Jacques Francois Shadow", category: "display", variants: ["regular"], tags: [] }, { family: "Alumni Sans Inline One", category: "display", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "SUSE Mono", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Chiron Sung HK", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Bungee Tint", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "Bahiana", category: "display", variants: ["regular"], tags: [] }, { family: "Send Flowers", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Gothic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bigelow Rules", category: "display", variants: ["regular"], tags: [] }, { family: "Uchen", category: "serif", variants: ["regular"], tags: [] }, { family: "Bungee Outline", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Playful", weight: 80 }, { name: "/Expressive/Excited", weight: 80 }] }, { family: "WDXL Lubrifont JP N", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Kedebideri", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Noto Rashi Hebrew", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Finlandica Text", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Ubuntu Sans Mono", category: "monospace", variants: ["regular", "italic", "500", "500i", "600", "600i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Purple Purse", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Linear A", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Reem Kufi Ink", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Keania One", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite AU SA", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Joti One", category: "display", variants: ["regular"], tags: [] }, { family: "Diplomata", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Mende Kikakui", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite AU QLD", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Lao Looped", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Fruktur", category: "display", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Chiron Hei HK", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Nuosu SIL", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Momo Signature", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Lakki Reddy", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Reem Kufi Fun", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Updock", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Odor Mean Chey", category: "serif", variants: ["regular"], tags: [] }, { family: "Federant", category: "display", variants: ["regular"], tags: [] }, { family: "Dr Sugiyama", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Glagolitic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "My Soul", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "BBH Hegarty", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Almendra Display", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite CU Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Hubballi", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Ojuju", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Wellfleet", category: "serif", variants: ["regular"], tags: [] }, { family: "Gideon Roman", category: "display", variants: ["regular"], tags: [] }, { family: "Emblema One", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Javanese", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Sassy Frass", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite PL", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Serif Sinhala", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Ancizar Sans", category: "sans-serif", variants: ["100", "1000", "1000i", "100i", "200", "200i", "300", "300i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Osmanya", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Galdeano", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Anek Gurmukhi", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Babylonica", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Passero One", category: "display", variants: ["regular"], tags: [] }, { family: "Inspiration", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Edu VIC WA NT Beginner", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Sirin Stencil", category: "display", variants: ["regular"], tags: [] }, { family: "Sixtyfour", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Ewert", category: "display", variants: ["regular"], tags: [] }, { family: "Diplomata SC", category: "display", variants: ["regular"], tags: [] }, { family: "Cascadia Mono", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Ranga", category: "display", variants: ["regular", "700"], tags: [] }, { family: "Noto Sans Anatolian Hieroglyphs", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Syriac Western", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Meera Inimai", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Rubik Iso", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Gveret Levin", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Distressed", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Dhurjati", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Bacasime Antique", category: "serif", variants: ["regular"], tags: [] }, { family: "Estonia", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Kirang Haerang", category: "display", variants: ["regular"], tags: [] }, { family: "Zen Loop", category: "display", variants: ["regular", "italic"], tags: [] }, { family: "Mr Bedfort", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Vibes", category: "display", variants: ["regular"], tags: [] }, { family: "Diphylleia", category: "serif", variants: ["regular"], tags: [] }, { family: "Stalinist One", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Edu NSW ACT Foundation", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Arsenal SC", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Snippet", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Miss Fajardose", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Twinkle Star", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Micro 5", category: "display", variants: ["regular"], tags: [] }, { family: "GFS Neohellenic", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [] }, { family: "Iosevka Charon Mono", category: "monospace", variants: ["300", "300i", "regular", "italic", "500", "500i", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Jersey 20", category: "display", variants: ["regular"], tags: [] }, { family: "Bonbon", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ribeye Marrow", category: "display", variants: ["regular"], tags: [] }, { family: "Foldit", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Molle", category: "handwriting", variants: ["italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HR", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Jersey 15", category: "display", variants: ["regular"], tags: [] }, { family: "Rubik Microbe", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Tiro Kannada", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Noto Sans Adlam", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Grey Qo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Flavors", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Rugged", weight: 80 }] }, { family: "Shizuru", category: "display", variants: ["regular"], tags: [] }, { family: "Peddana", category: "serif", variants: ["regular"], tags: [] }, { family: "Iansui", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "TASA Explorer", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Playwrite IE", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Alumni Sans Collegiate One", category: "sans-serif", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Tangsa", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Epunda Sans", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Hanunoo", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite US Modern", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Revalia", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Ethiopic", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Oldenburg", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Vintage", weight: 80 }] }, { family: "Playwrite AR", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cherish", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Estedad", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Jacquard 24", category: "display", variants: ["regular"], tags: [] }, { family: "Sedan", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Slackside One", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Hanalei Fill", category: "display", variants: ["regular"], tags: [] }, { family: "Langar", category: "display", variants: ["regular"], tags: [] }, { family: "Alumni Sans SC", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }] }, { family: "Gidole", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Lunasima", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Playpen Sans Hebrew", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Sixtyfour Convergence", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "BioRhyme Expanded", category: "serif", variants: ["200", "300", "regular", "700", "800"], tags: [] }, { family: "Playwrite CA", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Cause", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "WDXL Lubrifont SC", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Sans Shavian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Mandaic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Geist Pixel", category: "display", variants: ["regular"], tags: [] }, { family: "Idiqlat", category: "serif", variants: ["200", "300", "regular"], tags: [] }, { family: "Tiro Telugu", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Matemasie", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Aubrey", category: "display", variants: ["regular"], tags: [] }, { family: "Cossette Titre", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Gidugu", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Vithkuqi", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Burned", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noto Sans Marchen", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rhodium Libre", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Mrs Sheppards", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Protest Guerrilla", category: "display", variants: ["regular"], tags: [] }, { family: "Kolker Brush", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Tapestry", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Pahawh Hmong", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Gemstones", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Love Light", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Redacted Script", category: "display", variants: ["300", "regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Noto Sans Coptic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik 80s Fade", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Menbere", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Rubik Puddles", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Playwrite GB S", category: "handwriting", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "M PLUS Code Latin", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "UoqMunThenKhung", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Explora", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Kings", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Danfo", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Dives Akuru", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Cossette Texte", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Snowburst One", category: "display", variants: ["regular"], tags: [] }, { family: "Black And White Picture", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Loud", weight: 80 }] }, { family: "Noto Sans Multani", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Marker Hatch", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Rubik Vinyl", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noto Sans Sundanese", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Alyamama", category: "serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Tsukimi Rounded", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Sedan SC", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Sunuwar", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Takri", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Moo Lah Lah", category: "display", variants: ["regular"], tags: [] }, { family: "Splash", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Triodion", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Moulpali", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Bitcount Grid Single", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Old Permic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Noto Sans NKo", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Beastly", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noto Sans Balinese", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Ga Maamli", category: "display", variants: ["regular"], tags: [] }, { family: "Flow Block", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Noto Sans Egyptian Hieroglyphs", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "WDXL Lubrifont TC", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Blaka", category: "display", variants: ["regular"], tags: [] }, { family: "Tiro Tamil", category: "serif", variants: ["regular", "italic"], tags: [] }, { family: "Asimovian", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Are You Serious", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Libertinus Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Noto Sans Cherokee", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tai Heritage Pro", category: "serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Trochut", category: "display", variants: ["regular", "italic", "700"], tags: [] }, { family: "Noto Sans Yi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Agu Display", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Myanmar", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Old Italic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Noto Serif NP Hmong", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Workbench", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Taprom", category: "display", variants: ["regular"], tags: [] }, { family: "Lumanosimo", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Chenla", category: "display", variants: ["regular"], tags: [] }, { family: "LXGW Marker Gothic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Combo", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Batak", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Tangut", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Petemoss", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite RO", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Edu AU VIC WA NT Guides", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "BBH Bogle", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Edu AU VIC WA NT Dots", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ole", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Runic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Shafarik", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Rubik Glitch Pop", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Cute", weight: 80 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Awkward", weight: 80 }] }, { family: "Parastoo", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Noto Sans Cypro Minoan", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tirra", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Playwrite AT", category: "handwriting", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HU", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Pixels", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Lilex", category: "monospace", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Stiff", weight: 80 }] }, { family: "Narnoor", category: "sans-serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Sans Carian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite DK Uloopet", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Suravaram", category: "serif", variants: ["regular"], tags: [] }, { family: "Playwrite DK Loopet", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Annapurna SIL", category: "serif", variants: ["regular", "700"], tags: [] }, { family: "Noto Sans Syriac", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Big Shoulders Inline", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Sans Nandinagari", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Vithkuqi", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Rock 3D", category: "display", variants: ["regular"], tags: [] }, { family: "Libertinus Serif Display", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Scoutie Sans", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tagesschrift", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Old Turkic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Noto Sans Cuneiform", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kumar One Outline", category: "display", variants: ["regular"], tags: [] }, { family: "Geostar", category: "display", variants: ["regular"], tags: [] }, { family: "Phetsarath", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Valley Sans", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Ponomar", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Rubik Broken Fax", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Noto Serif Balinese", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Pochaevsk", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Coral Pixels", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite BE VLG", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ES", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ruge Boogie", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "M PLUS U", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Labrada", category: "serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Grandiflora One", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Tifinagh", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Alien Block", category: "display", variants: ["regular"], tags: [] }, { family: "Flow Rounded", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Hibur Mono", category: "monospace", variants: ["regular"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Ingrid Darling", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Nag Mundari", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Osage", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Gurmukhi", category: "serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Tuffy", category: "sans-serif", variants: ["regular", "italic", "700", "700i"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Playwrite GB J", category: "handwriting", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bahianita", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Winky Rough", category: "sans-serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Noto Sans Avestan", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Epunda Slab", category: "serif", variants: ["300", "300i", "regular", "italic", "500", "500i", "600", "600i"], tags: [] }, { family: "Palette Mosaic", category: "display", variants: ["regular"], tags: [] }, { family: "Moirai One", category: "display", variants: ["regular"], tags: [] }, { family: "Kalnia Glaze", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Noto Sans Syloti Nagri", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite NL", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Linefont", category: "display", variants: ["100", "1000", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Noto Sans Indic Siyaq Numbers", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite NZ Basic", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IT Moderna", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Savate", category: "sans-serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Noto Sans Duployan", category: "sans-serif", variants: ["regular", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Gajraj One", category: "display", variants: ["regular"], tags: [] }, { family: "Sankofa Display", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Bpmf Huninn", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Dogra", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite FR Moderne", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Edu QLD Beginner", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Geomini", category: "sans-serif", variants: ["200", "300", "regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Sans Adlam Unjoined", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite MX Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Chokokutai", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Toto", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Maps", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Playwrite DE SAS", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Kaithi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Finlandica Headline", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }] }, { family: "Playwrite ZA", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Serif Yezidi", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Puppies Play", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Old Hungarian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Noto Sans Grantha", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bytesized", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Playwrite MX", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Exile", category: "display", variants: ["regular"], tags: [] }, { family: "Lisu Bosa", category: "serif", variants: ["200", "200i", "300", "300i", "regular", "italic", "500", "500i"], tags: [] }, { family: "Playpen Sans Thai", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Asap Sharp", category: "sans-serif", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [] }, { family: "Bitcount", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AU TAS", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Doodle Triangles", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Playpen Sans Deva", category: "handwriting", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HR Lijeva", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Edu SA Hand", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Hind Mysuru", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [] }, { family: "Sirivennela", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Old North Arabian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Jaini", category: "display", variants: ["regular"], tags: [] }, { family: "Hanalei", category: "display", variants: ["regular"], tags: [] }, { family: "Karla Tamil Inclined", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Playwrite PT", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Buginese", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Ponnala", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Mahajani", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Medefaidrin", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Lydian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Allkin", category: "display", variants: ["regular"], tags: [] }, { family: "Namdhinggo", category: "serif", variants: ["regular", "500", "600", "700", "800"], tags: [] }, { family: "Noto Serif Oriya", category: "serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Maze", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }, { name: "/Expressive/Awkward", weight: 80 }] }, { family: "Noto Sans Tai Le", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Miao", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Blaka Ink", category: "display", variants: ["regular"], tags: [] }, { family: "Datatype", category: "monospace", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Stiff", weight: 80 }] }, { family: "Caacupe One", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite DE LA", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Syriac Eastern", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Warnes", category: "display", variants: ["regular"], tags: [] }, { family: "Strichpunkt Sans", category: "sans-serif", variants: ["regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Traditional Nushu", category: "sans-serif", variants: ["300", "regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Jaini Purva", category: "display", variants: ["regular"], tags: [] }, { family: "Edu AU VIC WA NT Pre", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Montenegrin Gothic One", category: "serif", variants: ["regular"], tags: [] }, { family: "Mingzat", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Sans Brahmi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Newa", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Wavefont", category: "display", variants: ["100", "1000", "200", "300", "regular", "500", "600", "700"], tags: [] }, { family: "Playwrite BE WAL", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Meroitic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Blaka Hollow", category: "display", variants: ["regular"], tags: [] }, { family: "Yuji Hentaigana Akari", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NG Modern", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Rubik Lines", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "BJCree", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Noto Sans Bamum", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Ottoman Siyaq", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Rubik Storm", category: "display", variants: ["regular"], tags: [{ name: "/Expressive/Cyrillic", weight: 100 }, { name: "/Expressive/Artistic", weight: 80 }] }, { family: "Playwrite BR", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Vai", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Betania Patmos", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bpmf Zihi Kai Std", category: "sans-serif", variants: ["regular"], tags: [] }, { family: "Noto Serif Todhri", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bitcount Single Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Lisu", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Edu VIC WA NT Hand", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Zanabazar Square", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Grantha", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Nabataean", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Kharoshthi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Khojki", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bitcount Prop Double", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Jacquard 12 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Saira Stencil", category: "display", variants: ["100", "100i", "200", "200i", "300", "300i", "regular", "italic"], tags: [{ name: "/Expressive/Active", weight: 80 }] }, { family: "Noto Sans Phoenician", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Karla Tamil Upright", category: "sans-serif", variants: ["regular", "700"], tags: [] }, { family: "Noto Serif Khitan Small Script", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Elymaic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans New Tai Lue", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Edu AU VIC WA NT Arrows", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite CZ", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Bitcount Grid Single Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Elbasan", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Wancho", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Imperial Aramaic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Yuyu", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Siddham", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite NZ", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yuyu Short", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Tagbanwa", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Serif Makasar", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Cham", category: "sans-serif", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bitcount Grid Double Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Tai Tham", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Deseret", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Libertinus Keyboard", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Serif Old Uyghur", category: "serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Playwrite AU VIC", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Tirhuta", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite SK", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Inscriptional Parthian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Playwrite GB J Guides", category: "handwriting", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ID", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Palmyrene", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Inscriptional Pahlavi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Fancy", weight: 80 }] }, { family: "Noto Sans Chakma", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Ugaritic", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Serif Hentaigana", category: "serif", variants: ["200", "300", "regular", "500", "600", "700", "800", "900"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bitcount Prop Double Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans SignWriting", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Edu NSW ACT Hand Pre", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Tamil Supplement", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Bpmf Iansui", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Old South Arabian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Matangi", category: "sans-serif", variants: ["300", "regular", "500", "600", "700", "800", "900"], tags: [] }, { family: "Playwrite CO Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Kay Pho Du", category: "serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Micro 5 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Bitcount Prop Single Ink", category: "display", variants: ["100", "200", "300", "regular", "500", "600", "700", "800"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Padyakke Expanded One", category: "serif", variants: ["regular"], tags: [] }, { family: "Noto Sans NKo Unjoined", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Mayan Numerals", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite TZ", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Znamenny Musical Notation", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite PE", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Hatran", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite CO", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Soyombo", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Caucasian Albanian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite NZ Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite TZ Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Sharada", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Kayah Li", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Lepcha", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Betania Patmos In GDL", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Modi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Mro", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Lycian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jacquard 24 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Sogdian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jersey 15 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Old Sogdian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Vintage", weight: 80 }] }, { family: "Betania Patmos In", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Linear B", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Khudawadi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite DE VA", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ES Deco", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Betania Patmos GDL", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Chorasmian", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite US Trad Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Kawi", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jacquarda Bastarda 9 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite CL", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Pau Cin Hau", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Yarndings 20 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Edu VIC WA NT Hand Pre", category: "handwriting", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IT Trad", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Nushu", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jersey 10 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Hanifi Rohingya", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Psalter Pahlavi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Manichaean", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Saurashtra", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Masaram Gondi", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Ogham", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Jersey 20 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite AU VIC Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Gunjala Gondi", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Kanchenjunga", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [] }, { family: "Jersey 25 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Noto Sans Rejang", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Noto Sans Limbu", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Yuji Hentaigana Akebono", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans Bassa Vah", category: "sans-serif", variants: ["regular", "500", "600", "700"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite DE Grund Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yarndings 12 Charted", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite PE Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Yarndings 12", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite PT Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }, { name: "/Expressive/Cute", weight: 80 }] }, { family: "Noto Sans PhagsPa", category: "sans-serif", variants: ["regular"], tags: [{ name: "/Expressive/Business", weight: 80 }] }, { family: "Playwrite FR Trad", category: "handwriting", variants: ["100", "200", "300", "regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NZ Basic Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite PL Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IN Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite BR Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IT Trad Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HU Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite GB S Guides", category: "handwriting", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite DE SAS Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Ramsina", category: "serif", variants: ["regular"], tags: [] }, { family: "Yarndings 20", category: "display", variants: ["regular"], tags: [] }, { family: "Playwrite IT Moderna Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite FR Trad Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite DK Uloopet Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite US Modern Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ID Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AR Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite DE VA Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NO Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NG Modern Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite CZ Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AU NSW Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ES Deco Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IS Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite RO Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite DE LA Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ZA Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite FR Moderne Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite IE Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AT Guides", category: "handwriting", variants: ["regular", "italic"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AU TAS Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite ES Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AU QLD Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite AU SA Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite CL Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite DK Loopet Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite NL Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HR Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite HR Lijeva Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite BE VLG Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }, { family: "Playwrite SK Guides", category: "handwriting", variants: ["regular"], tags: [{ name: "/Expressive/Cute", weight: 80 }] }];
 
 // src/shared/google-font-import.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/project/preset-ops.ts
 var googleFontNames = new Set(google_fonts_catalog_default.map((f) => f.family.toLowerCase()));
 
 // src/code/project/keyframe-ops.ts
+init_define_process_env();
 init_project_fs();
 init_debug_trace();
 
@@ -67954,6 +67641,7 @@ init_debug_trace();
 init_canvas_config();
 
 // src/code/generation/event-fire-gen.ts
+init_define_process_env();
 init_generator_utils();
 init_debug_trace();
 
@@ -67961,25 +67649,35 @@ init_debug_trace();
 init_overlay_parser();
 
 // src/code/generation/fit-text-gen.ts
+init_define_process_env();
 init_debug_trace();
 init_constants();
 init_css_utils();
 init_generator_utils();
 
 // src/shared/fit-measure.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/variants/connection-config.ts
+init_define_process_env();
 init_variant_root();
 init_project_fs();
 init_generator_utils();
 init_generator_motion_scroll();
 
 // src/code/variants/event-prop-forwarding.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/variants/connection-config.ts
 init_debug_trace();
+
+// src/code/sketch/sketch-anim-gen.ts
+init_define_process_env();
+
+// src/code/sketch/sketch-anim-config.ts
+init_define_process_env();
 
 // src/code/sketch/sketch-anim-gen.ts
 init_debug_trace();
@@ -67989,6 +67687,7 @@ init_generator_utils();
 init_project_fs();
 
 // src/code/generation/cursor-gen.ts
+init_define_process_env();
 init_generator_utils();
 init_regex_utils();
 init_debug_trace();
@@ -67996,17 +67695,29 @@ var t33 = __toESM(require_lib3());
 init_ast_utils();
 
 // src/canvas/node-ops.ts
+init_define_process_env();
 init_constants();
 init_css_utils();
 init_project_fs();
 
 // src/code/variants/instance-size-override.ts
+init_define_process_env();
 init_debug_trace();
+
+// src/shared/dom-utils.ts
+init_define_process_env();
+
+// src/code/mutation/render-resolved-mutations.ts
+init_define_process_env();
+
+// src/canvas/variant-root.ts
+init_define_process_env();
 
 // src/canvas/node-ops.ts
 init_constants();
 
 // src/canvas/drag/replica-context.ts
+init_define_process_env();
 init_constants();
 init_svg_geometry();
 init_constants();
@@ -68015,18 +67726,29 @@ init_debug_trace();
 
 // src/canvas/node-ops.ts
 init_debug_trace();
+
+// src/canvas/canvas-theme.ts
+init_define_process_env();
+
+// src/canvas/node-ops.ts
 init_canvas_bridge();
 
+// src/canvas/transform/TransformManager.ts
+init_define_process_env();
+
 // src/canvas/transform/constants.ts
+init_define_process_env();
 var MIN_SCALE = 0.02;
 var MAX_SCALE = 32;
 
 // src/shared/math-utils.ts
+init_define_process_env();
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
 // src/canvas/transform/reraster.ts
+init_define_process_env();
 function promotedDescendants(roots, doc = document) {
   const found = /* @__PURE__ */ new Set();
   const rootList = [...roots];
@@ -68231,13 +67953,21 @@ var TransformManager = class {
 var transformManager = new TransformManager();
 
 // src/code/svg/refit-group.ts
+init_define_process_env();
 init_svg_geometry();
 
 // src/code/svg/group-resize-bake.ts
+init_define_process_env();
 init_svg_geometry();
 
 // src/code/svg/refit-group.ts
 init_debug_trace();
+
+// src/shared/types.ts
+init_define_process_env();
+
+// src/shared/ghost-id.ts
+init_define_process_env();
 
 // src/canvas/node-ops.ts
 init_canvas_bridge();
@@ -68246,6 +67976,9 @@ var LONGHAND_TO_SHORTHAND2 = Object.fromEntries(
     ([short, longs]) => longs.map((lh) => [lh, short])
   )
 );
+
+// src/shared/import-detection.mjs
+init_define_process_env();
 
 // src/code/mutation/mutation-queue.ts
 var traverse7 = typeof import_traverse9.default === "function" ? import_traverse9.default : import_traverse9.default.default;
@@ -68264,55 +67997,77 @@ var _deferRaf = null;
 init_cms_page_meta();
 
 // src/code/oracle/checks/style-object.ts
+init_define_process_env();
 var t35 = __toESM(require_lib3());
 
 // src/code/oracle/checks/node-dimensions.ts
+init_define_process_env();
 var import_parser28 = __toESM(require_lib5());
 var t34 = __toESM(require_lib3());
 
 // src/shared/dimension-presets.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/oracle/preflight-validation.ts
+init_define_process_env();
 init_project_fs();
 
 // src/code/oracle/checks/image-source.ts
+init_define_process_env();
 var t36 = __toESM(require_lib3());
 
 // src/editor/tools/InputTool/select-icon.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/oracle/checks/variant-dialect.ts
+init_define_process_env();
 var t37 = __toESM(require_lib3());
 init_constants();
 
 // src/code/oracle/checks/scroll-dialect.ts
+init_define_process_env();
 var t38 = __toESM(require_lib3());
 
 // src/code/oracle/checks/element-identity.ts
+init_define_process_env();
 var t39 = __toESM(require_lib3());
 
 // src/code/oracle/checks/attribute-hygiene.ts
+init_define_process_env();
 init_jsx_tag_attrs();
 
 // src/code/oracle/checks/layout-rules.ts
+init_define_process_env();
 var t40 = __toESM(require_lib3());
 
+// src/code/oracle/checks/canvas-config.ts
+init_define_process_env();
+
+// src/code/oracle/checks/overlay-dialect.ts
+init_define_process_env();
+
 // src/code/oracle/checks/svg-shape-dialect.ts
+init_define_process_env();
 var t41 = __toESM(require_lib3());
 
 // src/code/oracle/checks/motion-appear.ts
+init_define_process_env();
 var t42 = __toESM(require_lib3());
 
 // src/code/oracle/checks/code-override.ts
+init_define_process_env();
 var t43 = __toESM(require_lib3());
 
 // src/code/oracle/checks/ticker.ts
+init_define_process_env();
 var t44 = __toESM(require_lib3());
 var TAG = "RevymeTicker";
 var SHAPE = `<${TAG} speed={${TICKER_DEFAULTS.speed}} direction="left"><motion.div data-id="logos" style={{ display: 'flex', gap: '24px', \u2026 }}>\u2026items\u2026</motion.div></${TAG}>`;
 
 // src/code/oracle/checks/motion-tag.ts
+init_define_process_env();
 var t45 = __toESM(require_lib3());
 var MOTION_ONLY_PROPS = /* @__PURE__ */ new Set([
   "layout",
@@ -68344,19 +68099,31 @@ var MOTION_ONLY_PROPS = /* @__PURE__ */ new Set([
   "dragMomentum"
 ]);
 
+// src/code/oracle/checks/translation-dialect.ts
+init_define_process_env();
+
+// src/code/oracle/checks/media-band-dialect.ts
+init_define_process_env();
+
 // src/code/project/breakpoint-start-migration.ts
+init_define_process_env();
 init_canvas_config();
 
 // src/code/project/breakpoint-relabel.ts
+init_define_process_env();
 var t46 = __toESM(require_lib3());
 var import_traverse10 = __toESM(require_lib8());
 init_ast_utils();
 
 // src/code/generation/viewport-width-rewrite.ts
+init_define_process_env();
 init_animation_scope();
 
 // src/code/project/breakpoint-relabel.ts
 var traverseAst3 = typeof import_traverse10.default === "function" ? import_traverse10.default : import_traverse10.default.default;
+
+// src/code/project/breakpoint-ladder.ts
+init_define_process_env();
 
 // src/code/project/breakpoint-start-migration.ts
 init_debug_trace();
@@ -68366,9 +68133,11 @@ init_canvas_config();
 init_media_important();
 
 // src/code/oracle/checks/link-rules.ts
+init_define_process_env();
 init_generator_attrs();
 
 // src/code/oracle/checks/cms-dialect.ts
+init_define_process_env();
 var t47 = __toESM(require_lib3());
 var import_parser29 = __toESM(require_lib5());
 init_map_gen();
@@ -68376,18 +68145,22 @@ init_cms_root_mount();
 init_generator_attrs();
 
 // src/code/oracle/checks/cms-locale-dialect.ts
+init_define_process_env();
 var t48 = __toESM(require_lib3());
 
 // src/code/oracle/checks/fidelity.ts
+init_define_process_env();
 var t49 = __toESM(require_lib3());
 init_constants();
 
 // src/code/oracle/checks/surface-dialect.ts
+init_define_process_env();
 var t50 = __toESM(require_lib3());
 init_constants();
 var MOTION_CHANNELS = /* @__PURE__ */ new Set(["x", "y", "z", ...MOTION_TRANSFORM_PROPS]);
 
 // src/code/oracle/checks/conditional-render-dialect.ts
+init_define_process_env();
 var t51 = __toESM(require_lib3());
 var import_parser30 = __toESM(require_lib5());
 init_generator_utils();
@@ -68413,6 +68186,7 @@ var READABLE_HANDLERS = /* @__PURE__ */ new Set([
 ]);
 
 // src/code/oracle/checks/code-component-style.ts
+init_define_process_env();
 var t52 = __toESM(require_lib3());
 
 // src/code/import/framer-native/pages.ts
@@ -68422,28 +68196,36 @@ init_generator_attrs();
 init_code_override_gen();
 
 // src/code/import/framer-native/responsive.ts
+init_define_process_env();
 init_css_utils();
 init_debug_trace();
 init_canvas_config();
 
 // src/code/import/framer-native/scene.ts
+init_define_process_env();
 init_debug_trace();
 init_rich_text_runs();
 init_id_utils();
 
+// src/editor/tools/FormTool/form-config.ts
+init_define_process_env();
+
 // src/code/import/framer-native/scene-instances.ts
+init_define_process_env();
 var t55 = __toESM(require_lib3());
 init_debug_trace();
 init_ast_utils();
 init_generator_utils();
 
 // src/code/import/framer-native/bindings.ts
+init_define_process_env();
 init_debug_trace();
 init_id_utils();
 init_generator_utils();
 init_cms_gen();
 
 // src/code/import/framer-native/components.ts
+init_define_process_env();
 var t54 = __toESM(require_lib3());
 init_debug_trace();
 init_id_utils();
@@ -68451,9 +68233,11 @@ init_constants();
 init_css_utils();
 
 // src/code/generation/create-component-gen.ts
+init_define_process_env();
 init_ast_utils();
 
 // src/code/generation/extract-component-gen.ts
+init_define_process_env();
 init_ast_utils();
 init_debug_trace();
 
@@ -68470,12 +68254,15 @@ init_generator_utils();
 init_ast_utils();
 
 // src/code/import/framer-native/interactions.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/import/framer-native/links.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/import/framer-native/cms.ts
+init_define_process_env();
 init_debug_trace();
 function sourceCollectionId(identifier22) {
   const match = typeof identifier22 === "string" && /^local-module:collection\/([^:]+):/.exec(identifier22);
@@ -68484,10 +68271,12 @@ function sourceCollectionId(identifier22) {
 }
 
 // src/code/import/framer-native/overlays.ts
+init_define_process_env();
 init_debug_trace();
 init_css_utils();
 
 // src/code/generation/instance-presence-gen.ts
+init_define_process_env();
 var t56 = __toESM(require_lib3());
 init_debug_trace();
 init_ast_utils();
@@ -68500,6 +68289,7 @@ init_cms_gen();
 init_overlay_parser();
 
 // src/code/features/template-props.ts
+init_define_process_env();
 init_debug_trace();
 
 // src/code/import/framer-native/pages.ts
@@ -69228,10 +69018,10 @@ export {
 };
 /*! Bundled license information:
 
-react/cjs/react.development.js:
+react/cjs/react.production.js:
   (**
    * @license React
-   * react.development.js
+   * react.production.js
    *
    * Copyright (c) Meta Platforms, Inc. and affiliates.
    *
@@ -69239,10 +69029,10 @@ react/cjs/react.development.js:
    * LICENSE file in the root directory of this source tree.
    *)
 
-react-dom/cjs/react-dom.development.js:
+react-dom/cjs/react-dom.production.js:
   (**
    * @license React
-   * react-dom.development.js
+   * react-dom.production.js
    *
    * Copyright (c) Meta Platforms, Inc. and affiliates.
    *
@@ -69250,10 +69040,10 @@ react-dom/cjs/react-dom.development.js:
    * LICENSE file in the root directory of this source tree.
    *)
 
-react/cjs/react-jsx-runtime.development.js:
+react/cjs/react-jsx-runtime.production.js:
   (**
    * @license React
-   * react-jsx-runtime.development.js
+   * react-jsx-runtime.production.js
    *
    * Copyright (c) Meta Platforms, Inc. and affiliates.
    *
