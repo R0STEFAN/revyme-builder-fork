@@ -72,15 +72,29 @@ export function parseSourceBuiltInFont(value: string): { family: string; axes: R
 
 export function mapSourceTypography(p: SourceProperties): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [source, target] of Object.entries({ fontSize: 'fontSize', textColor: 'color', textAlignment: 'textAlign', textTransform: 'textTransform', textDecoration: 'textDecoration' })) {
+  for (const [source, target] of Object.entries({ textColor: 'color', textAlignment: 'textAlign', textTransform: 'textTransform', textDecoration: 'textDecoration' })) {
     if (typeof p[source] === 'string') out[target] = p[source] as string;
+  }
+  if (typeof p.fontSize === 'number') {
+    out.fontSize = `${p.fontSize}px`;
+  } else if (typeof p.fontSize === 'string') {
+    out.fontSize = p.fontSize.endsWith('px') || p.fontSize.endsWith('rem') || p.fontSize.endsWith('em') || p.fontSize.endsWith('%') ? p.fontSize : `${p.fontSize}px`;
   }
   for (const key of ['lineHeight', 'letterSpacing']) {
     const value = p[key];
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'string') out[key] = `${value[0]}${value[1]}`;
   }
   normalizeSourceLineHeight(out);
-  const font = typeof p.font === 'string' ? (parseSourceGoogleFont(p.font) ?? parseSourceBuiltInFont(p.font)) : undefined;
+  let font: { family: string; axes: Record<string, number> } | undefined;
+  if (typeof p.font === 'string') {
+    font = parseSourceGoogleFont(p.font) ?? parseSourceBuiltInFont(p.font);
+  } else if (p.font && typeof p.font === 'object' && typeof (p.font as any).fontFamily === 'string') {
+    const fObj = p.font as any;
+    const wght = fObj.faceDescriptors?.weight ?? 400;
+    const axes: Record<string, number> = { wght };
+    if (fObj.faceDescriptors?.italic) axes.ital = 1;
+    font = { family: fObj.fontFamily, axes };
+  }
   if (font) {
     out.fontFamily = JSON.stringify(font.family);
     out.fontWeight = String(font.axes.wght);

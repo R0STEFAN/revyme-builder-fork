@@ -82,12 +82,11 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       return '{children}';
     }
     const styles = options.stylesFor(node, parent);
-    if (styles.display === 'none') delete styles.display;
     if (isSourceCodeComponent(node)) {
       const identifier = String(node.properties.codeComponentIdentifier ?? '');
       const isZeroSize = (node.properties.width === 0 && node.properties.height === 0) ||
         (styles.width === '0px' && styles.height === '0px');
-      if (isZeroSize || identifier.includes('SmoothScroll')) {
+      if (isZeroSize || identifier.includes('SmoothScroll') || identifier.includes('Noise')) {
         return '';
       }
     }
@@ -274,8 +273,18 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
 </div>`;
       }
       const displayName = name === 'default' || name.toLowerCase() === 'default' ? 'Code component' : name;
-      const label = escapeJsxText(`Заглушка · ${displayName}`).replace(/"/g, '&quot;');
-      return `<div data-id="${targetId}" data-name="${label}" style={${sourceStyleLiteral({ backgroundColor: '#eeeeee', ...styles })}}></div>`;
+      const placeholderLabel = escapeJsxText(`Заглушка · ${displayName}`).replace(/"/g, '&quot;');
+      if (identifier.includes('BlurGradient')) {
+        return `<div data-id="${targetId}" data-name="${placeholderLabel}" style={${sourceStyleLiteral({ pointerEvents: 'none', ...styles })}}></div>`;
+      }
+      if (identifier.includes('Time')) {
+        return `<span data-id="${targetId}" data-name="${placeholderLabel}" style={${sourceStyleLiteral(styles)}}>12:00 PM</span>`;
+      }
+      const validChildren = node.children.filter(c => identity[c]);
+      if (validChildren.length > 0) {
+        return `<div data-id="${targetId}" data-name="${placeholderLabel}" style={${sourceStyleLiteral(styles)}}>\n${validChildren.map(child => emit(child, node)).filter(Boolean).join('\n')}\n</div>`;
+      }
+      return `<div data-id="${targetId}" data-name="${placeholderLabel}" style={${sourceStyleLiteral(styles)}}></div>`;
     }
     let tag = 'div', content = '', attributes = '';
     if (node.kind === 'RichTextNode') {
