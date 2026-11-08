@@ -279,8 +279,9 @@ EXAMPLES:
       );
       return 1;
     }
-  } else if (flags['input-file']) {
-    if (typeof flags['input-file'] !== 'string') {
+  } else if (flags['input-file'] || flags.inputFile) {
+    const inputFileVal = flags['input-file'] ?? flags.inputFile;
+    if (typeof inputFileVal !== 'string') {
       printErr(
         JSON.stringify(
           {
@@ -298,7 +299,7 @@ EXAMPLES:
       );
       return 1;
     }
-    const filePath = path.resolve(process.cwd(), flags['input-file']);
+    const filePath = path.resolve(process.cwd(), inputFileVal);
     if (!fs.existsSync(filePath)) {
       printErr(
         JSON.stringify(
@@ -358,24 +359,24 @@ EXAMPLES:
       );
       return 1;
     }
-  } else {
-    // Gather key-value arguments from flags
-    const reservedFlags = new Set([
-      'project-id', 'projectId',
-      'branch-id', 'branchId',
-      'api', 'apiUrl',
-      'input-file', 'inputFile',
-      'stdin',
-      'dry-run', 'dryRun',
-      'format',
-    ]);
-    for (const [key, val] of Object.entries(flags)) {
-      if (!reservedFlags.has(key)) {
-        inputData[key] = val;
-        const camel = kebabToCamel(key);
-        if (camel !== key) {
-          inputData[camel] = val;
-        }
+  }
+
+  // Gather key-value arguments from flags
+  const reservedFlags = new Set([
+    'project-id', 'projectId',
+    'branch-id', 'branchId',
+    'api', 'apiUrl',
+    'input-file', 'inputFile',
+    'stdin',
+    'dry-run', 'dryRun',
+    'format',
+  ]);
+  for (const [key, val] of Object.entries(flags)) {
+    if (!reservedFlags.has(key)) {
+      if (inputData[key] === undefined) inputData[key] = val;
+      const camel = kebabToCamel(key);
+      if (camel !== key && inputData[camel] === undefined) {
+        inputData[camel] = val;
       }
     }
   }
