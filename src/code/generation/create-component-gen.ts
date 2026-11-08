@@ -28,6 +28,7 @@
 
 import { parseJSX, findFirstElementByDataId } from '@/code/parsing/ast-utils';
 import { serializeVariantConfig } from '@/code/variants/variant-config';
+import { PARSER_TRANSPARENT_TAGS } from '@/code/parsing/transparent-tags';
 import { setPropTypeInCode } from '@/code/components/prop-meta';
 import { convertRootStyleForMaster } from './extract-component-gen';
 import { trace } from '@/shared/debug-trace';
@@ -263,7 +264,7 @@ function buildFrom(
         enter(childPath: any) {
           const childTag = childPath.node.openingElement?.name;
           const childName = childTag?.type === 'JSXIdentifier' ? (childTag.name as string) : '';
-          if (childName && childName[0] !== childName[0].toLowerCase() && !nestedInstance) {
+          if (childName && childName[0] !== childName[0].toLowerCase() && !PARSER_TRANSPARENT_TAGS.has(childName) && !nestedInstance) {
             nestedInstance = childName;
           }
         },

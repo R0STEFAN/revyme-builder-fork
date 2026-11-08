@@ -133,8 +133,10 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     if (!target.tolerant && result.diagnostics.length) return result;
     const fatalInit = result.diagnostics.filter(d => d.code === 'SOURCE_CAPTURE_INVALID');
     if (fatalInit.length) return result;
-    const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
-    const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
+    const originals = (target.uploadedAssets || target.tolerant)
+      ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets ?? {}, { tolerant: target.tolerant })
+      : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
+    const assets = (target.uploadedAssets || target.tolerant) ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
     const codeComponents = emitNativeCodeComponents(graph, identity, { skipUnsupported: true });
     const cms = emitNativeCms(graph, identity, { assets: assets.assets, colorNames });

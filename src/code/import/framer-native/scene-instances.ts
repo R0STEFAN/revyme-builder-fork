@@ -112,17 +112,18 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
             const entries = Object.entries(sourceRecord(linkRec.pathVariables) ?? {});
             if (entries.length === 1) {
               const [paramId, rawBinding] = entries[0];
-              const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId: id });
-              if (binding.kind === 'field' && binding.collectionId === targetCollectionId && binding.sourceId === paramId && binding.valueType === 'slug') {
+              const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId: id, tolerant: options.tolerant });
+              if (binding.kind === 'field' && (binding.collectionId === targetCollectionId || options.tolerant)) {
                 const prefix = targetRoute.slice(0, -'/[slug]'.length);
                 const propName = nativePropName(identity, masterId, sourceProp);
-                result = setTagAttr(result, identity[id], propName, `{\`${prefix}/\${${binding.itemVar}?._slug ?? ''}\`}`);
+                const slugAccess = binding.fieldId.includes('previous') || binding.fieldId.includes('next') ? `${binding.itemVar}?.${binding.fieldId}` : `${binding.itemVar}?._slug`;
+                result = setTagAttr(result, identity[id], propName, `{\`${prefix}/\${${slugAccess} ?? ''}\`}`);
                 continue;
               }
             }
           }
         }
-        mapped = sourceStaticLinkValue(mapped, options.routes);
+        mapped = sourceStaticLinkValue(mapped, options.routes, { tolerant: options.tolerant });
       }
       if (cssImage && typeof mapped === 'string' && mapped) mapped = `url(${mapped})`;
       result = bindSourcePropInCode(result, identity[id], nativePropName(identity, masterId, sourceProp), mapped, {
@@ -130,6 +131,7 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
         ...(cssImage ? { cssImage: true } : {}),
         ...(variable.type === 'collectionreference' ? { referenceCollectionId: sourceCollectionId(variable.dataIdentifier) } : {}),
         assets,
+        tolerant: options.tolerant,
       });
     }
   }

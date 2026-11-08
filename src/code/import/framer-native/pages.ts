@@ -262,7 +262,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const imageFieldFor = (value: unknown, node: ResolvedSourceNode) => {
         if (isTemplate || sourceRecord(value)?.type !== 'variableReference') return;
         try {
-          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
+          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId, tolerant: options.tolerant });
           if (binding.kind === 'field' && ['image', 'file'].includes(binding.valueType)) return binding;
         } catch {
           return undefined;
@@ -274,7 +274,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return undefined;
         try {
-          const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
+          const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId, tolerant: options.tolerant });
           if (isTemplate && binding.kind === 'variable' && binding.providerId === id && binding.valueType === 'boolean') return binding;
           if (!isTemplate && ((binding.kind === 'field' && binding.valueType === 'boolean') || (binding.kind === 'transform' && binding.name === 'isSet' && binding.input.kind === 'field'))) return binding;
         } catch {
@@ -328,7 +328,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         isNeverVisible,
         intrinsicImageFor: node => { const field = intrinsicImageFieldFor(node); return field ? `${field.itemVar}.${field.fieldId}` : undefined; },
         expressionFor: (value, node) => {
-          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
+          const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId, tolerant: options.tolerant });
           const expr = (b: import('./bindings').NativeBinding): string => {
             if (b.kind === 'field') {
               if (b.fieldId === 'repeater_item_count') {
@@ -543,7 +543,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         const node = resolveSourceNode(graph, nodeId);
         const pageLink = sourceRecord(node.properties.link);
         if (isTemplate && pageLink?.type === 'variableReference') {
-          const binding = resolveSourceBinding(node.properties.link, { graph, identity, nodeId });
+          const binding = resolveSourceBinding(node.properties.link, { graph, identity, nodeId, tolerant: options.tolerant });
           if (binding.kind !== 'variable' || binding.providerId !== id || binding.valueType !== 'link') throw new Error(`Template link on ${nodeId} requires its native variable adapter`);
           code = convertToMotionLinkInCode(code, identity[nodeId]);
           code = setTagAttr(code, identity[nodeId], 'href', `{${binding.name}}`);
@@ -558,7 +558,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           const entries = Object.entries(sourceRecord(pageLink.pathVariables) ?? {});
           if (entries.length !== 1) throw new Error(`Source page link parameters on ${nodeId} require their native adapter`);
           const [paramId, rawBinding] = entries[0];
-          const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId });
+          const binding = resolveSourceBinding(rawBinding, { graph, identity, nodeId, tolerant: options.tolerant });
           if (binding.kind !== 'field' || binding.collectionId !== targetCollectionId || binding.sourceId !== paramId || binding.valueType !== 'slug' || graph.nodes.get(binding.providerId)?.kind === 'WebPageNode') throw new Error(`Source page link binding on ${nodeId} requires its native adapter`);
           const prefix = targetRoute.slice(0, -'/[slug]'.length);
           code = convertToMotionLinkInCode(code, identity[nodeId]);

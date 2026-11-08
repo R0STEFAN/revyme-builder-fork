@@ -229,7 +229,7 @@ export function sourceGlobalPageEffect(value: unknown): PageEffect | undefined {
     if (!transitionRecord || !spec) throw new Error('Missing source page effect transition');
     let transition: TransitionConfig;
     if (spec.type === 'tween') {
-      const bezier = Array.isArray(spec.ease) ? (spec.ease as [number, number, number, number])
+      const bezier = Array.isArray(spec.ease) ? (spec.ease as unknown as [number, number, number, number])
         : typeof spec.ease === 'string' && spec.ease.startsWith('[') ? JSON.parse(spec.ease) as [number, number, number, number] : undefined;
       if (spec.ease !== undefined && !bezier) throw new Error(`Source page effect easing ${spec.ease} requires a bezier adapter`);
       transition = { kind: 'ease', ease: bezier ? 'custom' : 'easeInOut', bezier: bezier ?? [...DEFAULT_BEZIER], duration: Number(spec.duration ?? 0.4), delay: Number(spec.delay ?? 0) };

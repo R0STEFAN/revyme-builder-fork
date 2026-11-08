@@ -81,16 +81,28 @@ export function nativePropName(identity: Record<string, string>, scopeId: string
 function valueExpression(value: unknown, node: ResolvedSourceNode, context: SourceMappingContext, property: string, identity?: Record<string, string>): string {
   const unwrapped = sourceRecord(value) && 'value' in (value as object) ? (value as any).value : value;
   const target = unwrapped !== undefined ? unwrapped : value;
-  if (identity && context.graph && sourceRecord(target)?.type === 'variableReference') {
-    const binding = resolveSourceBinding(target, { graph: context.graph, identity, nodeId: node.sourceId });
-    if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
-    if (binding.kind === 'variable') return binding.name;
-    throw new Error(`Unsupported expression binding ${binding.kind} on ${node.sourceId}`);
+  if (identity && context.graph && (sourceRecord(target)?.type === 'variableReference' || sourceRecord(target)?.type === 'computedValue')) {
+    try {
+      const binding = resolveSourceBinding(target, { graph: context.graph, identity, nodeId: node.sourceId });
+      if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
+      if (binding.kind === 'variable') return binding.name;
+      if (binding.kind === 'literal') return JSON.stringify(String(binding.value ?? ''));
+    } catch {
+      // Fall through to style/text resolution
+    }
   }
   const mapped = sourceStyleValue(target, node, context, property);
-  if (mapped === undefined) throw new Error(`Unresolved ${property} on ${node.sourceId}`);
-  const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(mapped);
-  return binding ? binding[1] : JSON.stringify(mapped);
+  if (mapped !== undefined) {
+    const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(mapped);
+    return binding ? binding[1] : JSON.stringify(mapped);
+  }
+  if (property === 'textContent') {
+    const staticText = typeof node.properties.html === 'string'
+      ? node.properties.html.replace(/<[^>]+>/g, '').trim()
+      : '';
+    return JSON.stringify(staticText);
+  }
+  throw new Error(`Unresolved ${property} on ${node.sourceId}`);
 }
 
 /** Build the canonical shell, then use native transforms for states and links. */
@@ -130,9 +142,15 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           negated = true;
           binding = binding.input;
         }
+        if (binding.kind === 'transform' && binding.name === 'convertFromString') return;
         if (binding.kind !== 'variable' || binding.providerId !== scopeId || binding.valueType !== 'boolean') return undefined;
         return { ...binding, negated };
       };
+      const rootWidths = new Set(
+        scope.children
+          .map(id => resolveSourceNode(graph, id).properties.width)
+          .filter((w): w is number => typeof w === 'number')
+      );
       const walkTree = (id: string): string[] => [id, ...resolveSourceNode(graph, id).children.flatMap(walkTree)];
       const hasInFlowVariantVisibility = walkTree(primaryId).some(id => {
         if (id === primaryId) return false;
@@ -171,6 +189,12 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (node.sourceId === primaryId && styles.height && /^\d+(?:\.\d+)?px$/.test(styles.height)) {
           if (!styles.minHeight) styles.minHeight = styles.height;
           if (hasInFlowVariantVisibility) styles.height = 'auto';
+        }
+        if (node.sourceId !== primaryId && styles.width) {
+          const m = /^(\d+(?:\.\d+)?)px$/.exec(styles.width);
+          if (m && rootWidths.has(parseFloat(m[1])) && parseFloat(m[1]) > 32) {
+            styles.width = '100%';
+          }
         }
         return styles;
       };
@@ -505,7 +529,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         const ref = options.overrides?.[identifier];
         if (!ref) {
           if (identifier.includes('withPress') || identifier.includes('Press')) {
-            code = setMotionPropScopedValue(code, identity[id], 'whileTap', { scale: '0.97' });
+            code = setMotionPropScopedValue(code, identity[id], 'whileTap', { scale: '0.97' }, null);
           } else {
             result.diagnostics.push({ code: 'SOURCE_COMPONENT_UNSUPPORTED', sourceId: scopeId, message: `Original code override adapter required on ${id}: ${identifier}` });
             trace.action('framer-native.skipUnsupportedCodeOverride', { id, identifier });

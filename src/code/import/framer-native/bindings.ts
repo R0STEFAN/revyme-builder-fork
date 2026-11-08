@@ -14,7 +14,7 @@ export type NativeBinding =
   | { kind: 'variable'; providerId: string; sourceId: string; name: string; valueType: string }
   | { kind: 'field'; providerId: string; collectionId: string; fieldId: string; sourceId: string; itemVar: string; valueType: string }
   | { kind: 'reference'; collectionId: string; rowId: string | string[] | null }
-  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate'; input: NativeBinding; argument?: NativeBinding; value?: string };
+  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate' | 'toString' | 'convertFromString'; input: NativeBinding; argument?: NativeBinding; value?: string; cases?: Array<{ from: unknown; to: unknown }>; default?: unknown };
 
 export interface BindingContext {
   graph: SourceGraph;
@@ -26,6 +26,7 @@ export interface BindingContext {
   referenceCollectionId?: string;
   cssImage?: boolean;
   assets?: Record<string, string>;
+  tolerant?: boolean;
 }
 export interface NativeSourceQuery {
   collectionId: string;
@@ -64,6 +65,9 @@ function fieldBinding(context: BindingContext, providerId: string, collectionId:
     const [head, tail] = sourceId.split('.', 2);
     const headField = sourceVariables(context.graph, collectionId).find(variable => variable.id === head);
     if (!headField) {
+      if (head === 'previousItemId' || head === 'nextItemId') {
+        return { kind: 'field', providerId, collectionId, sourceId, fieldId: `${head}_${tail}`, itemVar: itemVariable(context, providerId), valueType: 'slug' };
+      }
       if (!context.tolerant) throw new Error(`Missing source variable/field ${head} on ${providerId}`);
       return { kind: 'field', providerId, collectionId, sourceId, fieldId: sourceId, itemVar: itemVariable(context, providerId), valueType: 'string' };
     }
@@ -86,8 +90,8 @@ function fieldBinding(context: BindingContext, providerId: string, collectionId:
   }
   const field = sourceVariables(context.graph, collectionId).find(variable => variable.id === sourceId);
   if (!field && sourceId !== 'id') {
-    if (sourceId === 'repeater_item_count') {
-      return { kind: 'field', providerId, collectionId, sourceId, fieldId: 'repeater_item_count', itemVar: itemVariable(context, providerId), valueType: 'number' };
+    if (sourceId === 'repeater_item_count' || sourceId === 'previousItemId' || sourceId === 'nextItemId') {
+      return { kind: 'field', providerId, collectionId, sourceId, fieldId: sourceId, itemVar: itemVariable(context, providerId), valueType: sourceId === 'repeater_item_count' ? 'number' : 'string' };
     }
     const isLegacyField = collection.children.some(childId => context.graph.nodes.get(childId)?.raw[`$control__${sourceId}`] !== undefined);
     if (!isLegacyField) {
@@ -104,9 +108,13 @@ function applyTransforms(input: NativeBinding, raw: unknown, context: BindingCon
   let result = input;
   for (const item of raw) {
     const transform = sourceRecord(item);
-    if (!transform || !['isSet', 'equals', 'isIncludedIn', 'prefix', 'arrayToArray', 'negate', 'toString'].includes(String(transform.name))) throw new Error(`Unsupported source transform ${String(transform?.name)}`);
-    const name = transform.name as 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate' | 'toString';
+    if (!transform || !['isSet', 'equals', 'isIncludedIn', 'prefix', 'arrayToArray', 'negate', 'toString', 'convertFromString'].includes(String(transform.name))) throw new Error(`Unsupported source transform ${String(transform?.name)}`);
+    const name = transform.name as 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate' | 'toString' | 'convertFromString';
     if (name === 'isSet' || name === 'arrayToArray' || name === 'negate' || name === 'toString') result = { kind: 'transform', name, input: result };
+    else if (name === 'convertFromString') {
+      const cases = Array.isArray(transform.cases) ? transform.cases.map((c: any) => ({ from: c.from, to: c.to })) : [];
+      result = { kind: 'transform', name: 'convertFromString', input: result, cases, default: transform.default };
+    }
     else if (name === 'prefix') result = { kind: 'transform', name, input: result, value: String(transform.value ?? '') };
     else {
       if (!('value' in transform)) throw new Error(`Missing argument for ${name}`);
@@ -131,7 +139,15 @@ export function resolveSourceBinding(value: unknown, context: BindingContext): N
       return fieldBinding(context, providerId, sourceCollectionId(provider.raw.dataIdentifier), sourceId);
     }
     const variable = sourceVariables(context.graph, providerId).find(variable => variable.id === sourceId);
-    if (!variable) throw new Error(`Missing source variable/field ${sourceId} on ${providerId}`);
+    if (!variable) {
+      if (sourceId === 'previousItemId' || sourceId === 'nextItemId') {
+        return { kind: 'field', providerId, collectionId: '', sourceId, fieldId: sourceId, itemVar: 'item', valueType: 'string' };
+      }
+      if (context.tolerant) {
+        return { kind: 'variable', providerId, sourceId, name: sourceId, valueType: 'string' };
+      }
+      throw new Error(`Missing source variable/field ${sourceId} on ${providerId}`);
+    }
     return { kind: 'variable', providerId, sourceId, name: nativePropName(context.identity, providerId, sourceId), valueType: String(variable.type === 'controlReference' ? variable.expectedType : variable.type) };
   }
   if (record?.type !== undefined) throw new Error(`Unsupported source binding ${String(record.type)}`);
@@ -257,8 +273,8 @@ export function emitSourceQueryInCode(code: string, parentId: string, providerId
     }
     if (!argument || argument.kind !== 'literal' && argument.kind !== 'reference') return unsupported();
     const value = argument.kind === 'literal' ? argument.value : argument.rowId;
-    if (target.name === 'equals') return [{ field: target.input.fieldId, operator: negated ? 'not_equals' : 'equals', value }];
-    if (target.name === 'isIncludedIn' && Array.isArray(value)) return [{ field: target.input.fieldId, operator: negated ? 'not_in' : 'in', value }];
+    if (target.name === 'equals') return [{ field: target.input.fieldId, operator: negated ? 'not_equals' : 'equals', value } as FilterConfig];
+    if (target.name === 'isIncludedIn' && Array.isArray(value)) return [{ field: target.input.fieldId, operator: negated ? 'not_in' : 'in', value } as FilterConfig];
     return unsupported();
   });
   if (findJSXElementByDataId(code, parentId) < 0) throw new Error(`Native query target ${parentId} is missing`);

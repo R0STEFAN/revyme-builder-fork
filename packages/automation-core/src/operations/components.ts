@@ -439,6 +439,7 @@ export const componentsExtractOperation: Operation<
     name: string;
     sourceFile: string;
     nodeId: string;
+    rootSize?: Record<string, string>;
   },
   {
     changes: FileChange[];
@@ -457,7 +458,7 @@ export const componentsExtractOperation: Operation<
     name: z.string().regex(/^[A-Z][A-Za-z0-9]*$/, 'Component name must be PascalCase'),
     sourceFile: z.string().min(1),
     nodeId: z.string().min(1),
-    rootSize: z.record(z.string()).optional(),
+    rootSize: z.record(z.string(), z.string()).optional(),
   }),
   async execute(snapshot, input) {
     const sourceCode = snapshot.files.get(input.sourceFile);

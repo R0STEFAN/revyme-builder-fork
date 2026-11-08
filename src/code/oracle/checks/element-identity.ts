@@ -159,6 +159,7 @@ function checkComponentFluidWidth(code: string, ast: t.File, v: OracleViolation[
       const wn = widthNode(so);
       const cs = pxSet(wn);
       if (!cs || cs.length === 0) return;
+      if (cs.every((w) => w <= 32)) return;
       // Every width this child can take is an artboard width ⇒ pinned.
       if (!cs.every((w) => rootWidths.has(w))) return;
       const attrs = jsxAttrs(path.node.openingElement);

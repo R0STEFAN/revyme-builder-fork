@@ -615,29 +615,29 @@ export function extractTransferSlice(
 
     // Extract text effects if enabled
     let textEffect: FramerSemanticSlice['textEffect'] | undefined;
-    const rawNode = resolved.raw || {};
+    const rawNode = resolved.properties || {};
     if (rawNode.textEffectEnabled) {
       textEffect = {
-        animationType: rawNode.textEffectTokenization || 'character',
+        animationType: (rawNode.textEffectTokenization as any) || 'character',
         trigger: rawNode.textEffectTrigger === 'onMount' ? 'appear' : 'view',
         delay: typeof rawNode.textEffectDelay === 'number' ? rawNode.textEffectDelay : undefined,
-        y: rawNode.textEffectY,
-        skewY: rawNode.textEffectSkewY,
-        opacity: rawNode.textEffectOpacity,
-        transition: rawNode.textEffectTransition,
+        y: rawNode.textEffectY as any,
+        skewY: rawNode.textEffectSkewY as any,
+        opacity: rawNode.textEffectOpacity as any,
+        transition: rawNode.textEffectTransition as any,
       };
     }
 
     // Extract motion & animations
     let motion: FramerSemanticSlice['motion'] | undefined;
-    const transition = rawNode.variantTransition;
+    const transition = rawNode.variantTransition as any;
     if (componentId) {
       const master = graph.nodes.get(componentId);
-      const hoverChild = master?.children.map(cid => graph.nodes.get(cid)).find(c => c && (c.raw?.gesture === 'hover' || c.raw?.replicaInfo?.overrides));
+      const hoverChild = master?.children.map(cid => graph.nodes.get(cid)).find(c => c && ((c.raw as any)?.gesture === 'hover' || (c.raw as any)?.replicaInfo?.overrides));
       if (hoverChild) {
         motion = {
           whileHover: { scale: 1.01 },
-          transition: hoverChild.raw?.variantTransition || transition,
+          transition: (hoverChild.raw as any)?.variantTransition || transition,
         };
       }
     }
@@ -801,7 +801,8 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
     throw new Error(`FRAMER_COMPONENT_NOT_FOUND: SmartComponent "${componentIdOrName}" does not exist in capture`);
   }
 
-  const variables: FramerComponentVariable[] = (compNode.raw.variables || []).map((v: any) => ({
+  const compRaw = compNode.raw as any;
+  const variables: FramerComponentVariable[] = (compRaw.variables || []).map((v: any) => ({
     id: String(v.id ?? ''),
     name: String(v.name ?? v.id ?? ''),
     type: String(v.type ?? 'string'),
@@ -811,10 +812,10 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
   const variantMap = new Map<string, string>();
   for (const cid of compNode.children) {
     const c = graph.nodes.get(cid);
-    variantMap.set(cid, String(c?.raw.name || cid));
+    variantMap.set(cid, String((c?.raw as any)?.name || cid));
   }
   const variableMap = new Map<string, string>();
-  for (const v of compNode.raw.variables || []) {
+  for (const v of compRaw.variables || []) {
     variableMap.set(String(v.id), String(v.name || v.id));
   }
 
@@ -863,7 +864,7 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
   const scanVariantTree = (nodeId: string, variantId: string, variantName: string) => {
     const n = graph.nodes.get(nodeId);
     if (!n) return;
-    const sName = String(n.raw.name || n.id);
+    const sName = String((n.raw as any)?.name || n.id);
     for (const [k, v] of Object.entries(n.raw || {})) {
       if (eventProps.includes(k) && Array.isArray(v)) {
         for (const h of v) handleAction(h, variantId, variantName, n.id, sName, k);
@@ -878,26 +879,28 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
   for (const childId of compNode.children) {
     const child = graph.nodes.get(childId);
     if (!child) continue;
-    const name = String(child.raw.name || (child.raw.replicaInfo?.overrides ? 'Hover' : child.id));
-    const gesture = child.raw.gesture || (child.raw.replicaInfo ? 'hover' : undefined);
-    const isDefault = child.id === compNode.raw.baseVariantId || (!compNode.raw.baseVariantId && child === compNode.children[0]);
-    const transition = child.raw.variantTransition;
+    const childRaw = child.raw as any;
+    const name = String(childRaw.name || (childRaw.replicaInfo?.overrides ? 'Hover' : child.id));
+    const rawGesture = childRaw.gesture || (childRaw.replicaInfo ? 'hover' : undefined);
+    const gesture: 'hover' | 'pressed' | undefined = rawGesture === 'hover' || rawGesture === 'pressed' ? rawGesture : undefined;
+    const isDefault = child.id === compRaw.baseVariantId || (!compRaw.baseVariantId && child.id === compNode.children[0]);
+    const transition = childRaw.variantTransition;
 
     variants.push({
       id: child.id,
       name,
       gesture,
       isDefault,
-      overrides: cleanOverrides(child.raw.replicaInfo?.overrides),
-      transition,
+      overrides: cleanOverrides(childRaw.replicaInfo?.overrides),
+      transition: transition as any,
     });
 
     scanVariantTree(child.id, child.id, name);
 
-    if (child.raw.replicaInfo?.overrides) {
-      for (const [targetId, override] of Object.entries(child.raw.replicaInfo.overrides as Record<string, any>)) {
+    if (childRaw.replicaInfo?.overrides) {
+      for (const [targetId, override] of Object.entries(childRaw.replicaInfo.overrides as Record<string, any>)) {
         const targetNode = graph.nodes.get(targetId);
-        const tName = String(targetNode?.raw.name || targetId);
+        const tName = String((targetNode?.raw as any)?.name || targetId);
         for (const [prop, val] of Object.entries(override as any)) {
           if (eventProps.includes(prop) && Array.isArray(val)) {
             for (const h of val) handleAction(h, child.id, name, targetId, tName, prop);
@@ -923,8 +926,8 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
 
   return {
     id: compNode.id,
-    name: String(compNode.raw.name ?? compNode.id),
-    defaultVariantId: compNode.raw.baseVariantId || compNode.children[0],
+    name: String(compRaw.name ?? compNode.id),
+    defaultVariantId: String(compRaw.baseVariantId || compNode.children[0]),
     variables,
     variants,
     interactions,

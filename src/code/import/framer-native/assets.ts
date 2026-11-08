@@ -11,17 +11,20 @@ export interface NativeAssetPlan {
 export interface NativeAssetResult extends NativeCompileResult { assets: Record<string, string> }
 
 /** Uploaded media keep their native Revyme URLs; source references remain stable. */
-export function resolveUploadedNativeAssets(graph: SourceGraph, identity: Record<string, string>, uploaded: Readonly<Record<string, string>>): NativeAssetResult {
+export function resolveUploadedNativeAssets(graph: SourceGraph, identity: Record<string, string>, uploaded: Readonly<Record<string, string>>, options?: { tolerant?: boolean }): NativeAssetResult {
   const plan = planNativeAssets(graph, identity);
   const result: NativeAssetResult = { files: [], createdIds: [], identity, assets: {}, diagnostics: [...plan.diagnostics] };
   for (const request of plan.requests) {
-    const url = uploaded[request.key];
+    const rawUrl = uploaded[request.key] || (options?.tolerant ? request.url : undefined);
     let valid = false;
-    try { const parsed = new URL(url, 'https://revyme.invalid'); valid = typeof url === 'string' && (url.startsWith('/api/uploads/') || url.startsWith('/assets/') || url.startsWith('https://')) && parsed.protocol === 'https:' && !parsed.username && !parsed.password; } catch { /* invalid native upload */ }
-    if (!valid) { result.diagnostics.push({ code: 'ASSET_UPLOAD_UNAVAILABLE', property: 'assets', message: `Native uploaded media is unavailable for ${request.key}` }); continue; }
-    for (const [reference, path] of Object.entries(plan.assets)) if (path === request.path.slice(6)) result.assets[reference] = url;
+    try { const parsed = new URL(rawUrl ?? '', 'https://revyme.invalid'); valid = typeof rawUrl === 'string' && (rawUrl.startsWith('/api/uploads/') || rawUrl.startsWith('/assets/') || rawUrl.startsWith('https://')) && parsed.protocol === 'https:' && !parsed.username && !parsed.password; } catch { /* invalid native upload */ }
+    if (!valid) {
+      if (!options?.tolerant) result.diagnostics.push({ code: 'ASSET_UPLOAD_UNAVAILABLE', property: 'assets', message: `Native uploaded media is unavailable for ${request.key}` });
+      continue;
+    }
+    for (const [reference, path] of Object.entries(plan.assets)) if (path === request.path.slice(6)) result.assets[reference] = rawUrl!;
   }
-  if (result.diagnostics.length) result.assets = {};
+  if (!options?.tolerant && result.diagnostics.length) result.assets = {};
   return result;
 }
 const PREFIX = 'data:framer/asset-reference,';
