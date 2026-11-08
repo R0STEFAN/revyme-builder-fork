@@ -67,6 +67,22 @@ export interface FramerSemanticSlice {
   media?: { type: 'image' | 'video' | 'vector'; url?: string; svg?: string; alt?: string };
   componentId?: string;
   componentName?: string;
+  motion?: {
+    whileHover?: Record<string, unknown>;
+    whileTap?: Record<string, unknown>;
+    transition?: Record<string, unknown>;
+    appear?: Record<string, unknown>;
+  };
+  textEffect?: {
+    animationType: 'character' | 'word' | 'line' | 'full';
+    trigger?: 'appear' | 'view' | 'section' | 'scroll';
+    delay?: number;
+    y?: number | string;
+    skewY?: number;
+    opacity?: number;
+    transition?: Record<string, unknown>;
+  };
+  variants?: Array<{ id: string; name: string; isDefault?: boolean }>;
   children: FramerSemanticSlice[];
 }
 
@@ -92,6 +108,48 @@ export interface FramerCmsCollection {
 
 export interface FramerTransferCms {
   collections: FramerCmsCollection[];
+}
+
+export interface FramerComponentVariable {
+  id: string;
+  name: string;
+  type: string;
+  initialValue?: unknown;
+}
+
+export interface FramerComponentVariant {
+  id: string;
+  name: string;
+  gesture?: 'hover' | 'pressed';
+  isDefault?: boolean;
+  overrides?: Record<string, unknown>;
+  transition?: {
+    type?: string;
+    stiffness?: number;
+    damping?: number;
+    delay?: number;
+    duration?: number;
+    ease?: unknown;
+  };
+}
+
+export interface FramerComponentInteraction {
+  variantId?: string;
+  variantName?: string;
+  sourceNodeId: string;
+  sourceNodeName?: string;
+  event: string;
+  action: string;
+  targetVariantId?: string;
+}
+
+export interface FramerComponentDetail {
+  id: string;
+  name: string;
+  defaultVariantId?: string;
+  variables: FramerComponentVariable[];
+  variants: FramerComponentVariant[];
+  interactions: FramerComponentInteraction[];
 }
 
 function cleanStyles(styles: Record<string, string>): Record<string, string> {
@@ -551,6 +609,60 @@ export function extractTransferSlice(
       }
     }
 
+    // Extract text effects if enabled
+    let textEffect: FramerSemanticSlice['textEffect'] | undefined;
+    const rawNode = resolved.raw || {};
+    if (rawNode.textEffectEnabled) {
+      textEffect = {
+        animationType: rawNode.textEffectTokenization || 'character',
+        trigger: rawNode.textEffectTrigger === 'onMount' ? 'appear' : 'view',
+        delay: typeof rawNode.textEffectDelay === 'number' ? rawNode.textEffectDelay : undefined,
+        y: rawNode.textEffectY,
+        skewY: rawNode.textEffectSkewY,
+        opacity: rawNode.textEffectOpacity,
+        transition: rawNode.textEffectTransition,
+      };
+    }
+
+    // Extract motion & animations
+    let motion: FramerSemanticSlice['motion'] | undefined;
+    const transition = rawNode.variantTransition;
+    if (componentId) {
+      const master = graph.nodes.get(componentId);
+      const hoverChild = master?.children.map(cid => graph.nodes.get(cid)).find(c => c && (c.raw?.gesture === 'hover' || c.raw?.replicaInfo?.overrides));
+      if (hoverChild) {
+        motion = {
+          whileHover: { scale: 1.01 },
+          transition: hoverChild.raw?.variantTransition || transition,
+        };
+      }
+    }
+    if (rawNode.enterEffectEnabled || rawNode.styleAppearEffectEnabled) {
+      motion = motion || {};
+      motion.appear = {
+        opacity: rawNode.enterEffectOpacity ?? rawNode.styleAppearEffectOpacity ?? 0,
+        y: rawNode.enterEffectY ?? rawNode.styleAppearEffectY ?? 20,
+        transition: rawNode.enterEffectTransition ?? rawNode.styleAppearEffectTransition,
+      };
+    }
+
+    // Extract variants for components
+    let variants: FramerSemanticSlice['variants'] | undefined;
+    if (componentId) {
+      const master = graph.nodes.get(componentId);
+      if (master?.kind === 'SmartComponentNode') {
+        const baseId = master.raw.baseVariantId || master.children[0];
+        variants = master.children.map(cid => {
+          const child = graph.nodes.get(cid);
+          return {
+            id: cid,
+            name: String(child?.raw.name ?? child?.raw.variantName ?? cid),
+            isDefault: cid === baseId,
+          };
+        });
+      }
+    }
+
     // Recurse children
     const children: FramerSemanticSlice[] = [];
     const childIds = resolved.children ?? [];
@@ -573,6 +685,9 @@ export function extractTransferSlice(
       media,
       componentId,
       componentName,
+      motion,
+      textEffect,
+      variants,
       children,
     };
   }
@@ -661,4 +776,108 @@ export function extractTransferCms(input: unknown, collectionId?: string): Frame
   }
 
   return { collections };
+}
+
+/** Extract detailed component definition including variables, variants, transitions, and interactions */
+export function extractTransferComponent(input: unknown, componentIdOrName: string): FramerComponentDetail {
+  trace.fn('agent-slice.extractTransferComponent', { componentIdOrName });
+  const transfer = decodeNativeTransfer(input);
+  const graph = buildSourceGraph(transfer);
+
+  let compNode = graph.nodes.get(componentIdOrName);
+  if (!compNode || compNode.kind !== 'SmartComponentNode') {
+    for (const [_, n] of graph.nodes) {
+      if (n.kind === 'SmartComponentNode' && (String(n.raw.name ?? '').toLowerCase() === componentIdOrName.toLowerCase() || n.id === componentIdOrName)) {
+        compNode = n;
+        break;
+      }
+    }
+  }
+  if (!compNode) {
+    throw new Error(`FRAMER_COMPONENT_NOT_FOUND: SmartComponent "${componentIdOrName}" does not exist in capture`);
+  }
+
+  const variables: FramerComponentVariable[] = (compNode.raw.variables || []).map((v: any) => ({
+    id: String(v.id ?? ''),
+    name: String(v.name ?? v.id ?? ''),
+    type: String(v.type ?? 'string'),
+    initialValue: v.initialValue,
+  }));
+
+  const variants: FramerComponentVariant[] = [];
+  const interactions: FramerComponentInteraction[] = [];
+
+  for (const childId of compNode.children) {
+    const child = graph.nodes.get(childId);
+    if (!child) continue;
+    const name = String(child.raw.name || (child.raw.replicaInfo?.overrides ? 'Hover' : child.id));
+    const gesture = child.raw.gesture || (child.raw.replicaInfo ? 'hover' : undefined);
+    const isDefault = child.id === compNode.raw.baseVariantId || (!compNode.raw.baseVariantId && child === compNode.children[0]);
+    const transition = child.raw.variantTransition;
+    variants.push({
+      id: child.id,
+      name,
+      gesture,
+      isDefault,
+      overrides: child.raw.replicaInfo?.overrides,
+      transition,
+    });
+
+    if (child.raw.replicaInfo?.overrides) {
+      for (const [targetId, override] of Object.entries(child.raw.replicaInfo.overrides as Record<string, any>)) {
+        for (const [prop, val] of Object.entries(override as any)) {
+          if (prop.startsWith('$control__') && val && typeof val === 'object' && (val as any).type === 'eventhandler') {
+            const handlers = Array.isArray((val as any).value) ? (val as any).value : [(val as any).value];
+            for (const h of handlers) {
+              if (h && h.actionIdentifier) {
+                interactions.push({
+                  variantId: child.id,
+                  variantName: name,
+                  sourceNodeId: targetId,
+                  event: prop.replace('$control__', ''),
+                  action: h.actionIdentifier,
+                  targetVariantId: h.controls?.variantId?.value,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function walkBase(nodeId: string) {
+    const n = graph.nodes.get(nodeId);
+    if (!n) return;
+    for (const [k, v] of Object.entries(n.raw || {})) {
+      if (k.startsWith('$control__') && v && typeof v === 'object' && (v as any).type === 'eventhandler') {
+        const handlers = Array.isArray((v as any).value) ? (v as any).value : [(v as any).value];
+        for (const h of handlers) {
+          if (h && h.actionIdentifier) {
+            interactions.push({
+              variantId: 'base',
+              sourceNodeId: nodeId,
+              sourceNodeName: n.raw.name,
+              event: k.replace('$control__', ''),
+              action: h.actionIdentifier,
+              targetVariantId: h.controls?.variantId?.value,
+            });
+          }
+        }
+      }
+    }
+    for (const c of n.children) walkBase(c);
+  }
+
+  const baseId = compNode.raw.baseVariantId || compNode.children[0];
+  if (baseId) walkBase(baseId);
+
+  return {
+    id: compNode.id,
+    name: String(compNode.raw.name ?? compNode.id),
+    defaultVariantId: compNode.raw.baseVariantId || compNode.children[0],
+    variables,
+    variants,
+    interactions,
+  };
 }

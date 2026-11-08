@@ -16,6 +16,7 @@ describe('automation-core: framer-query operations', () => {
     expect(defaultRegistry.get('framer.tokens')).toBeDefined();
     expect(defaultRegistry.get('framer.slice')).toBeDefined();
     expect(defaultRegistry.get('framer.cms')).toBeDefined();
+    expect(defaultRegistry.get('framer.component')).toBeDefined();
   });
 
   it('executes framer.inspect via defaultRegistry', async () => {
@@ -69,6 +70,20 @@ describe('automation-core: framer-query operations', () => {
     const names = result.collections.map((c: any) => c.name);
     expect(names).toContain('Works');
     expect(names).toContain('Category');
+  });
+
+  it('executes framer.component via defaultRegistry', async () => {
+    const op = defaultRegistry.get('framer.component')!;
+    const result = await op.execute(
+      snapshot(),
+      { rawJson: JSON.stringify(capturedUnderline), componentId: 'f03DgVEM5' },
+      context
+    ) as any;
+
+    expect(result.id).toBe('f03DgVEM5');
+    expect(result.name).toBe('Underline Link (Line Out)');
+    expect(result.variants.length).toBeGreaterThanOrEqual(2);
+    expect(result.variables.length).toBeGreaterThanOrEqual(1);
   });
 
   it('reads from snapshot files when filePath is provided', async () => {

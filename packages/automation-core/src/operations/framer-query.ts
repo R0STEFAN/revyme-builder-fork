@@ -9,10 +9,12 @@ import {
   extractTransferTokens,
   extractTransferSlice,
   extractTransferCms,
+  extractTransferComponent,
   type FramerProjectSummary,
   type FramerTransferTokens,
   type FramerSemanticSlice,
   type FramerTransferCms,
+  type FramerComponentDetail,
 } from '@/code/import/framer-native/agent-slice';
 
 const transferCache = new Map<string, unknown>();
@@ -174,8 +176,36 @@ export const framerCmsOperation: Operation<
   },
 };
 
+// 5. framer.component
+export const framerComponentInputSchema = z.object({
+  filePath: z.string().optional(),
+  rawJson: z.string().optional(),
+  componentId: z.string().min(1),
+}).refine(data => data.filePath || data.rawJson, {
+  message: 'Either filePath or rawJson must be provided',
+});
+
+export const framerComponentOperation: Operation<
+  z.infer<typeof framerComponentInputSchema>,
+  FramerComponentDetail
+> = {
+  name: 'framer.component',
+  description: 'Inspect a Framer SmartComponent by ID or name to extract variables, variants, transitions, and interactions',
+  category: 'framer',
+  kind: 'read',
+  permit: 'read',
+  environment: 'headless',
+  ownerTask: 'T-framer-mcp',
+  inputSchema: framerComponentInputSchema,
+  async execute(snapshot, input) {
+    const data = getCachedTransfer(input, snapshot);
+    return extractTransferComponent(data, input.componentId);
+  },
+};
+
 // Auto-register operations into defaultRegistry
 defaultRegistry.register(framerInspectOperation);
 defaultRegistry.register(framerTokensOperation);
 defaultRegistry.register(framerSliceOperation);
 defaultRegistry.register(framerCmsOperation);
+defaultRegistry.register(framerComponentOperation);
