@@ -169,7 +169,28 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       }
       if (identifier.includes('MCzl3m2') || name === 'Halftone Mark') {
         const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
-        return `<span data-id="${targetId}"${label} style={${sourceStyleLiteral({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', ...styles })}}><svg data-id="${targetId}-svg" width="14" height="14" viewBox="0 0 24 24"><path data-id="${targetId}-path" d="M13.293 6.293a1 1 0 0 1 1.414 0l5 5a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414-1.414L16.586 13H5a1 1 0 1 1 0-2h11.586l-3.293-3.293a1 1 0 0 1 0-1.414z" fill="currentColor"/></svg></span>`;
+        const markCtrl = node.properties.$control__mark;
+        const markRec = sourceRecord(markCtrl);
+        const markVal = markRec && 'value' in markRec ? markRec.value : markCtrl;
+        let markProp = '';
+        if (markVal && typeof markVal === 'object' && 'startValue' in (markVal as any)) {
+          const sv = (markVal as any).startValue;
+          if (sv && sv.type === 'variableReference' && typeof sv.id === 'string' && typeof sv.providerId === 'string') {
+            const propTarget = identity[sourceVariableKey(sv.providerId, sv.id)] ?? identity[`${sv.providerId}:${sv.id}`];
+            if (propTarget) markProp = `prop${nodeIdToVarNameCapitalised(propTarget)}`;
+          }
+        }
+        const sparkPath = "M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z";
+        const arrowUpRightPath = "M6.4 17.6L16 8V15H18V4.5C18 4.2 17.8 4 17.5 4H7V6H14L4.4 15.6L6.4 17.6Z";
+        const defaultPath = "M13.293 6.293a1 1 0 0 1 1.414 0l5 5a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414-1.414L16.586 13H5a1 1 0 1 1 0-2h11.586l-3.293-3.293a1 1 0 0 1 0-1.414z";
+        let pathAttr = `d="${defaultPath}"`;
+        if (markProp) {
+          pathAttr = `d={(${markProp} === 'EbbUPHGE8' || ${markProp} === 'spark' || ${markProp} === 'sparkle') ? "${sparkPath}" : (${markProp} === 'bLrJ5hoOF' || ${markProp} === 'arrow-up-right') ? "${arrowUpRightPath}" : "${defaultPath}"}`;
+        } else if (typeof markVal === 'string') {
+          if (markVal === 'spark' || markVal === 'sparkle' || markVal === 'EbbUPHGE8') pathAttr = `d="${sparkPath}"`;
+          else if (markVal === 'arrow-up-right' || markVal === 'bLrJ5hoOF') pathAttr = `d="${arrowUpRightPath}"`;
+        }
+        return `<span data-id="${targetId}"${label} style={${sourceStyleLiteral({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', ...styles })}}><svg data-id="${targetId}-svg" width="14" height="14" viewBox="0 0 24 24"><path data-id="${targetId}-path" ${pathAttr} fill="currentColor"/></svg></span>`;
       }
       if (node.properties.dynamicVectorSetIdentifier) {
         const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
