@@ -63,3 +63,21 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
     - `Portfolio` -> `/portfolio/[slug]`
     - `Contact` -> `/contact`
     - `Page` -> `/404`
+
+---
+
+### Issue 4: `--projectId` CamelCase CLI Flag Ignored & Target File Scope Missing
+- **Symptom:**
+  - Invoking CLI operations with `--projectId <id>` (camelCase) caused the CLI to ignore the override and fall back to the project ID saved in `.revymelocal/automation.json`.
+  - In addition, target file paths (`targetFile`, `filePath`) were not propagated to the CLI execution `scope`, leading to potential plan validation hash mismatches for file-specific mutations.
+- **Root Cause:**
+  1. In `packages/cli/src/main.ts`, `loadConfig` was called with `projectId: flags['project-id']`, which did not check `flags.projectId`.
+  2. Flag collection for `inputData` did not exclude camelCase reserved flags (`projectId`, `branchId`, `apiUrl`, `inputFile`, `dryRun`), causing them to leak into operation input payloads.
+  3. `scope` in `main.ts` did not resolve `filePath` from `inputData.targetFile` or `inputData.filePath`.
+- **Fix:**
+  - Updated `main.ts` to check `flags.projectId || flags['project-id']`, `flags.branchId || flags['branch-id']`, and `flags.api || flags.apiUrl`.
+  - Added `reservedFlags` set with both kebab-case and camelCase keys.
+  - Added `scopeFilePath` resolution in `main.ts` matching `mcp.ts`.
+- **Verification:**
+  - Ran `tokens.set --projectId proj-1794157101920-rz0ttf ...` and verified that revision was committed directly to `proj-1794157101920-rz0ttf` and live synchronized with the open editor tab. All 44 CLI tests passed.
+

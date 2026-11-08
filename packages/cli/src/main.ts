@@ -246,9 +246,9 @@ EXAMPLES:
   const { flags, positionals } = parseCliTokens(toolArgs);
 
   const config = loadConfig(undefined, {
-    projectId: flags['project-id'],
-    branchId: flags['branch-id'],
-    apiUrl: flags.api,
+    projectId: flags.projectId || flags['project-id'],
+    branchId: flags.branchId || flags['branch-id'],
+    apiUrl: flags.api || flags.apiUrl,
   });
 
   // Collect input data
@@ -360,8 +360,17 @@ EXAMPLES:
     }
   } else {
     // Gather key-value arguments from flags
+    const reservedFlags = new Set([
+      'project-id', 'projectId',
+      'branch-id', 'branchId',
+      'api', 'apiUrl',
+      'input-file', 'inputFile',
+      'stdin',
+      'dry-run', 'dryRun',
+      'format',
+    ]);
     for (const [key, val] of Object.entries(flags)) {
-      if (!['project-id', 'branch-id', 'api', 'input-file', 'stdin', 'dry-run', 'format'].includes(key)) {
+      if (!reservedFlags.has(key)) {
         inputData[key] = val;
         const camel = kebabToCamel(key);
         if (camel !== key) {
@@ -413,9 +422,17 @@ EXAMPLES:
     return 1;
   }
 
+  const scopeFilePath =
+    (typeof inputData.filePath === 'string' && inputData.filePath) ||
+    (typeof inputData.targetFile === 'string' && inputData.targetFile) ||
+    (typeof inputData.componentFile === 'string' && inputData.componentFile) ||
+    (typeof inputData.sourceFile === 'string' && inputData.sourceFile) ||
+    undefined;
+
   const scope: Scope = {
     projectId: config.projectId || 'meta-project',
     branchId: config.branchId,
+    ...(scopeFilePath ? { filePath: scopeFilePath } : {}),
   };
 
   const screenshotService = createBridgeScreenshotService(config.apiUrl);
