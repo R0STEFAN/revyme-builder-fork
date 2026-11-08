@@ -41,30 +41,34 @@ function matchBrace(code: string, open: number): number {
 
 /** The component function: its destructured param names and the index just past its body's `{`. */
 function componentFunction(code: string): { params: Set<string>; bodyStart: number; start: number } | null {
-  const m = /(?:export\s+default\s+)?function\s+[A-Z]\w*\s*\(/.exec(code);
-  if (!m) return null;
-  const parenOpen = m.index + m[0].length - 1;
-  const parenEnd = matchParen(code, parenOpen);
-  if (parenEnd < 0) return null;
-  const bodyOpen = code.indexOf('{', parenEnd);
-  if (bodyOpen < 0) return null;
-  const sig = code.slice(parenOpen + 1, parenEnd - 1);
-  const patternOpen = sig.indexOf('{');
-  const patternEnd = patternOpen >= 0 ? matchBrace(sig, patternOpen) : -1;
-  const pattern = patternEnd > 0 ? sig.slice(patternOpen + 1, patternEnd) : '';
-  const params = new Set<string>();
-  let depth = 0;
-  let token = '';
-  for (const ch of pattern + ',') {
-    if ('{[('.includes(ch)) depth++;
-    else if ('}])'.includes(ch)) depth--;
-    if (ch === ',' && depth === 0) {
-      const name = /^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)/.exec(token)?.[1];
-      if (name && !token.trim().startsWith('...')) params.add(name);
-      token = '';
-    } else token += ch;
+  const regex = /(?:export\s+default\s+)?function\s+([A-Z]\w*)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(code)) !== null) {
+    if (m[1] === 'MotionLinkBase') continue;
+    const parenOpen = m.index + m[0].length - 1;
+    const parenEnd = matchParen(code, parenOpen);
+    if (parenEnd < 0) continue;
+    const bodyOpen = code.indexOf('{', parenEnd);
+    if (bodyOpen < 0) continue;
+    const sig = code.slice(parenOpen + 1, parenEnd - 1);
+    const patternOpen = sig.indexOf('{');
+    const patternEnd = patternOpen >= 0 ? matchBrace(sig, patternOpen) : -1;
+    const pattern = patternEnd > 0 ? sig.slice(patternOpen + 1, patternEnd) : '';
+    const params = new Set<string>();
+    let depth = 0;
+    let token = '';
+    for (const ch of pattern + ',') {
+      if ('{[('.includes(ch)) depth++;
+      else if ('}])'.includes(ch)) depth--;
+      if (ch === ',' && depth === 0) {
+        const name = /^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)/.exec(token)?.[1];
+        if (name && !token.trim().startsWith('...')) params.add(name);
+        token = '';
+      } else token += ch;
+    }
+    return { params, bodyStart: bodyOpen + 1, start: m.index };
   }
-  return { params, bodyStart: bodyOpen + 1, start: m.index };
+  return null;
 }
 
 /**

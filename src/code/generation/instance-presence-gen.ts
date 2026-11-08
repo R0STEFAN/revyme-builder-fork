@@ -20,10 +20,17 @@ export function wrapInstanceForPresence(code: string, nodeId: string): { code: s
     if (!id || !t.isJSXAttribute(style)) throw new Error('INSTANCE_PRESENCE_REQUIRES_PLACEMENT');
     const placement = t.cloneNode(style, true);
     id.value = t.stringLiteral(contentId);
+    let isAutoHeight = false;
+    if (t.isJSXAttribute(placement) && t.isJSXExpressionContainer(placement.value) && t.isObjectExpression(placement.value.expression)) {
+      const hProp = placement.value.expression.properties.find(p => t.isObjectProperty(p) && (t.isIdentifier(p.key, { name: 'height' }) || t.isStringLiteral(p.key, { value: 'height' }))) as t.ObjectProperty | undefined;
+      if (hProp && t.isStringLiteral(hProp.value) && hProp.value.value === 'auto') {
+        isAutoHeight = true;
+      }
+    }
     style.value = t.jsxExpressionContainer(t.objectExpression([
       t.objectProperty(t.identifier('position'), t.stringLiteral('relative')),
       t.objectProperty(t.identifier('width'), t.stringLiteral('100%')),
-      t.objectProperty(t.identifier('height'), t.stringLiteral('100%')),
+      t.objectProperty(t.identifier('height'), t.stringLiteral(isAutoHeight ? 'auto' : '100%')),
     ]));
     const name = t.jsxMemberExpression(t.jsxIdentifier('motion'), t.jsxIdentifier('div'));
     const outer = t.jsxElement(t.jsxOpeningElement(name, [t.jsxAttribute(t.jsxIdentifier('data-id'), t.stringLiteral(nodeId)), placement]), t.jsxClosingElement(t.cloneNode(name)), [element]);

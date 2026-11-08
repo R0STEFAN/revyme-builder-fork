@@ -41,7 +41,7 @@ import { findInstanceTag } from '@/code/components/instance-prop-overrides';
 import { parsePropMeta } from '@/code/components/prop-meta';
 import { parseScopedScalarExpr } from '@/code/generation/scoped-expr';
 import { setLocaleInstancePropInCode, setInstancePropBaseInCode } from '@/code/generation/responsive-instance-prop-vars-gen';
-import { buildProvidersSource, looksGeneratedProviders } from '@/code/project/providers-gen';
+import { buildProvidersSource, looksGeneratedProviders, healProvidersInLayout } from '@/code/project/providers-gen';
 import { syncLocaleRoutes } from '@/code/project/locale-route-ops';
 import { trace } from '@/shared/debug-trace';
 
@@ -651,20 +651,11 @@ export function ensureIntlScaffold(): void {
   for (const f of new Set(['messages/en.json', 'messages/fr.json', 'messages/es.json', ...configured])) {
     if (!projectFS.readFile(f)) projectFS.writeFile(f, '{}');
   }
-  // Root layout — inject the Providers import + wrap when missing.
+  // Root layout — inject the Providers import + wrap when missing, and heal duplicate Providers imports.
   const layout = projectFS.readFile('app/layout.tsx');
   if (layout) {
-    let healed = layout;
-    if (healed.includes('<Providers>') && !healed.includes("import { Providers } from './providers'")) {
-      healed = `import { Providers } from './providers';\n${healed}`;
-    }
-    if (!healed.includes('<Providers>')) {
-      if (!healed.includes("import { Providers } from './providers'")) healed = `import { Providers } from './providers';\n${healed}`;
-      // Wrap the body children: <body>{children}</body> (with optional attrs).
-      healed = healed.replace(/(<body[^>]*>)([\s\S]*?)(<\/body>)/, (_m, open, inner, close) =>
-        `${open}<Providers>${inner}</Providers>${close}`);
-    }
-    if (healed !== layout && healed.includes('<Providers>')) {
+    const healed = healProvidersInLayout(layout);
+    if (healed !== layout) {
       projectFS.writeFile('app/layout.tsx', healed);
       trace.action('ensureIntlScaffold:layout-healed', {});
     }

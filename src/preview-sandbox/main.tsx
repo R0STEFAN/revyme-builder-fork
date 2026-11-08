@@ -20,6 +20,7 @@ import * as React from 'react';
 import { jsx as reactJsx, jsxs as reactJsxs } from 'react/jsx-runtime';
 import { createRoot } from 'react-dom/client';
 import { captureThumbnail } from './capture-thumbnail';
+import { healProvidersInLayout } from '@/code/project/providers-gen';
 import { ThemeProvider as NextThemeProvider, useTheme } from 'next-themes';
 import { transform } from '@babel/standalone';
 // Bundle motion (framer-motion v12+) so user code can `import { motion } from
@@ -491,8 +492,9 @@ async function preloadProjectOptionalModules(): Promise<void> {
 
 function compileFile(filePath: string): any {
   if (compiledModuleCache.has(filePath)) return compiledModuleCache.get(filePath);
-  const source = projectFiles.get(filePath);
-  if (!source) throw new Error(`preview: file not found in ProjectFS: ${filePath}`);
+  const rawSource = projectFiles.get(filePath);
+  if (!rawSource) throw new Error(`preview: file not found in ProjectFS: ${filePath}`);
+  const source = filePath === 'app/layout.tsx' ? healProvidersInLayout(rawSource) : rawSource;
 
   // Strip Next.js-specific directives that aren't valid TS. `'use client'`
   // and `'use server'` are no-ops in the client-only preview.

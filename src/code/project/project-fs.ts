@@ -10,7 +10,7 @@ import type { ProjectData } from '@/backend/types';
 // with the branching engine (which imports projectFS).
 import type { FileConflict } from '@/code/branching/merge';
 import { registerProjectVersionReader } from '@/canvas/canvas-bridge';
-import { buildProvidersSource } from './providers-gen';
+import { buildProvidersSource, healProvidersInLayout } from './providers-gen';
 import { trace } from '@/shared/debug-trace';
 import { parseJSX } from '@/code/parsing/ast-utils';
 import { findVariantRootId, insertAtRootRestSpread, stampRootDataVariantAttr } from '@/shared/variant-root';
@@ -614,12 +614,15 @@ export class InMemoryProjectFS implements ProjectFS {
     // Without the mount the site silently scrolls natively.
     {
       const layout = this.activeFiles().get('app/layout.tsx');
-      if (layout && this.activeFiles().has(SMOOTH_SCROLL_DATA_PATH) && this.activeFiles().has(SMOOTH_SCROLL_CONTROLLER_PATH)
-          && !layout.includes('<SmoothScroll')) {
-        const healed = ensureSmoothScrollInLayout(layout);
+      if (layout) {
+        let healed = healProvidersInLayout(layout);
+        if (this.activeFiles().has(SMOOTH_SCROLL_DATA_PATH) && this.activeFiles().has(SMOOTH_SCROLL_CONTROLLER_PATH)
+            && !healed.includes('<SmoothScroll')) {
+          healed = ensureSmoothScrollInLayout(healed);
+        }
         if (healed !== layout) {
           this.activeFiles().set('app/layout.tsx', healed);
-          trace.action('project-fs:migrated-smooth-scroll-mount', {});
+          trace.action('project-fs:migrated-layout-mounts', {});
         }
       }
     }

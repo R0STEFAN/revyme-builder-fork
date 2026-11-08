@@ -70,6 +70,18 @@ test('repairs a compact imported layout that wraps Providers without importing i
   expect(fsStore.get('app/layout.tsx')).toBe(first);
 });
 
+test('does not duplicate Providers import when layout uses double quotes, and heals already-duplicated Providers imports', () => {
+  const doubleQuoted = `import type { Metadata } from "next";\nimport "./globals.css";\nimport { Providers } from "./providers";\n\nexport const metadata = {\n  title: "Nara",\n};\n\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return <html><body><Providers>{children}</Providers></body></html>;\n}\n`;
+  fsStore.set('app/layout.tsx', doubleQuoted);
+  ensureIntlScaffold();
+  expect(fsStore.get('app/layout.tsx')).toBe(doubleQuoted);
+
+  const corrupted = `import { Providers } from './providers';\n${doubleQuoted}`;
+  fsStore.set('app/layout.tsx', corrupted);
+  ensureIntlScaffold();
+  expect(fsStore.get('app/layout.tsx')).toBe(doubleQuoted);
+});
+
 describe('commitTranslationText', () => {
   test('non-default locale: transforms JSX, seeds default, writes locale message', () => {
     commitTranslationText({ filePath: FILE, nodeId: 'intro', locale: 'fr', defaultLocale: 'en', text: 'Peintre' });

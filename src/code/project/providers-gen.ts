@@ -206,3 +206,42 @@ export function looksGeneratedProviders(code: string): boolean {
   return code.includes(PROVIDERS_MARKER)
     || (code.includes('messagesByLocale') && code.includes("'locale-change'"));
 }
+
+const PROVIDERS_IMPORT_LINE_RE = /^[ \t]*import\s*\{\s*Providers\s*\}\s*from\s*['"]\.\/providers['"];?[ \t]*\r?\n?/gm;
+const PROVIDERS_IMPORT_CHECK_RE = /import\s*\{[^}]*\bProviders\b[^}]*\}\s*from\s*['"]\.\/providers['"]/;
+const PROVIDERS_JSX_RE = /<Providers[\s>]/;
+
+/** Ensure the root layout imports `Providers` once and wraps `<body>` children in `<Providers>`.
+ *  Also heals layouts where an earlier single-quote check prepended a duplicate `Providers` import
+ *  above an existing double-quoted `import { Providers } from "./providers";`. */
+export function healProvidersInLayout(layout: string): string {
+  let healed = layout;
+
+  const importMatches = [...healed.matchAll(PROVIDERS_IMPORT_LINE_RE)];
+  if (importMatches.length > 1) {
+    let seen = 0;
+    healed = healed.replace(PROVIDERS_IMPORT_LINE_RE, (match) => {
+      seen++;
+      if (importMatches[0].index === 0) {
+        return seen === importMatches.length ? match : '';
+      }
+      return seen === 1 ? match : '';
+    });
+  }
+
+  healed = healed.replace(/<Providers>\s*(<Providers[\s>][\s\S]*?<\/Providers>)\s*<\/Providers>/, '$1');
+
+  if (PROVIDERS_JSX_RE.test(healed) && !PROVIDERS_IMPORT_CHECK_RE.test(healed)) {
+    healed = `import { Providers } from './providers';\n${healed}`;
+  }
+  if (!PROVIDERS_JSX_RE.test(healed)) {
+    if (!PROVIDERS_IMPORT_CHECK_RE.test(healed)) {
+      healed = `import { Providers } from './providers';\n${healed}`;
+    }
+    healed = healed.replace(/(<body\b[^>]*>)([\s\S]*?)(<\/body>)/, (_m, open, inner, close) =>
+      `${open}<Providers>${inner}</Providers>${close}`);
+  }
+
+  return PROVIDERS_JSX_RE.test(healed) ? healed : layout;
+}
+

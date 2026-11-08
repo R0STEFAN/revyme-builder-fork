@@ -21,7 +21,7 @@ export function ensureSmoothScrollInLayout(layoutCode: string): string {
   const indent = layoutCode.slice(lineStart, body.index).match(/^\s*/)![0];
   const at = body.index + body[0].length;
   let next = layoutCode.slice(0, at) + `\n${indent}  <SmoothScroll />` + layoutCode.slice(at);
-  if (!next.includes(SMOOTH_SCROLL_IMPORT)) {
+  if (!/import\s*\{[^}]*\bSmoothScroll\b[^}]*\}\s*from\s*['"]\.\/smooth-scroll-controller['"]/.test(next)) {
     const lastImport = next.lastIndexOf('\nimport ');
     if (lastImport !== -1) {
       const eol = next.indexOf('\n', lastImport + 1);

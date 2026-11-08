@@ -16,6 +16,7 @@
 
 import { parse, parseExpression } from '@babel/parser';
 import { trace } from '@/shared/debug-trace';
+import { healProvidersInLayout } from '@/code/project/providers-gen';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -337,7 +338,8 @@ export function updateSiteConfigInCode(code: string, updates: Record<string, str
  * feature's layout footprint). Parseable input returns unchanged.
  */
 export function healLayoutFile(code: string): string {
-  if (moduleParses(code)) return code;
+  const providerHealed = healProvidersInLayout(code);
+  if (moduleParses(providerHealed)) return providerHealed;
   trace.error('metadata-gen:heal-layout', { reason: 'layout.tsx does not parse — rebuilding' });
   const salvagedMeta = (() => {
     const block = extractExportObject(code, 'metadata');

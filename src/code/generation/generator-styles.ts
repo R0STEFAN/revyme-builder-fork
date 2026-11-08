@@ -2167,8 +2167,15 @@ const SHORTHAND_CONSTITUENTS_MAP: Record<string, { sides: readonly string[]; par
  *  (`function Card({ style, color = '#fff', ...rest })`). */
 function isComponentPropParam(code: string, name: string): boolean {
   if (['undefined', 'null', 'true', 'false', 'style', 'rest', 'initialVariant', 'variant'].includes(name)) return false;
-  const sig = /function\s+[A-Z]\w*\s*\(\s*\{([\s\S]*?)\}\s*(?::|\))/.exec(code)?.[1] ?? '';
-  return new RegExp(`(?:^|[,\\s])${escapeRegExp(name)}\\s*(?:=|,|$)`).test(sig);
+  const fnMatches = code.matchAll(/(?:export\s+(?:default\s+)?)?function\s+([A-Z]\w*)\s*\(\s*\{([\s\S]*?)\}\s*(?::|\))/g);
+  for (const match of fnMatches) {
+    if (match[1] === 'MotionLinkBase') continue;
+    const sig = match[2];
+    if (new RegExp(`(?:^|[,\\s])${escapeRegExp(name)}\\s*(?:=|,|$)`).test(sig)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function readBaseValuesForNode(

@@ -49,6 +49,7 @@ export async function handleNativeTransferPaste(input: unknown, target: NativeIm
   const isLayoutPatch = (file: typeof compiled.files[number]) =>
     file.path === 'app/layout.tsx' && (
       file.cursorPortal === true ||
+      file.smoothScroll === true ||
       file.favicon !== undefined ||
       file.faviconDark !== undefined ||
       file.siteTitle !== undefined ||
@@ -56,9 +57,11 @@ export async function handleNativeTransferPaste(input: unknown, target: NativeIm
       file.socialImage !== undefined ||
       file.siteLanguage !== undefined
     );
+  const isSmoothScrollPatch = (file: typeof compiled.files[number]) =>
+    file.path === 'app/smooth-scroll.ts' || file.path === 'app/smooth-scroll-controller.tsx';
   if (importMode === 'replace' || importMode === 'paste') for (const file of compiled.files) {
     const prior = snapshot.files.get(file.path);
-    if (prior !== undefined && file.path !== 'app/globals.css' && !isLayoutPatch(file)) {
+    if (prior !== undefined && file.path !== 'app/globals.css' && !isLayoutPatch(file) && !isSmoothScrollPatch(file)) {
       file.baseHash = await (services.hash ?? hashNativeTarget)(prior);
     }
   }
