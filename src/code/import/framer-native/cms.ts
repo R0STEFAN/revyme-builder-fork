@@ -114,6 +114,27 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
         }
         if (variable.initialValue !== undefined) field.defaultValue = resolveValue(variable.initialValue, variable, collectionId);
         fields.push(field);
+        if (type === 'collectionreference') {
+          const targetCollectionId = sourceCollectionId(variable.dataIdentifier);
+          if (collectionSet.has(targetCollectionId)) {
+            const headNative = field.id;
+            for (const targetVar of sourceVariables(graph, targetCollectionId)) {
+              const targetType = String(targetVar.type);
+              if (targetType === 'divider' || targetType === 'slug' || targetType === 'collectionreference' || targetType === 'multicollectionreference') continue;
+              if (!fieldTypes[targetType]) continue;
+              const tailNative = nativeFieldId(identity, targetCollectionId, String(targetVar.id));
+              const subField: FieldDefinition = {
+                id: `${headNative}_${tailNative}`,
+                name: `${field.name} · ${String(targetVar.name ?? targetVar.id)}`,
+                type: fieldTypes[targetType],
+              };
+              if (targetType === 'enum' && Array.isArray(targetVar.options) && targetVar.options.every(v => typeof v === 'string')) {
+                subField.options = [...targetVar.options];
+              }
+              fields.push(subField);
+            }
+          }
+        }
       }
       const { children: _children, ...sourceSchema } = collection.raw;
       const schema: CollectionSchema & { _framerSource: SourceProperties } = { name: String(collection.raw.name ?? collectionId), slug, fields, _framerSource: sourceSchema };
@@ -143,15 +164,15 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
             if (collectionSet.has(targetCollectionId)) {
               const targetVars = sourceVariables(graph, targetCollectionId);
               const targetNode = typeof value === 'string' ? graph.nodes.get(value) : undefined;
-              for (const targetVar of targetVars) {
-                if (targetVar.type === 'divider' || targetVar.type === 'slug' || targetVar.type === 'collectionreference' || targetVar.type === 'multicollectionreference') continue;
-                const tailNative = nativeFieldId(identity, targetCollectionId, String(targetVar.id));
-                if (targetNode && targetNode.kind === 'CollectionItemNode') {
+              if (targetNode && targetNode.kind === 'CollectionItemNode') {
+                for (const targetVar of targetVars) {
+                  const targetType = String(targetVar.type);
+                  if (targetType === 'divider' || targetType === 'slug' || targetType === 'collectionreference' || targetType === 'multicollectionreference') continue;
+                  if (!fieldTypes[targetType]) continue;
+                  const tailNative = nativeFieldId(identity, targetCollectionId, String(targetVar.id));
                   const targetControl = sourceRecord(targetNode.raw[`$control__${String(targetVar.id)}`]);
                   const targetVal = targetControl && 'value' in targetControl ? targetControl.value : targetVar.initialValue;
                   if (targetVal !== undefined) row[`${headNative}_${tailNative}`] = resolveValue(targetVal, targetVar, targetCollectionId);
-                } else {
-                  row[`${headNative}_${tailNative}`] = '';
                 }
               }
             }

@@ -57,6 +57,7 @@ export function applyNativeResponsive(code: string, model: { graph: SourceGraph;
   let result = updateCanvasConfigInCode(code, { viewports, positions });
   const baseRoot = resolveSourceNode(graph, viewports[0].sourceStateId);
   const stylesFor = model.stylesFor ?? mapSourceStyles;
+  const isTemplate = graph.nodes.get(model.scopeId)?.kind === 'LayoutTemplateNode';
   const walk = (id: string, parentId?: string) => {
     const base = resolveSourceNode(graph, id);
     const baseParent = parentId ? resolveSourceNode(graph, parentId) : undefined;
@@ -68,6 +69,11 @@ export function applyNativeResponsive(code: string, model: { graph: SourceGraph;
       const changes: Record<string, string> = {};
       for (const key of new Set([...Object.keys(baseStyles), ...Object.keys(styles)])) {
         if (styles[key] !== baseStyles[key]) changes[key] = styles[key] ?? CSS_NEUTRAL_FALLBACK[key] ?? 'initial';
+      }
+      if (isTemplate && id === baseRoot.sourceId) {
+        delete changes.height;
+        delete changes.minHeight;
+        delete changes.overflow;
       }
       if (parent && baseParent && parent.children.join(',') !== baseParent.children.join(',')) changes.order = String(parent.children.indexOf(id));
       if (parent && baseParent) {

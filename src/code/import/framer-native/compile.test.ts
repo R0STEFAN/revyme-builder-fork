@@ -774,3 +774,35 @@ it('imports a native form with labels, inputs, select options, pseudo styles, su
   );
   expect(submitted.diagnostics).toEqual([]);
 });
+it('maps a Framer SmoothScroll code component instance to Revyme native page-level Smooth Scroll and mounts <SmoothScroll /> in app/layout.tsx', async () => {
+  const source = transfer();
+  const frame = (source.definitions[0].data.children as Record<string, any>[])[0];
+  frame.children.push({
+    id: 'smooth-scroll-node',
+    __class: 'CodeComponentNode',
+    parentid: 'desktop',
+    children: [],
+    name: 'SmoothScroll',
+    width: 0,
+    height: 0,
+    codeComponentIdentifier: 'local-module:codeFile/missing:SmoothScroll',
+    $control__intensity: { value: 14 },
+  });
+  const layout = `export default function RootLayout({ children }: { children: React.ReactNode }) {\n  return <html><body>{children}</body></html>;\n}\n`;
+  const result = compileNativeTransfer(source, { existingFiles: new Map([['app/layout.tsx', layout]]), mode: 'create' });
+  expect(result.diagnostics).toEqual([]);
+  const scrollData = result.files.find(file => file.path === 'app/smooth-scroll.ts');
+  expect(scrollData?.code).toContain('"intensity": 14');
+  const scrollController = result.files.find(file => file.path === 'app/smooth-scroll-controller.tsx');
+  expect(scrollController?.code).toContain('export function SmoothScroll()');
+  const layoutPatch = result.files.find(file => file.path === 'app/layout.tsx');
+  expect(layoutPatch?.smoothScroll).toBe(true);
+  expect(layoutPatch?.code).toContain('<SmoothScroll />');
+  const target = { projectId: 'destination', branchId: 'main' };
+  const submitted = await framerImportSubmitOperation.execute(
+    createSnapshot(target, 0, { 'app/layout.tsx': layout }),
+    { files: result.files, mode: 'create', target, expectedRevision: 0, sourceManifest: { format: source.format, version: source.version, complete: true, context: source.context, rootIds: source.rootIds } },
+    createOperationContext(),
+  );
+  expect(submitted.diagnostics).toEqual([]);
+});

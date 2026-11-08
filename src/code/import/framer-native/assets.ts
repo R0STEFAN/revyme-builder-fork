@@ -33,10 +33,14 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
   const result: NativeAssetPlan = { requests: [], assets: {}, diagnostics: [...graph.diagnostics] };
   if (result.diagnostics.length) return result;
   const references = new Set<string>();
-  function scan(value: unknown, ignoreControls = false): void {
-    if (typeof value === 'string' && value.startsWith(PREFIX)) references.add(value);
-    else if (Array.isArray(value)) value.forEach(item => scan(item, ignoreControls));
-    else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) if (!(ignoreControls && key.startsWith('$control__'))) scan(item, ignoreControls);
+  const placeholderReferences = new Set<string>();
+  function scan(value: unknown, fromCodeComponent = false): void {
+    if (typeof value === 'string' && value.startsWith(PREFIX)) {
+      references.add(value);
+      if (fromCodeComponent) placeholderReferences.add(value);
+    }
+    else if (Array.isArray(value)) value.forEach(item => scan(item, fromCodeComponent));
+    else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) scan(item, fromCodeComponent);
   }
   for (const id of graph.reachable) {
     const node = graph.nodes.get(id)!;
@@ -53,12 +57,15 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
           const component = target?.kind === 'CodeComponentNode' ? /^local-module:canvasComponent\/([^:]+):/.exec(String(target.raw.codeComponentIdentifier ?? ''))?.[1] : undefined;
           const declared = component ? graph.nodes.get(component)?.raw.variables : undefined;
           if (record && target && (isSourceCodeComponent(target) || Array.isArray(declared))) {
-            scan(Object.fromEntries(Object.entries(record).filter(([key]) => !key.startsWith('$control__') || !isSourceCodeComponent(target) && (key === '$control__variant' || Array.isArray(declared) && declared.some(variable => sourceRecord(variable)?.id === key.slice(10))))));
+            scan(Object.fromEntries(Object.entries(record).filter(([key]) => !key.startsWith('$control__') || (key === '$control__variant' || Array.isArray(declared) && declared.some(variable => sourceRecord(variable)?.id === key.slice(10))))));
+            if (isSourceCodeComponent(target)) {
+              for (const [k, v] of Object.entries(record)) if (k.startsWith('$control__')) scan(v, true);
+            }
           } else scan(raw);
         }
         continue;
       }
-      if (property !== 'children' && !(isSourceCodeComponent(node) && property.startsWith('$control__'))) scan(value, isSourceCodeComponent(node));
+      if (property !== 'children') scan(value, isSourceCodeComponent(node));
     }
     if (node.kind === 'WebPageNode' && sourceRecord(node.raw.webMetadata)?.socialImage === undefined) {
       let parent = node.raw.parentid;
@@ -88,7 +95,11 @@ export function planNativeAssets(graph: SourceGraph, identity: Record<string, st
     const filename = reference.slice(PREFIX.length).split('?')[0];
     const declarations = graph.transfer.assets.filter(asset => typeof asset.key === 'string' && typeof asset.extension === 'string' && `${asset.key}${asset.extension}` === filename);
     const asset = declarations[0];
-    if (!asset) { diagnostic('ASSET_DEFINITION_MISSING', `No original asset descriptor for ${filename}`); continue; }
+    if (!asset) {
+      if (placeholderReferences.has(reference)) continue;
+      diagnostic('ASSET_DEFINITION_MISSING', `No original asset descriptor for ${filename}`);
+      continue;
+    }
     const signature = (value: Record<string, unknown>) => JSON.stringify([value.key, value.extension, value.mimeType, value.url, value.imageUrl]);
     if (graph.transfer.assets.some(candidate => candidate.key === asset.key && signature(candidate) !== signature(asset))) {
       diagnostic('ASSET_DEFINITION_CONFLICT', `Conflicting original asset descriptors for ${filename}`); continue;

@@ -168,7 +168,11 @@ export function createEngineSourceAdapter(engine, { editorBuild, href, treeVersi
         const scan = value => {
           if (Array.isArray(value)) { value.forEach(scan); return; }
           if (!value || typeof value !== 'object' || value.__class === 'ExternalModuleNode' || value.__class === 'LocalModuleNode') return;
-          if (value.__class === 'CodeComponentNode' && !String(value.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/')) return;
+          if (value.__class === 'CodeComponentNode' && !String(value.codeComponentIdentifier ?? '').startsWith('local-module:canvasComponent/')) {
+            const codeFile = /^local-module:(codeFile\/[^:]+):/.exec(value.codeComponentIdentifier ?? '');
+            if (codeFile) requiredLocal.add(codeFile[1]);
+            return;
+          }
           if (value.__class === 'WebPageNode') scan({ inheritedTemplate: source.get(value.parentid)?.layoutTemplateIdentifier });
           if (value.type === 'variableReference' && typeof value.providerId === 'string') pending.push(value.providerId);
           for (const [key, item] of Object.entries(value)) {

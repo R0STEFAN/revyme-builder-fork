@@ -253,7 +253,6 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
-        if (styles.display === 'none' && ctx.viewport?.width === viewports[0].designWidth) delete styles.display;
         if (intrinsicImageFieldFor(node)) {
           delete styles.backgroundImage; delete styles.backgroundPosition; delete styles.backgroundRepeat; delete styles.backgroundSize;
           styles.objectFit = node.properties.fillImageResize === 'fit' ? 'contain' : 'cover';
@@ -261,6 +260,11 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         if (node.kind === 'RichTextNode') Object.assign(styles, mapSourceText(node, ctx).styles);
         if (node.sourceId === primary) {
           styles.width = '100%'; styles.position = 'relative';
+          if (isTemplate) {
+            styles.height = 'auto';
+            styles.minHeight = '100%';
+            delete styles.overflow;
+          }
           for (const key of ['left', 'right', 'top', 'bottom']) delete styles[key];
         } else if (ctx.parent && ['stack', 'grid'].includes(String(ctx.parent.properties.layout)) && !['absolute', 'fixed'].includes(styles.position)) {
           styles.order = String(ctx.parent.children.indexOf(node.sourceId));
@@ -271,8 +275,26 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         }
         return styles;
       };
+      const isNeverVisible = (node: ResolvedSourceNode) => {
+        if (node.properties.visible !== false) return false;
+        try {
+          return viewports.slice(1).every(vp => {
+            try {
+              return resolveSourceNode(graph, node.sourceId, vp.sourceStateId).properties.visible === false;
+            } catch {
+              return true;
+            }
+          });
+        } catch {
+          return false;
+        }
+      };
       const scene = emitSourceScene(graph, identity, primary, context, {
-        stylesFor: (node, parent) => stylesFor(node, { ...context, parent }), codeComponents: options.codeComponents, template: isTemplate,
+        stylesFor: (node, parent) => stylesFor(node, { ...context, parent }),
+        codeComponents: options.codeComponents,
+        template: isTemplate,
+        assets: options.assets,
+        isNeverVisible,
         intrinsicImageFor: node => { const field = intrinsicImageFieldFor(node); return field ? `${field.itemVar}.${field.fieldId}` : undefined; },
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });

@@ -21,6 +21,9 @@ import { applyFramerTypographyTokens } from '@/code/generation/framer-typography
 import { applyFramerFontFaces } from '@/code/generation/framer-font-gen';
 import { addGoogleFontImportsToCss } from '@/shared/google-font-import';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '@/code/generation/cursor-gen';
+import { ensureSmoothScrollInLayout, SMOOTH_SCROLL_CONTROLLER_PATH, SMOOTH_SCROLL_DATA_PATH } from '@/code/generation/smooth-scroll-layout';
+import { SMOOTH_SCROLL_CONTROLLER_SOURCE } from '@/code/generation/smooth-scroll-gen';
+import { parseSmoothScroll, serializeSmoothScroll } from '@/code/project/smooth-scroll-config';
 import { FORM_ROUTE_CONTENT, FORM_ROUTE_PATH } from '@/code/generation/form-gen';
 import { PAGE_EFFECTS_RUNTIME_SOURCE, PAGE_TRANSITIONS_SOURCE } from '@/code/generation/page-transitions-gen';
 import { isEmptyPageEffects, parsePageEffects, serializePageEffects } from '@/code/project/page-effects-config';
@@ -32,6 +35,7 @@ export const framerImportSubmitInputSchema = z.object({
     path: z.string().min(1), code: z.string(), baseHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     baseCode: z.string().optional(),
     cursorPortal: z.literal(true).optional(),
+    smoothScroll: z.literal(true).optional(),
     favicon: z.string().min(1).optional(),
     faviconDark: z.string().min(1).optional(),
     siteTitle: z.string().optional(),
@@ -63,7 +67,7 @@ function fail(code: string, message: string): never { throw new Error(`${code}: 
 
 function assertNativeFamily(path: string): void {
   if (!safeProjectPath(path) || path !== path.trim()) fail('INVALID_PATH', path);
-  if (path === 'app/globals.css' || path === FORM_ROUTE_PATH) return;
+  if (path === 'app/globals.css' || path === FORM_ROUTE_PATH || path === SMOOTH_SCROLL_DATA_PATH || path === SMOOTH_SCROLL_CONTROLLER_PATH) return;
   if (PROTECTED_SYSTEM_FILES.has(path) || isSystemProtectedPath(path) || path === 'app/layout.tsx') fail('PROTECTED_PATH', path);
   if (/^components\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
       /^overrides\/[A-Za-z][A-Za-z0-9_-]*\.tsx$/.test(path) ||
@@ -179,6 +183,7 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
     for (const file of input.files) {
       const isLayoutPatch = file.path === 'app/layout.tsx' && (
         file.cursorPortal === true ||
+        file.smoothScroll === true ||
         file.favicon !== undefined ||
         file.faviconDark !== undefined ||
         file.siteTitle !== undefined ||
@@ -191,9 +196,11 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
       seen.add(file.path);
       const existing = snapshot.files.get(file.path);
       const tokenPatch = file.path === 'app/globals.css';
+      const smoothScrollPatch = file.path === SMOOTH_SCROLL_DATA_PATH || file.path === SMOOTH_SCROLL_CONTROLLER_PATH;
       if (isLayoutPatch) {
         let expected = existing;
         if (expected !== undefined && file.cursorPortal) expected = ensureCursorPortalInLayout(expected);
+        if (expected !== undefined && file.smoothScroll) expected = ensureSmoothScrollInLayout(expected);
         const validUrl = (value: string) => {
           try { const url = new URL(value, 'https://revyme.invalid'); return (value.startsWith('/api/uploads/') || value.startsWith('/assets/') || value.startsWith('https://')) && url.protocol === 'https:' && !url.username && !url.password; } catch { return false; }
         };
@@ -212,15 +219,22 @@ const framerImportSubmitDefinition: Operation<FramerImportSubmitInput, FramerImp
         if (file.siteLanguage !== undefined && expected !== undefined) {
           expected = updateSiteConfigInCode(expected, { language: file.siteLanguage });
         }
-        if (existing === undefined || file.baseCode !== existing || file.code === existing || expected !== file.code || (file.cursorPortal && !hasNativeCursorPortal(file.code)) || file.colorTokens || file.typographyTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
-      } else if (file.cursorPortal || file.favicon !== undefined || file.faviconDark !== undefined || file.siteTitle !== undefined || file.siteDescription !== undefined || file.socialImage !== undefined || file.siteLanguage !== undefined) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+        if (existing === undefined || file.baseCode !== existing || file.code === existing || expected !== file.code || (file.cursorPortal && !hasNativeCursorPortal(file.code)) || (file.smoothScroll && !file.code.includes('<SmoothScroll')) || file.colorTokens || file.typographyTokens || file.fontFaces || file.googleFonts) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
+      } else if (file.cursorPortal || file.smoothScroll || file.favicon !== undefined || file.faviconDark !== undefined || file.siteTitle !== undefined || file.siteDescription !== undefined || file.socialImage !== undefined || file.siteLanguage !== undefined) fail('CURSOR_PORTAL_PATCH_INVALID', file.path);
       else if (tokenPatch) {
         if (!(file.colorTokens?.length || file.typographyTokens?.length || file.fontFaces?.length || file.googleFonts?.length) || file.baseCode !== existing || addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerTypographyTokens(applyFramerColorTokens(existing ?? '', file.colorTokens ?? []), file.typographyTokens ?? []), file.fontFaces ?? []), file.googleFonts ?? []) !== file.code) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
+      } else if (smoothScrollPatch) {
+        if (file.baseCode !== existing || file.colorTokens !== undefined || file.typographyTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('SMOOTH_SCROLL_PATCH_INVALID', file.path);
+        if (file.path === SMOOTH_SCROLL_CONTROLLER_PATH && file.code !== SMOOTH_SCROLL_CONTROLLER_SOURCE) fail('SMOOTH_SCROLL_PATCH_INVALID', file.path);
+        if (file.path === SMOOTH_SCROLL_DATA_PATH) {
+          const parsed = parseSmoothScroll(file.code);
+          if (serializeSmoothScroll(parsed) !== file.code) fail('SMOOTH_SCROLL_PATCH_INVALID', file.path);
+        }
       } else if (file.baseCode !== undefined || file.colorTokens !== undefined || file.typographyTokens !== undefined || file.fontFaces !== undefined || file.googleFonts !== undefined) fail('FRAMER_TOKEN_PATCH_INVALID', file.path);
       if (existing !== undefined) {
-        if (input.mode === 'create' && !tokenPatch && !isLayoutPatch) fail('ALREADY_EXISTS', file.path);
+        if (input.mode === 'create' && !tokenPatch && !isLayoutPatch && !smoothScrollPatch) fail('ALREADY_EXISTS', file.path);
         if (input.mode === 'paste' && file.path !== input.target.filePath) fail('PASTE_TARGET_CONFLICT', file.path);
-        if (!tokenPatch && !isLayoutPatch) {
+        if (!tokenPatch && !isLayoutPatch && !smoothScrollPatch) {
           if (!file.baseHash) fail('BASE_HASH_REQUIRED', file.path);
           if (sha256(existing) !== file.baseHash) fail('CAS_CONFLICT', file.path);
         }

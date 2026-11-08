@@ -78,13 +78,15 @@ export function nativePropName(identity: Record<string, string>, scopeId: string
 }
 
 function valueExpression(value: unknown, node: ResolvedSourceNode, context: SourceMappingContext, property: string, identity?: Record<string, string>): string {
-  if (identity && context.graph && sourceRecord(value)?.type === 'variableReference') {
-    const binding = resolveSourceBinding(value, { graph: context.graph, identity, nodeId: node.sourceId });
+  const unwrapped = sourceRecord(value) && 'value' in (value as object) ? (value as any).value : value;
+  const target = unwrapped !== undefined ? unwrapped : value;
+  if (identity && context.graph && sourceRecord(target)?.type === 'variableReference') {
+    const binding = resolveSourceBinding(target, { graph: context.graph, identity, nodeId: node.sourceId });
     if (binding.kind === 'field') return `${binding.itemVar}.${binding.fieldId}`;
     if (binding.kind === 'variable') return binding.name;
     throw new Error(`Unsupported expression binding ${binding.kind} on ${node.sourceId}`);
   }
-  const mapped = sourceStyleValue(value, node, context, property);
+  const mapped = sourceStyleValue(target, node, context, property);
   if (mapped === undefined) throw new Error(`Unresolved ${property} on ${node.sourceId}`);
   const binding = /^\{([A-Za-z_$][\w$]*)\}$/.exec(mapped);
   return binding ? binding[1] : JSON.stringify(mapped);
@@ -164,9 +166,9 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
             styles.height = `${typeof node.properties.height === 'number' && node.properties.height > 0 ? node.properties.height : 200}px`;
           }
         }
-        if (node.sourceId === primaryId && hasInFlowVariantVisibility && styles.height && /^\d+(?:\.\d+)?px$/.test(styles.height)) {
+        if (node.sourceId === primaryId && styles.height && /^\d+(?:\.\d+)?px$/.test(styles.height)) {
           if (!styles.minHeight) styles.minHeight = styles.height;
-          styles.height = 'auto';
+          if (hasInFlowVariantVisibility) styles.height = 'auto';
         }
         return styles;
       };
@@ -184,6 +186,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         expressionFor: (value, node, property) => valueExpression(value, node, context, property, identity),
         codeComponents: options.codeComponents,
         plainTextFor: hasPerStateTextChange,
+        assets: options.assets,
       });
       const body = rawBody.replace(/<Link\b/g, '<a').replace(/<\/Link>/g, '</a>');
       if (sourceIds.some(id => graph.nodes.get(id)!.kind === 'OverlayNode')) throw new Error('Source design-master overlay requires its native state-scope adapter');

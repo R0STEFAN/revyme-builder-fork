@@ -138,14 +138,15 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   } else if (p.layout != null) mappingDiagnostic(context, node, 'layout');
   if (p.layout === 'stack' || p.layout === 'grid') set('gap', px(p.gap));
 
-  const outOfFlow = p.position === 'absolute' || p.position === 'fixed';
+  const isFreeformChild = Boolean(parent && !['stack', 'grid'].includes(String(parent.layout)) && p.position !== 'relative');
+  const outOfFlow = p.position === 'absolute' || p.position === 'fixed' || isFreeformChild;
   if (outOfFlow || p.position === 'sticky') {
-    let pos = String(p.position);
+    let pos = String(p.position ?? (isFreeformChild ? 'absolute' : 'relative'));
     if (pos === 'fixed' && context.parent && context.parent.sourceId !== context.viewport?.sourceStateId) {
       pos = 'absolute';
     }
     result.position = pos;
-    for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null) set(key, px(p[key]));
+    for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null && p[key] !== undefined) set(key, px(p[key]));
     if (outOfFlow && p.left == null && p.right == null && (p.widthType === 1 || p.width === 1)) {
       result.left = '0px';
     }
@@ -167,7 +168,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     else if (type === 3 && typeof size === 'number') {
       if (main && !outOfFlow) {
         result.flexGrow = String(size); result.flexShrink = '1'; result.flexBasis = '0px';
-        result[axis === 'width' ? 'minWidth' : 'minHeight'] = '0px';
+        if (axis === 'width') result.minWidth = '0px';
       } else result[axis] = `${size * 100}%`;
     } else if (type === 4 && typeof size === 'number') result[axis] = `${size * 100}${axis === 'width' ? 'vw' : 'vh'}`;
     else if (type === 5) {
@@ -199,7 +200,12 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
       } else mappingDiagnostic(context, node, key);
     } else mappingDiagnostic(context, node, key);
   }
-  if (typeof p.aspectRatio === 'number' && p.aspectRatio > 0) result.aspectRatio = String(p.aspectRatio);
+  if (typeof p.aspectRatio === 'number' && p.aspectRatio > 0) {
+    result.aspectRatio = String(p.aspectRatio);
+    if (typeof p.width === 'number' && p.width > 0 && typeof p.height === 'number' && Math.abs(p.height - p.width / p.aspectRatio) > 1) {
+      result.height = `${Math.round(p.width / p.aspectRatio)}px`;
+    }
+  }
   if (p.paddingPerSide) {
     for (const side of ['Top', 'Right', 'Bottom', 'Left']) set(`padding${side}`, px(p[`padding${side}`]));
   } else set('padding', px(p.padding) ?? value('padding'));
@@ -293,6 +299,10 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   if (p.userSelect !== undefined) set('userSelect', value('userSelect'));
   if (p.cursor !== undefined) set('cursor', value('cursor'));
   else if (Array.isArray(p.onTap) && p.onTap.length > 0) result.cursor = 'pointer';
+  if (typeof p.backgroundBlur === 'number' && p.backgroundBlur > 0) {
+    result.backdropFilter = `blur(${p.backgroundBlur}px)`;
+    result.WebkitBackdropFilter = `blur(${p.backgroundBlur}px)`;
+  }
   if (p.visible === false) result.display = 'none';
   else if (p.visible !== undefined && p.visible !== true) {
     const visible = value('visible');

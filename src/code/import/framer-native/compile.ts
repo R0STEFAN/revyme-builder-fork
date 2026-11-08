@@ -4,14 +4,14 @@ import { parseJSX } from '../../parsing/ast-utils';
 import { checkFile } from '../../oracle/check-file';
 import { oracleFileKind } from '../../oracle/file-kind';
 import { parsePropMeta } from '../../components/prop-meta';
-import { buildSourceGraph, allocateTargetIdentity, sourceRecord } from './source-graph';
+import { buildSourceGraph, allocateTargetIdentity, isSourceCodeComponent, sourceRecord } from './source-graph';
 import { planNativeAssets, emitNativeAssets, resolveUploadedNativeAssets } from './assets';
 import { emitNativeCms } from './cms';
 import { emitNativeComponents } from './components';
 import { emitNativeCodeOverrides } from './code-adapters';
 import { emitNativeCodeComponents } from './code-components';
 import { emitNativePages, sourcePageRoute } from './pages';
-import type { NativeCompileResult, SourceGraph } from './types';
+import type { NativeCompileResult, SourceGraph, SourceNode } from './types';
 import { applyFramerColorTokens, type FramerColorToken } from '../../generation/framer-token-gen';
 import { applyFramerTypographyTokens } from '../../generation/framer-typography-gen';
 import { sourceTypographyTokens } from './typography';
@@ -22,6 +22,9 @@ import type { WorkspaceFontFaceSpec } from '../../project/preset-ops';
 import { addGoogleFontImportsToCss } from '../../../shared/google-font-import';
 import { sourceGoogleFontRequests } from './fonts';
 import { ensureCursorPortalInLayout, hasNativeCursorPortal } from '../../generation/cursor-gen';
+import { ensureSmoothScrollInLayout, SMOOTH_SCROLL_CONTROLLER_PATH, SMOOTH_SCROLL_DATA_PATH } from '../../generation/smooth-scroll-layout';
+import { SMOOTH_SCROLL_CONTROLLER_SOURCE } from '../../generation/smooth-scroll-gen';
+import { normalizeSmoothScroll, parseSmoothScroll, serializeSmoothScroll, setSmoothScrollForRoutesInMap, type SmoothScrollConfig } from '../../project/smooth-scroll-config';
 import { parseSiteConfigFromCode, updateMetadataInCode, updateSiteConfigInCode } from '../../generation/metadata-gen';
 import { updateNativeFavicon } from './favicon';
 import { omitNativeSourceFeatures, type NativeSourceSkips } from './omissions';
@@ -140,6 +143,73 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       const updated = original === undefined ? undefined : ensureCursorPortalInLayout(original);
       if (!updated || !hasNativeCursorPortal(updated)) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require a valid native root layout and cursor portal.' });
       else if (updated !== original) result.files.push({ path: 'app/layout.tsx', code: updated, baseCode: original, cursorPortal: true });
+    }
+    const smoothScrollNodes = [...graph.reachable]
+      .map(id => graph.nodes.get(id))
+      .filter((node): node is SourceNode => {
+        if (!node || !isSourceCodeComponent(node)) return false;
+        const identifier = String(node.raw.codeComponentIdentifier ?? '');
+        const name = typeof node.raw.name === 'string' && node.raw.name ? node.raw.name : identifier.split(':').pop() || '';
+        return /SmoothScroll/i.test(identifier) || /^Smooth\s*Scroll$/i.test(name);
+      });
+    if (smoothScrollNodes.length > 0 && Object.keys(pages.routes).length > 0) {
+      const node = smoothScrollNodes[0];
+      const unwrap = (key: string) => {
+        const ctrl = sourceRecord(node.raw[`$control__${key}`]);
+        return ctrl && 'value' in ctrl ? ctrl.value : node.raw[key];
+      };
+      const intensity = unwrap('intensity');
+      const smoothTouch = unwrap('smoothTouch') ?? unwrap('syncTouch');
+      const orientation = unwrap('orientation') ?? unwrap('direction');
+      const smoothScrollCfg: SmoothScrollConfig = normalizeSmoothScroll({
+        enabled: unwrap('enabled') !== false,
+        intensity: typeof intensity === 'number' ? intensity : 12,
+        smoothWheel: unwrap('smoothWheel') !== false,
+        smoothTouch: smoothTouch === true,
+        orientation: orientation === 'horizontal' ? 'horizontal' : 'vertical',
+        infinite: unwrap('infinite') === true,
+      });
+      const existingScrollData = target.existingFiles.get(SMOOTH_SCROLL_DATA_PATH);
+      const nextScrollMap = setSmoothScrollForRoutesInMap(
+        parseSmoothScroll(existingScrollData),
+        Object.values(pages.routes),
+        smoothScrollCfg,
+      );
+      const nextScrollData = serializeSmoothScroll(nextScrollMap);
+      if (nextScrollData !== existingScrollData) {
+        result.files.push({
+          path: SMOOTH_SCROLL_DATA_PATH,
+          code: nextScrollData,
+          ...(existingScrollData !== undefined ? { baseCode: existingScrollData } : {}),
+        });
+      }
+      const existingController = target.existingFiles.get(SMOOTH_SCROLL_CONTROLLER_PATH);
+      if (existingController !== SMOOTH_SCROLL_CONTROLLER_SOURCE) {
+        result.files.push({
+          path: SMOOTH_SCROLL_CONTROLLER_PATH,
+          code: SMOOTH_SCROLL_CONTROLLER_SOURCE,
+          ...(existingController !== undefined ? { baseCode: existingController } : {}),
+        });
+      }
+      const originalLayout = target.existingFiles.get('app/layout.tsx');
+      if (originalLayout !== undefined) {
+        const priorLayout = result.files.find(file => file.path === 'app/layout.tsx');
+        const baseLayout = priorLayout?.code ?? originalLayout;
+        const updatedLayout = ensureSmoothScrollInLayout(baseLayout);
+        if (updatedLayout !== baseLayout) {
+          if (priorLayout) {
+            priorLayout.code = updatedLayout;
+            priorLayout.smoothScroll = true;
+          } else {
+            result.files.push({
+              path: 'app/layout.tsx',
+              code: updatedLayout,
+              baseCode: originalLayout,
+              smoothScroll: true,
+            });
+          }
+        }
+      }
     }
     if (graph.transfer.context.mode === 'project' && graph.byKind.get('WebPageNode')?.some(id => graph.reachable.has(id))) {
       const roots = (graph.byKind.get('RootNode') ?? []).map(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata));
@@ -296,6 +366,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const isLayoutPatch = (file: typeof result.files[number]) =>
       file.path === 'app/layout.tsx' && (
         file.cursorPortal === true ||
+        file.smoothScroll === true ||
         file.favicon !== undefined ||
         file.faviconDark !== undefined ||
         file.siteTitle !== undefined ||
@@ -305,8 +376,10 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
       );
     const isTokenPatch = (file: typeof result.files[number]) =>
       file.path === 'app/globals.css' && !!(file.colorTokens || file.typographyTokens || file.fontFaces || file.googleFonts);
+    const isSmoothScrollPatch = (file: typeof result.files[number]) =>
+      file.path === SMOOTH_SCROLL_DATA_PATH || file.path === SMOOTH_SCROLL_CONTROLLER_PATH;
     for (const file of result.files) {
-      if ((paths.has(file.path) && !isTokenPatch(file) && !isLayoutPatch(file)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      if ((paths.has(file.path) && !isTokenPatch(file) && !isLayoutPatch(file) && !isSmoothScrollPatch(file)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;

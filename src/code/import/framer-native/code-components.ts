@@ -19,6 +19,10 @@ export function emitNativeCodeComponents(graph: SourceGraph, identity: Record<st
   const result: NativeCodeComponentResult = { files: [], createdIds: [], identity, diagnostics: [...graph.diagnostics], components: {} };
   if (result.diagnostics.length) return result;
   for (const identifier of sourceCodeComponentIdentifiers(graph)) {
+    if (/SmoothScroll/i.test(identifier)) {
+      trace.action('framer-native.skipNativeSmoothScrollComponent', { identifier });
+      continue;
+    }
     try {
       const local = /^local-module:(codeFile\/[^:]+):([A-Za-z_$][\w$]*|default)$/.exec(identifier);
       const external = /^module:([^/]+)\/([^/]+)\/([^:]+):([A-Za-z_$][\w$]*|default)$/.exec(identifier);
