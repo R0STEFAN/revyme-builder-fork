@@ -556,14 +556,19 @@ export function addCollectionItem(slug: string, item: Partial<CollectionItem>): 
   const schema = getCollectionSchema(slug);
   item = normalizeImageFieldValues(slug, item);
 
-  // Slug source priority: explicit `item._slug` → first text field value →
-  // 'item' fallback. Always slugified + uniquified so two empty/identically-
-  // named items don't collide (the old code let 3 empty items all become
-  // `_slug:"item"`, so every detail route resolved to one record).
+  // Slug source priority: explicit `item._slug` → `item.slug` → slug field value →
+  // first text field value → 'item' fallback. Always slugified + uniquified.
+  const slugField = schema?.fields.find(f => f.type === 'slug');
   const firstTextField = schema?.fields.find(f => f.type === 'text');
   const slugSource = item._slug
     ? String(item._slug)
-    : (firstTextField && item[firstTextField.id]) ? String(item[firstTextField.id]) : 'item';
+    : item.slug
+    ? String(item.slug)
+    : (slugField && (item[slugField.id] !== undefined ? item[slugField.id] : item[slugField.name]))
+    ? String(item[slugField.id] ?? item[slugField.name])
+    : (firstTextField && (item[firstTextField.id] !== undefined ? item[firstTextField.id] : item[firstTextField.name]))
+    ? String(item[firstTextField.id] ?? item[firstTextField.name])
+    : 'item';
   const finalSlug = uniqueItemSlug(items, slugify(slugSource));
 
   // Schema defaults seed a new item HERE, not in the caller — every creation path (the CMS
@@ -577,11 +582,21 @@ export function addCollectionItem(slug: string, item: Partial<CollectionItem>): 
     else if (f.type === 'tags') defaults[f.id] = [];
   }
 
+  const normalizedFields: Record<string, unknown> = {};
+  for (const f of schema?.fields ?? []) {
+    const val = item[f.id] ?? item[f.name];
+    if (val !== undefined) {
+      normalizedFields[f.id] = val;
+      normalizedFields[f.name] = val;
+    }
+  }
+
   const now = new Date().toISOString();
   const newItem: CollectionItem = {
     _status: 'published',
     ...defaults,
     ...item,
+    ...normalizedFields,
     _id: generateItemId(),  // always generated, never from spread
     _slug: finalSlug,       // AFTER spread so a raw item._slug can't leak through un-normalized
     _createdAt: now,

@@ -266,6 +266,23 @@ describe('addCollectionItem', () => {
     expect(result._slug).toBe('alice-johnson');
   });
 
+  test('generates _slug from explicit slug field or item.slug when available', () => {
+    saveCollectionSchema('projects', {
+      name: 'Projects',
+      slug: 'projects',
+      fields: [
+        { id: 'projectTitle', name: 'Project Title', type: 'text' },
+        { id: 'projectSlug', name: 'Slug', type: 'slug' },
+      ],
+    });
+    const item = addCollectionItem('projects', {
+      'Project Title': 'My Cool App',
+      'Slug': 'my-cool-app',
+    });
+    expect(item._slug).toBe('my-cool-app');
+    expect(item.projectTitle).toBe('My Cool App');
+  });
+
   test('uses fallback slug when no text field value', () => {
     fsStore.set('cms/team.schema.json', JSON.stringify(makeSchema('team', 'Team', [
       { id: 'count', name: 'Count', type: 'number' },

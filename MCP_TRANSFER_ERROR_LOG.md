@@ -81,3 +81,18 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
 - **Verification:**
   - Ran `tokens.set --projectId proj-1794157101920-rz0ttf ...` and verified that revision was committed directly to `proj-1794157101920-rz0ttf` and live synchronized with the open editor tab. All 44 CLI tests passed.
 
+---
+
+### Issue 5: CMS Item `_slug` Derivation Ignored Explicit `slug` Fields & Property Aliases
+- **Symptom:**
+  - When creating CMS records via `cms.items.create`, newly created items received placeholder slugs like `_slug: "item"`, `_slug: "item-2"`, even though the schema had a designated `Slug` field and the input contained valid slug values.
+  - In addition, fields supplied by name (e.g. `"Project Title"`) were not mirrored to their schema IDs (e.g. `"title"`).
+- **Root Cause:**
+  - In `src/code/project/cms-ops.ts`, `addCollectionItem` only checked `item._slug` and `firstTextField && item[firstTextField.id]`. It did not check `item.slug`, did not check schema fields of `type: 'slug'`, and did not resolve fields by display name (`f.name`).
+- **Fix:**
+  - Updated `addCollectionItem` in `cms-ops.ts` to check `item._slug`, then `item.slug`, then schema field of `type: 'slug'`, then `firstTextField`, checking both `.id` and `.name`.
+  - Added dual mapping for all schema fields (`item[f.id]` and `item[f.name]`) so items are queryable by either property.
+- **Verification:**
+  - Added test in `src/code/project/cms-ops.test.ts` verifying slug derivation from slug fields and field names. All 128 tests in `cms-ops` passed.
+
+
