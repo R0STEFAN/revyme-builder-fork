@@ -205,5 +205,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       expect(transformed['styles/tokens.css']).not.toContain('@import url(');
       expect(transformed['styles/tokens.css']).toContain("var(--font-comfortaa), 'Comfortaa', sans-serif");
     });
+
+    it('sanitizes unsupported weights and converts to next/font/google without keeping external import', () => {
+      const files: Record<string, string> = {
+        'app/layout.tsx': `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html><body>{children}</body></html>;
+}`,
+        'app/globals.css': `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@300;400;500;600;700&display=swap');
+body { font-family: 'Syne', sans-serif; }`,
+      };
+
+      const transformed = transformSiteFilesForNextFonts(files);
+
+      // Converts to next/font/google with sanitized weights (300 stripped from Syne)
+      expect(transformed['app/layout.tsx']).toContain("import { Syne } from 'next/font/google';");
+      expect(transformed['app/layout.tsx']).toContain("weight: ['400', '500', '600', '700']");
+      expect(transformed['app/layout.tsx']).not.toContain("'300'");
+
+      // Removes external @import so font is self-hosted at build time
+      expect(transformed['app/globals.css']).not.toContain('@import');
+      expect(transformed['app/globals.css']).toContain("var(--font-syne), 'Syne'");
+    });
   });
 });

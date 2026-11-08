@@ -20,14 +20,24 @@ export interface GoogleFontSpec {
   preserveImport?: boolean;
 }
 
-const fontCatalogMap = new Map<string, { family: string; variants: string[]; isCyrillic: boolean }>();
+const fontCatalogMap = new Map<string, {
+  family: string;
+  variants: string[];
+  subsets: string[];
+  weights: string[];
+  isVariable: boolean;
+  unsupportedByNext: boolean;
+}>();
 
 for (const item of (catalogFonts as any[])) {
   const isCyrillic = (item.tags || []).some((t: any) => t.name?.includes('Cyrillic'));
   fontCatalogMap.set(item.family.toLowerCase(), {
     family: item.family,
     variants: item.variants || [],
-    isCyrillic,
+    subsets: item.nextSubsets || (isCyrillic ? ['latin', 'cyrillic'] : ['latin']),
+    weights: item.nextWeights || [],
+    isVariable: Boolean(item.isVariable),
+    unsupportedByNext: Boolean(item.unsupportedByNext),
   });
 }
 
@@ -37,34 +47,25 @@ for (const item of (catalogFonts as any[])) {
  */
 export function getSupportedWeightsForFont(family: string, requestedWeights?: string[]): string[] | undefined {
   const entry = fontCatalogMap.get(family.toLowerCase());
-  if (!entry || !entry.variants || entry.variants.length === 0) {
+  if (!entry) {
     return requestedWeights && requestedWeights.length > 0 ? requestedWeights : undefined;
   }
 
   const supported = new Set<string>();
-  for (const v of entry.variants) {
-    if (v === 'regular' || v === 'italic') {
-      supported.add('400');
-    } else {
-      const m = v.match(/^(\d+)/);
-      if (m) supported.add(m[1]);
+  if (entry.weights && entry.weights.length > 0) {
+    for (const w of entry.weights) supported.add(w);
+  } else if (entry.variants && entry.variants.length > 0) {
+    for (const v of entry.variants) {
+      if (v === 'regular' || v === 'italic') {
+        supported.add('400');
+      } else {
+        const m = v.match(/^(\d+)/);
+        if (m) supported.add(m[1]);
+      }
     }
   }
 
   if (supported.size === 0) return undefined;
-
-  // If the catalog entry was capped at 8 items and starts with low weights (100..300)
-  // ending at regular/italic without higher weights (500, 600, 700, etc.),
-  // then higher numeric weights were truncated from the catalog (e.g. JetBrains Mono).
-  const isTruncatedCatalog =
-    entry.variants.length >= 8 &&
-    entry.variants[0] === '100' &&
-    !entry.variants.includes('700');
-  if (isTruncatedCatalog) {
-    for (const w of ['400', '500', '600', '700', '800']) {
-      supported.add(w);
-    }
-  }
 
   if (requestedWeights && requestedWeights.length > 0) {
     const valid = requestedWeights.filter((w) => supported.has(w));
@@ -79,8 +80,12 @@ export function getSupportedWeightsForFont(family: string, requestedWeights?: st
  */
 export function getSubsetsForFont(family: string): string[] {
   const entry = fontCatalogMap.get(family.toLowerCase());
-  if (entry?.isCyrillic) {
-    return ['latin', 'cyrillic'];
+  if (entry?.subsets && entry.subsets.length > 0) {
+    const wanted: string[] = [];
+    if (entry.subsets.includes('latin')) wanted.push('latin');
+    if (entry.subsets.includes('cyrillic')) wanted.push('cyrillic');
+    if (wanted.length > 0) return wanted;
+    return [entry.subsets[0]];
   }
   return ['latin'];
 }
@@ -168,8 +173,17 @@ export function extractGoogleFontsFromCSS(css: string): GoogleFontSpec[] {
       }
 
       // Filter and validate weights strictly against catalog
+      const entry = fontCatalogMap.get(familyName.toLowerCase());
       const weights = getSupportedWeightsForFont(familyName, rawRequestedWeights);
-      const preserveImport = params.getAll('family').length !== 1 || !!spec && (!/^wght@\d+(?:;\d+)*$/.test(spec) || !!rawRequestedWeights?.some(weight => !weights?.includes(weight)));
+      const hasNonStandardWeight = rawRequestedWeights?.some((w) => Number(w) % 100 !== 0);
+      const hasUnsupportedAxes = !!spec && !/^(?:ital,)?wght@/.test(spec);
+      const preserveImport =
+        params.getAll('family').length !== 1 ||
+        !weights ||
+        weights.length === 0 ||
+        hasUnsupportedAxes ||
+        !!hasNonStandardWeight ||
+        Boolean(entry?.unsupportedByNext);
       const subsets = getSubsetsForFont(familyName);
       const display = params.get('display') || 'swap';
 
