@@ -118,4 +118,36 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
   - Added unit test in `src/code/import/framer-native/agent-slice.test.ts` verifying recursive component inlining, variable overrides, link resolution, and component listing in `inspectNativeTransfer`.
   - Verified on live Framer JSON capture: `framer.inspect` reports exact component dependencies for all 6 pages and layout templates, and `framer.slice` successfully inlines the entire Bento Grid, cards, texts, and links.
 
+---
+
+### Issue 7: Variant Leakage in Nested Inlining (`agent-slice.ts`)
+- **Symptom:**
+  - When inlining nested component instances inside another component (e.g. `HeaderBox` inside `Header`), child instances inherited the parent component's active variant ID (such as `M6uxoYlpQ`), causing child components to erroneously resolve to the parent variant node or default fallback.
+- **Root Cause:**
+  - In `agent-slice.ts`, `node.raw.$control__variant` was passed or inherited from parent scope without verifying that the variant ID belonged to the child component's own master variant collection.
+- **Fix:**
+  - Scoped variant resolution to the instance's own explicit control value (`$control__variant`) or the component's own `baseVariantId` / `children[0]`.
+- **Verification:**
+  - Verified on live capture that `HeaderBox` correctly resolves its own `Nv38W5Tsu` (Desktop) variant while embedded inside `Header` (`M6uxoYlpQ`).
+
+---
+
+### Issue 8: Missing Component & Motion/Interactivity Inspection (`framer.component` & `framer.slice`)
+- **Symptom:**
+  - Agents had no dedicated MCP query tool to inspect Framer SmartComponents, their internal variables (`$control__*`), their variant hierarchies (`Desktop`, `Hover`, `Pressed`, custom states), their animation transitions (spring stiffness, damping), or their interaction event wiring (`useSetVariant` triggers on `mouseEnter` / `mouseLeave`).
+  - `framer.slice` omitted `motion` (hover scale, appear transitions), `textEffect` (splitText character animations), and `variants` lists from the semantic slice hierarchy.
+- **Root Cause:**
+  - `framer-porter` only supported 4 static query operations (`inspect`, `tokens`, `slice`, `cms`). SmartComponent definitions, variant transitions, and event control dictionaries remained unextracted.
+- **Fix:**
+  - Created and registered `framer.component` in `packages/automation-core/src/operations/framer-query.ts` and `src/code/import/framer-native/agent-slice.ts`:
+    - Extracts component variables (`Label`, `Link`, `Padding`, `Radius`, `BG Blur`).
+    - Extracts all variants with gestures (`hover`, `pressed`), replica overrides (opacity, icon transforms, text rolling), and physics transitions (`spring`, `stiffness: 400`, `damping: 80`).
+    - Extracts interactive event wiring (`actionIdentifier: "framer/useSetVariant"` mapping `mouseEnter` and `mouseLeave` to target variants).
+  - Enriched `framer.slice` output with `motion`, `textEffect`, and `variants` metadata.
+- **Verification:**
+  - Added unit test in `packages/automation-core/test/capabilities/framer-query.test.ts`. All 18 tests passed.
+  - Verified via CLI on live capture for `SlYfGW2gH` (`Header Box`) and `I5JSnLPt8` (`Header`).
+
+---
+
 
