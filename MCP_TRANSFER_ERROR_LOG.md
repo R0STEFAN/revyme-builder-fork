@@ -166,4 +166,27 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
 
 ---
 
+### Issue 10: Raw Capture AST Overhead & Clean Revyme IR Normalization
+- **Symptom:**
+  - Raw JSON captures downloaded from Framer contain ~900 nodes and 5–20 MB of proprietary Redux editor state (e.g. `guidesX`, `guidesY`, `duplicatedFrom`, `contentHash`, `constraintsLocked`, `previewSettings`).
+  - Parsing this voluminous raw state caused unnecessary cognitive load, slow AI context processing, and risk of hallucinated layout heuristics.
+- **Root Cause:**
+  - The capture tool (`framer-native-reader`) previously dumped the raw in-memory Framer node definitions without distilling them into a normalized domain model.
+- **Fix:**
+  - Created `src/code/import/framer-native/normalizer.ts` exporting `normalizeNativeTransfer`:
+    - Distills raw captures into clean `RevymeTransferIR` (`format: "revyme.ir.v1"`).
+    - Extracts 100% pixel-perfect design tokens (colors, typography metrics, Google fonts).
+    - Extracts CMS collections with typed schema fields and items.
+    - Extracts SmartComponents with variables, variants, transitions, interactions, and semantic structures.
+    - Extracts pages with routes, breakpoints, component references, and semantic structures.
+  - Added new MCP tool `framer.normalize` in `packages/automation-core/src/operations/framer-query.ts`.
+  - Added browser-compatible bundle `extensions/framer-native/normalizer.mjs`.
+  - Added "Save Clean Revyme JSON" button in `extensions/framer-native/popup.html` and `popup.mjs`.
+  - Bumped extension version to `0.2.0` in `manifest.json` and updated `scripts/build-framer-native-extension.mjs`.
+- **Verification:**
+  - Added unit test in `src/code/import/framer-native/normalizer.test.ts` and `packages/automation-core/test/capabilities/framer-query.test.ts`. All 12 tests passed.
+  - Built extension package `dist/framer-native-reader-0.2.0.zip` and verified via CLI `framer.normalize` on live capture `framer-native-gNeZkstCZ7bnyRrtX9Va.json`.
+
+---
+
 
