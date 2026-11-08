@@ -139,8 +139,12 @@ export interface FramerComponentInteraction {
   sourceNodeId: string;
   sourceNodeName?: string;
   event: string;
+  eventName?: string;
   action: string;
   targetVariantId?: string;
+  targetVariantName?: string;
+  triggerVarId?: string;
+  triggerVarName?: string;
 }
 
 export interface FramerComponentDetail {
@@ -804,8 +808,72 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
     initialValue: v.initialValue,
   }));
 
+  const variantMap = new Map<string, string>();
+  for (const cid of compNode.children) {
+    const c = graph.nodes.get(cid);
+    variantMap.set(cid, String(c?.raw.name || cid));
+  }
+  const variableMap = new Map<string, string>();
+  for (const v of compNode.raw.variables || []) {
+    variableMap.set(String(v.id), String(v.name || v.id));
+  }
+
   const variants: FramerComponentVariant[] = [];
-  const interactions: FramerComponentInteraction[] = [];
+  const rawInteractions: FramerComponentInteraction[] = [];
+
+  const canvasMetaKeys = new Set(['left', 'top', 'bottom', 'right', 'centerAnchorX', 'centerAnchorY', 'contentHash', '_deleted', 'isBreakpoint']);
+  const cleanOverrides = (rawOverrides?: Record<string, any>) => {
+    if (!rawOverrides || typeof rawOverrides !== 'object') return undefined;
+    const cleaned: Record<string, any> = {};
+    for (const [targetId, props] of Object.entries(rawOverrides)) {
+      if (!props || typeof props !== 'object') continue;
+      const targetCleaned: Record<string, any> = {};
+      for (const [pk, pv] of Object.entries(props)) {
+        if (!canvasMetaKeys.has(pk)) targetCleaned[pk] = pv;
+      }
+      if (Object.keys(targetCleaned).length > 0) cleaned[targetId] = targetCleaned;
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  };
+
+  const eventProps = ['onMouseEnter', 'onMouseLeave', 'onTap', 'onClick', 'onHoverStart', 'onHoverEnd', 'onFocus', 'onBlur', 'onKeyDown', 'onKeyUp'];
+
+  const handleAction = (h: any, variantId: string, variantName: string, sourceNodeId: string, sourceNodeName: string, event: string) => {
+    if (!h || !h.actionIdentifier) return;
+    const targetVariantId = typeof h.controls?.variantId?.value === 'string' ? h.controls.variantId.value : undefined;
+    const targetVariantName = targetVariantId ? variantMap.get(targetVariantId) : undefined;
+    const triggerVarId = typeof h.controls?.id?.value === 'string' ? h.controls.id.value : undefined;
+    const triggerVarName = triggerVarId ? variableMap.get(triggerVarId) : undefined;
+
+    rawInteractions.push({
+      variantId,
+      variantName,
+      sourceNodeId,
+      sourceNodeName,
+      event,
+      eventName: variableMap.get(event) || event,
+      action: String(h.actionIdentifier),
+      targetVariantId,
+      targetVariantName,
+      triggerVarId,
+      triggerVarName,
+    });
+  };
+
+  const scanVariantTree = (nodeId: string, variantId: string, variantName: string) => {
+    const n = graph.nodes.get(nodeId);
+    if (!n) return;
+    const sName = String(n.raw.name || n.id);
+    for (const [k, v] of Object.entries(n.raw || {})) {
+      if (eventProps.includes(k) && Array.isArray(v)) {
+        for (const h of v) handleAction(h, variantId, variantName, n.id, sName, k);
+      } else if (k.startsWith('$control__') && v && typeof v === 'object' && (v as any).type === 'eventhandler') {
+        const handlers = Array.isArray((v as any).value) ? (v as any).value : [(v as any).value];
+        for (const h of handlers) handleAction(h, variantId, variantName, n.id, sName, k.replace('$control__', ''));
+      }
+    }
+    for (const c of n.children) scanVariantTree(c, variantId, variantName);
+  };
 
   for (const childId of compNode.children) {
     const child = graph.nodes.get(childId);
@@ -814,63 +882,44 @@ export function extractTransferComponent(input: unknown, componentIdOrName: stri
     const gesture = child.raw.gesture || (child.raw.replicaInfo ? 'hover' : undefined);
     const isDefault = child.id === compNode.raw.baseVariantId || (!compNode.raw.baseVariantId && child === compNode.children[0]);
     const transition = child.raw.variantTransition;
+
     variants.push({
       id: child.id,
       name,
       gesture,
       isDefault,
-      overrides: child.raw.replicaInfo?.overrides,
+      overrides: cleanOverrides(child.raw.replicaInfo?.overrides),
       transition,
     });
 
+    scanVariantTree(child.id, child.id, name);
+
     if (child.raw.replicaInfo?.overrides) {
       for (const [targetId, override] of Object.entries(child.raw.replicaInfo.overrides as Record<string, any>)) {
+        const targetNode = graph.nodes.get(targetId);
+        const tName = String(targetNode?.raw.name || targetId);
         for (const [prop, val] of Object.entries(override as any)) {
-          if (prop.startsWith('$control__') && val && typeof val === 'object' && (val as any).type === 'eventhandler') {
+          if (eventProps.includes(prop) && Array.isArray(val)) {
+            for (const h of val) handleAction(h, child.id, name, targetId, tName, prop);
+          } else if (prop.startsWith('$control__') && val && typeof val === 'object' && (val as any).type === 'eventhandler') {
             const handlers = Array.isArray((val as any).value) ? (val as any).value : [(val as any).value];
-            for (const h of handlers) {
-              if (h && h.actionIdentifier) {
-                interactions.push({
-                  variantId: child.id,
-                  variantName: name,
-                  sourceNodeId: targetId,
-                  event: prop.replace('$control__', ''),
-                  action: h.actionIdentifier,
-                  targetVariantId: h.controls?.variantId?.value,
-                });
-              }
-            }
+            for (const h of handlers) handleAction(h, child.id, name, targetId, tName, prop.replace('$control__', ''));
           }
         }
       }
     }
   }
 
-  function walkBase(nodeId: string) {
-    const n = graph.nodes.get(nodeId);
-    if (!n) return;
-    for (const [k, v] of Object.entries(n.raw || {})) {
-      if (k.startsWith('$control__') && v && typeof v === 'object' && (v as any).type === 'eventhandler') {
-        const handlers = Array.isArray((v as any).value) ? (v as any).value : [(v as any).value];
-        for (const h of handlers) {
-          if (h && h.actionIdentifier) {
-            interactions.push({
-              variantId: 'base',
-              sourceNodeId: nodeId,
-              sourceNodeName: n.raw.name,
-              event: k.replace('$control__', ''),
-              action: h.actionIdentifier,
-              targetVariantId: h.controls?.variantId?.value,
-            });
-          }
-        }
-      }
+  // Deduplicate identical interactions
+  const interactions: FramerComponentInteraction[] = [];
+  const seenInteractions = new Set<string>();
+  for (const it of rawInteractions) {
+    const key = `${it.variantId}:${it.sourceNodeId}:${it.event}:${it.action}:${it.targetVariantId}:${it.triggerVarId}`;
+    if (!seenInteractions.has(key)) {
+      seenInteractions.add(key);
+      interactions.push(it);
     }
-    for (const c of n.children) walkBase(c);
   }
-
-  const baseId = compNode.raw.baseVariantId || compNode.children[0];
-  if (baseId) walkBase(baseId);
 
   return {
     id: compNode.id,
