@@ -17,6 +17,7 @@ describe('automation-core: framer-query operations', () => {
     expect(defaultRegistry.get('framer.slice')).toBeDefined();
     expect(defaultRegistry.get('framer.cms')).toBeDefined();
     expect(defaultRegistry.get('framer.component')).toBeDefined();
+    expect(defaultRegistry.get('framer.normalize')).toBeDefined();
   });
 
   it('executes framer.inspect via defaultRegistry', async () => {
@@ -84,6 +85,19 @@ describe('automation-core: framer-query operations', () => {
     expect(result.name).toBe('Underline Link (Line Out)');
     expect(result.variants.length).toBeGreaterThanOrEqual(2);
     expect(result.variables.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('executes framer.normalize via defaultRegistry', async () => {
+    const op = defaultRegistry.get('framer.normalize')!;
+    const result = await op.execute(
+      snapshot(),
+      { rawJson: JSON.stringify(capturedComponents) },
+      context
+    ) as any;
+
+    expect(result.format).toBe('revyme.ir.v1');
+    expect(result.tokens.colors.length).toBeGreaterThanOrEqual(2);
+    expect(result.components.length).toBeGreaterThanOrEqual(1);
   });
 
   it('reads from snapshot files when filePath is provided', async () => {

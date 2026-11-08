@@ -4,7 +4,7 @@ import { resolve, join } from 'node:path';
 
 const root = fileURLToPath(new URL('../extensions/framer-native/', import.meta.url));
 const files = ['manifest.json', 'popup.html', 'popup.css', 'popup.mjs', 'transport.mjs',
-  'page-reader.mjs', 'capture.mjs', 'source-adapters.mjs', 'README.md'];
+  'page-reader.mjs', 'capture.mjs', 'source-adapters.mjs', 'normalizer.mjs', 'README.md'];
 
 function crc32(bytes) {
   let crc = 0xffffffff;

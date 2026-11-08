@@ -16,6 +16,10 @@ import {
   type FramerTransferCms,
   type FramerComponentDetail,
 } from '@/code/import/framer-native/agent-slice';
+import {
+  normalizeNativeTransfer,
+  type RevymeTransferIR,
+} from '@/code/import/framer-native/normalizer';
 
 const transferCache = new Map<string, unknown>();
 
@@ -203,9 +207,36 @@ export const framerComponentOperation: Operation<
   },
 };
 
+// 6. framer.normalize
+export const framerNormalizeInputSchema = z.object({
+  filePath: z.string().optional(),
+  rawJson: z.string().optional(),
+}).refine(data => data.filePath || data.rawJson, {
+  message: 'Either filePath or rawJson must be provided',
+});
+
+export const framerNormalizeOperation: Operation<
+  z.infer<typeof framerNormalizeInputSchema>,
+  RevymeTransferIR
+> = {
+  name: 'framer.normalize',
+  description: 'Normalize raw Framer native capture into clean Revyme Transfer IR with components, tokens, CMS, and pages',
+  category: 'framer',
+  kind: 'read',
+  permit: 'read',
+  environment: 'headless',
+  ownerTask: 'T-framer-mcp',
+  inputSchema: framerNormalizeInputSchema,
+  async execute(snapshot, input) {
+    const data = getCachedTransfer(input, snapshot);
+    return normalizeNativeTransfer(data);
+  },
+};
+
 // Auto-register operations into defaultRegistry
 defaultRegistry.register(framerInspectOperation);
 defaultRegistry.register(framerTokensOperation);
 defaultRegistry.register(framerSliceOperation);
 defaultRegistry.register(framerCmsOperation);
 defaultRegistry.register(framerComponentOperation);
+defaultRegistry.register(framerNormalizeOperation);

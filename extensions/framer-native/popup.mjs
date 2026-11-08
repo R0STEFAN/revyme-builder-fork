@@ -1,9 +1,10 @@
 import { captureTabSource } from './transport.mjs';
 import { decodeNativeTransfer } from './envelope.mjs';
+import { normalizeNativeTransfer } from './normalizer.mjs';
 
 const get = id => document.getElementById(id);
 const capture = get('capture'), status = get('status'), summary = get('summary');
-const download = get('download'), copy = get('copy'), sendRevyme = get('send-revyme'), scope = get('scope');
+const download = get('download'), downloadClean = get('download-clean'), copy = get('copy'), sendRevyme = get('send-revyme'), scope = get('scope');
 let transfer, text;
 
 function report(message, error = false) {
@@ -14,6 +15,7 @@ function report(message, error = false) {
 capture.addEventListener('click', async () => {
   transfer = undefined; text = undefined;
   capture.disabled = true; download.disabled = true; copy.disabled = true;
+  if (downloadClean) downloadClean.disabled = true;
   if (sendRevyme) sendRevyme.disabled = true;
   summary.hidden = true;
   report('Reading definitions and fetching dependencies…');
@@ -29,6 +31,7 @@ capture.addEventListener('click', async () => {
     }
     summary.hidden = false;
     download.disabled = false;
+    if (downloadClean) downloadClean.disabled = false;
     copy.disabled = !transfer.complete;
     if (sendRevyme) sendRevyme.disabled = !transfer.complete;
     report(transfer.complete ? 'Source captured. Ready to send to Revyme or save.'
@@ -39,6 +42,26 @@ capture.addEventListener('click', async () => {
     capture.disabled = false;
   }
 });
+
+if (downloadClean) {
+  downloadClean.addEventListener('click', async () => {
+    if (!transfer) return;
+    downloadClean.disabled = true;
+    report('Normalizing transfer to clean Revyme IR…');
+    try {
+      const ir = normalizeNativeTransfer(transfer);
+      const irText = JSON.stringify(ir, null, 2);
+      const url = URL.createObjectURL(new Blob([irText], { type: 'application/json' }));
+      await chrome.downloads.download({ url, filename: `framer-clean-${transfer.context.projectId}.json`, saveAs: true });
+      URL.revokeObjectURL(url);
+      report('Clean Revyme IR JSON downloaded.');
+    } catch (error) {
+      report(error instanceof Error ? error.message : String(error), true);
+    } finally {
+      downloadClean.disabled = false;
+    }
+  });
+}
 
 download.addEventListener('click', async () => {
   if (!text) return;
