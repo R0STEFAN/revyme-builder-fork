@@ -23,10 +23,6 @@ export function sourceCollectionId(identifier: unknown): string {
 }
 export function nativeFieldId(identity: Record<string, string>, collectionId: string, fieldId: string): string {
   if (fieldId === 'id') return '_id';
-  if (fieldId.includes('.')) {
-    const [head, tail] = fieldId.split('.', 2);
-    return `${nativeFieldId(identity, collectionId, head)}.${tail}`;
-  }
   const value = identity[sourceVariableKey(collectionId, fieldId)];
   if (!value) throw new Error(`Missing field identity ${collectionId}:${fieldId}`);
   return value;
@@ -140,7 +136,26 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
           if (variable.type === 'divider' || variable.type === 'slug') continue;
           const control = sourceRecord(raw[`$control__${String(variable.id)}`]);
           const value = control && 'value' in control ? control.value : variable.initialValue;
-          if (value !== undefined) row[nativeFieldId(identity, collectionId, String(variable.id))] = resolveValue(value, variable, collectionId);
+          const headNative = nativeFieldId(identity, collectionId, String(variable.id));
+          if (value !== undefined) row[headNative] = resolveValue(value, variable, collectionId);
+          if (variable.type === 'collectionreference' && typeof variable.dataIdentifier === 'string') {
+            const targetCollectionId = sourceCollectionId(variable.dataIdentifier);
+            if (collectionSet.has(targetCollectionId)) {
+              const targetVars = sourceVariables(graph, targetCollectionId);
+              const targetNode = typeof value === 'string' ? graph.nodes.get(value) : undefined;
+              for (const targetVar of targetVars) {
+                if (targetVar.type === 'divider' || targetVar.type === 'slug' || targetVar.type === 'collectionreference' || targetVar.type === 'multicollectionreference') continue;
+                const tailNative = nativeFieldId(identity, targetCollectionId, String(targetVar.id));
+                if (targetNode && targetNode.kind === 'CollectionItemNode') {
+                  const targetControl = sourceRecord(targetNode.raw[`$control__${String(targetVar.id)}`]);
+                  const targetVal = targetControl && 'value' in targetControl ? targetControl.value : targetVar.initialValue;
+                  if (targetVal !== undefined) row[`${headNative}_${tailNative}`] = resolveValue(targetVal, targetVar, targetCollectionId);
+                } else {
+                  row[`${headNative}_${tailNative}`] = '';
+                }
+              }
+            }
+          }
         }
         data.push(row); createdIds.push(row._id);
       }

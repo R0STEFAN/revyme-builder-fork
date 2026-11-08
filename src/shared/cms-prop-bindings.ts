@@ -25,7 +25,7 @@ export function applyCmsPropBinding(value: unknown, binding: Pick<CmsPropBinding
 export function cmsPropBindingExpression(itemVar: string, binding: Pick<CmsPropBinding, 'field' | 'transform' | 'urlWrap' | 'visibility'>): string {
   trace.fn('cms-prop-binding.expression', { field: binding.field, transform: binding.transform });
   if (!/^[A-Za-z_$][\w$]*$/.test(itemVar) || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(binding.field)) throw new Error('Invalid CMS binding identifier');
-  const value = `${itemVar}.${binding.field}`;
+  const value = `${itemVar}.${binding.field.replace(/\./g, '?.')}`;
   if (binding.visibility) return `(${cmsPropBindingExpression(itemVar, { field: binding.field, transform: binding.visibility.transform })}) ? ${JSON.stringify(binding.visibility.display)} : "none"`;
   if (binding.transform === 'isSet') return `Array.isArray(${value}) ? ${value}.length > 0 : ${value} != null && ${value} !== ''`;
   return binding.urlWrap ? '`url(${' + value + '})`' : value;

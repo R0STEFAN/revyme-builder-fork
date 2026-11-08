@@ -75,7 +75,7 @@ function fieldBinding(context: BindingContext, providerId: string, collectionId:
       providerId,
       collectionId,
       sourceId,
-      fieldId: `${headNative}.${tailNative}`,
+      fieldId: `${headNative}_${tailNative}`,
       itemVar: itemVariable(context, providerId),
       valueType: String(targetField?.type ?? 'string'),
     };

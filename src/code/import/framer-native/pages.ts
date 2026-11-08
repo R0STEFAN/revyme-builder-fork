@@ -277,7 +277,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
           const expr = (b: import('./bindings').NativeBinding): string => {
-            if (b.kind === 'field') return `${b.itemVar}.${b.fieldId}`;
+            if (b.kind === 'field') return `${b.itemVar}.${b.fieldId.replace(/\./g, '?.')}`;
             if (isTemplate && b.kind === 'variable' && b.providerId === id) return b.name;
             if (b.kind === 'transform' && b.name === 'prefix') {
               return `${b.value ?? ''}{${expr(b.input)}}`;
