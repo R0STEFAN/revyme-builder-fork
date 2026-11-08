@@ -41,6 +41,8 @@ export interface NativeTargetContext {
   fontFaces?: readonly WorkspaceFontFaceSpec[];
   skipFeatures?: NativeSourceSkips;
   tolerant?: boolean;
+  replaceHomePage?: boolean;
+  overwrite?: boolean;
 }
 
 function destinationLanguageMatches(code: string | undefined, language: unknown): boolean {
@@ -138,7 +140,13 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const cms = emitNativeCms(graph, identity, { assets: assets.assets, colorNames });
     const reducedMotion = (graph.byKind.get('RootNode') ?? []).some(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.reducedMotion === true);
     const options = { assets: assets.assets, overrides: overrides.overrides, codeComponents: codeComponents.components };
-    const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
+    const pages = emitNativePages(graph, identity, {
+      ...options,
+      existingPaths: paths,
+      tolerant: target.tolerant,
+      replaceHomePage: target.replaceHomePage ?? target.tolerant,
+      overwrite: target.overwrite,
+    });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
     if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code)) || pages.files.some(file => /\bwithCursor\s*\(/.test(file.code))) {
       const original = target.existingFiles.get('app/layout.tsx');
@@ -360,7 +368,14 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     }
     if (colorTokens.length || typographyTokens.length || fontFaces.length || google.requests.length) {
       const before = target.existingFiles.get('app/globals.css');
-      const code = addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerTypographyTokens(applyFramerColorTokens(before ?? '', colorTokens), typographyTokens), fontFaces), google.requests);
+      const cssBefore = before ?? '';
+      const colorsToApply = (target.overwrite && target.tolerant)
+        ? colorTokens.filter(t => !new RegExp(`--${t.name}(?![\\w-])`).test(cssBefore))
+        : colorTokens;
+      const typoToApply = (target.overwrite && target.tolerant)
+        ? typographyTokens.filter(t => !new RegExp(`--${t.name}(?![\\w-])`).test(cssBefore))
+        : typographyTokens;
+      const code = addGoogleFontImportsToCss(applyFramerFontFaces(applyFramerTypographyTokens(applyFramerColorTokens(cssBefore, colorsToApply), typoToApply), fontFaces), google.requests);
       result.files.push({ path: 'app/globals.css', code, ...(before === undefined ? {} : { baseCode: before }), ...(colorTokens.length ? { colorTokens } : {}), ...(typographyTokens.length ? { typographyTokens } : {}), ...(fontFaces.length ? { fontFaces } : {}), ...(google.requests.length ? { googleFonts: google.requests } : {}) });
     }
     const assetPaths = 'requests' in assets && Array.isArray((assets as any).requests) ? ((assets as any).requests as Array<{ path: string }>).map(r => r.path) : [];
@@ -381,7 +396,8 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const isSmoothScrollPatch = (file: typeof result.files[number]) =>
       file.path === SMOOTH_SCROLL_DATA_PATH || file.path === SMOOTH_SCROLL_CONTROLLER_PATH;
     for (const file of result.files) {
-      if ((paths.has(file.path) && !isTokenPatch(file) && !isLayoutPatch(file) && !isSmoothScrollPatch(file)) || emittedPaths.has(file.path)) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
+      const canOverwrite = target.tolerant && (target.overwrite || (target.replaceHomePage && (file.path === 'app/page.client.tsx' || file.path === 'app/page.tsx')));
+      if (((paths.has(file.path) && !isTokenPatch(file) && !isLayoutPatch(file) && !isSmoothScrollPatch(file) && !canOverwrite) || emittedPaths.has(file.path))) result.diagnostics.push({ code: 'NATIVE_PATH_CONFLICT', property: file.path, message: `Import would overwrite or duplicate ${file.path}.` });
       emittedPaths.add(file.path);
       const kind = oracleFileKind(file.path, file.code);
       if (!kind) continue;

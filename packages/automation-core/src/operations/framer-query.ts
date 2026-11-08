@@ -307,6 +307,8 @@ export const framerCompileOperation: Operation<
       existingFiles,
       uploadedAssets,
       tolerant: true,
+      replaceHomePage: true,
+      overwrite: true,
     });
 
     const shouldCommit = input.commit !== false;

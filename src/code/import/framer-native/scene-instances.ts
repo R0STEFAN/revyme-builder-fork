@@ -15,7 +15,7 @@ import type { SourceGraph } from './types';
 import type { SourceScene } from './scene';
 
 /** Same imported instances and prop bindings in pages, templates and masters. */
-export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx' | 'sourceIds' | 'nested' | 'codeInstances' | 'links' | 'slots'>, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>>; componentScopeId?: string } = {}): string {
+export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx' | 'sourceIds' | 'nested' | 'codeInstances' | 'links' | 'slots'>, graph: SourceGraph, identity: Record<string, string>, assets?: Record<string, string>, options: { allowOverlayEvents?: boolean; routes?: Readonly<Record<string, string>>; componentScopeId?: string; tolerant?: boolean } = {}): string {
   trace.fn('framer-native.applyInstances', { design: scene.nested.size, code: scene.codeInstances.size });
   let result = code;
   const imported = new Set<string>();
@@ -49,7 +49,7 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
           const propName = nativePropName(identity, obj.providerId, obj.id);
           result = setTagAttr(result, identity[id], 'initialVariant', `{${propName}}`);
         } else {
-          const variant = sourceInstanceStateName({ graph, scopeId: masterId }, identity, value);
+          const variant = typeof value === 'string' ? sourceInstanceStateName({ graph, scopeId: masterId }, identity, value) : (options.tolerant ? 'default' : sourceInstanceStateName({ graph, scopeId: masterId }, identity, value));
           result = setTagAttr(result, identity[id], 'initialVariant', JSON.stringify(variant));
         }
         continue;
@@ -129,6 +129,7 @@ export function applySourceInstances(code: string, scene: Pick<SourceScene, 'jsx
         graph, identity, nodeId: id,
         ...(cssImage ? { cssImage: true } : {}),
         ...(variable.type === 'collectionreference' ? { referenceCollectionId: sourceCollectionId(variable.dataIdentifier) } : {}),
+        assets,
       });
     }
   }

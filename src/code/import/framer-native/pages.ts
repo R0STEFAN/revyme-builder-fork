@@ -47,6 +47,9 @@ export interface NativePageOptions {
   assets?: Record<string, string>;
   codeComponents?: Readonly<Record<string, NativeCodeComponentRef>>;
   overrides?: Readonly<Record<string, CodeOverrideRef>>;
+  tolerant?: boolean;
+  replaceHomePage?: boolean;
+  overwrite?: boolean;
 }
 export interface NativePageResult extends NativeCompileResult { routes: Record<string, string> }
 
@@ -105,6 +108,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
     if (new Set(originalRoutes.values()).size !== pageIds.length) throw new Error('Duplicate source page routes');
     const originalSet = new Set([...originalRoutes.values()].map(route => route.toLowerCase()));
     const used = new Set([...options.existingPaths].filter(path => /^app\/.+page(?:\.client)?\.tsx$|^app\/page(?:\.client)?\.tsx$/.test(path)).map(path => routeOfFile(path).toLowerCase()));
+    if (options.replaceHomePage) used.delete('/');
+    if (options.overwrite) used.clear();
     let prefix = '';
     const collides = (prefix: string) => (prefix !== '' && originalSet.has(prefix.toLowerCase())) || [...originalRoutes.values()].some(route => used.has((prefix + (route === '/' ? '' : route) || '/').toLowerCase()) || /^\/api(?:\/|$)/.test(prefix + route));
     if (collides(prefix)) {
@@ -117,7 +122,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
     for (const id of templateIds) {
       let name = identity[id];
       if (!name) throw new Error(`Missing template identity ${id}`);
-      for (let suffix = 2; [...options.existingPaths].some(path => path.startsWith(`app/(${name})/`)) || [...groups.values()].includes(name); suffix++) name = `${identity[id]}-${suffix}`;
+      for (let suffix = 2; (!options.overwrite && [...options.existingPaths].some(path => path.startsWith(`app/(${name})/`))) || [...groups.values()].includes(name); suffix++) name = `${identity[id]}-${suffix}`;
       groups.set(id, name);
     }
     const anchors = new Set<string>(), writtenAnchors = new Set<string>();
@@ -325,11 +330,21 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         expressionFor: (value, node) => {
           const binding = resolveSourceBinding(value, { graph, identity, nodeId: node.sourceId });
           const expr = (b: import('./bindings').NativeBinding): string => {
-            if (b.kind === 'field') return `${b.itemVar}.${b.fieldId.replace(/\./g, '?.')}`;
-            if (isTemplate && b.kind === 'variable' && b.providerId === id) return b.name;
-            if (b.kind === 'transform' && b.name === 'prefix') {
-              return `${b.value ?? ''}{${expr(b.input)}}`;
+            if (b.kind === 'field') {
+              if (b.fieldId === 'repeater_item_count') {
+                const staticText = typeof node.properties.html === 'string' ? node.properties.html.replace(/<[^>]+>/g, '').trim() : '';
+                return JSON.stringify(staticText || '10');
+              }
+              return `${b.itemVar}.${b.fieldId.replace(/\./g, '?.')}`;
             }
+            if (isTemplate && b.kind === 'variable' && b.providerId === id) return b.name;
+            if (b.kind === 'transform') {
+              if (b.name === 'prefix') return `${b.value ?? ''}{${expr(b.input)}}`;
+              return expr(b.input);
+            }
+            if (b.kind === 'literal') return JSON.stringify(String(b.value ?? ''));
+            if (b.kind === 'variable') return b.name;
+            if (options.tolerant) return "''";
             throw new Error('Source page text requires its native binding adapter');
           };
           return expr(binding);
@@ -349,7 +364,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         code = setPropTypeInCode(code, prop.name, prop.type);
         code = setPropLabelInCode(code, prop.name, String(prop.variable.name ?? prop.variable.id));
       }
-      code = applySourceInstances(code, scene, graph, identity, options.assets, { allowOverlayEvents: true, routes: result.routes });
+      code = applySourceInstances(code, scene, graph, identity, options.assets, { allowOverlayEvents: true, routes: result.routes, tolerant: options.tolerant });
       const parentOf = new Map<string, string>();
       for (const nodeId of scene.sourceIds) for (const childId of resolveSourceNode(graph, nodeId).children) parentOf.set(childId, nodeId);
       const formSet = new Set(scene.forms);
@@ -412,7 +427,9 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
             componentImportPath: `@/components/${compName}`,
           });
         }
-        if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length && !overlays.handled.has(`${nodeId}:${property}`)) throw new Error(`Source page action ${property} requires its native adapter`);
+        if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length && !overlays.handled.has(`${nodeId}:${property}`)) {
+          if (!options.tolerant) throw new Error(`Source page action ${property} requires its native adapter`);
+        }
         const override = isSourceCodeComponent(node) ? undefined : activeSourceCodeOverride(node.properties);
         if (override) {
           const ref = options.overrides?.[override];
@@ -487,7 +504,9 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
               }
             }
           }
-          for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
+          for (const property of semanticProperties) if (JSON.stringify(state.properties[property]) !== JSON.stringify(node.properties[property])) {
+            if (!options.tolerant) throw new Error(`Responsive ${property} on ${nodeId} requires its native adapter`);
+          }
           if (node.kind === 'RichTextNode') {
             const base = mapSourceText(node, context), text = mapSourceText(state, context);
             if (base.tag === text.tag && !base.binding && !text.binding && (base.plainText !== text.plainText || base.jsx !== text.jsx)) {
@@ -581,7 +600,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           if (!range) throw new Error('Native list container is missing');
           templateJSX = code.slice(range.contentStart, range.closeTagStart).trim();
         }
-        code = emitSourceQueryInCode(code, identity[nodeId], nodeId, templateJSX, { graph, identity, nodeId }, templateTargetId);
+        code = emitSourceQueryInCode(code, identity[nodeId], nodeId, templateJSX, { graph, identity, nodeId, tolerant: options.tolerant, assets: options.assets }, templateTargetId);
       }
       code = applyNativeResponsive(code, { graph, scopeId: id, context, stylesFor }, identity);
       for (const nodeId of scene.sourceIds) {
@@ -652,12 +671,23 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
         }
         if (isSourceCodeComponent(node)) continue;
         const spec = sourceRotationLoop(node.properties);
-        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceRotationLoop(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(spec)) throw new Error(`Responsive loop on ${nodeId} requires its native adapter`);
+        for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceRotationLoop(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(spec)) {
+          if (!options.tolerant) throw new Error(`Responsive loop on ${nodeId} requires its native adapter`);
+        }
         if (spec) {
-          if (isDetail) throw new Error(`Loop on CMS detail page ${nodeId} requires its native hook-order adapter`);
-          if (!['FrameNode', 'RichTextNode'].includes(node.kind)) throw new Error(`Loop on source component ${nodeId} requires its native adapter`);
-          assertLoopOutsideSourceList(graph, nodeId);
-          code = applySourceRotationLoop(code, identity[nodeId], spec);
+          if (isDetail) {
+            if (!options.tolerant) throw new Error(`Loop on CMS detail page ${nodeId} requires its native hook-order adapter`);
+          } else if (!['FrameNode', 'RichTextNode'].includes(node.kind)) {
+            if (!options.tolerant) throw new Error(`Loop on source component ${nodeId} requires its native adapter`);
+          } else {
+            try {
+              assertLoopOutsideSourceList(graph, nodeId);
+              code = applySourceRotationLoop(code, identity[nodeId], spec);
+            } catch (err) {
+              if (!options.tolerant) throw err;
+              context.diagnostics.push({ code: 'SOURCE_PAGE_UNSUPPORTED', sourceId: nodeId, message: err instanceof Error ? err.message : String(err) });
+            }
+          }
         }
         const flow = sourceFlowEffect(node.properties);
         for (const viewport of viewports.slice(1)) if (JSON.stringify(sourceFlowEffect(resolveSourceNode(graph, nodeId, viewport.sourceStateId).properties)) !== JSON.stringify(flow)) throw new Error(`Responsive flow effect on ${nodeId} requires its native adapter`);
@@ -714,7 +744,10 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
           }
         }
       }
-      if (context.diagnostics.length) { result.diagnostics.push(...context.diagnostics); throw new Error('Unresolved source page semantics'); }
+      if (context.diagnostics.length) {
+        result.diagnostics.push(...context.diagnostics);
+        if (!options.tolerant) throw new Error('Unresolved source page semantics');
+      }
       const pageEffect = isTemplate ? templatePageEffects.get(id) : undefined;
       if (pageEffect) code = injectPageTransitionsInCode(code);
       if (code.includes('RevymeSplitText')) code = ensureNamedImport(code, '@revyme/runtime', ['RevymeSplitText']);
@@ -724,7 +757,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       const projectedPaths = new Set([path, ...[...groups.values()].map(group => `app/(${group})/LayoutClient.tsx`), ...[...templatePageEffects.keys()].flatMap(tid => { const g = groups.get(tid)!; return [`app/(${g})/page-effects.ts`, `app/(${g})/page-effects-runtime.ts`, `app/(${g})/page-transitions.tsx`]; })]);
       const violations = checkFile(code, { kind: isTemplate ? 'template' : 'page', path, projectFiles: projectedPaths });
       const blocking = violations.filter(v => v.tier === 3 || isAgentBlockingOracleViolation(v.code));
-      if (blocking.length) throw new Error(`Native page validation: ${blocking.map(violation => violation.code).join(', ')}`);
+      if (blocking.length) throw new Error(`Native page validation: ${blocking.map(violation => `${violation.code} (${violation.message})`).join('; ')}`);
       if (isTemplate) {
         result.files.push({ path, code }, { path: `${folder}/layout.tsx`, code: "import LayoutClient from './LayoutClient';\nexport default function Layout({ children }: { children: React.ReactNode }) { return <LayoutClient>{children}</LayoutClient>; }\n" }, ...(pageEffect ? [{ path: `${folder}/page-effects.ts`, code: serializePageEffects({ __default: pageEffect, pages: {} }) }, { path: `${folder}/page-effects-runtime.ts`, code: PAGE_EFFECTS_RUNTIME_SOURCE }, { path: `${folder}/page-transitions.tsx`, code: PAGE_TRANSITIONS_SOURCE }] : []));
         result.createdIds.push(...scene.sourceIds.map(id => identity[id]), ...scene.optionIds);
