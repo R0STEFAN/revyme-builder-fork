@@ -3,6 +3,7 @@ import { cmsPropBindingExpression } from '../../../shared/cms-prop-bindings';
 import { checkFile, isAgentBlockingOracleViolation } from '../../oracle/check-file';
 import { setTagAttr, ensureNamedImport } from '../../generation/generator-utils';
 import { wrapInFitSVGInCode } from '../../generation/fit-text-gen';
+import { addComponentCursorInCode } from '../../generation/cursor-gen';
 import { setGlideInCode } from '../../generation/glide-gen';
 import { convertToMotionLinkInCode } from '../../generation/generator-attrs';
 import { setCodeOverridesInCode, type CodeOverrideRef } from '../../generation/code-override-gen';
@@ -243,7 +244,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const intrinsicImageFieldFor = (node: ResolvedSourceNode) => node.kind === 'FrameNode' && !node.children.length && node.properties.fillEnabled === true && node.properties.fillType === 'image' && node.properties.heightType === 5 && !(typeof node.properties.fillImagePixelWidth === 'number' && typeof node.properties.fillImagePixelHeight === 'number' && node.properties.fillImagePixelHeight > 0) && !(typeof node.properties.aspectRatio === 'number' && node.properties.aspectRatio > 0)
         ? imageFieldFor(node.properties.fillImage, node) : undefined;
-      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight }, routes: result.routes };
+      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: [], variables, assets: options.assets, cmsImageField: (value, node) => Boolean(imageFieldFor(value, node)), supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, supportedCustomCursors: true, viewport: { width: viewports[0].designWidth!, height: viewports[0].viewportHeight }, routes: result.routes };
       const visibilityFor = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return;
         const binding = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -378,6 +379,14 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       code = overlays.code;
       for (const nodeId of scene.sourceIds) {
         const node = resolveSourceNode(graph, nodeId);
+        const compId = node.properties.customCursorSmartComponentId;
+        if (node.properties.customCursorType === 'component' && typeof compId === 'string' && graph.nodes.has(compId)) {
+          const compName = nativeComponentName(identity, compId);
+          code = addComponentCursorInCode(code, identity[nodeId], {
+            componentName: compName,
+            componentImportPath: `@/components/${compName}`,
+          });
+        }
         if (!isSourceCodeComponent(node)) for (const [property, value] of Object.entries(node.properties)) if (/^on[A-Z]/.test(property) && Array.isArray(value) && value.length && !overlays.handled.has(`${nodeId}:${property}`)) throw new Error(`Source page action ${property} requires its native adapter`);
         const override = isSourceCodeComponent(node) ? undefined : activeSourceCodeOverride(node.properties);
         if (override) {

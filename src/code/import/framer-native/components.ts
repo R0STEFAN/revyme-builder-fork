@@ -113,7 +113,7 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           ? String(variable.initialValue ?? '0px')
           : `{${nativePropName(identity, scopeId, String(variable.id))}}`,
       ]));
-      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: componentDiagnostics, variables: variableValues, supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, ...options };
+      const context: SourceMappingContext = { graph, typographyIdentity: identity, diagnostics: componentDiagnostics, variables: variableValues, supportedLoops: true, supportedMountEffects: true, supportedFlowEffects: true, supportedForms: true, supportedCustomCursors: true, ...options };
       const isComputedVisibility = (node: ResolvedSourceNode) => {
         if (!sourceRecord(node.properties.visible)) return false;
         const b = resolveSourceBinding(node.properties.visible, { graph, identity, nodeId: node.sourceId });
@@ -466,6 +466,15 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
           for (const state of scope.children.filter(state => state !== primaryId)) if (JSON.stringify(resolveSourceNode(graph, id, state).properties.customCursorType) !== JSON.stringify(node.properties.customCursorType)) throw new Error(`Per-state cursor on ${id} requires its native adapter`);
           code = addComponentCursorInCode(code, identity[id], { componentName: binding.name });
           code = ensureCursorOptsForwardInCode(code, binding.name);
+        } else if (node.properties.customCursorType === 'component' && typeof node.properties.customCursorSmartComponentId === 'string') {
+          const compId = node.properties.customCursorSmartComponentId;
+          if (graph.nodes.has(compId)) {
+            const compName = nativeComponentName(identity, compId);
+            code = addComponentCursorInCode(code, identity[id], {
+              componentName: compName,
+              componentImportPath: `@/components/${compName}`,
+            });
+          }
         }
         const identifier = activeSourceCodeOverride(node.properties);
         if (!identifier) continue;

@@ -137,8 +137,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const options = { assets: assets.assets, overrides: overrides.overrides, codeComponents: codeComponents.components };
     const pages = emitNativePages(graph, identity, { ...options, existingPaths: paths });
     const components = emitNativeComponents(graph, identity, { ...options, routes: pages.routes });
-    if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code))) {
-      if (reducedMotion) result.diagnostics.push({ code: 'SOURCE_REDUCED_MOTION_ADAPTER_REQUIRED', message: 'Component cursors require reduced-motion runtime support.' });
+    if (components.files.some(file => /\bwithCursor\s*\(/.test(file.code)) || pages.files.some(file => /\bwithCursor\s*\(/.test(file.code))) {
       const original = target.existingFiles.get('app/layout.tsx');
       const updated = original === undefined ? undefined : ensureCursorPortalInLayout(original);
       if (!updated || !hasNativeCursorPortal(updated)) result.diagnostics.push({ code: 'SOURCE_CURSOR_PORTAL_REQUIRED', message: 'Component cursors require a valid native root layout and cursor portal.' });

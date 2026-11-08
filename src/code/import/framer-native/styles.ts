@@ -21,6 +21,7 @@ export interface SourceMappingContext {
   supportedMountEffects?: boolean;
   supportedFlowEffects?: boolean;
   supportedForms?: boolean;
+  supportedCustomCursors?: boolean;
   routes?: Readonly<Record<string, string>>;
 }
 
@@ -69,7 +70,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   for (const key of ['pageEffects']) {
     if (Array.isArray(p[key]) && p[key].length) mappingDiagnostic(context, node, key, 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   }
-  if (p.customCursorType === 'component' && p.customCursorSmartComponentId) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
+  if (p.customCursorType === 'component' && p.customCursorSmartComponentId && (!context.supportedCustomCursors || !context.graph?.nodes.has(String(p.customCursorSmartComponentId)))) mappingDiagnostic(context, node, 'customCursorSmartComponentId', 'SOURCE_BEHAVIOR_ADAPTER_REQUIRED');
   const result: Record<string, string> = { boxSizing: 'border-box', position: 'relative', display: 'block' };
   if (Array.isArray(p.boxShadows) && p.boxShadows.length) {
     const shadows = p.boxShadows.map(s => {
@@ -140,6 +141,8 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
 
   const isFreeformChild = Boolean(parent && !['stack', 'grid'].includes(String(parent.layout)) && p.position !== 'relative');
   const outOfFlow = p.position === 'absolute' || p.position === 'fixed' || isFreeformChild;
+  let hasCenterAnchorX = false;
+  let hasCenterAnchorY = false;
   if (outOfFlow || p.position === 'sticky') {
     let pos = String(p.position ?? (isFreeformChild ? 'absolute' : 'relative'));
     if (pos === 'fixed' && context.parent && context.parent.sourceId !== context.viewport?.sourceStateId) {
@@ -147,8 +150,21 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
     }
     result.position = pos;
     for (const key of ['left', 'right', 'top', 'bottom']) if (p[key] !== null && p[key] !== undefined) set(key, px(p[key]));
-    if (outOfFlow && p.left == null && p.right == null && (p.widthType === 1 || p.width === 1)) {
-      result.left = '0px';
+    if (outOfFlow && p.left == null && p.right == null) {
+      if (p.widthType === 1 || p.width === 1) {
+        result.left = '0px';
+      } else if (typeof p.centerAnchorX === 'number' && Number.isFinite(p.centerAnchorX)) {
+        result.left = `${Number((p.centerAnchorX * 100).toFixed(2))}%`;
+        hasCenterAnchorX = true;
+      }
+    }
+    if (outOfFlow && p.top == null && p.bottom == null) {
+      if (p.heightType === 1 || p.height === 1) {
+        result.top = '0px';
+      } else if (typeof p.centerAnchorY === 'number' && Number.isFinite(p.centerAnchorY)) {
+        result.top = `${Number((p.centerAnchorY * 100).toFixed(2))}%`;
+        hasCenterAnchorY = true;
+      }
     }
   }
   if (p.position === 'sticky' && p.positionStickyTop != null) set('top', px(p.positionStickyTop));
@@ -202,7 +218,7 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   }
   if (typeof p.aspectRatio === 'number' && p.aspectRatio > 0) {
     result.aspectRatio = String(p.aspectRatio);
-    if (typeof p.width === 'number' && p.width > 0 && typeof p.height === 'number' && Math.abs(p.height - p.width / p.aspectRatio) > 1) {
+    if (p.widthType === 0 && typeof p.width === 'number' && p.width > 1 && typeof p.height === 'number' && Math.abs(p.height - p.width / p.aspectRatio) > 1) {
       result.height = `${Math.round(p.width / p.aspectRatio)}px`;
     }
   }
@@ -259,6 +275,9 @@ export function mapSourceStyles(node: ResolvedSourceNode, context: SourceMapping
   for (const key of ['opacity', 'zIndex']) if (p[key] !== undefined) set(key, value(key));
   if (p.blendingMode) result.mixBlendMode = String(p.blendingMode);
   const transforms: string[] = [];
+  if (hasCenterAnchorX && hasCenterAnchorY) transforms.push('translate(-50%, -50%)');
+  else if (hasCenterAnchorX) transforms.push('translateX(-50%)');
+  else if (hasCenterAnchorY) transforms.push('translateY(-50%)');
   if (p.rotation) transforms.push(`rotate(${p.rotation}deg)`);
   if (p.scale !== undefined && p.scale !== 1) {
     const scale = value('scale');

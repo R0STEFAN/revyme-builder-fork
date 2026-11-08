@@ -136,15 +136,34 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
       }
       if (identifier.includes('LKiOP6Q') || name === 'Portrait' || name === 'Portrait Dither' || name === 'Dither Image') {
         const imageRaw = unwrapControl(node.properties.$control__image);
-        let src = typeof imageRaw === 'string' ? (options.assets?.[imageRaw] ?? imageRaw) : '';
-        if (src.startsWith('data:framer/asset-reference,')) {
-          src = options.assets?.[src] ?? src;
+        let srcAttr = '';
+        if (typeof imageRaw === 'string') {
+          let src = options.assets?.[imageRaw] ?? imageRaw;
+          if (src.startsWith('data:framer/asset-reference,')) src = options.assets?.[src] ?? src;
+          srcAttr = `src=${JSON.stringify(src)}`;
+        } else if (imageRaw && typeof imageRaw === 'object') {
+          if (options.expressionFor) {
+            try {
+              const expr = options.expressionFor(imageRaw, node, 'src');
+              if (expr) srcAttr = `src={${expr}}`;
+            } catch {}
+          }
+          if (!srcAttr) {
+            const rawRef = sourceRecord(imageRaw);
+            const refObj = rawRef && 'startValue' in rawRef ? (rawRef as any).startValue : rawRef;
+            if (refObj?.type === 'variableReference' && typeof refObj.id === 'string' && typeof refObj.providerId === 'string') {
+              const propTarget = identity[sourceVariableKey(refObj.providerId, refObj.id)] ?? identity[`${refObj.providerId}:${refObj.id}`];
+              if (propTarget) {
+                srcAttr = `src={prop${nodeIdToVarNameCapitalised(propTarget)}}`;
+              }
+            }
+          }
         }
         const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
         const isGreen = node.sourceId === 'qQVJYFwaM' || (parent && String(parent.properties.name) === 'Designer');
         const filterVal = isGreen ? 'contrast(1.4) brightness(0.9) sepia(1) hue-rotate(85deg) saturate(3.5)' : 'contrast(1.25) grayscale(0.15)';
         const imgStyles = { width: '100%', height: '100%', objectFit: 'cover', borderRadius: styles.borderRadius || '0px', filter: filterVal };
-        return `<div data-id="${targetId}"${label} style={${sourceStyleLiteral({ overflow: 'hidden', ...styles })}}>${src ? `<img data-id="${targetId}-img" src=${JSON.stringify(src)} alt="${escapeJsxText(name)}" style={${sourceStyleLiteral(imgStyles)}} />` : ''}</div>`;
+        return `<div data-id="${targetId}"${label} style={${sourceStyleLiteral({ overflow: 'hidden', ...styles })}}>${srcAttr ? `<img data-id="${targetId}-img" ${srcAttr} alt="${escapeJsxText(name)}" style={${sourceStyleLiteral(imgStyles)}} />` : ''}</div>`;
       }
       if (identifier.includes('C5D5teh') || name === 'Highlight Quote') {
         const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
@@ -180,17 +199,31 @@ export function emitSourceScene(graph: SourceGraph, identity: Record<string, str
             if (propTarget) markProp = `prop${nodeIdToVarNameCapitalised(propTarget)}`;
           }
         }
+        const isStepMark = node.sourceId === 'Z63e2F2fE' || (parent && String(parent.properties.name).includes('Step'));
         const sparkPath = "M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z";
         const arrowUpRightPath = "M6.4 17.6L16 8V15H18V4.5C18 4.2 17.8 4 17.5 4H7V6H14L4.4 15.6L6.4 17.6Z";
         const defaultPath = "M13.293 6.293a1 1 0 0 1 1.414 0l5 5a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414-1.414L16.586 13H5a1 1 0 1 1 0-2h11.586l-3.293-3.293a1 1 0 0 1 0-1.414z";
+        const briefPath = "M20,14h3.5v3.5h-3.5Z M20,66h3.5v3.5h-3.5Z M28,14h3.5v3.5h-3.5Z M28,66h3.5v3.5h-3.5Z M36,14h3.5v3.5h-3.5Z M36,66h3.5v3.5h-3.5Z M44,14h3.5v3.5h-3.5Z M44,66h3.5v3.5h-3.5Z M52,14h3.5v3.5h-3.5Z M52,66h3.5v3.5h-3.5Z M14,24h3.5v3.5h-3.5Z M58,24h3.5v3.5h-3.5Z M14,32h3.5v3.5h-3.5Z M58,32h3.5v3.5h-3.5Z M14,40h3.5v3.5h-3.5Z M58,40h3.5v3.5h-3.5Z M14,48h3.5v3.5h-3.5Z M58,48h3.5v3.5h-3.5Z M14,56h3.5v3.5h-3.5Z M58,56h3.5v3.5h-3.5Z M16,18h3.5v3.5h-3.5Z M56,18h3.5v3.5h-3.5Z M16,62h3.5v3.5h-3.5Z M56,62h3.5v3.5h-3.5Z M24,28h3.5v3.5h-3.5Z M32,28h3.5v3.5h-3.5Z M40,28h3.5v3.5h-3.5Z M48,28h3.5v3.5h-3.5Z M24,38h3.5v3.5h-3.5Z M32,38h3.5v3.5h-3.5Z M40,38h3.5v3.5h-3.5Z M24,48h3.5v3.5h-3.5Z M32,48h3.5v3.5h-3.5Z M40,48h3.5v3.5h-3.5Z M48,48h3.5v3.5h-3.5Z";
+        const platePath = "M36.2,36.2h3.5v3.5h-3.5Z M62.3,36.3h3.5v3.5h-3.5Z M60.7,45.2h3.5v3.5h-3.5Z M56.2,53.0h3.5v3.5h-3.5Z M49.3,58.8h3.5v3.5h-3.5Z M40.8,61.9h3.5v3.5h-3.5Z M31.8,61.9h3.5v3.5h-3.5Z M23.3,58.8h3.5v3.5h-3.5Z M16.4,53.0h3.5v3.5h-3.5Z M11.9,45.2h3.5v3.5h-3.5Z M10.3,36.3h3.5v3.5h-3.5Z M11.9,27.4h3.5v3.5h-3.5Z M16.4,19.6h3.5v3.5h-3.5Z M23.3,13.8h3.5v3.5h-3.5Z M31.8,10.7h3.5v3.5h-3.5Z M40.8,10.7h3.5v3.5h-3.5Z M49.3,13.8h3.5v3.5h-3.5Z M56.2,19.6h3.5v3.5h-3.5Z M60.7,27.4h3.5v3.5h-3.5Z M52.3,36.3h3.5v3.5h-3.5Z M50.2,44.3h3.5v3.5h-3.5Z M44.3,50.2h3.5v3.5h-3.5Z M36.3,52.3h3.5v3.5h-3.5Z M28.3,50.2h3.5v3.5h-3.5Z M22.4,44.3h3.5v3.5h-3.5Z M20.3,36.3h3.5v3.5h-3.5Z M22.4,28.3h3.5v3.5h-3.5Z M28.3,22.4h3.5v3.5h-3.5Z M36.3,20.3h3.5v3.5h-3.5Z M44.3,22.4h3.5v3.5h-3.5Z M50.2,28.3h3.5v3.5h-3.5Z M43.3,36.3h3.5v3.5h-3.5Z M39.8,42.4h3.5v3.5h-3.5Z M32.8,42.4h3.5v3.5h-3.5Z M29.3,36.3h3.5v3.5h-3.5Z M32.8,30.2h3.5v3.5h-3.5Z M39.8,30.2h3.5v3.5h-3.5Z";
+        const wheelPath = "M14,16h3.5v3.5h-3.5Z M22,16h3.5v3.5h-3.5Z M30,16h3.5v3.5h-3.5Z M44,16h3.5v3.5h-3.5Z M52,16h3.5v3.5h-3.5Z M60,16h3.5v3.5h-3.5Z M14,24h3.5v3.5h-3.5Z M22,24h3.5v3.5h-3.5Z M30,24h3.5v3.5h-3.5Z M44,24h3.5v3.5h-3.5Z M52,24h3.5v3.5h-3.5Z M60,24h3.5v3.5h-3.5Z M14,32h3.5v3.5h-3.5Z M22,32h3.5v3.5h-3.5Z M30,32h3.5v3.5h-3.5Z M44,32h3.5v3.5h-3.5Z M52,32h3.5v3.5h-3.5Z M60,32h3.5v3.5h-3.5Z M14,44h3.5v3.5h-3.5Z M22,44h3.5v3.5h-3.5Z M30,44h3.5v3.5h-3.5Z M37,44h3.5v3.5h-3.5Z M44,44h3.5v3.5h-3.5Z M52,44h3.5v3.5h-3.5Z M60,44h3.5v3.5h-3.5Z M14,52h3.5v3.5h-3.5Z M22,52h3.5v3.5h-3.5Z M30,52h3.5v3.5h-3.5Z M37,52h3.5v3.5h-3.5Z M44,52h3.5v3.5h-3.5Z M52,52h3.5v3.5h-3.5Z M60,52h3.5v3.5h-3.5Z M14,60h3.5v3.5h-3.5Z M22,60h3.5v3.5h-3.5Z M30,60h3.5v3.5h-3.5Z M37,60h3.5v3.5h-3.5Z M44,60h3.5v3.5h-3.5Z M52,60h3.5v3.5h-3.5Z M60,60h3.5v3.5h-3.5Z";
+        const loomPath = "M26,20h3.5v3.5h-3.5Z M32,20h3.5v3.5h-3.5Z M38,20h3.5v3.5h-3.5Z M44,20h3.5v3.5h-3.5Z M50,20h3.5v3.5h-3.5Z M22,32h3.5v3.5h-3.5Z M28,32h3.5v3.5h-3.5Z M34,32h3.5v3.5h-3.5Z M40,32h3.5v3.5h-3.5Z M46,32h3.5v3.5h-3.5Z M52,32h3.5v3.5h-3.5Z M18,44h3.5v3.5h-3.5Z M24,44h3.5v3.5h-3.5Z M30,44h3.5v3.5h-3.5Z M36,44h3.5v3.5h-3.5Z M42,44h3.5v3.5h-3.5Z M48,44h3.5v3.5h-3.5Z M54,44h3.5v3.5h-3.5Z M58,44h3.5v3.5h-3.5Z M14,56h3.5v3.5h-3.5Z M20,56h3.5v3.5h-3.5Z M26,56h3.5v3.5h-3.5Z M32,56h3.5v3.5h-3.5Z M38,56h3.5v3.5h-3.5Z M44,56h3.5v3.5h-3.5Z M50,56h3.5v3.5h-3.5Z M56,56h3.5v3.5h-3.5Z M62,56h3.5v3.5h-3.5Z";
+
         let pathAttr = `d="${defaultPath}"`;
         if (markProp) {
-          pathAttr = `d={(${markProp} === 'EbbUPHGE8' || ${markProp} === 'spark' || ${markProp} === 'sparkle') ? "${sparkPath}" : (${markProp} === 'bLrJ5hoOF' || ${markProp} === 'arrow-up-right') ? "${arrowUpRightPath}" : "${defaultPath}"}`;
+          pathAttr = `d={(${markProp} === 'wzfls2Y43' || ${markProp} === 'brief' || ${markProp} === 'Brief') ? "${briefPath}" : (${markProp} === 'pmjfuCx0Z' || ${markProp} === 'plate' || ${markProp} === 'Plate') ? "${platePath}" : (${markProp} === 'lt_v2f7vN' || ${markProp} === 'wheel' || ${markProp} === 'Wheel') ? "${wheelPath}" : (${markProp} === 'LN5YH58y4' || ${markProp} === 'set' || ${markProp} === 'Set' || ${markProp} === 'loom') ? "${loomPath}" : (${markProp} === 'EbbUPHGE8' || ${markProp} === 'spark' || ${markProp} === 'sparkle') ? "${sparkPath}" : (${markProp} === 'bLrJ5hoOF' || ${markProp} === 'arrow-up-right') ? "${arrowUpRightPath}" : "${defaultPath}"}`;
         } else if (typeof markVal === 'string') {
           if (markVal === 'spark' || markVal === 'sparkle' || markVal === 'EbbUPHGE8') pathAttr = `d="${sparkPath}"`;
           else if (markVal === 'arrow-up-right' || markVal === 'bLrJ5hoOF') pathAttr = `d="${arrowUpRightPath}"`;
+          else if (markVal === 'wzfls2Y43' || markVal === 'brief' || markVal === 'Brief') pathAttr = `d="${briefPath}"`;
+          else if (markVal === 'pmjfuCx0Z' || markVal === 'plate' || markVal === 'Plate') pathAttr = `d="${platePath}"`;
+          else if (markVal === 'lt_v2f7vN' || markVal === 'wheel' || markVal === 'Wheel') pathAttr = `d="${wheelPath}"`;
+          else if (markVal === 'LN5YH58y4' || markVal === 'set' || markVal === 'Set' || markVal === 'loom') pathAttr = `d="${loomPath}"`;
         }
-        return `<span data-id="${targetId}"${label} style={${sourceStyleLiteral({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', ...styles })}}><svg data-id="${targetId}-svg" width="14" height="14" viewBox="0 0 24 24"><path data-id="${targetId}-path" ${pathAttr} fill="currentColor"/></svg></span>`;
+        const vb = (markProp || isStepMark) ? '0 0 76 76' : '0 0 24 24';
+        const w = (markProp || isStepMark) ? '100%' : '14';
+        const h = (markProp || isStepMark) ? '100%' : '14';
+        const color = (markProp || isStepMark) ? 'var(--token-b2bff1f4-a224-4f0d-a2fe-258c1d2118e9, #FFF9E0)' : 'currentColor';
+        return `<span data-id="${targetId}"${label} style={${sourceStyleLiteral({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color, ...styles })}}><svg data-id="${targetId}-svg" width="${w}" height="${h}" viewBox="${vb}"><path data-id="${targetId}-path" ${pathAttr} fill="currentColor"/></svg></span>`;
       }
       if (node.properties.dynamicVectorSetIdentifier) {
         const label = typeof node.properties.name === 'string' ? ` data-name="${escapeJsxText(node.properties.name).replace(/"/g, '&quot;')}"` : '';
