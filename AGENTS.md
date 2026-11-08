@@ -46,7 +46,8 @@ Everything is one cycle. Learn it and the codebase stops being surprising.
 
 **Read path.** `code/parsing/parser.ts` walks the JSX with Babel and produces a flat
 `Map<id, CanvasNode>`. `canvas/Renderer.ts` turns that into DOM inside a sandboxed iframe.
-Nodes are identified by a `data-id` attribute that lives in the user's source.
+Nodes are identified by a `data-id` attribute that lives in the user's source (automatically
+minted and injected by Revyme during ingestion/editing if omitted).
 
 **Write path.** UI never edits the DOM as the source of truth. It calls
 `queueMutation({ type, nodeId, … })`; the queue batches, then runs a **generator** - a pure
@@ -135,9 +136,9 @@ it. Adding an export there has a checklist - see the package's own README.
 ## The oracle
 
 `src/code/oracle/` gates every file written by an AI agent or the MCP server before it reaches
-the project. Each rule encodes something the builder cannot resolve: an element without a
-`data-id`, a computed text expression the text tool can't edit, an animation shape the panel
-can't read back.
+the project. Each rule encodes something the builder cannot resolve: a computed text expression
+the text tool can't edit, an animation shape the panel can't read back, or syntax violations
+(missing `data-id`s are healed automatically by the gate before validation).
 
 Rules are tiered - tier 3 blocks (the file would crash or fail to parse), tiers 1-2 are
 correctness and dialect violations. When you add a codegen feature, ask whether a *hand-written*

@@ -135,10 +135,12 @@ dot-name such as `pages.list`.
   4. Resolves PascalCase tags as Design Components: checks `components/<Name>.tsx`, injects `import Name from '@/components/Name';` into the page automatically, and mounts the instance into the canvas tree.
   5. Inserts native canvas nodes into ProjectFS, guaranteeing full visual editability in the canvas iframe.
 
-- **Design System as Single Source of Truth (SSOT) Workflow:**
-  1. **Phase 1: Design Tokens & Presets:** Define design variables with `tokens.set`, typography with `typography.set`, and style presets with `presets.set`.
-  2. **Phase 2: Master Design Components:** Author atomic, interactive UI masters (Buttons, Cards, Modals, Navbar) via `components.create` with variants and typed props.
-  3. **Phase 3: Compose Sections with `fragments.insert`:** Write semantic JSX sections referencing HTML tags, CSS tokens, and Design Components in a single tool call per section.
+- **Two-Pass Pipeline & Single Source of Truth (SSOT) Workflow:**
+  1. **Phase 1: Pure Creative Design (Creative Lead):** Author the visual thesis, color palette, typography pair, and complete semantic JSX layout in pure React/Next.js without Revyme constraints or manual `data-id` tracking.
+  2. **Phase 2: Revyme Foundation:** Register design tokens with `tokens.set`, Next.js Google Fonts with `fonts.transformNextFont`, compound typography presets with `typography.set`, and style presets with `presets.set`.
+  3. **Phase 3: Compose Sections with `fragments.insert`:** Write semantic JSX sections referencing HTML tags, CSS tokens, and typography presets via `preset="..."` (e.g. `<h1 preset="display-statement">`, `<p preset="body-editorial">`). Revyme automatically generates deterministic `data-id`s and injects required imports. Never track `data-id` manually.
+  4. **Phase 4: Top-Down Component Modularization:** Extract repeated units (Buttons, Cards, Navbar) directly from the rendered canvas via `components.extract`, convert duplicates with `components.replace`, and configure interactive states via `variants.create`.
+  5. **Phase 5 (Only if needed): Bespoke Code Components:** For complex algorithmic or third-party visual canvas widgets (e.g. Three.js canvas, specialized WebGL canvas), author a Code Component with `@controls` via `codeFiles.submit`. Never use Code Components for standard text, layouts, or cards.
      - **Typography Presets in JSX:** Specify presets using `preset="<preset-name>"` (e.g. `<h1 preset="display-statement">`, `<h2 preset="section-title">`, `<p preset="body-editorial">`, `<span preset="mono-telemetry">`).
      - **SSOT Rules for Text:** DO NOT write hardcoded inline font family, font size, line height, letter spacing, or color on preset-bound elements. The typography preset is the SSOT and defines all of these properties. Writing hardcoded inline `color` or `fontSize` creates redundant element overrides and breaks the visual editor's Typography Preset dropdown.
      - `fragments.insert` automatically resolves the preset, binds all `--typo-<name>-*` CSS variables, generates responsive `@media` rules for viewport breakpoints, and strips temporary preset attributes from DOM output.
