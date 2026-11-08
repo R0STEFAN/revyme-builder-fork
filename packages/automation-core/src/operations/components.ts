@@ -457,6 +457,7 @@ export const componentsExtractOperation: Operation<
     name: z.string().regex(/^[A-Z][A-Za-z0-9]*$/, 'Component name must be PascalCase'),
     sourceFile: z.string().min(1),
     nodeId: z.string().min(1),
+    rootSize: z.record(z.string()).optional(),
   }),
   async execute(snapshot, input) {
     const sourceCode = snapshot.files.get(input.sourceFile);
@@ -469,7 +470,13 @@ export const componentsExtractOperation: Operation<
       throw new Error(`COMPONENT_ALREADY_EXISTS: Component "${input.name}" already exists at "${componentPath}"`);
     }
 
-    const built = buildExtractedMaster(sourceCode, input.nodeId, input.name);
+    // Default rootSize to fixed px if not specified, avoiding COMPONENT_ROOT_PERCENT_SIZE oracle rejection
+    const effectiveRootSize: Record<string, string> = { ...(input.rootSize ?? {}) };
+    if (!effectiveRootSize.width) {
+      effectiveRootSize.width = '1200px';
+    }
+
+    const built = buildExtractedMaster(sourceCode, input.nodeId, input.name, { rootSize: effectiveRootSize });
     if ('error' in built) {
       throw new Error(`COMPONENT_EXTRACT_ERROR: ${built.error}`);
     }
@@ -482,6 +489,7 @@ export const componentsExtractOperation: Operation<
       throw new Error(`COMPONENT_EXTRACT_ERROR: Could not parse "${input.sourceFile}"`);
     }
     let targetSpan: { start: number; end: number } | null = null;
+    let hadFluidWidth = false;
     traverse(sourceAst, {
       JSXElement(path) {
         const id = path.node.openingElement.attributes.find((attr) => t.isJSXAttribute(attr)
@@ -489,6 +497,10 @@ export const componentsExtractOperation: Operation<
         if (!id || !t.isJSXAttribute(id) || !t.isStringLiteral(id.value) || id.value.value !== input.nodeId) return;
         if (typeof path.node.start === 'number' && typeof path.node.end === 'number') {
           targetSpan = { start: path.node.start, end: path.node.end };
+          const rawTag = sourceCode.slice(path.node.start, path.node.end);
+          if (/width:\s*['"]100%['"]/.test(rawTag)) {
+            hadFluidWidth = true;
+          }
           path.stop();
         }
       },
@@ -499,7 +511,9 @@ export const componentsExtractOperation: Operation<
     }
 
     // Build replacement instance tag
-    const instanceTag = `<${input.name} data-id="${input.nodeId}" />`;
+    const instanceTag = hadFluidWidth
+      ? `<${input.name} data-id="${input.nodeId}" style={{ width: '100%' }} />`
+      : `<${input.name} data-id="${input.nodeId}" />`;
     let nextSourceCode = sourceCode.slice(0, extractedSpan.start) + instanceTag + sourceCode.slice(extractedSpan.end);
     nextSourceCode = ensureComponentImport(nextSourceCode, input.name);
 

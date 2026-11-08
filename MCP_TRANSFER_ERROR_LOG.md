@@ -150,4 +150,20 @@ Three critical bugs were diagnosed in the Framer transfer extraction engine (`sr
 
 ---
 
+### Issue 9: Component Extraction Oracle Gate Rejection on Fluid Width (`COMPONENT_ROOT_PERCENT_SIZE`)
+- **Symptom:**
+  - Running `components.extract` on a fluid element (such as `<nav style={{ width: '100%' }}>`) failed validation with:
+    `COMPONENT_ROOT_PERCENT_SIZE: The component ROOT's width is "100%" — a master/artboard root has NO parent box, so "%" is invalid; the root can ONLY be a fixed px value or "auto".`
+- **Root Cause:**
+  - In `packages/automation-core/src/operations/components.ts`, `componentsExtractOperation` called `buildExtractedMaster(sourceCode, input.nodeId, input.name)` without specifying `rootSize`.
+  - When the extracted element had `width: '100%'`, the generator left `width: '100%'` on the master component root, which is explicitly forbidden by Oracle rules.
+- **Fix:**
+  - Added optional `rootSize` parameter to `componentsExtractOperation` input schema and defaulted `effectiveRootSize.width = '1200px'` if unspecified.
+  - Detected whether the source element had fluid width (`width: '100%'`), and if so, generated the page replacement instance with `style={{ width: '100%' }}` so the page layout stays 100% fluid while the component master remains fixed-width compliant.
+- **Verification:**
+  - Extracted `Nav` (`components/Nav.tsx`) and `TechStack` (`components/TechStack.tsx`) cleanly into project `proj-1794157101920-rz0ttf`.
+  - Ran `diagnostics.projectCheck` and `publish.preflight`: 0 violations, all checks passed.
+
+---
+
 
