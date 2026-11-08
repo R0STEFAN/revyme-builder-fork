@@ -220,7 +220,7 @@ export default function CmsOverlay() {
         defaults[field.id] = field.defaultValue;
       } else if (field.type === 'boolean') {
         defaults[field.id] = false;
-      } else if (field.type === 'tags') {
+      } else if (field.type === 'tags' || field.type === 'gallery') {
         defaults[field.id] = [];
       }
     }

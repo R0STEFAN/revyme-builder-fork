@@ -252,7 +252,7 @@ export default function CmsEditorOverlay() {
     for (const field of schema.fields) {
       if (field.defaultValue !== undefined) defaults[field.id] = field.defaultValue;
       else if (field.type === 'boolean') defaults[field.id] = false;
-      else if (field.type === 'tags') defaults[field.id] = [];
+      else if (field.type === 'tags' || field.type === 'gallery') defaults[field.id] = [];
     }
     const newItem = addCollectionItem(activeSlug, { ...defaults, _status: 'draft' });
     bumpVersion(v => v + 1);

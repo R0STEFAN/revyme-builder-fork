@@ -620,6 +620,9 @@ function renderCellValue(value: any, field: FieldDefinition): string {
   if (value === undefined || value === null) return '-';
   if (field.type === 'boolean') return value ? 'Yes' : 'No';
   if (field.type === 'image') return value ? '(image)' : '-';
+  if (field.type === 'gallery' || (Array.isArray(value) && field.type === 'json')) {
+    return Array.isArray(value) && value.length ? `(${value.length} images)` : '-';
+  }
   if (field.type === 'color') return String(value);
   return String(value).slice(0, 40);
 }

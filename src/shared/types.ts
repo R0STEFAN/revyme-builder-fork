@@ -241,7 +241,7 @@ export interface FieldDefinition {
   id: string;
   name: string;
   type: 'text' | 'textarea' | 'richtext' | 'number' | 'boolean' | 'date'
-      | 'image' | 'file' | 'link' | 'url' | 'color' | 'enum' | 'tags' | 'slug'
+      | 'image' | 'gallery' | 'file' | 'link' | 'url' | 'color' | 'enum' | 'tags' | 'slug'
       | 'reference' | 'multi-reference' | 'json';
   required?: boolean;
   translatable?: boolean;

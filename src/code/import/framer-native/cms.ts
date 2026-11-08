@@ -75,6 +75,35 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
       } else if (type === 'number') {
         if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Invalid number ${String(variable.id)}`);
       } else if (type === 'array') {
+        const isGallery = (Array.isArray(variable.itemVariables) && variable.itemVariables.some((v: any) => v.type === 'image')) ||
+          String(variable.name ?? '').toLowerCase().includes('gallery') ||
+          String(variable.name ?? '').toLowerCase().includes('slideshow');
+        if (isGallery && Array.isArray(value)) {
+          return value.map((item: any) => {
+            let ref: string | undefined;
+            if (typeof item === 'string') ref = item;
+            else if (item && typeof item === 'object') {
+              if (item.value && typeof item.value === 'object') {
+                for (const subVal of Object.values(item.value)) {
+                  if (typeof subVal === 'string') ref = subVal;
+                  else if (subVal && typeof subVal === 'object' && typeof (subVal as any).value === 'string') {
+                    ref = (subVal as any).value;
+                  }
+                }
+              } else if (typeof item.value === 'string') {
+                ref = item.value;
+              } else if (typeof item.url === 'string') {
+                ref = item.url;
+              }
+            }
+            if (ref && typeof ref === 'string' && ref.startsWith('data:framer/asset-reference,')) {
+              if (options.assets?.[ref]) return options.assets[ref];
+              const keyMatch = ref.slice('data:framer/asset-reference,'.length).split('.')[0];
+              if (keyMatch) return `/api/uploads/${keyMatch}.webp`;
+            }
+            return ref || item;
+          }).filter(Boolean);
+        }
         return value;
       } else if (type === 'link' || type === 'url') {
         const resolvedLink = sourceStaticLinkValue(value);
@@ -99,7 +128,13 @@ export function emitNativeCms(graph: SourceGraph, identity: Record<string, strin
         const type = String(variable.type);
         if (type === 'divider' || type === 'slug') continue;
         if (!fieldTypes[type]) throw new Error(`Unsupported CMS field type ${type} in ${collectionId}:${String(variable.id)}`);
-        const field: FieldDefinition = { id: nativeFieldId(identity, collectionId, String(variable.id)), name: String(variable.name ?? variable.id), type: fieldTypes[type] };
+        const isGallery = type === 'array' && (
+          (Array.isArray(variable.itemVariables) && variable.itemVariables.some((v: any) => v.type === 'image')) ||
+          String(variable.name ?? '').toLowerCase().includes('gallery') ||
+          String(variable.name ?? '').toLowerCase().includes('slideshow')
+        );
+        const resolvedType = isGallery ? 'gallery' : fieldTypes[type];
+        const field: FieldDefinition = { id: nativeFieldId(identity, collectionId, String(variable.id)), name: String(variable.name ?? variable.id), type: resolvedType };
         if (typeof variable.description === 'string') field.description = variable.description;
         for (const key of ['required', 'translatable'] as const) if (typeof variable[key] === 'boolean') field[key] = variable[key];
         for (const key of ['min', 'max', 'step', 'maxLength'] as const) if (typeof variable[key] === 'number') field[key] = variable[key];

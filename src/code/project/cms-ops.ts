@@ -36,6 +36,7 @@ export const FIELD_TYPES: { value: FieldDefinition['type']; label: string }[] = 
   { value: 'boolean', label: 'Boolean' },
   { value: 'date', label: 'Date' },
   { value: 'image', label: 'Image' },
+  { value: 'gallery', label: 'Gallery' },
   { value: 'file', label: 'File' },
   { value: 'url', label: 'URL' },
   { value: 'link', label: 'Link' },

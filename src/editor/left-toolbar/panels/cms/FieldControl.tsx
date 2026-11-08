@@ -1,7 +1,7 @@
 // FieldControl.tsx — Renders the appropriate input control based on FieldDefinition type.
 // Used by ItemEditor inside the CMS overlay.
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
 import type { FieldDefinition } from '@/shared/types';
 import { collectionSchemasAtom, collectionDataAtom } from '@/code/stores/cms-store';
@@ -194,6 +194,9 @@ export default function FieldControl({ field, value, onChange }: FieldControlPro
     case 'image':
       return <ImageFieldControl value={value ?? ''} onChange={handleChange} name={field.name} />;
 
+    case 'gallery':
+      return <GalleryFieldControl value={value} onChange={handleChange} name={field.name} />;
+
     case 'file':
       return (
         <input
@@ -211,11 +214,25 @@ export default function FieldControl({ field, value, onChange }: FieldControlPro
     case 'multi-reference':
       return <ReferencePicker field={field} value={value} onChange={handleChange} multi />;
 
+    case 'json':
+      if (Array.isArray(value) && (field.name.toLowerCase().includes('gallery') || field.name.toLowerCase().includes('slide') || value.some(x => typeof x === 'string' && (x.startsWith('/') || x.startsWith('http'))))) {
+        return <GalleryFieldControl value={value} onChange={handleChange} name={field.name} />;
+      }
+      return (
+        <input
+          type="text"
+          value={typeof value === 'object' && value !== null ? JSON.stringify(value) : (value ?? '')}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder={field.name}
+          className={INPUT_BASE}
+        />
+      );
+
     default:
       return (
         <input
           type="text"
-          value={value ?? ''}
+          value={typeof value === 'object' && value !== null ? JSON.stringify(value) : (value ?? '')}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={field.name}
           className={INPUT_BASE}
@@ -334,6 +351,95 @@ function ImageFieldControl({ value, onChange, name }: { value: string; onChange:
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
         currentUrl={value || undefined}
+        onSelect={handleSelect}
+      />
+    </div>
+  );
+}
+
+// ─── Gallery Field (Multi-image) ───────────────────────────────────────────
+
+function GalleryFieldControl({ value, onChange, name }: { value: any; onChange: (v: string[]) => void; name: string }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const images: string[] = useMemo(() => {
+    if (Array.isArray(value)) {
+      return value.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          if (item.value && typeof item.value === 'object') {
+            for (const sub of Object.values(item.value)) {
+              if (typeof sub === 'string') return sub;
+              if (sub && typeof sub === 'object' && typeof (sub as any).value === 'string') return (sub as any).value;
+            }
+          }
+          if (typeof item.value === 'string') return item.value;
+          if (typeof item.url === 'string') return item.url;
+          if (typeof item.src === 'string') return item.src;
+        }
+        return '';
+      }).filter(Boolean);
+    }
+    if (typeof value === 'string' && value) {
+      if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed.filter(x => typeof x === 'string');
+        } catch { /* ignore */ }
+      }
+      return [value];
+    }
+    return [];
+  }, [value]);
+
+  const handleSelect = useCallback((picked: string) => {
+    if (picked) {
+      const next = [...images, picked];
+      onChange(next);
+      trace.action('cms-field:gallery:add', { field: name, url: picked.slice(0, 80) });
+    }
+    setPickerOpen(false);
+  }, [images, onChange, name]);
+
+  const handleRemove = useCallback((index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = images.filter((_, i) => i !== index);
+    onChange(next);
+    trace.action('cms-field:gallery:remove', { field: name, index });
+  }, [images, onChange, name]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {images.map((url, idx) => (
+        <div key={`${url}-${idx}`} className="relative group w-16 h-16 cut-corners cut-border border border-[var(--control-border)] [--cut-border-color:var(--control-border)] bg-[var(--grid-line)] overflow-hidden flex items-center justify-center">
+          <img
+            src={url}
+            alt={`${name} ${idx + 1}`}
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <button
+            type="button"
+            onClick={(e) => handleRemove(idx, e)}
+            title="Remove image"
+            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--bg-canvas,#121110)] border border-[var(--control-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => setPickerOpen(true)}
+        title="Add image to gallery…"
+        className="w-16 h-16 cut-corners cut-border hover:[--cut-border-color:var(--border-focus)] border border-dashed border-[var(--control-border)] hover:border-[var(--border-focus)] overflow-hidden bg-[var(--grid-line)]/50 transition-colors cursor-pointer flex flex-col items-center justify-center text-[var(--text-disabled)] hover:text-[var(--text-secondary)]"
+      >
+        <span className="text-base font-light leading-none">+</span>
+        <span className="text-[9px] mt-0.5">Add</span>
+      </button>
+      <ImageSearchModal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
         onSelect={handleSelect}
       />
     </div>

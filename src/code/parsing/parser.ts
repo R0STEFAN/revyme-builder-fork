@@ -1134,7 +1134,7 @@ function extractSvgAttrsInto(
         const parsed = responsiveAttrsAccum ? parseResponsiveAttrExpr(expr, ctx?.gateWidthMap) : null;
         if (parsed) {
           attrs[attrName] = parsed.base;
-          if (Object.keys(parsed.viewport).length > 0 || Object.keys(parsed.variant).length > 0) {
+          if (responsiveAttrsAccum && (Object.keys(parsed.viewport).length > 0 || Object.keys(parsed.variant).length > 0)) {
             responsiveAttrsAccum[attrName] = { viewport: parsed.viewport, variant: parsed.variant };
             trace.action('parser:svg-responsive-attr', { attrName, viewports: Object.keys(parsed.viewport), variants: Object.keys(parsed.variant) });
           }
