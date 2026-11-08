@@ -436,12 +436,12 @@ export function extractTransferSlice(
               }
             }
           }
-          // 3. Resolve target variant frame
+          // 3. Resolve target variant frame for this component
           const rawVariant = node.raw.$control__variant;
           const variantControlValue = typeof rawVariant === 'object' && rawVariant !== null && 'value' in rawVariant
             ? (rawVariant as any).value
             : rawVariant;
-          const variantVal = scopedVars.get('variant') ?? variantControlValue ?? master.raw.baseVariantId ?? master.children[0];
+          const variantVal = (typeof variantControlValue === 'string' && variantControlValue) || master.raw.baseVariantId || master.children[0];
           const variantNode = (typeof variantVal === 'string' && graph.nodes.get(variantVal)) || graph.nodes.get(master.children[0]);
           if (variantNode) {
             targetNodeId = variantNode.id;
