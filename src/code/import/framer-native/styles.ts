@@ -11,7 +11,7 @@ export interface SourceMappingContext {
   graph?: SourceGraph;
   typographyIdentity?: Record<string, string>;
   parent?: ResolvedSourceNode;
-  viewport?: { width: number; height?: number };
+  viewport?: { width: number; height?: number; sourceStateId?: string };
   /** Values may be canonical whole-value `{prop}` expressions. */
   variables?: Record<string, string | number | boolean>;
   assets?: Record<string, string>;

@@ -229,7 +229,9 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         if (!type) throw new Error(`Variable ${String(variable.id)} type ${sourceType} requires a native data adapter`);
         const prop = nativePropName(identity, scopeId, String(variable.id));
         let initial = variable.initialValue ?? (sourceType === 'boolean' ? false : sourceType === 'number' ? 0 : '');
-        if (sourceType === 'border') {
+        if (sourceType === 'link') {
+          initial = sourceStaticLinkValue(initial, options.routes) as typeof initial;
+        } else if (sourceType === 'border') {
           const b = sourceRecord(initial);
           if (b) initial = `${b.borderWidth ?? b.borderTop ?? 1}px ${b.borderStyle ?? 'solid'} ${b.borderColor ?? 'transparent'}`;
         } else if (sourceType === 'vectorsetitem') {
@@ -238,7 +240,6 @@ export function emitNativeComponents(graph: SourceGraph, identity: Record<string
         } else if (sourceType === 'array' || (typeof initial === 'object' && initial !== null)) {
           initial = '';
         }
-        if (sourceType === 'link') initial = sourceStaticLinkValue(initial, options.routes) as typeof initial;
         if (sourceType === 'collectionreference') {
           const collectionId = sourceCollectionId(variable.dataIdentifier);
           const collection = graph.nodes.get(collectionId);

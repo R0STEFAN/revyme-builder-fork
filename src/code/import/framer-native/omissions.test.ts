@@ -39,5 +39,5 @@ it('converts active page variable uses outside the omitted filter to static fall
   expect((transfer.definitions[0].data as any).variables).toEqual([]);
   const label = (transfer.definitions[0].data as any).children[0].children.find((c: any) => c.id === 'label');
   expect(label.textContent).toBeUndefined();
-  expect(omissions.some(o => o.property.includes('categoryVar'))).toBe(true);
+  expect(omissions.some(o => o.property?.includes('categoryVar'))).toBe(true);
 });

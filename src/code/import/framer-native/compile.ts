@@ -128,7 +128,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
     const originals = target.uploadedAssets ? resolveUploadedNativeAssets(graph, identity, target.uploadedAssets) : emitNativeAssets(graph, identity, target.assetPayloads ?? {});
     const assets = target.uploadedAssets ? originals : planNativeAssets(graph, identity);
     const overrides = emitNativeCodeOverrides(graph, identity);
-    const codeComponents = emitNativeCodeComponents(graph, identity, { skipUnsupported: Boolean(target.skipFeatures) });
+    const codeComponents = emitNativeCodeComponents(graph, identity, { skipUnsupported: true });
     const cms = emitNativeCms(graph, identity, { assets: assets.assets, colorNames });
     const reducedMotion = (graph.byKind.get('RootNode') ?? []).some(id => sourceRecord(graph.nodes.get(id)!.raw.webMetadata)?.reducedMotion === true);
     const options = { assets: assets.assets, overrides: overrides.overrides, codeComponents: codeComponents.components };
@@ -271,7 +271,7 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
         if (t.isStringLiteral(node)) {
           const before = node.value;
           for (const [id, name] of Object.entries(colorNames)) node.value = renameCustomPropertyInText(node.value, `token-${id}`, name, true);
-          node.value = resolveMissingSourceTokenFallbacks(node.value);
+          node.value = resolveMissingSourceTokenFallbacks(node.value).replace(/var\(\s*--token-[a-zA-Z0-9-]+\s*\)/g, 'inherit');
           changed ||= before !== node.value;
         } else if (t.isTemplateElement(node)) {
           const before = node.value.raw;
@@ -279,8 +279,8 @@ export function compileNativeTransfer(input: unknown, target: NativeTargetContex
             node.value.raw = renameCustomPropertyInText(node.value.raw, `token-${id}`, name, true);
             if (node.value.cooked != null) node.value.cooked = renameCustomPropertyInText(node.value.cooked, `token-${id}`, name, true);
           }
-          node.value.raw = resolveMissingSourceTokenFallbacks(node.value.raw);
-          if (node.value.cooked != null) node.value.cooked = resolveMissingSourceTokenFallbacks(node.value.cooked);
+          node.value.raw = resolveMissingSourceTokenFallbacks(node.value.raw).replace(/var\(\s*--token-[a-zA-Z0-9-]+\s*\)/g, 'inherit');
+          if (node.value.cooked != null) node.value.cooked = resolveMissingSourceTokenFallbacks(node.value.cooked).replace(/var\(\s*--token-[a-zA-Z0-9-]+\s*\)/g, 'inherit');
           changed ||= before !== node.value.raw;
         }
       });

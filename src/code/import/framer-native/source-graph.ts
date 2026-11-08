@@ -81,45 +81,16 @@ export function sourceCodeOverrideIdentifiers(graph: SourceGraph): Set<string> {
 }
 
 export function sourceVariables(graph: SourceGraph, scopeId: string): SourceProperties[] {
-  const node = requiredNode(graph, scopeId);
-  const value = node.raw.variables ?? [];
+  const value = requiredNode(graph, scopeId).raw.variables ?? [];
   const entries = Array.isArray(value) ? value.map(item => [undefined, item] as const) : Object.entries(sourceRecord(value) ?? {});
   const seen = new Set<string>();
-  const vars: SourceProperties[] = entries.map(([key, item]) => {
+  return entries.map(([key, item]) => {
     const record = sourceRecord(item);
     const id = record?.id ?? key;
     if (!record || typeof id !== 'string' || !id || seen.has(id)) throw new Error(`FRAMER_SOURCE_INVALID: invalid/duplicate variable in ${scopeId}`);
     seen.add(id);
     return { ...record, id };
   });
-  if (node.kind === 'CollectionNode') {
-    for (const child of node.children) {
-      const childNode = graph.nodes.get(child);
-      if (!childNode) continue;
-      for (const [propKey, propVal] of Object.entries(childNode.raw)) {
-        if (!propKey.startsWith('$control__')) continue;
-        const fieldId = propKey.slice(10);
-        if (seen.has(fieldId)) continue;
-        seen.add(fieldId);
-        const valRec = sourceRecord(propVal);
-        const type = typeof valRec?.type === 'string' ? valRec.type : 'string';
-        let dataIdentifier: string | undefined;
-        if (type === 'collectionreference' || type === 'multicollectionreference') {
-          const refVal = valRec?.value;
-          const targetItem = typeof refVal === 'string' ? graph.nodes.get(refVal) : Array.isArray(refVal) && typeof refVal[0] === 'string' ? graph.nodes.get(refVal[0]) : undefined;
-          const targetParent = typeof targetItem?.raw.parentid === 'string' ? targetItem.raw.parentid : undefined;
-          if (targetParent) dataIdentifier = `local-module:collection/${targetParent}:default`;
-        }
-        vars.push({
-          id: fieldId,
-          name: fieldId,
-          type,
-          ...(dataIdentifier ? { dataIdentifier } : {}),
-        });
-      }
-    }
-  }
-  return vars;
 }
 
 /** Image props bound to fills use Revyme's whole CSS background-image value. */

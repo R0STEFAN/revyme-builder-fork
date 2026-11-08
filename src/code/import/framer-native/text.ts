@@ -49,6 +49,26 @@ function normalizeSourceLineHeight(styles: Record<string, string>): void {
   else if (styles.lineHeight?.endsWith('px') && styles.fontSize?.endsWith('px') && parseFloat(styles.fontSize) > 0) styles.lineHeight = String(parseFloat(styles.lineHeight) / parseFloat(styles.fontSize));
 }
 
+function parseSourceBuiltInFont(value: string): { family: string; axes: Record<string, number> } | undefined {
+  if (!value.startsWith('FR;') && !value.startsWith('Inter-') && value !== 'Inter') return;
+  const raw = value.startsWith('FR;') ? value.slice(3) : value;
+  const [famPart, variantPart] = raw.includes('-') ? raw.split('-', 2) : [raw, 'Regular'];
+  let family = famPart.replace(/Display$/, '');
+  if (!family) family = 'Inter';
+  const weightMap: Record<string, number> = {
+    thin: 100, extralight: 200, ultralight: 200, light: 300, regular: 400, book: 400,
+    medium: 500, semibold: 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800,
+    black: 900, heavy: 900,
+  };
+  const varLower = (variantPart || 'Regular').toLowerCase();
+  const isItalic = varLower.includes('italic');
+  const cleanVar = varLower.replace('italic', '');
+  const wght = weightMap[cleanVar] ?? (parseInt(cleanVar, 10) || 400);
+  const axes: Record<string, number> = { wght };
+  if (isItalic) axes.ital = 1;
+  return { family, axes };
+}
+
 export function mapSourceTypography(p: SourceProperties): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [source, target] of Object.entries({ fontSize: 'fontSize', textColor: 'color', textAlignment: 'textAlign', textTransform: 'textTransform', textDecoration: 'textDecoration' })) {
@@ -59,7 +79,7 @@ export function mapSourceTypography(p: SourceProperties): Record<string, string>
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'string') out[key] = `${value[0]}${value[1]}`;
   }
   normalizeSourceLineHeight(out);
-  const font = typeof p.font === 'string' ? parseSourceGoogleFont(p.font) : undefined;
+  const font = typeof p.font === 'string' ? (parseSourceGoogleFont(p.font) ?? parseSourceBuiltInFont(p.font)) : undefined;
   if (font) {
     out.fontFamily = JSON.stringify(font.family);
     out.fontWeight = String(font.axes.wght);
@@ -181,7 +201,7 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       try {
         const decoded = rawSelector.startsWith('GF;') || rawSelector.startsWith('FR;') ? rawSelector : atob(rawSelector);
         if (decoded.startsWith('FR;')) {
-          const parsed = parseSourceGoogleFont(decoded);
+          const parsed = parseSourceBuiltInFont(decoded);
           if (parsed) styles.fontFamily = JSON.stringify(parsed.family);
         }
       } catch {
@@ -273,9 +293,9 @@ export function mapSourceText(node: ResolvedSourceNode, context: SourceMappingCo
       if (blockId && child.tagName !== 'br') {
         output.blockIds = [...(output.blockIds ?? []), blockId];
         attributes.push(`data-id="${escapeJsxText(blockId).replace(/"/g, '&quot;')}"`);
-      } else if (child.tagName !== 'br' && !['span', 'strong', 'em', 'b', 'i', 'u', 'br', 'sup', 'sub'].includes(child.tagName)) {
+      } else if (targetId && child.tagName !== 'br' && !['span', 'strong', 'em', 'b', 'i', 'u', 'br', 'sup', 'sub'].includes(child.tagName)) {
         inlineCounter++;
-        const base = targetId ? `${targetId}-${child.tagName}` : `${String(node.sourceId).toLowerCase().replace(/[^a-z0-9-]/g, '')}-${child.tagName}`;
+        const base = `${targetId}-${child.tagName}`;
         const autoId = inlineCounter > 1 ? `${base}-${inlineCounter}` : base;
         attributes.push(`data-id="${escapeJsxText(autoId).replace(/"/g, '&quot;')}"`);
       }

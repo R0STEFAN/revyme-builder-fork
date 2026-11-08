@@ -14,7 +14,7 @@ export type NativeBinding =
   | { kind: 'variable'; providerId: string; sourceId: string; name: string; valueType: string }
   | { kind: 'field'; providerId: string; collectionId: string; fieldId: string; sourceId: string; itemVar: string; valueType: string }
   | { kind: 'reference'; collectionId: string; rowId: string | string[] | null }
-  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn' | 'prefix'; input: NativeBinding; argument?: NativeBinding; value?: string };
+  | { kind: 'transform'; name: 'isSet' | 'equals' | 'isIncludedIn' | 'prefix' | 'arrayToArray' | 'negate'; input: NativeBinding; argument?: NativeBinding; value?: string };
 
 export interface BindingContext {
   graph: SourceGraph;
@@ -81,7 +81,11 @@ function fieldBinding(context: BindingContext, providerId: string, collectionId:
     };
   }
   const field = sourceVariables(context.graph, collectionId).find(variable => variable.id === sourceId);
-  if (!field && sourceId !== 'id') throw new Error(`Missing source field ${sourceId} in ${collectionId}`);
+  if (!field && sourceId !== 'id') {
+    const isLegacyField = collection.children.some(childId => context.graph.nodes.get(childId)?.raw[`$control__${sourceId}`] !== undefined);
+    if (!isLegacyField) throw new Error(`Missing source field ${sourceId} in ${collectionId}`);
+    return { kind: 'field', providerId, collectionId, sourceId, fieldId: sourceId, itemVar: itemVariable(context, providerId), valueType: 'string' };
+  }
   return { kind: 'field', providerId, collectionId, sourceId, fieldId: nativeFieldId(context.identity, collectionId, sourceId), itemVar: itemVariable(context, providerId), valueType: String(field?.type ?? 'string') };
 }
 

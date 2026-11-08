@@ -253,7 +253,7 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
       };
       const stylesFor = (node: ResolvedSourceNode, ctx: SourceMappingContext) => {
         const styles = mapSourceStyles(visibilityFor(node) ? { ...node, properties: { ...node.properties, visible: true } } : node, ctx);
-        if (styles.display === 'none') delete styles.display;
+        if (styles.display === 'none' && ctx.viewport?.width === viewports[0].designWidth) delete styles.display;
         if (intrinsicImageFieldFor(node)) {
           delete styles.backgroundImage; delete styles.backgroundPosition; delete styles.backgroundRepeat; delete styles.backgroundSize;
           styles.objectFit = node.properties.fillImageResize === 'fit' ? 'contain' : 'cover';
@@ -378,8 +378,8 @@ export function emitNativePages(graph: SourceGraph, identity: Record<string, str
                 const compVal = sourceVariant as Record<string, unknown>;
                 const transform = Array.isArray(compVal.transforms) ? sourceRecord(compVal.transforms[0]) : undefined;
                 if (transform?.name === 'convertFromBoolean') {
-                  const truthy = transform.truthy && sourceInstanceStateName({ graph, scopeId: master }, identity, String(transform.truthy));
-                  const falsy = transform.falsy && sourceInstanceStateName({ graph, scopeId: master }, identity, String(transform.falsy));
+                  const truthy = typeof transform.truthy === 'string' ? sourceInstanceStateName({ graph, scopeId: master }, identity, transform.truthy) : undefined;
+                  const falsy = typeof transform.falsy === 'string' ? sourceInstanceStateName({ graph, scopeId: master }, identity, transform.falsy) : undefined;
                   const startRef = sourceRecord(compVal.startValue);
                   const startProp = startRef?.type === 'variableReference' && typeof startRef.id === 'string'
                     ? nativePropName(identity, String(startRef.providerId), startRef.id)
