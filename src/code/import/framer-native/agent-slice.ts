@@ -2,7 +2,8 @@ import { trace } from '../../../shared/debug-trace';
 import { decodeNativeTransfer } from './decode';
 import { allocateTargetIdentity, buildSourceGraph, resolveSourceNode, sourceRecord } from './source-graph';
 import { mapSourceStyles, type SourceMappingContext } from './styles';
-import { mapSourceText } from './text';
+import { mapSourceText, mapSourceTypography } from './text';
+import { sourcePageRoute } from './pages';
 import { sourceTypographyTokens } from './typography';
 import { sourceGoogleFontRequests } from './fonts';
 import type { ResolvedSourceNode, SourceGraph, SourceProperties } from './types';
@@ -124,7 +125,12 @@ export function inspectNativeTransfer(input: unknown): FramerProjectSummary {
     const node = graph.nodes.get(id);
     if (!node) continue;
     const name = String(node.raw.name ?? 'Page');
-    const route = String(node.raw.path ?? '/');
+    let route = String(node.raw.path ?? '/');
+    try {
+      route = sourcePageRoute(graph, node);
+    } catch {
+      // Fall back to raw path or /
+    }
     const breakpoints = node.children.map(cid => String(graph.nodes.get(cid)?.raw.name ?? cid));
     pages.push({ id, name, route, breakpoints });
   }
@@ -240,15 +246,39 @@ export function extractTransferTokens(input: unknown): FramerTransferTokens {
     if (!node) continue;
     const sourceName = String(node.raw.name ?? 'Typography');
     const raw = node.raw;
+    const mapped = mapSourceTypography(raw);
+
+    const fontSize = typeof raw.fontSize === 'number'
+      ? `${raw.fontSize}px`
+      : (mapped.fontSize || (raw.fontSize ? String(raw.fontSize) : undefined));
+
+    const lineHeight = mapped.lineHeight || (
+      Array.isArray(raw.lineHeight) && raw.lineHeight.length === 2 && typeof raw.lineHeight[0] === 'number'
+        ? (raw.lineHeight[1] === 'em' ? String(raw.lineHeight[0]) : `${raw.lineHeight[0]}${raw.lineHeight[1]}`)
+        : typeof raw.lineHeight === 'number' ? String(raw.lineHeight) : undefined
+    );
+
+    const letterSpacing = mapped.letterSpacing || (
+      Array.isArray(raw.letterSpacing) && raw.letterSpacing.length === 2 && typeof raw.letterSpacing[0] === 'number'
+        ? `${raw.letterSpacing[0]}${raw.letterSpacing[1]}`
+        : typeof raw.letterSpacing === 'number' ? `${raw.letterSpacing}px` : undefined
+    );
+
+    const fontFamily = mapped.fontFamily
+      ? mapped.fontFamily.replace(/^"|"$/g, '')
+      : (typeof raw.fontFamily === 'string' ? raw.fontFamily : undefined);
+
+    const fontWeight = mapped.fontWeight || (raw.fontWeight ? String(raw.fontWeight) : undefined);
+
     typography.push({
       id,
       name: `typography-${identity[id] || slugify(sourceName)}`,
       sourceName,
-      fontSize: typeof raw.fontSize === 'number' ? `${raw.fontSize}px` : raw.fontSize ? String(raw.fontSize) : undefined,
-      lineHeight: typeof raw.lineHeight === 'number' ? `${raw.lineHeight}` : raw.lineHeight ? String(raw.lineHeight) : undefined,
-      letterSpacing: typeof raw.letterSpacing === 'number' ? `${raw.letterSpacing}px` : raw.letterSpacing ? String(raw.letterSpacing) : undefined,
-      fontWeight: raw.fontWeight ? String(raw.fontWeight) : undefined,
-      fontFamily: raw.fontFamily ? String(raw.fontFamily) : undefined,
+      fontSize,
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
     });
   }
 
@@ -371,15 +401,33 @@ export function extractTransferCms(input: unknown, collectionId?: string): Frame
       const itemNode = graph.nodes.get(childId);
       if (!itemNode || itemNode.kind !== 'CollectionItemNode') continue;
       const raw = itemNode.raw;
-      const itemSlug = String(raw.slug ?? raw.name ?? childId);
+
       const fieldData: Record<string, unknown> = {};
       for (const field of fields) {
-        if (raw[field.id] !== undefined) {
-          fieldData[field.id] = raw[field.id];
-        } else if (raw[field.name] !== undefined) {
-          fieldData[field.id] = raw[field.name];
+        const rawControl = raw[`$control__${field.id}`] ?? raw[field.id] ?? raw[field.name];
+        const val = (rawControl && typeof rawControl === 'object' && 'value' in rawControl)
+          ? (rawControl as any).value
+          : rawControl;
+        if (val !== undefined) {
+          fieldData[field.id] = val;
+          fieldData[field.name] = val;
         }
       }
+
+      let itemSlug: string | undefined;
+      for (const field of fields) {
+        if (field.type === 'slug' || field.name.toLowerCase() === 'slug') {
+          const val = fieldData[field.id] ?? fieldData[field.name];
+          if (typeof val === 'string' && val.trim()) {
+            itemSlug = val.trim();
+            break;
+          }
+        }
+      }
+      if (!itemSlug) {
+        itemSlug = String(raw.slug ?? raw.name ?? childId);
+      }
+
       items.push({
         id: childId,
         slug: itemSlug,

@@ -51,6 +51,42 @@ describe('agent-slice: extractTransferTokens', () => {
     expect(tokens.typography.length).toBeGreaterThanOrEqual(1);
     const bodyFaded = tokens.typography.find(t => t.name.toLowerCase().includes('body') || t.sourceName?.includes('Body Faded'));
     expect(bodyFaded).toBeDefined();
+    // Verify normalized values without comma artifacts
+    for (const typo of tokens.typography) {
+      if (typo.lineHeight) expect(typo.lineHeight).not.toContain(',');
+      if (typo.letterSpacing) expect(typo.letterSpacing).not.toContain(',');
+    }
+  });
+
+  it('normalizes tuple lineHeight/letterSpacing and resolves BI; built-in font families', () => {
+    const mockTransfer = {
+      ...capturedComponents,
+      definitions: [
+        ...(capturedComponents as any).definitions,
+        {
+          id: 'customTypo',
+          kind: 'TextStylePresetNode',
+          data: {
+            __class: 'TextStylePresetNode',
+            id: 'customTypo',
+            name: 'Hero Heading',
+            font: 'BI;Open Sauce Two/Medium/v0',
+            fontSize: 120,
+            lineHeight: [1.1, 'em'],
+            letterSpacing: [-0.03, 'em'],
+          },
+        },
+      ],
+      rootIds: [...(capturedComponents as any).rootIds, 'customTypo'],
+    };
+    const tokens = extractTransferTokens(mockTransfer);
+    const custom = tokens.typography.find(t => t.id === 'customTypo');
+    expect(custom).toBeDefined();
+    expect(custom?.fontSize).toBe('120px');
+    expect(custom?.lineHeight).toBe('1.1');
+    expect(custom?.letterSpacing).toBe('-0.03em');
+    expect(custom?.fontFamily).toBe('Open Sauce Two');
+    expect(custom?.fontWeight).toBe('500');
   });
 });
 
@@ -96,6 +132,12 @@ describe('agent-slice: extractTransferCms', () => {
     expect(works).toBeDefined();
     expect(works?.fields.length).toBeGreaterThan(0);
     expect(works?.items.length).toBeGreaterThan(0);
+
+    // Verify item data contains populated fields
+    const firstItem = works?.items[0];
+    expect(firstItem).toBeDefined();
+    expect(firstItem?.slug).toBeTruthy();
+    expect(Object.keys(firstItem?.data || {}).length).toBeGreaterThan(0);
   });
 
   it('filters by collectionId when specified', () => {

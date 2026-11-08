@@ -49,10 +49,11 @@ function normalizeSourceLineHeight(styles: Record<string, string>): void {
   else if (styles.lineHeight?.endsWith('px') && styles.fontSize?.endsWith('px') && parseFloat(styles.fontSize) > 0) styles.lineHeight = String(parseFloat(styles.lineHeight) / parseFloat(styles.fontSize));
 }
 
-function parseSourceBuiltInFont(value: string): { family: string; axes: Record<string, number> } | undefined {
-  if (!value.startsWith('FR;') && !value.startsWith('Inter-') && value !== 'Inter') return;
-  const raw = value.startsWith('FR;') ? value.slice(3) : value;
-  const [famPart, variantPart] = raw.includes('-') ? raw.split('-', 2) : [raw, 'Regular'];
+export function parseSourceBuiltInFont(value: string): { family: string; axes: Record<string, number> } | undefined {
+  if (!value.startsWith('FR;') && !value.startsWith('BI;') && !value.startsWith('Inter-') && value !== 'Inter') return;
+  const raw = value.startsWith('FR;') || value.startsWith('BI;') ? value.slice(3) : value;
+  const delimiter = raw.includes('/') ? '/' : '-';
+  const [famPart, variantPart] = raw.includes(delimiter) ? raw.split(delimiter, 2) : [raw, 'Regular'];
   let family = famPart.replace(/Display$/, '');
   if (!family) family = 'Inter';
   const weightMap: Record<string, number> = {
