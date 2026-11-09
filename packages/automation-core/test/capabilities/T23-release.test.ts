@@ -468,6 +468,43 @@ export default function FormPage() {
       expect(formCheck?.message).toMatch(/destination|sendTo|unconfigured/i);
     });
 
+    it('does not falsely flag forms with arrow function onSubmit as bare forms', async () => {
+      const WIRED_FORM_PAGE = `'use client';
+import React from 'react';
+
+/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 } ], "positions": { "desktop": { "x": 0, "y": 0 } } } */
+
+export default function WiredFormPage() {
+  return (
+    <div data-id="root">
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+        }}
+        data-id="contact-form"
+        data-form='{"sendTo":[{"id":"default","type":"email","recipient":"team@example.com","subject":"New Form"}]}'
+      >
+        <input data-id="inp-email" type="email" name="email" />
+        <button data-id="sub-btn" type="submit">Submit</button>
+      </form>
+    </div>
+  );
+}
+`;
+      const snapshot = createMockSnapshot({
+        'app/layout.tsx': CLEAN_LAYOUT_CODE,
+        'app/page.client.tsx': WIRED_FORM_PAGE,
+      });
+
+      const result = await publishPreflightOperation.execute(snapshot, {}, context);
+
+      const bareFormCheck = result.checks.find((c) => c.name.startsWith('forms.bare_form'));
+      expect(bareFormCheck).toBeUndefined();
+
+      const formDestCheck = result.checks.find((c) => c.name === 'forms.destinations');
+      expect(formDestCheck?.status).toBe('pass');
+    });
+
     it('detects circular redirect loops', async () => {
       const REDIRECT_LOOP = JSON.stringify([
         { id: 'r1', from: '/pricing', to: '/plans' },

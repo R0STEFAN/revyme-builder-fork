@@ -1,5 +1,24 @@
 # MCP v2 issue log
 
+## 2026-11-09 — False positive bare_form preflight rejection on forms with arrow function event handlers
+
+**Status:** fixed, verified via `packages/automation-core/test/capabilities/T23-release.test.ts` (36 tests), CLI build (`node packages/cli/build.cjs`), and live preflight inspection on project `proj-1794236460447-m6burp`, and committed.
+
+**Symptom:**
+Running `publish.preflight` on valid projects containing wired forms failed with:
+`Form container in "app/page.client.tsx" has neither a data-form configuration nor an action attribute` (`forms.bare_form:app/page.client.tsx`), even when the form had a complete `data-form` JSON configuration.
+
+**Cause:**
+`packages/automation-core/src/operations/publish.ts` used a naive regular expression `/<form(?![^>]*data-form)(?![^>]*action=)[^>]*>/g`. Because `wireFormSubmitInCode` attaches an `onSubmit` handler containing `(e) => { ... }`, the negated character class `[^>]*` terminated prematurely at the `>` within the arrow function `=>`. As a result, the negative lookaheads failed to scan the subsequent attributes (including `data-form`), incorrectly flagging valid forms as bare forms.
+
+**Fix and regression guard:**
+1. Replaced the regex-based form check with AST parsing using `parseJSX(code)`, `traverse`, and `findAttribute(node, 'data-form')` / `findAttribute(node, 'action')` with a graceful regex fallback.
+2. Added unit test `does not falsely flag forms with arrow function onSubmit as bare forms` in `packages/automation-core/test/capabilities/T23-release.test.ts`.
+3. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+4. Re-ran `publish.preflight` on project `proj-1794236460447-m6burp`, verifying clean pass (`forms.destinations: All 2 forms have valid destinations configured`).
+
+
+
 ## 2026-11-09 — Automatic form wiring, destination config, and input naming in fragments.insert
 
 **Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (9 tests), CLI build (`node packages/cli/build.cjs`), and committed.

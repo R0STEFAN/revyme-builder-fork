@@ -10,6 +10,7 @@ import { readFormConfig } from '@/editor/tools/FormTool/form-config';
 import { templatePreviewRoute } from '@/preview/template-preview';
 import { parsePageFromPath } from './pages';
 import { parse } from '@babel/parser';
+import { parseJSX, traverse, findAttribute } from '@/code/parsing/ast-utils';
 
 import { REDIRECTS_FILE } from './redirects';
 
@@ -487,17 +488,41 @@ export async function executePreflightChecks(
       }
 
       // Check bare <form> elements without data-form or action
-      const bareForms = code.matchAll(/<form(?![^>]*data-form)(?![^>]*action=)[^>]*>/g);
-      for (const _ of bareForms) {
-        formsCount += 1;
-        unconfiguredForms += 1;
-        checks.push({
-          name: `forms.bare_form:${path}`,
-          category: 'forms',
-          status: 'fail',
-          path,
-          message: `Form container in "${path}" has neither a data-form configuration nor an action attribute`,
+      const ast = parseJSX(code);
+      if (ast) {
+        traverse(ast, {
+          JSXOpeningElement(pathNode) {
+            const node = pathNode.node;
+            if (node.name.type === 'JSXIdentifier' && node.name.name === 'form') {
+              const hasDataForm = Boolean(findAttribute(node, 'data-form'));
+              const hasAction = Boolean(findAttribute(node, 'action'));
+              if (!hasDataForm && !hasAction) {
+                formsCount += 1;
+                unconfiguredForms += 1;
+                checks.push({
+                  name: `forms.bare_form:${path}`,
+                  category: 'forms',
+                  status: 'fail',
+                  path,
+                  message: `Form container in "${path}" has neither a data-form configuration nor an action attribute`,
+                });
+              }
+            }
+          },
         });
+      } else {
+        const bareForms = code.matchAll(/<form(?![^>]*data-form)(?![^>]*action=)[^>]*>/g);
+        for (const _ of bareForms) {
+          formsCount += 1;
+          unconfiguredForms += 1;
+          checks.push({
+            name: `forms.bare_form:${path}`,
+            category: 'forms',
+            status: 'fail',
+            path,
+            message: `Form container in "${path}" has neither a data-form configuration nor an action attribute`,
+          });
+        }
       }
     }
 
