@@ -1,5 +1,27 @@
 # MCP v2 issue log
 
+## 2026-11-09 — Automatic form wiring, destination config, and input naming in fragments.insert
+
+**Status:** fixed, verified via `packages/automation-core/test/capabilities/fragments-insert.test.ts` (9 tests), CLI build (`node packages/cli/build.cjs`), and committed.
+
+**Symptom:**
+When inserting a JSX fragment containing a `<form>` element (e.g. hero waitlist form, contact form, newsletter) via `fragments.insert`, the operation failed Oracle pre-commit validation with `PLAN_VALIDATION_FAILED` reporting `FORM_MISSING_ONSUBMIT`, `FORM_NO_DESTINATION`, and `FORM_INPUT_MISSING_NAME`.
+
+**Cause:**
+1. `packages/automation-core/src/operations/fragments.ts` inserted `<form>` tags via `addNodeInCode`, but unlike dedicated form tools, never invoked `wireFormSubmitInCode(targetCode, formId)` to attach the standard `/api/form` submission handler.
+2. The relay route `app/api/form/route.ts` was not provisioned into `changes`.
+3. Default `data-form` destination attribute was not injected when omitted in user JSX.
+4. Inputs inside forms without an explicit `name` attribute failed Oracle rule `FORM_INPUT_MISSING_NAME`.
+
+**Fix and regression guard:**
+1. In `packages/automation-core/src/operations/fragments.ts`, added `collectFormIds` to recursively detect all form elements in the ingested subtree, calling `wireFormSubmitInCode(targetCode, formId)` on each.
+2. Ensured `app/api/form/route.ts` (`FORM_ROUTE_CONTENT`) is emitted into `changes` whenever forms are present.
+3. In `ingestedToNodeDef`, automatically injected default `data-form` config if missing, and inferred `attrs['name']` for form input elements.
+4. Added regression test `wires onSubmit, data-form destination, and input names when inserting forms` to `packages/automation-core/test/capabilities/fragments-insert.test.ts`.
+5. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+
+
+
 ## 2026-10-31 — Preset removal freeze on replica viewports, Card Padding responsiveness across breakpoints, and real-time canvas token refresh
 
 **Status:** fixed, verified via `src/shared/dimension-presets.test.ts` (12 tests), `src/editor/controls/ControlLabel.test.tsx` (10 tests), `src/code/generation/generator-styles.test.ts` (131 tests), `packages/automation-core/test/capabilities/T08-design-system.test.ts` (8 tests), `npx tsc --noEmit` (0 errors), and live execution on project `proj-1793453710566-zr1d8a`, and committed.

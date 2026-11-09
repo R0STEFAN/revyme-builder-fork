@@ -349,4 +349,33 @@ export default function Button({
     const violations = checkFile(updatedCode, { kind: 'page' });
     expect(violations.filter((v) => v.tier === 3)).toHaveLength(0);
   });
+
+  it('wires onSubmit, data-form destination, and input names when inserting forms', async () => {
+    const fragment = `
+      <form style={{ display: 'flex', gap: '8px' }}>
+        <input type="email" placeholder="Enter email" style={{ padding: '8px 12px' }} />
+        <button type="submit" style={{ padding: '8px 16px' }}>Submit</button>
+      </form>
+    `;
+
+    const op = defaultRegistry.get('fragments.insert');
+    const result = await op!.execute(snapshot, {
+      parentId: 'root',
+      fragment,
+    }, context);
+
+    applyChanges(result.changes);
+    const updatedCode = files.get('app/page.client.tsx')!;
+
+    expect(updatedCode).toContain('onSubmit={async (e) =>');
+    expect(updatedCode).toContain('data-form=');
+    expect(updatedCode).toContain('name=');
+    expect(files.has('app/api/form/route.ts')).toBe(true);
+
+    const violations = checkFile(updatedCode, { kind: 'page' });
+    const formViolations = violations.filter(
+      (v) => v.code === 'FORM_MISSING_ONSUBMIT' || v.code === 'FORM_NO_DESTINATION' || v.code === 'FORM_INPUT_MISSING_NAME'
+    );
+    expect(formViolations).toHaveLength(0);
+  });
 });

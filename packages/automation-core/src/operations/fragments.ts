@@ -18,6 +18,7 @@ import { groupTypographyPresets, upsertTypographyResponsiveBlock, type TypoPrese
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
 import { DEFAULT_VIEWPORTS } from './viewports';
 import { VIEWPORT_GAP } from '@/shared/constants';
+import { wireFormSubmitInCode, FORM_ROUTE_PATH, FORM_ROUTE_CONTENT } from '@/code/generation/form-gen';
 const FRAMEWORK_COMPONENTS: Record<string, { module: string; defaultSpec: string }> = {
   Link: { module: 'next/link', defaultSpec: 'Link' },
   Image: { module: 'next/image', defaultSpec: 'Image' },
@@ -245,6 +246,27 @@ function ingestedToNodeDef(
     attrs['data-pinned'] = 'true';
   }
 
+  // Ensure form elements satisfy Oracle rules (destination and field naming)
+  const lowerTag = node.tag.toLowerCase();
+  if (lowerTag === 'form' || lowerTag === 'motion.form') {
+    if (!attrs['data-form']) {
+      attrs['data-form'] = '{"sendTo":[{"id":"default","type":"email","recipient":"team@example.com","subject":"New Form Submission"}]}';
+    }
+  }
+
+  if (
+    lowerTag === 'input' ||
+    lowerTag === 'textarea' ||
+    lowerTag === 'select' ||
+    lowerTag === 'motion.input' ||
+    lowerTag === 'motion.textarea' ||
+    lowerTag === 'motion.select'
+  ) {
+    if (!attrs['name']) {
+      attrs['name'] = (node.props?.name as string) || (node.props?.type as string) || (node.props?.id as string) || 'field';
+    }
+  }
+
   // Oracle PAGE_LINK_NOT_NEXTLINK: a navigating link on a page must be Next.js <Link>
   let tag = node.tag;
   if (tag === 'a' && (attrs.href !== undefined || node.props?.href !== undefined)) {
@@ -280,6 +302,22 @@ function collectNodeIds(nodes: IngestedNode[]): string[] {
   }
   for (const n of nodes) walk(n);
   return ids;
+}
+
+/** Collect all form node IDs generated/used in the ingested tree */
+function collectFormIds(nodes: IngestedNode[]): string[] {
+  const formIds: string[] = [];
+  function walk(n: IngestedNode) {
+    const t = n.tag.toLowerCase();
+    if (t === 'form' || t === 'motion.form') {
+      formIds.push(n.id);
+    }
+    if (n.children) {
+      for (const c of n.children) walk(c);
+    }
+  }
+  for (const n of nodes) walk(n);
+  return formIds;
 }
 
 export const fragmentsInsertInputSchema = z.object({
@@ -380,6 +418,21 @@ export const fragmentsInsertOperation: Operation<
     }
 
     targetCode = ensureFlowChildOrder(targetCode, input.parentId);
+
+    // Wire submit handlers on any inserted forms and ensure the relay route exists
+    const formIds = collectFormIds(ingestedNodes);
+    if (formIds.length > 0) {
+      for (const fId of formIds) {
+        targetCode = wireFormSubmitInCode(targetCode, fId);
+      }
+      if (!snapshot.files.has(FORM_ROUTE_PATH)) {
+        changes.push({
+          path: FORM_ROUTE_PATH,
+          beforeHash: null,
+          content: FORM_ROUTE_CONTENT,
+        });
+      }
+    }
 
     if (responsiveRulesMap.size > 0) {
       for (const [nodeId, rules] of responsiveRulesMap.entries()) {
