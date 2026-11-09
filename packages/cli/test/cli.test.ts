@@ -150,14 +150,12 @@ describe('T05: Revyme CLI Command Line Interface', () => {
     expect(result.data.overview).toContain('Revyme Automation');
   });
 
-  it('exposes the deterministic Framer import contract through CLI discovery', async () => {
+  it('exposes the deterministic operation contract through CLI discovery', async () => {
     const outputs: string[] = [];
-    expect(await runCli({ argv: ['meta.tools', '--name', 'imports.framer.submit'], stdout: message => outputs.push(message) })).toBe(0);
+    expect(await runCli({ argv: ['meta.tools', '--name', 'nodes.create'], stdout: message => outputs.push(message) })).toBe(0);
     const tool = JSON.parse(outputs.join('')).data.tools[0];
-    expect(tool.name).toBe('imports.framer.submit');
-    expect(tool.inputSchema.required).toEqual(expect.arrayContaining(['files', 'sourceManifest', 'mode', 'target', 'expectedRevision']));
-    expect(tool.inputSchema.properties.files.items.additionalProperties).toBe(false);
-    expect(tool.inputSchema.properties.sourceManifest.properties.complete.const).toBe(true);
+    expect(tool.name).toBe('nodes.create');
+    expect(tool.inputSchema.required).toEqual(expect.arrayContaining(['parentId']));
   });
 
   it('accepts tool arguments via standard input', async () => {

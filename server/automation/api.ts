@@ -6,7 +6,6 @@ import { LocalProjectRepository } from './project-repository';
 import { CommitService } from './commit-service';
 import { PlanSchema } from '../../packages/automation-core/src/contracts';
 import { validatePlan } from '../../packages/automation-core/src/validate';
-import { framerImportSubmitInputSchema, framerImportSubmitOperation } from '../../packages/automation-core/src/operations/framer-import';
 import { createOperationContext } from '../../packages/automation-core/src/session';
 import { createPlan } from '../../packages/automation-core/src/plan';
 import { addPlanHistory } from '../../packages/automation-core/src/plan-history';
@@ -66,27 +65,6 @@ export function createAutomationMiddleware(options: {
       });
 
     try {
-      if (method === 'POST' && pathname === '/api/automation/framer/prepare') {
-        const body = await readBody();
-        const input = framerImportSubmitInputSchema.safeParse(body?.input);
-        if (!input.success || typeof body?.operationId !== 'string' || !/^[a-zA-Z0-9_-]{1,200}$/.test(body.operationId)) return sendJson(400, { ok: false, error: 'Invalid Framer import request' });
-        const { target, expectedRevision } = input.data;
-        const scope = { projectId: target.projectId, branchId: target.branchId, ...(target.filePath ? { filePath: target.filePath } : {}) };
-        const snapshot = await repository.getSnapshot(scope);
-        if (!snapshot) return sendJson(404, { ok: false, error: 'Target project not found' });
-        if (snapshot.revision !== expectedRevision) return sendJson(409, { ok: false, error: 'REVISION_CONFLICT' });
-        try {
-          const context = createOperationContext();
-          const prepared = await framerImportSubmitOperation.execute(snapshot, input.data, context);
-          let plan = createPlan({ scope, baseRevision: snapshot.revision, operationId: body.operationId, changes: prepared.changes, createdIds: prepared.createdIds });
-          plan = addPlanHistory(plan, snapshot, context.createId);
-          const validation = (options.validatePlan || validatePlan)(snapshot, plan);
-          if (!validation.ok) return sendJson(400, { ok: false, error: { code: 'PLAN_VALIDATION_FAILED', issues: validation.issues } });
-          return sendJson(200, { ok: true, data: plan, meta: { commitStatus: 'not_committed', revision: snapshot.revision } });
-        } catch (error) {
-          return sendJson(400, { ok: false, error: { code: 'FRAMER_PREPARE_FAILED', message: error instanceof Error ? error.message : String(error) } });
-        }
-      }
       // 1. GET /api/automation/snapshot?projectId=...&branchId=...
       if (method === 'GET' && pathname === '/api/automation/snapshot') {
         const projectId = url.searchParams.get('projectId');

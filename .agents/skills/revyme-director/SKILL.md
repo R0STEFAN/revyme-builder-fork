@@ -36,7 +36,6 @@ You enforce a strict **Two-Pass Decoupled Pipeline**:
 
 | Role | Scope / MCP Domain | Primary Responsibility |
 | :--- | :--- | :--- |
-| **`FramerPorter`** | `framer.*`, `tokens.*`, `fragments.insert` | Porting Framer projects: inspects captures, extracts tokens & CMS, ports sections via `framer.slice` + `fragments.insert` (see `.agents/skills/framer-porter/SKILL.md`). |
 | **`CreativeLead`** | *Pure React/JSX (No Revyme MCP)* | Crafts the design thesis, color system, typography pairings, and complete semantic JSX layout without Revyme constraints. Never writes `data-id`. |
 | **`Stylist`** | `tokens.*`, `fonts.*` | Extracts OKLCH brand palette (no `#000`/`#fff`), loads Next.js Google Fonts via `fonts.transformNextFont`. |
 | **`Typographer`**| `typography.*` | Registers compound typography presets with fluid responsive tiers (`display-hero`, `section-title`, `body-lead`). |

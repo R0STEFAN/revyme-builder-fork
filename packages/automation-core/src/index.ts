@@ -56,8 +56,6 @@ export * from './operations/form-fields';
 export * from './operations/form-states';
 export * from './operations/code-components';
 export * from './operations/code-files';
-export * from './operations/framer-import';
-export * from './operations/framer-query';
 export * from './operations/overrides';
 export * from './operations/custom-code';
 export * from './operations/redirects';
