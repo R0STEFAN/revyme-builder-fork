@@ -2482,3 +2482,18 @@ was left untouched.
 **Fix:** introduced `createTypoTokensFromStyles(slug, styles, tag, existingTokens)` which seeds the new preset tokens with the active element's styles (`fontFamily`, `fontSize`, `fontWeight`, `color`, `letterSpacing`, `lineHeight`, `textTransform`, `textDecoration`, `textShadow`, and optional stroke longhands) while resolving any existing `var()` references. Updated `CreateTypoPresetPanel` and `StandalonePresetPanel` to receive and forward `styles` and `node?.type`.
 
 **Verification:** added 5 test cases in `src/editor/tools/typography-utils.test.ts` (47/47 vitest tests passed) and verified `tsc --noEmit` cleanly.
+
+## 2026-11-10 — Autonomous headless screenshot capture (Playwright CLI engine) & Phase 1.1 Responsive Hardening
+
+**Status:** resolved in `packages/cli/src/mcp.ts`, `packages/automation-core/src/operations/observe.ts`, and `.agents/skills/revyme-director/SKILL.md`.
+
+**Symptom:** `observe.screenshot` hung for up to 45 seconds or timed out whenever the user's browser tab was in the background (Chromium suspends `requestAnimationFrame` and rendering loops in inactive tabs), or returned `ACTIVE_FILE_MISMATCH` because it resolved `app/page.tsx` instead of interactive `app/page.client.tsx`.
+
+**Cause:** the CLI bridge adapter unconditionally forwarded screenshot capture over SSE to browser editor tabs and hung waiting on throttled tabs without a fast headless fallback.
+
+**Fix:**
+1. Implemented autonomous headless Chromium capture via Playwright directly in `packages/cli/src/mcp.ts`. Reduced bridge wait to 5s with an automatic seamless fallback to headless Playwright, capturing full viewport screenshots in ~4.5 seconds.
+2. In `packages/automation-core/src/operations/observe.ts`, updated `getTargetPageFile` to prefer `page.client.tsx` over server-only `page.tsx` stub.
+3. Added **Phase 1.1 (Responsive Hardening in Pure JSX)** to `.agents/skills/revyme-director/SKILL.md` before Phase 2 compilation to eliminate downstream layout refactoring.
+
+**Verification:** CLI build succeeded (`dist/main.js`); test suite `packages/cli/test/mcp.test.ts` passed (14/14); verified live CLI captures on mobile, tablet, and desktop in < 5 seconds each without active browser tab.

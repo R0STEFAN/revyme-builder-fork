@@ -51,6 +51,8 @@ try {
       '@modelcontextprotocol/sdk/*',
       'zod',
       '@babel/*',
+      'playwright',
+      '@playwright/test',
     ],
   });
   console.log('CLI build complete: dist/main.js');

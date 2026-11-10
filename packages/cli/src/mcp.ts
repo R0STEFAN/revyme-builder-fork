@@ -15,6 +15,99 @@ import type { ProjectConfig } from './config';
 
 const DEFAULT_MCP_BRIDGE_URL = 'http://127.0.0.1:8082';
 
+async function captureHeadlessScreenshot({
+  projectId,
+  viewport,
+  nodeId,
+  format,
+  pixelRatio,
+  backgroundColor,
+}: {
+  projectId?: string;
+  viewport?: string;
+  nodeId?: string;
+  format?: 'png' | 'jpeg';
+  pixelRatio?: number;
+  backgroundColor?: string;
+}): Promise<any> {
+  if (!projectId) return null;
+  const startTime = Date.now();
+  let chromium: any;
+  try {
+    const pw = require('playwright');
+    chromium = pw.chromium;
+  } catch {
+    try {
+      const pw = require('@playwright/test');
+      chromium = pw.chromium;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!chromium) return null;
+
+  let browser: any;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const vpConfig: { width: number; height: number; prefix: string } = {
+      mobile: { width: 390, height: 844, prefix: 'mobile-' },
+      tablet: { width: 810, height: 1080, prefix: 'tablet-' },
+      desktop: { width: 1440, height: 900, prefix: '' },
+    }[viewport || 'desktop'] || { width: 1440, height: 900, prefix: '' };
+
+    const page = await browser.newPage({
+      viewport: { width: vpConfig.width, height: vpConfig.height },
+      deviceScaleFactor: pixelRatio || 1,
+    });
+
+    const builderBase = (process.env.REVYME_BUILDER_URL || 'http://localhost:3333').replace(/\/+$/, '');
+    const targetUrl = `${builderBase}/builder/${projectId}`;
+
+    await page.goto(targetUrl, { waitUntil: 'load', timeout: 15_000 });
+    await page.waitForFunction(() => !!(window as any).__canvasBridge, { timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(500);
+
+    const targetNode = nodeId || 'root';
+    const targetPrefix = vpConfig.prefix;
+
+    const dataUrl = await page.evaluate(async (opts: any) => {
+      const bridge = (window as any).__canvasBridge;
+      if (bridge && typeof bridge.captureElement === 'function') {
+        return await bridge.captureElement(opts.targetNode, opts.targetPrefix, {
+          format: opts.format || 'png',
+          pixelRatio: opts.pixelRatio || 1,
+          backgroundColor: opts.backgroundColor,
+        });
+      }
+      return null;
+    }, { targetNode, targetPrefix, format, pixelRatio, backgroundColor });
+
+    if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+      const base64Data = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      return {
+        available: true,
+        status: 'ready',
+        dataUrl,
+        bytes: buffer.length,
+        width: vpConfig.width,
+        height: vpConfig.height,
+        dimensions: { width: vpConfig.width, height: vpConfig.height },
+        waitedMs: Date.now() - startTime,
+        source: 'headless-chromium',
+        note: 'Captured autonomously via headless Chromium engine',
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
 export function createBridgeScreenshotService(customUrl?: string) {
   const bridgeUrl = (
     customUrl ||
@@ -24,10 +117,11 @@ export function createBridgeScreenshotService(customUrl?: string) {
   ).replace(/\/+$/, '');
 
   return {
-    async captureScreenshot({ snapshot, revision, filePath: requestedFilePath, viewport, nodeId, format, pixelRatio, backgroundColor }: any) {
-      const filePath = requestedFilePath || snapshot.scope.filePath || [...snapshot.files.keys()].find((path: string) =>
-        path.endsWith('/page.client.tsx') || path === 'page.client.tsx'
+    async captureScreenshot({ snapshot, revision, filePath: requestedFilePath, viewport, nodeId, format, pixelRatio, backgroundColor, headless }: any) {
+      const clientPage = [...snapshot.files.keys()].find((path: string) =>
+        path.endsWith('/page.client.tsx') || path === 'page.client.tsx' || path.endsWith('page.client.tsx')
       );
+      const filePath = requestedFilePath || clientPage || snapshot.scope.filePath;
       if (!filePath) {
         return {
           available: false,
@@ -38,8 +132,27 @@ export function createBridgeScreenshotService(customUrl?: string) {
         };
       }
 
+      const preferHeadless = process.env.REVYME_HEADLESS_SCREENSHOT === '1' ||
+                             process.env.REVYME_HEADLESS_SCREENSHOT === 'true' ||
+                             Boolean(headless);
+
+      if (preferHeadless) {
+        const headlessResult = await captureHeadlessScreenshot({
+          projectId: snapshot.scope.projectId,
+          viewport,
+          nodeId,
+          format,
+          pixelRatio,
+          backgroundColor,
+        });
+        if (headlessResult && headlessResult.available) {
+          return headlessResult;
+        }
+      }
+
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45_000);
+      // Bounded 5s timer: don't hang for 45s if browser tab is suspended in background
+      const timer = setTimeout(() => controller.abort(), 5_000);
       try {
         const response = await fetch(`${bridgeUrl}/rpc`, {
           method: 'POST',
@@ -73,9 +186,26 @@ export function createBridgeScreenshotService(customUrl?: string) {
           }
           throw new Error(`Screenshot bridge returned HTTP ${response.status}`);
         }
-        const payload = await response.json() as { ok?: boolean; result?: unknown; error?: string };
+        const payload = await response.json() as { ok?: boolean; result?: any; error?: string };
         if (!payload.ok) throw new Error(payload.error || 'Screenshot bridge returned an empty response');
         return payload.result;
+      } catch (err: any) {
+        // If aborted (timed out because browser tab was throttled in background), attempt headless capture!
+        if (err?.name === 'AbortError' || err?.message?.includes('aborted') || err?.code === 'ECONNREFUSED') {
+          const headlessFallback = await captureHeadlessScreenshot({
+            projectId: snapshot.scope.projectId,
+            viewport,
+            nodeId,
+            format,
+            pixelRatio,
+            backgroundColor,
+          });
+
+          if (headlessFallback && headlessFallback.available) {
+            return headlessFallback;
+          }
+        }
+        throw err;
       } finally {
         clearTimeout(timer);
       }

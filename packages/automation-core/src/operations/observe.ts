@@ -44,10 +44,19 @@ import { selectedIdsAtom } from '@/code/stores/store';
 export function getTargetPageFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
   if (!target) {
+    // In Next.js App Router, prefer the interactive canvas document (page.client.tsx) over the server stub (page.tsx)
     for (const key of snapshot.files.keys()) {
-      if (key.endsWith('page.client.tsx') || key.endsWith('page.tsx')) {
+      if (key.endsWith('page.client.tsx')) {
         target = key;
         break;
+      }
+    }
+    if (!target) {
+      for (const key of snapshot.files.keys()) {
+        if (key.endsWith('page.tsx')) {
+          target = key;
+          break;
+        }
       }
     }
   }
