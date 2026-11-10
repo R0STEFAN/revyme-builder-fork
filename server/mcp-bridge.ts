@@ -598,6 +598,20 @@ function refreshModelsInBackground(): void {
           const provider = parsed.provider || 'revyme';
           const chatId = parsed.chatId || 'default';
           const existingSessionId = chatSessionMap.get(chatId) || parsed.conversationId;
+          const rawWebsiteId = parsed.websiteId || '';
+          const contextBlock = typeof parsed.contextBlock === 'string' ? parsed.contextBlock.trim() : '';
+
+          let effectiveProjectId = rawWebsiteId;
+          if (!effectiveProjectId || effectiveProjectId === 'local') {
+            try {
+              const projects = listProjects();
+              const valid = (projects || []).filter((p) => !p.id.startsWith('test-') && !p.id.includes('fifo'));
+              if (valid.length > 0 && valid[0]?.id) {
+                effectiveProjectId = valid[0].id;
+              }
+            } catch { /* ignore */ }
+          }
+          if (!effectiveProjectId) effectiveProjectId = 'local';
 
           const userMsgs = (parsed.messages || []).filter((m: any) => m.role === 'user');
           const lastMsg = userMsgs[userMsgs.length - 1];
@@ -622,7 +636,7 @@ function refreshModelsInBackground(): void {
 
           sendEvent({
             type: 'reasoning',
-            text: `[${model}] Effort: ${reasoning}. Session: ${chatId}${existingSessionId ? ' (resuming conversation)' : ''}.\n`,
+            text: `[${model}] Effort: ${reasoning}. Project: ${effectiveProjectId}. Chat: ${chatId}${existingSessionId ? ' (resuming conversation)' : ''}.\n`,
           });
 
           if (userPrompt.includes('[Target Element]') || userPrompt.includes('[Staged Tasks')) {
@@ -633,22 +647,46 @@ function refreshModelsInBackground(): void {
           }
 
           const revymeSystemPreamble = `You are the Revyme Website Builder AI Assistant.
-The user is visually building and editing a website on the Revyme canvas.
-When asked to modify, style, inspect, or build elements on the website, YOU MUST USE the "revyme-builder" MCP server via call_mcp_tool:
-- styles.set: Set CSS styles on an element. Arguments: { nodeId: string, styles: Record<string, string>, viewport?: string } (e.g. to set color to blue: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } })).
-- text.set: Update element text content. Arguments: { nodeId: string, text: string }.
-- nodes.create: Create element. Arguments: { parentId: string, type: string, styles?: Record<string, string>, textContent?: string }.
-- nodes.remove: Remove element. Arguments: { nodeId: string }.
-- motion.set: Set animation. Arguments: { nodeId: string, animation: Record<string, any> }.
-- observe.selection: Read current selection.
-DO NOT run bash/terminal commands or search host filesystem with find/grep.
-Execute all requested changes via revyme-builder MCP tools directly.
+You are embedded directly inside Revyme Website Builder — a visual, code-first website builder where real Next.js and React code is the document.
 
+[Active Project Details]
+- Project ID: ${effectiveProjectId}
+- Active Branch: main
+- Bridge URL: http://127.0.0.1:8082
+- API URL: http://localhost:3333
+
+[Available MCP Server: revyme-builder]
+You have direct access to the "revyme-builder" Model Context Protocol (MCP) server via call_mcp_tool:
+- styles.set: Set or update CSS styles on an element. Arguments: { nodeId: string, styles: Record<string, string>, viewport?: string }
+  (e.g. to set color or background: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } }))
+- text.set: Update element text content. Arguments: { nodeId: string, text: string }
+- nodes.create: Create a new node. Arguments: { parentId: string, type: string, styles?: Record<string, string>, textContent?: string }
+- nodes.remove: Remove an element. Arguments: { nodeId: string }
+- nodes.get: Retrieve node attributes and current styles. Arguments: { nodeId: string }
+- motion.set: Set Framer Motion animation / transition props. Arguments: { nodeId: string, animation: Record<string, any> }
+- pages.list / pages.create / pages.update: Query and manage site pages
+- observe.selection: Get currently selected canvas element IDs
+- codeFiles.read / codeFiles.submit: Inspect or update project source files
+
+[Specialized Skills Available in .agents/skills/]
+- revyme-mcp (.agents/skills/revyme-mcp/SKILL.md): Comprehensive Revyme MCP v2 tool reference, schemas, and design guidelines.
+- revyme-director (.agents/skills/revyme-director/SKILL.md): Executive Art Director and page generation pipeline.
+- motion-framer (.agents/skills/motion-framer/SKILL.md): Production-ready Framer Motion animation patterns.
+- design (.agents/skills/design/SKILL.md): Visual design system, tokens, colors, typography, and spacing.
+
+[Operating Rules]
+1. Never run bash/terminal search commands (such as find, grep, or locate) to explore the project.
+2. Directly execute visual changes and style updates using the "revyme-builder" MCP server via call_mcp_tool.
+3. Keep changes precise, high quality, and aligned with modern visual design standards.
+${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 User request:
 `;
 
           const effectivePrompt = existingSessionId
-            ? `[Revyme instruction: Always use revyme-builder MCP tools via call_mcp_tool (styles.set, text.set, nodes.*), never run bash commands.]\n\n${userPrompt}`
+            ? `[Revyme Context: Project ID: ${effectiveProjectId} | Chat: ${chatId}]
+[Revyme instruction: Always use revyme-builder MCP tools via call_mcp_tool (styles.set, text.set, nodes.*), never run bash commands.]
+${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
+${userPrompt}`
             : `${revymeSystemPreamble}${userPrompt}`;
           const bin = resolveAgentBinary(provider);
           const cleanModel = model.replace(/^(google|anthropic|openai)\//, '');
@@ -670,9 +708,16 @@ User request:
 
           let childProcess: any = null;
           try {
+            const childEnv = {
+              ...process.env,
+              REVYME_PROJECT_ID: effectiveProjectId,
+              REVYME_API_URL: 'http://localhost:3333',
+              REVYME_MCP_BRIDGE_URL: 'http://127.0.0.1:8082',
+              REVYME_BRANCH_ID: 'main',
+            };
             childProcess = spawn(bin, args, {
               cwd: process.cwd(),
-              env: process.env,
+              env: childEnv,
             });
           } catch (spawnErr: any) {
             sendEvent({ type: 'error', message: `Could not launch agent binary (${bin}): ${spawnErr.message}` });
