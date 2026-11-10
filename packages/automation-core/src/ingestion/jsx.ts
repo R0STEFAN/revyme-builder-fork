@@ -147,24 +147,57 @@ function convertBabelJSX(
     const { id } = idManager.ensureNodeId(existingId, tagName, reporter);
     const normalizedStyles = normalizeStyles(styles, unitContext, reporter, id);
 
+    const hasElementChildren = node.children.some(
+      (child: any) => child.type === 'JSXElement' || child.type === 'JSXFragment'
+    );
+
     let textContent = '';
     const children: IngestedNode[] = [];
 
-    for (const child of node.children) {
-      if (child.type === 'JSXText') {
-        const text = child.value.trim();
-        if (text) textContent += (textContent ? ' ' : '') + text;
-      } else if (
-        child.type === 'JSXExpressionContainer' &&
-        child.expression?.type === 'StringLiteral'
-      ) {
-        const text = child.expression.value.trim();
-        if (text) textContent += (textContent ? ' ' : '') + text;
-      } else if (child.type === 'JSXElement') {
-        const childNode = convertBabelJSX(child, idManager, unitContext, reporter);
-        if (childNode) children.push(childNode);
-      } else if (child.type === 'JSXFragment') {
-        collectNodesFromBabel(child, idManager, unitContext, reporter, children);
+    if (!hasElementChildren) {
+      for (const child of node.children) {
+        if (child.type === 'JSXText') {
+          const text = child.value.trim();
+          if (text) textContent += (textContent ? ' ' : '') + text;
+        } else if (
+          child.type === 'JSXExpressionContainer' &&
+          child.expression?.type === 'StringLiteral'
+        ) {
+          const text = child.expression.value.trim();
+          if (text) textContent += (textContent ? ' ' : '') + text;
+        }
+      }
+    } else {
+      for (const child of node.children) {
+        if (child.type === 'JSXText') {
+          const text = child.value.trim();
+          if (text) {
+            const { id: spanId } = idManager.ensureNodeId(undefined, 'span', reporter);
+            children.push({
+              id: spanId,
+              tag: 'span',
+              text,
+            });
+          }
+        } else if (
+          child.type === 'JSXExpressionContainer' &&
+          child.expression?.type === 'StringLiteral'
+        ) {
+          const text = child.expression.value.trim();
+          if (text) {
+            const { id: spanId } = idManager.ensureNodeId(undefined, 'span', reporter);
+            children.push({
+              id: spanId,
+              tag: 'span',
+              text,
+            });
+          }
+        } else if (child.type === 'JSXElement') {
+          const childNode = convertBabelJSX(child, idManager, unitContext, reporter);
+          if (childNode) children.push(childNode);
+        } else if (child.type === 'JSXFragment') {
+          collectNodesFromBabel(child, idManager, unitContext, reporter, children);
+        }
       }
     }
 

@@ -186,6 +186,18 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
       expect(node.children?.[0].isTransparent).toBe(true);
       expect(node.children?.[1].isTransparent).toBe(true);
     });
+
+    it('preserves text runs when elements contain mixed text and element children', () => {
+      const h1 = ingestJSXFragment('<h1>BREAK THE TEMPLATE <span data-id="s1">VELOCITY</span></h1>');
+      expect(h1).not.toBeNull();
+      expect(h1?.tag).toBe('h1');
+      expect(h1?.children).toBeDefined();
+      expect(h1?.children?.length).toBe(2);
+      expect(h1?.children?.[0].tag).toBe('span');
+      expect(h1?.children?.[0].text).toBe('BREAK THE TEMPLATE');
+      expect(h1?.children?.[1].id).toBe('s1');
+      expect(h1?.children?.[1].text).toBe('VELOCITY');
+    });
   });
 
   describe('Plan Creation & Validation', () => {

@@ -3445,10 +3445,11 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
   // Has children — build nested JSX
   if (node.children && node.children.length > 0) {
     const childIndent = indent + '  ';
+    const textJSX = textContent ? `${childIndent}${textContent}\n` : '';
     const childrenJSX = node.children
       .map(child => childIndent + buildNodeJSX(child, isComponentFile, childIndent))
       .join('\n');
-    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>\n${childrenJSX}\n${indent}</${tag}>`;
+    return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>\n${textJSX}${childrenJSX}\n${indent}</${tag}>`;
   }
 
   if (textContent) {

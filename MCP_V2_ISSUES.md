@@ -1,5 +1,24 @@
 # MCP v2 issue log
 
+## 2026-11-10 — Mixed text and JSX element ingestion dropped inline text runs
+
+**Status:** fixed, verified via `packages/automation-core/test/capabilities/T03-ingestion.test.ts` (20 tests), `src/code/generation/generator-crud.test.ts` (20 tests), CLI build (`node packages/cli/build.cjs`), and committed.
+
+**Symptom:**
+When ingesting or adding JSX containing mixed text runs and child elements (such as `<h1>BREAK THE TEMPLATE WITH PURE CANVAS <span>VELOCITY</span></h1>` or `<span style={{ fontFamily: 'Anton' }}>FLUX<span style={{ color: '#ffe17c' }}>.</span></span>`), all plain text runs outside the child tags were completely dropped. As a result, `<h1>` was rendered completely empty, and the header logo lost "FLUX", showing only a yellow square dot `.`.
+
+**Cause:**
+1. In `packages/automation-core/src/ingestion/jsx.ts`, when `convertBabelJSX` traversed `node.children`, it collected `JSXText` into a parent `textContent` string while pushing `JSXElement` into `children`.
+2. In `src/code/generation/generator-crud.ts`, `buildNodeJSX` checked `if (node.children && node.children.length > 0)` and serialized only `childrenJSX`, completely ignoring and discarding `node.textContent`.
+
+**Fix and regression guard:**
+1. In `packages/automation-core/src/ingestion/jsx.ts`, updated `convertBabelJSX` so that when an element contains child elements (`hasElementChildren`), any non-empty `JSXText` or string expression children are lowered into explicit `span` child nodes, preserving their content and document order.
+2. In `src/code/generation/generator-crud.ts`, updated `buildNodeJSX` to serialize `textJSX` alongside `childrenJSX` when both `textContent` and `children` are present.
+3. Added unit test `preserves text runs when elements contain mixed text and element children` to `packages/automation-core/test/capabilities/T03-ingestion.test.ts`.
+4. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+
+
+
 ## 2026-11-09 — False positive bare_form preflight rejection on forms with arrow function event handlers
 
 **Status:** fixed, verified via `packages/automation-core/test/capabilities/T23-release.test.ts` (36 tests), CLI build (`node packages/cli/build.cjs`), and live preflight inspection on project `proj-1794236460447-m6burp`, and committed.
