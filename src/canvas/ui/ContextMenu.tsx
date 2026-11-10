@@ -32,6 +32,9 @@ import { activeFilePathAtom, componentBreadcrumbAtom, isComponentFilePath, isDes
 import { codeEditorOpenAtom, codeEditorViewRequestAtom } from '@/code/stores/left-panel-store';
 import { viewportsConfigAtom, interactingViewportIdAtom, isReplicaViewportAtom, isComponentVariantViewportAtom, activeComponentVariantAtom } from '@/code/stores/viewport-store';
 import { buildMcpReference, formatMcpReference, copyTextToClipboard } from './mcp-reference';
+import { agentAttachedNodeAtom, agentCommentDialogAtom } from '@/code/stores/agent-chat-store';
+import { leftPanelAtom } from '@/code/stores/left-panel-store';
+import { getDefaultStore } from 'jotai';
 import { enterComponentFile } from '@/canvas/component-navigation';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
 import { projectVersionAtom } from '@/code/project/project-fs';
@@ -615,6 +618,44 @@ export default function ContextMenu() {
     close();
   };
 
+  const handleCommentForAgent = () => {
+    const nodes = getNodesSnapshot();
+    const ref = buildMcpReference({
+      activeFilePath,
+      targetNodeId: nodeId,
+      selectedIds,
+      nodes,
+      viewportHeader: menu.viewportHeader,
+      viewportId: menu.viewportId,
+      activeVariant,
+      interactingViewportId: interactingVp,
+    });
+    const effectiveId = ref.nodeId || selectedIds[0] || nodeId;
+    if (effectiveId) {
+      getDefaultStore().set(agentCommentDialogAtom, {
+        isOpen: true,
+        x: menu.x,
+        y: menu.y,
+        targetNodeId: effectiveId,
+        targetNodeName: ref.name || effectiveId,
+        targetNodeType: ref.type,
+        targetFilePath: ref.filePath,
+        refData: {
+          filePath: ref.filePath,
+          nodeId: effectiveId,
+          name: ref.name,
+          type: ref.type,
+          textContent: ref.textContent,
+          variant: ref.variant,
+          viewport: ref.viewport,
+        },
+      });
+    } else {
+      toast.error('Select an element first');
+    }
+    close();
+  };
+
   const handleCut = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
     if (ids.length === 0) return;
@@ -1056,6 +1097,7 @@ export default function ContextMenu() {
 
         <MenuItem label="Cut" shortcut="Ctrl+X" onClick={handleCut} disabled={!nodeId} />
         <MenuItem label="Copy" shortcut="Ctrl+C" onClick={handleCopy} disabled={!nodeId} />
+        <MenuItem label="Comment / Ask Agent" shortcut="Alt+Click" onClick={handleCommentForAgent} disabled={!nodeId && selectedIds.length === 0} />
         <MenuItem label="Copy to MCP" onClick={handleCopyToMCP} />
         <MenuItem label="Paste" shortcut="Ctrl+V" onClick={handlePaste} disabled={!hasClipboard()} />
         <MenuItem label="Duplicate" shortcut="Ctrl+D" onClick={handleDuplicate} disabled={!nodeId} />

@@ -1,5 +1,6 @@
 import http from 'node:http';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { listProjects } from './storage';
 
 export function assertProjectScopedPath(filePath: unknown): void {
@@ -430,11 +431,276 @@ export class McpBridge {
         return;
       }
 
-      // Return empty engines array for AI agent engines check if queried on the bridge
+interface DiscoveredModel {
+  id: string;
+  label: string;
+  vendor: 'google' | 'anthropic' | 'openai';
+  tier: 'fast' | 'standard' | 'best';
+}
+
+let cachedDynamicModels: DiscoveredModel[] | null = null;
+let lastDynamicModelFetch = 0;
+
+function resolveAgentBinary(preferred: string): string {
+  if (preferred === 'agy' || preferred === 'revyme' || !preferred) {
+    if (fs.existsSync('/home/rost/.local/bin/agy')) return '/home/rost/.local/bin/agy';
+    return 'agy';
+  }
+  if (preferred === 'codex') {
+    if (fs.existsSync('/home/rost/.local/bin/codex')) return '/home/rost/.local/bin/codex';
+    return 'codex';
+  }
+  return preferred;
+}
+
+function refreshModelsInBackground(): void {
+  if (Date.now() - lastDynamicModelFetch < 60_000) return;
+  lastDynamicModelFetch = Date.now();
+  try {
+    const bin = resolveAgentBinary('agy');
+    const cp = spawn(bin, ['models'], { timeout: 10000 });
+    let out = '';
+    cp.stdout.on('data', (d: Buffer | string) => { out += d.toString(); });
+    cp.on('close', (code: number | null) => {
+      if (code === 0 && out) {
+        const lines = out.split('\n');
+        const parsed: DiscoveredModel[] = [];
+        for (const line of lines) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            const id = parts[0].trim();
+            const label = parts[1].trim();
+            if (id && label) {
+              const vendor = id.startsWith('claude') ? 'anthropic' : (id.startsWith('gpt') ? 'openai' : 'google');
+              const tier = id.includes('low') || id.includes('lite') ? 'fast' : (id.includes('high') || id.includes('opus') ? 'best' : 'standard');
+              parsed.push({ id, label, vendor, tier });
+            }
+          }
+        }
+        if (parsed.length > 0) {
+          cachedDynamicModels = parsed;
+        }
+      }
+    });
+    cp.on('error', () => { /* ignore */ });
+  } catch {
+    // ignore
+  }
+}
+
+      // Return available engines for AI agent
       if (pathname === '/api/agent/engines') {
         res.setHeader('Content-Type', 'application/json');
         res.statusCode = 200;
-        res.end(JSON.stringify({ engines: [] }));
+        res.end(JSON.stringify({ engines: ['revyme', 'agy', 'claude-cli', 'codex'] }));
+        return;
+      }
+
+      // Dynamic model catalog endpoint: GET /api/freeform/models or GET /api/agent/models
+      if (pathname === '/api/freeform/models' || pathname === '/api/agent/models') {
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        refreshModelsInBackground();
+
+        const agent = (url.searchParams.get('agent') || '').toLowerCase();
+
+        const fallbackModels: DiscoveredModel[] = [
+          { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', vendor: 'google', tier: 'standard' },
+          { id: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', vendor: 'google', tier: 'fast' },
+          { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', vendor: 'google', tier: 'best' },
+          { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', vendor: 'anthropic', tier: 'standard' },
+          { id: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5', vendor: 'anthropic', tier: 'fast' },
+          { id: 'anthropic/claude-opus-5.5', label: 'Claude Opus 5.5', vendor: 'anthropic', tier: 'best' },
+          { id: 'openai/gpt-6-sol', label: 'GPT-6 Sol', vendor: 'openai', tier: 'standard' },
+          { id: 'openai/gpt-6-luna', label: 'GPT-6 Luna', vendor: 'openai', tier: 'fast' },
+        ];
+
+        let models = (cachedDynamicModels && cachedDynamicModels.length > 0)
+          ? [...cachedDynamicModels]
+          : fallbackModels;
+
+        if (agent === 'agy' || agent === 'google') {
+          models = models.filter((m) => m.vendor === 'google');
+        } else if (agent === 'claude' || agent === 'claude-code' || agent === 'claude-cli') {
+          models = models.filter((m) => m.vendor === 'anthropic');
+        } else if (agent === 'openai' || agent === 'codex') {
+          models = models.filter((m) => m.vendor === 'openai');
+        }
+
+        const defaultModel = models[0]?.id || 'google/gemini-3.8-flash';
+        res.end(JSON.stringify({ models, defaultModel }));
+        return;
+      }
+
+      // Local agent turn endpoint: POST /api/agent/turn
+      if (method === 'POST' && (pathname === '/api/agent/turn' || pathname === '/api/local-agent/turn')) {
+        let body = '';
+        req.on('data', (chunk: Buffer | string) => {
+          body += chunk.toString();
+        });
+        req.on('end', async () => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          });
+
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(body || '{}');
+          } catch {
+            parsed = {};
+          }
+
+          const model = parsed.model || 'google/gemini-3.8-flash';
+          const reasoning = parsed.reasoning || 'low';
+          const provider = parsed.provider || 'revyme';
+          const userMsgs = (parsed.messages || []).filter((m: any) => m.role === 'user');
+          const lastMsg = userMsgs[userMsgs.length - 1];
+          const userPrompt = typeof lastMsg?.content === 'string'
+            ? lastMsg.content
+            : (Array.isArray(lastMsg?.content) ? lastMsg.content.find((c: any) => c.type === 'text')?.text || '' : '');
+
+          const sendEvent = (obj: any) => {
+            try {
+              res.write(`data: ${JSON.stringify(obj)}\n\n`);
+            } catch {
+              // Client disconnected
+            }
+          };
+
+          if (!userPrompt.trim()) {
+            sendEvent({ type: 'text', text: 'Please enter a prompt or instruction.' });
+            sendEvent({ type: 'done' });
+            res.end();
+            return;
+          }
+
+          sendEvent({
+            type: 'reasoning',
+            text: `[${model}] Effort: ${reasoning}. Connected to agent runner.\n`,
+          });
+
+          if (userPrompt.includes('[Target Element]')) {
+            sendEvent({
+              type: 'reasoning',
+              text: `Canvas element context attached.\n`,
+            });
+          }
+
+          const bin = resolveAgentBinary(provider);
+          const cleanModel = model.replace(/^(google|anthropic|openai)\//, '');
+          const args = [
+            '-p',
+            userPrompt,
+            '--effort',
+            reasoning,
+            '--output-format',
+            'stream-json',
+            '--dangerously-skip-permissions',
+          ];
+          if (cleanModel) {
+            args.push('--model', cleanModel);
+          }
+
+          let childProcess: any = null;
+          try {
+            childProcess = spawn(bin, args, {
+              cwd: process.cwd(),
+              env: process.env,
+            });
+          } catch (spawnErr: any) {
+            sendEvent({ type: 'error', message: `Could not launch agent binary (${bin}): ${spawnErr.message}` });
+            sendEvent({ type: 'done' });
+            res.end();
+            return;
+          }
+
+          let buffer = '';
+          childProcess.stdout.on('data', (chunk: Buffer | string) => {
+            buffer += chunk.toString();
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const ev = JSON.parse(trimmed);
+                if (ev.event === 'step_update' && ev.step_update) {
+                  const su = ev.step_update;
+                  if (su.step_type === 'agent_response' && su.text_delta) {
+                    sendEvent({ type: 'text', text: su.text_delta });
+                  } else if (su.step_type === 'thought' || su.step_type === 'reasoning' || su.thinking_delta) {
+                    sendEvent({ type: 'reasoning', text: su.thinking_delta || su.text_delta || su.content || '' });
+                  } else if (su.step_type === 'tool') {
+                    const stepId = String(su.step_index ?? Date.now());
+                    const toolName = su.tool_name || su.tool_info?.name || 'tool';
+                    if (su.state === 'ACTIVE') {
+                      sendEvent({
+                        type: 'tool_call',
+                        id: stepId,
+                        name: toolName,
+                        input: su.tool_info?.parameters || {},
+                        label: toolName,
+                      });
+                    } else if (su.state === 'DONE') {
+                      sendEvent({
+                        type: 'tool_result',
+                        id: stepId,
+                        ok: true,
+                        content: typeof su.tool_info?.output === 'string' ? su.tool_info.output : JSON.stringify(su.tool_info?.output || ''),
+                      });
+                    }
+                  }
+                }
+              } catch {
+                // Non-JSON diagnostic or plain text line
+                if (trimmed && !trimmed.startsWith('Fetching')) {
+                  sendEvent({ type: 'text', text: trimmed + '\n' });
+                }
+              }
+            }
+          });
+
+          childProcess.stderr.on('data', (chunk: Buffer | string) => {
+            const errText = chunk.toString();
+            if (!errText.includes('Fetching available models') && !/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(errText.trim())) {
+              sendEvent({ type: 'reasoning', text: `[agent notice] ${errText}\n` });
+            }
+          });
+
+          childProcess.on('error', (err: any) => {
+            sendEvent({ type: 'error', message: `Agent process error: ${err.message}` });
+            sendEvent({ type: 'done' });
+            res.end();
+          });
+
+          childProcess.on('close', (code: number | null) => {
+            if (buffer.trim()) {
+              try {
+                const ev = JSON.parse(buffer.trim());
+                if (ev.event === 'step_update' && ev.step_update?.text_delta) {
+                  sendEvent({ type: 'text', text: ev.step_update.text_delta });
+                }
+              } catch {
+                sendEvent({ type: 'text', text: buffer.trim() });
+              }
+            }
+            sendEvent({ type: 'done' });
+            res.end();
+          });
+
+          res.on('close', () => {
+            if (!res.writableEnded && childProcess && !childProcess.killed) {
+              try {
+                childProcess.kill('SIGTERM');
+              } catch {
+                // Ignore kill errors
+              }
+            }
+          });
+        });
         return;
       }
 

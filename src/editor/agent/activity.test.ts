@@ -252,4 +252,31 @@ describe('the capability-audit tool families read as what they changed', () => {
       expect(foldActivity([t(name)])[0].label, name).toMatch(/layer/);
     }
   });
+
+  test('handles MCP v2 dot-notated operations correctly', () => {
+    // 1. Styles & nodes
+    const styleSteps = foldActivity([t('styles.set'), t('styles.set'), t('nodes.create')]);
+    expect(styleSteps[0].label).toBe('Edited 2 layer styles, added 1 layer');
+
+    // 2. Observations & reviews
+    const observeSteps = foldActivity([t('observe.selection'), t('observe.layout'), t('observe.screenshot', { image: 'data:img' })]);
+    expect(observeSteps).toHaveLength(3);
+    expect(observeSteps[0].kind).toBe('read');
+    expect(observeSteps[0].label).toBe('Inspected the selection');
+    expect(observeSteps[1].kind).toBe('review');
+    expect(observeSteps[1].label).toBe('Reviewed changes');
+    expect(observeSteps[2].kind).toBe('view');
+    expect(observeSteps[2].images).toEqual(['data:img']);
+
+    // 3. Pages & presets
+    const pageSteps = foldActivity([t('pages.create'), t('presets.apply')]);
+    expect(pageSteps[0].label).toBe('Added 1 page, edited 1 preset');
+
+    // 4. Fully-qualified MCP v2 wrapper names
+    const mcpSteps = foldActivity([
+      t('mcp__revyme-builder__nodes_create'),
+      t('mcp__revyme_v2__styles_set'),
+    ]);
+    expect(mcpSteps[0].label).toBe('Added 1 layer, edited 1 layer style');
+  });
 });

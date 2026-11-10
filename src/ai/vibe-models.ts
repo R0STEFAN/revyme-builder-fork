@@ -58,35 +58,46 @@ export interface VibeModelCatalog {
   retired?: Record<string, string>;
 }
 
-let catalogPromise: Promise<VibeModelCatalog> | null = null;
+let catalogCache = new Map<string, Promise<VibeModelCatalog>>();
 
-/** Fetch the live catalog once per session; on failure return the static
+/** Fetch the live catalog dynamically per agent; on failure return the static
  *  mirror WITHOUT caching, so a later open retries the service. */
-export function fetchVibeModels(): Promise<VibeModelCatalog> {
-  if (!catalogPromise) {
-    catalogPromise = fetch(`${AI_SERVICE_URL}/api/freeform/models`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d: { models?: VibeModel[]; defaultModel?: string; retired?: Record<string, string> }) => {
-        const models = Array.isArray(d.models) && d.models.length ? d.models : FALLBACK_MODELS;
-        const catalog = { models, defaultModel: d.defaultModel || FALLBACK_DEFAULT, retired: d.retired ?? FALLBACK_RETIRED };
-        trace.action('vibe-models:fetched', { count: models.length, defaultModel: catalog.defaultModel });
-        return catalog;
-      })
-      .catch((err) => {
-        trace.error('vibe-models:fetch-failed', { err: String(err?.message ?? err) });
-        catalogPromise = null; // retry next time — do not cache the failure
-        return { models: FALLBACK_MODELS, defaultModel: FALLBACK_DEFAULT, retired: FALLBACK_RETIRED };
-      });
+export function fetchVibeModels(agent?: string, forceRefresh = false): Promise<VibeModelCatalog> {
+  const cacheKey = (agent || 'all').toLowerCase();
+  if (forceRefresh) {
+    catalogCache.delete(cacheKey);
   }
-  return catalogPromise;
+  const existing = catalogCache.get(cacheKey);
+  if (existing) return existing;
+
+  const url = agent
+    ? `${AI_SERVICE_URL}/api/agent/models?agent=${encodeURIComponent(agent)}`
+    : `${AI_SERVICE_URL}/api/freeform/models`;
+
+  const promise = fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((d: { models?: VibeModel[]; defaultModel?: string; retired?: Record<string, string> }) => {
+      const models = Array.isArray(d.models) && d.models.length ? d.models : FALLBACK_MODELS;
+      const catalog = { models, defaultModel: d.defaultModel || FALLBACK_DEFAULT, retired: d.retired ?? FALLBACK_RETIRED };
+      trace.action('vibe-models:fetched', { agent: cacheKey, count: models.length, defaultModel: catalog.defaultModel });
+      return catalog;
+    })
+    .catch((err) => {
+      trace.error('vibe-models:fetch-failed', { agent: cacheKey, err: String(err?.message ?? err) });
+      catalogCache.delete(cacheKey); // retry next time — do not cache the failure
+      return { models: FALLBACK_MODELS, defaultModel: FALLBACK_DEFAULT, retired: FALLBACK_RETIRED };
+    });
+
+  catalogCache.set(cacheKey, promise);
+  return promise;
 }
 
 /** Test seam. */
 export function resetVibeModelCache(): void {
-  catalogPromise = null;
+  catalogCache.clear();
 }
 
 /** Display label for a model id — falls back to the slug tail so an id the

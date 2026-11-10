@@ -132,6 +132,36 @@ export const agentChangedFilesAtom = atom<AgentChangedFile[]>([]);
  */
 export const agentQueuedRequestAtom = atom<{ text: string; nonce: number } | null>(null);
 
+export interface AgentAttachedNode {
+  filePath: string;
+  nodeId: string;
+  name?: string;
+  type?: string;
+  textContent?: string;
+  variant?: string;
+  viewport?: string;
+}
+
+/** An element on the canvas marked for the next agent prompt. */
+export const agentAttachedNodeAtom = atom<AgentAttachedNode | null>(null);
+
+/** Inline canvas comment dialog state for targeting elements with the agent. */
+export interface AgentCommentDialogState {
+  isOpen: boolean;
+  x: number;
+  y: number;
+  targetNodeId: string;
+  targetNodeName?: string;
+  targetNodeType?: string;
+  targetFilePath: string;
+  refData: AgentAttachedNode;
+}
+
+export const agentCommentDialogAtom = atom<AgentCommentDialogState | null>(null);
+
+/** A pre-filled draft prompt for the chat composer. */
+export const agentDraftPromptAtom = atom<string>('');
+
 export const DEFAULT_MODELS: Record<AgentProviderConfig['provider'], string> = {
   // A catalog id (ai-generator providers/model-catalog.ts) — the server clamps
   // anything else to its default, so credits can never run an arbitrary model.
@@ -211,9 +241,9 @@ export const agentEffortAtom = atomWithStorage<Record<string, AgentEffort>>('rev
  */
 export function effortOptionsFor(provider: AgentProviderConfig['provider'], model: string): { options: AgentEffort[]; fallback: AgentEffort } | null {
   if (provider !== 'revyme' && provider !== 'openrouter') return null;
-  if (model.startsWith('anthropic/')) return { options: ['low', 'medium', 'high'], fallback: 'low' };
-  if (model.startsWith('openai/')) return { options: ['low', 'medium', 'high'], fallback: 'medium' };
-  if (model.startsWith('google/')) return { options: ['low', 'high'], fallback: 'high' };
+  if (model.startsWith('anthropic/') || model.startsWith('claude')) return { options: ['low', 'medium', 'high'], fallback: 'low' };
+  if (model.startsWith('openai/') || model.startsWith('gpt')) return { options: ['low', 'medium', 'high'], fallback: 'medium' };
+  if (model.startsWith('google/') || model.startsWith('gemini')) return { options: ['low', 'medium', 'high'], fallback: 'high' };
   return null;
 }
 

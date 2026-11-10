@@ -95,7 +95,7 @@ describe('thinking effort, per model', () => {
     // Gemini: its levels only — a level is what makes it send its thinking.
     // The chip also reads "Gemini 3.8 Flash" — take the LIST row.
     fireEvent.mouseEnter(screen.getAllByText('Gemini 3.8 Flash').map((e) => e.closest('button')!).find((b) => b.dataset.testid !== 'agent-model-select')!);
-    expect([...screen.getByTestId('searchable-dropdown-submenu').querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Low', 'Highdefault']);
+    expect([...screen.getByTestId('searchable-dropdown-submenu').querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Low', 'Medium', 'Highdefault']);
   });
 
   it('picking an effort stores it for THAT model and switches to it; the chip names a non-default effort', () => {

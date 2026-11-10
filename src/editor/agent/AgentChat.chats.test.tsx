@@ -28,6 +28,7 @@ import {
 } from '@/code/stores/agent-chats-store';
 import {
   agentStatusAtom, agentConversationAtom, agentStreamAtom, agentToolsAtom, agentBlocksAtom, agentReasoningAtom, agentErrorAtom,
+  agentAttachedNodeAtom,
 } from '@/code/stores/agent-chat-store';
 
 const store = getDefaultStore();
@@ -297,5 +298,42 @@ describe('the in-flight turn reads like a finished one', () => {
     expect(card.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The last block is the live one: the card in the middle is not shimmering.
     expect(card.querySelectorAll('.agent-step-live')).toHaveLength(0);
+  });
+});
+
+describe('attached canvas target', () => {
+  it('displays the target badge and prepends its metadata to prompt when sent', async () => {
+    seed();
+    act(() => {
+      store.set(agentAttachedNodeAtom, {
+        filePath: 'src/components/Hero.client.tsx',
+        nodeId: 'hero-btn-1',
+        name: 'Hero Button',
+        type: 'button',
+        textContent: 'Click me',
+      });
+    });
+    render(<AgentChat />);
+
+    // Shows English badge
+    expect(screen.getByText('Target')).toBeTruthy();
+    expect(screen.getByText('Hero Button')).toBeTruthy();
+    expect(screen.getByText('(src/components/Hero.client.tsx)')).toBeTruthy();
+
+    // Type comment/instructions and send
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'make it pulse' } });
+    fireEvent.click(screen.getByLabelText('Send'));
+
+    // Attached node is consumed / cleared
+    expect(store.get(agentAttachedNodeAtom)).toBeNull();
+
+    // The user turn contains the structured prompt with target element
+    await waitFor(() => {
+      const turns = store.get(agentConversationAtom);
+      const userTurn = [...turns].reverse().find((t) => t.role === 'user');
+      expect(userTurn?.text).toContain('[Target Element]');
+      expect(userTurn?.text).toContain('hero-btn-1');
+      expect(userTurn?.text).toContain('[User Instructions]\nmake it pulse');
+    });
   });
 });

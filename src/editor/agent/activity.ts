@@ -77,27 +77,69 @@ interface Effect {
  */
 const EFFECTS: Record<string, Effect> = {
   get_screenshot: { kind: 'view' },
+  'observe.screenshot': { kind: 'view' },
+  observe_screenshot: { kind: 'view' },
   audit_design: { kind: 'review' },
+  'observe.audit': { kind: 'review' },
+  observe_audit: { kind: 'review' },
+  'observe.layout': { kind: 'review' },
+  observe_layout: { kind: 'review' },
+  'observe.visuals': { kind: 'review' },
+  observe_visuals: { kind: 'review' },
+  'observe.composition': { kind: 'review' },
+  observe_composition: { kind: 'review' },
   verify_effect: { kind: 'review' },
+  'verify.effect': { kind: 'review' },
   turn_diff: { kind: 'review' },
   submit_plan: { kind: 'plan' },
   submit_design_intent: { kind: 'plan' },
+  'plans.commit': { kind: 'plan' },
 
   // Reads, by what they look at.
   get_node_tree: { kind: 'read', noun: 'page' },
   get_selection: { kind: 'read', noun: 'selection' },
+  'observe.selection': { kind: 'read', noun: 'selection' },
+  observe_selection: { kind: 'read', noun: 'selection' },
   list_pages: { kind: 'read', noun: 'page' },
+  'pages.list': { kind: 'read', noun: 'page' },
+  pages_list: { kind: 'read', noun: 'page' },
   list_components: { kind: 'read', noun: 'component' },
+  'components.list': { kind: 'read', noun: 'component' },
+  components_list: { kind: 'read', noun: 'component' },
   get_component: { kind: 'read', noun: 'component' },
+  'components.get': { kind: 'read', noun: 'component' },
+  components_get: { kind: 'read', noun: 'component' },
   list_collections: { kind: 'read', noun: 'collection' },
+  'cms.schema.list': { kind: 'read', noun: 'collection' },
+  cms_schema_list: { kind: 'read', noun: 'collection' },
   get_design_tokens: { kind: 'read', noun: 'design token' },
+  'tokens.list': { kind: 'read', noun: 'design token' },
+  tokens_list: { kind: 'read', noun: 'design token' },
+  'tokens.get': { kind: 'read', noun: 'design token' },
+  tokens_get: { kind: 'read', noun: 'design token' },
+  'tokens.validate': { kind: 'review' },
+  tokens_validate: { kind: 'review' },
   get_dialect: { kind: 'read', noun: 'convention' },
   find_assets: { kind: 'read', noun: 'asset' },
+  'assets.list': { kind: 'read', noun: 'asset' },
+  assets_list: { kind: 'read', noun: 'asset' },
   browse_marketplace: { kind: 'read', noun: 'template' },
+  'marketplace.browse': { kind: 'read', noun: 'template' },
+  marketplace_browse: { kind: 'read', noun: 'template' },
   create_icon_set: { kind: 'write', verb: 'added', noun: 'icon set' },
+  'vectors.createset': { kind: 'write', verb: 'added', noun: 'icon set' },
+  vectors_createset: { kind: 'write', verb: 'added', noun: 'icon set' },
 
   // Writes whose unit is not a layer.
   create_page: { kind: 'write', verb: 'added', noun: 'page' },
+  'pages.create': { kind: 'write', verb: 'added', noun: 'page' },
+  pages_create: { kind: 'write', verb: 'added', noun: 'page' },
+  'pages.update': { kind: 'write', verb: 'edited', noun: 'page' },
+  pages_update: { kind: 'write', verb: 'edited', noun: 'page' },
+  'pages.duplicate': { kind: 'write', verb: 'added', noun: 'page' },
+  pages_duplicate: { kind: 'write', verb: 'added', noun: 'page' },
+  'pages.remove': { kind: 'write', verb: 'deleted', noun: 'page' },
+  pages_remove: { kind: 'write', verb: 'deleted', noun: 'page' },
   create_component: { kind: 'write', verb: 'added', noun: 'component' },
   extract_component: { kind: 'write', verb: 'added', noun: 'component' },
   create_variant: { kind: 'write', verb: 'added', noun: 'variant' },
@@ -239,6 +281,74 @@ const EFFECTS: Record<string, Effect> = {
   write_plugin: { kind: 'write', verb: 'added', noun: 'plugin' },
   launch_plugin: { kind: 'view' },
 
+  // MCP v2 styles & layout
+  'styles.set': { kind: 'write', verb: 'edited', noun: 'layer style' },
+  styles_set: { kind: 'write', verb: 'edited', noun: 'layer style' },
+  'styles.remove': { kind: 'write', verb: 'deleted', noun: 'layer style' },
+  styles_remove: { kind: 'write', verb: 'deleted', noun: 'layer style' },
+  'styles.get': { kind: 'read', noun: 'style' },
+  styles_get: { kind: 'read', noun: 'style' },
+  'layout.set': { kind: 'write', verb: 'edited', noun: 'layout' },
+  layout_set: { kind: 'write', verb: 'edited', noun: 'layout' },
+  'text.get': { kind: 'read', noun: 'text' },
+  text_get: { kind: 'read', noun: 'text' },
+  'text.set': { kind: 'write', verb: 'edited', noun: 'text' },
+  text_set: { kind: 'write', verb: 'edited', noun: 'text' },
+
+  // MCP v2 nodes
+  'nodes.get': { kind: 'read', noun: 'layer' },
+  nodes_get: { kind: 'read', noun: 'layer' },
+  'nodes.create': { kind: 'write', verb: 'added' },
+  nodes_create: { kind: 'write', verb: 'added' },
+  'nodes.update': { kind: 'write', verb: 'edited' },
+  nodes_update: { kind: 'write', verb: 'edited' },
+  'nodes.move': { kind: 'write', verb: 'moved' },
+  nodes_move: { kind: 'write', verb: 'moved' },
+  'nodes.reorder': { kind: 'write', verb: 'moved' },
+  nodes_reorder: { kind: 'write', verb: 'moved' },
+  'nodes.duplicate': { kind: 'write', verb: 'added' },
+  nodes_duplicate: { kind: 'write', verb: 'added' },
+  'nodes.wrap': { kind: 'write', verb: 'added' },
+  nodes_wrap: { kind: 'write', verb: 'added' },
+  'nodes.remove': { kind: 'write', verb: 'deleted' },
+  nodes_remove: { kind: 'write', verb: 'deleted' },
+
+  // MCP v2 presets & tokens
+  'presets.list': { kind: 'read', noun: 'preset' },
+  presets_list: { kind: 'read', noun: 'preset' },
+  'presets.apply': { kind: 'write', verb: 'edited', noun: 'preset' },
+  presets_apply: { kind: 'write', verb: 'edited', noun: 'preset' },
+  'presets.set': { kind: 'write', verb: 'edited', noun: 'preset' },
+  presets_set: { kind: 'write', verb: 'edited', noun: 'preset' },
+  'presets.batchSet': { kind: 'write', verb: 'edited', noun: 'preset' },
+  presets_batchset: { kind: 'write', verb: 'edited', noun: 'preset' },
+  'tokens.set': { kind: 'write', verb: 'edited', noun: 'design token' },
+  tokens_set: { kind: 'write', verb: 'edited', noun: 'design token' },
+  'tokens.rename': { kind: 'write', verb: 'edited', noun: 'design token' },
+  tokens_rename: { kind: 'write', verb: 'edited', noun: 'design token' },
+  'tokens.remove': { kind: 'write', verb: 'deleted', noun: 'design token' },
+  tokens_remove: { kind: 'write', verb: 'deleted', noun: 'design token' },
+  'typography.apply': { kind: 'write', verb: 'edited', noun: 'text style' },
+  typography_apply: { kind: 'write', verb: 'edited', noun: 'text style' },
+  'typography.set': { kind: 'write', verb: 'edited', noun: 'text style' },
+  typography_set: { kind: 'write', verb: 'edited', noun: 'text style' },
+
+  // MCP v2 motion & site effects
+  'motion.set': { kind: 'write', verb: 'edited', noun: 'animation' },
+  motion_set: { kind: 'write', verb: 'edited', noun: 'animation' },
+  'motion.remove': { kind: 'write', verb: 'deleted', noun: 'animation' },
+  motion_remove: { kind: 'write', verb: 'deleted', noun: 'animation' },
+  'motion.preset.apply': { kind: 'write', verb: 'edited', noun: 'animation' },
+  motion_preset_apply: { kind: 'write', verb: 'edited', noun: 'animation' },
+  'siteEffects.smoothScroll.set': { kind: 'write', verb: 'edited', noun: 'scroll setting' },
+  siteeffects_smoothscroll_set: { kind: 'write', verb: 'edited', noun: 'scroll setting' },
+  'siteEffects.pageTransition.set': { kind: 'write', verb: 'edited', noun: 'page transition' },
+  siteeffects_pagetransition_set: { kind: 'write', verb: 'edited', noun: 'page transition' },
+  'siteEffects.cursor.set': { kind: 'write', verb: 'edited', noun: 'cursor' },
+  siteeffects_cursor_set: { kind: 'write', verb: 'edited', noun: 'cursor' },
+  'siteEffects.glide.set': { kind: 'write', verb: 'edited', noun: 'animation' },
+  siteeffects_glide_set: { kind: 'write', verb: 'edited', noun: 'animation' },
+
   // Branches.
   list_branches: { kind: 'read', noun: 'branch' },
   create_branch: { kind: 'write', verb: 'added', noun: 'branch' },
@@ -277,13 +387,47 @@ const MAX_LABEL_PARTS = 3;
  * and classify the bare verb like any other tool.
  */
 export function normalizeToolName(name: string): string {
-  return name.replace(/^mcp__[^_]+__/, '').replace(/^revyme_/, '');
+  return name
+    .replace(/^mcp__[a-zA-Z0-9_-]+__/, '')
+    .replace(/^revyme_/, '')
+    .replace(/^revyme\./, '');
 }
 
 function effectFor(rawName: string): Effect {
   const name = normalizeToolName(rawName);
-  const known = EFFECTS[name];
+  const known = EFFECTS[name] || EFFECTS[name.toLowerCase()] || EFFECTS[name.replace(/\./g, '_').toLowerCase()];
   if (known) return known;
+
+  // Handle dot-notated operations (e.g. "nodes.create", "styles.set", "presets.apply")
+  if (name.includes('.')) {
+    const parts = name.split('.');
+    const domain = parts[0].toLowerCase();
+    const action = parts[parts.length - 1].toLowerCase();
+
+    if (['list', 'get', 'read', 'search', 'usage', 'catalog'].includes(action)) {
+      return { kind: 'read', noun: domain };
+    }
+    if (['audit', 'validate', 'preflight', 'check', 'review'].includes(action)) {
+      return { kind: 'review' };
+    }
+    if (action === 'screenshot') {
+      return { kind: 'view' };
+    }
+    if (['create', 'add', 'duplicate', 'extract', 'import', 'deploy'].includes(action)) {
+      return { kind: 'write', verb: 'added', noun: domain === 'nodes' ? 'layer' : domain };
+    }
+    if (['delete', 'remove', 'detach'].includes(action)) {
+      return { kind: 'write', verb: 'deleted', noun: domain === 'nodes' ? 'layer' : domain };
+    }
+    if (['move', 'reorder'].includes(action)) {
+      return { kind: 'write', verb: 'moved', noun: domain === 'nodes' ? 'layer' : domain };
+    }
+    if (['set', 'update', 'apply', 'rename', 'submit', 'sync'].includes(action)) {
+      const noun = domain === 'nodes' ? 'layer' : domain === 'styles' ? 'layer style' : domain;
+      return { kind: 'write', verb: 'edited', noun };
+    }
+  }
+
   for (const [prefix, verb] of WRITE_PREFIXES) {
     if (name.startsWith(prefix)) return { kind: 'write', verb };
   }
@@ -300,7 +444,7 @@ function effectFor(rawName: string): Effect {
  */
 export function countFor(input: Record<string, unknown> | undefined): number {
   if (!input) return 1;
-  for (const key of ['ops', 'steps', 'edits', 'nodes', 'items']) {
+  for (const key of ['ops', 'steps', 'edits', 'nodes', 'items', 'styles', 'operations', 'presets']) {
     const v = input[key];
     if (Array.isArray(v) && v.length > 0) return v.length;
   }

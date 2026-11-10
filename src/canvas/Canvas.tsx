@@ -77,6 +77,7 @@ import PanelErrorBoundary from '@/editor/ui/PanelErrorBoundary';
 import SelectionBox, { marqueeSelectionSig } from './selection/SelectionBox';
 import CodeComponentHost from './CodeComponentHost';
 import ContextMenu from './ui/ContextMenu';
+import { AgentCommentPopover } from './ui/AgentCommentPopover';
 import ComponentBreadcrumb from './ui/ComponentBreadcrumb';
 import SlugPageBreadcrumb from './ui/SlugPageBreadcrumb';
 import DynamicRouteToolbar from './ui/DynamicRouteToolbar';
@@ -1519,6 +1520,9 @@ export default function Canvas() {
 
       {/* Context menu */}
       <ContextMenu />
+
+      {/* Agent comment popover */}
+      <AgentCommentPopover />
 
       {/* Live Code component renderer */}
       <CodeComponentHost />

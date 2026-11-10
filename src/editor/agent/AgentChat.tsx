@@ -17,7 +17,7 @@ import type { AgentBlock, AgentTurnImage } from '@/code/stores/agent-chat-store'
 import {
   agentStatusAtom, agentErrorAtom, agentConversationAtom, agentStreamAtom,
   agentToolsAtom, agentBlocksAtom, agentReasoningAtom, agentChangedFilesAtom, effectiveAgentConfigAtom, agentEnginesAtom, agentServiceReachableAtom,
-  isAgentConfiguredAtom, agentEffortAtom, effortFor, effortWire, agentQueuedRequestAtom, type AgentToolEntry, type AgentChangedFile,
+  isAgentConfiguredAtom, agentEffortAtom, effortFor, effortWire, agentQueuedRequestAtom, agentAttachedNodeAtom, agentDraftPromptAtom, type AgentToolEntry, type AgentChangedFile,
 } from '@/code/stores/agent-chat-store';
 import { useProjectSkills, listProjectSkills } from '@/code/stores/project-skills-store';
 import { invokedSkillNames } from '@/code/project/skills-config';
@@ -335,6 +335,8 @@ export default function AgentChat() {
   const config = useAtomValue(effectiveAgentConfigAtom);
   // The chosen model's thinking effort (picked in the model select).
   const efforts = useAtomValue(agentEffortAtom);
+  // Element on canvas targeted for the next prompt (via context menu / comment).
+  const [attachedNode, setAttachedNode] = useAtom(agentAttachedNodeAtom);
   // Which engines the connected service runs — asked once; none when there
   // is no service (the open-source builder), and the panel says so.
   const [engines, setEngines] = useAtom(agentEnginesAtom);
@@ -454,6 +456,16 @@ export default function AgentChat() {
   }, []);
 
   const [input, setInput] = useState('');
+  const [draftPrompt, setDraftPrompt] = useAtom(agentDraftPromptAtom);
+  useEffect(() => {
+    if (draftPrompt) {
+      setInput(draftPrompt);
+      setDraftPrompt('');
+      setTimeout(() => {
+        composerRef.current?.focus();
+      }, 50);
+    }
+  }, [draftPrompt, setDraftPrompt]);
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [pendingQueued, setPendingQueued] = useState<{ text: string; nonce: number } | null>(null);
   // THE COMPOSER GROWS WITH WHAT IS TYPED. It was a fixed two rows, so a real
@@ -546,7 +558,23 @@ export default function AgentChat() {
   // sent as is, leaving whatever the user is typing (and attaching) alone.
   const send = useCallback(async (override?: string, queuedNonce?: number) => {
     const fromDraft = override === undefined;
-    const text = fromDraft ? input.trim() : override!;
+    let text = fromDraft ? input.trim() : override!;
+    if (attachedNode) {
+      const parts = [
+        `[Target Element]`,
+        `- File: ${attachedNode.filePath}`,
+        `- Node ID: ${attachedNode.nodeId}`,
+        attachedNode.type ? `- Type: <${attachedNode.type}>` : null,
+        attachedNode.textContent ? `- Content: "${attachedNode.textContent}"` : null,
+        attachedNode.variant ? `- Variant: ${attachedNode.variant}` : null,
+        attachedNode.viewport ? `- Viewport: ${attachedNode.viewport}` : null,
+        '',
+        `[User Instructions]`,
+        text,
+      ].filter(Boolean).join('\n');
+      text = parts;
+      setAttachedNode(null);
+    }
     if ((!text.trim() && (!fromDraft || attachments.length === 0)) || status === 'running') return;
 
     // Settle buffered editor changes before consuming the draft or creating a
@@ -891,6 +919,21 @@ export default function AgentChat() {
           <div className="flex flex-col gap-1 pb-1.5 pt-1">
             <ImageStrip images={attachments} onRemove={removeAttachment} />
             {attachNote && <span className="text-[11px] text-[var(--text-tertiary)]">{attachNote}</span>}
+          </div>
+        )}
+        {attachedNode && (
+          <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 bg-[var(--bg-secondary)] border border-[var(--border-light)] cut-corners text-xs text-[var(--text-primary)] animate-fadeIn">
+            <span className="text-[10px] uppercase font-bold text-[var(--accent)] tracking-wider">Target</span>
+            <span className="font-mono text-[11px] truncate max-w-[120px]">{attachedNode.name || attachedNode.nodeId}</span>
+            <span className="text-[10px] text-[var(--text-tertiary)] truncate">({attachedNode.filePath})</span>
+            <button
+              type="button"
+              onClick={() => setAttachedNode(null)}
+              className="ml-auto text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-0.5 text-xs leading-none"
+              title="Remove target"
+            >
+              ✕
+            </button>
           </div>
         )}
         {/* ONE box: the text area on top, a footer inside it — a hairline, the
