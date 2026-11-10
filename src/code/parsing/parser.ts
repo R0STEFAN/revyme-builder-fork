@@ -2270,6 +2270,10 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
             if (child.expression.type === 'StringLiteral') {
               textContent += child.expression.value;
               textIsLiteral = true;
+            } else if (child.expression.type === 'TemplateLiteral') {
+              const tplVal = (child.expression as any).quasis.map((q: any) => q.value.raw ?? q.value.cooked ?? '').join('');
+              textContent += tplVal;
+              textIsLiteral = true;
             } else if (
               child.expression.type === 'MemberExpression' &&
               child.expression.property.type === 'Identifier' &&
@@ -3291,6 +3295,10 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         if (child.type === 'JSXExpressionContainer') {
           if (child.expression?.type === 'StringLiteral') {
             textContent += child.expression.value;
+            textIsLiteral = true;
+          } else if (child.expression?.type === 'TemplateLiteral') {
+            const tplVal = (child.expression as any).quasis.map((q: any) => q.value.raw ?? q.value.cooked ?? '').join('');
+            textContent += tplVal;
             textIsLiteral = true;
           } else if (
             child.expression?.type === 'MemberExpression' &&

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { transform } from '@babel/standalone';
-import { setVariantTextBindingInCode, setVariantStyleBindingInCode, removeNodeInCode, healStyleBlockSelectorAttrsInCode, updateNodeInCode, addNodeInCode } from './generator-crud';
+import { setVariantTextBindingInCode, setVariantStyleBindingInCode, removeNodeInCode, healStyleBlockSelectorAttrsInCode, updateNodeInCode, addNodeInCode, updateNodeTextInCode } from './generator-crud';
 
 const parsesOk = (code: string) =>
   expect(() => transform(code, { presets: ['react', 'typescript'], filename: 'f.tsx' })).not.toThrow();
@@ -252,3 +252,36 @@ describe('updateNodeInCode — quoted custom-property keys', () => {
     expect(out).toContain("'--rvb-bw': '11px'");
   });
 });
+
+describe('style tag textContent generation', () => {
+  const PAGE = `import React from 'react';
+export default function Page() {
+  return <div data-id="root"></div>;
+}`;
+
+  it('inserts a <style> tag with template literal JSX and parses it cleanly', () => {
+    const css = `@media (max-width: 800px) { [data-id="a"] { color: red !important; } }`;
+    const out = addNodeInCode(PAGE, 'root', {
+      id: 'style-node',
+      type: 'style',
+      name: 'Custom Style',
+      styles: { position: 'absolute' },
+      textContent: css,
+    });
+
+    expect(out).toContain('<style data-id="style-node" data-name="Custom Style" style={{position: \'absolute\'}}>{`');
+    expect(out).toContain(css);
+    parsesOk(out);
+  });
+
+  it('updates <style> tag text content via updateNodeTextInCode', () => {
+    const initial = `<div data-id="root"><style data-id="style-node">{\`@media (max-width: 800px) { [data-id="a"] { color: red !important; } }\`}</style></div>`;
+    const newCss = `@media (max-width: 500px) { [data-id="b"] { color: blue !important; } }`;
+    const out = updateNodeTextInCode(initial, 'style-node', newCss);
+
+    expect(out).toContain(newCss);
+    expect(out).not.toContain('color: red');
+    parsesOk(out);
+  });
+});
+

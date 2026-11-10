@@ -1,5 +1,29 @@
 # MCP v2 issue log
 
+## 2026-11-10 — Raw CSS text in `<style>` node generation caused JSX parse error and skipped template literal in parser
+
+**Status:** fixed, verified via `src/code/generation/generator-crud.test.ts` (22 tests), `src/code/parsing/parser.test.ts` (36 test suites, 439 tests), CLI build (`node packages/cli/build.cjs`), and committed.
+
+**Symptom:**
+When creating or updating a `<style>` node containing CSS rules (such as responsive `@media` or `@container` queries) via `nodes.create` or `generator-crud`:
+1. `buildNodeJSX` emitted raw text inside `<style>` (`<style>@media ... { ... }</style>`), which caused Babel to fail with `[ast-utils:parse] Failed to parse JSX Failed to parse JSX` because unescaped `{ ... }` blocks inside JSX elements are treated as unquoted JS expressions.
+2. In `updateNodeTextInCode`, style tags and JSX template literals were not recognized, causing text updates on style elements to fail or corrupt.
+3. In `src/code/parsing/parser.ts`, `cleanJsxText` / `JSXExpressionContainer` did not parse `TemplateLiteral` expressions, returning empty `textContent` for `<style>{\`...\`}</style>`.
+
+**Cause:**
+1. In `src/code/generation/generator-crud.ts`, `buildNodeJSX` lacked a special case for `tag === 'style'` to wrap text content in JSX template literals `{\`\n${escaped}\n${indent}\`}`.
+2. `updateNodeTextInCode` only checked `JSXText` nodes, skipping `JSXExpressionContainer` containing `TemplateLiteral`.
+3. In `src/code/parsing/parser.ts`, `parseJSXToNodes` and `canvasNodes` handled only `StringLiteral` under `JSXExpressionContainer`, omitting `TemplateLiteral`.
+
+**Fix and regression guard:**
+1. In `src/code/generation/generator-crud.ts`, updated `buildNodeJSX` to wrap `textContent` on `<style>` tags in JSX template literals `{\`\n...\n\`}` with backtick/`${` escaping.
+2. In `src/code/generation/generator-crud.ts`, updated `updateNodeTextInCode` to directly target `style` elements and update the `TemplateLiteral` container.
+3. In `src/code/parsing/parser.ts`, added `TemplateLiteral` handling to both `parseJSXToNodes` and `canvasNodes` to extract quasi string content into `textContent`.
+4. Added unit tests in `src/code/generation/generator-crud.test.ts` verifying that `<style>` tags with template literals generate valid JSX and can be updated cleanly.
+5. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+
+
+
 ## 2026-11-10 — Mixed text and JSX element ingestion dropped inline text runs
 
 **Status:** fixed, verified via `packages/automation-core/test/capabilities/T03-ingestion.test.ts` (20 tests), `src/code/generation/generator-crud.test.ts` (20 tests), CLI build (`node packages/cli/build.cjs`), and committed.

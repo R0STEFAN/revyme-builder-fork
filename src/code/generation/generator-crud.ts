@@ -453,6 +453,17 @@ export function updateNodeTextInCode(code: string, nodeId: string, newText: stri
   if (!ast) return code;
 
   findFirstElementByDataId(ast, nodeId, (path) => {
+    const isStyle = (path.node.openingElement.name as any)?.name === 'style';
+    if (isStyle) {
+      const templateLiteral = t.templateLiteral(
+        [t.templateElement({ raw: `\n${newText}\n    `, cooked: `\n${newText}\n    ` })],
+        []
+      );
+      path.node.children = [t.jsxExpressionContainer(templateLiteral)];
+      path.stop();
+      return;
+    }
+
     const newChildren: (t.JSXText | t.JSXElement | t.JSXExpressionContainer)[] = [];
     let replacedText = false;
 
@@ -3453,6 +3464,10 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
   }
 
   if (textContent) {
+    if (tag === 'style' && !textContent.trim().startsWith('{')) {
+      const escaped = textContent.replace(/`/g, '\\`').replace(/\${/g, '\\${');
+      return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>{\`\n${escaped}\n${indent}\`}</${tag}>`;
+    }
     return `<${tag}${layoutAttr} data-id="${node.id}"${nameAttr}${attrsStr}${motionPropsAttr} style={{${styleEntries}}}>\n${indent}  ${textContent}\n${indent}</${tag}>`;
   }
 
