@@ -121,4 +121,55 @@ export default function Page() {
     expect(saved).toContain('<div data-id="root" style');
     expect(saved).toMatch(/<p data-id="text-[a-z0-9-]+"/);
   });
+
+  it('gateTurnFiles automatically heals plain HTML tags with animation/gestures into motion.*', () => {
+    const rawAnimated = `'use client';
+import React from 'react';
+
+/** @canvas { "viewports": [1440], "positions": {} } */
+
+export default function Page() {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: 'auto', display: 'flex' }}>
+      <button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} style={{ position: 'relative' }}>
+        Hover Me
+      </button>
+    </div>
+  );
+}`;
+
+    const { files, violations } = gateTurnFiles(
+      [{ path: PAGE_PATH, kind: 'page', code: rawAnimated }],
+      PAGE_PATH
+    );
+
+    expect(violations).toEqual([]);
+    expect(files).toHaveLength(1);
+    const code = files[0].code;
+    expect(code).toContain("import { motion } from 'framer-motion';");
+    expect(code).toMatch(/<motion\.button data-id="btn-[a-z0-9-]+"/);
+    expect(code).toContain('</motion.button>');
+  });
+
+  it('modifyProjectFile automatically heals motion tags when saving', () => {
+    modifyProjectFile(PAGE_PATH, () => `'use client';
+import React from 'react';
+
+/** @canvas { "viewports": [1440], "positions": {} } */
+
+export default function Page() {
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div animate={{ opacity: 1 }} style={{ position: 'relative' }}>
+        Animated
+      </div>
+    </div>
+  );
+}`);
+
+    const saved = projectFS.readFile(PAGE_PATH)!;
+    expect(saved).toContain("import { motion } from 'framer-motion';");
+    expect(saved).toMatch(/<motion\.div data-id="(div|frame)-[a-z0-9-]+"/);
+    expect(saved).toContain('</motion.div>');
+  });
 });

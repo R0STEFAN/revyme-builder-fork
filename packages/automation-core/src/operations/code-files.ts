@@ -7,6 +7,7 @@ import { projectFS } from '@/code/project/project-fs';
 import { checkFile, type FileKind } from '@/code/oracle/check-file';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
+import { healMotionTags } from '@/code/parsing/heal-motion-tags';
 import { isLayoutFile } from '@/code/project/active-file-store';
 import { syncCodeSnapshotToProjectFS } from './code-components';
 
@@ -353,11 +354,12 @@ export const codeFilesSubmitOperation: Operation<CodeFilesSubmitInput, CodeFiles
           continue;
         }
 
-        // Auto-inject missing data-ids for canvas files so agents never need to track them manually
+        // Auto-inject missing data-ids and auto-heal motion tags for canvas files
         const isCanvasFile = (kind === 'component' || f.path.startsWith('components/')) && !isCodeComponentSource(f.code);
         if (isCanvasFile && f.code) {
           const { code: autoCode } = autoInjectMissingDataIds(f.code, { isPage: false });
-          f.code = autoCode;
+          const { code: motionCode } = healMotionTags(autoCode);
+          f.code = motionCode;
         }
 
         const violations = checkFile(f.code, {

@@ -11,6 +11,7 @@ import { activeFilePathAtom, isPageClientFile } from './active-file-store';
 import { syncQueueCode, flushNow, syncImports, getCurrentCode, refreshDeferredFlushWithExternalWrite } from '../mutation/mutation-queue';
 import { parseJSX } from '../parsing/ast-utils';
 import { autoInjectMissingDataIds } from '../parsing/heal-data-ids';
+import { healMotionTags } from '../parsing/heal-motion-tags';
 import { dragStateOps } from '@/canvas/drag/drag-state-store';
 import { trace } from '@/shared/debug-trace';
 
@@ -151,7 +152,8 @@ export function modifyProjectFile(
     if (isCanvasFile) {
       const isPage = isPageClientFile(filePath) || filePath.endsWith('LayoutClient.tsx');
       const { code: autoCode } = autoInjectMissingDataIds(finalResult, { isPage });
-      finalResult = autoCode;
+      const { code: motionCode } = healMotionTags(autoCode);
+      finalResult = motionCode;
     }
     finalResult = syncImports(finalResult);
   }

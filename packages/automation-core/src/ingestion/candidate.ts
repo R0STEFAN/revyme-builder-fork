@@ -5,6 +5,7 @@ import { isCodeComponentSource } from '@/code/oracle/checks/shared';
 import { SPACING_PX_KEYS } from '@/code/oracle/checks/style-object';
 import { applyRuntimeGuarantees } from '@/code/generation/runtime-guarantees';
 import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
+import { healMotionTags } from '@/code/parsing/heal-motion-tags';
 import { lowerUnits } from './units';
 import { IngestionReporter } from './report';
 
@@ -71,7 +72,8 @@ export function normalizeCandidateChanges(snapshot: Snapshot, changes: FileChang
     const isCanvasFile = isPage || (change.path.startsWith('components/') && !isCodeComponentSource(guaranteed));
     if (isCanvasFile && guaranteed) {
       const { code: autoCode } = autoInjectMissingDataIds(guaranteed, { isPage });
-      guaranteed = autoCode;
+      const { code: motionCode } = healMotionTags(autoCode);
+      guaranteed = motionCode;
     }
     change.content = guaranteed;
   }

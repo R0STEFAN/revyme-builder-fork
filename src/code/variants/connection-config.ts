@@ -17,47 +17,10 @@ import { extractImports, resolveImportPath } from '@/code/components/import-reso
 import { forwardEventPropsToComponentRoot } from './event-prop-forwarding';
 import { trace } from '@/shared/debug-trace';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types & Parser (re-exported from leaf @/shared/connection-parse) ────────
 
-export type ConnectionTrigger = 'click' | 'clickStart' | 'mouseEnter' | 'mouseLeave' | 'inView' | 'afterDelay';
-
-export interface Connection {
-  from: string;           // source variant name
-  to: string;             // target variant name
-  trigger: ConnectionTrigger;
-  delay?: number;         // seconds (0-2)
-  // data-id of the JSX element where the trigger handler is attached.
-  // When undefined, the handler lands on the root motion element
-  // (legacy behavior — clicking anywhere on the variant cycles state).
-  // When set, codegen places the handler on THAT element's JSX tag, so
-  // only clicks on that specific child trigger the variant switch.
-  sourceNode?: string;
-  /** Delayed auto-advance pauses its remaining time outside the viewport. */
-  pauseOffscreen?: boolean;
-}
-
-// ─── Parser ─────────────────────────────────────────────────────────────────
-
-/**
- * Parse connections from a component file.
- * Looks for: const connections = [...];
- */
-export function parseConnections(code: string): Connection[] {
-  const match = code.match(/const\s+connections\s*=\s*(\[[\s\S]*?\]);/);
-  if (!match) return [];
-
-  try {
-    const jsonStr = match[1]
-      .replace(/'/g, '"')
-      .replace(/(\w+)\s*:/g, '"$1":')
-      .replace(/,\s*([}\]])/g, '$1');
-
-    return JSON.parse(jsonStr) as Connection[];
-  } catch (e) {
-    trace.error('connection-config:parse-failed', { error: String(e) });
-    return [];
-  }
-}
+import { parseConnections, type Connection, type ConnectionTrigger } from '@/shared/connection-parse';
+export { parseConnections, type Connection, type ConnectionTrigger };
 
 /**
  * Serialize connections back to code.
@@ -946,29 +909,38 @@ function insertPropOnRootMotion(code: string, propName: string, handler: string)
   // "References undefined identifiers: variant, setVariant" (2026-09-08, a
   // collection-list master with a CMS row link). Same root law as
   // generator-styles / project-fs (`findVariantRootId`).
-  const rootId = findVariantRootId(code);
+  let result = code;
+  const rootId = findVariantRootId(result);
   if (rootId) {
-    const idIdx = code.indexOf(`data-id="${rootId}"`);
+    const dataIdAttr = `data-id="${rootId}"`;
+    let idIdx = result.indexOf(dataIdAttr);
     if (idIdx !== -1) {
-      const tagStart = code.lastIndexOf('<', idIdx);
-      const tagEnd = tagStart === -1 ? -1 : findTagEnd(code, tagStart);
-      if (tagStart !== -1 && tagEnd !== -1 && tagEnd > idIdx && HANDLER_TAG_OPEN.test(code.slice(tagStart, tagStart + 64))) {
-        return insertPropAtTag(code, tagStart, propName, handler);
+      const tagStart = result.lastIndexOf('<', idIdx);
+      const originalTagName = tagStart === -1 ? null : result.slice(tagStart).match(/^<([a-zA-Z][\w.]*)/)?.[1] ?? null;
+      if (originalTagName && /^[a-z]/.test(originalTagName) && !originalTagName.startsWith('motion.')) {
+        result = ensureMotionTag(result, rootId);
+        result = ensureNamedImport(result, 'framer-motion', ['motion']);
+        idIdx = result.indexOf(dataIdAttr);
+      }
+      const newTagStart = result.lastIndexOf('<', idIdx);
+      const tagEnd = newTagStart === -1 ? -1 : findTagEnd(result, newTagStart);
+      if (newTagStart !== -1 && tagEnd !== -1 && tagEnd > idIdx && HANDLER_TAG_OPEN.test(result.slice(newTagStart, newTagStart + 64))) {
+        return insertPropAtTag(result, newTagStart, propName, handler);
       }
     }
   }
   const WRAPPER_TAGS = new Set(['LayoutGroup', 'MotionConfig', 'AnimatePresence']);
   HANDLER_TAG_OPEN_G.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = HANDLER_TAG_OPEN_G.exec(code)) !== null) {
+  while ((m = HANDLER_TAG_OPEN_G.exec(result)) !== null) {
     // Skip generic type params (`useRef<HTMLDivElement>`): a real JSX `<` is
     // never preceded by an identifier character.
-    const prev = m.index > 0 ? code[m.index - 1] : ' ';
+    const prev = m.index > 0 ? result[m.index - 1] : ' ';
     if (/[A-Za-z0-9_$]/.test(prev)) continue;
     if (WRAPPER_TAGS.has(m[1])) continue;
-    return insertPropAtTag(code, m.index, propName, handler);
+    return insertPropAtTag(result, m.index, propName, handler);
   }
-  return code;
+  return result;
 }
 
 /** Insert a JSX prop into the `<motion.*>` tag whose `data-id` matches

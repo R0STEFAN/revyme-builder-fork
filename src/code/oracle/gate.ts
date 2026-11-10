@@ -15,6 +15,7 @@
 
 import { migrateFileToStartBreakpoints } from '@/code/project/breakpoint-start-migration';
 import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
+import { healMotionTags } from '@/code/parsing/heal-motion-tags';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { trace } from '@/shared/debug-trace';
@@ -74,6 +75,11 @@ export function gateTurnFiles(
       if (injectedCount > 0) {
         trace.action('gate:auto-injected-data-ids', { path: f.path, count: injectedCount });
         f = { ...f, code: autoCode };
+      }
+      const { code: motionCode, healedCount: motionCount } = healMotionTags(f.code);
+      if (motionCount > 0) {
+        trace.action('gate:healed-motion-tags', { path: f.path, count: motionCount });
+        f = { ...f, code: motionCode };
       }
     }
 
