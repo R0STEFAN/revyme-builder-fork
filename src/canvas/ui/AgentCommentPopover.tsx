@@ -2,18 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   agentCommentDialogAtom,
-  agentAttachedNodeAtom,
-  agentQueuedRequestAtom,
-  agentDraftPromptAtom,
+  agentStagedTasksAtom,
+  type AgentStagedTask,
 } from '@/code/stores/agent-chat-store';
 import { leftPanelAtom } from '@/code/stores/left-panel-store';
 import { toast } from 'sonner';
 
 export const AgentCommentPopover: React.FC = () => {
   const [dialog, setDialog] = useAtom(agentCommentDialogAtom);
-  const setAttachedNode = useSetAtom(agentAttachedNodeAtom);
-  const setQueuedRequest = useSetAtom(agentQueuedRequestAtom);
-  const setDraftPrompt = useSetAtom(agentDraftPromptAtom);
+  const setStagedTasks = useSetAtom(agentStagedTasksAtom);
   const setLeftPanel = useSetAtom(leftPanelAtom);
 
   const [commentText, setCommentText] = useState('');
@@ -23,7 +20,6 @@ export const AgentCommentPopover: React.FC = () => {
   useEffect(() => {
     if (dialog?.isOpen) {
       setCommentText('');
-      // Auto-focus after mounting
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 50);
@@ -48,31 +44,30 @@ export const AgentCommentPopover: React.FC = () => {
     setDialog(null);
   };
 
-  const handleAttachOnly = () => {
-    setAttachedNode(dialog.refData);
-    if (commentText.trim()) {
-      setDraftPrompt(commentText.trim());
-    }
-    setLeftPanel('vibe');
-    toast.success(`Attached "${dialog.targetNodeName || dialog.targetNodeId}" to agent chat`);
-    handleClose();
-  };
-
-  const handleAskAgent = () => {
+  const handleAddTask = (openChat = false) => {
     const text = commentText.trim();
     if (!text) {
-      // If empty, attach and open chat
-      handleAttachOnly();
+      toast.error('Please enter an instruction or comment');
       return;
     }
 
-    setAttachedNode(dialog.refData);
-    setQueuedRequest({
-      text,
-      nonce: Date.now(),
-    });
-    setLeftPanel('vibe');
-    toast.success(`Sent instructions to agent for "${dialog.targetNodeName || dialog.targetNodeId}"`);
+    const newTask: AgentStagedTask = {
+      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: Date.now(),
+      nodeId: dialog.targetNodeId,
+      nodeName: dialog.targetNodeName || dialog.targetNodeId,
+      nodeType: dialog.targetNodeType,
+      filePath: dialog.targetFilePath,
+      comment: text,
+      refData: dialog.refData,
+    };
+
+    setStagedTasks((prev) => [...prev, newTask]);
+    toast.success(`Task added for "${dialog.targetNodeName || dialog.targetNodeId}"`);
+
+    if (openChat) {
+      setLeftPanel('vibe');
+    }
     handleClose();
   };
 
@@ -122,13 +117,13 @@ export const AgentCommentPopover: React.FC = () => {
           ref={textareaRef}
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Add comment or instruction for the agent... (e.g. 'Make this button rounded with hover animation')"
+          placeholder="Describe what to change on this element... (e.g. 'Change color to blue')"
           rows={3}
           className="w-full resize-none rounded bg-[var(--bg-secondary,#27272a)] border border-[var(--border-light,#3f3f46)] p-2 text-xs leading-relaxed text-[var(--text-primary,#fff)] placeholder:text-[var(--text-tertiary,#71717a)] focus:outline-none focus:border-[var(--accent,#3b82f6)]"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
               e.preventDefault();
-              handleAskAgent();
+              handleAddTask(false);
             }
           }}
         />
@@ -137,10 +132,10 @@ export const AgentCommentPopover: React.FC = () => {
         <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-light,#27272a)] text-xs">
           <button
             type="button"
-            onClick={handleAttachOnly}
+            onClick={() => handleAddTask(true)}
             className="text-[11px] text-[var(--text-secondary,#a1a1aa)] hover:text-[var(--text-primary,#fff)] transition-colors underline-offset-2 hover:underline"
           >
-            Attach to Chat
+            Add & Open Chat
           </button>
 
           <div className="flex items-center gap-1.5">
@@ -153,10 +148,10 @@ export const AgentCommentPopover: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={handleAskAgent}
+              onClick={() => handleAddTask(false)}
               className="px-2.5 py-1 rounded text-[11px] font-medium bg-[var(--accent,#3b82f6)] text-[var(--accent-fg,#fff)] hover:brightness-110 transition-[filter]"
             >
-              Ask Agent
+              Add Task
             </button>
           </div>
         </div>

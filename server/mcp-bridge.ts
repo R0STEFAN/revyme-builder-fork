@@ -1,4 +1,5 @@
 import http from 'node:http';
+import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { listProjects } from './storage';
@@ -441,6 +442,35 @@ interface DiscoveredModel {
 let cachedDynamicModels: DiscoveredModel[] | null = null;
 let lastDynamicModelFetch = 0;
 
+const SESSIONS_FILE = path.resolve(process.cwd(), 'data', 'chat-sessions.json');
+
+function loadChatSessions(): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+      for (const [k, v] of Object.entries(data)) {
+        if (typeof v === 'string') map.set(k, v);
+      }
+    }
+  } catch { /* ignore */ }
+  return map;
+}
+
+function saveChatSessions(map: Map<string, string>): void {
+  try {
+    const obj: Record<string, string> = {};
+    for (const [k, v] of map.entries()) {
+      obj[k] = v;
+    }
+    const dir = path.dirname(SESSIONS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch { /* ignore */ }
+}
+
+const chatSessionMap = loadChatSessions();
+
 function resolveAgentBinary(preferred: string): string {
   if (preferred === 'agy' || preferred === 'revyme' || !preferred) {
     if (fs.existsSync('/home/rost/.local/bin/agy')) return '/home/rost/.local/bin/agy';
@@ -532,6 +562,17 @@ function refreshModelsInBackground(): void {
         return;
       }
 
+      // Delete chat session endpoint: DELETE /api/agent/session/:chatId
+      if (method === 'DELETE' && pathname.startsWith('/api/agent/session/')) {
+        const targetChatId = decodeURIComponent(pathname.replace('/api/agent/session/', ''));
+        chatSessionMap.delete(targetChatId);
+        saveChatSessions(chatSessionMap);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
       // Local agent turn endpoint: POST /api/agent/turn
       if (method === 'POST' && (pathname === '/api/agent/turn' || pathname === '/api/local-agent/turn')) {
         let body = '';
@@ -555,6 +596,9 @@ function refreshModelsInBackground(): void {
           const model = parsed.model || 'google/gemini-3.8-flash';
           const reasoning = parsed.reasoning || 'low';
           const provider = parsed.provider || 'revyme';
+          const chatId = parsed.chatId || 'default';
+          const existingSessionId = chatSessionMap.get(chatId) || parsed.conversationId;
+
           const userMsgs = (parsed.messages || []).filter((m: any) => m.role === 'user');
           const lastMsg = userMsgs[userMsgs.length - 1];
           const userPrompt = typeof lastMsg?.content === 'string'
@@ -578,21 +622,39 @@ function refreshModelsInBackground(): void {
 
           sendEvent({
             type: 'reasoning',
-            text: `[${model}] Effort: ${reasoning}. Connected to agent runner.\n`,
+            text: `[${model}] Effort: ${reasoning}. Session: ${chatId}${existingSessionId ? ' (resuming conversation)' : ''}.\n`,
           });
 
-          if (userPrompt.includes('[Target Element]')) {
+          if (userPrompt.includes('[Target Element]') || userPrompt.includes('[Staged Tasks')) {
             sendEvent({
               type: 'reasoning',
-              text: `Canvas element context attached.\n`,
+              text: `Canvas task context attached.\n`,
             });
           }
 
+          const revymeSystemPreamble = `You are the Revyme Website Builder AI Assistant.
+The user is visually building and editing a website on the Revyme canvas.
+When asked to modify, style, inspect, or build elements on the website, YOU MUST USE the "revyme-builder" MCP server via call_mcp_tool:
+- styles.set: Set CSS styles on an element. Arguments: { nodeId: string, styles: Record<string, string>, viewport?: string } (e.g. to set color to blue: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } })).
+- text.set: Update element text content. Arguments: { nodeId: string, text: string }.
+- nodes.create: Create element. Arguments: { parentId: string, type: string, styles?: Record<string, string>, textContent?: string }.
+- nodes.remove: Remove element. Arguments: { nodeId: string }.
+- motion.set: Set animation. Arguments: { nodeId: string, animation: Record<string, any> }.
+- observe.selection: Read current selection.
+DO NOT run bash/terminal commands or search host filesystem with find/grep.
+Execute all requested changes via revyme-builder MCP tools directly.
+
+User request:
+`;
+
+          const effectivePrompt = existingSessionId
+            ? `[Revyme instruction: Always use revyme-builder MCP tools via call_mcp_tool (styles.set, text.set, nodes.*), never run bash commands.]\n\n${userPrompt}`
+            : `${revymeSystemPreamble}${userPrompt}`;
           const bin = resolveAgentBinary(provider);
           const cleanModel = model.replace(/^(google|anthropic|openai)\//, '');
           const args = [
             '-p',
-            userPrompt,
+            effectivePrompt,
             '--effort',
             reasoning,
             '--output-format',
@@ -601,6 +663,9 @@ function refreshModelsInBackground(): void {
           ];
           if (cleanModel) {
             args.push('--model', cleanModel);
+          }
+          if (existingSessionId) {
+            args.push('--conversation', existingSessionId);
           }
 
           let childProcess: any = null;
@@ -627,6 +692,13 @@ function refreshModelsInBackground(): void {
               if (!trimmed) continue;
               try {
                 const ev = JSON.parse(trimmed);
+                const convId = ev.conversation_id || ev.result?.conversation_id;
+                if (convId) {
+                  chatSessionMap.set(chatId, convId);
+                  saveChatSessions(chatSessionMap);
+                  sendEvent({ type: 'conversation_id', conversationId: convId });
+                }
+
                 if (ev.event === 'step_update' && ev.step_update) {
                   const su = ev.step_update;
                   if (su.step_type === 'agent_response' && su.text_delta) {
@@ -635,13 +707,20 @@ function refreshModelsInBackground(): void {
                     sendEvent({ type: 'reasoning', text: su.thinking_delta || su.text_delta || su.content || '' });
                   } else if (su.step_type === 'tool') {
                     const stepId = String(su.step_index ?? Date.now());
-                    const toolName = su.tool_name || su.tool_info?.name || 'tool';
+                    const rawTool = su.tool_name || su.tool_info?.name || 'tool';
+                    let toolName = rawTool;
+                    let toolInput = su.tool_info?.parameters || {};
+                    if (rawTool === 'call_mcp_tool' && su.tool_info?.parameters?.ToolName) {
+                      toolName = su.tool_info.parameters.ToolName;
+                      toolInput = su.tool_info.parameters.Arguments || {};
+                    }
+
                     if (su.state === 'ACTIVE') {
                       sendEvent({
                         type: 'tool_call',
                         id: stepId,
                         name: toolName,
-                        input: su.tool_info?.parameters || {},
+                        input: toolInput,
                         label: toolName,
                       });
                     } else if (su.state === 'DONE') {

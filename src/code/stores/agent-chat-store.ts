@@ -145,6 +145,21 @@ export interface AgentAttachedNode {
 /** An element on the canvas marked for the next agent prompt. */
 export const agentAttachedNodeAtom = atom<AgentAttachedNode | null>(null);
 
+/** A single task staged from an inline canvas comment for batch dispatch. */
+export interface AgentStagedTask {
+  id: string;
+  createdAt: number;
+  nodeId: string;
+  nodeName?: string;
+  nodeType?: string;
+  filePath: string;
+  comment: string;
+  refData: AgentAttachedNode;
+}
+
+/** Staged tasks queued up by the user from canvas comments to send in batch. */
+export const agentStagedTasksAtom = atom<AgentStagedTask[]>([]);
+
 /** Inline canvas comment dialog state for targeting elements with the agent. */
 export interface AgentCommentDialogState {
   isOpen: boolean;

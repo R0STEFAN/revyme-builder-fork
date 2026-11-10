@@ -28,7 +28,7 @@ import {
 } from '@/code/stores/agent-chats-store';
 import {
   agentStatusAtom, agentConversationAtom, agentStreamAtom, agentToolsAtom, agentBlocksAtom, agentReasoningAtom, agentErrorAtom,
-  agentAttachedNodeAtom,
+  agentAttachedNodeAtom, agentStagedTasksAtom,
 } from '@/code/stores/agent-chat-store';
 
 const store = getDefaultStore();
@@ -334,6 +334,52 @@ describe('attached canvas target', () => {
       expect(userTurn?.text).toContain('[Target Element]');
       expect(userTurn?.text).toContain('hero-btn-1');
       expect(userTurn?.text).toContain('[User Instructions]\nmake it pulse');
+    });
+  });
+
+  it('displays staged tasks list and bundles all tasks when sent', async () => {
+    store.set(agentStagedTasksAtom, [
+      {
+        id: 't-1',
+        createdAt: Date.now(),
+        nodeId: 'hero-title',
+        nodeName: 'Hero Title',
+        nodeType: 'h1',
+        filePath: 'app/page.tsx',
+        comment: 'Change color to blue',
+        refData: { filePath: 'app/page.tsx', nodeId: 'hero-title' },
+      },
+      {
+        id: 't-2',
+        createdAt: Date.now(),
+        nodeId: 'cta-btn',
+        nodeName: 'CTA Button',
+        nodeType: 'button',
+        filePath: 'app/page.tsx',
+        comment: 'Make rounded with shadow',
+        refData: { filePath: 'app/page.tsx', nodeId: 'cta-btn' },
+      },
+    ]);
+
+    render(<AgentChat />);
+    expect(screen.getByText('Staged Tasks (2)')).toBeTruthy();
+    expect(screen.getByText('Change color to blue')).toBeTruthy();
+    expect(screen.getByText('Make rounded with shadow')).toBeTruthy();
+
+    // Click send without extra input
+    fireEvent.click(screen.getByLabelText('Send'));
+
+    // Staged tasks are cleared
+    expect(store.get(agentStagedTasksAtom)).toEqual([]);
+
+    await waitFor(() => {
+      const turns = store.get(agentConversationAtom);
+      const userTurn = [...turns].reverse().find((t) => t.role === 'user');
+      expect(userTurn?.text).toContain('[Staged Tasks to Execute (2)]');
+      expect(userTurn?.text).toContain('hero-title');
+      expect(userTurn?.text).toContain('Change color to blue');
+      expect(userTurn?.text).toContain('cta-btn');
+      expect(userTurn?.text).toContain('Make rounded with shadow');
     });
   });
 });

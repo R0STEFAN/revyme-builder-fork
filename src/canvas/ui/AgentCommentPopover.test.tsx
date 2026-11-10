@@ -1,13 +1,11 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
 import { AgentCommentPopover } from './AgentCommentPopover';
 import {
   agentCommentDialogAtom,
-  agentAttachedNodeAtom,
-  agentQueuedRequestAtom,
-  agentDraftPromptAtom,
+  agentStagedTasksAtom,
 } from '@/code/stores/agent-chat-store';
 import { leftPanelAtom } from '@/code/stores/left-panel-store';
 
@@ -16,9 +14,7 @@ describe('AgentCommentPopover', () => {
 
   beforeEach(() => {
     store.set(agentCommentDialogAtom, null);
-    store.set(agentAttachedNodeAtom, null);
-    store.set(agentQueuedRequestAtom, null);
-    store.set(agentDraftPromptAtom, '');
+    store.set(agentStagedTasksAtom, []);
     store.set(leftPanelAtom, 'layers');
   });
 
@@ -47,7 +43,7 @@ describe('AgentCommentPopover', () => {
     render(<AgentCommentPopover />);
     expect(screen.getByTestId('agent-comment-popover')).toBeTruthy();
     expect(screen.getByText('Get Started Button')).toBeTruthy();
-    expect(screen.getByPlaceholderText(/Add comment or instruction for the agent/)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/Describe what to change on this element/)).toBeTruthy();
   });
 
   it('closes when Cancel is clicked', () => {
@@ -65,46 +61,51 @@ describe('AgentCommentPopover', () => {
     expect(store.get(agentCommentDialogAtom)).toBeNull();
   });
 
-  it('attaches to chat when "Attach to Chat" is clicked', () => {
+  it('stages task when "Add Task" is clicked with comment', () => {
     store.set(agentCommentDialogAtom, {
       isOpen: true,
       x: 100,
       y: 100,
       targetNodeId: 'node-cta',
-      targetNodeName: 'CTA Section',
+      targetNodeName: 'CTA Button',
+      targetNodeType: 'button',
       targetFilePath: 'app/page.tsx',
-      refData: { filePath: 'app/page.tsx', nodeId: 'node-cta', name: 'CTA Section' },
+      refData: { filePath: 'app/page.tsx', nodeId: 'node-cta', name: 'CTA Button' },
     });
 
     render(<AgentCommentPopover />);
-    const textarea = screen.getByPlaceholderText(/Add comment or instruction for the agent/);
-    fireEvent.change(textarea, { target: { value: 'Make this bigger' } });
-    fireEvent.click(screen.getByText('Attach to Chat'));
+    const textarea = screen.getByPlaceholderText(/Describe what to change on this element/);
+    fireEvent.change(textarea, { target: { value: 'Make this button blue' } });
+    fireEvent.click(screen.getByText('Add Task'));
 
-    expect(store.get(agentAttachedNodeAtom)?.nodeId).toBe('node-cta');
-    expect(store.get(agentDraftPromptAtom)).toBe('Make this bigger');
-    expect(store.get(leftPanelAtom)).toBe('vibe');
+    const staged = store.get(agentStagedTasksAtom);
+    expect(staged.length).toBe(1);
+    expect(staged[0].nodeId).toBe('node-cta');
+    expect(staged[0].comment).toBe('Make this button blue');
     expect(store.get(agentCommentDialogAtom)).toBeNull();
   });
 
-  it('queues request and opens vibe panel when "Ask Agent" is clicked with comment', () => {
+  it('stages task and opens vibe chat when "Add & Open Chat" is clicked', () => {
     store.set(agentCommentDialogAtom, {
       isOpen: true,
       x: 100,
       y: 100,
       targetNodeId: 'node-card',
       targetNodeName: 'Hero Card',
+      targetNodeType: 'div',
       targetFilePath: 'app/page.tsx',
       refData: { filePath: 'app/page.tsx', nodeId: 'node-card', name: 'Hero Card' },
     });
 
     render(<AgentCommentPopover />);
-    const textarea = screen.getByPlaceholderText(/Add comment or instruction for the agent/);
-    fireEvent.change(textarea, { target: { value: 'Add gradient background' } });
-    fireEvent.click(screen.getByText('Ask Agent'));
+    const textarea = screen.getByPlaceholderText(/Describe what to change on this element/);
+    fireEvent.change(textarea, { target: { value: 'Add rounded borders' } });
+    fireEvent.click(screen.getByText('Add & Open Chat'));
 
-    expect(store.get(agentAttachedNodeAtom)?.nodeId).toBe('node-card');
-    expect(store.get(agentQueuedRequestAtom)?.text).toBe('Add gradient background');
+    const staged = store.get(agentStagedTasksAtom);
+    expect(staged.length).toBe(1);
+    expect(staged[0].nodeId).toBe('node-card');
+    expect(staged[0].comment).toBe('Add rounded borders');
     expect(store.get(leftPanelAtom)).toBe('vibe');
     expect(store.get(agentCommentDialogAtom)).toBeNull();
   });

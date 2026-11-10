@@ -16,6 +16,7 @@ const AI_SERVICE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:
 export type AgentEvent =
   | { type: 'text'; text: string }
   | { type: 'reasoning'; text: string }
+  | { type: 'conversation_id'; conversationId: string }
   | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown>; label: string }
   | { type: 'tool_result'; id: string; ok: boolean; content: string; image?: string }
   | { type: 'usage'; usage: Record<string, number> }
@@ -42,6 +43,8 @@ export interface AgentMessageOut {
 export async function* streamAgentTurn(opts: {
   messages: AgentMessageOut[];
   config: AgentProviderConfig;
+  chatId?: string;
+  conversationId?: string;
   contextBlock?: string;
   /** Which panel the user is in, and the manual that goes with it. The
    *  DESCRIPTION of the surface is in `contextBlock`; this is the part the
@@ -62,6 +65,8 @@ export async function* streamAgentTurn(opts: {
       websiteId: getProjectId(),
       // The workspace Revyme credits are billed to (cloud); absent locally.
       workspaceId: getCreditsState()?.workspaceId,
+      chatId: opts.chatId,
+      conversationId: opts.conversationId,
       messages: opts.messages,
       provider: opts.config.provider,
       model: opts.config.model,

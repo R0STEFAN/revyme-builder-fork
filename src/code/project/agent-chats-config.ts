@@ -45,6 +45,7 @@ export interface AgentChat {
   createdAt: number;
   updatedAt: number;
   messages: StoredChatMessage[];
+  conversationId?: string;
 }
 
 export interface AgentChatsFile {
@@ -142,6 +143,7 @@ export function parseAgentChats(json: string | null): AgentChatsFile {
         createdAt: Number.isFinite(raw.createdAt) ? Number(raw.createdAt) : updatedAt,
         updatedAt,
         messages,
+        conversationId: typeof raw.conversationId === 'string' && raw.conversationId ? raw.conversationId : undefined,
       });
     }
     return { version: 1, chats };

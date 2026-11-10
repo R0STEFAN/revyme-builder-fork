@@ -17,7 +17,7 @@ import type { AgentBlock, AgentTurnImage } from '@/code/stores/agent-chat-store'
 import {
   agentStatusAtom, agentErrorAtom, agentConversationAtom, agentStreamAtom,
   agentToolsAtom, agentBlocksAtom, agentReasoningAtom, agentChangedFilesAtom, effectiveAgentConfigAtom, agentEnginesAtom, agentServiceReachableAtom,
-  isAgentConfiguredAtom, agentEffortAtom, effortFor, effortWire, agentQueuedRequestAtom, agentAttachedNodeAtom, agentDraftPromptAtom, type AgentToolEntry, type AgentChangedFile,
+  isAgentConfiguredAtom, agentEffortAtom, effortFor, effortWire, agentQueuedRequestAtom, agentAttachedNodeAtom, agentDraftPromptAtom, agentStagedTasksAtom, type AgentStagedTask, type AgentToolEntry, type AgentChangedFile,
 } from '@/code/stores/agent-chat-store';
 import { useProjectSkills, listProjectSkills } from '@/code/stores/project-skills-store';
 import { invokedSkillNames } from '@/code/project/skills-config';
@@ -43,7 +43,7 @@ import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
 import { cmsEditorOpenAtom } from '@/code/stores/cms-editor-store';
 import {
   activeAgentChatIdAtom, loadedAgentChatIdAtom, listAgentChats, getAgentChat, saveAgentChat, deleteAgentChat,
-  migrateFileKeyedHistory, newAgentChatId, resolveAgentChatId,
+  setAgentChatConversationId, migrateFileKeyedHistory, newAgentChatId, resolveAgentChatId,
 } from '@/code/stores/agent-chats-store';
 import { NEW_CHAT_TITLE, chatTitleFrom, relativeAge, type AgentChat as StoredAgentChat } from '@/code/project/agent-chats-config';
 import { turnsFromStored, storedFromTurns, visibleBlocks } from './transcript-io';
@@ -337,6 +337,8 @@ export default function AgentChat() {
   const efforts = useAtomValue(agentEffortAtom);
   // Element on canvas targeted for the next prompt (via context menu / comment).
   const [attachedNode, setAttachedNode] = useAtom(agentAttachedNodeAtom);
+  // Staged tasks queued up from canvas comments waiting to be sent in batch.
+  const [stagedTasks, setStagedTasks] = useAtom(agentStagedTasksAtom);
   // Which engines the connected service runs — asked once; none when there
   // is no service (the open-source builder), and the panel says so.
   const [engines, setEngines] = useAtom(agentEnginesAtom);
@@ -436,11 +438,13 @@ export default function AgentChat() {
   const deleteChat = useCallback(() => {
     if (!activeChatId) return;
     trace.action('agent-panel:chat-delete', { id: activeChatId });
-    deleteAgentChat(activeChatId);
+    const idToDelete = activeChatId;
+    deleteAgentChat(idToDelete);
     // "Not chosen" — resolves to the most recently active chat that is left,
     // or a new one. Same render as the delete, so the save effect never sees
     // the deleted chat as active and writes it back.
     setActiveChatId(undefined);
+    void fetch(`http://localhost:8082/api/agent/session/${encodeURIComponent(idToDelete)}`, { method: 'DELETE' }).catch(() => {});
   }, [activeChatId, setActiveChatId]);
 
   // STICKY SCROLL. Follow the newest row while the user is already at the
@@ -559,7 +563,30 @@ export default function AgentChat() {
   const send = useCallback(async (override?: string, queuedNonce?: number) => {
     const fromDraft = override === undefined;
     let text = fromDraft ? input.trim() : override!;
-    if (attachedNode) {
+
+    if (stagedTasks.length > 0) {
+      const taskBlocks = stagedTasks.map((t, i) => [
+        `Task ${i + 1}:`,
+        `- Target Element: ${t.nodeName || t.nodeId}`,
+        `- Node ID: ${t.nodeId}`,
+        `- File: ${t.filePath}`,
+        t.nodeType ? `- Tag: <${t.nodeType}>` : null,
+        `- Instruction: ${t.comment}`,
+      ].filter(Boolean).join('\n')).join('\n\n');
+
+      const parts = [
+        `[Staged Tasks to Execute (${stagedTasks.length})]`,
+        `Please perform the following tasks on the specified elements using revyme-builder MCP tools:`,
+        '',
+        taskBlocks,
+        '',
+        text ? `[Additional Instructions]\n${text}` : null,
+      ].filter(Boolean).join('\n');
+
+      text = parts;
+      setStagedTasks([]);
+      if (attachedNode) setAttachedNode(null);
+    } else if (attachedNode) {
       const parts = [
         `[Target Element]`,
         `- File: ${attachedNode.filePath}`,
@@ -575,7 +602,8 @@ export default function AgentChat() {
       text = parts;
       setAttachedNode(null);
     }
-    if ((!text.trim() && (!fromDraft || attachments.length === 0)) || status === 'running') return;
+
+    if ((!text.trim() && (!fromDraft || (attachments.length === 0 && stagedTasks.length === 0))) || status === 'running') return;
 
     // Settle buffered editor changes before consuming the draft or creating a
     // chat turn. A refused save must leave the user's request available.
@@ -598,10 +626,11 @@ export default function AgentChat() {
     // A NEW chat becomes a real one with its first message. Mark it loaded in
     // the same breath, or the load effect would "open" it — empty — over this
     // very message.
-    if (!activeChatId) {
-      const id = newAgentChatId();
-      setLoadedChatId(id);
-      setActiveChatId(id);
+    let currentChatId = activeChatId;
+    if (!currentChatId) {
+      currentChatId = newAgentChatId();
+      setLoadedChatId(currentChatId);
+      setActiveChatId(currentChatId);
     }
     setConversation((c) => [...c, { role: 'user', text, ...(images.length > 0 ? { images } : {}), ...(invoked.length > 0 ? { skills: invoked } : {}) }]);
     if (fromDraft) {
@@ -666,15 +695,22 @@ export default function AgentChat() {
       // manual the service attaches agree about where the user is working.
       const surface = readAgentSurface();
       trace.action('agent-panel:turn-start', { surface: surface.kind, images: images.length });
+      const existingConvId = currentChatId ? getAgentChat(currentChatId)?.conversationId : undefined;
       for await (const ev of streamAgentTurn({
         messages: history,
         config,
+        chatId: currentChatId ?? undefined,
+        conversationId: existingConvId,
         contextBlock: buildAgentContextBlock(surface, invoked),
         surface: surfaceForRequest(surface),
         reasoning: effortWire(effortFor(efforts, config.provider, config.model)),
         signal: ac.signal,
       })) {
-        if (ev.type === 'text') { assistantText += ev.text; appendText(ev.text); setStream(assistantText); }
+        if (ev.type === 'conversation_id') {
+          if (currentChatId) {
+            setAgentChatConversationId(currentChatId, ev.conversationId);
+          }
+        } else if (ev.type === 'text') { assistantText += ev.text; appendText(ev.text); setStream(assistantText); }
         else if (ev.type === 'reasoning') { runReasoning += ev.text; pendingNote += ev.text; setReasoning(runReasoning); appendReasoning(ev.text); }
         else if (ev.type === 'tool_call') {
           const entry: AgentToolEntry = { id: ev.id, name: ev.name, ok: null, count: countFor(ev.input), note: pendingNote.trim() || undefined };
@@ -921,6 +957,62 @@ export default function AgentChat() {
             {attachNote && <span className="text-[11px] text-[var(--text-tertiary)]">{attachNote}</span>}
           </div>
         )}
+        {stagedTasks.length > 0 && (
+          <div data-testid="agent-staged-tasks" className="flex flex-col gap-1.5 p-2 mb-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] cut-corners text-xs animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-[10px] font-bold">
+                  {stagedTasks.length}
+                </span>
+                <span className="font-semibold text-[var(--text-primary)] text-xs">
+                  Staged Tasks ({stagedTasks.length})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStagedTasks([])}
+                className="text-[10px] text-[var(--text-tertiary)] hover:text-[var(--accent-danger,#dc2626)] transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto pr-0.5">
+              {stagedTasks.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="flex items-start gap-1.5 p-1.5 rounded bg-[var(--bg-primary)] border border-[var(--border-light)] text-xs"
+                >
+                  <span className="shrink-0 px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-[var(--accent)] text-[var(--accent-fg)]">
+                    #{idx + 1}
+                  </span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-[10px] font-semibold text-[var(--accent)] truncate max-w-[130px]">
+                        {t.nodeName || t.nodeId}
+                      </span>
+                      {t.nodeType && (
+                        <span className="text-[9px] text-[var(--text-tertiary)]">
+                          &lt;{t.nodeType}&gt;
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[var(--text-primary)] break-words leading-tight mt-0.5">
+                      {t.comment}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStagedTasks((prev) => prev.filter((item) => item.id !== t.id))}
+                    className="text-[var(--text-tertiary)] hover:text-[var(--accent-danger,#dc2626)] p-0.5 text-xs leading-none"
+                    title="Remove task"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {attachedNode && (
           <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 bg-[var(--bg-secondary)] border border-[var(--border-light)] cut-corners text-xs text-[var(--text-primary)] animate-fadeIn">
             <span className="text-[10px] uppercase font-bold text-[var(--accent)] tracking-wider">Target</span>
@@ -1028,7 +1120,7 @@ export default function AgentChat() {
               <button
                 type="button"
                 onClick={() => void send()}
-                disabled={!configured || (!input.trim() && attachments.length === 0)}
+                disabled={!configured || (!input.trim() && attachments.length === 0 && stagedTasks.length === 0)}
                 title="Send"
                 aria-label="Send"
                 data-testid="agent-send"

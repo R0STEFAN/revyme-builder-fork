@@ -88,7 +88,7 @@ export function getAgentChat(id: string | null): AgentChat | null {
  * `updatedAt` moves only when the transcript actually changed — merely opening
  * an old chat must not float it to the top of the list.
  */
-export function saveAgentChat(id: string, messages: StoredChatMessage[], now: number = Date.now()): void {
+export function saveAgentChat(id: string, messages: StoredChatMessage[], now: number = Date.now(), conversationId?: string): void {
   if (!id || messages.length === 0) return;
   const trimmed = messages.slice(-CHAT_HISTORY_CAP).map((m) => ({ ...m }));
   budgetImages(trimmed);
@@ -96,12 +96,23 @@ export function saveAgentChat(id: string, messages: StoredChatMessage[], now: nu
 
   const chats = read();
   const existing = chats.find((c) => c.id === id);
-  if (existing && JSON.stringify(existing.messages) === JSON.stringify(trimmed)) return;
+  const nextConvId = conversationId ?? existing?.conversationId;
+  if (existing && JSON.stringify(existing.messages) === JSON.stringify(trimmed) && existing.conversationId === nextConvId) return;
   const next: AgentChat = existing
-    ? { ...existing, messages: trimmed, updatedAt: now }
-    : { id, title: titleForMessages(trimmed), createdAt: now, updatedAt: now, messages: trimmed };
+    ? { ...existing, messages: trimmed, updatedAt: now, ...(nextConvId ? { conversationId: nextConvId } : {}) }
+    : { id, title: titleForMessages(trimmed), createdAt: now, updatedAt: now, messages: trimmed, ...(nextConvId ? { conversationId: nextConvId } : {}) };
   write([next, ...chats.filter((c) => c.id !== id)]);
-  trace.action('agent-chats:save', { id, messages: trimmed.length, created: !existing });
+  trace.action('agent-chats:save', { id, messages: trimmed.length, created: !existing, conversationId: nextConvId });
+}
+
+export function setAgentChatConversationId(id: string, conversationId: string): void {
+  if (!id || !conversationId) return;
+  const chats = read();
+  const existing = chats.find((c) => c.id === id);
+  if (!existing || existing.conversationId === conversationId) return;
+  const next: AgentChat = { ...existing, conversationId };
+  write(chats.map((c) => (c.id === id ? next : c)));
+  trace.action('agent-chats:set-conversation-id', { id, conversationId });
 }
 
 export function deleteAgentChat(id: string): void {
