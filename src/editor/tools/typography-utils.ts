@@ -215,23 +215,74 @@ export function bakePresetStyles(group: TypoGroup, styles: Record<string, string
   return out;
 }
 
-// ─── Default token creation ──────────────────────────────────────────────────
+// ─── Token creation (default & from styles) ──────────────────────────────
 
-/** Returns the 11 default tokens (9 base + 2 min-width breakpoints) for a new typography preset. */
-export function createDefaultTypoTokens(slug: string, tag: string = 'p'): PresetToken[] {
-  trace.action('createDefaultTypoTokens', { slug, tag });
-  return [
-    { name: `typo-${slug}-tag`, value: TYPO_TAGS.has(tag) ? tag : 'p', category: 'typography' },
-    { name: `typo-${slug}-font`, value: "'Inter', sans-serif", category: 'typography' },
-    { name: `typo-${slug}-weight`, value: '400', category: 'typography' },
-    { name: `typo-${slug}-color`, value: '#000000', category: 'typography' },
-    { name: `typo-${slug}-transform`, value: 'none', category: 'typography' },
-    { name: `typo-${slug}-decoration`, value: 'none', category: 'typography' },
-    { name: `typo-${slug}-shadow`, value: 'none', category: 'typography' },
-    { name: `typo-${slug}-size`, value: '16px', category: 'typography' },
-    { name: `typo-${slug}-spacing`, value: '0px', category: 'typography' },
-    { name: `typo-${slug}-line-height`, value: '1.5', category: 'typography' },
+/**
+ * Creates preset tokens for a new typography preset using the provided styles as initial values.
+ * Falls back to default values for any properties not specified.
+ * Resolves var(--typo-*) references if existingTokens are provided, so creating a preset
+ * from an already-styled or preset-bound element captures the actual resolved values.
+ */
+export function createTypoTokensFromStyles(
+  slug: string,
+  styles: Record<string, string> = {},
+  tag: string = 'p',
+  existingTokens?: PresetToken[]
+): PresetToken[] {
+  trace.action('createTypoTokensFromStyles', { slug, tag, styles });
+
+  const resolveVal = (val: string | undefined, fallback: string): string => {
+    if (!val || !val.trim()) return fallback;
+    const trimmed = val.trim();
+    const varMatch = trimmed.match(/^var\(\s*--([a-zA-Z0-9_-]+)\s*\)$/);
+    if (varMatch && existingTokens) {
+      const found = existingTokens.find(t => t.name === varMatch[1]);
+      if (found && found.value) return found.value;
+    }
+    return trimmed;
+  };
+
+  const resolvedTag = TYPO_TAGS.has(tag) ? tag : 'p';
+  const font = resolveVal(styles.fontFamily || styles['font-family'], "'Inter', sans-serif");
+  const weight = resolveVal(styles.fontWeight || styles['font-weight'], '400');
+  const color = resolveVal(styles.color, '#000000');
+  const transform = resolveVal(styles.textTransform || styles['text-transform'], 'none');
+  const decoration = resolveVal(styles.textDecoration || styles['text-decoration'], 'none');
+  const shadow = resolveVal(styles.textShadow || styles['text-shadow'], 'none');
+  const size = resolveVal(styles.fontSize || styles['font-size'], '16px');
+  const spacing = resolveVal(styles.letterSpacing || styles['letter-spacing'], '0px');
+  const lineHeight = resolveVal(styles.lineHeight || styles['line-height'], '1.5');
+
+  const tokens: PresetToken[] = [
+    { name: `typo-${slug}-tag`, value: resolvedTag, category: 'typography' },
+    { name: `typo-${slug}-font`, value: font, category: 'typography' },
+    { name: `typo-${slug}-weight`, value: weight, category: 'typography' },
+    { name: `typo-${slug}-color`, value: color, category: 'typography' },
+    { name: `typo-${slug}-transform`, value: transform, category: 'typography' },
+    { name: `typo-${slug}-decoration`, value: decoration, category: 'typography' },
+    { name: `typo-${slug}-shadow`, value: shadow, category: 'typography' },
+    { name: `typo-${slug}-size`, value: size, category: 'typography' },
+    { name: `typo-${slug}-spacing`, value: spacing, category: 'typography' },
+    { name: `typo-${slug}-line-height`, value: lineHeight, category: 'typography' },
     { name: `typo-${slug}-min-default`, value: '1200', category: 'typography' },
     { name: `typo-${slug}-min-md`, value: '600', category: 'typography' },
   ];
+
+  // Optional text stroke if set
+  const strokeWidth = resolveVal(styles.WebkitTextStrokeWidth || styles['-webkit-text-stroke-width'], '');
+  const strokeColor = resolveVal(styles.WebkitTextStrokeColor || styles['-webkit-text-stroke-color'], '');
+  if (strokeWidth) {
+    tokens.push({ name: `typo-${slug}-stroke-width`, value: strokeWidth, category: 'typography' });
+  }
+  if (strokeColor) {
+    tokens.push({ name: `typo-${slug}-stroke-color`, value: strokeColor, category: 'typography' });
+  }
+
+  return tokens;
+}
+
+/** Returns the 12 default tokens (10 base + 2 min-width breakpoints) for a new typography preset. */
+export function createDefaultTypoTokens(slug: string, tag: string = 'p'): PresetToken[] {
+  trace.action('createDefaultTypoTokens', { slug, tag });
+  return createTypoTokensFromStyles(slug, {}, tag);
 }

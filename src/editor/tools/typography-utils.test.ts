@@ -10,6 +10,7 @@ import {
   typoTagLabel,
   detectActivePreset,
   createDefaultTypoTokens,
+  createTypoTokensFromStyles,
   TYPO_SUFFIXES,
   TYPO_TAG_OPTIONS,
   RESPONSIVE_PROPS,
@@ -399,5 +400,84 @@ describe('bakePresetStyles (detach preset → keep look)', () => {
 
   test('returns {} when nothing is bound', () => {
     expect(bakePresetStyles(body, { fontFamily: 'Georgia, serif', fontSize: '20px' })).toEqual({});
+  });
+});
+
+describe('createTypoTokensFromStyles', () => {
+  test('creates tokens from provided inline styles', () => {
+    const styles = {
+      fontFamily: 'Anton, sans-serif',
+      fontSize: '64px',
+      fontWeight: '900',
+      color: '#ffe17c',
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      lineHeight: '0.9',
+    };
+    const tokens = createTypoTokensFromStyles('hero-title', styles, 'h1');
+    const group = groupTypoTokens(tokens)[0];
+
+    expect(getTypoTag(group)).toBe('h1');
+    expect(getTypoTokenValue(group, 'font')).toBe('Anton, sans-serif');
+    expect(getTypoTokenValue(group, 'size')).toBe('64px');
+    expect(getTypoTokenValue(group, 'weight')).toBe('900');
+    expect(getTypoTokenValue(group, 'color')).toBe('#ffe17c');
+    expect(getTypoTokenValue(group, 'transform')).toBe('uppercase');
+    expect(getTypoTokenValue(group, 'spacing')).toBe('1px');
+    expect(getTypoTokenValue(group, 'line-height')).toBe('0.9');
+    // Unset properties fallback cleanly
+    expect(getTypoTokenValue(group, 'decoration')).toBe('none');
+    expect(getTypoTokenValue(group, 'shadow')).toBe('none');
+  });
+
+  test('supports kebab-case CSS properties', () => {
+    const styles = {
+      'font-family': 'Satoshi, sans-serif',
+      'font-size': '20px',
+      'font-weight': '500',
+      'line-height': '1.6',
+    };
+    const tokens = createTypoTokensFromStyles('subtext', styles, 'p');
+    const group = groupTypoTokens(tokens)[0];
+
+    expect(getTypoTokenValue(group, 'font')).toBe('Satoshi, sans-serif');
+    expect(getTypoTokenValue(group, 'size')).toBe('20px');
+    expect(getTypoTokenValue(group, 'weight')).toBe('500');
+    expect(getTypoTokenValue(group, 'line-height')).toBe('1.6');
+  });
+
+  test('resolves var() references when existing tokens are provided', () => {
+    const existing = [
+      makeToken('typo-old-font', "'Cinzel', serif"),
+      makeToken('typo-old-color', '#ff5500'),
+    ];
+    const styles = {
+      fontFamily: 'var(--typo-old-font)',
+      color: 'var(--typo-old-color)',
+    };
+    const tokens = createTypoTokensFromStyles('cloned', styles, 'h2', existing);
+    const group = groupTypoTokens(tokens)[0];
+
+    expect(getTypoTokenValue(group, 'font')).toBe("'Cinzel', serif");
+    expect(getTypoTokenValue(group, 'color')).toBe('#ff5500');
+  });
+
+  test('includes stroke tokens when element has stroke styles', () => {
+    const styles = {
+      fontFamily: 'Anton',
+      WebkitTextStrokeWidth: '2px',
+      WebkitTextStrokeColor: '#171e19',
+    };
+    const tokens = createTypoTokensFromStyles('stroked', styles);
+    const group = groupTypoTokens(tokens)[0];
+
+    expect(getTypoTokenValue(group, 'stroke-width')).toBe('2px');
+    expect(getTypoTokenValue(group, 'stroke-color')).toBe('#171e19');
+  });
+
+  test('falls back to default 12 tokens when styles are empty', () => {
+    const fromEmpty = createTypoTokensFromStyles('custom', {});
+    const defaultTokens = createDefaultTypoTokens('custom');
+    expect(fromEmpty).toEqual(defaultTokens);
   });
 });

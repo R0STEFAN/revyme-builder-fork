@@ -29,6 +29,7 @@ import {
   getTypoTag,
   detectActivePreset,
   createDefaultTypoTokens,
+  createTypoTokensFromStyles,
 } from '../../typography-utils';
 import type { TypoGroup } from '../../typography-utils';
 
@@ -144,18 +145,30 @@ function TypoPresetListPanel({ activeGroupName, onApply, onEdit, onCreate }: {
 
 // ─── Create Preset Panel ──────────────────────────────────────────────────────
 
-/** Step 1: name input. Step 2: creates tokens → shows full TypographyEditContent. */
-function CreateTypoPresetPanel({ onCreated }: { onCreated: (group: TypoGroup) => void }) {
+/** Step 1: name input. Step 2: creates tokens → shows full TypographyEditContent.
+ *  Captures initial styles and element tag from the selected node so the new preset
+ *  preserves the exact look instead of dropping into generic Inter 16px defaults. */
+function CreateTypoPresetPanel({
+  onCreated,
+  initialStyles,
+  initialTag,
+}: {
+  onCreated: (group: TypoGroup) => void;
+  initialStyles?: Record<string, string>;
+  initialTag?: string;
+}) {
   const [name, setName] = useState('');
   const [createdGroup, setCreatedGroup] = useState<TypoGroup | null>(null);
   const bumpVersion = useSetAtom(projectVersionAtom);
+  const allTokens = useAtomValue(presetTokensAtom);
 
   const handleCreate = useCallback(() => {
     if (!name.trim()) return;
     const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-    trace.action('typo-preset:create', { slug });
-    createDefaultTypoTokens(slug).forEach(t => queueMutation({ type: 'addPresetToken', token: t }));
+    trace.action('typo-preset:create', { slug, initialStyles, initialTag });
+    const tokens = createTypoTokensFromStyles(slug, initialStyles, initialTag, allTokens);
+    tokens.forEach(t => queueMutation({ type: 'addPresetToken', token: t }));
 
     bumpVersion(v => v + 1);
 
@@ -164,7 +177,7 @@ function CreateTypoPresetPanel({ onCreated }: { onCreated: (group: TypoGroup) =>
     const groups = groupTypoTokens(fresh);
     const created = groups.find(g => g.name === slug);
     if (created) setCreatedGroup(created);
-  }, [name, bumpVersion]);
+  }, [name, bumpVersion, initialStyles, initialTag, allTokens]);
 
   // Live-drag fast path: setProperty on the iframe contentRoot for the var.
   // Heavy bumpVersion + refreshCanvasTokens are debounced 300ms — running
@@ -315,9 +328,18 @@ function EditTypoPresetPanel({ group, nodeId, onClose }: { group: TypoGroup; nod
 // ─── Main Control ─────────────────────────────────────────────────────────────
 
 /** Standalone panel content — wraps TypoPresetListPanel inside ToolPopup context */
-function StandalonePresetPanel({ activeGroupName, nodeId, onApply, onClose }: {
+function StandalonePresetPanel({
+  activeGroupName,
+  nodeId,
+  styles,
+  tag,
+  onApply,
+  onClose,
+}: {
   activeGroupName: string | null;
   nodeId?: string;
+  styles?: Record<string, string>;
+  tag?: string;
   onApply: (group: TypoGroup) => void;
   onClose: () => void;
 }) {
@@ -338,10 +360,14 @@ function StandalonePresetPanel({ activeGroupName, nodeId, onApply, onClose }: {
 
   const handleCreate = () => {
     popupCtx?.pushPanel('New Typography Preset', (
-      <CreateTypoPresetPanel onCreated={(created) => {
-        onApply(created);
-        onClose();
-      }} />
+      <CreateTypoPresetPanel
+        initialStyles={styles}
+        initialTag={tag}
+        onCreated={(created) => {
+          onApply(created);
+          onClose();
+        }}
+      />
     ));
   };
 
@@ -466,11 +492,15 @@ export function TypographyPresetControl() {
 
       const handleCreate = () => {
         popupCtx.pushPanel('New Typography Preset', (
-          <CreateTypoPresetPanel onCreated={(created) => {
-            applyPreset(created);
-            popupCtx.popPanel();
-            popupCtx.popPanel();
-          }} />
+          <CreateTypoPresetPanel
+            initialStyles={styles}
+            initialTag={node?.type}
+            onCreated={(created) => {
+              applyPreset(created);
+              popupCtx.popPanel();
+              popupCtx.popPanel();
+            }}
+          />
         ));
       };
 
@@ -518,6 +548,8 @@ export function TypographyPresetControl() {
           <StandalonePresetPanel
             activeGroupName={activeGroup?.name ?? null}
             nodeId={selectedIds[0]}
+            styles={styles}
+            tag={node?.type}
             onApply={applyPreset}
             onClose={() => setIsOpen(false)}
           />

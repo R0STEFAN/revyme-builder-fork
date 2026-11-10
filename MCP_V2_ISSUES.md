@@ -2470,3 +2470,15 @@ This workflow is documented in `.agents/skills/revyme-mcp/SKILL.md` A3.
 check reported `clean=true` across 29 files and zero blocking/drift violations. The exact
 temporary coverage branch was deleted, `main` restored as active, and the Builder/API process
 was left untouched.
+
+## 2026-11-10 — Creating typography preset from styled text created default tokens (Inter 16px) instead of capturing element styles
+
+**Status:** resolved in `src/editor/tools/typography-utils.ts` and `src/editor/tools/TextStyleTool/atoms/TypographyPresetControl.tsx`.
+
+**Symptom:** when a user configured text typography directly on an element in the styles panel (e.g. Anton, 64px, #ffe17c) and clicked "Preset -> Create new", the new preset was initialized with generic defaults (`Inter`, `16px`, `400`, `#000000`), wiping out the customized styles on the element upon application.
+
+**Cause:** `CreateTypoPresetPanel` inside `TypographyPresetControl.tsx` called `createDefaultTypoTokens(slug)` blindly without receiving the active node's styles or tag.
+
+**Fix:** introduced `createTypoTokensFromStyles(slug, styles, tag, existingTokens)` which seeds the new preset tokens with the active element's styles (`fontFamily`, `fontSize`, `fontWeight`, `color`, `letterSpacing`, `lineHeight`, `textTransform`, `textDecoration`, `textShadow`, and optional stroke longhands) while resolving any existing `var()` references. Updated `CreateTypoPresetPanel` and `StandalonePresetPanel` to receive and forward `styles` and `node?.type`.
+
+**Verification:** added 5 test cases in `src/editor/tools/typography-utils.test.ts` (47/47 vitest tests passed) and verified `tsc --noEmit` cleanly.
