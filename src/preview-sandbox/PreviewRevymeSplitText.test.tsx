@@ -104,4 +104,16 @@ describe('PreviewRevymeSplitText', () => {
 
     expect(parentMeasured).toBe(true);
   });
+
+  it('targets parent element for useScroll so display: contents wrapper does not break scroll tracking', () => {
+    const { container } = render(
+      <h2 data-id="h2-parent">
+        <PreviewRevymeSplitText spec={{ animationType: 'word', trigger: 'scroll', scrollStart: 95, scrollEnd: 5 }}>
+          Hello World
+        </PreviewRevymeSplitText>
+      </h2>
+    );
+    const hostSpan = container.querySelector('span[style*="contents"]');
+    expect(hostSpan).not.toBeNull();
+  });
 });

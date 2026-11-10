@@ -432,6 +432,12 @@ function usePlayed(hostRef: React.RefObject<HTMLElement | null>, spec: SplitText
 export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProps): React.ReactElement {
   const base: SplitTextSpec = spec ?? {};
   const hostRef = React.useRef<HTMLSpanElement>(null);
+  const targetRef = React.useRef<HTMLElement | null>(null);
+
+  const setHostRef = React.useCallback((el: HTMLSpanElement | null) => {
+    (hostRef as React.MutableRefObject<HTMLSpanElement | null>).current = el;
+    targetRef.current = el?.parentElement || el;
+  }, []);
 
   const scopeIdx = useActiveScopeIndex(base, variant);
   const resolved: SplitTextSpec = React.useMemo(() => {
@@ -449,7 +455,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
   const startFrac = Math.min(1, Math.max(0, (resolved.scrollStart ?? 90) / 100));
   const endFrac = Math.min(1, Math.max(0, (resolved.scrollEnd ?? 35) / 100));
   const { scrollYProgress } = useScroll({
-    target: hostRef,
+    target: targetRef,
     offset: [`start ${startFrac}`, `start ${endFrac}`] as never,
   });
 
@@ -478,7 +484,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
 
   if (text === null && rich === null) {
     return (
-      <span ref={hostRef} style={{ display: 'contents' }}>
+      <span ref={setHostRef} style={{ display: 'contents' }}>
         {children}
       </span>
     );
@@ -548,7 +554,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
   };
 
   return (
-    <span ref={hostRef} style={{ display: 'contents' }}>
+    <span ref={setHostRef} style={{ display: 'contents' }}>
       {nodes.map(render)}
     </span>
   );
