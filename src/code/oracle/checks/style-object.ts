@@ -301,6 +301,7 @@ function checkStyleObject(
         message: `transform strings (line ${line}) collide with layout animation and cannot be edited. Use NUMBER motion props instead: rotate: 30, scale: 1.1, x: 10, y: -8, skewX: 5. (Exceptions — the builder's own formats: translate-only centering, e.g. transform: 'translate(-50%, -50%)' with left/top %; rotate-only, e.g. transform: 'rotate(12deg)' with transformBox/transformOrigin; and folded single-arg motion sequences, e.g. 'translateX(10px) translateY(-8px) rotate(30deg)' as baked by Detach.)`,
       });
     } else if (key === 'display' && styleValueIncludes(prop.value, 'none')
+        && !(t.isStringLiteral(prop.value) && prop.value.value.trim().toLowerCase() === 'none')
         && !isTogglePropTernary(prop.value, ctx.booleanProps) && !isSafeCmsVisibility(prop.value, ctx.cmsItemVar)) {
       v.push({
         code: 'DISPLAY_TOGGLE_VISIBILITY', tier: 2, line, elementId: dataId,

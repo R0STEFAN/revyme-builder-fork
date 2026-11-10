@@ -55,9 +55,9 @@ export default function LayoutClient({children, footerVisible = true}: {children
     expect(hides(COMPONENT("position: 'relative', display: iconVisible ? 'block' : 'none'"))).toEqual([]);
   });
 
-  // The rule it is carved out of must keep biting.
-  it('still rejects a plain display:none', () => {
-    expect(hides(COMPONENT("position: 'relative', display: 'none'"))).toHaveLength(1);
+  // Plain display:none is allowed for canvas and components (matching the builder Hide tool)
+  it('allows a plain display:none', () => {
+    expect(hides(COMPONENT("position: 'relative', display: 'none'"))).toHaveLength(0);
   });
 
   it('still rejects a ternary on something that is not a boolean prop', () => {

@@ -1673,7 +1673,6 @@ export function isAgentBlockingOracleViolation(code: string): boolean {
   if (
     code === 'SYNTAX_ERROR' ||
     code === 'MISSING_DATA_ID' ||
-    code === 'DISPLAY_TOGGLE_VISIBILITY' ||
     code === 'TEXT_EXPRESSION' ||
     code === 'UNRESOLVABLE_TERNARY' ||
     code === 'WOULD_CRASH' ||

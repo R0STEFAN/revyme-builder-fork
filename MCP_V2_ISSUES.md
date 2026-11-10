@@ -1,5 +1,24 @@
 # MCP v2 issue log
 
+## 2026-11-10 — Permitted plain `display: 'none'` in Oracle validator for parity with visual Hide tool
+
+**Status:** fixed, verified via `src/code/oracle/display-toggle-prop.test.ts` (6 tests), `src/code/features/cms-visibility.test.ts` (14 tests), `src/code/oracle/check-file.test.ts` (161 tests), `packages/automation-core/test/capabilities/T07-layout.test.ts` (13 tests), CLI build (`node packages/cli/build.cjs`), and committed.
+
+**Symptom:**
+When an agent or MCP tool attempted to set `display: 'none'` on a node (such as hiding mobile-only elements on desktop or replicating the editor's "Hide: Yes" tool), the Oracle validator rejected the plan with `DISPLAY_TOGGLE_VISIBILITY: display:'none' — never hide with display`. This created an artificial capability gap between human users in the editor (who freely use the `Hide: Yes` tool) and automated agents.
+
+**Cause:**
+`src/code/oracle/checks/style-object.ts` indiscriminately flagged any style property containing `'none'` with `DISPLAY_TOGGLE_VISIBILITY` unless it matched a component boolean prop ternary or CMS visibility binding. Additionally, `isAgentBlockingOracleViolation` in `src/code/oracle/check-file.ts` and `isBlockingModifyViolation` in `src/code/project/modify-file.ts` marked `DISPLAY_TOGGLE_VISIBILITY` as a hard blocker for automated transformations.
+
+**Fix and regression guard:**
+1. In `src/code/oracle/checks/style-object.ts`, exempted plain string literals with value `'none'` (`t.isStringLiteral(prop.value) && prop.value.value.trim().toLowerCase() === 'none'`), while retaining checks for unresolvable dynamic state ternaries.
+2. In `src/code/oracle/check-file.ts`, removed `DISPLAY_TOGGLE_VISIBILITY` from `isAgentBlockingOracleViolation`.
+3. In `src/code/project/modify-file.ts`, removed `DISPLAY_TOGGLE_VISIBILITY` from `isBlockingModifyViolation`.
+4. Updated unit tests in `src/code/oracle/display-toggle-prop.test.ts` and `packages/automation-core/test/capabilities/T07-layout.test.ts`.
+5. Rebuilt CLI bundle (`packages/cli/dist/main.js`).
+
+
+
 ## 2026-11-10 — Raw CSS text in `<style>` node generation caused JSX parse error and skipped template literal in parser
 
 **Status:** fixed, verified via `src/code/generation/generator-crud.test.ts` (22 tests), `src/code/parsing/parser.test.ts` (36 test suites, 439 tests), CLI build (`node packages/cli/build.cjs`), and committed.

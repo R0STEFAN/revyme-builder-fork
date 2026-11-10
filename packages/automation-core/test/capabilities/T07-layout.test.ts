@@ -257,6 +257,19 @@ export default function Page() {
     expect(readRes.styles.borderRadius).toBe('8px');
     expect(readRes.styles.opacity).toBe('0.9');
 
+    // Setting display: 'none' is fully permitted for agent on canvas (Hide tool parity)
+    const hideRes = await stylesSetOp.execute(
+      snapshot,
+      {
+        nodeId: 'title-1',
+        styles: { display: 'none' },
+      },
+      context
+    );
+    applyChanges(hideRes.changes);
+    const readHidden = await stylesGetOp.execute(snapshot, { nodeId: 'title-1' }, context);
+    expect(readHidden.styles.display).toBe('none');
+
     // 3. Remove styles via empty string (Invariant 3)
     const removeRes = await stylesRemoveOp.execute(
       snapshot,
