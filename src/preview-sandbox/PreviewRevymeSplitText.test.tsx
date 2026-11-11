@@ -116,4 +116,47 @@ describe('PreviewRevymeSplitText', () => {
     const hostSpan = container.querySelector('span[style*="contents"]');
     expect(hostSpan).not.toBeNull();
   });
+
+  it('line mode with rich children and <br> renders inline-block units and does not create block splits', () => {
+    const { container } = render(
+      <PreviewRevymeSplitText spec={{ animationType: 'line', trigger: 'appear' }}>
+        <span>
+          BREAK THE TEMPLATE WITH <br />PURE CANVAS
+        </span>
+        <span style={{ display: 'inline-block' }}>
+          <span>VELOCITY</span>
+        </span>
+      </PreviewRevymeSplitText>
+    );
+
+    // Units must be inline-block to preserve line flow and prevent broken wraps
+    const blockSpans = container.querySelectorAll('span[style*="display: block"]');
+    expect(blockSpans).toHaveLength(0);
+
+    const inlineBlockSpans = container.querySelectorAll('span[style*="display: inline-block"]');
+    expect(inlineBlockSpans.length).toBeGreaterThanOrEqual(3);
+
+    // Exactly one <br> element exists, without spurious blank lines
+    const brs = container.querySelectorAll('br');
+    expect(brs).toHaveLength(1);
+    expect(container.textContent).toContain('BREAK THE TEMPLATE WITH PURE CANVAS');
+    expect(container.textContent).toContain('VELOCITY');
+  });
+
+  it('line mode for plain text with newlines renders inline-block units with br breaks', () => {
+    const { container } = render(
+      <PreviewRevymeSplitText spec={{ animationType: 'line', trigger: 'appear' }}>
+        {'First Line\nSecond Line'}
+      </PreviewRevymeSplitText>
+    );
+
+    const blockSpans = container.querySelectorAll('span[style*="display: block"]');
+    expect(blockSpans).toHaveLength(0);
+
+    const inlineBlockSpans = container.querySelectorAll('span[style*="display: inline-block"]');
+    expect(inlineBlockSpans.length).toBe(2);
+
+    const brs = container.querySelectorAll('br');
+    expect(brs).toHaveLength(1);
+  });
 });

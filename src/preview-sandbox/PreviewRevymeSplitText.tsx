@@ -199,6 +199,7 @@ function buildRichNodes(
   mask: boolean,
 ): { nodes: Node[]; count: number; sig: string } | null {
   let i = 0;
+  let lineIndex = 0;
   let sig = '';
   let key = 0;
   let bailed = false;
@@ -253,8 +254,9 @@ function buildRichNodes(
   toSegs(children, roots);
   if (bailed) return null;
 
-  const unit = (inner: React.ReactNode, display: 'inline-block' | 'block'): Node => {
-    const u: Node = { t: 'unit', u: { key: `u${i}`, inner, display, index: i } };
+  const unit = (inner: React.ReactNode, display: 'inline-block' | 'block', customIdx?: number): Node => {
+    const idx = customIdx ?? i;
+    const u: Node = { t: 'unit', u: { key: `u${key++}`, inner, display, index: idx } };
     i++;
     return u;
   };
@@ -263,14 +265,25 @@ function buildRichNodes(
     for (const seg of segs) {
       if (seg.kind === 'br') {
         out.push({ t: 'br', k: `br${key++}` });
+        lineIndex++;
       } else if (seg.kind === 'el') {
         const kids: Node[] = [];
         emit(seg.segs, kids);
         out.push({ t: 'el', k: `el${key++}`, tag: seg.tag, props: seg.props, kids });
       } else if (animationType === 'full') {
-        out.push(unit(seg.v, 'inline-block'));
+        out.push(unit(seg.v, 'inline-block', 0));
       } else if (animationType === 'line') {
-        out.push(unit(seg.v, 'block'));
+        const subLines = seg.v.split('\n');
+        for (let sli = 0; sli < subLines.length; sli++) {
+          if (sli > 0) {
+            out.push({ t: 'br', k: `br${key++}` });
+            lineIndex++;
+          }
+          const text = subLines[sli];
+          if (!text) continue;
+          const u = unit(text, 'inline-block', lineIndex);
+          out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u] } : u);
+        }
       } else {
         const words = seg.v.split(' ');
         for (let wi = 0; wi < words.length; wi++) {
@@ -291,7 +304,8 @@ function buildRichNodes(
   };
   const nodes: Node[] = [];
   emit(roots, nodes);
-  return { nodes, count: i, sig };
+  const totalCount = animationType === 'full' ? 1 : animationType === 'line' ? lineIndex + 1 : i;
+  return { nodes, count: totalCount, sig };
 }
 
 function buildNodes(
@@ -306,8 +320,9 @@ function buildNodes(
   if (animationType === 'line') {
     for (let li = 0; li < lines.length; li++) {
       if (li > 0) nodes.push({ t: 'br', k: `br${li}` });
-      nodes.push({ t: 'unit', u: { key: `u${i}`, inner: lines[li], display: 'block', index: i } });
+      const u: Node = { t: 'unit', u: { key: `u${i}`, inner: lines[li], display: 'inline-block', index: i } };
       i++;
+      nodes.push(mask ? { t: 'wrap', k: `w${li}`, kids: [u] } : u);
     }
     return { nodes, count: i };
   }
