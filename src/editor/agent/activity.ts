@@ -96,6 +96,10 @@ const EFFECTS: Record<string, Effect> = {
   submit_plan: { kind: 'plan' },
   submit_design_intent: { kind: 'plan' },
   'plans.commit': { kind: 'plan' },
+  run_command: { kind: 'review' },
+  bash: { kind: 'review' },
+  execute_command: { kind: 'review' },
+  powershell: { kind: 'review' },
 
   // Reads, by what they look at.
   get_node_tree: { kind: 'read', noun: 'page' },

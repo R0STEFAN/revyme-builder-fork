@@ -51,6 +51,13 @@ describe('foldActivity', () => {
     expect(steps[0].label).toBe('Reviewed changes');
   });
 
+  test('terminal commands like run_command map to review, never false layer edits', () => {
+    const steps = foldActivity([t('run_command'), t('bash')]);
+    expect(steps).toHaveLength(1);
+    expect(steps[0].kind).toBe('review');
+    expect(steps[0].label).toBe('Reviewed changes');
+  });
+
   test('a batch counts its ops, not itself', () => {
     // One "Running batch" row standing in for 15 real changes is the bug.
     const steps = foldActivity([t('batch', { count: countFor({ ops: new Array(15).fill({}) }) })]);

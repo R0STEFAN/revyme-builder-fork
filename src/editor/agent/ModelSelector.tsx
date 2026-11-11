@@ -81,9 +81,8 @@ export function ModelSelector() {
   const [catalog, setCatalog] = useState<VibeModelCatalog>({ models: FALLBACK_MODELS, defaultModel: FALLBACK_DEFAULT, retired: FALLBACK_RETIRED });
   const offersCredits = !!offered?.includes('revyme');
   useEffect(() => {
-    if (!offersCredits) return;
     let live = true;
-    void fetchVibeModels().then((c) => { if (live && c.models.length) setCatalog(c); });
+    void fetchVibeModels(undefined, true).then((c) => { if (live && c.models.length) setCatalog(c); });
     return () => { live = false; };
   }, [offersCredits]);
 

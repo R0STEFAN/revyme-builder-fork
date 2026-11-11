@@ -473,6 +473,10 @@ const chatSessionMap = loadChatSessions();
 
 function resolveAgentBinary(preferred: string): string {
   if (preferred === 'agy' || preferred === 'revyme' || !preferred) {
+    if (process.platform === 'win32') {
+      const localAgy = path.join(process.env.LOCALAPPDATA || '', 'agy', 'bin', 'agy.exe');
+      if (fs.existsSync(localAgy)) return localAgy;
+    }
     if (fs.existsSync('/home/rost/.local/bin/agy')) return '/home/rost/.local/bin/agy';
     return 'agy';
   }
@@ -483,39 +487,49 @@ function resolveAgentBinary(preferred: string): string {
   return preferred;
 }
 
-function refreshModelsInBackground(): void {
-  if (Date.now() - lastDynamicModelFetch < 60_000) return;
-  lastDynamicModelFetch = Date.now();
-  try {
-    const bin = resolveAgentBinary('agy');
-    const cp = spawn(bin, ['models'], { timeout: 10000 });
-    let out = '';
-    cp.stdout.on('data', (d: Buffer | string) => { out += d.toString(); });
-    cp.on('close', (code: number | null) => {
-      if (code === 0 && out) {
-        const lines = out.split('\n');
-        const parsed: DiscoveredModel[] = [];
-        for (const line of lines) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            const id = parts[0].trim();
-            const label = parts[1].trim();
-            if (id && label) {
-              const vendor = id.startsWith('claude') ? 'anthropic' : (id.startsWith('gpt') ? 'openai' : 'google');
-              const tier = id.includes('low') || id.includes('lite') ? 'fast' : (id.includes('high') || id.includes('opus') ? 'best' : 'standard');
-              parsed.push({ id, label, vendor, tier });
+function fetchDynamicModels(): Promise<DiscoveredModel[]> {
+  if (cachedDynamicModels && cachedDynamicModels.length > 0 && Date.now() - lastDynamicModelFetch < 60_000) {
+    return Promise.resolve(cachedDynamicModels);
+  }
+  return new Promise((resolve) => {
+    try {
+      const bin = resolveAgentBinary('agy');
+      const cp = spawn(bin, ['models'], { timeout: 10000, shell: process.platform === 'win32' });
+      let out = '';
+      cp.stdout.on('data', (d: Buffer | string) => { out += d.toString(); });
+      cp.on('close', (code: number | null) => {
+        if (code === 0 && out) {
+          const lines = out.split('\n');
+          const parsed: DiscoveredModel[] = [];
+          for (const line of lines) {
+            const parts = line.split('\t');
+            if (parts.length >= 2) {
+              const id = parts[0].trim();
+              const label = parts[1].trim();
+              if (id && label) {
+                const vendor = id.startsWith('claude') ? 'anthropic' : (id.startsWith('gpt') ? 'openai' : 'google');
+                const tier = id.includes('low') || id.includes('lite') ? 'fast' : (id.includes('high') || id.includes('opus') ? 'best' : 'standard');
+                parsed.push({ id, label, vendor, tier });
+              }
             }
           }
+          if (parsed.length > 0) {
+            cachedDynamicModels = parsed;
+            lastDynamicModelFetch = Date.now();
+            return resolve(parsed);
+          }
         }
-        if (parsed.length > 0) {
-          cachedDynamicModels = parsed;
-        }
-      }
-    });
-    cp.on('error', () => { /* ignore */ });
-  } catch {
-    // ignore
-  }
+        resolve(cachedDynamicModels || []);
+      });
+      cp.on('error', () => { resolve(cachedDynamicModels || []); });
+    } catch {
+      resolve(cachedDynamicModels || []);
+    }
+  });
+}
+
+function refreshModelsInBackground(): void {
+  void fetchDynamicModels();
 }
 
       // Return available engines for AI agent
@@ -530,23 +544,21 @@ function refreshModelsInBackground(): void {
       if (pathname === '/api/freeform/models' || pathname === '/api/agent/models') {
         res.setHeader('Content-Type', 'application/json');
         res.statusCode = 200;
-        refreshModelsInBackground();
+        const dynamicModels = await fetchDynamicModels();
 
         const agent = (url.searchParams.get('agent') || '').toLowerCase();
 
         const fallbackModels: DiscoveredModel[] = [
-          { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', vendor: 'google', tier: 'standard' },
-          { id: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', vendor: 'google', tier: 'fast' },
-          { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', vendor: 'google', tier: 'best' },
-          { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', vendor: 'anthropic', tier: 'standard' },
-          { id: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5', vendor: 'anthropic', tier: 'fast' },
-          { id: 'anthropic/claude-opus-5.5', label: 'Claude Opus 5.5', vendor: 'anthropic', tier: 'best' },
-          { id: 'openai/gpt-6-sol', label: 'GPT-6 Sol', vendor: 'openai', tier: 'standard' },
-          { id: 'openai/gpt-6-luna', label: 'GPT-6 Luna', vendor: 'openai', tier: 'fast' },
+          { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)', vendor: 'google', tier: 'fast' },
+          { id: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)', vendor: 'google', tier: 'standard' },
+          { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)', vendor: 'google', tier: 'best' },
+          { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)', vendor: 'anthropic', tier: 'standard' },
+          { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)', vendor: 'anthropic', tier: 'best' },
+          { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)', vendor: 'openai', tier: 'standard' },
         ];
 
-        let models = (cachedDynamicModels && cachedDynamicModels.length > 0)
-          ? [...cachedDynamicModels]
+        let models = (dynamicModels && dynamicModels.length > 0)
+          ? [...dynamicModels]
           : fallbackModels;
 
         if (agent === 'agy' || agent === 'google') {
@@ -557,7 +569,7 @@ function refreshModelsInBackground(): void {
           models = models.filter((m) => m.vendor === 'openai');
         }
 
-        const defaultModel = models[0]?.id || 'google/gemini-3.8-flash';
+        const defaultModel = models.find((m) => m.id.includes('low') || m.id.includes('flash'))?.id || models[0]?.id || 'gemini-3.8-flash-low';
         res.end(JSON.stringify({ models, defaultModel }));
         return;
       }
@@ -694,13 +706,15 @@ You have direct access to 280+ operations on the "revyme-builder" Model Context 
 1. Never run bash/terminal search commands or read files from .agents/skills/ — all tool schemas, project details, and conventions are already pre-loaded in this prompt or introspectable via meta.tools.
 2. Directly execute visual changes, insertions, styling, and component/variant updates using the "revyme-builder" MCP server via call_mcp_tool.
 3. Keep changes precise, high quality, and aligned with modern visual design standards.
+4. STRICT INVARIANT: Never run bash / PowerShell terminal commands (like run_command) to inspect, edit, or search files in data/projects/ or the repository. Never create scripts to bypass the system.
+5. IF PLAN_VALIDATION_FAILED OCCURS: If an MCP tool returns PLAN_VALIDATION_FAILED (e.g. FORBIDDEN_MIN_CONTENT_HEIGHT or FIXED_DEPTH), it indicates invalid layout styles on nodes in the page. You MUST resolve it directly using MCP tools — e.g. call styles.set({ nodeId: '<offending-node-id>', styles: { height: 'auto' } }). NEVER try to hack around validation with terminal scripts.
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 User request:
 `;
 
           const effectivePrompt = existingSessionId
             ? `[Revyme Context: Project ID: ${effectiveProjectId} | Chat: ${chatId}]
-[Revyme instruction: Directly execute visual changes via call_mcp_tool (fragments.insert, styles.set, extract_component, text.set, etc.). Do not run terminal search commands or read .agents/skills/.]
+[Revyme instruction: Directly execute visual changes via call_mcp_tool (fragments.insert, styles.set, extract_component, text.set, etc.). Never use run_command or terminal scripts. If an MCP tool returns PLAN_VALIDATION_FAILED, resolve the offending node styles directly using styles.set, never terminal scripts.]
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 ${userPrompt}`
             : `${revymeSystemPreamble}${userPrompt}`;

@@ -182,10 +182,10 @@ export const DEFAULT_MODELS: Record<AgentProviderConfig['provider'], string> = {
   // anything else to its default, so credits can never run an arbitrary model.
   revyme: 'anthropic/claude-sonnet-5',
   'claude-cli': '',                 // whatever the CLI is configured to use
-  anthropic: 'claude-sonnet-5',
-  openai: 'gpt-5',
-  google: 'gemini-2.5-pro',
-  openrouter: 'anthropic/claude-sonnet-5',
+  anthropic: 'claude-sonnet-4-6',
+  openai: 'gpt-oss-120b-medium',
+  google: 'gemini-3.8-flash-low',
+  openrouter: 'gemini-3.8-flash-low',
 };
 
 /** Engine config. Per user, not per project — a key is an account credential. */
