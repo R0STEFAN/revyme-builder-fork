@@ -69,4 +69,42 @@ describe('renderMarkdown', () => {
     const { container } = render(<div>{renderMarkdown('')}</div>);
     expect(container.textContent).toBe('');
   });
+
+  it('renders markdown headings h1 through h4', () => {
+    const md = '# Main\n## Section\n### Що налаштовано:\n#### Detail';
+    const { container } = render(<div>{renderMarkdown(md)}</div>);
+    expect(container.querySelector('h1')?.textContent).toBe('Main');
+    expect(container.querySelector('h2')?.textContent).toBe('Section');
+    expect(container.querySelector('h3')?.textContent).toBe('Що налаштовано:');
+    expect(container.querySelector('h4')?.textContent).toBe('Detail');
+  });
+
+  it('renders fenced code blocks with language', () => {
+    const md = '```tsx\nconst a = 1;\nconsole.log(a);\n```';
+    const { container } = render(<div>{renderMarkdown(md)}</div>);
+    expect(container.querySelector('pre')).toBeTruthy();
+    expect(container.querySelector('code')?.textContent).toContain('const a = 1;');
+    expect(container.textContent).toContain('tsx');
+  });
+
+  it('renders blockquotes', () => {
+    const md = '> Important note here';
+    const { container } = render(<div>{renderMarkdown(md)}</div>);
+    expect(container.querySelector('blockquote')?.textContent).toBe('Important note here');
+  });
+
+  it('renders safe markdown links', () => {
+    const md = 'Visit [Revyme](https://revyme.com) for details.';
+    const { container } = render(<div>{renderMarkdown(md)}</div>);
+    const link = container.querySelector('a');
+    expect(link).toBeTruthy();
+    expect(link?.textContent).toBe('Revyme');
+    expect(link?.getAttribute('href')).toBe('https://revyme.com');
+  });
+
+  it('renders horizontal dividers', () => {
+    const md = 'Above\n---\nBelow';
+    const { container } = render(<div>{renderMarkdown(md)}</div>);
+    expect(container.querySelector('hr')).toBeTruthy();
+  });
 });
