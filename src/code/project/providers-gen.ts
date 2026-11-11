@@ -23,7 +23,7 @@ import { RTL_TEXT_CSS } from '@/shared/rtl-text';
 
 /** Version marker — bump when the template shape changes so older generated
  *  providers are upgraded on load. */
-export const PROVIDERS_MARKER = '@revyme-providers v5';
+export const PROVIDERS_MARKER = '@revyme-providers v6';
 
 /** A locale code safe to interpolate into generated code/identifiers. */
 function safeLocale(code: string): boolean {
@@ -37,7 +37,121 @@ function importIdent(code: string): string {
 export function buildProvidersSource(config: I18nConfig): string {
   const locales = config.locales.map((l) => l.code).filter(safeLocale);
   const codes = locales.length > 0 ? locales : ['en'];
-  const defaultLocale = safeLocale(config.defaultLocale) ? config.defaultLocale : 'en';
+  const defaultLocale = safeLocale(config.defaultLocale) ? config.defaultLocale : (codes[0] || 'en');
+  const isSingleLocale = codes.length <= 1;
+
+  if (isSingleLocale) {
+    const singleCode = codes[0];
+    const singleImport = `import ${importIdent(singleCode)} from '@/messages/${singleCode}.json';`;
+    return `'use client';
+
+/** ${PROVIDERS_MARKER} — GENERATED from i18n/config.json (single locale: ${singleCode}).
+ *  The editor regenerates this file when locales change. Do not hand-edit. */
+
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ThemeProvider } from 'next-themes';
+import { NextIntlClientProvider } from 'next-intl';
+
+${singleImport}
+
+const DEFAULT_LOCALE = '${defaultLocale}';
+const messages = ${importIdent(singleCode)};
+
+// Right-to-left languages: the TEXT follows its own script (this rule, matched
+// through the wrapper's lang); the LAYOUT — rows, grids, alignment — never
+// mirrors, so no \`dir\` is ever set.
+const RTL_TEXT_CSS = ${JSON.stringify(RTL_TEXT_CSS)};
+
+// ── Link attributes runtime (data-smooth-scroll / data-keep-params) ──────────
+const SMOOTH_KEY = 'revyme:smooth-target';
+function revymeNavClick(e, nav) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+  let url;
+  try { url = new URL(a.getAttribute('href') || '', window.location.href); } catch { return; }
+  if (url.origin !== window.location.origin) return;
+  const smooth = a.dataset.smoothScroll === 'true';
+  const keep = a.dataset.keepParams === 'true';
+  if (smooth && url.hash) {
+    const id = decodeURIComponent(url.hash.slice(1));
+    if (url.pathname === window.location.pathname) {
+      const el = id ? document.getElementById(id) : null;
+      if (el) {
+        e.preventDefault();
+        el.scrollIntoView({ behavior: 'smooth' });
+        try { window.history.pushState(null, '', url.pathname + url.search + url.hash); } catch {}
+        return;
+      }
+    } else if (id) {
+      // Cross-page: let the router navigate, scroll on arrival (see effect below).
+      try { window.sessionStorage.setItem(SMOOTH_KEY, id); } catch {}
+    }
+  }
+  if (keep && window.location.search) {
+    const merged = new URL(url.href);
+    new URLSearchParams(window.location.search).forEach((v, k) => { if (!merged.searchParams.has(k)) merged.searchParams.set(k, v); });
+    if (merged.href !== url.href) {
+      e.preventDefault();
+      nav.push(merged.pathname + merged.search + merged.hash);
+    }
+  }
+}
+/** Scroll smoothly to the section a cross-page smooth link targeted, once
+ *  the destination page has mounted it (polls up to 10s — SPA routers do no
+ *  native hash scrolling). */
+function revymeScrollOnArrival() {
+  let id = null;
+  try { id = window.sessionStorage.getItem(SMOOTH_KEY); } catch {}
+  if (!id) return () => {};
+  try { window.sessionStorage.removeItem(SMOOTH_KEY); } catch {}
+  let n = 0;
+  const t = window.setInterval(() => {
+    const el = document.getElementById(id);
+    if (el) { window.clearInterval(t); el.scrollIntoView({ behavior: 'smooth' }); }
+    else if (++n > 100) window.clearInterval(t);
+  }, 100);
+  return () => window.clearInterval(t);
+}
+
+export function Providers({ children, locale: propLocale }: { children: React.ReactNode; locale?: string }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const locale = propLocale || DEFAULT_LOCALE;
+
+  // Link attributes runtime — see revymeNavClick above.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => revymeNavClick(e, router);
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [router]);
+  useEffect(() => revymeScrollOnArrival(), [pathname]);
+
+  // Mirror the ACTIVE locale to <html lang> so :lang() CSS fires
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (document.documentElement.lang !== locale) document.documentElement.lang = locale;
+    }
+  }, [locale]);
+
+  return (
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+        {/* lang on a wrapper (display:contents = no box) so :lang() styles —
+            the RTL text rule among them — match in the SERVER-rendered HTML
+            too; <html lang> is only patched client-side. */}
+        <div lang={locale} style={{ display: 'contents' }}>
+          <style dangerouslySetInnerHTML={{ __html: RTL_TEXT_CSS }} />
+          {children}
+        </div>
+      </ThemeProvider>
+    </NextIntlClientProvider>
+  );
+}
+`;
+  }
+
   const imports = codes
     .map((c) => `import ${importIdent(c)} from '@/messages/${c}.json';`)
     .join('\n');
@@ -204,6 +318,7 @@ export function Providers({ children, locale: propLocale }: { children: React.Re
  *  files are safe to regenerate; a hand-written provider is left alone. */
 export function looksGeneratedProviders(code: string): boolean {
   return code.includes(PROVIDERS_MARKER)
+    || code.includes('@revyme-providers')
     || (code.includes('messagesByLocale') && code.includes("'locale-change'"));
 }
 

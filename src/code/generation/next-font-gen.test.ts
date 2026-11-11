@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extractGoogleFontsFromCSS,
+  extractUsedFontWeightsFromFiles,
   fontNameToNextFontIdentifier,
   fontNameToCssVar,
   transformLayoutWithNextFonts,
@@ -225,6 +226,60 @@ body { font-family: 'Syne', sans-serif; }`,
       // Removes external @import so font is self-hosted at build time
       expect(transformed['app/globals.css']).not.toContain('@import');
       expect(transformed['app/globals.css']).toContain("var(--font-syne), 'Syne'");
+    });
+
+    it('prunes font weights to only those actually referenced across the site', () => {
+      const files: Record<string, string> = {
+        'app/layout.tsx': `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html><body>{children}</body></html>;
+}`,
+        'app/globals.css': `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
+:root {
+  --typo-heading-font: 'Syne', sans-serif;
+  --typo-heading-weight: 700;
+}`,
+        'app/page.tsx': `export default function Page() {
+  return (
+    <div>
+      <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800 }}>Hero</h1>
+    </div>
+  );
+}`,
+      };
+
+      const transformed = transformSiteFilesForNextFonts(files);
+
+      // Only weights 700 (from token) and 800 (from JSX) should be requested, NOT 400, 500, or 600!
+      expect(transformed['app/layout.tsx']).toContain("weight: ['700', '800']");
+      expect(transformed['app/layout.tsx']).not.toContain("'400'");
+      expect(transformed['app/layout.tsx']).not.toContain("'500'");
+      expect(transformed['app/layout.tsx']).not.toContain("'600'");
+    });
+  });
+
+  describe('extractUsedFontWeightsFromFiles', () => {
+    it('discovers font weights from tokens, CSS rules, and JSX inline styles', () => {
+      const files: Record<string, string> = {
+        'app/globals.css': `:root {
+  --typo-title-font: 'Playfair Display', serif;
+  --typo-title-weight: 600;
+}
+.sub {
+  font-family: 'Comfortaa', cursive;
+  font-weight: 700;
+}`,
+        'app/page.tsx': `export default function Page() {
+  return (
+    <div style={{ fontFamily: 'var(--typo-title-font)', fontWeight: 900 }}>
+      <p style={{ fontFamily: 'Comfortaa', fontWeight: 'bold' }}>Text</p>
+    </div>
+  );
+}`,
+      };
+
+      const map = extractUsedFontWeightsFromFiles(files);
+      expect(map.get('playfair display')).toEqual(new Set(['600', '900']));
+      expect(map.get('comfortaa')).toEqual(new Set(['700']));
     });
   });
 });

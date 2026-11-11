@@ -81,6 +81,7 @@ function Marquee({
     // Static (editor canvas) — no rAF, no listeners, no drag.
     if (isStatic) return;
 
+    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const sizeProp = vertical ? 'offsetHeight' : 'offsetWidth';
     const span = set[sizeProp];
     const sign = (direction === 'right' || direction === 'down') ? 1 : -1;
@@ -92,7 +93,32 @@ function Marquee({
         ? 'translateY(' + offset + 'px)'
         : 'translateX(' + offset + 'px)';
     };
+
+    if (prefersReduced) {
+      apply();
+      return;
+    }
+
+    let isVisible = true;
+    let observer = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(function (entries) {
+        const entry = entries[0];
+        const prevVisible = isVisible;
+        isVisible = entry ? entry.isIntersecting : true;
+        if (isVisible && !prevVisible) {
+          last = performance.now();
+          if (!raf) raf = requestAnimationFrame(tick);
+        }
+      }, { threshold: 0 });
+      observer.observe(box);
+    }
+
     function tick(now) {
+      if (!isVisible) {
+        raf = 0;
+        return;
+      }
       const dt = (now - last) / 1000;
       last = now;
       if (!paused && !dragging && span > 0) {
@@ -132,7 +158,8 @@ function Marquee({
     }
 
     return function () {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
+      if (observer) observer.disconnect();
       box.removeEventListener('mouseenter', enter);
       box.removeEventListener('mouseleave', leave);
       box.removeEventListener('pointerdown', onDown);

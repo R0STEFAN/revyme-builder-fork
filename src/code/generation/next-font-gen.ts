@@ -310,11 +310,104 @@ export function transformCssForNextFonts(css: string, fonts: GoogleFontSpec[]): 
 }
 
 /**
+ * Scans project files (.tsx, .jsx, .css) to discover actually referenced
+ * font weights for each font family.
+ *
+ * Checks:
+ * 1. CSS custom properties: --typo-<name>-font paired with --typo-<name>-weight
+ * 2. CSS rules: { font-family: ...; font-weight: ...; }
+ * 3. JSX inline styles: style={{ fontFamily: ..., fontWeight: ... }}
+ */
+export function extractUsedFontWeightsFromFiles(files: Record<string, string>): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+
+  const normalizeWeight = (w: string | number): string | null => {
+    const s = String(w).trim().replace(/['"]/g, '').toLowerCase();
+    if (s === 'normal') return '400';
+    if (s === 'bold') return '700';
+    if (/^[1-9]00$/.test(s)) return s;
+    return null;
+  };
+
+  const addWeight = (family: string, weight: string) => {
+    const cleanFam = family.trim().replace(/['"]/g, '').toLowerCase();
+    if (!cleanFam) return;
+    const cleanWeight = normalizeWeight(weight);
+    if (!cleanWeight) return;
+    let set = result.get(cleanFam);
+    if (!set) {
+      set = new Set<string>();
+      result.set(cleanFam, set);
+    }
+    set.add(cleanWeight);
+  };
+
+  // Pass 1: Parse tokens from CSS files
+  const tokens = new Map<string, string>();
+  for (const [path, code] of Object.entries(files)) {
+    if (!path.endsWith('.css')) continue;
+    const tokenRegex = /--([\w-]+)\s*:\s*([^;}]+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = tokenRegex.exec(code)) !== null) {
+      tokens.set(m[1], m[2].trim());
+    }
+  }
+
+  // Check typo tokens pair: --typo-<name>-font and --typo-<name>-weight
+  for (const [key, value] of tokens) {
+    if (key.startsWith('typo-') && key.endsWith('-font')) {
+      const prefix = key.slice(0, -5); // 'typo-<name>'
+      const weightVal = tokens.get(prefix + '-weight');
+      const fam = value.split(',')[0].trim().replace(/['"]/g, '');
+      if (fam && weightVal) {
+        addWeight(fam, weightVal);
+      }
+    }
+  }
+
+  // Pass 2: Scan CSS and JSX blocks { ... } for font-family + font-weight
+  const blockRegex = /\{([^}]+)\}/g;
+  for (const [path, code] of Object.entries(files)) {
+    if (!path.endsWith('.css') && !path.endsWith('.tsx') && !path.endsWith('.jsx')) continue;
+
+    let bm: RegExpExecArray | null;
+    while ((bm = blockRegex.exec(code)) !== null) {
+      const block = bm[1];
+      const ffMatch = block.match(/(?:font-family|fontFamily)\s*:\s*([^;,}\n]+)/);
+      const fwMatch = block.match(/(?:font-weight|fontWeight)\s*:\s*([^;,}\n]+)/);
+
+      if (ffMatch && fwMatch) {
+        let fam = ffMatch[1].trim();
+        if (fam.includes('var(')) {
+          const varMatch = fam.match(/var\(\s*--([\w-]+)/);
+          if (varMatch && tokens.has(varMatch[1])) {
+            fam = tokens.get(varMatch[1])!;
+          }
+        }
+        fam = fam.split(',')[0].trim().replace(/['"]/g, '');
+
+        let wt = fwMatch[1].trim();
+        if (wt.includes('var(')) {
+          const varMatch = wt.match(/var\(\s*--([\w-]+)/);
+          if (varMatch && tokens.has(varMatch[1])) {
+            wt = tokens.get(varMatch[1])!;
+          }
+        }
+        addWeight(fam, wt);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Transforms all project files for next/font/google support:
  * 1. Scans CSS files for Google Fonts.
- * 2. Injects next/font/google loaders into app/layout.tsx.
- * 3. Strips external Google Fonts @import from CSS files.
- * 4. Ensures font-family references fallback to the CSS variable.
+ * 2. Prunes font weights to only those actually referenced across the site.
+ * 3. Injects next/font/google loaders into app/layout.tsx.
+ * 4. Strips external Google Fonts @import from CSS files.
+ * 5. Ensures font-family references fallback to the CSS variable.
  */
 export function transformSiteFilesForNextFonts(files: Record<string, string>): Record<string, string> {
   const result = { ...files };
@@ -338,6 +431,18 @@ export function transformSiteFilesForNextFonts(files: Record<string, string>): R
   }
 
   if (allFonts.length === 0) return result;
+
+  // Prune requested weights to only actually referenced weights across project files
+  const usedWeightsByFamily = extractUsedFontWeightsFromFiles(result);
+  for (const font of allFonts) {
+    const used = usedWeightsByFamily.get(font.family.toLowerCase());
+    if (used && used.size > 0 && font.weights && font.weights.length > 0) {
+      const filtered = font.weights.filter((w) => used.has(w));
+      if (filtered.length > 0) {
+        font.weights = filtered;
+      }
+    }
+  }
 
   // Transform app/layout.tsx
   if (result['app/layout.tsx']) {

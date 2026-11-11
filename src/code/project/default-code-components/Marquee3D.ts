@@ -81,6 +81,24 @@ function Marquee3D({
 
     if (isStatic) return;
 
+    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    let isVisible = true;
+    let observer = null;
+    const ticks = [];
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(function (entries) {
+        const entry = entries[0];
+        const prevVisible = isVisible;
+        isVisible = entry ? entry.isIntersecting : true;
+        if (isVisible && !prevVisible) {
+          ticks.forEach(function (restart) { restart(); });
+        }
+      }, { threshold: 0 });
+      observer.observe(stage);
+    }
+
     const rafs = [];
     columnEls.forEach(function (col, ci) {
       const firstInner = col.firstElementChild;
@@ -90,6 +108,10 @@ function Marquee3D({
       let off = dir === 1 ? -span : 0;
       let last = performance.now();
       function tick(now) {
+        if (!isVisible) {
+          rafs[ci] = 0;
+          return;
+        }
         const dt = (now - last) / 1000;
         last = now;
         if (span > 0) {
@@ -100,11 +122,16 @@ function Marquee3D({
         }
         rafs[ci] = requestAnimationFrame(tick);
       }
+      ticks[ci] = function () {
+        last = performance.now();
+        if (!rafs[ci]) rafs[ci] = requestAnimationFrame(tick);
+      };
       rafs[ci] = requestAnimationFrame(tick);
     });
 
     return function () {
-      rafs.forEach(function (r) { cancelAnimationFrame(r); });
+      if (observer) observer.disconnect();
+      rafs.forEach(function (r) { if (r) cancelAnimationFrame(r); });
       columnEls.forEach(function (col) { col.style.transform = ''; });
     };
   }, [speed, gap, colCount, children, copies, isStatic]);

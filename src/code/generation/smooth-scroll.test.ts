@@ -53,9 +53,10 @@ describe('Smooth Scroll config', () => {
 });
 
 describe('Smooth Scroll codegen', () => {
-  it('the controller is valid TSX that imports Lenis and the data module, versioned', () => {
+  it('the controller is valid TSX that imports Lenis dynamically and the data module, versioned', () => {
     expect(() => parse(SMOOTH_SCROLL_CONTROLLER_SOURCE, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
-    expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).toContain("import Lenis from 'lenis';");
+    expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).toContain("import('lenis')");
+    expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).not.toContain("import Lenis from 'lenis';");
     expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).toContain("import { SMOOTH_SCROLL } from './smooth-scroll';");
     expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).toContain(SMOOTH_SCROLL_MARKER);
     expect(SMOOTH_SCROLL_CONTROLLER_SOURCE).toContain('prefers-reduced-motion');

@@ -41,6 +41,25 @@ describe('buildProvidersSource', () => {
     });
     expect(src).not.toContain('alert(1)');
   });
+
+  it('optimizes single-locale projects by omitting multi-locale listener machinery', () => {
+    const single = buildProvidersSource({
+      defaultLocale: 'en',
+      locales: [{ code: 'en', label: 'English' }],
+    });
+    // Omits multi-locale listeners and unused machinery
+    expect(single).not.toContain('locale-change');
+    expect(single).not.toContain('localeFromPath');
+    expect(single).not.toContain('messagesByLocale');
+    expect(single).not.toContain('setClientLocale');
+    // But retains single locale dictionary and NextIntlClientProvider
+    expect(single).toContain("import enMessages from '@/messages/en.json';");
+    expect(single).toContain('NextIntlClientProvider');
+    expect(single).toContain('const messages = enMessages;');
+    expect(single).toContain("const DEFAULT_LOCALE = 'en';");
+    // Retains link attributes runtime
+    expect(single).toContain('revymeNavClick');
+  });
 });
 
 // RTL (2026-10-16): v3 set <html dir="rtl"> for every RTL locale — the whole

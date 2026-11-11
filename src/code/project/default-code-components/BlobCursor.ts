@@ -91,9 +91,30 @@ function BlobCursor({
       return;
     }
 
+    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    let isVisible = true;
+    let observer = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(function (entries) {
+        const entry = entries[0];
+        const prevVisible = isVisible;
+        isVisible = entry ? entry.isIntersecting : true;
+        if (isVisible && !prevVisible) {
+          if (!raf) raf = requestAnimationFrame(tick);
+        }
+      }, { threshold: 0 });
+      observer.observe(box);
+    }
+
     let raf = 0;
 
     function tick() {
+      if (!isVisible) {
+        raf = 0;
+        return;
+      }
       let head = cursor;
       for (let i = 0; i < pos.length; i++) {
         // Each link is slightly lazier than the one before it.
@@ -118,8 +139,9 @@ function BlobCursor({
     raf = requestAnimationFrame(tick);
 
     return function () {
+      if (observer) observer.disconnect();
       window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [blobCount, blobSize, taper, follow, gooiness, isStatic]);
 

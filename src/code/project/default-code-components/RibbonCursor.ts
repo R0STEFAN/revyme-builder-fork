@@ -151,9 +151,30 @@ function RibbonCursor({
       return function () { ro.disconnect(); };
     }
 
+    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return function () { ro.disconnect(); };
+
+    let isVisible = true;
+    let observer = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(function (entries) {
+        const entry = entries[0];
+        const prevVisible = isVisible;
+        isVisible = entry ? entry.isIntersecting : true;
+        if (isVisible && !prevVisible) {
+          if (!raf) raf = requestAnimationFrame(tick);
+        }
+      }, { threshold: 0 });
+      observer.observe(canvas);
+    }
+
     let raf = 0;
 
     function tick() {
+      if (!isVisible) {
+        raf = 0;
+        return;
+      }
       phase += 0.06;
       solve();
       draw();
@@ -173,8 +194,9 @@ function RibbonCursor({
     raf = requestAnimationFrame(tick);
 
     return function () {
+      if (observer) observer.disconnect();
       window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
     };
   }, [points, segment, thickness, tension, colorHead, colorTail, wave, isStatic]);

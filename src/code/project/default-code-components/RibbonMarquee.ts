@@ -93,10 +93,32 @@ function RibbonMarquee({ speed = 9, direction = 'forward', pathStyle = 'wave', f
     }
 
     const dir = direction === 'reverse' ? -1 : 1;
+    const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    let isVisible = true;
+    let observer = null;
+    if (typeof IntersectionObserver !== 'undefined' && boxRef.current) {
+      observer = new IntersectionObserver(function (entries) {
+        const entry = entries[0];
+        const prevVisible = isVisible;
+        isVisible = entry ? entry.isIntersecting : true;
+        if (isVisible && !prevVisible) {
+          last = performance.now();
+          if (!raf) raf = requestAnimationFrame(tick);
+        }
+      }, { threshold: 0 });
+      observer.observe(boxRef.current);
+    }
+
     let base = 0;
     let last = performance.now();
     let raf = 0;
     function tick(now) {
+      if (!isVisible) {
+        raf = 0;
+        return;
+      }
       const dt = (now - last) / 1000;
       last = now;
       base = (base + dir * (100 / speed) * dt) % 100;
@@ -113,7 +135,8 @@ function RibbonMarquee({ speed = 9, direction = 'forward', pathStyle = 'wave', f
     raf = requestAnimationFrame(tick);
 
     return function () {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
+      if (observer) observer.disconnect();
       els.forEach(function (el) {
         el.style.offsetPath = '';
         el.style.offsetDistance = '';
