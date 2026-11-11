@@ -2,7 +2,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { listProjects } from './storage';
+import { listProjects, getProject } from './storage';
 
 export function assertProjectScopedPath(filePath: unknown): void {
   const p = String(filePath ?? '').trim();
@@ -646,6 +646,20 @@ function refreshModelsInBackground(): void {
             });
           }
 
+          let projectSummaryText = '';
+          try {
+            const pr = getProject(effectiveProjectId);
+            if (pr?.data?.files) {
+              const fileKeys = Object.keys(pr.data.files);
+              const pages = fileKeys.filter(k => k.startsWith('app/') && (k.endsWith('/page.client.tsx') || k.endsWith('/page.tsx') || k === 'app/page.tsx' || k === 'app/page.client.tsx'));
+              const components = fileKeys.filter(k => k.startsWith('components/') && (k.endsWith('.tsx') || k.endsWith('.jsx')));
+              projectSummaryText = [
+                pages.length > 0 ? `- Existing Pages: ${pages.slice(0, 10).join(', ')}${pages.length > 10 ? ` (+${pages.length - 10} more)` : ''}` : null,
+                components.length > 0 ? `- Existing Design Components: ${components.slice(0, 15).join(', ')}${components.length > 15 ? ` (+${components.length - 15} more)` : ''}` : null,
+              ].filter(Boolean).join('\n');
+            }
+          } catch { /* ignore */ }
+
           const revymeSystemPreamble = `You are the Revyme Website Builder AI Assistant.
 You are embedded directly inside Revyme Website Builder — a visual, code-first website builder where real Next.js and React code is the document.
 
@@ -654,29 +668,31 @@ You are embedded directly inside Revyme Website Builder — a visual, code-first
 - Active Branch: main
 - Bridge URL: http://127.0.0.1:8082
 - API URL: http://localhost:3333
-
+${projectSummaryText ? `${projectSummaryText}\n` : ''}
 [Available MCP Server: revyme-builder]
-You have direct access to the "revyme-builder" Model Context Protocol (MCP) server via call_mcp_tool:
+You have direct access to 280+ operations on the "revyme-builder" Model Context Protocol (MCP) server via call_mcp_tool:
+- fragments.insert: PRIMARY TOOL to insert semantic UI subtrees, sections, or elements in 1 atomic operation (with automatic data-ids, styles, and hover effects).
+  Arguments: { parentId: string, fragment: string, targetId?: string, where?: 'after' | 'before' | 'inside' }
+  (e.g. to add a button after an element: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'fragments.insert', Arguments: { parentId: 'root', targetId: 'heading-1', where: 'after', fragment: '<button className="px-4 py-2 bg-blue-600 text-white rounded-lg">Action</button>' } }))
 - styles.set: Set or update CSS styles on an element. Arguments: { nodeId: string, styles: Record<string, string>, viewport?: string }
   (e.g. to set color or background: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } }))
 - text.set: Update element text content. Arguments: { nodeId: string, text: string }
-- nodes.create: Create a new node. Arguments: { parentId: string, type: string, styles?: Record<string, string>, textContent?: string }
-- nodes.remove: Remove an element. Arguments: { nodeId: string }
+- extract_component: Turn an element into a reusable Design Component in components/. Arguments: { node_id: string, name: string }
+- create_variant: Declare a variant for a component (e.g. hover). Arguments: { component: string, variant: string, interaction?: 'hover' | 'pressed' }
+- set_variant: Style or configure a component variant. Arguments: { component: string, variant: string, styles: Record<string, string> }
+- set_pseudo_style: Set pseudo-class styles like :hover on a plain element without a component. Arguments: { nodeId: string, pseudo: 'hover', styles: Record<string, string> }
+- motion.set: Set Framer Motion animation / transition props on an element. Arguments: { nodeId: string, animation: Record<string, any> }
+- nodes.remove: Remove an element by data-id. Arguments: { nodeId: string }
 - nodes.get: Retrieve node attributes and current styles. Arguments: { nodeId: string }
-- motion.set: Set Framer Motion animation / transition props. Arguments: { nodeId: string, animation: Record<string, any> }
+- meta.tools: Self-documentation / Help for ANY command schema and examples. Arguments: { name: string }
+- meta.index: List registered operations and categories.
 - pages.list / pages.create / pages.update: Query and manage site pages
 - observe.selection: Get currently selected canvas element IDs
 - codeFiles.read / codeFiles.submit: Inspect or update project source files
 
-[Specialized Skills Available in .agents/skills/]
-- revyme-mcp (.agents/skills/revyme-mcp/SKILL.md): Comprehensive Revyme MCP v2 tool reference, schemas, and design guidelines.
-- revyme-director (.agents/skills/revyme-director/SKILL.md): Executive Art Director and page generation pipeline.
-- motion-framer (.agents/skills/motion-framer/SKILL.md): Production-ready Framer Motion animation patterns.
-- design (.agents/skills/design/SKILL.md): Visual design system, tokens, colors, typography, and spacing.
-
 [Operating Rules]
-1. Never run bash/terminal search commands (such as find, grep, or locate) to explore the project.
-2. Directly execute visual changes and style updates using the "revyme-builder" MCP server via call_mcp_tool.
+1. Never run bash/terminal search commands or read files from .agents/skills/ — all tool schemas, project details, and conventions are already pre-loaded in this prompt or introspectable via meta.tools.
+2. Directly execute visual changes, insertions, styling, and component/variant updates using the "revyme-builder" MCP server via call_mcp_tool.
 3. Keep changes precise, high quality, and aligned with modern visual design standards.
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 User request:
@@ -684,7 +700,7 @@ User request:
 
           const effectivePrompt = existingSessionId
             ? `[Revyme Context: Project ID: ${effectiveProjectId} | Chat: ${chatId}]
-[Revyme instruction: Always use revyme-builder MCP tools via call_mcp_tool (styles.set, text.set, nodes.*), never run bash commands.]
+[Revyme instruction: Directly execute visual changes via call_mcp_tool (fragments.insert, styles.set, extract_component, text.set, etc.). Do not run terminal search commands or read .agents/skills/.]
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 ${userPrompt}`
             : `${revymeSystemPreamble}${userPrompt}`;

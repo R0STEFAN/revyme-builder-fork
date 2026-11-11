@@ -39,6 +39,7 @@ export interface ActivityToolInput {
 /** One call inside a folded step, shown when the step is expanded. */
 export interface ActivitySubstep {
   label: string;
+  rawTool?: string;
   ms: number;
   ok: boolean | null;
   note?: string;
@@ -48,6 +49,7 @@ export interface ActivityStep {
   kind: ActivityKind;
   /** The one line shown, already phrased: "Added 15 layers, edited 1". */
   label: string;
+  rawTool?: string;
   /** Screenshots collected by this step, in call order. */
   images: string[];
   /** Humanized failure lines, deduped. Empty when everything landed. */
@@ -539,6 +541,7 @@ export function foldActivity(tools: ActivityToolInput[]): ActivityStep[] {
     // "Added 3 layers" for three bounced edits is a lie the user cannot check.
     const landed = t.ok !== false;
 
+    const toolCleanName = normalizeToolName(t.name);
     if (!current || current.kind !== eff.kind || eff.kind === 'view') {
       seal();
       current = {
@@ -546,13 +549,16 @@ export function foldActivity(tools: ActivityToolInput[]): ActivityStep[] {
         label: eff.kind === 'view' ? 'Viewed the canvas'
           : eff.kind === 'plan' ? 'Shared a plan'
           : eff.kind === 'review' ? 'Reviewed changes' : '',
+        rawTool: toolCleanName,
         images: [], failures: [], running: false, ms: 0, calls: 0, substeps: [],
       };
+    } else {
+      current.rawTool = toolCleanName;
     }
 
     current.calls += 1;
     current.ms += t.ms ?? 0;
-    current.substeps.push({ label: phraseOne(t), ms: t.ms ?? 0, ok: t.ok, note: t.note });
+    current.substeps.push({ label: phraseOne(t), rawTool: toolCleanName, ms: t.ms ?? 0, ok: t.ok, note: t.note });
     current.running = t.ok === null;
     if (t.image) current.images.push(t.image);
     if (t.ok === false && t.detail && !current.failures.includes(t.detail)) {

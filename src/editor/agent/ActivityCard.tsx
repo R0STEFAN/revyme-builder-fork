@@ -170,6 +170,11 @@ export function ActivityRow({ step, seconds, live }: { step: ActivityStep; secon
 
   const line = (
     <>
+      {step.rawTool && (
+        <span className="shrink-0 font-mono text-[10px] text-[var(--accent,#3b82f6)] bg-[var(--bg-secondary)] px-1 py-0.2 rounded border border-[var(--border-light)] font-semibold">
+          {step.rawTool}
+        </span>
+      )}
       {/* The shimmer runs on the TEXT, so a live row is the same size as a
           finished one and nothing shifts when the step completes. */}
       <span className={`truncate text-[12px] leading-relaxed ${live ? 'agent-step-live' : 'text-[var(--text-tertiary)]'}`}>
@@ -211,6 +216,11 @@ export function Substep({ sub }: { sub: ActivitySubstep }) {
   const hasNote = !!sub.note?.trim();
   const body = (
     <>
+      {sub.rawTool && (
+        <span className="shrink-0 font-mono text-[9px] text-[var(--accent,#3b82f6)] bg-[var(--bg-secondary)] px-1 py-0.2 rounded border border-[var(--border-light)] font-medium">
+          {sub.rawTool}
+        </span>
+      )}
       <span className="truncate text-[12px] leading-relaxed text-[var(--text-tertiary)]">{sub.label}</span>
       {t && <span className="shrink-0 text-[11px] text-[var(--text-disabled)]">{t}</span>}
       {hasNote && <span className="shrink-0 text-[10px] text-[var(--text-disabled)]">{open ? '▾' : '▸'}</span>}
