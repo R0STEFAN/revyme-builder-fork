@@ -256,9 +256,10 @@ export const agentEffortAtom = atomWithStorage<Record<string, AgentEffort>>('rev
  */
 export function effortOptionsFor(provider: AgentProviderConfig['provider'], model: string): { options: AgentEffort[]; fallback: AgentEffort } | null {
   if (provider !== 'revyme' && provider !== 'openrouter') return null;
-  if (model.endsWith('-low') || model.includes('-low')) return { options: ['low', 'medium', 'high'], fallback: 'low' };
-  if (model.endsWith('-medium') || model.includes('-medium')) return { options: ['low', 'medium', 'high'], fallback: 'medium' };
-  if (model.endsWith('-high') || model.includes('-high')) return { options: ['low', 'medium', 'high'], fallback: 'high' };
+  // Specific Antigravity CLI models have their effort tier already hard-wired into their model preset
+  if (model.includes('-low') || model.includes('-medium') || model.includes('-high') || model.startsWith('claude-') || model.startsWith('gpt-oss-')) {
+    return null;
+  }
   if (model.startsWith('anthropic/') || model.startsWith('claude')) return { options: ['low', 'medium', 'high'], fallback: 'low' };
   if (model.startsWith('openai/') || model.startsWith('gpt')) return { options: ['low', 'medium', 'high'], fallback: 'medium' };
   if (model.startsWith('google/') || model.startsWith('gemini')) return { options: ['low', 'medium', 'high'], fallback: 'high' };

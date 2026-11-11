@@ -737,14 +737,17 @@ ${userPrompt}`
           const args = [
             '-p',
             effectivePrompt,
-            '--effort',
-            reasoning,
             '--output-format',
             'stream-json',
             '--dangerously-skip-permissions',
           ];
           if (cleanModel) {
             args.push('--model', cleanModel);
+          }
+          // Do not pass --effort to models that already have pinned effort or reject it
+          const isFixedEffort = cleanModel.includes('-low') || cleanModel.includes('-medium') || cleanModel.includes('-high') || cleanModel.startsWith('claude-') || cleanModel.startsWith('gpt-oss-');
+          if (reasoning && !isFixedEffort) {
+            args.push('--effort', reasoning);
           }
           if (existingSessionId) {
             args.push('--conversation', existingSessionId);
