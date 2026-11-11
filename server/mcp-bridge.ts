@@ -477,11 +477,23 @@ function resolveAgentBinary(preferred: string): string {
       const localAgy = path.join(process.env.LOCALAPPDATA || '', 'agy', 'bin', 'agy.exe');
       if (fs.existsSync(localAgy)) return localAgy;
     }
-    if (fs.existsSync('/home/rost/.local/bin/agy')) return '/home/rost/.local/bin/agy';
+    const home = process.env.HOME || '';
+    if (home) {
+      const localAgy = path.join(home, '.local', 'bin', 'agy');
+      if (fs.existsSync(localAgy)) return localAgy;
+    }
+    if (fs.existsSync('/usr/local/bin/agy')) return '/usr/local/bin/agy';
+    if (fs.existsSync('/usr/bin/agy')) return '/usr/bin/agy';
     return 'agy';
   }
   if (preferred === 'codex') {
-    if (fs.existsSync('/home/rost/.local/bin/codex')) return '/home/rost/.local/bin/codex';
+    const home = process.env.HOME || '';
+    if (home) {
+      const localCodex = path.join(home, '.local', 'bin', 'codex');
+      if (fs.existsSync(localCodex)) return localCodex;
+    }
+    if (fs.existsSync('/usr/local/bin/codex')) return '/usr/local/bin/codex';
+    if (fs.existsSync('/usr/bin/codex')) return '/usr/bin/codex';
     return 'codex';
   }
   return preferred;
@@ -700,14 +712,16 @@ You have direct access to 280+ operations on the "revyme-builder" Model Context 
 - meta.index: List registered operations and categories.
 - pages.list / pages.create / pages.update: Query and manage site pages
 - observe.selection: Get currently selected canvas element IDs
-- codeFiles.read / codeFiles.submit: Inspect or update project source files
+- codeFiles.read: Read raw source files for inspection.
+- codeFiles.submit: ONLY for Code Components (components/*.tsx with /** @controls { ... } */) and non-canvas configs. STRICTLY FORBIDDEN for canvas pages or regular design components!
 
 [Operating Rules]
 1. Never run bash/terminal search commands or read files from .agents/skills/ — all tool schemas, project details, and conventions are already pre-loaded in this prompt or introspectable via meta.tools.
 2. Directly execute visual changes, insertions, styling, and component/variant updates using the "revyme-builder" MCP server via call_mcp_tool.
 3. Keep changes precise, high quality, and aligned with modern visual design standards.
 4. STRICT INVARIANT: Never run bash / PowerShell terminal commands (like run_command) to inspect, edit, or search files in data/projects/ or the repository. Never create scripts to bypass the system.
-5. IF PLAN_VALIDATION_FAILED OCCURS: If an MCP tool returns PLAN_VALIDATION_FAILED (e.g. FORBIDDEN_MIN_CONTENT_HEIGHT or FIXED_DEPTH), it indicates invalid layout styles on nodes in the page. You MUST resolve it directly using MCP tools — e.g. call styles.set({ nodeId: '<offending-node-id>', styles: { height: 'auto' } }). NEVER try to hack around validation with terminal scripts.
+5. NEVER USE codeFiles.submit FOR CANVAS PAGES: Direct creation or modification of canvas pages (page.client.tsx, LayoutClient.tsx) or design components via codeFiles.submit is strictly forbidden (throws CANVAS_PAGE_SUBMISSION_DISALLOWED / DESIGN_COMPONENT_SUBMISSION_DISALLOWED). Use fragments.insert, sections.insert, nodes.create, styles.set, extract_component, or components.create instead.
+6. IF PLAN_VALIDATION_FAILED OCCURS: If an MCP tool returns PLAN_VALIDATION_FAILED (e.g. FORBIDDEN_MIN_CONTENT_HEIGHT or FIXED_DEPTH), it indicates invalid layout styles on nodes in the page. You MUST resolve it directly using MCP tools — e.g. call styles.set({ nodeId: '<offending-node-id>', styles: { height: 'auto' } }). NEVER try to hack around validation with terminal scripts.
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 User request:
 `;
