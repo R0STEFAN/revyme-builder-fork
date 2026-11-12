@@ -16,7 +16,8 @@ import { trace } from '@/shared/debug-trace';
 
 // ─── Transform parse/format (from existing TransformControl.tsx) ─────────────
 
-interface TransformData {
+export interface TransformData {
+  translateX: number; translateY: number;
   rotateZ: number; rotateX: number; rotateY: number;
   scaleX: number; scaleY: number;
   skewX: number; skewY: number;
@@ -47,8 +48,8 @@ export function transformFieldValue(n: number, neutral: number, isScopedWrite: b
   return n === neutral && !isScopedWrite ? '' : String(n);
 }
 
-function parseTransform(raw: string | undefined): TransformData {
-  const def: TransformData = { rotateZ: 0, rotateX: 0, rotateY: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0, perspective: 0, rest: '' };
+export function parseTransform(raw: string | undefined): TransformData {
+  const def: TransformData = { translateX: 0, translateY: 0, rotateZ: 0, rotateX: 0, rotateY: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0, perspective: 0, rest: '' };
   if (!raw || raw === 'none') return def;
   let rest = raw;
   const extract = (re: RegExp): number | null => {
@@ -57,6 +58,25 @@ function parseTransform(raw: string | undefined): TransformData {
     rest = rest.replace(m[0], '').trim();
     return parseFloat(m[1]);
   };
+
+  const tx = extract(/translateX\(\s*(-?[\d.]+)px\s*\)/);
+  const ty = extract(/translateY\(\s*(-?[\d.]+)px\s*\)/);
+  let translateX = tx;
+  let translateY = ty;
+
+  const transMatch = rest.match(/translate\(\s*(-?[\d.]+)px(?:\s*,\s*(-?[\d.]+)px)?\s*\)/);
+  if (transMatch) {
+    rest = rest.replace(transMatch[0], '').trim();
+    if (translateX === null) translateX = parseFloat(transMatch[1]);
+    if (translateY === null) translateY = parseFloat(transMatch[2] ?? '0');
+  }
+
+  const trans3dMatch = rest.match(/translate3d\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/);
+  if (trans3dMatch) {
+    rest = rest.replace(trans3dMatch[0], '').trim();
+    if (translateX === null) translateX = parseFloat(trans3dMatch[1]);
+    if (translateY === null) translateY = parseFloat(trans3dMatch[2]);
+  }
 
   const perspective = extract(/perspective\(\s*(-?[\d.]+)px\s*\)/) ?? 0;
   const rotateZ = extract(/rotateZ\(\s*(-?[\d.]+)deg\s*\)/) ?? extract(/rotate\(\s*(-?[\d.]+)deg\s*\)/) ?? 0;
@@ -73,13 +93,22 @@ function parseTransform(raw: string | undefined): TransformData {
   const skewX = extract(/skewX\(\s*(-?[\d.]+)deg\s*\)/) ?? 0;
   const skewY = extract(/skewY\(\s*(-?[\d.]+)deg\s*\)/) ?? 0;
 
-  return { rotateZ, rotateX, rotateY, scaleX: scaleX ?? 1, scaleY: scaleY ?? 1, skewX, skewY, perspective, rest: rest.trim() };
+  return { translateX: translateX ?? 0, translateY: translateY ?? 0, rotateZ, rotateX, rotateY, scaleX: scaleX ?? 1, scaleY: scaleY ?? 1, skewX, skewY, perspective, rest: rest.trim() };
 }
 
-function formatTransform(v: TransformData): string {
+export function formatTransform(v: TransformData): string {
   const parts: string[] = [];
   if (v.perspective > 0) parts.push(`perspective(${v.perspective}px)`);
   if (v.rest) parts.push(v.rest);
+  if (v.translateX !== 0 || v.translateY !== 0) {
+    if (v.translateX !== 0 && v.translateY !== 0) {
+      parts.push(`translate(${v.translateX}px, ${v.translateY}px)`);
+    } else if (v.translateX !== 0) {
+      parts.push(`translateX(${v.translateX}px)`);
+    } else {
+      parts.push(`translateY(${v.translateY}px)`);
+    }
+  }
   if (v.rotateZ !== 0) parts.push(`rotate(${v.rotateZ}deg)`);
   if (v.rotateX !== 0) parts.push(`rotateX(${v.rotateX}deg)`);
   if (v.rotateY !== 0) parts.push(`rotateY(${v.rotateY}deg)`);
@@ -92,21 +121,19 @@ function formatTransform(v: TransformData): string {
   return parts.join(' ') || 'none';
 }
 
-// Matches every flavour of translate (`translate`, `translateX`, `translateY`,
-// `translateZ`, `translate3d`). The Transform control intentionally ignores
-// translates — they're managed by the position/anchor system (e.g. centering
-// with `translate(-50%, -50%)`) and should NOT be surfaced as an editable
-// transform here.
-const TRANSLATE_RE = /translate(?:3d|X|Y|Z)?\([^)]*\)/g;
+// Percentage-based translates (e.g. centering with translate(-50%, -50%)) are
+// managed by the position/anchor system and stay in rest, whereas pixel-based
+// offset translates are editable via the Translate X/Y inputs.
+const CENTERING_TRANSLATE_RE = /translate(?:3d|X|Y|Z)?\([^)]*%\s*\)/g;
 
 function stripTranslates(raw: string | undefined): string {
   if (!raw) return '';
-  return raw.replace(TRANSLATE_RE, '').replace(/\s+/g, ' ').trim();
+  return raw.replace(CENTERING_TRANSLATE_RE, '').replace(/\s+/g, ' ').trim();
 }
 
 function extractTranslates(raw: string | undefined): string {
   if (!raw) return '';
-  return (raw.match(TRANSLATE_RE) || []).join(' ').trim();
+  return (raw.match(CENTERING_TRANSLATE_RE) || []).join(' ').trim();
 }
 
 // ─── Atom ────────────────────────────────────────────────────────────────────
@@ -155,6 +182,8 @@ function TransformAtom() {
   const parsed = parseTransform(value);
   const t: TransformData = isMotion
     ? {
+        translateX: numOr(allProps.x) ?? parsed.translateX,
+        translateY: numOr(allProps.y) ?? parsed.translateY,
         rotateZ: numOr(allProps.rotate ?? (allProps as any).rotateZ) ?? parsed.rotateZ,
         rotateX: numOr((allProps as any).rotateX) ?? parsed.rotateX,
         rotateY: numOr((allProps as any).rotateY) ?? parsed.rotateY,
@@ -167,7 +196,7 @@ function TransformAtom() {
       }
     : parsed;
 
-  const motionHasTransform = !!(t.rotateZ || t.rotateX || t.rotateY || t.skewX || t.skewY
+  const motionHasTransform = !!(t.translateX || t.translateY || t.rotateZ || t.rotateX || t.rotateY || t.skewX || t.skewY
     || t.scaleX !== 1 || t.scaleY !== 1 || t.perspective);
   // `visibleValue` ignores translate*() — see stripTranslates comment.
   const visibleValue = stripTranslates(value);
@@ -205,11 +234,13 @@ function TransformAtom() {
   };
   /** Write a single transform field — see `transformFieldValue` for why the
    *  neutral-value collapse is BASE-only. */
-  const setField = (field: keyof TransformData, v: number, neutral: number) => {
+  const setField = (field: keyof TransformData, v: number, _neutral: number) => {
     if (!isMotion) { update({ [field]: v } as Partial<TransformData>); return; }
     const out = (n: number, neu: number) => transformFieldValue(n, neu, isScopedWrite);
     trace.action('transform:setMotionField', { field, v });
     switch (field) {
+      case 'translateX': onChangeMultiple({ x: out(v, 0) ? `${v}px` : '' }); break;
+      case 'translateY': onChangeMultiple({ y: out(v, 0) ? `${v}px` : '' }); break;
       case 'rotateZ': onChangeMultiple({ rotate: out(v, 0) }); break;
       case 'rotateX': onChangeMultiple({ rotateX: out(v, 0) }); break;
       case 'rotateY': onChangeMultiple({ rotateY: out(v, 0) }); break;
@@ -235,7 +266,7 @@ function TransformAtom() {
           // position/anchor system).
           const handleRemove = () => {
             if (isMotion) {
-              onChangeMultiple({ rotate: '', rotateX: '', rotateY: '', skewX: '', skewY: '', scaleX: '', scaleY: '', scale: '', transformPerspective: '' });
+              onChangeMultiple({ x: '', y: '', rotate: '', rotateX: '', rotateY: '', skewX: '', skewY: '', scaleX: '', scaleY: '', scale: '', transformPerspective: '' });
             } else {
               onChange(extractTranslates(value));
             }
@@ -254,6 +285,14 @@ function TransformAtom() {
       </span>
       <ToolPopup isOpen={isOpen} onClose={() => setIsOpen(false)} title="Transform" anchorRef={btnRef}>
         <div className="flex flex-col gap-2">
+          {/* Translate */}
+          <div className="flex items-center justify-between w-full">
+            <ControlLabel label="Translate" property="transform" plain forceShow />
+            <div className="flex items-center gap-1 w-full">
+              <ToolInput value={String(t.translateX)} {...fieldInputProps('translateX', 0)} step={1} chevronLabel="X" />
+              <ToolInput value={String(t.translateY)} {...fieldInputProps('translateY', 0)} step={1} chevronLabel="Y" />
+            </div>
+          </div>
           {/* Rotate */}
           <div className="flex items-center justify-between w-full">
             <ControlLabel label="Rotate" property="transform" plain forceShow />

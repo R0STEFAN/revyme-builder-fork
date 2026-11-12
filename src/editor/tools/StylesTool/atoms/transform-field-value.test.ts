@@ -17,7 +17,7 @@
 // control; see project_variant_rotate_zero_dropped.
 
 import { describe, it, expect } from 'vitest';
-import { transformFieldValue } from './TransformControl';
+import { transformFieldValue, parseTransform, formatTransform } from './TransformControl';
 
 describe('transformFieldValue', () => {
   describe('BASE write (primary viewport / default variant)', () => {
@@ -60,5 +60,71 @@ describe('transformFieldValue', () => {
   it('treats -0 as neutral on a base write', () => {
     // parseFloat('-0') === -0, and -0 === 0 in JS — the collapse must still fire.
     expect(transformFieldValue(-0, 0, false)).toBe('');
+  });
+});
+
+describe('parseTransform & formatTransform (translate support)', () => {
+  it('parses translateY(16px)', () => {
+    const data = parseTransform('translateY(16px)');
+    expect(data.translateY).toBe(16);
+    expect(data.translateX).toBe(0);
+    expect(data.rest).toBe('');
+  });
+
+  it('parses translateX(24px)', () => {
+    const data = parseTransform('translateX(24px)');
+    expect(data.translateX).toBe(24);
+    expect(data.translateY).toBe(0);
+  });
+
+  it('parses translate(10px, 20px)', () => {
+    const data = parseTransform('translate(10px, 20px)');
+    expect(data.translateX).toBe(10);
+    expect(data.translateY).toBe(20);
+  });
+
+  it('parses translate3d(5px, 15px, 0px)', () => {
+    const data = parseTransform('translate3d(5px, 15px, 0px)');
+    expect(data.translateX).toBe(5);
+    expect(data.translateY).toBe(15);
+  });
+
+  it('preserves percentage centering translate(-50%, -50%) in rest', () => {
+    const data = parseTransform('translate(-50%, -50%) translateY(16px) rotate(45deg)');
+    expect(data.translateY).toBe(16);
+    expect(data.rotateZ).toBe(45);
+    expect(data.rest).toBe('translate(-50%, -50%)');
+  });
+
+  it('formats translateX and translateY cleanly', () => {
+    expect(formatTransform({
+      translateX: 0, translateY: 16,
+      rotateZ: 0, rotateX: 0, rotateY: 0,
+      scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
+      perspective: 0, rest: ''
+    })).toBe('translateY(16px)');
+
+    expect(formatTransform({
+      translateX: 12, translateY: 0,
+      rotateZ: 0, rotateX: 0, rotateY: 0,
+      scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
+      perspective: 0, rest: ''
+    })).toBe('translateX(12px)');
+
+    expect(formatTransform({
+      translateX: 10, translateY: 20,
+      rotateZ: 0, rotateX: 0, rotateY: 0,
+      scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
+      perspective: 0, rest: ''
+    })).toBe('translate(10px, 20px)');
+  });
+
+  it('preserves rest centering while formatting pixel translates', () => {
+    expect(formatTransform({
+      translateX: 0, translateY: 16,
+      rotateZ: 0, rotateX: 0, rotateY: 0,
+      scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
+      perspective: 0, rest: 'translate(-50%, -50%)'
+    })).toBe('translate(-50%, -50%) translateY(16px)');
   });
 });
