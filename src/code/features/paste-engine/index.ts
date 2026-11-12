@@ -9,7 +9,10 @@
 export {
   copyNodes,
   hasClipboard,
+  getClipboardData,
+  setClipboardData,
   setExternalClipboardData,
+  CLIPBOARD_STORAGE_KEY,
 } from './copy';
 
 // Paste

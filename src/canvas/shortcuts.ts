@@ -496,7 +496,12 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
 
   cleanups.push(keyboard.register({ key: 'c', ctrl: true, label: 'Copy', category: 'general', handler: () => {
     const ids = selectedIdsRef.current;
-    if (ids.length > 0) copyNodes(ids, nodesRef.current);
+    if (ids.length > 0) {
+      const res = copyNodes(ids, nodesRef.current);
+      if (res.success) {
+        toast.success(`Copied ${res.nodeCount} element${res.nodeCount > 1 ? 's' : ''}`);
+      }
+    }
   }}));
 
   cleanups.push(keyboard.register({ key: 'v', ctrl: true, label: 'Paste', category: 'general', handler: () => {
@@ -751,6 +756,20 @@ export function registerShortcuts(refs: ShortcutRefs): () => void {
 
     const text = e.clipboardData?.getData('text/plain')?.trim();
     if (!text) return;
+
+    if (text.startsWith('revyme-node:')) {
+      e.preventDefault();
+      e.stopPropagation();
+      trace.action('revyme-node-paste:detected-from-event');
+      executePaste(
+        nodesRef.current,
+        contentRef.current,
+        selectedIdRef.current,
+        (id) => setSelectedIds(id ? [id] : []),
+        handleNodeMouseDown,
+      );
+      return;
+    }
 
     if (isComponentUrl(text)) {
       e.preventDefault();

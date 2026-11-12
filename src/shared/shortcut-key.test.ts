@@ -47,6 +47,21 @@ describe('isShortcutKey — any keyboard layout', () => {
     expect(physicalShortcutKey(ev('é', 'Digit2'))).toBe('2'); // AZERTY / Czech
   });
 
+  it('Linux / IBus / XKB: control characters and Cyrillic with Ctrl match shortcuts', () => {
+    // Ctrl+C emitting ASCII 3 (\x03)
+    expect(isShortcutKey({ key: '\x03', code: 'KeyC', ctrlKey: true }, 'c')).toBe(true);
+    // Ctrl+V emitting ASCII 22 (\x16)
+    expect(isShortcutKey({ key: '\x16', code: 'KeyV', ctrlKey: true }, 'v')).toBe(true);
+    // Ctrl+D emitting ASCII 4 (\x04)
+    expect(isShortcutKey({ key: '\x04', code: 'KeyD', ctrlKey: true }, 'd')).toBe(true);
+    // Cyrillic letters with Ctrl (e.g. Ukrainian/Russian layout)
+    expect(isShortcutKey({ key: 'с', code: 'KeyC', ctrlKey: true }, 'c')).toBe(true);
+    expect(isShortcutKey({ key: 'м', code: 'KeyV', ctrlKey: true }, 'v')).toBe(true);
+    expect(isShortcutKey({ key: 'в', code: 'KeyD', ctrlKey: true }, 'd')).toBe(true);
+    // Unidentified with valid code
+    expect(isShortcutKey({ key: 'Unidentified', code: 'KeyC', ctrlKey: true }, 'c')).toBe(true);
+  });
+
   it('named keys and keys outside letters/digits have no physical key', () => {
     expect(physicalShortcutKey(ev('Escape', 'Escape'))).toBeNull();
     expect(physicalShortcutKey(ev('ñ', 'Semicolon'))).toBeNull(); // Spanish

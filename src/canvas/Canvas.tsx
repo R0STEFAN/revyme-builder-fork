@@ -40,12 +40,13 @@ import ToolbarGhost from './ui/ToolbarGhost';
 import CanvasRulers from './ui/CanvasRulers';
 import RulerGuides from './ui/RulerGuides';
 import Comments from './ui/Comments';
-import { getContentRoot, getViewportPrefix, setStyleContext, setUpdatingFromCanvasFlagger, setForceCanvasRender, setReplicaOverridesGetter, getNodeHitsAtPoint, injectCanvasCSS, removeCanvasCSS, forceCanvasRender } from './node-ops';
+import { getContentRoot, getViewportPrefix, setStyleContext, setUpdatingFromCanvasFlagger, setForceCanvasRender, setReplicaOverridesGetter, getNodeHitsAtPoint, injectCanvasCSS, removeCanvasCSS, forceCanvasRender, vpIdFromPrefix, redirectToComponentInstance, redirectToFitTextWrapper } from './node-ops';
+import { getScreenCornersById } from '@/canvas/resize/geometry-utils';
 import { reclaimKeyboardFocus } from './reclaim-keyboard-focus';
 import { registerTextEditCommitter } from './text-edit-committer';
 // redirectToComponentInstance, redirectToCollectionTemplate, redirectToFitTextWrapper,
 // redirectLayoutNodeToViewport, getIsolatedChildOfGroup, vpIdFromPrefix,
-import { isGhostNodeId } from '@/shared/ghost-id';
+import { isGhostNodeId, stripGhostSuffix } from '@/shared/ghost-id';
 import { containerOverridesAtom, getOverridesAtWidth } from '@/code/stores/container-query-store';
 import { collectionSchemasAtom, collectionDataAtom } from '@/code/stores/cms-store';
 import { cmsPageMetaAtom, activePreviewItemAtom } from '@/code/stores/cms-page-store';
@@ -200,7 +201,7 @@ export default function Canvas() {
   const setCommentModeActive = useSetAtom(commentModeActiveAtom);
   const setShapeEditingId = useSetAtom(shapeEditingIdAtom);
   const setSelectedPoint = useSetAtom(selectedPointAtom);
-  const setGroupEditingId = useSetAtom(groupEditingIdAtom);
+  const [groupEditingId, setGroupEditingId] = useAtom(groupEditingIdAtom);
   const [overlayEditingId, setOverlayEditingId] = useAtom(overlayEditingIdAtom);
   const overlayCallsForHeader = useAtomValue(overlayCallsAtom);
   // Overlay edit mode → the viewport header becomes the exit affordance
@@ -1303,13 +1304,72 @@ export default function Canvas() {
         const headerEl = (e.target as HTMLElement).closest?.('[data-viewport-header]');
         const onViewportHeader = headerEl != null;
         const vpHeaderId = headerEl?.getAttribute('data-viewport-header') || null;
+
+        if (onViewportHeader) {
+          setContextMenu({
+            show: true,
+            x: e.clientX,
+            y: e.clientY,
+            nodeId: null,
+            viewportHeader: true,
+            viewportId: vpHeaderId ?? undefined,
+          });
+          return;
+        }
+
+        // Hit-test through bridge to find the element under cursor
+        const hits = getNodeHitsAtPoint(e.clientX, e.clientY);
+        let targetNodeId: string | null = null;
+        let targetVpId: string | undefined = undefined;
+
+        if (hits.length > 0) {
+          const { id: realId, vpPrefix } = hits[0];
+          targetVpId = vpIdFromPrefix(vpPrefix);
+          setInteractingViewport(targetVpId);
+
+          const canonicalId = stripGhostSuffix(realId);
+          const currentNodes = nodesRef.current;
+          let targetId = redirectToComponentInstance(canonicalId, currentNodes, groupEditingId);
+          const fitTarget = redirectToFitTextWrapper(targetId, currentNodes);
+          if (fitTarget) targetId = fitTarget;
+          targetNodeId = targetId;
+
+          if (!selectedIdsRef.current.includes(targetNodeId)) {
+            setSelectedIds([targetNodeId]);
+          }
+        } else {
+          // Check if right-clicked inside an already selected SVG's bounding box
+          const currentSel = selectedIdsRef.current;
+          if (currentSel.length === 1 && !groupEditingId) {
+            const selNode = nodesRef.current.get(currentSel[0]);
+            if (selNode?.type === 'svg') {
+              const selVpId = interactingVpIdVal;
+              const c = getScreenCornersById(currentSel[0], selVpId);
+              if (c) {
+                const minX = Math.min(c.TL.x, c.TR.x, c.BR.x, c.BL.x);
+                const maxX = Math.max(c.TL.x, c.TR.x, c.BR.x, c.BL.x);
+                const minY = Math.min(c.TL.y, c.TR.y, c.BR.y, c.BL.y);
+                const maxY = Math.max(c.TL.y, c.TR.y, c.BR.y, c.BL.y);
+                if (e.clientX >= minX && e.clientX <= maxX && e.clientY >= minY && e.clientY <= maxY) {
+                  targetNodeId = currentSel[0];
+                  targetVpId = selVpId;
+                }
+              }
+            }
+          }
+
+          if (!targetNodeId) {
+            setSelectedIds([]);
+          }
+        }
+
         setContextMenu({
           show: true,
           x: e.clientX,
           y: e.clientY,
-          nodeId: onViewportHeader ? null : selectedId,
-          viewportHeader: onViewportHeader,
-          viewportId: vpHeaderId ?? undefined,
+          nodeId: targetNodeId,
+          viewportHeader: false,
+          viewportId: targetVpId,
         });
       }}
       style={{

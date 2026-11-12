@@ -51,6 +51,7 @@ export function executePaste(
   selectedId: string | null,
   setSelectedId: (id: string | null) => void,
   _handleNodeMouseDown: (nodeId: string, e: MouseEvent) => void,
+  options?: { forcePosition?: { x: number; y: number } },
 ): void {
   // Read container size for 'visible-center' math. We query
   // `[data-canvas-viewport]` (the outer wrapper that holds the iframe + grid)
@@ -79,6 +80,7 @@ export function executePaste(
       activeFilePath,
       overrideClipboard,
       parentHasLayout: resolveParentHasLayout(nodes, selectedId ?? undefined, interactingVpId),
+      forcePosition: options?.forcePosition,
     });
 
   // Mirror old behaviour: select the first newly-created node so the user
@@ -89,9 +91,9 @@ export function executePaste(
   // in the parsed nodes map yet — it unmounts its content (panel "disappears")
   // and remounts on the next render after flush ("reappears"). The visible
   // result is a one-frame flash on every paste.
-  const finish = (result: PasteResult): void => {
-    if (!result.success && result.userFacing && result.message) {
-      toast.error(result.message);
+  const finish = (result: PasteResult, skipSuccessToast?: boolean): void => {
+    if (!result.success) {
+      toast.error(result.message || 'Paste failed');
       return;
     }
     if (result.success && result.createdIds.length > 0) {
@@ -100,6 +102,9 @@ export function executePaste(
       if (result.attachedOverlayId) {
         trace.action('paste:enter-overlay-edit', { overlayId: result.attachedOverlayId, hooked: !!pasteUiHooks?.enterOverlayEdit });
         pasteUiHooks?.enterOverlayEdit?.(result.attachedOverlayId);
+      }
+      if (!skipSuccessToast) {
+        toast.success(`Pasted ${result.createdIds.length} element${result.createdIds.length > 1 ? 's' : ''}`);
       }
     }
   };
@@ -139,7 +144,7 @@ export function executePaste(
   const tId = toast.loading(`Linking ${count} component${count === 1 ? '' : 's'}…`);
   void linkClipboardComponents(data, activeFilePath)
     .then((link) => {
-      finish(runEngine({ ...data, nodes: applyTagRenames(data.nodes, link.tagRenames) }));
+      finish(runEngine({ ...data, nodes: applyTagRenames(data.nodes, link.tagRenames) }), true);
       if (link.failed.length > 0) {
         toast.error(`Pasted, but ${link.failed.length} component${link.failed.length === 1 ? '' : 's'} could not be linked: ${link.failed.join(', ')}`, { id: tId, duration: 6000 });
       } else if (link.linked > 0) {

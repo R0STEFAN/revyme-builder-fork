@@ -47,6 +47,27 @@ async function readClipboardImage(): Promise<Blob | null> {
   }
   try {
     const items = await navigator.clipboard.read();
+    // 1. If clipboard contains a Revyme node marker in text/plain, do NOT treat as image paste.
+    for (const item of items) {
+      if (item.types.includes('text/plain')) {
+        try {
+          const textBlob = await item.getType('text/plain');
+          const text = await textBlob.text();
+          if (text.trim().startsWith('revyme-node:')) {
+            return null;
+          }
+        } catch { /* ignore text read error */ }
+      }
+    }
+    if (navigator.clipboard.readText) {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text?.trim().startsWith('revyme-node:')) {
+          return null;
+        }
+      } catch { /* ignore readText error */ }
+    }
+
     for (const item of items) {
       for (const type of item.types) {
         if (type.startsWith('image/')) {
@@ -69,6 +90,9 @@ async function readClipboardImage(): Promise<Blob | null> {
  *  it doesn't have access to a DataTransfer. */
 export function hasClipboardImageInDataTransfer(clipboardData: DataTransfer | null): boolean {
   if (!clipboardData) return false;
+  const text = clipboardData.getData('text/plain')?.trim();
+  if (text?.startsWith('revyme-node:')) return false;
+
   for (const item of clipboardData.items) {
     if (item.kind === 'file' && item.type.startsWith('image/')) return true;
   }

@@ -194,7 +194,7 @@ class KeyboardManager {
     for (const spec of this.shortcuts) {
       // Match key (e.key, or the physical key)
       const keys = Array.isArray(spec.key) ? spec.key : [spec.key];
-      if (!keys.some(k => { const kl = k.toLowerCase(); return kl === keyLower || (physicalKey !== null && kl === physicalKey); })) continue;
+      if (!keys.some(k => isShortcutKey(e, k))) continue;
 
       // Match modifiers (undefined = must NOT be pressed)
       if ((spec.ctrl ?? false) !== ctrl) continue;

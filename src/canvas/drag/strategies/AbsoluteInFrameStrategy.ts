@@ -129,6 +129,7 @@ export class AbsoluteInFrameStrategy implements DragStrategy {
    *  overflow is pre-existing, exit requires the CURSOR to leave the parent.
    *  null = not yet sampled (captured on the first exit-check frame). */
   private startedNotFullyInside: boolean | null = null;
+  private parentClipsOverflow = false;
   private exitedParent = false;
   private candidateSiblingId: string | null = null;
   private framesInCandidateSibling = 0;
@@ -352,6 +353,10 @@ export class AbsoluteInFrameStrategy implements DragStrategy {
     // the unparent flow: you have to drag the element completely
     // off the viewport before it pops out to canvas.
     const parentNode = context.nodes.get(this.parentId);
+    const parentOverflow = (this.parentId ? findNodeComputedStyle(this.parentId, this.vpId, 'overflow') : null)
+      || parentNode?.styles?.overflow
+      || '';
+    this.parentClipsOverflow = parentOverflow === 'hidden' || parentOverflow === 'clip';
     const grandparentId = parentNode?.parentId ?? null;
     const grandparentNode = grandparentId ? context.nodes.get(grandparentId) : null;
     // When grandparent is flex/grid, exit must go to CANVAS (not grandparent
@@ -1511,6 +1516,24 @@ export class AbsoluteInFrameStrategy implements DragStrategy {
           } else {
             // Axis-aligned, or a corner read failed — plain AABB exit.
             out = aabbExit(elRect, parentRect, this.exitDestination);
+          }
+        }
+        const rootRect = context.nodes.has('root') ? findNodeRect('root', this.vpId) : null;
+        const cursorOutsideSite = rootRect && (
+          mouseScreen.x < rootRect.left || mouseScreen.x > rootRect.left + rootRect.width
+          || mouseScreen.y < rootRect.top || mouseScreen.y > rootRect.top + rootRect.height
+        );
+        if (cursorOutsideSite) {
+          this.exitDestination = 'canvas';
+          this.grandparentId = null;
+          out = true;
+        } else if (this.parentClipsOverflow) {
+          const cursorOutsideParent = mouseScreen.x < parentRect.left
+            || mouseScreen.x > parentRect.left + parentRect.width
+            || mouseScreen.y < parentRect.top
+            || mouseScreen.y > parentRect.top + parentRect.height;
+          if (cursorOutsideParent) {
+            out = true;
           }
         }
         if (this.exitDestination === 'canvas') {
@@ -3484,7 +3507,7 @@ export class AbsoluteInFrameStrategy implements DragStrategy {
     this.originalTransforms.clear();
     this.flexGroupChildRefit.clear();
     this.svgNeedsAbsolute.clear();
-    this.framesOutsideParent = 0; this.exitedParent = false; this.parentIsFlexGrid = false;
+    this.framesOutsideParent = 0; this.exitedParent = false; this.parentIsFlexGrid = false; this.parentClipsOverflow = false;
     this.candidateSiblingId = null; this.framesInCandidateSibling = 0; this.siblingEntryConfirmed = false;
     this.pendingLayoutDrop = null;
     this.pendingSiblingDrop = null;

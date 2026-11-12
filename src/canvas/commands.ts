@@ -50,7 +50,7 @@ import { generateNodeId } from '@/shared/id-utils';
 import { FIT_SIZE, isFitSize, isTextTag } from '@/shared/constants';
 import { transformManager } from './transform';
 import { trace } from '@/shared/debug-trace';
-import { copyNodes } from '@/code/features/paste-engine';
+import { copyNodes, getClipboardData, setClipboardData } from '@/code/features/paste-engine';
 import { executePaste } from '@/code/features/paste-engine/execute-from-ui';
 
 // ─── Selection Navigation ───────────────────────────────────────────────────
@@ -1553,12 +1553,11 @@ export function duplicateSelection(opts: {
   const sel = opts.primaryId;
   if (!sel) return;
   trace.fn('commands:duplicateSelection', { nodeId: sel });
-  const savedClipboard = localStorage.getItem('canvas_clipboard');
+  const savedClipboard = getClipboardData();
   copyNodes([sel], opts.nodes);
   executePaste(opts.nodes, opts.contentEl, sel, (id) => opts.setSelectedIds(id ? [id] : []), opts.handleNodeMouseDown);
   // Restore original clipboard
-  if (savedClipboard) localStorage.setItem('canvas_clipboard', savedClipboard);
-  else localStorage.removeItem('canvas_clipboard');
+  setClipboardData(savedClipboard);
 }
 
 // ─── Copy / Paste Element Styles ──────────────────────────────────────────

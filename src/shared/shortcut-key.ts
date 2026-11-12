@@ -30,7 +30,7 @@
 
 import { trace } from './debug-trace';
 
-type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'altKey'>;
+type KeyLike = Pick<KeyboardEvent, 'key' | 'code'> & Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'>>;
 
 const STORAGE_KEY = 'revyme:latin-key-layout';
 const LATIN = /^[a-z]$/i;
@@ -113,8 +113,15 @@ export function resetKeyboardLayoutForTests(): void {
 /** The shortcut key this keydown carries physically ("r", "1"…) when it may
  *  match a shortcut by position; null when only e.key counts. */
 export function physicalShortcutKey(e: KeyLike): string | null {
-  const fallback = e.altKey || e.key === 'Process'
-    || (/^\p{L}$/u.test(e.key) && !LATIN.test(e.key));
+  const isControlChar = typeof e.key === 'string' && e.key.length === 1 && e.key.charCodeAt(0) < 32;
+  const fallback = Boolean(
+    e.altKey ||
+    e.key === 'Process' ||
+    e.key === 'Unidentified' ||
+    isControlChar ||
+    ((e.ctrlKey || e.metaKey) && !LATIN.test(e.key)) ||
+    (/^\p{L}$/u.test(e.key) && !LATIN.test(e.key))
+  );
   if (!fallback) return null;
   const own = layout();
   const mine = own.get(e.code);
@@ -132,5 +139,6 @@ export function physicalShortcutKey(e: KeyLike): string | null {
  *  typed character or, where that can't apply, the physical key. */
 export function isShortcutKey(e: KeyLike, key: string): boolean {
   const k = key.toLowerCase();
-  return e.key.toLowerCase() === k || physicalShortcutKey(e) === k;
+  const isMatchControl = typeof e.key === 'string' && e.key.length === 1 && e.key.charCodeAt(0) >= 1 && e.key.charCodeAt(0) <= 26 && String.fromCharCode(e.key.charCodeAt(0) + 96) === k;
+  return e.key.toLowerCase() === k || isMatchControl || physicalShortcutKey(e) === k;
 }

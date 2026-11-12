@@ -1939,6 +1939,14 @@ export class LayoutLiftedStrategy implements DragStrategy {
     const isVectorContainer = isIconSetMaster && this.parentNodeId === 'root';
     if (isVectorContainer) {
       this.isOverParent = true;
+    } else {
+      const finalVpRect = this.getViewportScreenRect(new Set(draggedNodes.map(n => n.id)));
+      if (finalVpRect) {
+        const isNowOver = isInsideRect(this.prevMouse, finalVpRect);
+        if (!isNowOver) {
+          this.isOverParent = false;
+        }
+      }
     }
 
     trace.action('layout-lifted:onEnd-start', {
@@ -3967,7 +3975,11 @@ export class LayoutLiftedStrategy implements DragStrategy {
     // switched to canvas before the placeholder ever showed — reorder inside
     // a below-the-fold layout was unreachable (user trace 2026-08-05,
     // `layout-lifted:exit-parent` 3ms after `drag:start`). The bounds that
-    // mean "still over the page" are the CONTENT bounds.
+    // mean "still over the page" are the CONTENT bounds vertically.
+    //
+    // Horizontally, the site bounds are fixed to the viewport box (bridgeRect.left
+    // to bridgeRect.left + bridgeRect.width). Expanding horizontally on overflowing
+    // children traps elements inside the parent when dragged out sideways onto canvas.
     //
     // `excludeIds` = the DRAGGED nodes. When the drag IS a root section, its
     // own rect is one of root's children — and the lifted element follows
@@ -3975,12 +3987,14 @@ export class LayoutLiftedStrategy implements DragStrategy {
     // exit can never fire ("can't drag a section out to canvas, the
     // placeholder stays" — regression report same day). The bounds must
     // describe the page WITHOUT the thing being dragged.
-    let left = bridgeRect.left, top = bridgeRect.top;
-    let right = bridgeRect.left + bridgeRect.width, bottom = bridgeRect.top + bridgeRect.height;
-    const union = (r: { left: number; top: number; width: number; height: number } | null) => {
+    const left = bridgeRect.left;
+    const right = bridgeRect.left + bridgeRect.width;
+    let top = bridgeRect.top;
+    let bottom = bridgeRect.top + bridgeRect.height;
+    const unionVertical = (r: { left: number; top: number; width: number; height: number } | null) => {
       if (!r) return;
-      left = Math.min(left, r.left); top = Math.min(top, r.top);
-      right = Math.max(right, r.left + r.width); bottom = Math.max(bottom, r.top + r.height);
+      top = Math.min(top, r.top);
+      bottom = Math.max(bottom, r.top + r.height);
     };
     const rootNode = getNodeFromCache(vpNodeId);
     for (const childId of rootNode?.children ?? []) {
@@ -3999,9 +4013,9 @@ export class LayoutLiftedStrategy implements DragStrategy {
       if (childNode?.attrs?.['data-overlay']) continue;
       const r = findNodeRect(childId, this.currentVpId);
       if (!r || (r.width === 0 && r.height === 0)) continue;
-      union(r);
+      unionVertical(r);
     }
-    if (this.parentNodeId && this.parentNodeId !== vpNodeId) union(findNodeRect(this.parentNodeId, this.currentVpId));
+    if (this.parentNodeId && this.parentNodeId !== vpNodeId) unionVertical(findNodeRect(this.parentNodeId, this.currentVpId));
     return { left, top, width: right - left, height: bottom - top };
   }
 

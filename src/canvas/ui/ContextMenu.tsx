@@ -11,11 +11,14 @@ import { codeAtom, nodesAtom, selectedNodeAtom, selectedIdsAtom, updatingFromCan
 import { useNode, useNodesComputed } from '@/code/stores/node-family';
 import type { CanvasNode } from '@/code/parsing/parser';
 import { copyNodes, hasClipboard } from '@/code/features/paste-engine';
+import { executePaste } from '@/code/features/paste-engine/execute-from-ui';
+import { screenToCanvas } from '@/canvas/canvas-math';
 import {
   deleteNode, toggleLock, toggleVisibility,
   selectParent, selectChildren, selectNextSibling, selectPrevSibling, selectNextReplica,
   wrapInFrame, wrapInLayout, unfoldChildren,
   copyElementStylesCommand, pasteElementStylesCommand,
+  duplicateSelection,
 } from '../commands';
 import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext, forceCanvasRender, findNodeComputedStyle } from '../node-ops';
 import { isTextTag } from '@/shared/constants';
@@ -590,7 +593,16 @@ export default function ContextMenu() {
 
   const handleCopy = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
-    if (ids.length > 0) copyNodes(ids, getNodesSnapshot());
+    if (ids.length > 0) {
+      const res = copyNodes(ids, getNodesSnapshot());
+      if (res.success) {
+        toast.success(`Copied ${res.nodeCount} element${res.nodeCount > 1 ? 's' : ''}`);
+      } else {
+        toast.error(res.message || 'Failed to copy');
+      }
+    } else {
+      toast.error('No element selected to copy');
+    }
     close();
   };
 
@@ -658,27 +670,57 @@ export default function ContextMenu() {
 
   const handleCut = () => {
     const ids = selectedIds.length > 0 ? selectedIds : (nodeId ? [nodeId] : []);
-    if (ids.length === 0) return;
-    copyNodes(ids, getNodesSnapshot());
-    const contentEl = getContentEl();
-    if (contentEl) deleteNode(ids, contentEl);
-    setSelectedIds([]);
+    if (ids.length === 0) {
+      toast.error('No element selected to cut');
+      close();
+      return;
+    }
+    const res = copyNodes(ids, getNodesSnapshot());
+    if (res.success) {
+      const contentEl = getContentEl();
+      if (contentEl) deleteNode(ids, contentEl);
+      setSelectedIds([]);
+      toast.success(`Cut ${res.nodeCount} element${res.nodeCount > 1 ? 's' : ''}`);
+    } else {
+      toast.error(res.message || 'Failed to cut');
+    }
     close();
   };
 
   const handlePaste = () => {
     close();
-    // Small delay so context menu closes before paste creates nodes
-    setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
-    }, 10);
+    const contentEl = getContentRoot();
+    const targetId = nodeId ? ((selectedIds.includes(nodeId) && selectedIds[0]) ? selectedIds[0] : nodeId) : null;
+    let forcePosition: { x: number; y: number } | undefined;
+    if (!targetId) {
+      const viewportEl = document.querySelector('[data-canvas-viewport]') as HTMLElement | null;
+      const containerRect = viewportEl?.getBoundingClientRect();
+      if (containerRect) {
+        const pos = screenToCanvas(menu.x, menu.y, transformManager.getTransform(), containerRect);
+        forcePosition = { x: Math.round(pos.x), y: Math.round(pos.y) };
+      }
+    }
+    executePaste(
+      getNodesSnapshot(),
+      contentEl,
+      targetId,
+      (id) => setSelectedIds(id ? [id] : []),
+      () => {},
+      forcePosition ? { forcePosition } : undefined,
+    );
   };
 
   const handleDuplicate = () => {
     close();
-    setTimeout(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true }));
-    }, 10);
+    const targetId = (nodeId && !selectedIds.includes(nodeId)) ? nodeId : (selectedIds[0] || nodeId);
+    if (!targetId) return;
+    duplicateSelection({
+      nodes: getNodesSnapshot(),
+      primaryId: targetId,
+      contentEl: getContentRoot(),
+      setSelectedIds: (ids) => setSelectedIds(ids),
+      handleNodeMouseDown: () => {},
+    });
   };
 
   const handleCopyStyles = () => {

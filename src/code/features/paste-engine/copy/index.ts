@@ -33,7 +33,7 @@ import { readCodeOverrides } from '@/code/generation/code-override-gen';
 import { readTicker } from '@/code/generation/ticker-gen';
 import { getI18nConfig } from '@/code/project/locale-ops';
 
-const CLIPBOARD_STORAGE_KEY = 'revyme_clipboard';
+export const CLIPBOARD_STORAGE_KEY = 'revyme_clipboard';
 
 // ─── Subtree collection ──────────────────────────────────────────────────────
 
@@ -556,50 +556,142 @@ export function copyNodes(
     components,
   };
 
+  inMemoryClipboard = data;
+  persistToLocalStorage(data);
+
+  // Overwrite the OS clipboard with a marker so any existing IMAGE
+  // (e.g. a screenshot the user took earlier) gets evicted. The
+  // Ctrl+V handler reads the OS clipboard for an image BEFORE
+  // falling through to the internal node clipboard — without this,
+  // the user's "copy node → paste" flow pastes their previously-
+  // captured screenshot instead of the just-copied node.
+  //
+  // `navigator.clipboard.writeText` replaces ALL formats on the
+  // clipboard (image + text + html), so the next Ctrl+V's image-
+  // detection probe finds nothing and the paste handler routes to
+  // the internal localStorage clipboard as intended.
+  //
+  // Fire-and-forget: we don't want copy to block on the async
+  // clipboard write, and a permission error is harmless — paste
+  // will then prefer the OS image, which is the OLD (pre-fix)
+  // behavior.
+  const marker = `revyme-node:${nodeIds.join(',')}`;
+  let writtenSync = false;
+  if (typeof document !== 'undefined') {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = marker;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      writtenSync = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch { /* ignore execCommand failure */ }
+  }
+  if (!writtenSync && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(marker).catch((err) => {
+      trace.action('clipboard:os-write-failed', { error: String(err) });
+    });
+  }
+  trace.action('clipboard:copy', { count: clipboardNodes.length, ids: nodeIds });
+  return { success: true, nodeCount: clipboardNodes.length };
+}
+
+// In-memory clipboard store as fallback and primary sync layer
+let inMemoryClipboard: ClipboardData | null = null;
+
+function evictExpendableLocalStorage(): void {
+  if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(data));
-    // Overwrite the OS clipboard with a marker so any existing IMAGE
-    // (e.g. a screenshot the user took earlier) gets evicted. The
-    // Ctrl+V handler reads the OS clipboard for an image BEFORE
-    // falling through to the internal node clipboard — without this,
-    // the user's "copy node → paste" flow pastes their previously-
-    // captured screenshot instead of the just-copied node.
-    //
-    // `navigator.clipboard.writeText` replaces ALL formats on the
-    // clipboard (image + text + html), so the next Ctrl+V's image-
-    // detection probe finds nothing and the paste handler routes to
-    // the internal localStorage clipboard as intended.
-    //
-    // Fire-and-forget: we don't want copy to block on the async
-    // clipboard write, and a permission error is harmless — paste
-    // will then prefer the OS image, which is the OLD (pre-fix)
-    // behavior.
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      const marker = `revyme-node:${nodeIds.join(',')}`;
-      navigator.clipboard.writeText(marker).catch((err) => {
-        trace.action('clipboard:os-write-failed', { error: String(err) });
-      });
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      // High-volume thumbnail preview data URLs, recovery backups, or MRU cache
+      if (
+        key.startsWith('revyme:project-preview:') ||
+        key.startsWith('revyme-project-recovery-') ||
+        key === 'revyme:palette:mru'
+      ) {
+        keysToRemove.push(key);
+      }
     }
-    trace.action('clipboard:copy', { count: clipboardNodes.length, ids: nodeIds });
-    return { success: true, nodeCount: clipboardNodes.length };
-  } catch (err) {
-    trace.error('clipboard:copy-failed', err);
-    return { success: false, nodeCount: 0, message: 'localStorage write failed' };
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    if (keysToRemove.length > 0) {
+      trace.action('clipboard:evicted-storage-keys', { count: keysToRemove.length });
+    }
+  } catch {
+    // ignore
   }
 }
 
-/** Read raw clipboard data — null if missing or unparseable. */
-export function getClipboardData(): ClipboardData | null {
+function persistToLocalStorage(data: ClipboardData | null): void {
+  if (typeof localStorage === 'undefined') return;
   try {
-    const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as ClipboardData;
-    if (data.version !== 1) return null;
-    return data;
+    if (!data) {
+      localStorage.removeItem(CLIPBOARD_STORAGE_KEY);
+      return;
+    }
+    const json = JSON.stringify(data);
+    try {
+      localStorage.setItem(CLIPBOARD_STORAGE_KEY, json);
+    } catch {
+      // Quota exceeded: try evicting expendable keys once, then retry
+      evictExpendableLocalStorage();
+      try {
+        localStorage.setItem(CLIPBOARD_STORAGE_KEY, json);
+      } catch (err) {
+        trace.action('clipboard:localstorage-quota-exhausted', { error: String(err) });
+      }
+    }
   } catch (err) {
-    trace.error('clipboard:read-failed', err);
-    return null;
+    trace.action('clipboard:persist-failed', { error: String(err) });
   }
+}
+
+/** Set raw clipboard data in-memory and in localStorage. */
+export function setClipboardData(data: ClipboardData | null): void {
+  inMemoryClipboard = data;
+  persistToLocalStorage(data);
+}
+
+/** Read raw clipboard data — in-memory fallback if localStorage missing/quota-exceeded. */
+export function getClipboardData(): ClipboardData | null {
+  let storageData: ClipboardData | null = null;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ClipboardData;
+        if (parsed.version === 1) {
+          storageData = parsed;
+        }
+      }
+    } catch (err) {
+      trace.error('clipboard:read-failed', err);
+    }
+  }
+
+  if (storageData && inMemoryClipboard) {
+    if (storageData.timestamp > inMemoryClipboard.timestamp) {
+      inMemoryClipboard = storageData;
+      return storageData;
+    }
+    return inMemoryClipboard;
+  }
+
+  if (storageData) {
+    inMemoryClipboard = storageData;
+    return storageData;
+  }
+
+  return inMemoryClipboard;
 }
 
 export function hasClipboard(): boolean {
@@ -615,12 +707,8 @@ export function hasClipboard(): boolean {
  */
 export function setExternalClipboardData(data: ClipboardData): boolean {
   if (!data || data.version !== 1 || !Array.isArray(data.nodes) || data.nodes.length === 0) return false;
-  try {
-    localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify({ ...data, timestamp: Date.now() }));
-    trace.action('clipboard:external-set', { nodes: data.nodes.length, components: data.components?.length ?? 0 });
-    return true;
-  } catch (err) {
-    trace.error('clipboard:external-set-failed', err);
-    return false;
-  }
+  const payload: ClipboardData = { ...data, timestamp: Date.now() };
+  setClipboardData(payload);
+  trace.action('clipboard:external-set', { nodes: data.nodes.length, components: data.components?.length ?? 0 });
+  return true;
 }
