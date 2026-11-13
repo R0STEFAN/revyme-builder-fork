@@ -707,3 +707,35 @@ export default function Page() {
     expect(out).toBe(PARALLAX);
   });
 });
+
+describe('updateScrollAnimInCode — perspective alongside a spring-chained transform', () => {
+  const PERSPECTIVE_PAGE = `'use client';
+import React, { useRef } from 'react';
+import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
+export default function Page() {
+  const projectsSectionRef = useRef(null);
+  const { scrollYProgress: projectsSectionProgress } = useScroll({ target: projectsSectionRef, offset: ["start end", "start center"] });
+  const projectsSectionSmooth = useSpring(projectsSectionProgress, { duration: 0.5, bounce: 0.25 });
+  const projectsSectionOpacity = useTransform(projectsSectionSmooth, [0, 1], [1, 1]);
+  const projectsSectionScale = useTransform(projectsSectionSmooth, [0, 1], [0.5, 1]);
+  const projectsSectionY = useTransform(projectsSectionSmooth, [0, 1], [-1404, 0]);
+  const projectsSectionX = useTransform(projectsSectionSmooth, [0, 1], [295, 0]);
+  const projectsSectionRotateY = useTransform(projectsSectionSmooth, [0, 1], [45, 0]);
+  return <motion.section ref={projectsSectionRef} data-id="projects-section" style={{ opacity: projectsSectionOpacity, scale: projectsSectionScale, y: projectsSectionY, x: projectsSectionX, rotateY: projectsSectionRotateY, transformStyle: 'preserve-3d', transformPerspective: '1200' }} />;
+}`;
+
+  it('keeps hook order valid when updating the animated properties on a perspective-enabled element', async () => {
+    const { syncImports, validateGeneratedCode } = await import('@/code/mutation/mutation-queue');
+    const out = updateScrollAnimInCode(PERSPECTIVE_PAGE, {
+      nodeId: 'projects-section',
+      trigger: 'layerInView',
+      stops: [
+        { progress: 0, props: { scale: '0.5', y: '-1404', x: '295', rotateY: '45' } },
+        { progress: 1, props: { scale: '1', y: '0', x: '0', rotateY: '0' } },
+      ],
+      transition: { type: 'spring', duration: '0.5', bounce: '0.25' },
+    } as any);
+
+    expect(validateGeneratedCode(syncImports(out))).toBeNull();
+  });
+});

@@ -676,6 +676,31 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
       result = result.replace(new RegExp(`\\s*const ${varName} = useMotionTemplate\`[^\`]*\`;`, 'g'), '');
     }
 
+    // Remove orphaned transforms driven by this node's scroll source too.
+    // The parser only associates JSX-bound motion values with a node; an old
+    // hook whose style binding was overwritten is invisible to that mapping.
+    // Leaving it behind while replacing the shared Smooth declaration can put
+    // its use before the newly inserted declaration and block the mutation.
+    const orphanedTransformVars = parsed.transforms
+      .filter(t => oldSourceVars.has(t.sourceVar)
+        && !otherSourceVars.has(t.sourceVar)
+        && !otherTransformVars.has(t.varName)
+        && !oldTransformVars.has(t.varName)
+        && (code.match(new RegExp(`\\b${escapeRegExp(t.varName)}\\b`, 'g')) || []).length === 1)
+      .map(t => t.varName);
+    for (const varName of orphanedTransformVars) {
+      const vEsc = escapeRegExp(varName);
+      result = result.replace(
+        new RegExp(`\\s*const ${vEsc} = (?:useSpring\\(\\s*)?useTransform\\([^;]*;`, 'g'),
+        '',
+      );
+    }
+    if (orphanedTransformVars.length) {
+      trace.action('generator.updateScrollAnim:removedOrphanedTransforms', {
+        nodeId, removedTransforms: orphanedTransformVars,
+      });
+    }
+
     // Remove spring wrappers that feed into this node's transforms
     for (const t of nodeScroll.transforms) {
       if (t.isSpring && !otherTransformVars.has(t.varName)) {
@@ -805,6 +830,27 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
   const withHooks = insertBeforeRenderReturn(result, hookBlock);
   if (withHooks === null) return result;
   result = withHooks;
+
+  // If a still-live transform wasn't attributable to this node during cleanup,
+  // put its source hooks before that use. This also protects shared scroll
+  // sources: their consumers may remain while this node's source hooks are
+  // regenerated, and must never observe the new spring after its first use.
+  const hookBlockStart = result.lastIndexOf(hookBlock);
+  if (hookBlockStart !== -1) {
+    const priorSourceUse = result.slice(0, hookBlockStart).search(
+      new RegExp(`\\b${escapeRegExp(valueVar)}\\b`),
+    );
+    if (priorSourceUse !== -1) {
+      const insertAt = result.lastIndexOf('\n', priorSourceUse) + 1;
+      result = result.slice(0, insertAt)
+        + hookBlock + '\n'
+        + result.slice(insertAt, hookBlockStart)
+        + result.slice(hookBlockStart + hookBlock.length);
+      trace.action('generator.updateScrollAnim:hoistedHooksBeforeExistingUse', {
+        nodeId, sourceVar: valueVar,
+      });
+    }
+  }
 
   // Add ref to the correct element — preserve old ref placement when it was on a parent
   // e.g., AI put ref on hero-wrapper (150vh scroll container) but transforms on hero-sticky (child)
