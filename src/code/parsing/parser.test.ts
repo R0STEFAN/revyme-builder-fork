@@ -15,6 +15,16 @@ describe('parseJSXToNodes', () => {
     expect(box!.styles.width).toBe('100px');
   });
 
+  test('preserves motion tag identity for transform controls on page elements', () => {
+    const code = `<motion.section data-id="projects-section" style={{rotate: '1', scaleX: '1', scaleY: '0.4', skewX: '-11', x: '18', transform: 'translate(30px, 108px)'}} />`;
+    const node = parseJSXToNodes(code).get('projects-section')!;
+
+    expect(node.type).toBe('section');
+    expect(node.isMotionElement).toBe(true);
+    expect(node.styles.rotate).toBe('1');
+    expect(node.styles.scaleY).toBe('0.4');
+  });
+
   test('parses nested parent-child relationships', () => {
     const code = `<div data-id="parent" style={{width: '400px'}}>
       <div data-id="child" style={{width: '200px'}}></div>

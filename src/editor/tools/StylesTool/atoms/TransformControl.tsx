@@ -145,6 +145,55 @@ function numOr(raw: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const TRANSFORM_ANIMATION_PROPS = ['initial', 'animate', 'whileInView', 'whileHover', 'whileTap', 'exit'] as const;
+const FIELD_MOTION_PROPS: Partial<Record<keyof TransformData, readonly string[]>> = {
+  translateX: ['x', 'translateX'],
+  translateY: ['y', 'translateY'],
+  rotateZ: ['rotate', 'rotateZ'],
+  rotateX: ['rotateX'],
+  rotateY: ['rotateY'],
+  scaleX: ['scale', 'scaleX'],
+  scaleY: ['scale', 'scaleY'],
+  skewX: ['skewX'],
+  skewY: ['skewY'],
+  perspective: ['transformPerspective'],
+};
+
+/** A transform field owned by a MotionValue/animation cannot also be authored
+ *  by this control: both write the same Framer Motion transform channel. */
+export function isTransformFieldAnimated(
+  field: keyof TransformData,
+  allProps: Record<string, string>,
+  node: Record<string, any> | null | undefined,
+): boolean {
+  const motionProps = FIELD_MOTION_PROPS[field] ?? [];
+  if (motionProps.some((prop) => String(allProps[prop] ?? '').startsWith('var:') || !!node?.styleVariables?.[prop])) return true;
+
+  if ((Object.values(node?.motionVariants ?? {}) as Array<Record<string, string>>)
+    .some((variant) => motionProps.some((prop) => prop in variant))) return true;
+
+  const nodeMotionProps = node?.motionProps ?? {};
+  for (const propName of TRANSFORM_ANIMATION_PROPS) {
+    const props = nodeMotionProps[propName];
+    if (!props || typeof props !== 'object') continue;
+    if (motionProps.some((prop) => prop in props)) return true;
+    if (typeof props._base === 'string') {
+      try {
+        const base = JSON.parse(props._base);
+        if (motionProps.some((prop) => prop in base)) return true;
+      } catch { /* Ignore malformed parser metadata. */ }
+    }
+    if (typeof props._chain === 'string') {
+      try {
+        const chain = JSON.parse(props._chain) as Array<{ props?: Record<string, unknown> }>;
+        if (chain.some((entry) => !!entry.props && motionProps.some((prop) => prop in entry.props!))) return true;
+      } catch { /* Ignore malformed parser metadata. */ }
+    }
+  }
+
+  return false;
+}
+
 function TransformAtom() {
   const { value, onChange, onChangeLive, node, onChangeMultiple, mode, allProps } = useControlContext();
   const [isOpen, setIsOpen] = useState(false);
@@ -177,6 +226,7 @@ function TransformAtom() {
   // rather than the node's base style — see `setField`.
   const isScopedWrite = isReplica || isComponentVariantViewport;
   const isMotion = mode !== 'variableDefault' && (isComponentFilePath(activeFile)
+    || !!node?.isMotionElement
     || !!node?.motionVariants || !!(node as any)?.motionVariantsRef
     || !!(node as any)?.attrs?.['data-overlay']);
   const parsed = parseTransform(value);
@@ -225,11 +275,19 @@ function TransformAtom() {
    *  what route the chevron through `applyValue(live=true)` in ToolInput; without them it falls back to
    *  per-frame `onChange`. */
   const fieldInputProps = (field: keyof TransformData, neutral: number, clamp?: (n: number) => number) => {
+    const disabled = isTransformFieldAnimated(field, allProps, node as any);
     const num = (v: string) => { const n = parseFloat(v) || neutral; return clamp ? clamp(n) : n; };
+    const commitInput = (v: string) => {
+      if (disabled) return;
+      const next = num(v);
+      if (isMotion) liveTransform({ [field]: next } as Partial<TransformData>);
+      setField(field, next, neutral);
+    };
     return {
-      onChange: (v: string) => setField(field, num(v), neutral),
-      onChangeLive: (v: string) => liveTransform({ [field]: num(v) } as Partial<TransformData>),
-      onCommit: (v: string) => setField(field, num(v), neutral),
+      disabled,
+      onChange: commitInput,
+      onChangeLive: (v: string) => { if (!disabled) liveTransform({ [field]: num(v) } as Partial<TransformData>); },
+      onCommit: (v: string) => { if (!disabled) setField(field, num(v), neutral); },
     };
   };
   /** Write a single transform field — see `transformFieldValue` for why the
@@ -246,7 +304,7 @@ function TransformAtom() {
       case 'rotateY': onChangeMultiple({ rotateY: out(v, 0) }); break;
       case 'skewX': onChangeMultiple({ skewX: out(v, 0) }); break;
       case 'skewY': onChangeMultiple({ skewY: out(v, 0) }); break;
-      case 'perspective': onChangeMultiple({ transformPerspective: out(v, 0) }); break;
+      case 'perspective': onChangeMultiple({ transformPerspective: out(v, 0) ? `${v}px` : '' }); break;
       // Scale writes BOTH axes (clearing the uniform `scale` to avoid a
       // conflicting key), preserving the other axis's current value.
       case 'scaleX': onChangeMultiple({ scaleX: out(v, 1), scaleY: out(t.scaleY, 1), scale: '' }); break;

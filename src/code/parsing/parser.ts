@@ -138,6 +138,8 @@ function isInlineRunChild(c: any): boolean {
 export interface CanvasNode {
   id: string;
   type: string; // 'div', 'p', 'span', 'img', etc.
+  /** True when JSX uses a `motion.*` tag; `type` intentionally stores its base tag. */
+  isMotionElement?: boolean;
   name: string;
   parentId: string | null;
   children: string[];
@@ -1048,6 +1050,14 @@ function resolveTagName(opening: any): string {
   return 'div';
 }
 
+/** Keep the motion wrapper identity after `resolveTagName` removes its prefix. */
+function isMotionElement(opening: any): boolean {
+  const name = opening?.name;
+  return name?.type === 'JSXMemberExpression'
+    && name.object?.type === 'JSXIdentifier'
+    && name.object.name === 'motion';
+}
+
 /** data-id, or a shared-counter auto id (`auto_<n>`) when the JSX has none. */
 function resolveElementId(attributes: any[], ctx: ParseCtx): string {
   let id = getAttr(attributes, 'data-id');
@@ -1323,6 +1333,7 @@ function attachToParent(ctx: ParseCtx, parentId: string | null, id: string): num
 function createBaseNode(p: {
   id: string;
   tagName: string;
+  isMotionElement?: boolean;
   name: string;
   parentId: string | null;
   styles: Record<string, string>;
@@ -1339,6 +1350,7 @@ function createBaseNode(p: {
   return {
     id: p.id,
     type: p.tagName,
+    isMotionElement: p.isMotionElement,
     name: p.name,
     parentId: p.parentId,
     children: [],
@@ -2645,7 +2657,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         const isCollectionTemplate = ctx.collectionContextStack.length > 0 ? true : undefined;
 
         const node: CanvasNode = createBaseNode({
-          id, tagName, name, parentId, styles, conditionalStyles, attrs,
+          id, tagName, isMotionElement: isMotionElement(opening), name, parentId, styles, conditionalStyles, attrs,
           textContent, hasMixedContent, textIsLiteral, order,
           isCanvasNode, motionVariantsRef, motionProps,
         });
@@ -3368,7 +3380,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       const motionPropsCanvas = extractMotionProps(opening.attributes as any[], ctx);
 
       const node: CanvasNode = createBaseNode({
-        id, tagName, name, parentId, styles, conditionalStyles, attrs,
+        id, tagName, isMotionElement: isMotionElement(opening), name, parentId, styles, conditionalStyles, attrs,
         textContent, hasMixedContent, textIsLiteral, order,
         // Only top-level canvasNodes entries are canvas nodes; children are regular.
         isCanvasNode: !parentId,

@@ -170,7 +170,7 @@ export default function ToolInput({ value, onChange, onChangeLive, onCommit, ste
 
   // ─── Chevron hold + drag ──────────────────────────────────────────
   const startChevronDrag = useCallback((direction: 'up' | 'down', e: React.MouseEvent) => {
-    if (!isNumeric || !parsed) return;
+    if (effectiveDisabled || !isNumeric || !parsed) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -235,7 +235,7 @@ export default function ToolInput({ value, onChange, onChangeLive, onCommit, ste
     document.addEventListener('mousemove', handleMouseMove, true);
     document.addEventListener('mouseup', handleMouseUp, true);
     document.body.style.cursor = 'ns-resize';
-  }, [isNumeric, parsed, step, applyValue, clampNum, setCanvasInteracting, onCommit, unit]);
+  }, [effectiveDisabled, isNumeric, parsed, step, applyValue, clampNum, setCanvasInteracting, onCommit, unit]);
 
   const isAutoOrFill = value === 'auto' || value === 'fill';
 
@@ -244,6 +244,7 @@ export default function ToolInput({ value, onChange, onChangeLive, onCommit, ste
       <input
         ref={inputRef}
         type="text"
+        disabled={effectiveDisabled}
         value={isFocused || chevronDragging || holdLocal ? localValue : roundLengthForDisplay(value)}
         onChange={(e) => setLocalValue(e.target.value)}
         onFocus={(e) => {
@@ -289,6 +290,7 @@ export default function ToolInput({ value, onChange, onChangeLive, onCommit, ste
           <button
             tabIndex={-1}
             type="button"
+            disabled={effectiveDisabled}
             onMouseDown={(e) => startChevronDrag('up', e)}
             className="flex-1 flex items-center justify-center cursor-pointer group/chevron"
           >
@@ -299,6 +301,7 @@ export default function ToolInput({ value, onChange, onChangeLive, onCommit, ste
           <button
             tabIndex={-1}
             type="button"
+            disabled={effectiveDisabled}
             onMouseDown={(e) => startChevronDrag('down', e)}
             className="flex-1 flex items-center justify-center cursor-pointer group/chevron"
           >
