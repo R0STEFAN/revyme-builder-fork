@@ -406,7 +406,12 @@ export default function MotionPropsEditor({ nodeId, props, onChange, preview, de
     // their resting value — NOT remove (removal wipes the element's own inline).
     const stale = [...appliedKeysRef.current].filter((k) => !next.has(k));
     if (stale.length) restorePreview(null, stale, getRestingStyles(), nodeId, previewVpId);
-    applyPreview(null, p, nodeId, previewVpId);
+    const perspective = parseFloat(getRestingStyles()?.transformPerspective ?? '');
+    const previewProps = buildTransformPreview(p) && !('perspective' in p)
+      && Number.isFinite(perspective) && perspective > 0
+      ? { ...p, perspective: String(perspective) }
+      : p;
+    applyPreview(null, previewProps, nodeId, previewVpId);
     appliedKeysRef.current = next;
   }, [nodeId, previewVpId, getRestingStyles]);
 
