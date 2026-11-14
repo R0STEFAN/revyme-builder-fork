@@ -130,3 +130,31 @@ describe('framer-motion SVG variant SIZE facts (nested motion.svg)', () => {
     expect(el.getAttribute('width')).toBe('224');
   });
 });
+
+describe('motion SVG scale with component variant layers', () => {
+  it('applies scaleX and scaleY from the active variant', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const variants = {
+      default: { scale: 1, scaleX: 1, scaleY: 1, opacity: 1 },
+      'variant-1': { scaleX: 2, scaleY: 2, opacity: 0 },
+    };
+    const App = ({ v, layout }: { v: string; layout: boolean }) => (
+      <motion.svg data-probe="scale" layout={layout} variants={variants}
+        initial={['default', 'default']} animate={['default', v]}
+        viewBox="0 0 22 18" style={{ width: '8px', height: '8px' }}
+        transition={{ duration: 0 }}>
+        <motion.path layout={layout} d="M11,0 C17,0 22,4 22,9 C22,14 17,18 11,18 C5,18 0,14 0,9 C0,4 5,0 11,0 Z" />
+      </motion.svg>
+    );
+    await act(async () => { root.render(<App v="default" layout />); });
+    await act(async () => { await raf(); await raf(); });
+    await act(async () => { root.render(<App v="variant-1" layout />); });
+    for (let i = 0; i < 12; i++) await act(async () => { await raf(); });
+    const svg = host.querySelector('[data-probe="scale"]') as SVGElement;
+    expect(svg.style.transform).toContain('scaleX(2)');
+    expect(svg.style.transform).toContain('scaleY(2)');
+    expect(svg.style.opacity).toBe('0');
+  });
+});

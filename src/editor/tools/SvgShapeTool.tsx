@@ -37,6 +37,7 @@ import { LocalizeGate } from '../controls/localize-gate';
 import { useControl } from '../controls/ControlProvider';
 import { OpacityControl } from './StylesTool/atoms/OpacityControl';
 import { RotateControl } from './StylesTool/atoms/RotateControl';
+import { ScaleXYControl } from './StylesTool/atoms/ScaleXYControl';
 import { HideControl } from './StylesTool/atoms/HideControl';
 import { queueMutation, flushNow } from '@/code/mutation/mutation-queue';
 import { getCanvasBridge } from '@/canvas/canvas-bridge';
@@ -560,6 +561,7 @@ export default function SvgShapeTool() {
         </div>
 
         {!isInShapeEdit && <RotateControl />}
+        {!isInShapeEdit && node.isMotionElement && <ScaleXYControl />}
       </ToolSection>
 
       {/* Divider matches the rule the PropertiesPanel uses between

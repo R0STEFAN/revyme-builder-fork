@@ -6,6 +6,7 @@ import {
   translate, scale, rotateDeg, decompose,
   topSvgUserToScreenAffine, nestedChildAffine, affineBoxCorners,
   pivotScreenPosition,
+  getSvgWrapperViewBoxAffine,
   readNestedChildParams,
   type Affine,
 } from './svg-user-to-screen';
@@ -113,6 +114,48 @@ describe('topSvgUserToScreenAffine handles non-zero/negative viewBox origin + sc
     closePt(applyAffine(m, 0, 0), 0, 0, 1e-6);
     closePt(applyAffine(m, 100, 100), 200, 200, 1e-6);   // viewBox far corner -> css far corner
     closePt(applyAffine(m, 50, 50), 100, 100, 1e-6);     // centre
+  });
+});
+
+describe('top-level SVG CSS scale selection geometry', () => {
+  it('maps an 8px SVG scaled 2x to the full 16px painted box', () => {
+    const cssTransformLinear: [number, number, number, number] = [2, 0, 0, 2];
+    const { Cx, Cy } = pivotScreenPosition(40, 38, 0, 1, 4, 4, 8, 8, cssTransformLinear);
+    const m = topSvgUserToScreenAffine({
+      Cx, Cy, thetaDeg: 0, zoom: 1, pivotX: 4, pivotY: 4,
+      vbX: 0, vbY: 0, cssW: 8, vbW: 22, cssH: 8, vbH: 18,
+      cssTransformLinear,
+    });
+    const box = affineBoxCorners(m, 0, 0, 22, 18);
+    closePt(box.TL, 40, 38);
+    closePt(box.BR, 56, 54);
+    closePt(applyAffine(m, 11, 9), 48, 46);
+  });
+
+  it('reads a scaled motion SVG from the DOM into the selection affine', () => {
+    const previousMatrix = globalThis.DOMMatrix;
+    class MatrixStub {
+      a = 2; b = 0; c = 0; d = 2;
+      constructor(_transform: string) {}
+    }
+    Object.defineProperty(globalThis, 'DOMMatrix', { configurable: true, value: MatrixStub });
+    try {
+      const host = document.createElement('div');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 22 18');
+      svg.style.width = '8px';
+      svg.style.height = '8px';
+      svg.style.transform = 'matrix(2, 0, 0, 2, 0, 0)';
+      svg.getBoundingClientRect = () => ({ left: 40, top: 38, width: 16, height: 16 }) as DOMRect;
+      host.appendChild(svg);
+      const m = getSvgWrapperViewBoxAffine(svg, { contentRoot: host, zoom: 1 });
+      expect(m).not.toBeNull();
+      const box = affineBoxCorners(m!, 0, 0, 22, 18);
+      closePt(box.TL, 40, 38);
+      closePt(box.BR, 56, 54);
+    } finally {
+      Object.defineProperty(globalThis, 'DOMMatrix', { configurable: true, value: previousMatrix });
+    }
   });
 });
 

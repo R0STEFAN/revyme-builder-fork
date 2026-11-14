@@ -106,6 +106,8 @@ export interface TopSvgParams {
   /** Parsed CSS `rotate(θdeg)` on the wrapper; 0 for a standalone shape (whose
    *  rotation lives on the inner shape attribute instead). */
   thetaDeg: number;
+  /** Linear part of the wrapper's CSS transform (scale/rotate/skew). */
+  cssTransformLinear?: [number, number, number, number];
   /** Canvas zoom (currentSandboxTransform.scale). */
   zoom: number;
   /** Rotation pivot in CSS px (from `transform-origin`); for a non-rotated svg
@@ -118,16 +120,17 @@ export interface TopSvgParams {
 }
 
 /** Top-level/standalone <svg> viewBox-user coords → screen.
- *  translate(C) · rotate(θ) · scale(zoom) · translate(-pivot) ·
+ *  translate(C) · CSS transform linear part · scale(zoom) · translate(-pivot) ·
  *  scale(cssW/vbW, cssH/vbH) · translate(-vbX,-vbY).
- *  Algebraic restatement of bridge-sandbox `buildSvgUserToScreen` (which is
- *  the test oracle), generalised to viewBox origin/scale. */
+ *  Includes the motion scale so the selection corners match the painted SVG. */
 export function topSvgUserToScreenAffine(p: TopSvgParams): Affine {
   const sx = p.vbW !== 0 ? p.cssW / p.vbW : 1;
   const sy = p.vbH !== 0 ? p.cssH / p.vbH : 1;
   return composeAll(
     translate(p.Cx, p.Cy),
-    rotateDeg(p.thetaDeg),
+    p.cssTransformLinear
+      ? [p.cssTransformLinear[0], p.cssTransformLinear[1], p.cssTransformLinear[2], p.cssTransformLinear[3], 0, 0]
+      : rotateDeg(p.thetaDeg),
     scale(p.zoom, p.zoom),
     translate(-p.pivotX, -p.pivotY),
     scale(sx, sy),
@@ -230,7 +233,15 @@ function readTopSvgParams(svg: SVGSVGElement, zoom: number): TopSvgParams | null
   const vbW = vb?.w || cssW;
   const vbH = vb?.h || cssH;
   if (!(cssW > 0) || !(cssH > 0) || !(vbW > 0) || !(vbH > 0)) return null;
-  const thetaDeg = parseCssRotateDeg((svg as unknown as HTMLElement).style.transform);
+  const transform = (svg as unknown as HTMLElement).style.transform;
+  const thetaDeg = parseCssRotateDeg(transform);
+  let cssTransformLinear: TopSvgParams['cssTransformLinear'];
+  if (transform && transform !== 'none' && typeof DOMMatrix !== 'undefined') {
+    try {
+      const matrix = new DOMMatrix(transform);
+      cssTransformLinear = [matrix.a, matrix.b, matrix.c, matrix.d];
+    } catch { /* Keep the existing rotation-only fallback for invalid transforms. */ }
+  }
   // Pivot in CSS px: transform-origin if set (groups), else the box centre
   // (standalone shapes — required so the BCR centre `C` corresponds to the
   // pivot when θ=0). NOT getBBox centre.
@@ -239,10 +250,11 @@ function readTopSvgParams(svg: SVGSVGElement, zoom: number): TopSvgParams | null
   const tm = to.match(/(-?[\d.]+)px\s+(-?[\d.]+)px/);
   if (tm) { pivotX = parseFloat(tm[1]); pivotY = parseFloat(tm[2]); }
   // Pivot SCREEN position `C` — backed out from the BCR (see `pivotScreenPosition`).
-  const { Cx, Cy } = pivotScreenPosition(r.left, r.top, thetaDeg, zoom, pivotX, pivotY, cssW, cssH);
+  const { Cx, Cy } = pivotScreenPosition(r.left, r.top, thetaDeg, zoom, pivotX, pivotY, cssW, cssH, cssTransformLinear);
   return {
     Cx, Cy,
     thetaDeg,
+    cssTransformLinear,
     zoom,
     pivotX, pivotY,
     vbX: vb?.x ?? 0,
@@ -254,8 +266,8 @@ function readTopSvgParams(svg: SVGSVGElement, zoom: number): TopSvgParams | null
 /** The rotation pivot's SCREEN position, backed out from the element's
  *  bounding-client-rect top-left + angle + zoom + pivot offset + box dims.
  *
- *  A rotation maps the pivot to a FIXED point, so it must be a corner-relative
- *  invariant of the BCR (the rotated AABB). We rotate the box's 4 corners
+ *  A CSS transform maps the pivot to a FIXED point, so it must be a corner-relative
+ *  invariant of the BCR (the transformed AABB). We transform the box's 4 corners
  *  (expressed relative to the pivot, in screen px) and take their min — the BCR
  *  top-left equals `pivot + min(rotatedCorner)`, so `pivot = BCR.topLeft − min`.
  *
@@ -266,6 +278,7 @@ function readTopSvgParams(svg: SVGSVGElement, zoom: number): TopSvgParams | null
 export function pivotScreenPosition(
   bcrLeft: number, bcrTop: number, thetaDeg: number, zoom: number,
   pivotX: number, pivotY: number, cssW: number, cssH: number,
+  cssTransformLinear?: [number, number, number, number],
 ): { Cx: number; Cy: number } {
   const rad = (thetaDeg * Math.PI) / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
@@ -277,7 +290,12 @@ export function pivotScreenPosition(
   ];
   let minX = Infinity, minY = Infinity;
   for (const [dx, dy] of rel) {
-    const rx = dx * cos - dy * sin, ry = dx * sin + dy * cos;
+    const rx = cssTransformLinear
+      ? cssTransformLinear[0] * dx + cssTransformLinear[2] * dy
+      : dx * cos - dy * sin;
+    const ry = cssTransformLinear
+      ? cssTransformLinear[1] * dx + cssTransformLinear[3] * dy
+      : dx * sin + dy * cos;
     if (rx < minX) minX = rx;
     if (ry < minY) minY = ry;
   }
