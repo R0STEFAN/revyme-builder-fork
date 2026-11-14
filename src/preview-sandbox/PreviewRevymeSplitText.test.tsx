@@ -4,6 +4,15 @@ import { render, act } from '@testing-library/react';
 import { PreviewRevymeSplitText } from './PreviewRevymeSplitText';
 
 describe('PreviewRevymeSplitText', () => {
+  it('animates a component between word runs', () => {
+    const Stroke = () => <b data-testid="stroke">Stroke</b>;
+    const { getByTestId } = render(
+      <PreviewRevymeSplitText spec={{ animationType: 'word', trigger: 'view', opacity: 0, delay: 0.05 }}>
+        <span>First</span><Stroke /><span>Last</span>
+      </PreviewRevymeSplitText>,
+    );
+    expect(getByTestId('stroke').parentElement?.style.opacity).toBe('0');
+  });
   beforeEach(() => {
     vi.stubGlobal('innerHeight', 800);
   });

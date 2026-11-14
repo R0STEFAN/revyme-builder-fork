@@ -49,6 +49,20 @@ describe('RevymeSplitText renders', () => {
     expect(container.textContent).toBe('one two three');
   });
 
+  it('animates a component in sequence between marked word runs', () => {
+    const Stroke = () => <b data-testid="stroke">Stroke</b>;
+    const { container, getByTestId } = render(
+      <RevymeSplitText spec={spec({ animationType: 'word', delay: 0.05 })}>
+        <span data-id="first">First</span><Stroke /><span data-id="last">Last</span>
+      </RevymeSplitText>,
+    );
+    const stroke = getByTestId('stroke');
+    expect(stroke).not.toBeNull();
+    expect(stroke.parentElement?.tagName).toBe('SPAN');
+    expect(stroke.parentElement?.style.opacity).toBe('0');
+    expect(container.textContent).toBe('FirstStrokeLast');
+  });
+
   it('line mode breaks on \\n', () => {
     const { container } = render(<RevymeSplitText spec={spec({ animationType: 'line' })}>{'a\nb'}</RevymeSplitText>);
     expect(container.querySelectorAll('br')).toHaveLength(1);

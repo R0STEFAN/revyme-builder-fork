@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseJSXToNodes } from '@/code/parsing/parser';
-import { updateMotionPropInCode } from '@/code/generation/generator-motion-props';
+import { updateMotionPropInCode, removeMotionPropFromCode } from '@/code/generation/generator-motion-props';
 import { updateHtmlAttrsInCode } from '@/code/generation/generator-attrs';
 
 describe('Appear Popup & Children Stagger', () => {
@@ -57,5 +57,26 @@ export default function Page() {
       { type: 'spring', stiffness: '300', damping: '25', delay: 'index * 0.1' }
     );
     expect(code).toContain('delay: index * 0.1');
+  });
+
+  it('preserves a component between text children when staggering a heading', () => {
+    let code = `import React from 'react';
+import UxReJo from '@/components/UxReJo';
+export default function Page() { return <div data-id="root">{cn_heading}</div>; }
+const cn_heading = <h1 data-id="heading" data-canvas-node="true"><span data-id="first">First</span><UxReJo data-id="stroke" /><span data-id="last">Last</span></h1>;`;
+    code = updateHtmlAttrsInCode(code, 'heading', { 'data-stagger': '0.1' });
+    for (const [index, id] of ['first', 'stroke', 'last'].entries()) {
+      const forward = id === 'stroke';
+      code = updateMotionPropInCode(code, id, 'initial', { opacity: '0', y: '30' }, forward);
+      code = updateMotionPropInCode(code, id, 'whileInView', { opacity: '1', y: '0' }, forward);
+      code = updateMotionPropInCode(code, id, 'viewport', { once: 'true' }, forward);
+      code = updateMotionPropInCode(code, id, 'transition', { type: 'spring', delay: String(index * 0.1) }, forward);
+    }
+    expect(code).toMatch(/<UxReJo[^>]*data-id="stroke"[^>]*initial=\{\{ opacity: 0, y: 30 \}\}/);
+    expect(code).toMatch(/<UxReJo[^>]*transition=\{\{ type: 'spring', delay: 0\.1 \}\}/);
+    expect(code).not.toContain('<MotionConfig');
+    expect(parseJSXToNodes(code).get('heading')?.children).toEqual(['first', 'stroke', 'last']);
+    const withoutTransition = removeMotionPropFromCode(code, 'stroke', 'transition');
+    expect(withoutTransition).not.toMatch(/<UxReJo[^>]*transition=/);
   });
 });

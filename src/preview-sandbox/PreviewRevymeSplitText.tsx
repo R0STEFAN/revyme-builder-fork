@@ -207,6 +207,7 @@ function buildRichNodes(
   type Seg =
     | { kind: 'text'; v: string }
     | { kind: 'el'; tag: string; props: Record<string, unknown>; segs: Seg[] }
+    | { kind: 'component'; value: React.ReactNode }
     | { kind: 'br' };
 
   const toSegs = (node: React.ReactNode, out: Seg[]): void => {
@@ -244,7 +245,8 @@ function buildRichNodes(
         out.push({ kind: 'el', tag: type, props, segs });
         return;
       }
-      bailed = true;
+      out.push({ kind: 'component', value: node });
+      sig += '<component>';
       return;
     }
     bailed = true;
@@ -270,6 +272,8 @@ function buildRichNodes(
         const kids: Node[] = [];
         emit(seg.segs, kids);
         out.push({ t: 'el', k: `el${key++}`, tag: seg.tag, props: seg.props, kids });
+      } else if (seg.kind === 'component') {
+        out.push(unit(seg.value, 'inline-block', animationType === 'line' ? lineIndex : undefined));
       } else if (animationType === 'full') {
         out.push(unit(seg.v, 'inline-block', 0));
       } else if (animationType === 'line') {

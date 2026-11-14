@@ -60,13 +60,12 @@ const PARSED_SKIP_ATTRS = new Set(['data-id', 'data-name', 'data-viewport', 'dat
  *
  *  Keyed on the WRAPPER, not on `data-text-anim`, so a half-written node still resolves. */
 function findSplitTextWrapper(el: any): any | null {
-  for (const c of el.children ?? []) {
-    if (c.type !== 'JSXElement') continue;
-    const n = c.openingElement?.name;
-    const name = n?.type === 'JSXMemberExpression' ? `${n.object?.name}.${n.property?.name}` : n?.name;
-    return name === 'RevymeSplitText' ? c : null;   // only the FIRST element child counts
-  }
-  return null;
+  const children = (el.children ?? []).filter((c: any) =>
+    c.type !== 'JSXText' || c.value.trim());
+  if (children.length !== 1 || children[0].type !== 'JSXElement') return null;
+  const child = children[0];
+  const name = child.openingElement?.name;
+  return name?.type === 'JSXIdentifier' && name.name === 'RevymeSplitText' ? child : null;
 }
 
 /**
@@ -3175,16 +3174,14 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
 
       const tagName = resolveTagName(opening);
 
-      // Skip non-visual wrappers.
-      // PRESERVED walker difference: returning here drops the wrapper's whole
-      // subtree (this walker recurses manually at the bottom), whereas the main
-      // babel walker keeps descending so wrapper children re-parent upward.
-      if (tagName === 'style' || tagName === 'MotionConfig' || tagName === 'LayoutGroup' || tagName === 'PageTransitions') {
+      if (tagName === 'style') {
         return;
       }
-      // Element wrappers (code override, Ticker effect) are transparent: their
-      // one element parents to the wrapper's parent, as in the main walker.
-      if (tagName === 'Override' || tagName === 'RevymeTicker') {
+      // These wrappers render no authored layer. Descend without changing the
+      // parent stack so their children stay attached to the canvas node.
+      if (tagName === 'MotionConfig' || tagName === 'LayoutGroup'
+          || tagName === 'PageTransitions' || tagName === 'RevymeSplitText'
+          || tagName === 'Override' || tagName === 'RevymeTicker') {
         for (const child of el.children) {
           if (child.type === 'JSXElement') visitCanvasJSXElement(child);
         }
@@ -3297,6 +3294,8 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
       // Same wrapper carve-out as the main walker — see findSplitTextWrapper.
       const canvasSplitWrapper = findSplitTextWrapper(el);
       const canvasContentEl = canvasSplitWrapper ?? el;
+      const canvasSplitHasNodes = !!canvasSplitWrapper?.children.some((child: any) =>
+        child.type === 'JSXElement' && getAttr(child.openingElement.attributes, 'data-id'));
       for (const child of canvasContentEl.children) {
         if (child.type === 'JSXText') {
           // JSX-proper whitespace — preserve same-line edge spaces (see the
@@ -3444,7 +3443,7 @@ export function parseJSXToNodes(code: string, propOverrides?: Record<string, str
         node.graphicMarkup = serializeJsxChildrenToSvgMarkup(el.children as any[]);
         node.textContent = '';
         trace.action('parser:canvasNodes-graphic-svg-captured', { nodeId: id, markupLength: node.graphicMarkup.length });
-      } else if (!hasMixedContent && !node.collectionList && !canvasSplitWrapper) {
+      } else if (!hasMixedContent && !node.collectionList && (!canvasSplitWrapper || canvasSplitHasNodes)) {
         // A collection-list container's children are the `.map()` template — already
         // parsed by the main traverse and preserved above. Re-walking its JSXElement
         // children here would re-add/duplicate them; skip recursion for it.

@@ -16,6 +16,7 @@ import {
   buildSplitTextSpecSource,
 } from './text-anim-gen';
 import { validateGeneratedCode } from '@/code/mutation/mutation-queue';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 import {
   resolveTextAnimForScope, setTextAnimScoped, hasTextAnimScope, resetTextAnimScope,
 } from '@/editor/tools/AnimationTool/motion/text-anim-presets';
@@ -47,6 +48,50 @@ const inner = (code: string, id = 'hero') => {
 // ─── Emitted shape ───────────────────────────────────────────────────────────
 
 describe('addTextAnimInCode — runtime wrapper', () => {
+  it('keeps a component between animated spans through add, update, and remove', () => {
+    const source = `import React from 'react';
+import UxReJo from '@/components/UxReJo';
+export default function Page() { return <div data-id="root">{cn_hero}</div>; }
+const cn_hero = <h1 data-id="hero" data-canvas-node="true"><span data-id="first">First</span><UxReJo data-id="stroke" /><span data-id="last">Last</span></h1>;`;
+    const added = addTextAnimInCode(source, 'hero', DEFAULT_CONFIG);
+    expect(added).toContain('<UxReJo data-id="stroke" />');
+    expect((added.match(/<RevymeSplitText spec=/g) ?? []).length).toBe(1);
+    expect(added).toContain('data-id="first">First</span><UxReJo data-id="stroke" /><span data-id="last">Last</span></RevymeSplitText>');
+    expect(validateGeneratedCode(added)).toBeNull();
+    expect(parseJSXToNodes(added).get('hero')?.children).toEqual(['first', 'stroke', 'last']);
+    const updated = updateTextAnimInCode(added, 'hero', { ...DEFAULT_CONFIG, animationType: 'word' });
+    expect(updated).toContain('<UxReJo data-id="stroke" />');
+    expect((updated.match(/<RevymeSplitText spec=/g) ?? []).length).toBe(1);
+    expect(validateGeneratedCode(updated)).toBeNull();
+    expect(parseJSXToNodes(updated).get('hero')?.children).toEqual(['first', 'stroke', 'last']);
+    expect(removeTextAnimFromCode(updated, 'hero').replace(/\s+/g, '')).toContain('<spandata-id="first">First</span><UxReJodata-id="stroke"/><spandata-id="last">Last</span>');
+  });
+  it('updates the split spec without rebuilding the heading children', () => {
+    const source = `import UxReJo from '@/components/UxReJo';
+export default function Page() { return <div data-id="root">{cn_hero}</div>; }
+const cn_hero = <h1 data-id="hero" data-canvas-node="true"><span data-id="first">First</span><UxReJo data-id="stroke" /><span data-id="last">Last</span></h1>;`;
+    const added = addTextAnimInCode(source, 'hero', DEFAULT_CONFIG)
+      .replace('<RevymeSplitText spec=', '<RevymeSplitText data-preserve="yes" spec=');
+    const updated = updateTextAnimInCode(added, 'hero', { ...DEFAULT_CONFIG, animationType: 'word' });
+    expect(updated).toContain('<RevymeSplitText data-preserve="yes" spec=');
+    expect(updated).toContain('<UxReJo data-id="stroke" />');
+    expect(parseJSXToNodes(updated).get('hero')?.children).toEqual(['first', 'stroke', 'last']);
+  });
+  it('consolidates the previous per-span wrappers into one sequence when switching to Word', () => {
+    const source = `import UxReJo from '@/components/UxReJo';
+export default function Page() { return <div data-id="root">{cn_hero}</div>; }
+const cn_hero = <h1 data-id="hero" data-canvas-node="true" data-text-anim='{"animationType":"character"}'><RevymeSplitText spec={{ animationType: 'character' }}><span data-id="first">First</span></RevymeSplitText><UxReJo data-id="stroke" /><RevymeSplitText spec={{ animationType: 'character' }}><span data-id="last">Last</span></RevymeSplitText></h1>;`;
+    const updated = updateTextAnimInCode(source, 'hero', { ...DEFAULT_CONFIG, animationType: 'word' });
+    expect((updated.match(/<RevymeSplitText spec=/g) ?? []).length).toBe(1);
+    expect(updated).toContain('<span data-id="first">First</span><UxReJo data-id="stroke" /><span data-id="last">Last</span>');
+    expect(parseJSXToNodes(updated).get('hero')?.children).toEqual(['first', 'stroke', 'last']);
+  });
+  it('keeps a nested component when a text run cannot be split', () => {
+    const source = `import Icon from '@/components/Icon'; export default function Page() { return <h1 data-id="hero"><span>Hi <Icon /></span></h1>; }`;
+    const added = addTextAnimInCode(source, 'hero', DEFAULT_CONFIG);
+    expect(added).toContain('<span>Hi <Icon /></span>');
+    expect(removeTextAnimFromCode(added, 'hero')).toContain('<span>Hi <Icon /></span>');
+  });
   it('wraps the children and records the spec on the data-id tag', () => {
     const out = addTextAnimInCode(PAGE, 'hero', DEFAULT_CONFIG);
     expect(out).toContain('data-text-anim=');

@@ -526,7 +526,7 @@ export type Mutation =
   | { type: 'setSmoothScroll'; nodeId: string; enabled: boolean }
   // ─── Motion mutations ────────────────────────────────────────────
   /** Set a Motion animation prop (whileHover, whileTap, animate, etc.) on an element. */
-  | { type: 'updateMotionProp'; nodeId: string; propName: string; props: Record<string, string>; scope?: import('../animations/animation-scope').ResolvedScope }
+  | { type: 'updateMotionProp'; nodeId: string; propName: string; props: Record<string, string>; scope?: import('../animations/animation-scope').ResolvedScope; componentPassthrough?: boolean }
   /** Remove a Motion animation prop from an element. */
   | { type: 'removeMotionProp'; nodeId: string; propName: string }
   /** Reset Override: drop one scope's branch from a responsive motion prop (keep the base). */
@@ -3680,9 +3680,9 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         // (`whileHover={__mq0 ? {override} : {base}}`). scope=null → write the base.
         // No scope key at all (legacy / non-scoped editor) → plain in-place update.
         if (mutation.scope !== undefined) {
-          return setMotionPropScopedValue(code, mutation.nodeId, mutation.propName, mutation.props, mutation.scope);
+          return setMotionPropScopedValue(code, mutation.nodeId, mutation.propName, mutation.props, mutation.scope, mutation.componentPassthrough);
         }
-        return updateMotionPropInCode(code, mutation.nodeId, mutation.propName, mutation.props);
+        return updateMotionPropInCode(code, mutation.nodeId, mutation.propName, mutation.props, mutation.componentPassthrough);
       }
 
       case 'removeMotionProp':

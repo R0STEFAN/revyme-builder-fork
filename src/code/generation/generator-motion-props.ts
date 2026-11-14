@@ -33,6 +33,7 @@ export function updateMotionPropInCode(
   nodeId: string,
   propName: string,
   props: Record<string, string>,
+  componentPassthrough = false,
 ): string {
   trace.fn('generator.updateMotionPropInCode', { nodeId, propName, props });
 
@@ -101,7 +102,7 @@ export function updateMotionPropInCode(
     // apply directly. Treat it like a motion.* element, not an inert instance.
     && tagName !== 'MotionLink';
 
-  if (isComponentInstanceTag) {
+  if (isComponentInstanceTag && !componentPassthrough) {
     if (propName === 'transition') {
       return wrapInstanceWithMotionConfig(code, nodeId, effectiveProps);
     }
@@ -114,7 +115,7 @@ export function updateMotionPropInCode(
   // Step 1: Convert to motion.* if needed. `MotionLink` is already a motion
   // component (`motion.create(Link)`) — leave the tag as-is and just apply the
   // prop (turning it into `motion.motionlink` would render a broken element).
-  if (!tagName.startsWith('motion.') && tagName !== 'MotionLink') {
+  if (!tagName.startsWith('motion.') && tagName !== 'MotionLink' && !isComponentInstanceTag) {
     const baseTag = tagName.toLowerCase();
     const motionTag = `motion.${baseTag}`;
     result = result.slice(0, tagStart + 1) + motionTag + result.slice(tagStart + 1 + tagName.length);
@@ -369,7 +370,7 @@ function formatMotionPropObject(props: Record<string, string>): string {
  */
 export function setMotionPropScopedValue(
   code: string, nodeId: string, propName: string,
-  props: Record<string, string>, scope: ResolvedScope,
+  props: Record<string, string>, scope: ResolvedScope, componentPassthrough = false,
 ): string {
   const t = scopeTest(code, scope); code = t.code;
   const objStr = formatMotionPropObject(props);
@@ -378,7 +379,7 @@ export function setMotionPropScopedValue(
   if (!expr) {
     // No existing prop → create. updateMotionPropInCode handles motion.*
     // conversion + import + a bare `{{…}}`; then re-wrap if this is a scope.
-    const created = updateMotionPropInCode(code, nodeId, propName, props);
+    const created = updateMotionPropInCode(code, nodeId, propName, props, componentPassthrough);
     if (!t.test) return created;
     const e2 = findMotionPropExpr(created, nodeId, propName);
     if (!e2) return created;
@@ -466,7 +467,8 @@ export function removeMotionPropFromCode(
     // not a MotionConfig wrapper.
     && tagName !== 'MotionLink';
   if (isComponentInstanceTag && propName === 'transition') {
-    return wrapInstanceWithMotionConfig(code, nodeId, null);
+    const unwrapped = wrapInstanceWithMotionConfig(code, nodeId, null);
+    if (unwrapped !== code) return unwrapped;
   }
 
   // Remove the whole `propName={…}` attribute — handles the bare `{{…}}` object

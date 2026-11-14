@@ -396,6 +396,9 @@ function resolveWrapperContent(code: string, nodeId: string, inner: string): { c
   // splitter walks them and animates the glyphs inside (bold/color used to be
   // silently stripped here). Paragraph wrappers normalize to `<br />`.
   if (/<(?!br\b)/.test(inner)) {
+    // A component is a real child in the same text sequence. Keep its JSX so
+    // the runtime can animate it as one unit between the surrounding words.
+    if (/<[A-Z][A-Za-z0-9]*\b/.test(inner)) return { content: inner, code };
     const rich = normalizeInlineRichInner(inner);
     if (rich !== null) return { content: rich, code };
     // (d2) any other markup → fold to plain text + real <br /> (unchanged)
@@ -404,6 +407,19 @@ function resolveWrapperContent(code: string, nodeId: string, inner: string): { c
 
   // (e) plain text and/or <br /> — already correct
   return { content: inner, code };
+}
+
+function unwrapSplitText(inner: string): string {
+  let out = inner;
+  let start = out.lastIndexOf(`<${SPLIT_TEXT_TAG}`);
+  while (start >= 0) {
+    const end = findTagClose(out, start);
+    const close = out.indexOf(`</${SPLIT_TEXT_TAG}>`, end + 1);
+    if (end < 0 || close < 0) break;
+    out = out.slice(0, start) + out.slice(end + 1, close) + out.slice(close + `</${SPLIT_TEXT_TAG}>`.length);
+    start = out.lastIndexOf(`<${SPLIT_TEXT_TAG}`);
+  }
+  return out;
 }
 
 /** The raw source of `inner` when it is exactly ONE JSXExpressionContainer holding something
@@ -479,6 +495,7 @@ function locate(code: string, nodeId: string): { tagStart: number; openEnd: numb
 export function addTextAnimInCode(code: string, nodeId: string, config: TextAnimConfig): string {
   trace.fn('text-anim-gen:add', { nodeId, animationType: config.animationType });
   code = healCorruptedStyleTextAnim(code);
+  if (nodeHasTextAnim(code, nodeId)) code = removeTextAnimFromCode(code, nodeId);
 
   const loc = locate(code, nodeId);
   if (!loc) { trace.error('text-anim-gen:add:not-found', { nodeId }); return code; }
@@ -522,6 +539,39 @@ export function addTextAnimInCode(code: string, nodeId: string, config: TextAnim
 export function updateTextAnimInCode(code: string, nodeId: string, config: TextAnimConfig): string {
   trace.fn('text-anim-gen:update', { nodeId, animationType: config.animationType });
   if (findJSXDataIdIndex(code, nodeId) < 0) return code;
+  const loc = locate(code, nodeId);
+  if (loc && nodeHasTextAnim(code, nodeId)) {
+    const inner = code.slice(loc.openEnd + 1, loc.closeIdx);
+    if ((inner.match(new RegExp(`<${SPLIT_TEXT_TAG}\\b`, 'g')) ?? []).length === 1) {
+      const variantId = /\bconst\s*\[\s*variant\b/.test(code) ? 'variant' : 'initialVariant';
+      const variantAttr = needsVariantProp(config) ? ` variant={${variantId}}` : '';
+      const specAttr = ` spec={${buildSplitTextSpecSource(config)}}${variantAttr}`;
+      let nextInner = inner;
+      let searchEnd = inner.length;
+      while (searchEnd > 0) {
+        const start = nextInner.lastIndexOf(`<${SPLIT_TEXT_TAG}`, searchEnd - 1);
+        if (start < 0) break;
+        const end = findTagClose(nextInner, start);
+        if (end < 0) break;
+        const oldOpen = nextInner.slice(start, end + 1);
+        const bare = stripTagAttrBalanced(stripTagAttrBalanced(oldOpen, 'spec'), 'variant');
+        const newOpen = `${bare.slice(0, -1)}${specAttr}>`;
+        nextInner = nextInner.slice(0, start) + newOpen + nextInner.slice(end + 1);
+        searchEnd = start;
+      }
+      let result = code.slice(0, loc.openEnd + 1) + nextInner + code.slice(loc.closeIdx);
+      const updated = locate(result, nodeId);
+      if (updated) {
+        const open = result.slice(updated.tagStart, updated.openEnd + 1);
+        const replaced = open.replace(/data-text-anim=(?:'[^']*'|"[^"]*")/, `data-text-anim='${JSON.stringify(config)}'`);
+        if (replaced !== open) {
+          result = result.slice(0, updated.tagStart) + replaced + result.slice(updated.openEnd + 1);
+          trace.action('text-anim-gen:update:spec-only', { nodeId });
+          return result;
+        }
+      }
+    }
+  }
   const collapsed = removeTextAnimFromCode(code, nodeId);
   return addTextAnimInCode(collapsed === code ? code : collapsed, nodeId, config);
 }
@@ -542,9 +592,7 @@ export function removeTextAnimFromCode(code: string, nodeId: string): string {
 
   const wrapOpen = inner.indexOf(`<${SPLIT_TEXT_TAG}`);
   if (wrapOpen >= 0) {
-    const gt = findTagClose(inner, wrapOpen);
-    const close = inner.lastIndexOf(`</${SPLIT_TEXT_TAG}>`);
-    if (gt >= 0 && close > gt) content = inner.slice(gt + 1, close);
+    content = unwrapSplitText(inner);
   } else if (inner.includes('<motion.span')) {
     content = escapeText(collapseMotionSpans(inner));
     working = stripScrollTextHooks(code, nodeId);

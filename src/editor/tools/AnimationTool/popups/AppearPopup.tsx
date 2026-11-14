@@ -79,30 +79,36 @@ export function AppearPopup({ nodeId, node, enterProps, transition, isVariantMod
       const idxVar = node?.collectionList?.indexVar || 'index';
       for (const cid of cIds) {
         const cNode = getNodeFromCache(cid);
-        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'initial', props: enter, scope });
+        const componentPassthrough = !!cNode && /^[A-Z]/.test(cNode.type) && !cNode.isCodeComponent;
+        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'initial', props: enter, scope, componentPassthrough });
         queueMutation({
           type: 'updateMotionProp', nodeId: cid, propName: 'whileInView',
           props: appearReveal(appearUnionKeys(cNode?.motionProps?.initial, enter), cNode?.styles),
+          componentPassthrough,
         });
-        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'viewport', props: { once: 'true' } });
+        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'viewport', props: { once: 'true' }, componentPassthrough });
         queueMutation({
           type: 'updateMotionProp', nodeId: cid, propName: 'transition',
           props: { ...trans, delay: `${idxVar} * ${stagVal}` },
+          componentPassthrough,
         });
       }
     } else {
       cIds.forEach((cid, index) => {
         const cNode = getNodeFromCache(cid);
+        const componentPassthrough = !!cNode && /^[A-Z]/.test(cNode.type) && !cNode.isCodeComponent;
         const delay = parseFloat((index * stagVal).toFixed(2));
-        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'initial', props: enter, scope });
+        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'initial', props: enter, scope, componentPassthrough });
         queueMutation({
           type: 'updateMotionProp', nodeId: cid, propName: 'whileInView',
           props: appearReveal(appearUnionKeys(cNode?.motionProps?.initial, enter), cNode?.styles),
+          componentPassthrough,
         });
-        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'viewport', props: { once: 'true' } });
+        queueMutation({ type: 'updateMotionProp', nodeId: cid, propName: 'viewport', props: { once: 'true' }, componentPassthrough });
         queueMutation({
           type: 'updateMotionProp', nodeId: cid, propName: 'transition',
           props: { ...trans, delay: String(delay) },
+          componentPassthrough,
         });
       });
     }
