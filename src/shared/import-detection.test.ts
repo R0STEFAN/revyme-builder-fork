@@ -62,6 +62,11 @@ describe('buildAutoImports — React hooks', () => {
 });
 
 describe('buildAutoImports — framer-motion', () => {
+  test('keeps useReducedMotionConfig for a Loop effect', () => {
+    const out = buildAutoImports(`const reducedMotion = useReducedMotionConfig();`);
+    expect(out).toContain(`import { useReducedMotionConfig } from 'framer-motion';`);
+  });
+
   test('detects motion. member access', () => {
     const out = buildAutoImports(`<motion.div animate={{ x: 0 }}/>`);
     expect(out).toContain(`import { motion } from 'framer-motion';`);

@@ -55,6 +55,7 @@ export function buildAutoImports(body) {
   if (/\buseMotionTemplate\b/.test(body)) motion.push('useMotionTemplate');
   if (/\buseInView\b/.test(body)) motion.push('useInView');
   if (/\buseMotionValueEvent\b/.test(body)) motion.push('useMotionValueEvent');
+  if (/\buseReducedMotionConfig\b/.test(body)) motion.push('useReducedMotionConfig');
   // useMotionValue + imperative animate() drive the COMPOSED scroll-effect form
   // (Appear×Transform stacked into one element). Without these two detectors,
   // syncImports regenerates the framer-motion import without them and the

@@ -231,6 +231,17 @@ const cn_dark_box = <div data-id="dark-box" data-canvas-node="true" style={{ pos
 // declaration block. These tests pin the fix in place.
 
 describe('syncImports — top-of-file JSDoc block preservation', () => {
+  test('preserves the reduced motion hook added by Loop composition', () => {
+    const code = `'use client';
+import React from 'react';
+import { motion, useReducedMotionConfig } from 'framer-motion';
+export default function Page() {
+  const reducedMotion = useReducedMotionConfig();
+  return <motion.div data-id="loop-layout" animate={{ rotate: reducedMotion ? 0 : 360 }} />;
+}`;
+    expect(syncImports(code)).toContain("import { motion, useReducedMotionConfig } from 'framer-motion';");
+  });
+
   test('keeps React helpers used by a slot component after an edit', () => {
     const code = `'use client';
 import { useRef, Children } from 'react';

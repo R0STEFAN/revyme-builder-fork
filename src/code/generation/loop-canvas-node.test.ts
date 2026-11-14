@@ -8,6 +8,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { setLoopInCode, composeLoopInCode } from './generator-motion-loop';
+import { syncImports } from '@/code/mutation/mutation-queue';
 
 const SPEC = { props: { rotate: '360' }, transition: { duration: '6', repeat: 'Infinity', ease: 'linear' } };
 
@@ -117,6 +118,13 @@ const canvasNodes = <>
 });
 
 describe('Loop inside the component render — hook form (unchanged behavior)', () => {
+  test('keeps the reduced motion import after the builder syncs imports', () => {
+    const withLoop = setLoopInCode(VIEWPORT_PAGE, 'star', SPEC);
+    const synced = syncImports(composeLoopInCode(withLoop, 'star'));
+    expect(synced).toContain('const starLoopReducedMotion = useReducedMotionConfig()');
+    expect(synced).toMatch(/import \{[^}]*useReducedMotionConfig[^}]*\} from 'framer-motion'/);
+  });
+
   test('composes motion values + effects, strips data-loop from the tag', () => {
     let code = setLoopInCode(VIEWPORT_PAGE, 'star', SPEC);
     code = composeLoopInCode(code, 'star');
