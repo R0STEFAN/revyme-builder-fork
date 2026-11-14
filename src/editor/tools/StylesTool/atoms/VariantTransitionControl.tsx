@@ -3,7 +3,7 @@
 //
 // Routing:
 //   Root + default variant  → <MotionConfig transition={...}> wrapper (propagates to all)
-//   Root + non-default      → inside variant entry: transition: { ... }
+//   Root + non-default      → variant entry, cascaded through MotionConfig
 //   Child + default         → transition={{...}} prop on the element (overrides MotionConfig)
 //   Child + non-default     → inside variant entry: transition: { ... }
 
@@ -17,7 +17,7 @@ import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import {
   updateMotionPropInCode, removeMotionPropFromCode,
-  updateMotionConfigTransition, updateVariantEntryTransition, readTransitionVarRef, revertVariantTransition, setMotionConfigBaseVar,
+  updateMotionConfigTransition, updateVariantEntryTransition, syncRootVariantTransition, readTransitionVarRef, revertVariantTransition, setMotionConfigBaseVar,
 } from '@/code/generation/generator-motion';
 import { readTransitionOrphanVar } from '@/code/generation/component-var-detach-gen';
 import { queueMutation } from '@/code/mutation/mutation-queue';
@@ -66,7 +66,7 @@ export default function VariantTransitionControl() {
 
     if (mode === 'motionConfig') {
       // Read from <MotionConfig transition={{...}}>
-      const match = code.match(/<MotionConfig\s+transition=\{\{([^}]*)\}\}/);
+      const match = code.match(/<MotionConfig\s+transition=\{(?:\(\w+\s+as Record<string, any>\)\[variant\]\?\.transition\s*\?\?\s*)?\{([^}]*)\}\}/);
       if (!match) return {};
       const result: Record<string, string> = {};
       // A bezier ease is a bare ARRAY in code (`ease: [0.12, 0.23, 0.5, 1]` —
@@ -168,7 +168,8 @@ export default function VariantTransitionControl() {
         return updateMotionConfigTransition(currentCode, resolvedTransition);
       }
       if (mode === 'variantEntry' && variantName) {
-        return updateVariantEntryTransition(currentCode, selectedId, variantName, resolvedTransition);
+        const updated = updateVariantEntryTransition(currentCode, selectedId, variantName, resolvedTransition);
+        return isRoot ? syncRootVariantTransition(updated, selectedId) : updated;
       }
       // elementProp mode (child + default)
       return updateMotionPropInCode(currentCode, selectedId, 'transition', resolvedTransition);
@@ -176,7 +177,7 @@ export default function VariantTransitionControl() {
 
     const newCode = projectFS.readFile(activeFile);
     if (newCode) { setCode(newCode); setVersion(v => v + 1); }
-  }, [selectedId, activeFile, mode, variantName, setCode, setVersion]);
+  }, [selectedId, activeFile, mode, variantName, isRoot, setCode, setVersion]);
 
   // PER-VIEWPORT RESET (the X on a replica): on a non-primary viewport the transition lives in THIS tile's
   // variant entry (`mode === 'variantEntry'`). Passing `null` strips just that entry's `transition: {…}`

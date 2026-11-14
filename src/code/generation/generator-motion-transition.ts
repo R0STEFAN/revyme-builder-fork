@@ -233,6 +233,10 @@ export function updateMotionConfigTransition(
   const transStr = (varRef && varRef.trim()) ? varRef.trim() : formatTransitionObj(transition!);
 
   if (hasWrapper) {
+    // A root variant override uses the variant object's transition as the cascade source.
+    // Updating the primary transition must replace only its fallback.
+    const cascaded = /(<MotionConfig\s+transition=\{\(\w+\s+as Record<string, any>\)\[variant\]\?\.transition\s*\?\?\s*)(?:\{[^}]*\}|[^}]+)(\})/;
+    if (cascaded.test(code)) return code.replace(cascaded, (_, prefix: string, close: string) => `${prefix}${transStr}${close}`);
     // Update existing MotionConfig transition — match either the `={{ … }}` object OR a `={ident}` variable form.
     code = code.replace(
       /(<MotionConfig\s+transition=)(?:\{\{[^}]*\}\}|\{[^{}]*\})/,
@@ -319,6 +323,46 @@ export function updateMotionConfigTransition(
   }
 
   return code;
+}
+
+/** Cascade the root's per-variant transition to motion descendants without their own override. */
+export function syncRootVariantTransition(code: string, nodeId: string): string {
+  trace.fn('generator.syncRootVariantTransition', { nodeId });
+  if (!/\bconst\s*\[\s*variant\s*,/.test(code)) return code;
+  const ast = parseJSX(code);
+  if (!ast) return code;
+  let root: any = null;
+  let ancestorConfig: any = null;
+  traverse(ast, {
+    JSXElement(path) {
+      const attrs = path.node.openingElement.attributes;
+      if (!attrs.some((attr: any) => attr.type === 'JSXAttribute' && attr.name.name === 'data-id' && attr.value?.value === nodeId)) return;
+      root = path.node;
+      let parent: any = path.parentPath;
+      while (parent) {
+        if (parent.isJSXElement() && parent.node.openingElement.name.type === 'JSXIdentifier' && parent.node.openingElement.name.name === 'MotionConfig') {
+          ancestorConfig = parent.node;
+          break;
+        }
+        parent = parent.parentPath;
+      }
+    },
+  });
+  if (!root) return code;
+  const opening = code.slice(root.openingElement.start, root.openingElement.end);
+  const variantsVar = opening.match(/\bvariants=\{(?:__applyInstanceSize\()?([A-Za-z_$][\w$]*)/)?.[1];
+  if (!variantsVar) return code;
+  const prefix = `(${variantsVar} as Record<string, any>)[variant]?.transition ?? `;
+  const transitionAttr = ancestorConfig?.openingElement.attributes.find((attr: any) => attr.type === 'JSXAttribute' && attr.name.name === 'transition');
+  const baseNode = transitionAttr?.value?.expression;
+  if (baseNode?.start !== undefined && baseNode?.end !== undefined) {
+    const base = code.slice(baseNode.start, baseNode.end);
+    if (base.startsWith(prefix)) return code;
+    const fallback = /^[A-Za-z_$][\w$]*$|^\{/.test(base) ? base : `(${base})`;
+    return code.slice(0, baseNode.start) + prefix + fallback + code.slice(baseNode.end);
+  }
+  const wrapped = `<MotionConfig transition={${prefix}{}}>${code.slice(root.start, root.end)}</MotionConfig>`;
+  return ensureMotionConfigImport(code.slice(0, root.start) + wrapped + code.slice(root.end));
 }
 
 /**
@@ -477,6 +521,8 @@ export function readTransitionVarRef(
     const mcMatch = code.match(/<MotionConfig\s+transition=(\{\{[\s\S]*?\}\}|\{[^{}]*\})/);
     if (!mcMatch) return null;
     const expr = mcMatch[1].slice(1, -1).trim();
+    const cascadeBase = /\[variant\]\?\.transition\s*\?\?\s*([A-Za-z_$][\w$]*)$/.exec(expr);
+    if (cascadeBase) return isIdent(cascadeBase[1]);
     const base = /\?/.test(expr) ? (expr.match(/:\s*([^:?]*)$/)?.[1]?.trim() ?? '') : expr;
     return base === 'undefined' ? null : isIdent(base);
   }
@@ -527,6 +573,9 @@ export function readTransitionVarRef(
  */
 export function setMotionConfigBaseVar(code: string, varRef: string): string {
   trace.fn('generator.setMotionConfigBaseVar', { varRef });
+  if (/<MotionConfig\s+transition=\{\(\w+\s+as Record<string, any>\)\[variant\]\?\.transition/.test(code)) {
+    return updateMotionConfigTransition(code, null, varRef);
+  }
   const mcMatch = code.match(/<MotionConfig\s+transition=(\{\{[\s\S]*?\}\}|\{[^{}]*\})/);
   if (!mcMatch) return updateMotionConfigTransition(code, null, varRef);
   const expr = mcMatch[1].slice(1, -1).trim();
