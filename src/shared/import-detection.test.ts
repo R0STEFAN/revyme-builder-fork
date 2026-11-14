@@ -47,6 +47,18 @@ describe('buildAutoImports — React hooks', () => {
     const out = buildAutoImports(`const x = myUseState; const y = useStateFoo;`);
     expect(out).toEqual([`import React from 'react';`]);
   });
+
+  test('keeps React helpers used by slot components', () => {
+    const out = buildAutoImports(`
+      const count = Children.count(children);
+      return isValidElement(children) ? cloneElement(children) : null;
+    `);
+    expect(out[0]).toBe(`import React, { Children, cloneElement, isValidElement } from 'react';`);
+  });
+
+  test('keeps useId for generated components', () => {
+    expect(buildAutoImports(`const id = useId();`)[0]).toBe(`import React, { useId } from 'react';`);
+  });
 });
 
 describe('buildAutoImports — framer-motion', () => {

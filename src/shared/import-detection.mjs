@@ -36,6 +36,13 @@ export function buildAutoImports(body) {
   if (/\buseCallback\b/.test(body)) hooks.push('useCallback');
   if (/\buseMemo\b/.test(body)) hooks.push('useMemo');
   if (/\buseLayoutEffect\b/.test(body)) hooks.push('useLayoutEffect');
+  if (/\buseId\b/.test(body)) hooks.push('useId');
+  // Slot-based code components use these React helpers as bare identifiers.
+  // syncImports rebuilds the React import on every edit, so omitting one here
+  // leaves the component compiling but crashing in preview at render time.
+  if (/\bChildren\b/.test(body)) hooks.push('Children');
+  if (/\bcloneElement\b/.test(body)) hooks.push('cloneElement');
+  if (/\bisValidElement\b/.test(body)) hooks.push('isValidElement');
 
   // Motion. `motion.` is matched as member-access (everything else
   // is a bare named import).

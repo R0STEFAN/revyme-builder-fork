@@ -231,6 +231,19 @@ const cn_dark_box = <div data-id="dark-box" data-canvas-node="true" style={{ pos
 // declaration block. These tests pin the fix in place.
 
 describe('syncImports — top-of-file JSDoc block preservation', () => {
+  test('keeps React helpers used by a slot component after an edit', () => {
+    const code = `'use client';
+import { useRef, Children } from 'react';
+function MagnetBox({ children }) {
+  const ref = useRef(null);
+  return <div ref={ref}>{Children.count(children) ? children : null}</div>;
+}
+export default MagnetBox;`;
+    const out = syncImports(code);
+    expect(out).toContain("import React, { useRef, Children } from 'react';");
+    expect(syncImports(out)).toBe(out);
+  });
+
   test('preserves /** @pageVariables */ block', () => {
     const code = `'use client';
 
