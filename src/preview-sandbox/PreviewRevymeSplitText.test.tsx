@@ -4,6 +4,17 @@ import { render, act } from '@testing-library/react';
 import { PreviewRevymeSplitText } from './PreviewRevymeSplitText';
 
 describe('PreviewRevymeSplitText', () => {
+  it.each(['character', 'word', 'line'] as const)('masks a component in %s mode', (animationType) => {
+    const Badge = () => <span data-probe="badge">badge</span>;
+    const { container } = render(
+      <PreviewRevymeSplitText spec={{ animationType, mask: true, trigger: 'appear' }}>
+        first <Badge /> last
+      </PreviewRevymeSplitText>,
+    );
+    const badge = container.querySelector('[data-probe="badge"]')!;
+    expect(badge.parentElement?.parentElement?.style.overflow).toBe('hidden');
+  });
+
   it('animates a component between word runs', () => {
     const Stroke = () => <b data-testid="stroke">Stroke</b>;
     const { getByTestId } = render(

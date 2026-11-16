@@ -273,7 +273,8 @@ function buildRichNodes(
         emit(seg.segs, kids);
         out.push({ t: 'el', k: `el${key++}`, tag: seg.tag, props: seg.props, kids });
       } else if (seg.kind === 'component') {
-        out.push(unit(seg.value, 'inline-block', animationType === 'line' ? lineIndex : undefined));
+        const u = unit(seg.value, 'inline-block', animationType === 'line' ? lineIndex : undefined);
+        out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u] } : u);
       } else if (animationType === 'full') {
         out.push(unit(seg.v, 'inline-block', 0));
       } else if (animationType === 'line') {
