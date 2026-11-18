@@ -15,6 +15,16 @@ describe('PreviewRevymeSplitText', () => {
     expect(badge.parentElement?.parentElement?.style.overflow).toBe('hidden');
   });
 
+  it.each(['character', 'word', 'line'] as const)('uses the compact mask for a component in %s mode', (animationType) => {
+    const Badge = () => <span data-probe="badge">badge</span>;
+    const { container } = render(
+      <PreviewRevymeSplitText spec={{ animationType, mask: true, trigger: 'appear' }}><Badge /></PreviewRevymeSplitText>,
+    );
+    const mask = container.querySelector('[data-probe="badge"]')!.parentElement!.parentElement!;
+    expect(mask.style.display).toBe('inline-flex');
+    expect(mask.style.paddingBottom).toBe('');
+  });
+
   it('animates a component between word runs', () => {
     const Stroke = () => <b data-testid="stroke">Stroke</b>;
     const { getByTestId } = render(

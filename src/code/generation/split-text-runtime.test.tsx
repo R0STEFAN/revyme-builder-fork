@@ -161,6 +161,18 @@ describe('rich children — marks survive the split (BUG 4, 2026-09-05)', () => 
     expect(container.textContent?.replace(/\s+/g, ' ').trim()).toBe('first badge last');
   });
 
+  it.each(['character', 'word', 'line'] as const)('keeps a masked component wrapper compact in %s mode', (animationType) => {
+    const Badge = () => <span data-probe="badge">badge</span>;
+    const { container } = render(
+      <RevymeSplitText spec={{ ...spec, animationType, mask: true }}><Badge /></RevymeSplitText>,
+    );
+    const mask = container.querySelector('[data-probe="badge"]')!.parentElement!.parentElement!;
+    expect(mask.style.overflow).toBe('hidden');
+    expect(mask.style.display).toBe('inline-flex');
+    expect(mask.style.paddingBottom).toBe('');
+    expect(mask.style.marginBottom).toBe('');
+  });
+
   it('plain text output is byte-identical to the pre-rich structure', () => {
     const rich = render(<RevymeSplitText spec={spec}>ab cd</RevymeSplitText>);
     // Two words → two mask-less wraps of char units, space between — the old

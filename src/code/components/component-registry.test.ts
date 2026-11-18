@@ -529,3 +529,13 @@ export default Button;
     expect(names).not.toContain('two`');
   });
 });
+
+test('decodes Unicode escapes in a component content default', () => {
+  const code = String.raw`function StrokeSpan({ content = "\u0426\u0438\u0444\u0440\u043E\u0432\u0438\u0439" }) {
+    return <h1>{content}</h1>;
+  }
+  export default StrokeSpan;`;
+  clearComponentCache();
+  const registry = buildComponentRegistry(makeMockFS({ 'components/StrokeSpan.tsx': code }));
+  expect(registry.get('StrokeSpan')?.props.find((p) => p.name === 'content')?.defaultValue).toBe('Цифровий');
+});

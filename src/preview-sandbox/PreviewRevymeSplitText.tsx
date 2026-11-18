@@ -59,6 +59,12 @@ const WRAP_MASK: React.CSSProperties = {
   paddingBottom: '0.14em',
   marginBottom: '-0.14em',
 };
+const WRAP_COMPONENT_MASK: React.CSSProperties = {
+  whiteSpace: 'nowrap',
+  display: 'inline-flex',
+  overflow: 'hidden',
+  verticalAlign: 'top',
+};
 
 function normalizeEase(e: string | number[] | undefined): string | number[] | undefined {
   if (e === undefined || Array.isArray(e)) return e;
@@ -174,7 +180,7 @@ type Node =
   | { t: 'unit'; u: Unit }
   | { t: 'br'; k: string }
   | { t: 'text'; k: string; v: string }
-  | { t: 'wrap'; k: string; kids: Node[] }
+  | { t: 'wrap'; k: string; kids: Node[]; component?: boolean }
   | { t: 'el'; k: string; tag: string; props: Record<string, unknown>; kids: Node[] };
 
 const INLINE_MARK_TAGS = new Set([
@@ -274,7 +280,7 @@ function buildRichNodes(
         out.push({ t: 'el', k: `el${key++}`, tag: seg.tag, props: seg.props, kids });
       } else if (seg.kind === 'component') {
         const u = unit(seg.value, 'inline-block', animationType === 'line' ? lineIndex : undefined);
-        out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u] } : u);
+        out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u], component: true } : u);
       } else if (animationType === 'full') {
         out.push(unit(seg.v, 'inline-block', 0));
       } else if (animationType === 'line') {
@@ -568,7 +574,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
   const render = (n: Node): React.ReactNode => {
     if (n.t === 'br') return <br key={n.k} />;
     if (n.t === 'text') return n.v;
-    if (n.t === 'wrap') return <span key={n.k} style={mask ? WRAP_MASK : WRAP_PLAIN}>{n.kids.map(render)}</span>;
+    if (n.t === 'wrap') return <span key={n.k} style={mask ? (n.component ? WRAP_COMPONENT_MASK : WRAP_MASK) : WRAP_PLAIN}>{n.kids.map(render)}</span>;
     if (n.t === 'el') return React.createElement(n.tag, { ...n.props, key: n.k }, n.kids.map(render));
     return renderUnit(n.u);
   };

@@ -1,8 +1,21 @@
 diff --git a/node_modules/@revyme/runtime/dist/index.js b/node_modules/@revyme/runtime/dist/index.js
-index ff329be..ba5de31 100644
+index ff329be..4e6683a 100644
 --- a/node_modules/@revyme/runtime/dist/index.js
 +++ b/node_modules/@revyme/runtime/dist/index.js
-@@ -804,7 +804,8 @@ function buildRichNodes(children, animationType, mask) {
+@@ -603,6 +603,12 @@ var WRAP_MASK = {
+ 	paddingBottom: "0.14em",
+ 	marginBottom: "-0.14em"
+ };
++var WRAP_COMPONENT_MASK = {
++	whiteSpace: "nowrap",
++	display: "inline-flex",
++	overflow: "hidden",
++	verticalAlign: "top"
++};
+ /** The editor persists a custom cubic-bezier as the STRING "[0.22, 1, 0.36, 1]" (that's what
+ *  the TransitionPanel curve editor writes). framer accepts a named easing or a real array —
+ *  handed the string it throws `Invalid easing type` and unmounts the tree. Codegen normalises
+@@ -804,7 +810,8 @@ function buildRichNodes(children, animationType, mask) {
  				});
  				return;
  			}
@@ -12,7 +25,7 @@ index ff329be..ba5de31 100644
  			return;
  		}
  		bailed = true;
-@@ -824,6 +825,7 @@ function buildRichNodes(children, animationType, mask) {
+@@ -824,6 +831,7 @@ function buildRichNodes(children, animationType, mask) {
  	const segsToReact = (segs) => segs.map((s2, idx) => {
  		if (s2.kind === "text") return s2.v;
  		if (s2.kind === "br") return React$1.createElement("br", { key: `b${idx}` });
@@ -20,7 +33,7 @@ index ff329be..ba5de31 100644
  		return React$1.createElement(s2.tag, {
  			...s2.props,
  			key: `e${idx}`
-@@ -842,7 +844,12 @@ function buildRichNodes(children, animationType, mask) {
+@@ -842,7 +850,13 @@ function buildRichNodes(children, animationType, mask) {
  				t: "br",
  				k: `br${li}`
  			});
@@ -29,12 +42,13 @@ index ff329be..ba5de31 100644
 +			nodes.push(mask ? {
 +				t: "wrap",
 +				k: `w${li}`,
-+				kids: [u]
++				kids: [u],
++				component: line.some((s2) => s2.kind === "component")
 +			} : u);
  			line = [];
  		};
  		let li = 0;
-@@ -878,6 +885,15 @@ function buildRichNodes(children, animationType, mask) {
+@@ -878,6 +892,16 @@ function buildRichNodes(children, animationType, mask) {
  				});
  				continue;
  			}
@@ -43,14 +57,15 @@ index ff329be..ba5de31 100644
 +				out.push(mask ? {
 +					t: "wrap",
 +					k: `w${key++}`,
-+					kids: [u]
++					kids: [u],
++					component: true
 +				} : u);
 +				continue;
 +			}
  			const words = s2.v.split(" ");
  			for (let wi = 0; wi < words.length; wi++) {
  				if (wi > 0) out.push({
-@@ -1030,6 +1046,11 @@ function ScrollUnit({ progress, range, channels, display, children }) {
+@@ -1030,6 +1054,11 @@ function ScrollUnit({ progress, range, channels, display, children }) {
  function RevymeSplitText({ spec, variant, children }) {
  	const base = spec ?? {};
  	const hostRef = React$1.useRef(null);
@@ -62,7 +77,7 @@ index ff329be..ba5de31 100644
  	const scopeIdx = useActiveScopeIndex(base, variant);
  	const resolved = React$1.useMemo(() => {
  		return {
-@@ -1049,7 +1070,7 @@ function RevymeSplitText({ spec, variant, children }) {
+@@ -1049,7 +1078,7 @@ function RevymeSplitText({ spec, variant, children }) {
  	const startFrac = Math.min(1, Math.max(0, (resolved.scrollStart ?? 90) / 100));
  	const endFrac = Math.min(1, Math.max(0, (resolved.scrollEnd ?? 35) / 100));
  	const { scrollYProgress } = useScroll({
@@ -71,7 +86,7 @@ index ff329be..ba5de31 100644
  		offset: [`start ${startFrac}`, `start ${endFrac}`]
  	});
  	const springScroll = resolved.trigger === "scroll" && resolved.transition?.type === "spring";
-@@ -1076,7 +1097,8 @@ function RevymeSplitText({ spec, variant, children }) {
+@@ -1076,7 +1105,8 @@ function RevymeSplitText({ spec, variant, children }) {
  	]);
  	const { nodes, count } = rich ?? plain;
  	if (text === null && rich === null) return /* @__PURE__ */ jsx("span", {
@@ -81,7 +96,16 @@ index ff329be..ba5de31 100644
  		children
  	});
  	const isScroll = resolved.trigger === "scroll";
-@@ -1137,8 +1159,8 @@ function RevymeSplitText({ spec, variant, children }) {
+@@ -1127,7 +1157,7 @@ function RevymeSplitText({ spec, variant, children }) {
+ 		if (n.t === "br") return /* @__PURE__ */ jsx("br", {}, n.k);
+ 		if (n.t === "text") return n.v;
+ 		if (n.t === "wrap") return /* @__PURE__ */ jsx("span", {
+-			style: mask ? WRAP_MASK : WRAP_PLAIN,
++			style: mask ? n.component ? WRAP_COMPONENT_MASK : WRAP_MASK : WRAP_PLAIN,
+ 			children: n.kids.map(render)
+ 		}, n.k);
+ 		if (n.t === "el") return React$1.createElement(n.tag, {
+@@ -1137,8 +1167,8 @@ function RevymeSplitText({ spec, variant, children }) {
  		return renderUnit(n.u);
  	};
  	return /* @__PURE__ */ jsx("span", {
@@ -93,10 +117,27 @@ index ff329be..ba5de31 100644
  	});
  }
 diff --git a/node_modules/@revyme/runtime/src/split-text.tsx b/node_modules/@revyme/runtime/src/split-text.tsx
-index 8c68143..302a5e8 100644
+index 8c68143..ed23f50 100644
 --- a/node_modules/@revyme/runtime/src/split-text.tsx
 +++ b/node_modules/@revyme/runtime/src/split-text.tsx
-@@ -229,9 +229,7 @@ type Node = { t: 'unit'; u: Unit } | { t: 'br'; k: string } | { t: 'text'; k: st
+@@ -109,6 +109,9 @@ const WRAP_MASK: React.CSSProperties = {
+   whiteSpace: 'nowrap', display: 'inline-block', overflow: 'hidden',
+   paddingBottom: '0.14em', marginBottom: '-0.14em',
+ };
++const WRAP_COMPONENT_MASK: React.CSSProperties = {
++  whiteSpace: 'nowrap', display: 'inline-flex', overflow: 'hidden', verticalAlign: 'top',
++};
+ 
+ /** The editor persists a custom cubic-bezier as the STRING "[0.22, 1, 0.36, 1]" (that's what
+  *  the TransitionPanel curve editor writes). framer accepts a named easing or a real array —
+@@ -223,15 +226,13 @@ function restingOf(from: number | string, key: string): number | string {
+ interface Unit { key: string; inner: React.ReactNode; display: 'inline-block' | 'block'; index: number }
+ 
+ type Node = { t: 'unit'; u: Unit } | { t: 'br'; k: string } | { t: 'text'; k: string; v: string }
+-  | { t: 'wrap'; k: string; kids: Node[] }
++  | { t: 'wrap'; k: string; kids: Node[]; component?: boolean }
+   // A PRESERVED inline mark (`<strong>`, `<span style={{…}}>`): the wrapper
+   // element survives in the stream and its text recurses into animated units
    // INSIDE it, so bold/color style the moving glyphs by plain CSS inheritance.
    | { t: 'el'; k: string; tag: string; props: Record<string, unknown>; kids: Node[] };
  
@@ -107,7 +148,7 @@ index 8c68143..302a5e8 100644
  const INLINE_MARK_TAGS = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'sub', 'sup', 'mark', 'code', 'a']);
  
  /**
-@@ -246,8 +244,7 @@ const INLINE_MARK_TAGS = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 's
+@@ -246,8 +247,7 @@ const INLINE_MARK_TAGS = new Set(['span', 'strong', 'em', 'b', 'i', 'u', 's', 's
   * recurse — the mark wrapper stays in the DOM and its glyph units animate
   * inside it, styled by inheritance. The unit index is GLOBAL across the walk
   * so stagger and scroll ranges flow through mark boundaries as if the text
@@ -117,7 +158,7 @@ index 8c68143..302a5e8 100644
   *
   * 'line' and 'full' modes group WHOLE segments (rich content rides inside the
   * unit as ReactNode children); only top-level `<br />` separates lines.
-@@ -262,7 +259,7 @@ function buildRichNodes(
+@@ -262,7 +262,7 @@ function buildRichNodes(
    let key = 0;
    let bailed = false;
  
@@ -126,7 +167,7 @@ index 8c68143..302a5e8 100644
  
    // Pass 1 — normalize the React tree into segments (and the memo signature).
    const toSegs = (node: React.ReactNode, out: Seg[]): void => {
-@@ -287,7 +284,8 @@ function buildRichNodes(
+@@ -287,7 +287,8 @@ function buildRichNodes(
          out.push({ kind: 'el', tag: type, props, segs });
          return;
        }
@@ -136,7 +177,7 @@ index 8c68143..302a5e8 100644
        return;
      }
      bailed = true;
-@@ -304,6 +302,7 @@ function buildRichNodes(
+@@ -304,6 +305,7 @@ function buildRichNodes(
    const segsToReact = (segs: Seg[]): React.ReactNode[] => segs.map((s2, idx) => {
      if (s2.kind === 'text') return s2.v;
      if (s2.kind === 'br') return React.createElement('br', { key: `b${idx}` });
@@ -144,29 +185,29 @@ index 8c68143..302a5e8 100644
      return React.createElement(s2.tag, { ...s2.props, key: `e${idx}` }, ...segsToReact(s2.segs));
    });
  
-@@ -317,7 +316,8 @@ function buildRichNodes(
+@@ -317,7 +319,8 @@ function buildRichNodes(
      let line: Seg[] = [];
      const flush = (li: number) => {
        if (li > 0) nodes.push({ t: 'br', k: `br${li}` });
 -      nodes.push(unit(segsToReact(line), 'block'));
 +      const u = unit(segsToReact(line), 'block');
-+      nodes.push(mask ? { t: 'wrap', k: `w${li}`, kids: [u] } : u);
++      nodes.push(mask ? { t: 'wrap', k: `w${li}`, kids: [u], component: line.some(s => s.kind === 'component') } : u);
        line = [];
      };
      let li = 0;
-@@ -339,6 +339,11 @@ function buildRichNodes(
+@@ -339,6 +342,11 @@ function buildRichNodes(
          out.push({ t: 'el', k: `el${key++}`, tag: s2.tag, props: s2.props, kids });
          continue;
        }
 +      if (s2.kind === 'component') {
 +        const u = unit(s2.value, 'inline-block');
-+        out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u] } : u);
++        out.push(mask ? { t: 'wrap', k: `w${key++}`, kids: [u], component: true } : u);
 +        continue;
 +      }
        // A text run: same word/space walk as the plain splitter, scoped to
        // this run — a mark starting mid-word simply continues the unit flow.
        const words = s2.v.split(' ');
-@@ -433,6 +438,12 @@ function ScrollUnit({ progress, range, channels, display, children }: {
+@@ -433,6 +441,12 @@ function ScrollUnit({ progress, range, channels, display, children }: {
  export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProps): React.ReactElement {
    const base: SplitTextSpec = spec ?? {};
    const hostRef = React.useRef<HTMLSpanElement>(null);
@@ -179,7 +220,7 @@ index 8c68143..302a5e8 100644
  
    const scopeIdx = useActiveScopeIndex(base, variant);
    const resolved: SplitTextSpec = React.useMemo(() => {
-@@ -461,7 +472,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+@@ -461,7 +475,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
    const startFrac = Math.min(1, Math.max(0, (resolved.scrollStart ?? 90) / 100));
    const endFrac = Math.min(1, Math.max(0, (resolved.scrollEnd ?? 35) / 100));
    const { scrollYProgress } = useScroll({
@@ -188,7 +229,7 @@ index 8c68143..302a5e8 100644
      offset: [`start ${startFrac}`, `start ${endFrac}`] as never,
    });
    // A spring transition in scroll mode smooths the scrub through the spring, so a sharp
-@@ -487,7 +498,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+@@ -487,7 +501,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
    const { nodes, count } = rich ?? plain;
  
    // Not splittable (a component child, an icon) → render verbatim rather than mangling it.
@@ -197,7 +238,14 @@ index 8c68143..302a5e8 100644
  
    const isScroll = resolved.trigger === 'scroll';
    // Disabled for the ACTIVE scope → both endpoints empty: units mount at
-@@ -550,7 +561,7 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+@@ -544,13 +558,13 @@ export function RevymeSplitText({ spec, variant, children }: RevymeSplitTextProp
+   const render = (n: Node): React.ReactNode => {
+     if (n.t === 'br') return <br key={n.k} />;
+     if (n.t === 'text') return n.v;
+-    if (n.t === 'wrap') return <span key={n.k} style={mask ? WRAP_MASK : WRAP_PLAIN}>{n.kids.map(render)}</span>;
++    if (n.t === 'wrap') return <span key={n.k} style={mask ? (n.component ? WRAP_COMPONENT_MASK : WRAP_MASK) : WRAP_PLAIN}>{n.kids.map(render)}</span>;
+     if (n.t === 'el') return React.createElement(n.tag, { ...n.props, key: n.k }, n.kids.map(render));
+     return renderUnit(n.u);
    };
  
    return (

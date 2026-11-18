@@ -3,6 +3,7 @@
 // Cached by file content hash — only re-parses when file changes.
 
 import * as t from '@babel/types';
+import { parseExpression } from '@babel/parser';
 import { simpleHash } from '@/shared/hash-utils';
 import type { ProjectFS } from '../project/project-fs';
 import { parseJSX, traverse } from '../parsing/ast-utils';
@@ -435,9 +436,16 @@ function parseProps(paramsStr: string): ComponentProp[] {
       const open = valueStr[0];
       const close = valueStr[valueStr.length - 1];
       if ((open === '"' || open === "'" || open === '`') && open === close) {
-        // Unescape the quote the source had to escape, or the panel shows the
-        // backslash: a BT Text field reading `Let\'s get your cargo`.
-        defaultValue = valueStr.slice(1, -1).replace(/\\([\\'"`])/g, '$1');
+        // Babel decodes the same escapes as the component's JavaScript source,
+        // including Unicode defaults that code generation writes as \uXXXX.
+        // Keep the old template-literal fallback for non-static expressions.
+        if (open !== '`') {
+          try {
+            const parsed = parseExpression(valueStr);
+            if (t.isStringLiteral(parsed)) defaultValue = parsed.value;
+          } catch { /* Leave malformed source to the existing fallback. */ }
+        }
+        if (defaultValue === null) defaultValue = valueStr.slice(1, -1).replace(/\\([\\'"`])/g, '$1');
       }
     }
     // Numeric / boolean literal defaults (`fontSize = 16`, `wrap = true`) — captured as their string
