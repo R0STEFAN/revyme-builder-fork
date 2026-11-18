@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { TransformControl } from './TransformControl';
 
 const state = vi.hoisted(() => ({
+  variantViewport: false,
   onChangeLive: vi.fn(),
   onChangeMultiple: vi.fn(),
   context: {
@@ -18,10 +19,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock('jotai', async (importOriginal) => ({
   ...await importOriginal<typeof import('jotai')>(),
-  useAtomValue: () => false,
+  useAtomValue: (atom: unknown) => atom === 'variant-viewport' ? state.variantViewport : false,
 }));
 vi.mock('@/code/project/active-file-store', () => ({ activeFilePathAtom: {}, isComponentFilePath: () => false }));
-vi.mock('@/code/stores/viewport-store', () => ({ isReplicaViewportAtom: {}, isComponentVariantViewportAtom: {} }));
+vi.mock('@/code/stores/viewport-store', () => ({ isReplicaViewportAtom: {}, isComponentVariantViewportAtom: 'variant-viewport' }));
 vi.mock('@/shared/debug-trace', () => ({ trace: { action: vi.fn(), fn: vi.fn(), error: vi.fn(), dom: vi.fn() } }));
 vi.mock('@/editor/hooks/useScrubInteracting', () => ({ useScrubInteracting: () => vi.fn() }));
 vi.mock('@/code/stores/viewer-mode-store', async (importOriginal) => ({
@@ -54,6 +55,7 @@ vi.mock('../../../controls', async (importOriginal) => {
 
 describe('TransformControl input commits', () => {
   beforeEach(() => {
+    state.variantViewport = false;
     state.onChangeLive.mockClear();
     state.onChangeMultiple.mockClear();
     state.context = {
@@ -107,5 +109,33 @@ describe('TransformControl input commits', () => {
     fireEvent.click(screen.getByRole('button'));
 
     expect((screen.getAllByRole('textbox')[2] as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('preserves percent Translate X and keeps a variant override editable', () => {
+    state.variantViewport = true;
+    state.context.node = {
+      ...state.context.node,
+      motionVariants: { default: { x: '0' }, 'variant-1': { x: '-20px' } },
+    };
+    state.context.allProps = { ...state.context.allProps, x: '-20px' };
+    const view = render(<TransformControl />);
+    fireEvent.click(screen.getByRole('button'));
+
+    const xInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    expect(xInput.disabled).toBe(false);
+    fireEvent.focus(xInput);
+    fireEvent.change(xInput, { target: { value: '-20%' } });
+    fireEvent.keyDown(xInput, { key: 'Enter' });
+    expect(state.onChangeMultiple).toHaveBeenCalledWith({ x: '-20%' });
+
+    state.context.allProps = { ...state.context.allProps, x: '-20%' };
+    state.context.node = {
+      ...state.context.node,
+      motionVariants: { default: { x: '0' }, 'variant-1': { x: '-20%' } },
+    };
+    view.rerender(<TransformControl />);
+    const updatedInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    expect(updatedInput.disabled).toBe(false);
+    expect(updatedInput.value).toBe('-20%');
   });
 });

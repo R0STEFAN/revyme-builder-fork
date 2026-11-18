@@ -145,6 +145,13 @@ function numOr(raw: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Keep the unit the user typed; a bare number in Translate means pixels. */
+function normalizeTranslateLength(raw: string): string | null {
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(px|%|vw|vh|svw|svh|dvw|dvh|lvw|lvh|rem|em)?$/i.exec(raw.trim());
+  if (!match) return null;
+  return `${Number(match[1])}${match[2]?.toLowerCase() ?? 'px'}`;
+}
+
 const TRANSFORM_ANIMATION_PROPS = ['initial', 'animate', 'whileInView', 'whileHover', 'whileTap', 'exit'] as const;
 const FIELD_MOTION_PROPS: Partial<Record<keyof TransformData, readonly string[]>> = {
   translateX: ['x', 'translateX'],
@@ -165,11 +172,12 @@ export function isTransformFieldAnimated(
   field: keyof TransformData,
   allProps: Record<string, string>,
   node: Record<string, any> | null | undefined,
+  editingComponentVariant = false,
 ): boolean {
   const motionProps = FIELD_MOTION_PROPS[field] ?? [];
   if (motionProps.some((prop) => String(allProps[prop] ?? '').startsWith('var:') || !!node?.styleVariables?.[prop])) return true;
 
-  if ((Object.values(node?.motionVariants ?? {}) as Array<Record<string, string>>)
+  if (!editingComponentVariant && (Object.values(node?.motionVariants ?? {}) as Array<Record<string, string>>)
     .some((variant) => motionProps.some((prop) => prop in variant))) return true;
 
   const nodeMotionProps = node?.motionProps ?? {};
@@ -275,10 +283,19 @@ function TransformAtom() {
    *  what route the chevron through `applyValue(live=true)` in ToolInput; without them it falls back to
    *  per-frame `onChange`. */
   const fieldInputProps = (field: keyof TransformData, neutral: number, clamp?: (n: number) => number) => {
-    const disabled = isTransformFieldAnimated(field, allProps, node as any);
+    const disabled = isTransformFieldAnimated(field, allProps, node as any, isComponentVariantViewport);
     const num = (v: string) => { const n = parseFloat(v) || neutral; return clamp ? clamp(n) : n; };
+    const isTranslate = field === 'translateX' || field === 'translateY';
+    const commitTranslate = (v: string) => {
+      const normalized = normalizeTranslateLength(v);
+      if (normalized === null) return;
+      if (normalized.endsWith('px')) liveTransform({ [field]: parseFloat(normalized) } as Partial<TransformData>);
+      const key = field === 'translateX' ? 'x' : 'y';
+      onChangeMultiple({ [key]: !isScopedWrite && parseFloat(normalized) === 0 ? '' : normalized });
+    };
     const commitInput = (v: string) => {
       if (disabled) return;
+      if (isTranslate && isMotion) { commitTranslate(v); return; }
       const next = num(v);
       if (isMotion) liveTransform({ [field]: next } as Partial<TransformData>);
       setField(field, next, neutral);
@@ -286,8 +303,20 @@ function TransformAtom() {
     return {
       disabled,
       onChange: commitInput,
-      onChangeLive: (v: string) => { if (!disabled) liveTransform({ [field]: num(v) } as Partial<TransformData>); },
-      onCommit: (v: string) => { if (!disabled) setField(field, num(v), neutral); },
+      onChangeLive: (v: string) => {
+        if (disabled) return;
+        if (isTranslate && isMotion) {
+          const normalized = normalizeTranslateLength(v);
+          if (normalized?.endsWith('px')) liveTransform({ [field]: parseFloat(normalized) } as Partial<TransformData>);
+          return;
+        }
+        liveTransform({ [field]: num(v) } as Partial<TransformData>);
+      },
+      onCommit: (v: string) => {
+        if (disabled) return;
+        if (isTranslate && isMotion) { commitTranslate(v); return; }
+        setField(field, num(v), neutral);
+      },
     };
   };
   /** Write a single transform field — see `transformFieldValue` for why the
@@ -347,8 +376,8 @@ function TransformAtom() {
           <div className="flex items-center justify-between w-full">
             <ControlLabel label="Translate" property="transform" plain forceShow />
             <div className="flex items-center gap-1 w-full">
-              <ToolInput value={String(t.translateX)} {...fieldInputProps('translateX', 0)} step={1} chevronLabel="X" />
-              <ToolInput value={String(t.translateY)} {...fieldInputProps('translateY', 0)} step={1} chevronLabel="Y" />
+              <ToolInput value={isMotion && allProps.x && !allProps.x.startsWith('var:') ? allProps.x : String(t.translateX)} {...fieldInputProps('translateX', 0)} step={1} chevronLabel="X" />
+              <ToolInput value={isMotion && allProps.y && !allProps.y.startsWith('var:') ? allProps.y : String(t.translateY)} {...fieldInputProps('translateY', 0)} step={1} chevronLabel="Y" />
             </div>
           </div>
           {/* Rotate */}
