@@ -44,6 +44,8 @@ export interface CopiedStyle {
    *  the `updateBorderOverlay` mutation — it can't travel through the style
    *  map, hence the dedicated slot. */
   borderOverlayCSS?: string | null;
+  /** Motion Transition row: its config lives on the motion prop/variant, not in CSS styles. */
+  transitionConfig?: Record<string, string>;
   /** Transform only: the source's transform as a CANONICAL composed CSS string,
    *  regardless of which of the two storage forms it was authored in.
    *

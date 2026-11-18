@@ -29,6 +29,25 @@ import { useControlOptional } from '../../../controls/ControlProvider';
 import { summarizeTransition, TransitionCurveIcon } from '../../AnimationTool/CurvePreview';
 import TransitionPanel from '../../AnimationTool/TransitionPanel';
 import { trace } from '@/shared/debug-trace';
+import { copiedStyleAtom } from '@/editor/controls/style-clipboard';
+
+function objectBodyAt(code: string, openingBrace: number): string | null {
+  if (code[openingBrace] !== '{') return null;
+  let depth = 0;
+  let quote = '';
+  for (let i = openingBrace; i < code.length; i++) {
+    const ch = code[i];
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '{') depth++;
+    if (ch === '}' && --depth === 0) return code.slice(openingBrace + 1, i);
+  }
+  return null;
+}
 
 export default function VariantTransitionControl() {
   const isComponentFile = useAtomValue(isComponentFileAtom);
@@ -38,6 +57,8 @@ export default function VariantTransitionControl() {
   const vpId = useAtomValue(interactingViewportIdAtom);
   const setCode = useSetAtom(codeAtom);
   const setVersion = useSetAtom(projectVersionAtom);
+  const copiedStyle = useAtomValue(copiedStyleAtom);
+  const setCopiedStyle = useSetAtom(copiedStyleAtom);
   const [isOpen, setIsOpen] = useState(false);
   const btnRef = useRef<HTMLDivElement>(null);
 
@@ -91,8 +112,10 @@ export default function VariantTransitionControl() {
       const entryMatch = afterConst.match(entryRegex);
       if (!entryMatch) return {};
       const entryStart = constIdx + afterConst.indexOf(entryMatch[0]) + entryMatch[0].length;
-      // Find transition: { ... } inside the entry (brace-aware)
-      const entrySlice = code.slice(entryStart, entryStart + 500);
+      // Bound the read to THIS entry. A fixed-length slice could pick up a
+      // later variant's transition when the selected variant inherited its base.
+      const entrySlice = objectBodyAt(code, entryStart - 1);
+      if (entrySlice === null) return {};
       const transMatch = entrySlice.match(/transition\s*:\s*\{([^}]*)\}/);
       if (!transMatch) return {};
       const result: Record<string, string> = {};
@@ -261,11 +284,38 @@ export default function VariantTransitionControl() {
   const overridden = mode === 'variantEntry' && (!!ownVariantVarRef || hasTrans);
   const summary = hasTrans ? summarizeTransition(currentTransition) : 'Default';
   const isSpring = currentTransition.type === 'spring';
+  const inheritedTransition = mode === 'variantEntry' && !isRoot
+    ? Object.fromEntries(Object.entries(node?.motionProps?.transition ?? {})
+      .filter(([key]) => !key.startsWith('_')).map(([key, value]) => [key, String(value)]))
+    : {};
+  const copyableTransition = hasTrans ? currentTransition : inheritedTransition;
+  const transitionMenuItems = [
+    {
+      label: 'Copy Style', show: Object.keys(copyableTransition).length > 0, separator: true,
+      onClick: () => {
+        setCopiedStyle({
+          family: 'transition', sourceProperty: 'transition', label: 'Transition',
+          value: JSON.stringify(copyableTransition), payload: {},
+          transitionConfig: { ...copyableTransition },
+        });
+        trace.action('variant-transition:copy-style', { nodeId: selectedId, mode, variantName });
+      },
+    },
+    {
+      label: 'Paste Style', show: !!copiedStyle?.transitionConfig,
+      onClick: () => {
+        if (!copiedStyle?.transitionConfig) return;
+        handleWrite({ ...copiedStyle.transitionConfig });
+        trace.action('variant-transition:paste-style', { nodeId: selectedId, mode, variantName });
+      },
+    },
+  ];
 
   return (
     <>
       <div className="flex items-center justify-between w-full" ref={btnRef}>
-        <ControlLabel label="Transition" property="transition" overridden={overridden} onResetOverride={handleResetOverride} />
+        <ControlLabel label="Transition" property="transition" overridden={overridden} onResetOverride={handleResetOverride}
+          hideCopyPasteStyle extraMenuItems={transitionMenuItems} />
         {variableRef && ctl ? (
           <LegacyVariableBoundPill
             property="transition"
