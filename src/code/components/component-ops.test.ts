@@ -72,6 +72,46 @@ describe('makeComponent', () => {
     vi.clearAllMocks();
   });
 
+  test('removes the selected scroll animation and its page hooks before extraction', () => {
+    const page = `import React, { useRef } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+export default function Page() {
+  const animatedRootRef = useRef(null);
+  const { scrollYProgress: animatedRootScrollYProgress } = useScroll({ target: animatedRootRef });
+  const animatedRootX = useTransform(animatedRootScrollYProgress, [0, 1], ['0%', '-80%']);
+  const siblingRef = useRef(null);
+  const { scrollYProgress: siblingScrollYProgress } = useScroll({ target: siblingRef });
+  const siblingX = useTransform(siblingScrollYProgress, [0, 1], ['0%', '-20%']);
+  return <div data-id="page">
+    <motion.div data-id="animated-root" data-scroll-fx='{"scroll":{"x":{"from":"0%","to":"-80%"}}}' data-loop='{"props":{"rotate":"360"},"transition":{"repeat":"Infinity"}}' ref={animatedRootRef} style={{ x: animatedRootX, width: '300px', position: 'relative' }}>Card</motion.div>
+    <motion.div data-id="sibling" ref={siblingRef} style={{ x: siblingX }}>Other</motion.div>
+  </div>;
+}`;
+    mockFS.readFile.mockReturnValue(page);
+    mockFS.exists.mockReturnValue(false);
+
+    const result = makeComponent('app/page.tsx', 'animated-root', 'Card');
+    expect(result).not.toBeNull();
+    const component = getWrittenComponentCode();
+    expect(component).not.toMatch(/animatedRoot(?:Ref|ScrollYProgress|X)|data-scroll-fx|data-loop/);
+    expect(component).toContain("width: '300px'");
+    expect(result!.updatedPageCode).not.toMatch(/animatedRoot(?:Ref|ScrollYProgress|X)|data-scroll-fx|data-loop/);
+    expect(result!.updatedPageCode).toContain('siblingX');
+    expect(parseJSX(component)).not.toBeNull();
+    expect(parseJSX(result!.updatedPageCode)).not.toBeNull();
+  });
+
+  test('keeps a plain tap handler when the selected node has no animation', () => {
+    const page = `import React from 'react';
+export default function Page() {
+  return <div data-id="page"><div data-id="card" onTap={() => console.log('tap')} style={{ width: '100px' }}>Card</div></div>;
+}`;
+    mockFS.readFile.mockReturnValue(page);
+    mockFS.exists.mockReturnValue(false);
+    makeComponent('app/page.tsx', 'card', 'Card');
+    expect(getWrittenComponentCode()).toContain("onTap={() => console.log('tap')}");
+  });
+
   test('POSITION GUARANTEE: a source node with NO position yields an instance with position: relative', () => {
     // The collapsed-footer chain (2026-08-12; first seen 2026-07-06): the
     // master root gets `position: 'absolute'` (canvas tiling) and the

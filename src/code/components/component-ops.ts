@@ -20,11 +20,15 @@ import { WRAPPER_ONLY_STYLE_PROPS, PROJECTION_STYLE_PROPS } from '@/shared/const
 import { cssTransformToMotionProps } from '@/shared/motion-transform';
 import { toCamel, toKebab } from '@/shared/css-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
+import { nodeIdToVarName } from '@/shared/id-utils';
 import { updateVariantStyleInCode, setConditionalStyleInCode, syncLinkHandlerInCode, clearContainerStylesForNode, updateContainerQueryStyle, mergeDetachedStyleCSSIntoPage, moveStyleRulesForIds } from '../generation/generator-styles';
 import { parseContainerRules } from '../stores/container-query-store';
 import { extractStyleCSS } from '../parsing/parser';
 import { rehydrateInstanceFx, setInstanceFxInCode } from '../generation/instance-fx-gen';
 import { setGlideInCode, glidedNodeIds } from '../generation/glide-gen';
+import { getOpeningTag, robustClearScrollFx } from '../generation/generator-motion-scroll-fx';
+import { setLoopInCode } from '../generation/generator-motion-loop';
+import { nodeHasTextAnim, removeTextAnimFromCode } from '../generation/text-anim-gen';
 import { adoptTranslationsForComponent } from '@/code/project/translation-ops';
 import { ensureResponsiveTextHook } from '../generation/text-override-gen';
 import { rehydrateScrollVariant, setScrollVariantInCode } from '../generation/scroll-variant-gen';
@@ -587,8 +591,24 @@ export function makeComponent(
     if (preFlushCode) syncQueueCode(preFlushCode);
     flushNow();
 
-    const pageCode = projectFS.readFile(pageFilePath);
-    if (!pageCode) return null;
+    const sourceCode = projectFS.readFile(pageFilePath);
+    if (!sourceCode) return null;
+
+    // The selected node becomes a component master, whose own animation is no
+    // longer valid. Remove both the JSX bindings and their page-level hooks
+    // before extracting the subtree, so neither file inherits dangling refs.
+    const withoutTextAnim = nodeHasTextAnim(sourceCode, nodeId)
+      ? removeTextAnimFromCode(sourceCode, nodeId)
+      : sourceCode;
+    const rootTag = getOpeningTag(withoutTextAnim, nodeId)?.tag ?? '';
+    const nodeVar = escapeRegExp(nodeIdToVarName(nodeId));
+    const hasMotionFx = /\s(?:data-scroll-fx|data-loop|whileHover|whileTap|whileInView)=|\s(?:initial|animate)=\{\{/.test(rootTag)
+      || new RegExp(`:\\s*${nodeVar}[A-Z]\\w*`).test(rootTag);
+    let pageCode = withoutTextAnim;
+    if (/\sdata-scroll-variant=/.test(rootTag)) pageCode = setScrollVariantInCode(pageCode, nodeId, null);
+    if (/\sdata-instance-fx=/.test(rootTag)) pageCode = setInstanceFxInCode(pageCode, nodeId, null);
+    if (/\sdata-loop=/.test(rootTag)) pageCode = setLoopInCode(pageCode, nodeId, null);
+    if (hasMotionFx) pageCode = robustClearScrollFx(pageCode, nodeId);
 
     // Generate random PascalCase internal name (React requires uppercase component names)
     const componentName = generateInternalName();
