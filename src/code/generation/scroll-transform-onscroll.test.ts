@@ -37,6 +37,20 @@ describe('Scroll Transform "On Scroll" = whole-page progress (From at top)', () 
   });
 });
 
+it('does not generate MotionValues for neutral opacity and scale stops', () => {
+  const out = updateScrollAnimInCode(PAGE, {
+    nodeId: 'box', trigger: 'onScroll',
+    stops: [
+      { progress: 0, props: { opacity: '1', scale: '1', x: '0%' } },
+      { progress: 1, props: { opacity: '1', scale: '1', x: '-80%' } },
+    ],
+  });
+  expect(out).toContain('const boxX = useTransform(');
+  expect(out).not.toContain('const boxOpacity = useTransform(');
+  expect(out).not.toContain('const boxScale = useTransform(');
+  expect(out).not.toMatch(/opacity:\s*boxOpacity|scale:\s*boxScale/);
+});
+
 describe('Scroll Transform output range is not reversed without direction', () => {
   const cfg = (direction?: 'down' | 'up') => ({
     nodeId: 'box', trigger: 'onScroll' as const,

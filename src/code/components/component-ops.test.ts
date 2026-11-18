@@ -72,7 +72,7 @@ describe('makeComponent', () => {
     vi.clearAllMocks();
   });
 
-  test('removes the selected scroll animation and its page hooks before extraction', () => {
+  test('removes a descendant scroll animation and its page hooks before extraction', () => {
     const page = `import React, { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 export default function Page() {
@@ -83,14 +83,16 @@ export default function Page() {
   const { scrollYProgress: siblingScrollYProgress } = useScroll({ target: siblingRef });
   const siblingX = useTransform(siblingScrollYProgress, [0, 1], ['0%', '-20%']);
   return <div data-id="page">
-    <motion.div data-id="animated-root" data-scroll-fx='{"scroll":{"x":{"from":"0%","to":"-80%"}}}' data-loop='{"props":{"rotate":"360"},"transition":{"repeat":"Infinity"}}' ref={animatedRootRef} style={{ x: animatedRootX, width: '300px', position: 'relative' }}>Card</motion.div>
+    <div data-id="container" style={{ position: 'relative' }}>
+      <motion.div data-id="animated-root" data-scroll-fx='{"scroll":{"x":{"from":"0%","to":"-80%"}}}' data-loop='{"props":{"rotate":"360"},"transition":{"repeat":"Infinity"}}' ref={animatedRootRef} style={{ x: animatedRootX, width: '300px', position: 'relative' }}>Card</motion.div>
+    </div>
     <motion.div data-id="sibling" ref={siblingRef} style={{ x: siblingX }}>Other</motion.div>
   </div>;
 }`;
     mockFS.readFile.mockReturnValue(page);
     mockFS.exists.mockReturnValue(false);
 
-    const result = makeComponent('app/page.tsx', 'animated-root', 'Card');
+    const result = makeComponent('app/page.tsx', 'container', 'Card');
     expect(result).not.toBeNull();
     const component = getWrittenComponentCode();
     expect(component).not.toMatch(/animatedRoot(?:Ref|ScrollYProgress|X)|data-scroll-fx|data-loop/);
@@ -110,6 +112,38 @@ export default function Page() {
     mockFS.exists.mockReturnValue(false);
     makeComponent('app/page.tsx', 'card', 'Card');
     expect(getWrittenComponentCode()).toContain("onTap={() => console.log('tap')}");
+  });
+
+  test('clears legacy descendant MotionValue bindings without a data-scroll-fx spec', () => {
+    const page = `import React, { useRef, useEffect } from 'react';
+import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
+export default function Page() {
+  const frameMwm3mtif_2Ref = useRef(null);
+  useEffect(() => {
+    frameMwm3mtif_2Ref.current = document.getElementById('projects') || document.body;
+  }, []);
+  const {
+    scrollYProgress: frameMwm3mtif_2Progress
+  } = useScroll({
+    target: frameMwm3mtif_2Ref,
+    offset: ['start 0%', 'end 100%']
+  });
+  const frameMwm3mtif_2Smooth = useSpring(frameMwm3mtif_2Progress, {
+    duration: 0.5,
+    bounce: 0.25
+  });
+  const frameMwm3mtif_2Opacity = useTransform(frameMwm3mtif_2Smooth, [0, 1], [1, 1]);
+  const frameMwm3mtif_2Scale = useTransform(frameMwm3mtif_2Smooth, [0, 1], [1, 1]);
+  const frameMwm3mtif_2X = useTransform(frameMwm3mtif_2Smooth, [0, 1], ['0%', '-80%']);
+  return <div data-id="page"><div data-id="container"><motion.div data-id="frame-mwm3mtif-2" style={{ width: '500vw', opacity: frameMwm3mtif_2Opacity, scale: frameMwm3mtif_2Scale, x: frameMwm3mtif_2X }} /></div></div>;
+}`;
+    mockFS.readFile.mockReturnValue(page);
+    mockFS.exists.mockReturnValue(false);
+    const result = makeComponent('app/page.tsx', 'container', 'Projects');
+    expect(result).not.toBeNull();
+    expect(getWrittenComponentCode()).not.toContain('frameMwm3mtif_2');
+    expect(result!.updatedPageCode).not.toContain('frameMwm3mtif_2');
+    expect(getWrittenComponentCode()).toContain("width: '500vw'");
   });
 
   test('POSITION GUARANTEE: a source node with NO position yields an instance with position: relative', () => {
@@ -270,12 +304,7 @@ export default function Page() {
     expect(component).not.toContain('key="hamburger"');
   });
 
-  test('child instance with scroll/fx: animation hooks are PORTED into the component (not left undefined)', () => {
-    // A frame whose child is a component instance with data-instance-fx +
-    // data-scroll-variant. Those effects' page-level hooks (useMotionValue/
-    // useScroll/useEffect + Sv state) stay in the PAGE; the extracted JSX binds
-    // `scale: kidFxCScale` / `ref={kidRef}` / `initialVariant={kidSv}`. Without
-    // porting, the new component references undefined identifiers and crashes.
+  test('child instance animations and their page hooks are removed on extraction', () => {
     const ANIM_PAGE = `import React, { useState, useEffect, useRef } from 'react';
 import { useScroll, useMotionValueEvent, useMotionValue, useTransform, animate, hover } from 'framer-motion';
 import Card from '@/components/Card';
@@ -301,16 +330,10 @@ export default function Page() {
     const result = makeComponent('app/page.tsx', 'frame', 'Anim');
     expect(result).not.toBeNull();
     const code = getWrittenComponentCode();
-    // The component file PARSES (was a crash) and DECLARES the hooks the child binds.
+    // The new component has neither stale references nor animation specs.
     expect(parseJSX(code)).not.toBeNull();
-    expect(code).toMatch(/const kidFxHovScale = useMotionValue\(/);   // fx motion value regenerated
-    expect(code).toMatch(/const kidRef = useRef\(null\)/);            // gesture ref regenerated
-    expect(code).toMatch(/setKidSv\(/);                              // scroll-variant state regenerated
-    expect(code).toContain('data-instance-fx=');                     // spec preserved
-    expect(code).toContain('data-scroll-variant=');
-    // The page's now-orphaned hooks are stripped (their JSX moved to the component).
-    expect(result!.updatedPageCode).not.toMatch(/kidFxHovScale/);
-    expect(result!.updatedPageCode).not.toMatch(/setKidSv/);
+    expect(code).not.toMatch(/kidFxHovScale|kidFxCScale|kidRef|kidSv|data-instance-fx|data-scroll-variant/);
+    expect(result!.updatedPageCode).not.toMatch(/kidFxHovScale|kidFxCScale|kidRef|kidSv/);
     expect(result!.updatedPageCode).toContain('data-name="Anim"');  // instance (random tag) swapped in
     expect(result!.updatedPageCode).not.toContain('data-id="kid"'); // child JSX moved to the component
   });

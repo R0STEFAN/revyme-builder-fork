@@ -583,6 +583,9 @@ export function updateScrollAnimInCode(code: string, config: ScrollAnimConfig): 
     const rawOutputs = stops.map(s => s.props[prop] ?? (prop === 'opacity' || prop === 'scale' ? '1' : '0'));
     // Direction 'up' flips the output range (resting↔To).
     const outputs = reverseOutput ? [...rawOutputs].reverse() : rawOutputs;
+    // A cleared opacity/scale effect can leave neutral values at every stop.
+    // Do not bind that idle channel to a MotionValue.
+    if ((prop === 'opacity' || prop === 'scale') && outputs.every(v => v === '1')) continue;
     // Skip properties where any stop has an empty value (empty = "not set")
     if (outputs.some(v => v === '')) continue;
     // Skip webkit-prefixed duplicates (e.g., WebkitMaskImage mirrors maskImage)
@@ -1111,6 +1114,7 @@ function updateMultiSectionScrollAnimInCode(code: string, config: ScrollAnimConf
     const sectionVals = filled.slice(1) as string[];
     const lastVal = sectionVals[sectionVals.length - 1];
     const outputVals = [fromVal, ...sectionVals, lastVal];
+    if ((prop === 'opacity' || prop === 'scale') && outputVals.every(v => v === '1')) continue;
     const allNumeric = outputVals.every(v => !isNaN(Number(v)));
     const outputStr = allNumeric
       ? `[${outputVals.join(', ')}]`

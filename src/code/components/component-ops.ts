@@ -24,14 +24,14 @@ import { nodeIdToVarName } from '@/shared/id-utils';
 import { updateVariantStyleInCode, setConditionalStyleInCode, syncLinkHandlerInCode, clearContainerStylesForNode, updateContainerQueryStyle, mergeDetachedStyleCSSIntoPage, moveStyleRulesForIds } from '../generation/generator-styles';
 import { parseContainerRules } from '../stores/container-query-store';
 import { extractStyleCSS } from '../parsing/parser';
-import { rehydrateInstanceFx, setInstanceFxInCode } from '../generation/instance-fx-gen';
+import { setInstanceFxInCode } from '../generation/instance-fx-gen';
 import { setGlideInCode, glidedNodeIds } from '../generation/glide-gen';
 import { getOpeningTag, robustClearScrollFx } from '../generation/generator-motion-scroll-fx';
 import { setLoopInCode } from '../generation/generator-motion-loop';
 import { nodeHasTextAnim, removeTextAnimFromCode } from '../generation/text-anim-gen';
 import { adoptTranslationsForComponent } from '@/code/project/translation-ops';
 import { ensureResponsiveTextHook } from '../generation/text-override-gen';
-import { rehydrateScrollVariant, setScrollVariantInCode } from '../generation/scroll-variant-gen';
+import { setScrollVariantInCode } from '../generation/scroll-variant-gen';
 import { healMissingFormStateDeclarations } from '../generation/form-state-gen';
 import { collectTransferableVariables, applyVariableTransfer, buildInstanceVariableAttrs } from './component-variable-transfer';
 import { detectHugAxes, type HugAxes, type StyleMap } from './master-root-sizing';
@@ -163,28 +163,18 @@ export function detectCmsNavLink(
   return result;
 }
 
-/** Collect the data-ids of every element carrying a `data-instance-fx` or `data-scroll-variant`
- *  spec. Used by makeComponent: such an instance's page-level animation HOOKS
- *  (useMotionValue/useScroll/useEffect + Sv state) don't travel with the extracted JSX, so the
- *  new component would reference undefined identifiers (`<cn>FxCScale`, `<cn>Ref`, `<cn>Sv`) — we
- *  regenerate them inside the component from the preserved specs (rehydrate). Attr order varies
- *  (`data-instance-fx` precedes `data-id`), so this is tag-scoped via the AST, not a flat regex. */
-function collectAnimatedInstanceIds(code: string): string[] {
+/** The root and every child moved into a component must lose its page animation. */
+function collectSubtreeNodeIds(code: string, nodeId: string): string[] {
   const ast = parseJSX(code);
   if (!ast) return [];
   const ids: string[] = [];
-  traverse(ast, {
-    JSXOpeningElement(path) {
-      const attrs = path.node.attributes;
-      const hasAttr = (n: string) => attrs.some(
-        (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === n,
-      );
-      if (!hasAttr('data-instance-fx') && !hasAttr('data-scroll-variant')) return;
-      const idAttr = attrs.find(
-        (a): a is t.JSXAttribute => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'data-id',
-      );
-      if (idAttr && t.isStringLiteral(idAttr.value)) ids.push(idAttr.value.value);
-    },
+  const addId = (opening: t.JSXOpeningElement) => {
+    const idAttr = findAttribute(opening, 'data-id');
+    if (idAttr && t.isStringLiteral(idAttr.value)) ids.push(idAttr.value.value);
+  };
+  findFirstElementByDataId(ast, nodeId, (path) => {
+    addId(path.node.openingElement);
+    path.traverse({ JSXOpeningElement(childPath: any) { addId(childPath.node); } });
   });
   return ids;
 }
@@ -594,21 +584,22 @@ export function makeComponent(
     const sourceCode = projectFS.readFile(pageFilePath);
     if (!sourceCode) return null;
 
-    // The selected node becomes a component master, whose own animation is no
-    // longer valid. Remove both the JSX bindings and their page-level hooks
-    // before extracting the subtree, so neither file inherits dangling refs.
-    const withoutTextAnim = nodeHasTextAnim(sourceCode, nodeId)
-      ? removeTextAnimFromCode(sourceCode, nodeId)
-      : sourceCode;
-    const rootTag = getOpeningTag(withoutTextAnim, nodeId)?.tag ?? '';
-    const nodeVar = escapeRegExp(nodeIdToVarName(nodeId));
-    const hasMotionFx = /\s(?:data-scroll-fx|data-loop|whileHover|whileTap|whileInView)=|\s(?:initial|animate)=\{\{/.test(rootTag)
-      || new RegExp(`:\\s*${nodeVar}[A-Z]\\w*`).test(rootTag);
-    let pageCode = withoutTextAnim;
-    if (/\sdata-scroll-variant=/.test(rootTag)) pageCode = setScrollVariantInCode(pageCode, nodeId, null);
-    if (/\sdata-instance-fx=/.test(rootTag)) pageCode = setInstanceFxInCode(pageCode, nodeId, null);
-    if (/\sdata-loop=/.test(rootTag)) pageCode = setLoopInCode(pageCode, nodeId, null);
-    if (hasMotionFx) pageCode = robustClearScrollFx(pageCode, nodeId);
+    // Animations on the selected node and its descendants cannot move to a
+    // component master. Remove their JSX bindings and page-level hooks before
+    // extraction, so neither file inherits dangling references.
+    let pageCode = sourceCode;
+    const subtreeIds = collectSubtreeNodeIds(sourceCode, nodeId);
+    for (const id of subtreeIds) {
+      if (nodeHasTextAnim(pageCode, id)) pageCode = removeTextAnimFromCode(pageCode, id);
+      const tag = getOpeningTag(pageCode, id)?.tag ?? '';
+      const nodeVar = escapeRegExp(nodeIdToVarName(id));
+      const hasMotionFx = /\s(?:data-scroll-fx|data-loop|whileHover|whileTap|whileInView)=|\s(?:initial|animate)=\{\{/.test(tag)
+        || new RegExp(`:\\s*${nodeVar}[A-Z]\\w*`).test(tag);
+      if (/\sdata-scroll-variant=/.test(tag)) pageCode = setScrollVariantInCode(pageCode, id, null);
+      if (/\sdata-instance-fx=/.test(tag)) pageCode = setInstanceFxInCode(pageCode, id, null);
+      if (/\sdata-loop=/.test(tag)) pageCode = setLoopInCode(pageCode, id, null);
+      if (hasMotionFx) pageCode = robustClearScrollFx(pageCode, id);
+    }
 
     // Generate random PascalCase internal name (React requires uppercase component names)
     const componentName = generateInternalName();
@@ -940,24 +931,6 @@ export function makeComponent(
       componentCode, pageFilePath, componentFilePath,
     });
 
-    // PORT CHILD ANIMATIONS INTO COMPONENT MODE. The extracted JSX may contain
-    // descendant instances with `data-instance-fx`/`data-scroll-variant` whose
-    // page-level hooks (useMotionValue/useScroll/useEffect + the `<cn>Sv` state)
-    // stayed in the PAGE — so the new component's `scale: <cn>FxCScale` /
-    // `ref={<cn>Ref}` / `initialVariant={<cn>Sv}` bindings reference undefined
-    // identifiers and crash. Regenerate the hooks INSIDE the component from the
-    // preserved specs (rehydrate strips the stale bindings + rebuilds canonical
-    // hooks before `return (`), then sync the framer-motion/React hook imports.
-    const animatedIds = collectAnimatedInstanceIds(componentCode);
-    if (animatedIds.length) {
-      for (const id of animatedIds) {
-        componentCode = rehydrateScrollVariant(componentCode, id);
-        componentCode = rehydrateInstanceFx(componentCode, id);
-      }
-      componentCode = syncImports(componentCode);
-      trace.action('component-ops:port-child-animations', { componentName, animatedIds });
-    }
-
     // A <form> made into a component carries its onSubmit + FormSubmit
     // initialVariant (both reference `formState<X>`) into the master, but the
     // page's `useState` declaration stayed behind → "formState<X> is not
@@ -1208,16 +1181,6 @@ export function makeComponent(
         count: extractedIds.size,
         rootPlacementKept: Object.fromEntries([...rootPlacementByBp].map(([bp, s]) => [bp, Object.keys(s)])),
       });
-    }
-
-    // The animated descendants' JSX left the page (it's in the component now), so
-    // their page-level hooks are orphaned dead code (useMotionValue/useScroll/
-    // useEffect + `<cn>Sv` state, no consumer). Strip them — the same specs were
-    // rehydrated inside the component above. Sibling instances NOT extracted keep
-    // their hooks (their ids aren't in `animatedIds`, which came from the component).
-    for (const id of animatedIds) {
-      replacedCode = setScrollVariantInCode(replacedCode, id, null);
-      replacedCode = setInstanceFxInCode(replacedCode, id, null);
     }
 
     // Add import statement
