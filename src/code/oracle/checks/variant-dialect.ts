@@ -11,6 +11,9 @@ import type { OracleViolation } from './shared';
 import { styleValueIncludes } from './style-object';
 import { CSS_NEUTRAL_FALLBACK } from '@/code/generation/generator-styles';
 
+const SVG_PRESENTATION_ATTRS = new Set(['fill', 'stroke', 'strokeWidth', 'strokeDasharray', 'strokeDashoffset',
+  'strokeLinecap', 'strokeLinejoin', 'strokeOpacity', 'fillOpacity', 'opacity', 'strokeMiterlimit']);
+
 // ─── variant dialect (design components) ─────────────────────────────────────
 //
 // The variant system's two load-bearing laws:
@@ -126,7 +129,7 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
   // Collect `const xVariants = { … }` objects + which are referenced by variants={x};
   // detect the ROOT (the element whose style spreads ...style) and per-element shapes.
   const referenced = new Set<string>();
-  /** variants-object name → the inline style keys of the element using it. */
+  /** variants-object name → base style keys of the element using it. */
   const inlineKeysFor = new Map<string, Set<string>>();
   let rootVariantsName: string | null = null;
   let sawStyleSpread = false;
@@ -282,11 +285,19 @@ function checkVariantDialect(code: string, ast: t.File, v: OracleViolation[]): v
       const styleAttr = attrs.find((a) => a.name.name === 'style');
       const styleObj = styleAttr && t.isJSXExpressionContainer(styleAttr.value) && t.isObjectExpression(styleAttr.value.expression)
         ? styleAttr.value.expression : null;
-      if (variantsName && styleObj) {
+      if (variantsName) {
         const keys = new Set<string>();
-        for (const p of styleObj.properties) {
+        for (const p of styleObj?.properties ?? []) {
           if (t.isObjectProperty(p) && t.isIdentifier(p.key)) keys.add(p.key.name);
           else if (t.isObjectProperty(p) && t.isStringLiteral(p.key)) keys.add(p.key.value);
+        }
+        // SVG presentation values live on tag attributes. The variant writer
+        // seeds default.fill from these attributes so the hover fill animates back.
+        if (/^(?:motion\.)?(?:svg|path|rect|circle|ellipse|line|polyline|polygon|g)$/.test(jsxTagName(path.node.openingElement.name))) {
+          for (const attr of attrs) {
+            const key = String(attr.name.name).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+            if (SVG_PRESENTATION_ATTRS.has(key)) keys.add(key);
+          }
         }
         inlineKeysFor.set(variantsName, keys);
       }

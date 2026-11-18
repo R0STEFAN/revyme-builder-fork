@@ -6,17 +6,16 @@
 //   READS  — walks every descendant shape-bearing <svg> under the group
 //            and collects their inner-shape `fill` attrs. All equal →
 //            shows that color. They differ → shows "Mixed".
-//   WRITES — fans the chosen color out to EVERY leaf shape, using the
-//            same dual-write SvgShapeTool/RotateControl use for inner-shape
-//            attrs: `queueMutation({ type: 'updateSvgAttrs' })` for source
-//            persistence + `bridge.setChildShapeAttribute` for instant
-//            iframe-DOM feedback.
+//   WRITES — fans the chosen color out to EVERY leaf shape. Component
+//            variants write the path's motion fill; ordinary edits write its
+//            SVG attribute. The bridge provides instant iframe feedback.
 //
 // Single color swatch only (no gradient/image) — a group recolor is a
 // "make all these shapes one color" gesture; per-shape gradients stay
 // editable by selecting the individual shape (SvgShapeTool).
 
 import { useCallback } from 'react';
+import { useAtomValue } from 'jotai';
 import { ColorInput, ControlLabel } from '../../../controls';
 import { useControl } from '../../../controls/ControlProvider';
 import { useNodesComputed } from '@/code/stores/node-family';
@@ -25,6 +24,7 @@ import { getCanvasBridge } from '@/canvas/canvas-bridge';
 import { findSvgShapeChild, getViewportPrefix } from '@/canvas/node-ops';
 import type { CanvasNode } from '@/code/parsing/parser';
 import { trace } from '@/shared/debug-trace';
+import { activeComponentVariantAtom, isComponentVariantViewportAtom } from '@/code/stores/viewport-store';
 
 export interface GroupShapeRef {
   /** The leaf <svg> wrapper id (childIndex 0 holds the shape we recolor). */
@@ -55,6 +55,8 @@ export function collectGroupShapeSvgs(
 
 export function GroupFillControl() {
   const { node, vpId } = useControl();
+  const isVariantTile = useAtomValue(isComponentVariantViewportAtom);
+  const activeVariant = useAtomValue(activeComponentVariantAtom);
 
   // ─── Read — collect leaf shapes + detect common color / Mixed ──────────
   const { shapes, fill, isMixed } = useNodesComputed((nodes) => {
@@ -63,14 +65,17 @@ export function GroupFillControl() {
     for (const { shape } of out) {
       // Default SVG fill is black when the attr is absent — normalise so
       // an explicit `#000000` and an absent attr don't read as "Mixed".
-      fills.add((shape.attrs?.fill || '#000000').trim());
+      const variantFill = activeVariant && shape.motionVariants
+        ? shape.motionVariants[activeVariant]?.fill ?? shape.motionVariants.default?.fill
+        : undefined;
+      fills.add((variantFill || shape.attrs?.fill || '#000000').trim());
     }
     return {
       shapes: out,
       fill: fills.size === 1 ? Array.from(fills)[0] : '',
       isMixed: fills.size > 1,
     };
-  }, [node]);
+  }, [node, activeVariant]);
 
   // ─── Live (per-frame) — paint every leaf shape's fill via the bridge only,
   // NO mutation-queue write. Routing the picker's per-frame callback straight
@@ -95,11 +100,18 @@ export function GroupFillControl() {
     const bridge = getCanvasBridge() as {
       setChildShapeAttribute?: (parent: string, vp: string, idx: number, attr: string, value: string | null) => void;
     };
-    for (const { svgId } of shapes) {
-      queueMutation({ type: 'updateSvgAttrs', nodeId: svgId, attrs: { fill: color }, childIndex: 0 });
+    for (const { svgId, shape } of shapes) {
+      if (isVariantTile && activeVariant) {
+        queueMutation({ type: 'updateVariantStyle', nodeId: shape.id, variantName: activeVariant, styles: { fill: color } });
+      } else {
+        queueMutation({ type: 'updateSvgAttrs', nodeId: svgId, attrs: { fill: color }, childIndex: 0 });
+        if (shape.motionVariants?.default?.fill !== undefined) {
+          queueMutation({ type: 'updateVariantStyle', nodeId: shape.id, variantName: 'default', styles: { fill: color } });
+        }
+      }
       bridge.setChildShapeAttribute?.(svgId, vpPrefix, 0, 'fill', color);
     }
-  }, [node?.id, vpId, shapes]);
+  }, [node?.id, vpId, shapes, isVariantTile, activeVariant]);
 
   if (!node || shapes.length === 0) return null;
 
