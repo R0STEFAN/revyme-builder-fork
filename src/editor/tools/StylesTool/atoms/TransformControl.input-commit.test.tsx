@@ -127,6 +127,7 @@ describe('TransformControl input commits', () => {
     fireEvent.change(xInput, { target: { value: '-20%' } });
     fireEvent.keyDown(xInput, { key: 'Enter' });
     expect(state.onChangeMultiple).toHaveBeenCalledWith({ x: '-20%' });
+    expect(state.onChangeLive).toHaveBeenCalledWith(expect.stringContaining('translate(-20%, 18px)'));
 
     state.context.allProps = { ...state.context.allProps, x: '-20%' };
     state.context.node = {

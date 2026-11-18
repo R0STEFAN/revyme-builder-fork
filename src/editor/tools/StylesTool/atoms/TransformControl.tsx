@@ -276,6 +276,12 @@ function TransformAtom() {
   const liveTransform = (override: Partial<TransformData>) => {
     onChangeLive(formatTransform({ ...t, ...override }));
   };
+  const liveTranslate = (field: 'translateX' | 'translateY', value: string) => {
+    const x = field === 'translateX' ? value : (normalizeTranslateLength(allProps.x ?? '') ?? `${t.translateX}px`);
+    const y = field === 'translateY' ? value : (normalizeTranslateLength(allProps.y ?? '') ?? `${t.translateY}px`);
+    const rest = formatTransform({ ...t, translateX: 0, translateY: 0 });
+    onChangeLive(`${rest === 'none' ? '' : `${rest} `}translate(${x}, ${y})`);
+  };
   /** ToolInput field handlers — the chevron DRAG/hold live-patches the canvas (DOM-only, NO code write per
    *  frame) and commits ONCE on release; typing + arrow keys commit. Mirrors the slider's
    *  onChange(live)/onCommit split — this is what makes the rotate/skew/scale chevrons high-FPS instead of
@@ -289,7 +295,7 @@ function TransformAtom() {
     const commitTranslate = (v: string) => {
       const normalized = normalizeTranslateLength(v);
       if (normalized === null) return;
-      if (normalized.endsWith('px')) liveTransform({ [field]: parseFloat(normalized) } as Partial<TransformData>);
+      liveTranslate(field as 'translateX' | 'translateY', normalized);
       const key = field === 'translateX' ? 'x' : 'y';
       onChangeMultiple({ [key]: !isScopedWrite && parseFloat(normalized) === 0 ? '' : normalized });
     };
@@ -307,7 +313,7 @@ function TransformAtom() {
         if (disabled) return;
         if (isTranslate && isMotion) {
           const normalized = normalizeTranslateLength(v);
-          if (normalized?.endsWith('px')) liveTransform({ [field]: parseFloat(normalized) } as Partial<TransformData>);
+          if (normalized) liveTranslate(field as 'translateX' | 'translateY', normalized);
           return;
         }
         liveTransform({ [field]: num(v) } as Partial<TransformData>);
