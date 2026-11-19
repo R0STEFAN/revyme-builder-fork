@@ -49,7 +49,7 @@ import { isComponentFilePath } from '@/code/project/file-path-kind';
 import { extractImports, resolveImportPath } from '@/code/components/import-resolver';
 import { hasComponentControls } from '@/code/components/controls-parser';
 import { parseVariantConfig } from '@/code/variants/variant-config';
-import { updateVariantStyleInCode } from '@/code/generation/generator-styles';
+import { applyVariantStyleUpdateInCode } from '@/code/generation/generator-styles';
 import { updateVariantTextInCode } from '@/code/generation/generator-crud';
 import {
   queueToolMutation,
@@ -511,7 +511,7 @@ export const setVariantTool: AgentTool = {
     const masterBefore = readToolFile(ctx, targetPath) ?? code;
     let preview = masterBefore;
     if (styles && Object.keys(styles).length > 0) {
-      preview = updateVariantStyleInCode(preview, targetNodeId, variant, styles);
+      preview = applyVariantStyleUpdateInCode(preview, targetNodeId, variant, styles, { explicitVariant: true });
     }
     if (text !== undefined) {
       preview = updateVariantTextInCode(preview, targetNodeId, variant, text);
@@ -549,7 +549,7 @@ export const setVariantTool: AgentTool = {
     const wrote = modifyProjectFile(targetPath, (master) => {
       let next = master;
       if (styles && Object.keys(styles).length > 0) {
-        next = updateVariantStyleInCode(next, targetNodeId, variant, styles);
+        next = applyVariantStyleUpdateInCode(next, targetNodeId, variant, styles, { explicitVariant: true });
       }
       if (text !== undefined) {
         next = updateVariantTextInCode(next, targetNodeId, variant, text);

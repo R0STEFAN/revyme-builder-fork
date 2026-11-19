@@ -13,6 +13,7 @@ import {
   type AddNodeDef,
 } from '@/code/generation/generator-crud';
 import { normalizeStylePatch } from '../ingestion/styles';
+import { mergeNodeVariantStyles, resolveTargetNode } from './styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -60,7 +61,12 @@ function ensureFlowChildOrder(code: string, parentId: string): string {
 // 1. nodes.get
 export const nodesGetOperation: Operation<
   { filePath?: string; nodeId: string },
-  { node: CanvasNode }
+  {
+    node: CanvasNode & {
+      variantStyles?: Record<string, Record<string, string>>;
+      variantTexts?: Record<string, string>;
+    };
+  }
 > = {
   name: 'nodes.get',
   description: 'Get parsed CanvasNode by data-id from JSX source',
@@ -76,11 +82,22 @@ export const nodesGetOperation: Operation<
   async execute(snapshot, input) {
     const { code } = getTargetFile(snapshot, input.filePath);
     const nodes = parseJSXToNodes(code);
-    const node = nodes.get(input.nodeId);
+    const { node, effectiveNodeId } = resolveTargetNode(nodes, input.nodeId);
     if (!node) {
       throw new Error(`NODE_NOT_FOUND: Node with id "${input.nodeId}" not found in source`);
     }
-    return { node };
+    const variantStyles = mergeNodeVariantStyles(node);
+    return {
+      node: {
+        ...node,
+        id: effectiveNodeId,
+        ...(Object.keys(variantStyles).length > 0 ? { variantStyles } : {}),
+        ...(node.conditionalText ? { variantTexts: node.conditionalText } : {}),
+        ...(node.hiddenOnVariants && node.hiddenOnVariants.size > 0
+          ? { hiddenOnVariants: Array.from(node.hiddenOnVariants) as unknown as Set<string> }
+          : {}),
+      },
+    };
   },
 };
 

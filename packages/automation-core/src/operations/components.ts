@@ -18,8 +18,10 @@ import { parseComponentFile, type ComponentInfo } from '@/code/components/compon
 import { parseVariantConfig } from '@/code/variants/variant-config';
 import { parsePropMeta } from '@/code/components/prop-meta';
 import { parseJSX, traverse } from '@/code/parsing/ast-utils';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 import { generate } from '@/code/generation/generator-utils';
 import { simpleHash } from '@/shared/hash-utils';
+import { mergeNodeVariantStyles } from './styles';
 
 export function ensureComponentImport(code: string, componentName: string): string {
   const importRegex = new RegExp(`import\\s+${componentName}\\s+from\\s+['"]@/components/${componentName}['"]`);
@@ -279,6 +281,21 @@ export const componentsListOperation: Operation<
   },
 };
 
+export interface ComponentNodeSummary {
+  id: string;
+  type: string;
+  name: string;
+  parentId: string | null;
+  children: string[];
+  textContent?: string;
+  textVariable?: string;
+  variantTexts?: Record<string, string>;
+  styles: Record<string, string>;
+  styleVariables?: Record<string, string>;
+  variantStyles?: Record<string, Record<string, string>>;
+  hiddenOnVariants?: string[];
+}
+
 // 2. components.get
 export const componentsGetOperation: Operation<
   { name: string },
@@ -290,11 +307,13 @@ export const componentsGetOperation: Operation<
       variants: Array<{ name: string; label: string; isPrimary?: boolean }>;
       propMeta: Record<string, unknown>;
       isCodeComponent: boolean;
+      rootNodeId?: string | null;
+      nodes?: ComponentNodeSummary[];
     } | null;
   }
 > = {
   name: 'components.get',
-  description: 'Get component metadata, variants, prop types, and default values by name',
+  description: 'Get component metadata, variants, prop types, default values, and internal Design Component node tree by name',
   category: 'components',
   kind: 'read',
   permit: 'read',
@@ -319,6 +338,37 @@ export const componentsGetOperation: Operation<
 
     const variants = parseVariantConfig(content);
     const propMeta = parsePropMeta(content);
+    const isCodeComponent = parsed.controlsMeta !== null;
+
+    let designTree: { rootNodeId: string | null; nodes: ComponentNodeSummary[] } | undefined;
+    if (!isCodeComponent) {
+      const parsedNodes = parseJSXToNodes(content);
+      const treeNodes = Array.from(parsedNodes.values()).filter((n) => !n.isCanvasNode);
+      const rootNode = treeNodes.find((n) => n.parentId === null) ?? treeNodes[0] ?? null;
+      const nodes: ComponentNodeSummary[] = treeNodes.map((n) => {
+        const vStyles = mergeNodeVariantStyles(n);
+        return {
+          id: n.id,
+          type: n.type,
+          name: n.name,
+          parentId: n.parentId,
+          children: n.children,
+          ...(n.textContent ? { textContent: n.textContent } : {}),
+          ...(n.textVariable ? { textVariable: n.textVariable } : {}),
+          ...(n.conditionalText ? { variantTexts: n.conditionalText } : {}),
+          styles: n.styles || {},
+          ...(n.styleVariables ? { styleVariables: n.styleVariables } : {}),
+          ...(Object.keys(vStyles).length > 0 ? { variantStyles: vStyles } : {}),
+          ...(n.hiddenOnVariants && n.hiddenOnVariants.size > 0
+            ? { hiddenOnVariants: Array.from(n.hiddenOnVariants) }
+            : {}),
+        };
+      });
+      designTree = {
+        rootNodeId: rootNode ? rootNode.id : null,
+        nodes,
+      };
+    }
 
     return {
       component: {
@@ -331,7 +381,8 @@ export const componentsGetOperation: Operation<
           isPrimary: v.isPrimary,
         })),
         propMeta,
-        isCodeComponent: parsed.controlsMeta !== null,
+        isCodeComponent,
+        ...(designTree ? designTree : {}),
       },
     };
   },

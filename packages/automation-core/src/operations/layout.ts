@@ -2,9 +2,12 @@
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
-import { updateNodeInCode } from '@/code/generation/generator-crud';
 import { parseJSXToNodes } from '@/code/parsing/parser';
-import { validateStylesNotForbiddenAuto } from './styles';
+import {
+  applyVariantAwareStylesToCode,
+  resolveTargetNode,
+  validateStylesNotForbiddenAuto,
+} from './styles';
 import { normalizeStylePatch } from '../ingestion/styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
@@ -52,6 +55,7 @@ export const layoutSetOperation: Operation<
     bottom?: string;
     zIndex?: number | string;
     overflow?: string;
+    variantName?: string;
   },
   {
     nodeId: string;
@@ -59,7 +63,7 @@ export const layoutSetOperation: Operation<
   }
 > = {
   name: 'layout.set',
-  description: 'Set layout, sizing, flex/grid properties, and pin/inset coordinates',
+  description: 'Set layout, sizing, flex/grid properties, and pin/inset coordinates (optionally per variant)',
   category: 'layout',
   kind: 'mutation',
   permit: 'write',
@@ -92,9 +96,11 @@ export const layoutSetOperation: Operation<
     bottom: z.string().optional(),
     zIndex: z.union([z.number(), z.string()]).optional(),
     overflow: z.string().optional(),
+    variantName: z.string().min(1).optional(),
   }),
   async execute(snapshot, input) {
     const { path, code } = getTargetFile(snapshot, input.filePath);
+    const { effectiveNodeId } = resolveTargetNode(parseJSXToNodes(code), input.nodeId);
 
     const styleUpdates: Record<string, string> = {};
     if (input.display !== undefined) styleUpdates.display = input.display;
@@ -125,10 +131,10 @@ export const layoutSetOperation: Operation<
     validateStylesNotForbiddenAuto(styleUpdates);
     const normalizedUpdates = normalizeStylePatch(styleUpdates);
 
-    const nextCode = updateNodeInCode(code, input.nodeId, normalizedUpdates);
+    const nextCode = applyVariantAwareStylesToCode(code, effectiveNodeId, normalizedUpdates, input.variantName);
 
     return {
-      nodeId: input.nodeId,
+      nodeId: effectiveNodeId,
       changes: [
         {
           path,

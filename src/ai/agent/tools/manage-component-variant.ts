@@ -13,7 +13,7 @@ import { buildComponentRegistry } from '@/code/components/component-registry';
 import { hasComponentControls } from '@/code/components/controls-parser';
 import { parseVariantConfig, hasInteractionState } from '@/code/variants/variant-config';
 import { addVariant, addInteractionState } from '@/code/variants/variant-ops';
-import { updateVariantStyleInCode } from '@/code/generation/generator-styles';
+import { applyVariantStyleUpdateInCode } from '@/code/generation/generator-styles';
 import { findVariantRootId } from '@/shared/variant-root';
 import { coerceRecord } from './coerce';
 import { trace } from '@/shared/debug-trace';
@@ -105,7 +105,7 @@ export const manageComponentVariantTool: AgentTool = {
         modifyProjectFile(info.filePath, (code) => {
           const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
           if (!targetNodeId) return code;
-          return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
+          return applyVariantStyleUpdateInCode(code, targetNodeId, variantName, styles, { explicitVariant: true });
         });
       }
 
@@ -149,7 +149,7 @@ export const manageComponentVariantTool: AgentTool = {
         modifyProjectFile(info.filePath, (code) => {
           const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
           if (!targetNodeId) return code;
-          return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
+          return applyVariantStyleUpdateInCode(code, targetNodeId, variantName, styles, { explicitVariant: true });
         });
       }
 
@@ -180,7 +180,7 @@ export const manageComponentVariantTool: AgentTool = {
       modifyProjectFile(info.filePath, (code) => {
         const targetNodeId = (typeof args.element === 'string' && args.element.trim()) ? args.element.trim() : findVariantRootId(code);
         if (!targetNodeId) return code;
-        return updateVariantStyleInCode(code, targetNodeId, variantName, styles);
+        return applyVariantStyleUpdateInCode(code, targetNodeId, variantName, styles, { explicitVariant: true });
       });
 
       store.set(projectVersionAtom, (v) => v + 1);

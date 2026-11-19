@@ -10,7 +10,8 @@ import { parseVariantConfig } from '@/code/variants/variant-config';
 import { toKebab, SHORTHAND_LONGHANDS, parseShorthand } from '@/shared/css-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
 import { scopeVariantConstsReadingProps } from './variant-const-scope';
-import { CSS_LAYOUT_DEFAULTS } from '@/shared/constants';
+import { CSS_LAYOUT_DEFAULTS, PROJECTION_STYLE_PROPS } from '@/shared/constants';
+import { parseJSXToNodes } from '@/code/parsing/parser';
 import { cssTransformToMotionProps, MOTION_TRANSFORM_PROPS, MOTION_VISUAL_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { removeAxisTranslate } from '@/shared/position-utils';
 import { parseJSX } from '@/code/parsing/ast-utils';
@@ -2584,6 +2585,135 @@ export function updateVariantStyleInCode(
   return ensureInitialVariantParam(
     ensureRootPerfIsolation(scopeVariantConstsReadingProps(updateVariantStyleInCodeImpl(code, nodeId, variantName, styles))),
   );
+}
+
+/**
+ * Oracle-compliant variant style writer shared across automation-core (MCP)
+ * and in-builder chat tools:
+ * - Routes `PROJECTION_STYLE_PROPS` (and pre-existing conditional styles) to
+ *   inline ternaries (`setConditionalStyleInCode`), keeping visual styles in
+ *   Framer Motion `variants` objects.
+ * - Normalizes `boxShadow: 'none'` and seeds transparent boxShadow bases when
+ *   animating shadows on variants to satisfy `BOX_SHADOW_INTERPOLATION`.
+ * - Keeps primary (`default`) inline styles and `variants.default` in sync to
+ *   prevent `DEFAULT_VALUE_NOT_IN_BASE`.
+ */
+export function applyVariantStyleUpdateInCode(
+  code: string,
+  nodeId: string,
+  variantName: string,
+  styles: Record<string, string>,
+  options?: { explicitVariant?: boolean },
+): string {
+  const nodes = parseJSXToNodes(code);
+  const node = nodes.get(nodeId);
+  const variants = parseVariantConfig(code);
+  const primaryName = (variants.find((v) => v.isPrimary) ?? variants[0])?.name ?? 'default';
+  const isPrimary = !variantName || variantName === 'default' || variantName === primaryName;
+  const isSvgWrapper = node?.type === 'svg';
+  const isInstanceNode = Boolean(node?.isComponentInstance || node?.isCodeComponent);
+  const hasMotionVariants = Boolean(node?.motionVariants || node?.motionVariantsRef);
+
+  const workingStyles = { ...styles };
+  if (
+    (!isPrimary || hasMotionVariants)
+    && typeof workingStyles.boxShadow === 'string'
+    && workingStyles.boxShadow.trim().toLowerCase() === 'none'
+  ) {
+    workingStyles.boxShadow = '0 0 0 rgba(0, 0, 0, 0)';
+  }
+
+  let nextCode = code;
+
+  // Ensure animating boxShadow on a non-primary variant never seeds 'none' into default.
+  if (
+    !isPrimary
+    && typeof workingStyles.boxShadow === 'string'
+    && workingStyles.boxShadow !== ''
+    && !isInstanceNode
+  ) {
+    const baseBoxShadow = node?.styles?.boxShadow?.trim().toLowerCase();
+    if (!baseBoxShadow || baseBoxShadow === 'none') {
+      nextCode = updateNodeInCode(nextCode, nodeId, { boxShadow: '0 0 0 rgba(0, 0, 0, 0)' });
+    }
+    if (node?.motionVariants?.default?.boxShadow?.trim().toLowerCase() === 'none') {
+      nextCode = updateVariantStyleInCode(nextCode, nodeId, 'default', {
+        boxShadow: '0 0 0 rgba(0, 0, 0, 0)',
+      });
+    }
+  }
+
+  if (isPrimary) {
+    const existingConditional: Record<string, string> = {};
+    const plainBase: Record<string, string> = {};
+    for (const [k, v] of Object.entries(workingStyles)) {
+      if (node?.conditionalStyles && k in node.conditionalStyles) {
+        existingConditional[k] = v;
+      } else {
+        plainBase[k] = v;
+      }
+    }
+
+    for (const [prop, val] of Object.entries(existingConditional)) {
+      nextCode = setConditionalStyleInCode(nextCode, nodeId, prop, 'default', val);
+    }
+
+    if (Object.keys(plainBase).length > 0) {
+      if (isInstanceNode) {
+        nextCode = updateVariantStyleInCode(nextCode, nodeId, 'default', plainBase);
+      } else {
+        nextCode = updateNodeInCode(nextCode, nodeId, plainBase);
+        if (hasMotionVariants) {
+          const isRoot = node?.parentId === null && !node?.isCanvasNode;
+          const CANVAS_ONLY = new Set(['left', 'top', 'right', 'bottom', 'position']);
+          const mirroredDefault: Record<string, string> = {};
+          for (const [k, v] of Object.entries(plainBase)) {
+            const isSvgSize = isSvgWrapper && (k === 'width' || k === 'height');
+            if (PROJECTION_STYLE_PROPS.has(k) && !isSvgSize) continue;
+            if (isRoot && CANVAS_ONLY.has(k)) continue;
+            const inMotion = Boolean(
+              node?.motionVariants && Object.values(node.motionVariants).some((entry) => k in entry),
+            );
+            if (inMotion || options?.explicitVariant) {
+              mirroredDefault[k] = v;
+            }
+          }
+          if (Object.keys(mirroredDefault).length > 0) {
+            nextCode = updateVariantStyleInCode(nextCode, nodeId, 'default', mirroredDefault);
+          }
+        }
+      }
+    }
+
+    return nextCode;
+  }
+
+  if (isInstanceNode) {
+    return updateVariantStyleInCode(nextCode, nodeId, variantName, workingStyles);
+  }
+
+  const conditionalStyles: Record<string, string> = {};
+  const visualStyles: Record<string, string> = {};
+  for (const [k, v] of Object.entries(workingStyles)) {
+    const isSvgSize = isSvgWrapper && (k === 'width' || k === 'height');
+    const isConditional = (PROJECTION_STYLE_PROPS.has(k) && !isSvgSize)
+      || Boolean(node?.conditionalStyles && k in node.conditionalStyles);
+    if (isConditional) {
+      conditionalStyles[k] = v;
+    } else {
+      visualStyles[k] = v;
+    }
+  }
+
+  for (const [prop, val] of Object.entries(conditionalStyles)) {
+    nextCode = setConditionalStyleInCode(nextCode, nodeId, prop, variantName, val);
+  }
+
+  if (Object.keys(visualStyles).length > 0) {
+    nextCode = updateVariantStyleInCode(nextCode, nodeId, variantName, visualStyles);
+  }
+
+  return ensureInitialVariantParam(nextCode);
 }
 
 function updateVariantStyleInCodeImpl(

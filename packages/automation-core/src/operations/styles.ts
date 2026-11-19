@@ -2,16 +2,75 @@
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
-import { parseJSXToNodes } from '@/code/parsing/parser';
+import { parseJSXToNodes, type CanvasNode } from '@/code/parsing/parser';
+import { parseVariantConfig } from '@/code/variants/variant-config';
 import { updateNodeInCode } from '@/code/generation/generator-crud';
 import {
   updateHoverStyleInCode,
   updatePseudoStyleInCode,
   updateContainerQueryStyle,
-  updateVariantStyleInCode,
+  applyVariantStyleUpdateInCode,
   type PseudoRuleKind,
 } from '@/code/generation/generator-styles';
 import { normalizeStylePatch } from '../ingestion/styles';
+
+export function resolveTargetNode(
+  nodes: Map<string, CanvasNode>,
+  nodeId: string,
+): { node: CanvasNode | undefined; effectiveNodeId: string } {
+  const direct = nodes.get(nodeId);
+  if (direct) return { node: direct, effectiveNodeId: nodeId };
+  if (nodeId === 'root') {
+    const rootNode = Array.from(nodes.values()).find((n) => n.parentId === null && !n.isCanvasNode);
+    if (rootNode) return { node: rootNode, effectiveNodeId: rootNode.id };
+  }
+  return { node: undefined, effectiveNodeId: nodeId };
+}
+
+export function mergeNodeVariantStyles(node: CanvasNode): Record<string, Record<string, string>> {
+  const merged: Record<string, Record<string, string>> = {};
+  if (node.motionVariants) {
+    for (const [variantName, props] of Object.entries(node.motionVariants)) {
+      if (!props || typeof props !== 'object') continue;
+      merged[variantName] = { ...(merged[variantName] ?? {}), ...props };
+    }
+  }
+  if (node.conditionalStyles) {
+    for (const [prop, branches] of Object.entries(node.conditionalStyles)) {
+      if (!branches || typeof branches !== 'object') continue;
+      for (const [variantName, val] of Object.entries(branches)) {
+        if (!merged[variantName]) merged[variantName] = {};
+        merged[variantName][prop] = val;
+      }
+    }
+  }
+  return merged;
+}
+
+export function applyVariantAwareStylesToCode(
+  code: string,
+  nodeId: string,
+  styles: Record<string, string>,
+  variantName?: string,
+): string {
+  const nodes = parseJSXToNodes(code);
+  const { node, effectiveNodeId } = resolveTargetNode(nodes, nodeId);
+  const variants = parseVariantConfig(code);
+  const primaryName = (variants.find((v) => v.isPrimary) ?? variants[0])?.name ?? 'default';
+  const isVariantComponent = variants.length > 0;
+
+  if (!variantName && !isVariantComponent && !node?.motionVariants && !node?.conditionalStyles) {
+    return updateNodeInCode(code, effectiveNodeId, styles);
+  }
+
+  return applyVariantStyleUpdateInCode(
+    code,
+    effectiveNodeId,
+    variantName ?? primaryName,
+    styles,
+    { explicitVariant: Boolean(variantName) },
+  );
+}
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -40,11 +99,16 @@ function resolveBreakpointWidth(bp: string | number): number {
 
 // 1. styles.get
 export const stylesGetOperation: Operation<
-  { filePath?: string; nodeId: string },
-  { nodeId: string; styles: Record<string, string> }
+  { filePath?: string; nodeId: string; variantName?: string },
+  {
+    nodeId: string;
+    styles: Record<string, string>;
+    baseStyles?: Record<string, string>;
+    variantStyles?: Record<string, Record<string, string>>;
+  }
 > = {
   name: 'styles.get',
-  description: 'Get parsed inline CSS styles for a node',
+  description: 'Get parsed inline and variant CSS styles for a node',
   category: 'styles',
   kind: 'read',
   permit: 'read',
@@ -53,17 +117,36 @@ export const stylesGetOperation: Operation<
   inputSchema: z.object({
     filePath: z.string().optional(),
     nodeId: z.string().min(1),
+    variantName: z.string().min(1).optional(),
   }),
   async execute(snapshot, input) {
     const { code } = getTargetFile(snapshot, input.filePath);
     const nodes = parseJSXToNodes(code);
-    const node = nodes.get(input.nodeId);
+    const { node, effectiveNodeId } = resolveTargetNode(nodes, input.nodeId);
     if (!node) {
       throw new Error(`NODE_NOT_FOUND: Node "${input.nodeId}" not found in source`);
     }
+    const baseStyles = node.styles || {};
+    const variantStyles = mergeNodeVariantStyles(node);
+    const hasVariantStyles = Object.keys(variantStyles).length > 0;
+
+    if (input.variantName) {
+      return {
+        nodeId: effectiveNodeId,
+        styles: {
+          ...baseStyles,
+          ...(variantStyles.default || {}),
+          ...(variantStyles[input.variantName] || {}),
+        },
+        baseStyles,
+        ...(hasVariantStyles ? { variantStyles } : {}),
+      };
+    }
+
     return {
-      nodeId: input.nodeId,
-      styles: node.styles || {},
+      nodeId: effectiveNodeId,
+      styles: baseStyles,
+      ...(hasVariantStyles ? { variantStyles } : {}),
     };
   },
 };
@@ -154,31 +237,32 @@ export const stylesSetOperation: Operation<
     validateStylesNotForbiddenAuto(input.styles);
     const normalizedStyles = normalizeStylePatch(input.styles);
     const { path, code } = getTargetFile(snapshot, input.filePath);
+    const { effectiveNodeId } = resolveTargetNode(parseJSXToNodes(code), input.nodeId);
     let nextCode = code;
 
     if (input.variantName) {
-      nextCode = updateVariantStyleInCode(nextCode, input.nodeId, input.variantName, normalizedStyles);
+      nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, normalizedStyles, input.variantName);
     } else if (input.pseudo) {
       const cleanPseudo = input.pseudo.replace(/^:+/, '');
       if (cleanPseudo === 'hover') {
-        nextCode = updateHoverStyleInCode(nextCode, input.nodeId, normalizedStyles);
+        nextCode = updateHoverStyleInCode(nextCode, effectiveNodeId, normalizedStyles);
       } else {
         nextCode = updatePseudoStyleInCode(
           nextCode,
-          input.nodeId,
+          effectiveNodeId,
           cleanPseudo as PseudoRuleKind,
           normalizedStyles
         );
       }
     } else if (input.breakpoint) {
       const width = resolveBreakpointWidth(input.breakpoint);
-      nextCode = updateContainerQueryStyle(nextCode, input.nodeId, width, normalizedStyles);
+      nextCode = updateContainerQueryStyle(nextCode, effectiveNodeId, width, normalizedStyles);
     } else {
-      nextCode = updateNodeInCode(nextCode, input.nodeId, normalizedStyles);
+      nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, normalizedStyles);
     }
 
     return {
-      nodeId: input.nodeId,
+      nodeId: effectiveNodeId,
       changes: [
         {
           path,
@@ -198,6 +282,7 @@ export const stylesRemoveOperation: Operation<
     properties: string[];
     breakpoint?: string | number;
     pseudo?: string;
+    variantName?: string;
   },
   {
     nodeId: string;
@@ -205,7 +290,7 @@ export const stylesRemoveOperation: Operation<
   }
 > = {
   name: 'styles.remove',
-  description: 'Remove specific style properties from a node by passing empty string values',
+  description: 'Remove specific style properties from a node or variant by passing empty string values',
   category: 'styles',
   kind: 'mutation',
   permit: 'write',
@@ -217,9 +302,11 @@ export const stylesRemoveOperation: Operation<
     properties: z.array(z.string()).min(1),
     breakpoint: z.union([z.string(), z.number()]).optional(),
     pseudo: z.string().optional(),
+    variantName: z.string().min(1).optional(),
   }),
   async execute(snapshot, input) {
     const { path, code } = getTargetFile(snapshot, input.filePath);
+    const { effectiveNodeId } = resolveTargetNode(parseJSXToNodes(code), input.nodeId);
     let nextCode = code;
 
     // Invariant 3: empty string deletes property
@@ -228,27 +315,29 @@ export const stylesRemoveOperation: Operation<
       removalStyles[prop] = '';
     }
 
-    if (input.pseudo) {
+    if (input.variantName) {
+      nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, removalStyles, input.variantName);
+    } else if (input.pseudo) {
       const cleanPseudo = input.pseudo.replace(/^:+/, '');
       if (cleanPseudo === 'hover') {
-        nextCode = updateHoverStyleInCode(nextCode, input.nodeId, removalStyles);
+        nextCode = updateHoverStyleInCode(nextCode, effectiveNodeId, removalStyles);
       } else {
         nextCode = updatePseudoStyleInCode(
           nextCode,
-          input.nodeId,
+          effectiveNodeId,
           cleanPseudo as PseudoRuleKind,
           removalStyles
         );
       }
     } else if (input.breakpoint) {
       const width = resolveBreakpointWidth(input.breakpoint);
-      nextCode = updateContainerQueryStyle(nextCode, input.nodeId, width, removalStyles);
+      nextCode = updateContainerQueryStyle(nextCode, effectiveNodeId, width, removalStyles);
     } else {
-      nextCode = updateNodeInCode(nextCode, input.nodeId, removalStyles);
+      nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, removalStyles);
     }
 
     return {
-      nodeId: input.nodeId,
+      nodeId: effectiveNodeId,
       changes: [
         {
           path,
