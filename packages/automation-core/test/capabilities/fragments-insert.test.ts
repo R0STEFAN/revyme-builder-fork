@@ -378,4 +378,58 @@ export default function Button({
     );
     expect(formViolations).toHaveLength(0);
   });
+
+  it('auto-heals raw screenshot-style JSX so fragments.insert passes Oracle in one shot', async () => {
+    const existing = files.get('app/page.client.tsx')!;
+    files.set(
+      'app/page.client.tsx',
+      existing.replace(
+        "'use client';",
+        `'use client';\n/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 810, "height": "auto", "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 390, "height": "auto", "isPrimary": false, "order": 2 } ], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1360, "y": 0 }, "mobile": { "x": 2330, "y": 0 } } } */`
+      )
+    );
+
+    const fragment = `
+      <section style={{ background: '#0f172a', color: '#f8fafc', fontFamily: 'Inter', padding: '48px 24px', minHeight: 'min-content' }}>
+        <h2>Pricing Features</h2>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'baseline' }}>
+          <div style={{ width: '100%', border: '1px solid rgba(255,255,255,0.1)', borderColor: 'transparent', transition: 'all 0.2s ease', padding: '16px', position: 'relative' }}>
+            <span style={{ position: 'absolute', inset: '12px 12px auto auto', lineHeight: '1.25 /* tight */' }}>Popular</span>
+            <p>Starter tier with generous limits</p>
+            <img src="https://example.com/card.jpg" alt="Card preview" />
+          </div>
+          <div style={{ width: '100%', padding: '16px' }}>
+            <ul style={{ listStyleType: 'disc', paddingLeft: '20px', overflow: 'auto', maxHeight: '240px' }}>
+              <li style={{ fontSize: '14px' }}>Unlimited blocks</li>
+              <li style={{ fontSize: '14px' }}>Native JSX source</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    `;
+
+    const op = defaultRegistry.get('fragments.insert');
+    const result = await op!.execute(snapshot, {
+      parentId: 'root',
+      fragment,
+    }, context);
+
+    applyChanges(result.changes);
+    const updatedCode = files.get('app/page.client.tsx')!;
+
+    expect(updatedCode).toContain("backgroundColor: '#0f172a'");
+    expect(updatedCode).not.toContain("minHeight: 'min-content'");
+    expect(updatedCode).not.toContain('transition:');
+    expect(updatedCode).toContain('rgba(0, 0, 0, 0)');
+    expect(updatedCode).toContain("data-pinned=\"true\"");
+    expect(updatedCode).toContain("flex: '1 0 0px'");
+    expect(updatedCode).toContain("flex: '0 0 auto'");
+    expect(updatedCode).toContain("order: '0'");
+    expect(updatedCode).toContain("order: '1'");
+    expect(updatedCode).toContain("lineHeight: '1.25'");
+    expect(updatedCode).toContain("objectFit: 'cover'");
+
+    const violations = checkFile(updatedCode, { kind: 'page' });
+    expect(violations).toEqual([]);
+  });
 });

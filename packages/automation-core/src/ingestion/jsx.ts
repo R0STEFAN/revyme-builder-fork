@@ -201,6 +201,16 @@ function convertBabelJSX(
       }
     }
 
+    autoHealNodeAndSubtree(
+      id,
+      tagName,
+      normalizedStyles,
+      props,
+      textContent,
+      children,
+      reporter
+    );
+
     return {
       id,
       tag: tagName,
@@ -213,4 +223,280 @@ function convertBabelJSX(
   }
 
   return null;
+}
+
+const AUTO_FLEX_FRAME_TAGS = new Set([
+  'div',
+  'section',
+  'article',
+  'aside',
+  'main',
+  'header',
+  'footer',
+  'nav',
+  'ul',
+  'ol',
+  'li',
+  'form',
+  'figure',
+  'figcaption',
+]);
+
+const PADDING_STYLE_KEYS = [
+  'padding',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingBlock',
+  'paddingInline',
+  'paddingBlockStart',
+  'paddingBlockEnd',
+  'paddingInlineStart',
+  'paddingInlineEnd',
+];
+
+const INHERITED_TEXT_STYLE_KEYS = [
+  'color',
+  'fontFamily',
+  'fontSize',
+  'fontWeight',
+  'fontStyle',
+  'lineHeight',
+  'letterSpacing',
+  'textAlign',
+  'textTransform',
+  'whiteSpace',
+];
+
+const TEXT_OR_INTERACTIVE_TAGS = new Set([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'span',
+  'a',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'label',
+  'strong',
+  'em',
+  'b',
+  'i',
+  'u',
+  's',
+  'small',
+  'mark',
+  'del',
+  'ins',
+  'sub',
+  'sup',
+  'code',
+  'pre',
+  'kbd',
+  'samp',
+  'var',
+  'q',
+  'blockquote',
+  'cite',
+  'abbr',
+  'time',
+  'address',
+  'caption',
+  'legend',
+  'summary',
+]);
+
+const VOID_OR_VECTOR_TAGS = new Set([
+  'svg',
+  'path',
+  'circle',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'ellipse',
+  'g',
+  'defs',
+  'use',
+  'clipPath',
+  'linearGradient',
+  'radialGradient',
+  'stop',
+  'img',
+  'video',
+  'audio',
+  'iframe',
+  'canvas',
+  'hr',
+  'br',
+]);
+
+function hasNonZeroPaddingStyle(styles: Record<string, any>): boolean {
+  for (const key of PADDING_STYLE_KEYS) {
+    const val = styles[key];
+    if (val === undefined || val === null || val === '') continue;
+    const str = String(val).trim();
+    if (str !== '' && str !== '0' && str !== '0px' && str !== '0rem' && str !== '0em' && str !== '0%') {
+      return true;
+    }
+  }
+  return false;
+}
+
+function cascadeInheritedTextProps(
+  nodes: IngestedNode[],
+  inherited: Record<string, string | number>,
+  reporter?: IngestionReporter
+): void {
+  for (const child of nodes) {
+    if (VOID_OR_VECTOR_TAGS.has(child.tag)) {
+      continue;
+    }
+
+    const isTextOrControl = Boolean(child.text) || TEXT_OR_INTERACTIVE_TAGS.has(child.tag);
+    if (isTextOrControl) {
+      let applied = false;
+      for (const [prop, val] of Object.entries(inherited)) {
+        if (!child.styles) child.styles = {};
+        if (child.styles[prop] === undefined) {
+          child.styles[prop] = val;
+          applied = true;
+        }
+      }
+      if (applied) {
+        reporter?.recordNormalization('CASCADE_TEXT_STYLES', child.id, '', Object.keys(inherited).join(','));
+      }
+      if (child.children && child.children.length > 0) {
+        const nextInherited: Record<string, string | number> = { ...inherited };
+        if (child.styles) {
+          for (const key of INHERITED_TEXT_STYLE_KEYS) {
+            if (child.styles[key] !== undefined) {
+              nextInherited[key] = child.styles[key];
+            }
+          }
+        }
+        cascadeInheritedTextProps(child.children, nextInherited, reporter);
+      }
+    } else if (child.children && child.children.length > 0) {
+      cascadeInheritedTextProps(child.children, inherited, reporter);
+    }
+  }
+}
+
+function autoHealNodeAndSubtree(
+  id: string,
+  tagName: string,
+  normalizedStyles: Record<string, any>,
+  props: Record<string, any>,
+  textContent: string,
+  children: IngestedNode[],
+  reporter?: IngestionReporter
+): void {
+  // 1. Default frame tags with element children or non-zero padding to flex-column
+  if (
+    AUTO_FLEX_FRAME_TAGS.has(tagName) &&
+    normalizedStyles.display === undefined &&
+    (children.length > 0 || hasNonZeroPaddingStyle(normalizedStyles))
+  ) {
+    normalizedStyles.display = 'flex';
+    reporter?.recordNormalization('AUTO_FLEX_CONTAINER', id, '', 'flex');
+    if (normalizedStyles.flexDirection === undefined) {
+      normalizedStyles.flexDirection = 'column';
+      reporter?.recordNormalization('AUTO_FLEX_DIRECTION', id, '', 'column');
+    }
+  }
+
+  // 2. Cascade inherited text props from pure wrapper frames down to leaf text/controls
+  if (!textContent && children.length > 0 && !TEXT_OR_INTERACTIVE_TAGS.has(tagName)) {
+    const cascaded: Record<string, string | number> = {};
+    for (const key of INHERITED_TEXT_STYLE_KEYS) {
+      if (normalizedStyles[key] !== undefined) {
+        cascaded[key] = normalizedStyles[key];
+        delete normalizedStyles[key];
+      }
+    }
+    if (Object.keys(cascaded).length > 0) {
+      reporter?.recordNormalization('STRIP_WRAPPER_TEXT_STYLES', id, Object.keys(cascaded).join(','), '');
+      cascadeInheritedTextProps(children, cascaded, reporter);
+    }
+  }
+
+  // 3. Ensure position: 'absolute' nodes carry data-pinned="true"
+  if (normalizedStyles.position === 'absolute' && props['data-pinned'] === undefined) {
+    props['data-pinned'] = 'true';
+    reporter?.recordNormalization('AUTO_ADD_DATA_PINNED', id, '', 'true');
+  }
+
+  // 4. Default unsized <img> elements so they always render cleanly in flex/grid frames
+  if (tagName === 'img') {
+    const hadWidth = normalizedStyles.width !== undefined;
+    const hadHeight = normalizedStyles.height !== undefined;
+    if (!hadWidth) {
+      normalizedStyles.width = '100%';
+      reporter?.recordNormalization('AUTO_SIZE_IMAGE', `${id}.width`, '', '100%');
+    }
+    if (!hadHeight) {
+      normalizedStyles.height = 'auto';
+      reporter?.recordNormalization('AUTO_SIZE_IMAGE', `${id}.height`, '', 'auto');
+    }
+    if (!hadWidth && !hadHeight && normalizedStyles.objectFit === undefined) {
+      normalizedStyles.objectFit = 'cover';
+      reporter?.recordNormalization('AUTO_SIZE_IMAGE', `${id}.objectFit`, '', 'cover');
+    }
+  }
+
+  // 5. Flex row children with width: '100%' and no px maxWidth become flex: '1 0 0px'
+  if (
+    normalizedStyles.display === 'flex' &&
+    (!normalizedStyles.flexDirection || normalizedStyles.flexDirection === 'row') &&
+    normalizedStyles.flexWrap !== 'wrap' &&
+    children.length >= 2
+  ) {
+    for (const child of children) {
+      if (child.styles && child.styles.width === '100%') {
+        const mw = child.styles.maxWidth;
+        const hasPxMaxWidth = mw !== undefined && /^\s*-?[\d.]+\s*px\s*$/i.test(String(mw));
+        if (!hasPxMaxWidth) {
+          delete child.styles.width;
+          if (child.styles.flex === undefined) {
+            child.styles.flex = '1 0 0px';
+          }
+          reporter?.recordNormalization(
+            'NORMALIZE_FLEX_ROW_CHILD_WIDTH',
+            child.id,
+            'width: 100%',
+            `flex: ${child.styles.flex}`
+          );
+        }
+      }
+    }
+  }
+
+  // 6. Enforce Revyme flex/grid flow-child invariants (no flex-shrink & explicit string order)
+  const display = normalizedStyles.display;
+  const isFlexContainer = display === 'flex' || display === 'inline-flex';
+  const isGridContainer = display === 'grid' || display === 'inline-grid';
+  if (isFlexContainer || isGridContainer) {
+    const inFlowChildren = children.filter(
+      (c) => c.styles?.position !== 'absolute' && c.styles?.position !== 'fixed'
+    );
+    inFlowChildren.forEach((child, idx) => {
+      if (!child.styles) child.styles = {};
+      if (isFlexContainer && child.styles.flex === undefined && child.styles.flexShrink === undefined) {
+        child.styles.flex = '0 0 auto';
+        reporter?.recordNormalization('AUTO_FLEX_NO_SHRINK', child.id, '', '0 0 auto');
+      }
+      if (inFlowChildren.length >= 2 && child.styles.order === undefined) {
+        child.styles.order = String(idx);
+        reporter?.recordNormalization('AUTO_CHILD_ORDER', child.id, '', String(idx));
+      }
+    });
+  }
 }
