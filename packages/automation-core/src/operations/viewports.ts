@@ -6,6 +6,7 @@ import { updateContainerQueryStyle } from '@/code/generation/generator-styles';
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
 import { DEFAULT_BREAKPOINT_STARTS, VIEWPORT_GAP } from '@/shared/constants';
 import { validateStylesNotForbiddenAuto } from './styles';
+import { normalizeStylePatch } from '../ingestion/styles';
 
 export interface ViewportDefinition {
   id: string;
@@ -85,6 +86,7 @@ export const viewportsSetOverrideOperation: Operation<
   }),
   async execute(snapshot, input) {
     validateStylesNotForbiddenAuto(input.styles);
+    const normalizedStyles = normalizeStylePatch(input.styles);
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let width: number;
 
@@ -106,7 +108,7 @@ export const viewportsSetOverrideOperation: Operation<
       }
     }
 
-    let nextCode = updateContainerQueryStyle(code, input.nodeId, width, input.styles);
+    let nextCode = updateContainerQueryStyle(code, input.nodeId, width, normalizedStyles);
     const canvas = parseCanvasConfig(code);
     if (canvas) {
       const requestedName = typeof input.viewport === 'string' ? input.viewport.trim().toLowerCase() : '';

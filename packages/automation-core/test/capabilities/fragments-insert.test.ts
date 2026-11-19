@@ -555,4 +555,50 @@ export default function Page() {
     expect(updatedCode).not.toContain('Old Pricing');
     expect(updatedCode).toContain('New Pricing');
   });
+
+  it('auto-heals bgColor+bgImage, logical props, shorthand ordering, icon buttons, and HTML tables to 0 Oracle violations', async () => {
+    const existing = files.get('app/page.client.tsx')!;
+    files.set(
+      'app/page.client.tsx',
+      existing.replace(
+        "'use client';",
+        `'use client';\n/** @canvas { "viewports": [ { "id": "desktop", "label": "Desktop", "width": 1200, "height": "auto", "isPrimary": true, "order": 0 }, { "id": "tablet", "label": "Tablet", "width": 810, "height": "auto", "isPrimary": false, "order": 1 }, { "id": "mobile", "label": "Mobile", "width": 390, "height": "auto", "isPrimary": false, "order": 2 } ], "positions": { "desktop": { "x": 0, "y": 0 }, "tablet": { "x": 1360, "y": 0 }, "mobile": { "x": 2330, "y": 0 } } } */`
+      )
+    );
+
+    const fragment = `
+      <section style={{ backgroundColor: '#0f172a', backgroundImage: 'radial-gradient(circle, rgba(59,130,246,0.2), transparent)', paddingInline: '24px', marginBlock: '16px', paddingTop: '8px', padding: '16px' }}>
+        <button style={{ color: '#ffffff', textDecoration: 'none', padding: '10px 16px', backgroundColor: '#2563eb' }}>
+          <svg viewBox="0 0 16 16" style={{ width: '16px', height: '16px' }}><path d="M0 0h16v16H0z" /></svg>
+          <span>Launch</span>
+        </button>
+        <table style={{ width: '100%' }}>
+          <tbody>
+            <tr>
+              <td>Cell 1</td>
+              <td>Cell 2</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    `;
+
+    const op = defaultRegistry.get('fragments.insert')!;
+    const result = await op.execute(snapshot, {
+      parentId: 'root',
+      fragment,
+    }, context);
+    applyChanges(result.changes);
+
+    const updatedCode = files.get('app/page.client.tsx')!;
+    expect(updatedCode).toContain('linear-gradient(#0f172a, #0f172a)');
+    expect(updatedCode).not.toContain('backgroundColor: \'#0f172a\'');
+    expect(updatedCode).toContain('paddingLeft');
+    expect(updatedCode).not.toContain('<table');
+    expect(updatedCode).not.toContain('<tr');
+    expect(updatedCode).not.toContain('<td');
+
+    const violations = checkFile(updatedCode, { kind: 'page' });
+    expect(violations).toEqual([]);
+  });
 });

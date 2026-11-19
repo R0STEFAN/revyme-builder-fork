@@ -5,6 +5,7 @@ import { defaultRegistry } from '../registry';
 import { updateNodeInCode } from '@/code/generation/generator-crud';
 import { parseJSXToNodes } from '@/code/parsing/parser';
 import { validateStylesNotForbiddenAuto } from './styles';
+import { normalizeStylePatch } from '../ingestion/styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -122,8 +123,9 @@ export const layoutSetOperation: Operation<
     if (input.overflow !== undefined) styleUpdates.overflow = input.overflow;
 
     validateStylesNotForbiddenAuto(styleUpdates);
+    const normalizedUpdates = normalizeStylePatch(styleUpdates);
 
-    const nextCode = updateNodeInCode(code, input.nodeId, styleUpdates);
+    const nextCode = updateNodeInCode(code, input.nodeId, normalizedUpdates);
 
     return {
       nodeId: input.nodeId,

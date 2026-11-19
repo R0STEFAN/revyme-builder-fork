@@ -144,12 +144,18 @@ function convertBabelJSX(
       }
     }
 
-    const { id } = idManager.ensureNodeId(existingId, tagName, reporter);
-    const normalizedStyles = normalizeStyles(styles, unitContext, reporter, id);
-
     const hasElementChildren = node.children.some(
       (child: any) => child.type === 'JSXElement' || child.type === 'JSXFragment'
     );
+
+    const transpiledTag = transpileUnsupportedHtmlTag(tagName, styles, hasElementChildren);
+    if (transpiledTag !== tagName) {
+      reporter?.recordNormalization('TRANSPILE_UNSUPPORTED_TAG', existingId ?? tagName, tagName, transpiledTag);
+      tagName = transpiledTag;
+    }
+
+    const { id } = idManager.ensureNodeId(existingId, tagName, reporter);
+    const normalizedStyles = normalizeStyles(styles, unitContext, reporter, id);
 
     let textContent = '';
     const children: IngestedNode[] = [];
@@ -256,17 +262,74 @@ const PADDING_STYLE_KEYS = [
   'paddingInlineEnd',
 ];
 
+const CONTAINER_REDIRECT_TAGS = new Set([
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'dl',
+  'details',
+  'dialog',
+  'menu',
+]);
+
+function transpileUnsupportedHtmlTag(
+  tagName: string,
+  styles: Record<string, any>,
+  hasElementChildren: boolean
+): string {
+  if (CONTAINER_REDIRECT_TAGS.has(tagName)) {
+    return 'div';
+  }
+  if (tagName === 'tr') {
+    if (styles.display === undefined) styles.display = 'flex';
+    if (styles.display === 'flex' && styles.flexDirection === undefined) {
+      styles.flexDirection = 'row';
+    }
+    return 'div';
+  }
+  if (tagName === 'td' || tagName === 'th') {
+    if (styles.width === undefined && styles.flex === undefined) {
+      styles.width = '100%';
+    }
+    if (tagName === 'th' && styles.fontWeight === undefined) {
+      styles.fontWeight = '600';
+    }
+    return 'div';
+  }
+  if (tagName === 'dt' || tagName === 'dd' || tagName === 'summary') {
+    return hasElementChildren ? 'div' : 'p';
+  }
+  return tagName;
+}
+
 const INHERITED_TEXT_STYLE_KEYS = [
-  'color',
+  'fontFeatureSettings',
+  'fontVariationSettings',
   'fontFamily',
   'fontSize',
   'fontWeight',
   'fontStyle',
   'lineHeight',
   'letterSpacing',
-  'textAlign',
   'textTransform',
+  'textAlign',
+  'textDecoration',
+  'textDecorationLine',
+  'textDecorationStyle',
+  'textDecorationColor',
+  'textDecorationThickness',
+  'textUnderlineOffset',
+  'textShadow',
   'whiteSpace',
+  'textOverflow',
+  'wordBreak',
+  'textIndent',
+  'color',
+  'WebkitTextStroke',
+  'WebkitTextStrokeWidth',
+  'WebkitTextStrokeColor',
+  'WebkitTextFillColor',
 ];
 
 const TEXT_OR_INTERACTIVE_TAGS = new Set([
@@ -279,7 +342,6 @@ const TEXT_OR_INTERACTIVE_TAGS = new Set([
   'p',
   'span',
   'a',
-  'button',
   'input',
   'textarea',
   'select',
@@ -310,7 +372,6 @@ const TEXT_OR_INTERACTIVE_TAGS = new Set([
   'address',
   'caption',
   'legend',
-  'summary',
 ]);
 
 const VOID_OR_VECTOR_TAGS = new Set([
@@ -410,6 +471,12 @@ function autoHealNodeAndSubtree(
     if (normalizedStyles.flexDirection === undefined) {
       normalizedStyles.flexDirection = 'column';
       reporter?.recordNormalization('AUTO_FLEX_DIRECTION', id, '', 'column');
+    }
+  } else if (tagName === 'button' && children.length > 0 && normalizedStyles.display === undefined) {
+    normalizedStyles.display = 'flex';
+    reporter?.recordNormalization('AUTO_FLEX_CONTAINER', id, '', 'flex');
+    if (normalizedStyles.alignItems === undefined) {
+      normalizedStyles.alignItems = 'center';
     }
   }
 

@@ -12,6 +12,7 @@ import {
   updateNodeNameInCode,
   type AddNodeDef,
 } from '@/code/generation/generator-crud';
+import { normalizeStylePatch } from '../ingestion/styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -127,7 +128,7 @@ export const nodesCreateOperation: Operation<
       id: nodeId,
       type: input.type || 'div',
       name: input.name || input.type || 'Node',
-      styles: input.styles || {},
+      styles: input.styles ? normalizeStylePatch(input.styles) : {},
       attrs: input.attrs,
       textContent: input.textContent,
     };
@@ -183,7 +184,8 @@ export const nodesUpdateOperation: Operation<
     }
 
     if (input.styles && Object.keys(input.styles).length > 0) {
-      nextCode = updateNodeInCode(nextCode, input.nodeId, input.styles);
+      const normalizedStyles = normalizeStylePatch(input.styles);
+      nextCode = updateNodeInCode(nextCode, input.nodeId, normalizedStyles);
     }
 
     return {

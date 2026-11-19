@@ -375,43 +375,53 @@ export default function Page() {
       .map((issue) => issue.code)).not.toContain('CANVAS_VIEWPORT_BREAKPOINT_MISMATCH');
   });
 
-  it('rejects setting "auto" on properties that cannot be visually edited in builder controls', async () => {
+  it('allows "auto" on newly editable properties while rejecting uneditable "auto" props and auto-healing styles.set', async () => {
     const stylesSetOp = defaultRegistry.get('styles.set')!;
     const layoutSetOp = defaultRegistry.get('layout.set')!;
     const vpOverrideOp = defaultRegistry.get('viewports.setOverride')!;
 
-    // 1. overflow: auto in styles.set
+    // 1. overflow: auto is now supported in styles.set, layout.set, and viewports.setOverride
     await expect(stylesSetOp.execute(snapshot, {
       nodeId: 'title-1',
       styles: { overflow: 'auto' },
-    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
+    }, context)).resolves.toBeDefined();
 
-    // 2. minWidth: auto in styles.set
+    await expect(layoutSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      overflow: 'auto',
+    }, context)).resolves.toBeDefined();
+
+    await expect(vpOverrideOp.execute(snapshot, {
+      nodeId: 'title-1',
+      viewport: 'mobile',
+      styles: { overflow: 'auto' },
+    }, context)).resolves.toBeDefined();
+
+    // 2. minWidth: auto is now supported in styles.set
     await expect(stylesSetOp.execute(snapshot, {
       nodeId: 'title-1',
       styles: { minWidth: 'auto' },
-    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*minWidth.*auto/);
+    }, context)).resolves.toBeDefined();
 
-    // 3. padding: auto in styles.set
+    // 3. padding: auto is still rejected by DISALLOWED_STYLE_VALUE
     await expect(stylesSetOp.execute(snapshot, {
       nodeId: 'title-1',
       styles: { padding: 'auto' },
     }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*padding.*auto/);
 
-    // 4. overflow: auto in layout.set
-    await expect(layoutSetOp.execute(snapshot, {
+    // 4. styles.set auto-heals logical props, solid background, and transparent colors
+    const patchRes = await stylesSetOp.execute(snapshot, {
       nodeId: 'title-1',
-      overflow: 'auto',
-    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
+      styles: { background: '#0f172a', paddingInline: '12px 24px', borderColor: 'transparent' },
+    }, context);
+    const patchedNodes = parseJSXToNodes(patchRes.changes[0]?.content ?? '');
+    const titleStyles = patchedNodes.get('title-1')?.styles;
+    expect(titleStyles?.backgroundColor).toBe('#0f172a');
+    expect(titleStyles?.paddingLeft).toBe('12px');
+    expect(titleStyles?.paddingRight).toBe('24px');
+    expect(titleStyles?.borderColor).toBe('rgba(0, 0, 0, 0)');
 
-    // 5. overflow: auto in viewports.setOverride
-    await expect(vpOverrideOp.execute(snapshot, {
-      nodeId: 'title-1',
-      viewport: 'mobile',
-      styles: { overflow: 'auto' },
-    }, context)).rejects.toThrow(/DISALLOWED_STYLE_VALUE.*overflow.*auto/);
-
-    // 6. Valid 'auto' on width/height or margins still passes cleanly
+    // 5. Valid 'auto' on width/height or margins still passes cleanly
     await expect(stylesSetOp.execute(snapshot, {
       nodeId: 'title-1',
       styles: { width: 'auto', height: 'auto', marginLeft: 'auto' },

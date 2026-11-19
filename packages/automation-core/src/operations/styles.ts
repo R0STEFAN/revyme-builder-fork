@@ -11,6 +11,7 @@ import {
   updateVariantStyleInCode,
   type PseudoRuleKind,
 } from '@/code/generation/generator-styles';
+import { normalizeStylePatch } from '../ingestion/styles';
 
 function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
   let target = filePath;
@@ -69,32 +70,23 @@ export const stylesGetOperation: Operation<
 
 // 2. styles.set
 export const FORBIDDEN_AUTO_STYLE_PROPS = new Set([
-  // Overflow controls: only 'visible', 'hidden', 'scroll', 'clip' are supported in UI
-  'overflow',
-  'overflowX',
-  'overflowY',
-  // Min/Max controls: only 'px' and '%' are supported; 'auto' has no UI slot and triggers MINMAX_SIZE_UNIT oracle error
-  'minWidth',
-  'maxWidth',
-  'minHeight',
-  'maxHeight',
-  // Padding controls: only numeric px lengths (padding cannot be 'auto' in CSS)
+  // Padding controls: numeric/multi-unit lengths (padding cannot be 'auto' in CSS)
   'padding',
   'paddingTop',
   'paddingRight',
   'paddingBottom',
   'paddingLeft',
-  // Gap controls: only numeric px lengths
+  // Gap controls: explicit lengths
   'gap',
   'rowGap',
   'columnGap',
-  // Radius controls: only numeric px
+  // Radius controls: explicit lengths
   'borderRadius',
   'borderTopLeftRadius',
   'borderTopRightRadius',
   'borderBottomRightRadius',
   'borderBottomLeftRadius',
-  // Border width controls: only numeric px
+  // Border width controls: explicit lengths
   'borderWidth',
   'borderTopWidth',
   'borderRightWidth',
@@ -102,7 +94,7 @@ export const FORBIDDEN_AUTO_STYLE_PROPS = new Set([
   'borderLeftWidth',
   // Opacity: numeric 0..1
   'opacity',
-  // Typography controls: numeric lengths
+  // Typography controls: explicit lengths/values
   'fontSize',
   'lineHeight',
   'letterSpacing',
@@ -160,28 +152,29 @@ export const stylesSetOperation: Operation<
   }),
   async execute(snapshot, input) {
     validateStylesNotForbiddenAuto(input.styles);
+    const normalizedStyles = normalizeStylePatch(input.styles);
     const { path, code } = getTargetFile(snapshot, input.filePath);
     let nextCode = code;
 
     if (input.variantName) {
-      nextCode = updateVariantStyleInCode(nextCode, input.nodeId, input.variantName, input.styles);
+      nextCode = updateVariantStyleInCode(nextCode, input.nodeId, input.variantName, normalizedStyles);
     } else if (input.pseudo) {
       const cleanPseudo = input.pseudo.replace(/^:+/, '');
       if (cleanPseudo === 'hover') {
-        nextCode = updateHoverStyleInCode(nextCode, input.nodeId, input.styles);
+        nextCode = updateHoverStyleInCode(nextCode, input.nodeId, normalizedStyles);
       } else {
         nextCode = updatePseudoStyleInCode(
           nextCode,
           input.nodeId,
           cleanPseudo as PseudoRuleKind,
-          input.styles
+          normalizedStyles
         );
       }
     } else if (input.breakpoint) {
       const width = resolveBreakpointWidth(input.breakpoint);
-      nextCode = updateContainerQueryStyle(nextCode, input.nodeId, width, input.styles);
+      nextCode = updateContainerQueryStyle(nextCode, input.nodeId, width, normalizedStyles);
     } else {
-      nextCode = updateNodeInCode(nextCode, input.nodeId, input.styles);
+      nextCode = updateNodeInCode(nextCode, input.nodeId, normalizedStyles);
     }
 
     return {

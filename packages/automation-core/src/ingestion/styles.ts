@@ -12,6 +12,42 @@ export function toKebabCase(str: string): string {
 
 const PIN_OFFSET_KEYS = new Set(['top', 'right', 'bottom', 'left']);
 
+const SHORTHAND_ORDER_RANK: Record<string, number> = {
+  border: 0,
+  borderWidth: 1,
+  borderColor: 1,
+  borderStyle: 1,
+  padding: 0,
+  margin: 0,
+  borderRadius: 0,
+  gap: 0,
+  overflow: 0,
+};
+
+const TWO_SIDED_LOGICAL_MAP: Record<string, { sides: [string, string]; isPin?: boolean }> = {
+  paddingInline: { sides: ['paddingLeft', 'paddingRight'] },
+  paddingBlock: { sides: ['paddingTop', 'paddingBottom'] },
+  marginInline: { sides: ['marginLeft', 'marginRight'] },
+  marginBlock: { sides: ['marginTop', 'marginBottom'] },
+  insetInline: { sides: ['left', 'right'], isPin: true },
+  insetBlock: { sides: ['top', 'bottom'], isPin: true },
+};
+
+const SINGLE_SIDE_LOGICAL_MAP: Record<string, { target: string; isPin?: boolean }> = {
+  paddingInlineStart: { target: 'paddingLeft' },
+  paddingInlineEnd: { target: 'paddingRight' },
+  paddingBlockStart: { target: 'paddingTop' },
+  paddingBlockEnd: { target: 'paddingBottom' },
+  marginInlineStart: { target: 'marginLeft' },
+  marginInlineEnd: { target: 'marginRight' },
+  marginBlockStart: { target: 'marginTop' },
+  marginBlockEnd: { target: 'marginBottom' },
+  insetInlineStart: { target: 'left', isPin: true },
+  insetInlineEnd: { target: 'right', isPin: true },
+  insetBlockStart: { target: 'top', isPin: true },
+  insetBlockEnd: { target: 'bottom', isPin: true },
+};
+
 function splitTopLevelWhitespace(value: string): string[] {
   const parts: string[] = [];
   let current = '';
@@ -121,6 +157,45 @@ export function normalizeStyles(
       }
     }
 
+    // Expand 2-sided logical spacing/inset properties (paddingInline, marginBlock, insetInline, etc.)
+    const twoSidedLogical = TWO_SIDED_LOGICAL_MAP[camelKey];
+    if (twoSidedLogical) {
+      const rawStr = typeof rawValue === 'number' ? `${rawValue}px` : String(rawValue).trim();
+      const parts = splitTopLevelWhitespace(rawStr);
+      if (parts.length >= 1 && parts.length <= 2) {
+        const [startRaw, endRaw = startRaw] = parts;
+        const [startSide, endSide] = twoSidedLogical.sides;
+        const expanded: Array<[string, string]> = [
+          [startSide, startRaw],
+          [endSide, endRaw],
+        ];
+        for (const [side, sideRaw] of expanded) {
+          if (explicitKeys.has(side) && (normalized[side] !== undefined || (styles[side] !== undefined && styles[side] !== ''))) {
+            continue;
+          }
+          const formatted = twoSidedLogical.isPin ? formatPinValue(sideRaw) : sideRaw;
+          const finalVal = formatted.toLowerCase() === 'transparent' ? 'rgba(0, 0, 0, 0)' : formatted;
+          normalized[side] = lowerUnits(finalVal, context, reporter, `${target}.${side}`);
+        }
+        reporter?.recordNormalization('EXPAND_LOGICAL_PROPERTY', `${target}.${camelKey}`, String(rawValue), twoSidedLogical.sides.join(','));
+        continue;
+      }
+    }
+
+    // Expand single-side logical spacing/inset properties (paddingInlineStart -> paddingLeft, etc.)
+    const singleSideLogical = SINGLE_SIDE_LOGICAL_MAP[camelKey];
+    if (singleSideLogical) {
+      const side = singleSideLogical.target;
+      if (!(explicitKeys.has(side) && (normalized[side] !== undefined || (styles[side] !== undefined && styles[side] !== '')))) {
+        const rawStr = typeof rawValue === 'number' ? `${rawValue}px` : String(rawValue).trim();
+        const formatted = singleSideLogical.isPin ? formatPinValue(rawStr) : rawStr;
+        const finalVal = formatted.toLowerCase() === 'transparent' ? 'rgba(0, 0, 0, 0)' : formatted;
+        normalized[side] = lowerUnits(finalVal, context, reporter, `${target}.${side}`);
+        reporter?.recordNormalization('EXPAND_LOGICAL_PROPERTY', `${target}.${camelKey}`, String(rawValue), side);
+      }
+      continue;
+    }
+
     if (typeof rawValue === 'number') {
       if (PIN_OFFSET_KEYS.has(camelKey)) {
         const px = `${rawValue}px`;
@@ -185,5 +260,67 @@ export function normalizeStyles(
     normalized[camelKey] = lowered;
   }
 
+  // Auto-fold backgroundColor + backgroundImage into a bottom linear-gradient layer (BG_COLOR_WITH_IMAGE)
+  const bgc = normalized.backgroundColor;
+  const bgi = normalized.backgroundImage;
+  if (
+    typeof bgc === 'string' &&
+    bgc.length > 0 &&
+    typeof bgi === 'string' &&
+    bgi.length > 0 &&
+    bgi.toLowerCase() !== 'none'
+  ) {
+    normalized.backgroundImage = `${bgi}, linear-gradient(${bgc}, ${bgc})`;
+    delete normalized.backgroundColor;
+    reporter?.recordNormalization('FOLD_BG_COLOR_INTO_IMAGE', `${target}.backgroundImage`, bgc, String(normalized.backgroundImage));
+  }
+
+  // Ensure shorthand properties precede longhand properties in key iteration order (STYLE_SHORTHAND_LONGHAND_MIX)
+  const entries = Object.entries(normalized);
+  if (entries.length > 1) {
+    const sorted = entries.sort(([keyA], [keyB]) => {
+      const rankA = SHORTHAND_ORDER_RANK[keyA] ?? 10;
+      const rankB = SHORTHAND_ORDER_RANK[keyB] ?? 10;
+      return rankA - rankB;
+    });
+    const reordered: Record<string, string | number> = {};
+    for (const [k, v] of sorted) {
+      reordered[k] = v;
+    }
+    return reordered;
+  }
+
   return normalized;
+}
+
+/**
+ * Normalize an MCP style update patch while preserving empty string ('') deletion entries.
+ */
+export function normalizeStylePatch(
+  styles: Record<string, string>,
+  context: UnitContext = {},
+  reporter?: IngestionReporter,
+  target = 'style'
+): Record<string, string> {
+  const nonEmpty: Record<string, string | number> = {};
+  const deletions: string[] = [];
+
+  for (const [key, value] of Object.entries(styles)) {
+    const camelKey = toCamelCase(key);
+    if (value === '') {
+      deletions.push(camelKey);
+    } else {
+      nonEmpty[camelKey] = value;
+    }
+  }
+
+  const normalized = normalizeStyles(nonEmpty, context, reporter, target);
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(normalized)) {
+    out[key] = String(value);
+  }
+  for (const key of deletions) {
+    out[key] = '';
+  }
+  return out;
 }
