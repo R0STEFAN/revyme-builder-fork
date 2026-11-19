@@ -106,3 +106,29 @@ describe('SpacingControl — radius (no axes)', () => {
     expect((m.corners().querySelector('path')!.getAttribute('d')!.match(/[Mm]/g) ?? []).length).toBe(4);
   });
 });
+
+describe('SpacingControl — multi-unit support (px, rem, em, %, clamp)', () => {
+  it('cycles unit badge px -> rem -> em -> % in uniform mode', () => {
+    const m = mount(['2rem', '2rem', '2rem', '2rem']);
+    const unitBtn = m.container.querySelector('[data-spacing-unit]') as HTMLButtonElement;
+    expect(unitBtn.dataset.spacingUnit).toBe('rem');
+    fireEvent.click(unitBtn);
+    expect(m.onChangeAll).toHaveBeenCalledWith('2em');
+  });
+
+  it('commits explicit unit or clamp() typed into an individual side', () => {
+    const m = mount(['10px', '20px', '10px', '20px']);
+    fireEvent.click(m.corners()); // axis -> individual
+    const inputs = Array.from(m.container.querySelectorAll('input[type="text"]')) as HTMLInputElement[];
+    const topInput = inputs[1]; // after global input
+    fireEvent.focus(topInput);
+    fireEvent.change(topInput, { target: { value: '1.5rem' } });
+    fireEvent.blur(topInput);
+    expect(m.onChange).toHaveBeenCalledWith(0, '1.5rem');
+
+    fireEvent.focus(topInput);
+    fireEvent.change(topInput, { target: { value: 'clamp(12px, 2vw, 24px)' } });
+    fireEvent.blur(topInput);
+    expect(m.onChange).toHaveBeenCalledWith(0, 'clamp(12px, 2vw, 24px)');
+  });
+});

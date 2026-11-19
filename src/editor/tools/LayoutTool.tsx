@@ -103,18 +103,16 @@ function formatSpanValue(value: string): string {
  *  the safest default — we don't try to second-guess hand-written CSS. */
 function parseSpanValue(css: string): string {
   if (!css) return '1';
-  if (css.trim() === '1 / -1') return 'all';
-  const m = css.match(/^span\s+(\d+)$/);
+  const trimmed = css.trim();
+  if (trimmed === '1 / -1') return 'all';
+  const m = trimmed.match(/^(?:-?\d+\s*\/\s*)?span\s+(\d+)$/);
   if (m) return m[1];
-  // Pattern `N / M` where M - N gives the span — surface it as Span (M-N)
-  // when it starts at line 1 so a converted Position drag still reads
-  // sensibly. Other start lines stay as Span 1 (CSS preserved verbatim
-  // via the inline style; only the dropdown display is approximated).
-  const explicit = css.match(/^(-?\d+)\s*\/\s*(-?\d+)$/);
+  // Pattern `N / M` where M - N gives the span — surface it as Span (M-N).
+  const explicit = trimmed.match(/^(-?\d+)\s*\/\s*(-?\d+)$/);
   if (explicit) {
     const start = parseInt(explicit[1], 10);
     const end = parseInt(explicit[2], 10);
-    if (start === 1 && end > 1) return String(end - 1);
+    if (start > 0 && end > start) return String(end - start);
   }
   return '1';
 }

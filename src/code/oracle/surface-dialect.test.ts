@@ -35,10 +35,9 @@ describe('STYLE_PROP_NO_CONTROL', () => {
       .toContain('STYLE_PROP_NO_CONTROL');
   });
 
-  it("rejects overflow: 'auto' (blank select) and suggests scroll", () => {
+  it("allows overflow: 'auto' alongside visible/hidden/scroll/clip", () => {
     const code = page(`      <div data-id="s" style={{ position: 'relative', width: '100%', height: '300px', overflow: 'auto' }}>x</div>`);
-    const hit = checkFile(code, { kind: 'page' }).find((v) => v.code === 'STYLE_PROP_NO_CONTROL')!;
-    expect(hit.message).toContain("'scroll'");
+    expect(codesOf(code)).not.toContain('STYLE_PROP_NO_CONTROL');
   });
 
   it('rejects bare transform channels on PLAIN tags, allows them on motion.*', () => {
@@ -91,12 +90,12 @@ describe('TEXT_STYLE_ON_FRAME', () => {
 });
 
 describe('ELEMENT_UNSUPPORTED_TAG', () => {
-  it('rejects ul/li lists with the frames redirect', () => {
-    const code = page(`      <ul data-id="l" style={{ position: 'relative', width: '100%', height: 'auto' }}>
+  it('allows ul/ol/li lists natively and supports listStyleType', () => {
+    const code = page(`      <ul data-id="l" style={{ position: 'relative', width: '100%', height: 'auto', listStyleType: 'disc' }}>
         <li data-id="i1" style={{ position: 'relative', width: '100%', height: 'auto' }}>One</li>
       </ul>`);
-    const hit = checkFile(code, { kind: 'page' }).find((v) => v.code === 'ELEMENT_UNSUPPORTED_TAG')!;
-    expect(hit.message).toContain('FRAMES');
+    expect(codesOf(code)).not.toContain('ELEMENT_UNSUPPORTED_TAG');
+    expect(codesOf(code)).not.toContain('STYLE_PROP_NO_CONTROL');
   });
 
   it('rejects table / details / iframe with per-tag redirects', () => {

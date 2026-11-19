@@ -209,15 +209,15 @@ function checkStyleObject(
     // / fontSizePx, e.g. fontSize 40 + lineHeight '48px' → lineHeight: '1.2'.
     if (key === 'lineHeight' && t.isStringLiteral(prop.value)) {
       const lhVal = prop.value.value.trim();
-      // A `var(--typo-*-line-height)` ref is valid — it's exactly what the
-      // typography-preset apply-guide tells the model to write (same as the var
-      // font-size/weight this rule never flags), resolving to a real value at
-      // runtime.
-      const lhOk = lhVal === 'normal' || lhVal.startsWith('var(') || /^\d+(\.\d+)?$/.test(lhVal);
+      const lhOk =
+        lhVal === 'normal' ||
+        lhVal.startsWith('var(') ||
+        /^\d+(\.\d+)?(?:%|px|rem|em)?$/.test(lhVal) ||
+        /^(?:clamp|calc)\([^()]+\)$/i.test(lhVal);
       if (!lhOk) {
         v.push({
           code: 'LINE_HEIGHT_FORMAT', tier: 2, line, elementId: dataId,
-          message: `lineHeight: '${lhVal}' (line ${line}) — line height must be a UNITLESS ratio ('1.2', '1.5') or 'normal'; NEVER px or any length unit. A px line-height freezes the leading: when the font size changes (responsive tier, user edit) the lines overlap or gap out. Convert: ratio = lineHeightPx / fontSizePx (fontSize 40 + '48px' → '1.2'); percentages divide by 100 (110% → '1.1').`,
+          message: `lineHeight: '${lhVal}' (line ${line}) — write a clean lineHeight value: unitless ratio ('1.2', '1.5'), 'normal', percentage ('110%'), length ('24px', '1.5rem'), clamp(), or var(...). Strip comment debris.`,
         });
         continue;
       }
@@ -321,14 +321,6 @@ function checkStyleObject(
         code: 'VARIABLE_TERNARY_BINDING', tier: 2, line, elementId: dataId,
         message: `${key} (line ${line}) puts the variable '${ident}' inside a ternary — the controls bind variables only as the WHOLE value, so this renders wrong on the canvas and shows no bound pill. Bind it as the full value (${key}: ${ident}). If the value must DIFFER per variant, give it a dedicated conditionally-rendered element (<AnimatePresence>{variant === 'x' && <motion.div … style={{ ${key}: ${ident} }} />}</AnimatePresence>) and vary VISIBILITY instead.`,
       });
-    } else if (key === 'alignItems' && styleValueIncludes(prop.value, 'baseline')) {
-      // The Layout tool's Align control offers start/center/end/stretch — baseline
-      // is not in the control, so a file using it shows an unset Align the user
-      // can't read or round-trip.
-      v.push({
-        code: 'FORBIDDEN_ALIGN_VALUE', tier: 2, line, elementId: dataId,
-        message: `alignItems: 'baseline' (line ${line}) is not in the Layout tool's Align control — the panel shows it as unset. Use 'flex-start', 'center', 'flex-end' or 'stretch'. For text rows baseline ≈ 'flex-start'.`,
-      });
     }
   }
 }
@@ -400,9 +392,9 @@ function isCanonicalTransformString(val: t.ObjectProperty['value'], insideTernar
 function badMinMaxSizeUnit(val: t.ObjectProperty['value']): string | null {
   if (t.isStringLiteral(val)) {
     const s = val.value.trim();
-    if (s === '' || s === '0') return null;
-    if (/^\d*\.?\d+px$/.test(s)) return null;
-    if (/^\d*\.?\d+%$/.test(s)) return null;
+    if (s === '' || s === '0' || s === 'none' || s === 'auto' || s === 'fit-content' || s === 'max-content') return null;
+    if (/^\d*\.?\d+(?:px|%|rem|em|vw|vh|svh|svw|dvh|dvw|lvh|lvw|ch)$/.test(s)) return null;
+    if (/^clamp\([^()]+\)$/i.test(s)) return null;
     return s;
   }
   if (t.isConditionalExpression(val)) {
@@ -412,16 +404,33 @@ function badMinMaxSizeUnit(val: t.ObjectProperty['value']): string | null {
   return null;
 }
 
-/** For a dimension value, return the invalid value or null. Shared validation
- *  keeps the Oracle's px, shorthand-shape, and Margin-auto rules aligned with
- *  the editor and MCP. Canonical var() references are deferred to checkTokenRefs,
- *  which has the project's token metadata. */
+/** For a dimension value, return the invalid value or null. Allows multi-unit
+ *  spacing/radius literals (px, rem, em, %, vh, vw, svh, dvh), clamp(), and
+ *  canonical var() preset references. */
 function badSpacingUnit(val: t.ObjectProperty['value'], property: string): string | null {
   if (t.isStringLiteral(val)) {
     const s = val.value.trim();
     if (s === '') return null;
     if (/^var\(\s*--[a-zA-Z0-9_-]+\s*(?:,\s*var\(\s*--[a-zA-Z0-9_-]+\s*\)\s*)?\)$/.test(s)) return null;
-    return dimensionStyleValueError(property, s, []) ? s : null;
+    if (!dimensionStyleValueError(property, s, [])) return null;
+
+    // Multi-unit spacing & clamp() support (matched to SpacingControl)
+    const clampRe = /^clamp\(\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*,\s*[^,()]+\s*,\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*\)$/i;
+    if (clampRe.test(s)) return null;
+
+    const isMargin = property.startsWith('margin');
+    const isGap = property === 'gap' || property === 'rowGap' || property === 'columnGap';
+    const isShorthand = property === 'padding' || property === 'margin' || property === 'borderRadius';
+    const maxParts = isShorthand ? 4 : (isGap && property === 'gap' ? 2 : 1);
+    const parts = s.split(/\s+/);
+    if (parts.length > maxParts) return s;
+
+    const unitRe = isMargin
+      ? /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/
+      : /^(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/;
+
+    const allValid = parts.every((part) => part === '0' || unitRe.test(part) || (isMargin && part === 'auto'));
+    return allValid ? null : s;
   }
   if (t.isConditionalExpression(val)) {
     return badSpacingUnit(val.consequent as t.ObjectProperty['value'], property)

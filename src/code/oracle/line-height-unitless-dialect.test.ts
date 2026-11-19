@@ -25,23 +25,21 @@ ${body}
 const sel = (code: string) => checkFile(code, { kind: 'page' }).filter((x) => x.code === 'LINE_HEIGHT_FORMAT');
 const node = (style: string) => PAGE(`  <p data-id="a" data-name="A" style={{ position: 'relative', width: '100%', height: 'auto', margin: '0px', ${style} }}>x</p>`);
 
-describe('line-height unitless dialect', () => {
-  it("px bounces with the conversion hint", () => {
-    const out = sel(node("fontSize: '40px', lineHeight: '48px'"));
-    expect(out.length).toBe(1);
-    expect(out[0].message).toContain('UNITLESS');
-    expect(out[0].message).toContain('48px');
-  });
-
-  it('em/rem/percent bounce too', () => {
-    expect(sel(node("lineHeight: '1.2em'")).length).toBe(1);
-    expect(sel(node("lineHeight: '110%'")).length).toBe(1);
-  });
-
-  it("unitless ratios, 'normal' and var() refs pass", () => {
+describe('line-height format dialect', () => {
+  it('unitless ratios, normal, var(), px, em, rem, and percent pass', () => {
     expect(sel(node("lineHeight: '1.2'"))).toEqual([]);
     expect(sel(node("lineHeight: '1.495'"))).toEqual([]);
     expect(sel(node("lineHeight: 'normal'"))).toEqual([]);
     expect(sel(node("lineHeight: 'var(--typo-body-line-height)'"))).toEqual([]);
+    expect(sel(node("fontSize: '40px', lineHeight: '48px'"))).toEqual([]);
+    expect(sel(node("lineHeight: '1.2em'"))).toEqual([]);
+    expect(sel(node("lineHeight: '1.5rem'"))).toEqual([]);
+    expect(sel(node("lineHeight: '110%'"))).toEqual([]);
+  });
+
+  it('Figma comment debris or invalid strings bounce', () => {
+    const out = sel(node("lineHeight: '110% /* 79.2px */'"));
+    expect(out.length).toBe(1);
+    expect(sel(node("lineHeight: 'abc'")).length).toBe(1);
   });
 });

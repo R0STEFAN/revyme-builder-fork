@@ -45,6 +45,7 @@ type DimUnit =
   | 'px'
   | '%'
   | 'auto'
+  | 'none'
   | 'min'
   | 'rem'
   | 'em'
@@ -63,6 +64,7 @@ function parseValue(raw: string): { num: number; unit: DimUnit } {
   // The "auto" unit (shown as Fit) maps from CSS Fit values — `fit-content`
   // (current), legacy `auto`, and `max-content`.
   if (!raw) return { num: 0, unit: 'auto' };
+  if (raw === 'none') return { num: 0, unit: 'none' };
   if (raw === 'min-content') return { num: 0, unit: 'min' };
   if (isFitSize(raw)) return { num: 0, unit: 'auto' };
   const match = raw.match(/^(-?[\d.]+)\s*([a-z%]+)?$/i);
@@ -72,6 +74,7 @@ function parseValue(raw: string): { num: number; unit: DimUnit } {
 
 function formatValue(num: number, unit: DimUnit): string {
   if (unit === 'auto') return FIT_SIZE; // "Fit" → fit-content
+  if (unit === 'none') return 'none';
   if (unit === 'min') return 'min-content'; // "min" → min-content
   if (unit === 'fill') return ''; // fill is handled via flex property, not width/height
   return `${num}${unit}`;
@@ -947,12 +950,15 @@ export default function SizeTool({ styles: stylesProp, nodeId: nodeIdProp, vpId,
     return disableAutoForCode([...UNIT_OPTIONS, { value: 'fill', label: 'fill' }]);
   }, [heightCanFill, isTopLevel, pxOnly, disableAutoForCode, isIconSetInstance]);
 
-  // Min/max width/height accept all length units (px, %, rem, em, vw, vh, svh, svw, dvh, dvw, lvh, lvw).
+  // Min/max width/height accept all length units (px, %, rem, em, vw, vh, svh, svw, dvh, dvw, lvh, lvw) + none/auto.
   // On a top-level node (a design-component variant root or a canvas node) a '%'
   // has no sizing parent to resolve against, so it's disabled there.
   const minMaxUnitOptions = useMemo(() => {
-    const base = UNIT_OPTIONS.filter(o => o.value !== 'auto' && o.value !== 'min');
-    if (isTopLevel && !isText) return base.map(o => o.value === 'px' ? o : { ...o, disabled: true });
+    const base = [
+      ...UNIT_OPTIONS.filter(o => o.value !== 'min'),
+      { value: 'none', label: 'none' },
+    ];
+    if (isTopLevel && !isText) return base.map(o => (o.value === 'px' || o.value === 'none' || o.value === 'auto') ? o : { ...o, disabled: true });
     return base;
   }, [isTopLevel, isText]);
 

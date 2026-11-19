@@ -24,6 +24,9 @@ export const FRAME_TAG_OPTIONS = [
   { value: 'main', label: 'main' },
   { value: 'figure', label: 'figure' },
   { value: 'figcaption', label: 'figcaption' },
+  { value: 'ul', label: 'ul' },
+  { value: 'ol', label: 'ol' },
+  { value: 'li', label: 'li' },
   { value: 'button', label: 'button' },
   { value: 'a', label: 'a' },
 ];
@@ -37,6 +40,7 @@ export const TEXT_TAG_OPTIONS = [
   { value: 'h4', label: 'h4' },
   { value: 'h5', label: 'h5' },
   { value: 'h6', label: 'h6' },
+  { value: 'li', label: 'li' },
   { value: 'a', label: 'a' },
   { value: 'label', label: 'label' },
   { value: 'strong', label: 'strong' },

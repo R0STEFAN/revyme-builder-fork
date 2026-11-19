@@ -80,11 +80,11 @@ function parseInput(tool: AgentTool, input: Record<string, unknown>) {
 // ─── PARITY: schema enums ≡ editor option sets ─────────────────────────────
 
 describe('action layer — UI parity', () => {
-  it('alignItems enum mirrors getAlignOptions() exactly (includes stretch, no baseline)', () => {
+  it('alignItems enum mirrors getAlignOptions() exactly (includes stretch and baseline)', () => {
     const ui = getAlignOptions().map((o) => o.value);
     expect(LAYOUT_ALIGN_VALUES).toEqual(ui);
     expect(ui).toContain('stretch');
-    expect(ui).not.toContain('baseline');
+    expect(ui).toContain('baseline');
   });
 
   it('justifyContent enum mirrors getJustifyOptions() exactly', () => {
@@ -273,9 +273,9 @@ describe('action layer — mutation payloads', () => {
 // ─── ANTI-PERMISSIVITY ─────────────────────────────────────────────────────
 
 describe('action layer — anti-permissivity', () => {
-  it('set_layout rejects alignItems baseline (not in the Align control) and accepts stretch', () => {
+  it('set_layout accepts alignItems baseline, stretch, and flex-start', () => {
     expect(parseInput(setLayoutTool, { node_id: 'x', alignItems: 'stretch' }).success).toBe(true);
-    expect(parseInput(setLayoutTool, { node_id: 'x', alignItems: 'baseline' }).success).toBe(false);
+    expect(parseInput(setLayoutTool, { node_id: 'x', alignItems: 'baseline' }).success).toBe(true);
     expect(parseInput(setLayoutTool, { node_id: 'x', alignItems: 'flex-start' }).success).toBe(true);
   });
 

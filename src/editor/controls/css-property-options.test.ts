@@ -31,14 +31,14 @@ describe('getAlignOptions', () => {
     }
   });
 
-  test('offers stretch but never baseline (oracle FORBIDDEN_ALIGN_VALUE)', () => {
+  test('offers stretch and baseline', () => {
     for (const dir of ['row', 'column', undefined]) {
       const values = getAlignOptions(dir).map(o => o.value);
-      expect(values).not.toContain('baseline');
+      expect(values).toContain('baseline');
       expect(values).toContain('stretch');
     }
     const enumValues = getCSSPropertyOptions('alignItems')!.map(o => o.value);
-    expect(enumValues).not.toContain('baseline');
+    expect(enumValues).toContain('baseline');
     expect(enumValues).toContain('stretch');
   });
 });

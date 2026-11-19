@@ -21,6 +21,7 @@ export const OVERFLOW_OPTIONS: CSSOption[] = [
   { value: 'visible', label: 'visible' },
   { value: 'hidden', label: 'hidden' },
   { value: 'scroll', label: 'scroll' },
+  { value: 'auto', label: 'auto' },
   { value: 'clip', label: 'clip' },
 ];
 
@@ -53,6 +54,18 @@ const OPTIONS: Record<string, CSSOption[]> = {
     { value: 'center', label: 'Center' },
     { value: 'flex-end', label: 'End' },
     { value: 'stretch', label: 'Stretch' },
+    { value: 'baseline', label: 'Baseline' },
+  ],
+  listStyleType: [
+    { value: 'none', label: 'none' },
+    { value: 'disc', label: 'disc' },
+    { value: 'circle', label: 'circle' },
+    { value: 'square', label: 'square' },
+    { value: 'decimal', label: 'decimal' },
+  ],
+  listStylePosition: [
+    { value: 'outside', label: 'outside' },
+    { value: 'inside', label: 'inside' },
   ],
   justifyContent: [
     { value: 'flex-start', label: 'Start' },
@@ -187,6 +200,7 @@ export function getAlignOptions(_flexDirection?: string): CSSOption[] {
     { value: 'center', label: 'Center' },
     { value: 'flex-end', label: 'End' },
     { value: 'stretch', label: 'Stretch' },
+    { value: 'baseline', label: 'Baseline' },
   ];
 }
 

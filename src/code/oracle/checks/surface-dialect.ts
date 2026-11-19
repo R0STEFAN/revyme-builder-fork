@@ -96,6 +96,7 @@ export const CONTROLLED_STYLE_PROPS = new Set<string>([
   'transformBox', 'boxSizing',
   'stroke', 'strokeWidth', 'strokeDasharray', 'strokeDashoffset', 'strokeLinecap',
   'strokeLinejoin', 'strokeOpacity', 'strokeMiterlimit', 'fill', 'fillOpacity',
+  'listStyle', 'listStyleType', 'listStylePosition',
 ]);
 
 /** The confirmed dead-end cluster gets a tailored redirect. */
@@ -107,8 +108,6 @@ const KNOWN_DEAD_ENDS: Record<string, string> = {
   overscrollBehavior: 'no control exists; overlays already manage body scroll natively',
   float: 'floats are not a layout the builder expresses — use flex or grid',
   clear: 'floats are not a layout the builder expresses — use flex or grid',
-  listStyle: 'lists are not native elements — build stacked frames (see the element rule)',
-  listStyleType: 'lists are not native elements — build stacked frames',
   translate: "the independent CSS translate property has no reader — motion uses x/y channels on a motion.* element, plain elements use the composed `transform` string",
 };
 
@@ -156,19 +155,6 @@ export function checkStyleSurface(
         }
 
         if (CONTROLLED_STYLE_PROPS.has(key)) {
-          // Key is controlled, but ONE value has no slot: the Overflow select
-          // offers visible/hidden/scroll/clip — `auto` renders the control
-          // BLANK and the first touch rewrites it. Redirect to `scroll`.
-          if (/^overflow[XY]?$/.test(key) && t.isStringLiteral(prop.value) && prop.value.value === 'auto') {
-            const dk = `${id}:${key}:auto`;
-            if (seen.has(dk)) continue;
-            seen.add(dk);
-            v.push({
-              code: 'STYLE_PROP_NO_CONTROL', tier: 2, elementId: id ?? undefined,
-              line: prop.loc?.start.line,
-              message: `[style surface] data-id="${id ?? '?'}" sets \`${key}: 'auto'\` — the Overflow control offers visible / hidden / scroll / clip, so 'auto' shows as a BLANK select and the first interaction silently rewrites it. Use \`'scroll'\`.`,
-            });
-          }
           continue;
         }
 
@@ -281,9 +267,6 @@ export function checkTextStyleOnFrame(
 // ─── A7: elements no tool can manage ────────────────────────────────────────
 
 const UNSUPPORTED_TAGS: Record<string, string> = {
-  ul: 'lists are stacked FRAMES here: a flex column of row frames (icon + text), giving full control of spacing and markers',
-  ol: 'lists are stacked FRAMES here: a flex column of row frames with a number text per row',
-  li: 'list items are row FRAMES inside a flex column',
   dl: 'definition lists are stacked frames', dt: 'use a text element inside a frame', dd: 'use a text element inside a frame',
   menu: 'use a flex column of frames',
   table: 'tables are a GRID here: a frame with display grid and per-cell frames — fully editable, responsive per viewport',

@@ -179,10 +179,8 @@ function checkGridNeedsTemplate(ast: t.File, v: OracleViolation[], existingDataI
  * 2026-08-01 — correct on canvas, "Span 1" in the panel.
  */
 function checkGridChildSpan(ast: t.File, v: OracleViolation[], existingDataIds?: Set<string>): void {
-  // The forms parseSpanValue decodes without loss. `N / M` starting at line 1
-  // also decodes (→ Span M-1), but it is not what the control ever WRITES, so
-  // it is steered to the canonical `span N` rather than blessed.
-  const RESOLVES = /^(span\s+([2-9]|1[0-2])|1\s*\/\s*-1)$/;
+  // Allow `span N`, `1 / -1` (Span All), `<start> / span <N>`, and explicit line pairs `<start> / <end>`.
+  const RESOLVES = /^(span\s+([1-9]|1[0-2])|1\s*\/\s*-1|-?\d+\s*\/\s*span\s+([1-9]|1[0-2])|-?\d+\s*\/\s*-?\d+)$/;
 
   traverse(ast, {
     JSXElement(path) {

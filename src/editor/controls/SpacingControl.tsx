@@ -83,19 +83,42 @@ interface SpacingControlProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** DISPLAY-only unit of a legacy value: '5%' → '%', '1.5rem' → 'rem', else
- *  'px'. Purely informational — every write is px. */
+export const SPACING_UNITS = ['px', 'rem', 'em', '%'] as const;
+export type SpacingUnit = typeof SPACING_UNITS[number];
+
+/** Unit of a spacing value: '5%' → '%', '1.5rem' → 'rem', 'clamp(...)' → 'clamp', else 'px'. */
 function displayUnit(v: string): string {
   if (!v || v === '0') return 'px';
-  if (v.endsWith('rem')) return 'rem';
-  if (v.endsWith('em')) return 'em';
-  if (v.endsWith('%')) return '%';
+  const t = v.trim();
+  if (t.startsWith('clamp(')) return 'clamp';
+  if (t.startsWith('var(')) return 'var';
+  if (t.endsWith('rem')) return 'rem';
+  if (t.endsWith('em')) return 'em';
+  if (t.endsWith('%')) return '%';
   return 'px';
 }
 
 /** Parse just the number */
 function parseNum(v: string): number {
   return parseFloat(v) || 0;
+}
+
+/** Value shown inside an input: expression strings stay intact, length values show their number. */
+function displayEditValue(v: string): string {
+  const t = (v || '').trim();
+  if (t.startsWith('clamp(') || t.startsWith('var(')) return t;
+  return String(parseNum(v));
+}
+
+/** Parse user-typed spacing input (plain number, <number><unit>, or clamp/var expression). */
+function parseSpacingEdit(raw: string, fallbackUnit: string, allowNegative: boolean): string {
+  const trimmed = raw.trim();
+  if (/^(?:clamp|var)\(/i.test(trimmed)) return trimmed;
+  const safeFallback = (fallbackUnit === 'clamp' || fallbackUnit === 'var') ? 'px' : fallbackUnit;
+  const m = trimmed.match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(px|rem|em|%)?$/i);
+  const unit = (m?.[2]?.toLowerCase() || safeFallback);
+  const num = clampSpacingValue(parseFloat(m ? m[1] : trimmed) || 0, allowNegative);
+  return `${num}${unit}`;
 }
 
 /** Clamp a spacing number. The lower bound is 0 (padding/radius can't be
@@ -142,7 +165,7 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
   const [mode, setMode] = useState<SpacingMode>(() => detectSpacingMode(values, axes));
   const showIndividual = mode !== 'uniform';
   const userToggledRef = useRef(false); // tracks if user explicitly toggled individual mode
-  const [localValues, setLocalValues] = useState(values.map(v => String(parseNum(v))));
+  const [localValues, setLocalValues] = useState(values.map(displayEditValue));
   const focusedRef = useRef<number | null>(null);
   // The X / Y input being typed in — a pair that differs shows "Mixed" only
   // while it is NOT being edited.
@@ -151,7 +174,7 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
   // Sync from props (skip while user is editing)
   useEffect(() => {
     if (focusedRef.current === null) {
-      setLocalValues(values.map(v => String(parseNum(v))));
+      setLocalValues(values.map(displayEditValue));
       // Only auto-toggle if user hasn't explicitly set the mode
       if (!userToggledRef.current) {
         setMode(detectSpacingMode(values, axes));
@@ -159,17 +182,14 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
     }
   }, [values, axes]);
 
-  // Global input value — show just the number (no unit)
-  const globalValue = String(parseNum(values[0]));
+  const globalUnit = displayUnit(values[0]);
+  const globalValue = displayEditValue(values[0]);
 
   const handleGlobalChange = useCallback((val: string) => {
-    // Clamp typed AND scrubbed commits — padding/radius can't be negative
-    // (the ToolInput `min` handles the scrub display; this guards typed text).
-    const num = clampSpacingValue(parseFloat(val) || 0, allowNegative);
-    const formatted = `${num}px`;
+    const formatted = parseSpacingEdit(val, globalUnit, allowNegative);
     trace.action('spacing-control:global-change', { value: formatted });
     onChangeAll(formatted);
-  }, [onChangeAll, allowNegative]);
+  }, [onChangeAll, globalUnit, allowNegative]);
 
   // Live (per-frame) twin for the global input's chevron drag. Same formatting
   // as handleGlobalChange but routes to the DOM-only patch — no source write
@@ -177,41 +197,51 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
   // handleGlobalChange).
   const handleGlobalChangeLive = useCallback((val: string) => {
     if (!onChangeAllLive) return;
-    const num = clampSpacingValue(parseFloat(val) || 0, allowNegative);
-    onChangeAllLive(`${num}px`);
-  }, [onChangeAllLive, allowNegative]);
+    const formatted = parseSpacingEdit(val, globalUnit, allowNegative);
+    onChangeAllLive(formatted);
+  }, [onChangeAllLive, globalUnit, allowNegative]);
 
   // ─── Segmented input handlers ───────────────────────────────────
   const handleSegmentChange = useCallback((index: number, rawValue: string) => {
-    if (rawValue === '' || rawValue === '-' || /^-?\d*\.?\d*$/.test(rawValue)) {
+    if (
+      rawValue === '' ||
+      rawValue === '-' ||
+      /^-?\d*\.?\d*\s*[a-z%]*$/i.test(rawValue) ||
+      /^(?:clamp|var)\(/i.test(rawValue.trim())
+    ) {
       setLocalValues(prev => { const n = [...prev]; n[index] = rawValue; return n; });
     }
   }, []);
 
   const commitSegment = useCallback((index: number) => {
-    const num = parseFloat(localValues[index]) || 0;
-    const clamped = clampSpacingValue(num, allowNegative);
-    setLocalValues(prev => { const n = [...prev]; n[index] = String(clamped); return n; });
-    trace.action('spacing-control:side-change', { index, label: labels[index], value: clamped });
-    onChange(index, `${clamped}px`);
+    const unit = displayUnit(values[index]);
+    const formatted = parseSpacingEdit(localValues[index], unit, allowNegative);
+    setLocalValues(prev => { const n = [...prev]; n[index] = displayEditValue(formatted); return n; });
+    trace.action('spacing-control:side-change', { index, label: labels[index], value: formatted });
+    onChange(index, formatted);
     focusedRef.current = null;
-  }, [localValues, onChange, labels, allowNegative]);
+  }, [localValues, values, onChange, labels, allowNegative]);
 
   // ─── X / Y inputs (axis mode) ───────────────────────────────────
   // Y edits localValues[0] (top) and X localValues[1] (right); a commit writes
   // the PAIR through onChangeSides, the other axis untouched.
   const axisIndex = (axis: 'x' | 'y') => (axis === 'y' ? 0 : 1);
-  const commitAxisValue = useCallback((axis: 'x' | 'y', num: number) => {
+  const commitAxisValue = useCallback((axis: 'x' | 'y', rawOrNum: string | number) => {
     if (!onChangeSides) return;
-    const clamped = clampSpacingValue(num, allowNegative);
+    const idx = axisIndex(axis);
+    const fallbackUnit = displayUnit(values[idx]);
+    const formatted = typeof rawOrNum === 'number'
+      ? `${clampSpacingValue(rawOrNum, allowNegative)}${fallbackUnit === 'clamp' || fallbackUnit === 'var' ? 'px' : fallbackUnit}`
+      : parseSpacingEdit(rawOrNum, fallbackUnit, allowNegative);
+    const displayVal = displayEditValue(formatted);
     setLocalValues(prev => {
       const n = [...prev];
-      if (axis === 'y') { n[0] = String(clamped); n[2] = String(clamped); }
-      else { n[1] = String(clamped); n[3] = String(clamped); }
+      if (axis === 'y') { n[0] = displayVal; n[2] = displayVal; }
+      else { n[1] = displayVal; n[3] = displayVal; }
       return n;
     });
-    trace.action('spacing-control:axis-change', { axis, value: clamped });
-    onChangeSides(applyAxisValue(values, axis, `${clamped}px`));
+    trace.action('spacing-control:axis-change', { axis, value: formatted });
+    onChangeSides(applyAxisValue(values, axis, formatted));
   }, [onChangeSides, values, allowNegative]);
 
   const commitAxis = useCallback((axis: 'x' | 'y') => {
@@ -220,14 +250,14 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
     setEditingAxis(null);
     // Left a "Mixed" pair without typing — nothing to write.
     if (raw === '') return;
-    commitAxisValue(axis, parseFloat(raw) || 0);
+    commitAxisValue(axis, raw);
   }, [localValues, commitAxisValue]);
 
   const handleAxisKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, axis: 'x' | 'y') => {
     const i = axisIndex(axis);
     if (e.key === 'Enter') { commitAxis(axis); (e.target as HTMLInputElement).blur(); }
     else if (e.key === 'Escape') {
-      setLocalValues(prev => { const n = [...prev]; n[i] = String(parseNum(values[i])); return n; });
+      setLocalValues(prev => { const n = [...prev]; n[i] = displayEditValue(values[i]); return n; });
       (e.target as HTMLInputElement).blur();
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
@@ -239,15 +269,17 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
   const handleSegmentKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     if (e.key === 'Enter') { commitSegment(index); (e.target as HTMLInputElement).blur(); }
     else if (e.key === 'Escape') {
-      setLocalValues(prev => { const n = [...prev]; n[index] = String(parseNum(values[index])); return n; });
+      setLocalValues(prev => { const n = [...prev]; n[index] = displayEditValue(values[index]); return n; });
       (e.target as HTMLInputElement).blur();
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       const step = e.shiftKey ? 10 : 1;
       const delta = (e.key === 'ArrowUp' ? 1 : -1) * step;
+      const unit = displayUnit(values[index]);
+      const safeUnit = unit === 'clamp' || unit === 'var' ? 'px' : unit;
       const newVal = clampSpacingValue((parseFloat(localValues[index]) || 0) + delta, allowNegative);
       setLocalValues(prev => { const n = [...prev]; n[index] = String(newVal); return n; });
-      onChange(index, `${newVal}px`);
+      onChange(index, `${newVal}${safeUnit}`);
     }
   }, [commitSegment, localValues, values, onChange, allowNegative]);
 
@@ -265,32 +297,38 @@ export default function SpacingControl({ values, labels, onChange, onChangeAll, 
           className="flex-1"
         />
 
-        {/* Toggle group: uniform shows the static px badge, individual shows uniform icon */}
+        {/* Toggle group: uniform shows clickable unit cycler (px/rem/em/%), individual shows uniform icon */}
         <div className="flex items-center border border-[var(--control-border)] cut-corners cut-border [--cut-border-color:var(--control-border)] overflow-hidden shrink-0">
-          {/* Left button: when individual → shows uniform icon, click switches
-              back to uniform (consolidates the longhands into shorthand).
-              When uniform → a STATIC px badge; spacing is px-only, so there
-              is no unit to cycle. */}
           <button
             tabIndex={-1}
+            data-spacing-unit={globalUnit}
             onClick={() => {
-              if (!showIndividual) return;
-              // Switch back to uniform — consolidate longhands into shorthand
-              setMode('uniform');
-              userToggledRef.current = true;
-              const num = parseFloat(localValues[0]) || 0;
-              onChangeAll(`${num}px`);
+              if (showIndividual) {
+                // Switch back to uniform — consolidate longhands into shorthand
+                setMode('uniform');
+                userToggledRef.current = true;
+                const formatted = parseSpacingEdit(localValues[0] || '0', displayUnit(values[0]), allowNegative);
+                onChangeAll(formatted);
+              } else {
+                const currentUnit: SpacingUnit = SPACING_UNITS.includes(globalUnit as SpacingUnit)
+                  ? (globalUnit as SpacingUnit)
+                  : 'px';
+                const nextUnit = SPACING_UNITS[(SPACING_UNITS.indexOf(currentUnit) + 1) % SPACING_UNITS.length];
+                const num = clampSpacingValue(parseNum(values[0]), allowNegative);
+                trace.action('spacing-control:unit-cycle', { from: currentUnit, to: nextUnit, value: num });
+                onChangeAll(`${num}${nextUnit}`);
+              }
             }}
-            className={`flex items-center justify-center h-7 w-7 transition-colors ${
+            className={`flex items-center justify-center h-7 w-7 transition-colors cursor-pointer ${
               !showIndividual
-                ? 'bg-[var(--button-secondary-bg)] text-[var(--text-disabled)] cursor-default'
-                : 'bg-[var(--choice-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer'
+                ? 'bg-[var(--button-secondary-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'bg-[var(--choice-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
-            title={showIndividual ? 'Uniform' : 'px'}
+            title={showIndividual ? 'Uniform' : `Unit: ${globalUnit} (click to cycle px / rem / em / %)`}
           >
             {showIndividual
               ? <UniformIcon className="w-3 h-3" />
-              : <span className="text-[10px] font-medium">px</span>
+              : <span className="text-[10px] font-medium">{globalUnit === 'clamp' ? 'clmp' : globalUnit}</span>
             }
           </button>
           {/* Right button: X / Y ⇄ individual sides (only individual when the

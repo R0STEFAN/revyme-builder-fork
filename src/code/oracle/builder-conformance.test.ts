@@ -75,10 +75,6 @@ const KNOWN_DIVERGENCES: Record<string, { codes: string[]; why: string }> = {
   'shape-star': { codes: ['SHAPE_GEOMETRY_NOT_PATH'], why: 'open: native primitives vs path geometry' },
   'shape-hexagon': { codes: ['SHAPE_GEOMETRY_NOT_PATH'], why: 'open: native primitives vs path geometry' },
   'shape-pentagon': { codes: ['SHAPE_GEOMETRY_NOT_PATH'], why: 'open: native primitives vs path geometry' },
-  // `maxWidth: 'none'` has no slot in the Size panel.
-  image: { codes: ['MINMAX_SIZE_UNIT'], why: "open: maxWidth: 'none'" },
-  video: { codes: ['MINMAX_SIZE_UNIT'], why: "open: maxWidth: 'none'" },
-  audio: { codes: ['MINMAX_SIZE_UNIT'], why: "open: maxWidth: 'none'" },
   // Card templates style text through WRAPPER inheritance (textAlign /
   // fontSize / fontWeight / color on a div with no direct text). The dialect
   // puts text styles ON the text node (TEXT_STYLE_ON_FRAME, 2026-08-11);

@@ -68,10 +68,12 @@ describe('checkFile — tier 2 dialect', () => {
     expect(checkFile(CLEAN_COMPONENT, { kind: 'component' })).toEqual([]);
   });
 
-  it('treats Gap, Row Gap, and Column Gap as pixel-only spacing properties', () => {
+  it('rejects unsupported expressions (e.g. calc()) on Gap, Row Gap, and Column Gap while allowing px/rem/%/clamp', () => {
     for (const property of ['gap', 'rowGap', 'columnGap']) {
-      const code = CLEAN_COMPONENT.replace("gap: '16px'", `${property}: 'clamp(8px, 2vw, 24px)'`);
-      expect(codes(checkFile(code, { kind: 'component' })), property).toContain('SPACING_UNIT_NOT_PX');
+      const badCode = CLEAN_COMPONENT.replace("gap: '16px'", `${property}: 'calc(8px + 2vw)'`);
+      expect(codes(checkFile(badCode, { kind: 'component' })), property).toContain('SPACING_UNIT_NOT_PX');
+      const okCode = CLEAN_COMPONENT.replace("gap: '16px'", `${property}: '1rem'`);
+      expect(codes(checkFile(okCode, { kind: 'component' })), property).not.toContain('SPACING_UNIT_NOT_PX');
     }
   });
 
@@ -724,40 +726,12 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   });
 });
 
-describe('checkFile — FORBIDDEN_ALIGN_VALUE (Align control has no baseline)', () => {
-  it('flags alignItems: baseline', () => {
-    const code = CLEAN_COMPONENT.replace("display: 'flex',", "display: 'flex', alignItems: 'baseline',");
-    const vs = checkFile(code, { kind: 'component' });
-    expect(codes(vs)).toContain('FORBIDDEN_ALIGN_VALUE');
-    expect(vs.find((x) => x.code === 'FORBIDDEN_ALIGN_VALUE')!.message).toContain("'flex-start'");
-  });
-
-  it('stays silent for the values the Align control offers', () => {
-    for (const val of ['flex-start', 'center', 'flex-end', 'stretch']) {
+describe('checkFile — alignItems baseline allowed (Align control supports baseline)', () => {
+  it('allows alignItems: baseline and all other Align control values', () => {
+    for (const val of ['flex-start', 'center', 'flex-end', 'stretch', 'baseline']) {
       const code = CLEAN_COMPONENT.replace("display: 'flex',", `display: 'flex', alignItems: '${val}',`);
       expect(codes(checkFile(code, { kind: 'component' }))).not.toContain('FORBIDDEN_ALIGN_VALUE');
     }
-  });
-
-  it('flags a ternary branch resolving to a forbidden value', () => {
-    const code = CLEAN_COMPONENT.replace(
-      "display: 'flex',",
-      "display: 'flex', alignItems: initialVariant === 'open' ? 'baseline' : 'center',",
-    );
-    expect(codes(checkFile(code, { kind: 'component' }))).toContain('FORBIDDEN_ALIGN_VALUE');
-  });
-
-  it('applies on pages too', () => {
-    const page = `'use client';
-
-/** @canvas { "viewports": [], "positions": {} } */
-
-import React from 'react';
-
-export default function Page() {
-  return <div data-id="root" data-name="Page" style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'baseline' }} />;
-}`;
-    expect(codes(checkFile(page, { kind: 'page' }))).toContain('FORBIDDEN_ALIGN_VALUE');
   });
 });
 
@@ -1282,15 +1256,13 @@ export default function Page() {
   const vs = (s: string) => checkFile(page(s), { kind: 'page', existingDataIds: ex });
   const has = (s: string) => vs(s).some(x => x.code === 'GRID_CHILD_SPAN_UNRESOLVABLE');
 
-  // The live regression: renders six tracks wide, panel reads "Span 1".
-  it("flags line-based placement: gridColumn '7 / span 6'", () => {
-    expect(has(`gridColumn: '7 / span 6'`)).toBe(true);
+  it("allows line-based placement: gridColumn '7 / span 6' and explicit line pair '2 / 4'", () => {
+    expect(has(`gridColumn: '7 / span 6'`)).toBe(false);
+    expect(has(`gridColumn: '2 / 4'`)).toBe(false);
+    expect(has(`gridRow: '3 / span 2'`)).toBe(false);
   });
-  it("flags an explicit line pair: gridColumn '2 / 4'", () => {
-    expect(has(`gridColumn: '2 / 4'`)).toBe(true);
-  });
-  it('flags gridRow the same way', () => {
-    expect(has(`gridRow: '3 / span 2'`)).toBe(true);
+  it('flags unsupported named grid lines', () => {
+    expect(has(`gridColumn: 'sidebar-start / sidebar-end'`)).toBe(true);
   });
   it("passes the canonical form: gridColumn 'span 6'", () => {
     expect(has(`gridColumn: 'span 6'`)).toBe(false);
@@ -1305,11 +1277,9 @@ export default function Page() {
     expect(checkFile(page(`gridColumn: '7 / span 6'`), { kind: 'page', existingDataIds: new Set(['root','grid','c1','c2']) })
       .some(x => x.code === 'GRID_CHILD_SPAN_UNRESOLVABLE')).toBe(false);
   });
-  // The message has to be copy-paste fixable — an abstract "use span N" did not
-  // converge for the image rule, so this one carries the derived equivalent.
-  it("names the exact replacement in the message", () => {
-    const m = vs(`gridColumn: '7 / span 6'`).find(x => x.code === 'GRID_CHILD_SPAN_UNRESOLVABLE')!.message;
-    expect(m).toContain(`gridColumn: 'span 6'`);
+  it("names the exact replacement when an unsupported grid span value fails", () => {
+    const m = vs(`gridColumn: 'sidebar / span 2'`).find(x => x.code === 'GRID_CHILD_SPAN_UNRESOLVABLE')!.message;
+    expect(m).toContain(`gridColumn: 'span N'`);
   });
 });
 
