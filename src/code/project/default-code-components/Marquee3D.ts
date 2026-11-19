@@ -47,20 +47,33 @@ function Marquee3D({
   for (let i = 0; i < colCount; i++) cols.push([]);
   items.forEach(function (c, i) { cols[i % colCount].push(c); });
 
-  // Measure column inner — bump copies so column height >= stage height + one.
+  // Measure column inner — bump copies so column height fills the tilted stage seamlessly.
   useLayoutEffect(() => {
     if (isStatic) return;
     const stage = stageRef.current;
     if (!stage) return;
-    const firstCol = stage.querySelector('[data-mq3d-col]');
-    const firstInner = firstCol && firstCol.firstElementChild;
-    if (!firstInner) return;
-    const stageH = stage.clientHeight;
-    const innerH = firstInner.offsetHeight + gap;
-    if (innerH <= 0) return;
-    const needed = Math.min(30, Math.max(2, Math.ceil(stageH / innerH) + 1));
-    if (needed !== copies) setCopies(needed);
-  }, [isStatic, children, gap, colCount, copies]);
+    const rad = Math.abs(tiltX) * (Math.PI / 180);
+
+    function measure() {
+      const stageH = stage.clientHeight;
+      if (stageH <= 0) return;
+      const firstCol = stage.querySelector('[data-mq3d-col]');
+      const firstInner = firstCol && firstCol.firstElementChild;
+      if (!firstInner) return;
+      const innerH = firstInner.offsetHeight + gap;
+      if (innerH <= 0) return;
+      const tiltMultiplier = Math.max(1.8, Math.min(4, 1 / Math.max(0.25, Math.cos(rad))));
+      const effectiveH = stageH * tiltMultiplier;
+      const needed = Math.min(30, Math.max(5, Math.ceil(effectiveH / innerH) + 2));
+      setCopies(function (prev) { return prev === needed ? prev : needed; });
+    }
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(stage);
+    return function () { ro.disconnect(); };
+  }, [isStatic, children, gap, colCount, tiltX]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -158,11 +171,13 @@ function Marquee3D({
     );
   }
 
+  // Applying perspective() in stage's own transform (instead of parent perspective + preserve-3d)
+  // prevents Blink/Viz 3D sub-layer cull clipping when scrolling the tilted grid near viewport edges.
   return (
     <div
       data-id={props['data-id']}
       data-name={props['data-name']}
-      style={{ position: 'relative',  overflow: 'hidden', perspective: perspective + 'px', ...props.style }}
+      style={{ position: 'relative', overflow: 'hidden', ...props.style }}
     >
       <div
         ref={stageRef}
@@ -173,8 +188,7 @@ function Marquee3D({
           justifyContent: 'center',
           alignItems: 'flex-start',
           gap: gap + 'px',
-          transform: 'rotateX(' + tiltX + 'deg) rotateY(' + tiltY + 'deg) rotateZ(' + tiltZ + 'deg)',
-          transformStyle: 'preserve-3d',
+          transform: 'perspective(' + perspective + 'px) rotateX(' + tiltX + 'deg) rotateY(' + tiltY + 'deg) rotateZ(' + tiltZ + 'deg)',
         }}
       >
         {cols.map(function (col, ci) {
