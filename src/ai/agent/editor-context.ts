@@ -43,8 +43,9 @@ const DIALECT_CARD =
   '## Revyme dialect — must-pass\n' +
   "FLEX_CHILD_MISSING_ORDER: every flex/grid child needs quoted order '0','1'… • " +
   'NODE_MISSING_POSITION: every node needs position (relative/absolute/fixed) • ' +
-  'MINMAX_SIZE_UNIT: min/max only px or % • ' +
-  'IMAGE_USE_BACKGROUND_FRAME: images are div+backgroundImage, not <img> • ' +
+  'MINMAX_SIZE_UNIT: min/max accept px, %, vh/vw, rem/em, clamp(), none/auto/fit-content • ' +
+  'IMAGES: <img> with explicit width/height/objectFit or div+backgroundImage • ' +
+  'LISTS_AND_SPACING: native ul/ol/li, overflow: auto, baseline align, and multi-unit spacing/lineHeight allowed • ' +
   "FLEX_CHILD_SHRINKS: flex children need flex:'0 0 auto' (no shrink) • " +
   "PIN_VALUE_NOT_PX: pins must be 'Npx' strings";
 

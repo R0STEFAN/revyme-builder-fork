@@ -703,34 +703,35 @@ You have direct access to 280+ operations on the "revyme-builder" Model Context 
   (e.g. to set color or background: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } }))
 - text.set: Update element text content. Arguments: { nodeId: string, text: string }
 - meta.guide: Task-scope routing (taskScope: 'quick-ui-insert' | 'small-style-or-text-edit' | 'full-page-pipeline' | 'cms-and-dynamic-data' | 'motion-and-interactions' | 'read-only-audit') for concise workflow instructions.
-- extract_component: Turn an element into a reusable Design Component in components/. Arguments: { node_id: string, name: string }
-- create_variant: Declare a variant for a component (e.g. hover). Arguments: { component: string, variant: string, interaction?: 'hover' | 'pressed' }
-- set_variant: Style or configure a component variant. Arguments: { component: string, variant: string, styles: Record<string, string> }
-- set_pseudo_style: Set pseudo-class styles like :hover on a plain element without a component. Arguments: { nodeId: string, pseudo: 'hover', styles: Record<string, string> }
-- motion.set: Set Framer Motion animation / transition props on an element. Arguments: { nodeId: string, animation: Record<string, any> }
+- components.extract: Turn an element into a reusable Design Component in components/. Arguments: { nodeId: string, name: string }
+- variants.create: Declare a variant for a component (e.g. hover). Arguments: { component: string, name: string, interaction?: 'hover' | 'pressed' }
+- styles.set (hover / variant / breakpoint): Use variantName, pseudo: 'hover', or breakpoint on styles.set instead of legacy pseudo/variant helpers.
+- motion.set: Set Framer Motion animation / transition props on an element. Arguments: { nodeId: string, motion: Record<string, any> }
 - nodes.remove: Remove an element by data-id. Arguments: { nodeId: string }
 - nodes.get: Retrieve node attributes and current styles. Arguments: { nodeId: string }
 - meta.tools: Self-documentation / Help for ANY command schema and examples. Arguments: { name: string }
 - meta.index: List registered operations and categories.
 - pages.list / pages.create / pages.update: Query and manage site pages
 - observe.selection: Get currently selected canvas element IDs
+- observe.screenshot: Capture canvas screenshot for visual verification when needed
 - codeFiles.read: Read raw source files for inspection.
 - codeFiles.submit: ONLY for Code Components (components/*.tsx with /** @controls { ... } */) and non-canvas configs. STRICTLY FORBIDDEN for canvas pages or regular design components!
 
 [Operating Rules]
-1. Never run bash/terminal search commands or read files from .agents/skills/ — all tool schemas, project details, and conventions are already pre-loaded in this prompt or introspectable via meta.tools.
-2. Directly execute visual changes, insertions, styling, and component/variant updates using the "revyme-builder" MCP server via call_mcp_tool.
-3. Keep changes precise, high quality, and aligned with modern visual design standards.
-4. STRICT INVARIANT: Never run bash / PowerShell terminal commands (like run_command) to inspect, edit, or search files in data/projects/ or the repository. Never create scripts to bypass the system.
-5. NEVER USE codeFiles.submit FOR CANVAS PAGES: Direct creation or modification of canvas pages (page.client.tsx, LayoutClient.tsx) or design components via codeFiles.submit is strictly forbidden (throws CANVAS_PAGE_SUBMISSION_DISALLOWED / DESIGN_COMPONENT_SUBMISSION_DISALLOWED). Use fragments.insert, sections.insert, nodes.create, styles.set, extract_component, or components.create instead.
-6. IF PLAN_VALIDATION_FAILED OCCURS: If an MCP tool returns PLAN_VALIDATION_FAILED (e.g. FORBIDDEN_MIN_CONTENT_HEIGHT or FIXED_DEPTH), it indicates invalid layout styles on nodes in the page. You MUST resolve it directly using MCP tools — e.g. call styles.set({ nodeId: '<offending-node-id>', styles: { height: 'auto' } }). NEVER try to hack around validation with terminal scripts.
+1. FAST-PATH FOR SECTIONS / CARDS / BUTTONS / SCREENSHOTS: If the user asks for a single section, card, button, list, or screenshot UI block without asking for design tokens or reusable components, complete it in 2-3 MCP calls (observe.selection / pages.list -> fragments.insert or fragments.replace). Do NOT configure tokens, typography presets, viewports, or Design Components unnecessarily. Always write inline camelCase style={{ ... }} objects (native ul/ol/li lists and px/rem/em/%/clamp() units are supported and auto-healed).
+2. Never run bash/terminal search commands or read files from .agents/skills/ — call meta.guide({ taskScope }) or meta.tools if you need additional tool schemas.
+3. Directly execute visual changes, insertions, styling, and component/variant updates using the "revyme-builder" MCP server via call_mcp_tool.
+4. Keep changes precise, high quality, and aligned with modern visual design standards.
+5. STRICT INVARIANT: Never run bash / PowerShell terminal commands (like run_command) to inspect, edit, or search files in data/projects/ or the repository. Never create scripts to bypass the system.
+6. NEVER USE codeFiles.submit FOR CANVAS PAGES: Direct creation or modification of canvas pages (page.client.tsx, LayoutClient.tsx) or design components via codeFiles.submit is strictly forbidden (throws CANVAS_PAGE_SUBMISSION_DISALLOWED / DESIGN_COMPONENT_SUBMISSION_DISALLOWED). Use fragments.insert, fragments.replace, sections.insert, nodes.create, styles.set, components.extract, or components.create instead.
+7. IF PLAN_VALIDATION_FAILED OCCURS: If an MCP tool returns PLAN_VALIDATION_FAILED (e.g. FORBIDDEN_MIN_CONTENT_HEIGHT or FIXED_DEPTH), it indicates invalid layout styles on nodes in the page. You MUST resolve it directly using MCP tools — e.g. call styles.set({ nodeId: '<offending-node-id>', styles: { height: 'auto' } }). NEVER try to hack around validation with terminal scripts.
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 User request:
 `;
 
           const effectivePrompt = existingSessionId
             ? `[Revyme Context: Project ID: ${effectiveProjectId} | Chat: ${chatId}]
-[Revyme instruction: Directly execute visual changes via call_mcp_tool (fragments.insert, styles.set, extract_component, text.set, etc.). Never use run_command or terminal scripts. If an MCP tool returns PLAN_VALIDATION_FAILED, resolve the offending node styles directly using styles.set, never terminal scripts.]
+[Revyme instruction: Directly execute visual changes via call_mcp_tool (fragments.insert, fragments.replace, styles.set, components.extract, text.set, meta.guide). For single sections/cards/buttons/screenshots use the 2-3 call Fast-Path via fragments.insert or fragments.replace without creating tokens or components. Never use run_command or terminal scripts. If PLAN_VALIDATION_FAILED occurs, resolve offending node styles directly using styles.set.]
 ${contextBlock ? `\n[Editor Context]\n${contextBlock}\n` : ''}
 ${userPrompt}`
             : `${revymeSystemPreamble}${userPrompt}`;

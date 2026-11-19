@@ -9,6 +9,11 @@ import { installBuiltInCodeComponent } from '@/code/project/project-fs';
 import { isAllowedImageSource, extractCssUrl, IMAGE_ATTR_KEYS } from './checks/image-source';
 import type { PresetToken } from '@/shared/types';
 import { dimensionStyleValueError } from '@/shared/dimension-presets';
+import {
+  isValidLineHeightString,
+  isValidMinMaxSizeString,
+  validateSpacingString,
+} from './checks/style-object';
 
 export const FRAMEWORK_TAGS = new Set([
   'Link', 'Image', 'Fragment', 'AnimatePresence', 'MotionConfig', 'LayoutGroup',
@@ -49,9 +54,6 @@ export const KNOWN_SLOT_COMPONENTS = new Set([
 ]);
 
 export const UNSUPPORTED_TAGS: Record<string, string> = {
-  ul: 'lists are stacked FRAMES here: a flex column of row frames (icon + text), giving full control of spacing and markers',
-  ol: 'lists are stacked FRAMES here: a flex column of row frames with a number text per row',
-  li: 'list items are row FRAMES inside a flex column',
   dl: 'definition lists are stacked frames',
   dt: 'use a text element inside a frame',
   dd: 'use a text element inside a frame',
@@ -215,32 +217,37 @@ export function validateStyleInput(
       return `Custom CSS property "${key}" has no editable surface in Revyme panels. Write concrete values directly or reference design token presets (e.g. globals.css presets).`;
     }
 
-    // 4. Spacing px-only validation
+    // 4. Spacing multi-unit & dimension token validation
     if (SPACING_PX_KEYS.has(key) && strVal !== '') {
-      // Existing callers without project metadata may still pass through a
-      // token reference; every agent/MCP authoring path supplies the current
-      // tokens and gets category/fallback validation here.
-      if (strVal.includes('var(') && !opts?.presetTokens) continue;
-      const dimensionError = dimensionStyleValueError(key, strVal, opts?.presetTokens ?? []);
-      if (dimensionError) {
-        const isTokenError = /token|category|fallback/i.test(dimensionError);
-        return isTokenError
-          ? `Property "${key}" has an invalid dimension preset reference: ${dimensionError}`
-          : `Property "${key}" value "${strVal}" must be in pixels (e.g. "24px"): ${dimensionError}`;
+      if (strVal.includes('var(')) {
+        if (!opts?.presetTokens) continue;
+        const dimensionError = dimensionStyleValueError(key, strVal, opts.presetTokens);
+        if (dimensionError) {
+          const isTokenError = /token|category|fallback/i.test(dimensionError);
+          return isTokenError
+            ? `Property "${key}" has an invalid dimension preset reference: ${dimensionError}`
+            : `Property "${key}" value "${strVal}" is invalid: ${dimensionError}`;
+        }
+        continue;
+      }
+      const spacingErr = validateSpacingString(strVal, key);
+      if (spacingErr) {
+        const dimensionError = dimensionStyleValueError(key, strVal, opts?.presetTokens ?? []);
+        return `Property "${key}" value "${strVal}" is invalid${dimensionError ? `: ${dimensionError}` : ''}`;
       }
     }
 
     // 5. Min/Max size unit constraints
-    if (MINMAX_SIZE_KEYS.has(key) && strVal !== '' && strVal !== 'none' && strVal !== 'auto') {
-      if (/vh|vw|em|rem|calc|min-content|max-content|fit-content/i.test(strVal)) {
-        return `Property "${key}" value "${strVal}" is invalid. Size constraints (min/max) only accept plain 'px' or '%' values (e.g. '100%', '400px'). Viewport units (vh/vw) and calc() are unsupported by visual controls.`;
+    if (MINMAX_SIZE_KEYS.has(key) && strVal !== '') {
+      if (!isValidMinMaxSizeString(strVal)) {
+        return `Property "${key}" value "${strVal}" is invalid. Size constraints (min/max) accept px, %, vw/vh/svh/dvh, rem/em/ch, clamp(), none, auto, fit-content, or max-content.`;
       }
     }
 
-    // 6. Unitless lineHeight
-    if (key === 'lineHeight' && strVal !== '' && strVal !== 'normal') {
-      if (/px|rem|em|%/i.test(strVal)) {
-        return `lineHeight must be a unitless multiplier (e.g. '1.2', '1.5'), not a pixel or unit value like "${strVal}".`;
+    // 6. Line-height format validation
+    if (key === 'lineHeight' && strVal !== '') {
+      if (!isValidLineHeightString(strVal)) {
+        return `lineHeight value "${strVal}" is invalid. Use a unitless ratio ('1.2', '1.5'), 'normal', '%', 'px', 'rem', 'em', clamp(), or calc().`;
       }
     }
 

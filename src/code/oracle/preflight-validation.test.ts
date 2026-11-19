@@ -24,15 +24,17 @@ describe('preflight-validation', () => {
       expect(validateStyleInput({ '--primary-color': '#ff0000' })).toContain('Custom CSS property');
     });
 
-    it('rejects non-px spacing units', () => {
-      expect(validateStyleInput({ padding: '2rem' })).toContain('must be in pixels');
-      expect(validateStyleInput({ margin: '10%' })).toContain('must be in pixels');
-      expect(validateStyleInput({ borderRadius: '1.5em' })).toContain('must be in pixels');
+    it('validates multi-unit spacing literals, clamp(), and rejects unsupported units or too many parts', () => {
+      expect(validateStyleInput({ padding: '2rem' })).toBeNull();
+      expect(validateStyleInput({ margin: '10%' })).toBeNull();
+      expect(validateStyleInput({ borderRadius: '1.5em' })).toBeNull();
+      expect(validateStyleInput({ padding: 'clamp(12px, 3vw, 32px)' })).toBeNull();
       expect(validateStyleInput({ padding: '24px' })).toBeNull();
       expect(validateStyleInput({ padding: '0' })).toBeNull();
+      expect(validateStyleInput({ padding: 'calc(10px + 1rem)' })).toContain('is invalid');
     });
 
-    it('validates px-only gap values and compatible responsive dimension token refs', () => {
+    it('validates multi-unit gap values and compatible responsive dimension token refs', () => {
       const tokens: PresetToken[] = [
         { name: 'space-card', value: '16px', category: 'spacing' },
         { name: 'space-card-md', value: '12px', category: 'spacing' },
@@ -43,8 +45,8 @@ describe('preflight-validation', () => {
 
       expect(validateStyleInput({ gap: '16px 24px' }, opts)).toBeNull();
       expect(validateStyleInput({ rowGap: '12px' }, opts)).toBeNull();
-      expect(validateStyleInput({ columnGap: '1rem' }, opts)).toContain('must use pixels');
-      expect(validateStyleInput({ gap: 'clamp(8px, 2vw, 24px)' }, opts)).toContain('must use pixels');
+      expect(validateStyleInput({ columnGap: '1rem' }, opts)).toBeNull();
+      expect(validateStyleInput({ gap: 'clamp(8px, 2vw, 24px)' }, opts)).toBeNull();
       expect(validateStyleInput({ gap: '8px 12px 16px' }, opts)).toContain('many dimension values');
       expect(validateStyleInput({ padding: 'var(--space-card)' }, opts)).toBeNull();
       expect(validateStyleInput({ padding: 'var(--space-card-sm, var(--space-card))' }, opts)).toBeNull();
@@ -55,16 +57,20 @@ describe('preflight-validation', () => {
       expect(validateStyleInput({ fontSize: 'clamp(24px, 4vw, 64px)' }, opts)).toBeNull();
     });
 
-    it('rejects invalid min/max constraints', () => {
-      expect(validateStyleInput({ minHeight: '100vh' })).toContain('Size constraints (min/max)');
+    it('allows viewport/relative/keyword min/max constraints and rejects calc() or min-content', () => {
+      expect(validateStyleInput({ minHeight: '100vh' })).toBeNull();
+      expect(validateStyleInput({ minWidth: 'fit-content' })).toBeNull();
       expect(validateStyleInput({ maxWidth: 'calc(100% - 20px)' })).toContain('Size constraints (min/max)');
+      expect(validateStyleInput({ minHeight: 'min-content' })).toContain('Size constraints (min/max)');
       expect(validateStyleInput({ minHeight: '400px' })).toBeNull();
       expect(validateStyleInput({ maxWidth: '100%' })).toBeNull();
     });
 
-    it('rejects unit-based lineHeight', () => {
-      expect(validateStyleInput({ lineHeight: '24px' })).toContain('unitless multiplier');
+    it('allows unitless, percentage, px/rem/em, and clamp() lineHeight values', () => {
+      expect(validateStyleInput({ lineHeight: '24px' })).toBeNull();
+      expect(validateStyleInput({ lineHeight: '150%' })).toBeNull();
       expect(validateStyleInput({ lineHeight: '1.5' })).toBeNull();
+      expect(validateStyleInput({ lineHeight: '1.5 /* comment */' })).toContain('lineHeight value');
     });
 
     it('rejects simultaneous background color and image', () => {
@@ -163,9 +169,10 @@ describe('preflight-validation', () => {
       expect(err).toContain('is a slot component');
     });
 
-    it('rejects unsupported HTML tags', () => {
-      expect(validateTagInput('ul')).toContain('is not supported by Revyme visual engine');
-      expect(validateTagInput('li')).toContain('is not supported by Revyme visual engine');
+    it('allows native lists and rejects unsupported HTML tags', () => {
+      expect(validateTagInput('ul')).toBeNull();
+      expect(validateTagInput('ol')).toBeNull();
+      expect(validateTagInput('li')).toBeNull();
       expect(validateTagInput('table')).toContain('is not supported by Revyme visual engine');
       expect(validateTagInput('iframe')).toContain('is not supported by Revyme visual engine');
     });

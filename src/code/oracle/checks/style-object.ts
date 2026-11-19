@@ -209,12 +209,7 @@ function checkStyleObject(
     // / fontSizePx, e.g. fontSize 40 + lineHeight '48px' → lineHeight: '1.2'.
     if (key === 'lineHeight' && t.isStringLiteral(prop.value)) {
       const lhVal = prop.value.value.trim();
-      const lhOk =
-        lhVal === 'normal' ||
-        lhVal.startsWith('var(') ||
-        /^\d+(\.\d+)?(?:%|px|rem|em)?$/.test(lhVal) ||
-        /^(?:clamp|calc)\([^()]+\)$/i.test(lhVal);
-      if (!lhOk) {
+      if (!isValidLineHeightString(lhVal)) {
         v.push({
           code: 'LINE_HEIGHT_FORMAT', tier: 2, line, elementId: dataId,
           message: `lineHeight: '${lhVal}' (line ${line}) — write a clean lineHeight value: unitless ratio ('1.2', '1.5'), 'normal', percentage ('110%'), length ('24px', '1.5rem'), clamp(), or var(...). Strip comment debris.`,
@@ -385,17 +380,56 @@ function isCanonicalTransformString(val: t.ObjectProperty['value'], insideTernar
   return false;
 }
 
+export function isValidLineHeightString(value: string): boolean {
+  const s = value.trim();
+  return (
+    s === 'normal' ||
+    s.startsWith('var(') ||
+    /^\d+(\.\d+)?(?:%|px|rem|em)?$/.test(s) ||
+    /^(?:clamp|calc)\([^()]+\)$/i.test(s)
+  );
+}
+
+export function isValidMinMaxSizeString(value: string): boolean {
+  const s = value.trim();
+  if (s === '' || s === '0' || s === 'none' || s === 'auto' || s === 'fit-content' || s === 'max-content') return true;
+  if (/^\d*\.?\d+(?:px|%|rem|em|vw|vh|svh|svw|dvh|dvw|lvh|lvw|ch)$/.test(s)) return true;
+  if (/^clamp\([^()]+\)$/i.test(s)) return true;
+  return false;
+}
+
+export function validateSpacingString(value: string, property: string): string | null {
+  const s = value.trim();
+  if (s === '') return null;
+  if (/^var\(\s*--[a-zA-Z0-9_-]+\s*(?:,\s*var\(\s*--[a-zA-Z0-9_-]+\s*\)\s*)?\)$/.test(s)) return null;
+  if (!dimensionStyleValueError(property, s, [])) return null;
+
+  // Multi-unit spacing & clamp() support (matched to SpacingControl)
+  const clampRe = /^clamp\(\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*,\s*[^,()]+\s*,\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*\)$/i;
+  if (clampRe.test(s)) return null;
+
+  const isMargin = property.startsWith('margin');
+  const isGap = property === 'gap' || property === 'rowGap' || property === 'columnGap';
+  const isShorthand = property === 'padding' || property === 'margin' || property === 'borderRadius';
+  const maxParts = isShorthand ? 4 : (isGap && property === 'gap' ? 2 : 1);
+  const parts = s.split(/\s+/);
+  if (parts.length > maxParts) return s;
+
+  const unitRe = isMargin
+    ? /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/
+    : /^(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/;
+
+  const allValid = parts.every((part) => part === '0' || unitRe.test(part) || (isMargin && part === 'auto'));
+  return allValid ? null : s;
+}
+
 /** For a min/max width/height value, return the first offending string (a
  *  non-px/% length, a viewport/relative unit, calc() or a keyword) or null when
  *  every branch is a clean px / % / bare-0 length. Recurses ternary branches
  *  (responsive + per-variant values) and ignores '' (a cleared property). */
 function badMinMaxSizeUnit(val: t.ObjectProperty['value']): string | null {
   if (t.isStringLiteral(val)) {
-    const s = val.value.trim();
-    if (s === '' || s === '0' || s === 'none' || s === 'auto' || s === 'fit-content' || s === 'max-content') return null;
-    if (/^\d*\.?\d+(?:px|%|rem|em|vw|vh|svh|svw|dvh|dvw|lvh|lvw|ch)$/.test(s)) return null;
-    if (/^clamp\([^()]+\)$/i.test(s)) return null;
-    return s;
+    return isValidMinMaxSizeString(val.value) ? null : val.value.trim();
   }
   if (t.isConditionalExpression(val)) {
     return badMinMaxSizeUnit(val.consequent as t.ObjectProperty['value'])
@@ -409,28 +443,7 @@ function badMinMaxSizeUnit(val: t.ObjectProperty['value']): string | null {
  *  canonical var() preset references. */
 function badSpacingUnit(val: t.ObjectProperty['value'], property: string): string | null {
   if (t.isStringLiteral(val)) {
-    const s = val.value.trim();
-    if (s === '') return null;
-    if (/^var\(\s*--[a-zA-Z0-9_-]+\s*(?:,\s*var\(\s*--[a-zA-Z0-9_-]+\s*\)\s*)?\)$/.test(s)) return null;
-    if (!dimensionStyleValueError(property, s, [])) return null;
-
-    // Multi-unit spacing & clamp() support (matched to SpacingControl)
-    const clampRe = /^clamp\(\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*,\s*[^,()]+\s*,\s*-?[\d.]+(?:px|rem|em|%|vw|vh)\s*\)$/i;
-    if (clampRe.test(s)) return null;
-
-    const isMargin = property.startsWith('margin');
-    const isGap = property === 'gap' || property === 'rowGap' || property === 'columnGap';
-    const isShorthand = property === 'padding' || property === 'margin' || property === 'borderRadius';
-    const maxParts = isShorthand ? 4 : (isGap && property === 'gap' ? 2 : 1);
-    const parts = s.split(/\s+/);
-    if (parts.length > maxParts) return s;
-
-    const unitRe = isMargin
-      ? /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/
-      : /^(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%|vh|vw|svh|dvh)$/;
-
-    const allValid = parts.every((part) => part === '0' || unitRe.test(part) || (isMargin && part === 'auto'));
-    return allValid ? null : s;
+    return validateSpacingString(val.value, property);
   }
   if (t.isConditionalExpression(val)) {
     return badSpacingUnit(val.consequent as t.ObjectProperty['value'], property)
