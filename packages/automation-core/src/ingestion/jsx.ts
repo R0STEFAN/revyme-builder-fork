@@ -57,6 +57,21 @@ export function ingestJSXFragment(
   return nodes[0] || null;
 }
 
+const INLINE_TEXT_RUN_TAGS = new Set([
+  'span',
+  'strong',
+  'em',
+  'b',
+  'i',
+  'u',
+  's',
+  'small',
+  'mark',
+  'sub',
+  'sup',
+  'br',
+]);
+
 function collectNodesFromBabel(
   node: any,
   idManager: IdManager,
@@ -152,6 +167,31 @@ function convertBabelJSX(
     if (transpiledTag !== tagName) {
       reporter?.recordNormalization('TRANSPILE_UNSUPPORTED_TAG', existingId ?? tagName, tagName, transpiledTag);
       tagName = transpiledTag;
+    }
+
+    // Auto-heal: If a <div> contains direct text and no block children (only text or inline runs like <span>),
+    // automatically transform it into a semantic <p> so Revyme visual canvas treats it as a real text node.
+    if (tagName === 'div') {
+      const hasBlockChildren = node.children.some((child: any) => {
+        if (child.type === 'JSXElement') {
+          const childName = child.openingElement?.name?.name;
+          return childName && !INLINE_TEXT_RUN_TAGS.has(childName);
+        }
+        return false;
+      });
+
+      const hasDirectText = node.children.some((child: any) => {
+        if (child.type === 'JSXText') return child.value.trim() !== '';
+        if (child.type === 'JSXExpressionContainer') {
+          return child.expression?.type === 'StringLiteral' && child.expression.value.trim() !== '';
+        }
+        return false;
+      });
+
+      if (!hasBlockChildren && hasDirectText) {
+        tagName = 'p';
+        reporter?.recordNormalization('TRANSPILE_DIV_TEXT_TO_P', existingId ?? 'div', 'div', 'p');
+      }
     }
 
     const { id } = idManager.ensureNodeId(existingId, tagName, reporter);

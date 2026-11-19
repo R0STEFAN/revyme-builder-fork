@@ -1,4 +1,6 @@
 // packages/automation-core/src/operations/diagnostics.ts
+import fs from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import type { Operation, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
@@ -338,7 +340,34 @@ export const diagnosticsProjectCheckOperation: Operation<
                       `public/api/uploads/${baseName}`,
                       `assets/${baseName}`,
                     ];
-                    const exists = candidates.some((c) => snapshot.files.has(c));
+                    let exists = candidates.some((c) => snapshot.files.has(c));
+
+                    if (!exists) {
+                      // Fallback: Check if the asset exists physically in data/uploads or public/
+                      try {
+                        const cwd = process.cwd();
+                        const diskPaths = [
+                          path.join(cwd, 'data/uploads', baseName),
+                          path.join(cwd, 'public/api/uploads', baseName),
+                          path.join(cwd, 'public/uploads', baseName),
+                          path.join(cwd, 'public/assets', baseName),
+                          path.join(cwd, 'public', assetRel),
+                        ];
+                        if (diskPaths.some((p) => fs.existsSync(p))) {
+                          exists = true;
+                        } else {
+                          const metaPath = path.join(cwd, 'data/uploads-meta.json');
+                          if (fs.existsSync(metaPath)) {
+                            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                            if (meta[baseName] || meta[decodeURIComponent(baseName)]) {
+                              exists = true;
+                            }
+                          }
+                        }
+                      } catch {
+                        // Ignore disk check failures (e.g. browser/sandbox environment)
+                      }
+                    }
 
                     if (!exists) {
                       missingAssets.push({

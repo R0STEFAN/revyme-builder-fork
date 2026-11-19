@@ -141,6 +141,15 @@ function resolvePresetForNode(
   const tag = node.tag.toLowerCase();
   const TEXT_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span']);
   if (TEXT_TAGS.has(tag)) {
+    // If the element carries explicit custom typography (e.g. custom color or non-token fontSize),
+    // do not clobber it with an inferred preset unless explicitly requested via preset="...".
+    const hasExplicitCustomType =
+      (styles.fontSize && !styles.fontSize.startsWith('var(--typo-')) ||
+      (styles.color && !styles.color.startsWith('var(--typo-') && !styles.color.startsWith('var(--color-'));
+    if (hasExplicitCustomType) {
+      return null;
+    }
+
     // Prefer custom presets over generic starter presets ('heading', 'body')
     const customPresets = presets.filter((p) => p.name !== 'heading' && p.name !== 'body');
     const candidatePool = customPresets.length > 0 ? customPresets : presets;

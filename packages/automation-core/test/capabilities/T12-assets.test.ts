@@ -1,4 +1,6 @@
 // packages/automation-core/test/capabilities/T12-assets.test.ts
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import type { Snapshot, FileChange } from '../../src/contracts';
 import { createSnapshot, createOperationContext } from '../../src/session';
@@ -115,6 +117,29 @@ describe('T12: Assets, Media, and Fills Operations', () => {
     applyChanges(mutableFiles, forceDelete.changes);
     snapshot = { ...snapshot, files: new Map(mutableFiles) };
     expect(snapshot.files.has('public/assets/hero.png')).toBe(false);
+  });
+
+  it('supports uploading assets directly from local filePath without base64', async () => {
+    const tempFile = path.resolve(process.cwd(), 'temp-test-image.png');
+    fs.writeFileSync(tempFile, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])); // PNG magic bytes
+    try {
+      const snapshot = createMockSnapshot({});
+      const uploadRes = await assetsUploadOperation.execute(
+        snapshot,
+        {
+          filePath: tempFile,
+        },
+        mockContext
+      );
+      expect(uploadRes.changes).toHaveLength(1);
+      expect(uploadRes.asset.path).toBe('public/api/uploads/temp-test-image.png');
+      expect(uploadRes.asset.url).toBe('/api/uploads/temp-test-image.png');
+      expect(uploadRes.asset.mimeType).toBe('image/png');
+      expect(uploadRes.asset.sizeBytes).toBe(8);
+      expect(uploadRes.changes[0].content).toContain('data:image/png;base64,');
+    } finally {
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    }
   });
 
   it('does not treat archived history snapshots as live asset references', async () => {

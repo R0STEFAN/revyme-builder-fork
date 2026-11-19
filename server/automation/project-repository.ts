@@ -244,7 +244,12 @@ export class LocalProjectRepository implements ProjectRepository {
       const destination = change.path.startsWith('_meta/') ? record.data.files : targetFiles;
       if (change.content === null) {
         delete destination[change.path];
-        if (change.path.startsWith('public/assets/') || change.path.startsWith('public/images/') || change.path.startsWith('public/uploads/')) {
+        if (
+          change.path.startsWith('public/assets/') ||
+          change.path.startsWith('public/images/') ||
+          change.path.startsWith('public/uploads/') ||
+          change.path.startsWith('public/api/uploads/')
+        ) {
           try {
             deleteUpload(path.basename(change.path), this.dataDir);
           } catch {
@@ -253,7 +258,12 @@ export class LocalProjectRepository implements ProjectRepository {
         }
       } else {
         destination[change.path] = change.content;
-        if (change.path.startsWith('public/assets/') || change.path.startsWith('public/images/') || change.path.startsWith('public/uploads/')) {
+        if (
+          change.path.startsWith('public/assets/') ||
+          change.path.startsWith('public/images/') ||
+          change.path.startsWith('public/uploads/') ||
+          change.path.startsWith('public/api/uploads/')
+        ) {
           try {
             const safeName = path.basename(change.path);
             let buf: Buffer;
@@ -271,6 +281,14 @@ export class LocalProjectRepository implements ProjectRepository {
               }
             }
             saveUploadExact(safeName, buf, this.dataDir, projectId);
+            try {
+              const publicApiDir = path.resolve(process.cwd(), 'public/api/uploads');
+              if (fs.existsSync(publicApiDir)) {
+                fs.writeFileSync(path.join(publicApiDir, safeName), buf);
+              }
+            } catch {
+              // Ignore public/api/uploads mirror errors
+            }
           } catch {
             // Ignore asset upload sync errors
           }

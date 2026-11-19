@@ -1,4 +1,6 @@
 // packages/automation-core/src/operations/assets.ts
+import fs from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
@@ -76,8 +78,10 @@ export const assetsListOperation: Operation<
 // 2. assets.upload
 export const assetsUploadOperation: Operation<
   {
-    fileName: string;
-    content: string; // base64 or text (for SVG)
+    fileName?: string;
+    filePath?: string;
+    url?: string;
+    content?: string; // base64 or text (for SVG)
     encoding?: 'base64' | 'utf-8';
     folder?: string;
   },
@@ -87,30 +91,81 @@ export const assetsUploadOperation: Operation<
   }
 > = {
   name: 'assets.upload',
-  description: 'Upload and save an asset file into the project storage',
+  description: 'Upload and save an asset file directly from a local filePath, remote URL, or content string into project storage',
   category: 'assets',
   kind: 'mutation',
   permit: 'write',
   environment: 'headless',
   ownerTask: 'T12',
   inputSchema: z.object({
-    fileName: z.string().min(1),
-    content: z.string().min(1),
+    fileName: z.string().optional(),
+    filePath: z.string().optional().describe('Absolute or workspace-relative path to a local file on disk'),
+    url: z.string().optional().describe('Remote HTTP/HTTPS URL of an image to download and save directly'),
+    content: z.string().optional().describe('Direct file content (base64 or text)'),
     encoding: z.enum(['base64', 'utf-8']).optional().default('utf-8'),
-    folder: z.string().optional().default('public/assets'),
+    folder: z.string().optional().default('public/api/uploads'),
+  }).refine((data) => Boolean(data.filePath || data.url || (data.fileName && data.content)), {
+    message: 'Must provide either filePath, url, or both fileName and content',
   }),
   async execute(snapshot, input) {
-    const folderInput = input.folder ?? 'public/assets';
+    let rawBuffer: Buffer;
+    let derivedFileName = input.fileName;
+
+    if (input.filePath) {
+      const resolvedPath = path.isAbsolute(input.filePath)
+        ? input.filePath
+        : path.resolve(process.cwd(), input.filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`Asset file does not exist at filePath: "${input.filePath}"`);
+      }
+      rawBuffer = fs.readFileSync(resolvedPath);
+      if (!derivedFileName) {
+        derivedFileName = path.basename(resolvedPath);
+      }
+    } else if (input.url) {
+      const res = await fetch(input.url);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch asset from URL "${input.url}": HTTP ${res.status}`);
+      }
+      const arrayBuf = await res.arrayBuffer();
+      rawBuffer = Buffer.from(arrayBuf);
+      if (!derivedFileName) {
+        try {
+          const u = new URL(input.url);
+          derivedFileName = path.basename(u.pathname) || 'downloaded-asset';
+        } catch {
+          derivedFileName = 'downloaded-asset';
+        }
+      }
+    } else if (input.content) {
+      if (input.encoding === 'base64' || input.content.startsWith('data:')) {
+        const cleanBase64 = input.content.replace(/^data:[^;]+;base64,/, '');
+        rawBuffer = Buffer.from(cleanBase64, 'base64');
+      } else {
+        rawBuffer = Buffer.from(input.content, 'utf-8');
+      }
+      if (!derivedFileName) {
+        derivedFileName = 'asset.bin';
+      }
+    } else {
+      throw new Error('Must provide either filePath, url, or content');
+    }
+
+    const folderInput = input.folder ?? 'public/api/uploads';
     const folder = folderInput.endsWith('/') ? folderInput.slice(0, -1) : folderInput;
-    const cleanFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `${folder}/${cleanFileName}`;
-    const url = path.replace(/^public\//, '/');
-    const mimeType = guessMimeType(path);
-    const hash = simpleHash(input.content);
-    const sizeBytes = Buffer.byteLength(input.content, input.encoding ?? 'utf-8');
+    const cleanFileName = derivedFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const targetPath = `${folder}/${cleanFileName}`;
+    const url = targetPath.replace(/^public\//, '/');
+    const mimeType = guessMimeType(targetPath);
+    const isText = targetPath.endsWith('.svg') || targetPath.endsWith('.json') || targetPath.endsWith('.txt');
+    const finalContent = isText
+      ? rawBuffer.toString('utf-8')
+      : `data:${mimeType};base64,${rawBuffer.toString('base64')}`;
+    const hash = simpleHash(finalContent);
+    const sizeBytes = rawBuffer.length;
 
     const asset: ProjectAsset = {
-      path,
+      path: targetPath,
       url,
       hash,
       sizeBytes,
@@ -120,9 +175,9 @@ export const assetsUploadOperation: Operation<
     return {
       changes: [
         {
-          path,
+          path: targetPath,
           beforeHash: null,
-          content: input.content,
+          content: finalContent,
         },
       ],
       asset,

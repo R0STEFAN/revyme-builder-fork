@@ -181,6 +181,23 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
         }
 
         try {
+          const originalContent = snapshot.files.get(filePath);
+          const preexistingViolations = new Set<string>();
+          if (originalContent) {
+            try {
+              const origV = checkFile(originalContent, {
+                kind,
+                path: filePath,
+                projectFiles: new Set(snapshot.files.keys()),
+              });
+              for (const ov of origV) {
+                preexistingViolations.add(`${ov.code}:${ov.elementId || ''}`);
+              }
+            } catch {
+              // Ignore original parsing errors
+            }
+          }
+
           const oracleViolations = checkFile(change.content, {
             kind,
             path: filePath,
@@ -188,6 +205,16 @@ export function validatePlan(snapshot: Snapshot, plan: Plan): { ok: boolean; iss
           })
             .filter((v) => v.code !== 'CANVAS_CONFIG_MISSING' && v.code !== 'MISSING_DATA_ID');
           for (const v of oracleViolations) {
+            // 1. Never block on pre-existing author violations that already existed on the page
+            if (preexistingViolations.has(`${v.code}:${v.elementId || ''}`)) {
+              continue;
+            }
+
+            // 2. Only tier 3 violations block save (per AGENTS.md: tier 3 blocks, tiers 1-2 are dialect warnings)
+            if (v.tier < 3 && v.code !== 'SYNTAX_ERROR') {
+              continue;
+            }
+
             issues.push({
               code: v.code,
               path: [filePath, ...(v.elementId ? [v.elementId] : [])],
