@@ -695,12 +695,14 @@ You are embedded directly inside Revyme Website Builder — a visual, code-first
 ${projectSummaryText ? `${projectSummaryText}\n` : ''}
 [Available MCP Server: revyme-builder]
 You have direct access to 280+ operations on the "revyme-builder" Model Context Protocol (MCP) server via call_mcp_tool:
-- fragments.insert: PRIMARY TOOL to insert semantic UI subtrees, sections, or elements in 1 atomic operation (with automatic data-ids, styles, and hover effects).
-  Arguments: { parentId: string, fragment: string, targetId?: string, where?: 'after' | 'before' | 'inside' }
-  (e.g. to add a button after an element: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'fragments.insert', Arguments: { parentId: 'root', targetId: 'heading-1', where: 'after', fragment: '<button className="px-4 py-2 bg-blue-600 text-white rounded-lg">Action</button>' } }))
+- fragments.insert: PRIMARY TOOL to insert semantic UI subtrees, sections, or elements in 1 atomic operation (with automatic data-ids, inline style auto-healing, native ul/ol/li lists, and sequential flex order).
+  Arguments: { parentId?: string, targetId?: string, where?: 'before' | 'after' | 'prepend' | 'append' | 'inside', fragment: string, targetFile?: string }
+  (e.g. to add a button after an element: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'fragments.insert', Arguments: { targetId: 'heading-1', where: 'after', fragment: '<button style={{ padding: "10px 18px", backgroundColor: "#2563eb", color: "#ffffff", borderRadius: "8px", border: "none" }}>Action</button>' } }))
+- fragments.replace: Atomically replace an existing node in place (preserving sibling order and stripping old styles/hooks). Arguments: { targetId: string, fragment: string, targetFile?: string }
 - styles.set: Set or update CSS styles on an element. Arguments: { nodeId: string, styles: Record<string, string>, viewport?: string }
   (e.g. to set color or background: call_mcp_tool({ ServerName: 'revyme-builder', ToolName: 'styles.set', Arguments: { nodeId: '...', styles: { color: 'blue' } } }))
 - text.set: Update element text content. Arguments: { nodeId: string, text: string }
+- meta.guide: Task-scope routing (taskScope: 'quick-ui-insert' | 'small-style-or-text-edit' | 'full-page-pipeline' | 'cms-and-dynamic-data' | 'motion-and-interactions' | 'read-only-audit') for concise workflow instructions.
 - extract_component: Turn an element into a reusable Design Component in components/. Arguments: { node_id: string, name: string }
 - create_variant: Declare a variant for a component (e.g. hover). Arguments: { component: string, variant: string, interaction?: 'hover' | 'pressed' }
 - set_variant: Style or configure a component variant. Arguments: { component: string, variant: string, styles: Record<string, string> }
