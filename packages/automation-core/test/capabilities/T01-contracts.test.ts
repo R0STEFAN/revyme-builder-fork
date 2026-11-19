@@ -219,6 +219,32 @@ describe('T01: Operation Contracts, Registry, Coverage and Fixture', () => {
       expect(result.recommendedWorkflow.length).toBeGreaterThan(3);
       expect(result.recipes.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('meta.guide routes quick-ui-insert to Fast-Path guidance and recommendedTools', async () => {
+      const result = await metaGuideOperation.execute(
+        snapshot,
+        { taskScope: 'quick-ui-insert' },
+        context
+      );
+      expect(result.taskScope).toBe('quick-ui-insert');
+      expect(result.fastPathRule).toContain('fragments.insert');
+      expect(result.recommendedTools).toContain('fragments.insert');
+      expect(result.recommendedTools).toContain('fragments.replace');
+      expect(result.recommendedWorkflow.length).toBeLessThanOrEqual(3);
+    });
+
+    it('generates schema-valid examples for fragments.insert and fragments.replace', async () => {
+      const result = await metaToolsOperation.execute(
+        snapshot,
+        { names: ['fragments.insert', 'fragments.replace'] },
+        context
+      );
+      expect(result.tools).toHaveLength(2);
+      for (const tool of result.tools) {
+        const op = defaultRegistry.get(tool.name)!;
+        expect(op.inputSchema.safeParse(tool.example).success, tool.name).toBe(true);
+      }
+    });
   });
 
   describe('Dependency Boundary Enforcement', () => {

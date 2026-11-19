@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Operation, FileChange, Snapshot, OperationContext } from '../contracts';
 import { defaultRegistry } from '../registry';
 import { parseJSXToNodes, type CanvasNode } from '@/code/parsing/parser';
-import { addNodeInCode, updateNodeInCode, type AddNodeDef } from '@/code/generation/generator-crud';
+import { addNodeInCode, updateNodeInCode, removeNodeInCode, type AddNodeDef } from '@/code/generation/generator-crud';
 import { ensureNamedImport } from '@/code/generation/generator-utils';
 import { SVG_SHAPE_TAGS } from '@/shared/constants';
 import { ingestJSXNodes } from '../ingestion/jsx';
@@ -48,7 +48,7 @@ function getTargetFile(snapshot: Snapshot, filePath?: string): { path: string; c
   return { path: target, code: snapshot.files.get(target)! };
 }
 
-function ensureFlowChildOrder(code: string, parentId: string): string {
+function ensureFlowChildOrder(code: string, parentId: string, resequence = false): string {
   const nodes = parseJSXToNodes(code);
   const parent = nodes.get(parentId);
   const display = parent?.styles.display;
@@ -57,10 +57,23 @@ function ensureFlowChildOrder(code: string, parentId: string): string {
   const flowChildren = parent.children
     .map((childId) => nodes.get(childId))
     .filter((child): child is CanvasNode => !!child && child.styles.position !== 'absolute' && child.styles.position !== 'fixed');
+
+  let nextCode = code;
+  if (resequence) {
+    flowChildren.forEach((child, idx) => {
+      const targetOrder = String(idx);
+      const existing = child.styles.order;
+      const isPlainOrMissing = existing === undefined || existing === '' || /^-?\d+$/.test(existing);
+      if (isPlainOrMissing && existing !== targetOrder) {
+        nextCode = updateNodeInCode(nextCode, child.id, { order: targetOrder });
+      }
+    });
+    return nextCode;
+  }
+
   const explicitOrders = flowChildren
     .map((child) => Number(child.styles.order))
     .filter(Number.isFinite);
-  let nextCode = code;
   let flowOrder = explicitOrders.length ? Math.max(...explicitOrders) + 1 : 0;
   for (const child of flowChildren) {
     if (child.styles.order === undefined || child.styles.order === '') {
@@ -323,8 +336,10 @@ function collectFormIds(nodes: IngestedNode[]): string[] {
 export const fragmentsInsertInputSchema = z.object({
   targetFile: z.string().optional().describe('Target page file path (defaults to page.client.tsx or primary page)'),
   filePath: z.string().optional().describe('Alias for targetFile'),
-  parentId: z.string().min(1).describe('Parent node data-id to insert fragment into (e.g. "root")'),
-  fragment: z.string().min(1).describe('JSX fragment string containing HTML tags and/or Design Components. IMPORTANT: padding, margin, gap, and borderRadius MUST use explicit px values (e.g. "16px", "24px 48px", "9999px") or px tokens. Non-px units like %, rem/em, vh/vw, calc(), and clamp() are rejected by the builder controls.'),
+  parentId: z.string().min(1).optional().describe('Parent container data-id to insert fragment into (e.g. "root"). Optional when targetId is provided.'),
+  targetId: z.string().min(1).optional().describe('Reference node data-id for relative placement (used with "where").'),
+  where: z.enum(['before', 'after', 'prepend', 'append', 'inside']).optional().describe('Placement relative to targetId (or inside parentId): "before" / "after" sibling of targetId, or "prepend" / "append" / "inside" container.'),
+  fragment: z.string().min(1).describe('JSX fragment string containing HTML tags and/or Design Components. Standard CSS units (px, rem, em, %, clamp()) and native lists (ul/ol/li) are supported and auto-healed on ingestion.'),
   insertIndex: z.number().int().nonnegative().optional().describe('Zero-based child index to insert at (appends at end if omitted)'),
 });
 
@@ -338,7 +353,7 @@ export const fragmentsInsertOperation: Operation<
   }
 > = {
   name: 'fragments.insert',
-  description: 'Insert a semantic JSX fragment (HTML elements and/or Design Components) into a parent container on the canvas. Note: spacing/radius (padding, margin, gap, borderRadius) MUST use explicit px units or design tokens, as builder controls are px-only.',
+  description: 'Insert a semantic JSX fragment (HTML elements and/or Design Components) into a container or relative to targetId ("before", "after", "prepend", "append", "inside"). Automatically mints data-ids and auto-heals inline styles for one-shot Oracle compliance.',
   category: 'fragments',
   kind: 'mutation',
   permit: 'write',
@@ -351,8 +366,62 @@ export const fragmentsInsertOperation: Operation<
     let targetCode = initialCode;
 
     const existingNodes = parseJSXToNodes(targetCode);
-    if (!existingNodes.has(input.parentId)) {
-      throw new Error(`PARENT_NOT_FOUND: Parent node "${input.parentId}" not found in "${path}"`);
+
+    let resolvedParentId: string;
+    let insertBeforeId: string | undefined;
+    let initialIndex: number | undefined = input.insertIndex;
+    let needsResequence = false;
+
+    if (input.targetId) {
+      const targetNode = existingNodes.get(input.targetId);
+      if (!targetNode) {
+        throw new Error(`TARGET_NOT_FOUND: Target node "${input.targetId}" not found in "${path}"`);
+      }
+      const where = input.where ?? (input.parentId ? 'after' : 'inside');
+      if (where === 'before' || where === 'after') {
+        const parentId = targetNode.parentId || input.parentId;
+        if (!parentId || !existingNodes.has(parentId)) {
+          throw new Error(`PARENT_NOT_FOUND: Cannot insert "${where}" node "${input.targetId}" without a valid parent in "${path}"`);
+        }
+        resolvedParentId = parentId;
+        const parentNode = existingNodes.get(parentId)!;
+        const targetIdx = parentNode.children.indexOf(input.targetId);
+        if (where === 'before') {
+          insertBeforeId = input.targetId;
+          initialIndex = undefined;
+        } else {
+          insertBeforeId =
+            targetIdx !== -1 && targetIdx + 1 < parentNode.children.length
+              ? parentNode.children[targetIdx + 1]
+              : undefined;
+          initialIndex = undefined;
+        }
+        needsResequence = true;
+      } else if (where === 'prepend') {
+        resolvedParentId = input.targetId;
+        initialIndex = 0;
+        needsResequence = true;
+      } else {
+        resolvedParentId = input.targetId;
+        if (initialIndex !== undefined) needsResequence = true;
+      }
+    } else {
+      if (!input.parentId) {
+        throw new Error('PARENT_NOT_FOUND: Either "parentId" or "targetId" must be provided for fragments.insert');
+      }
+      if (!existingNodes.has(input.parentId)) {
+        throw new Error(`PARENT_NOT_FOUND: Parent node "${input.parentId}" not found in "${path}"`);
+      }
+      if (input.where === 'before' || input.where === 'after') {
+        throw new Error(`TARGET_REQUIRED: Placement "where: '${input.where}'" requires "targetId"`);
+      }
+      resolvedParentId = input.parentId;
+      if (input.where === 'prepend') {
+        initialIndex = 0;
+        needsResequence = true;
+      } else if (initialIndex !== undefined) {
+        needsResequence = true;
+      }
     }
 
     const idManager = new IdManager(existingNodes.keys());
@@ -407,17 +476,17 @@ export const fragmentsInsertOperation: Operation<
     const typographyPresets = groupTypographyPresets(parsePresetTokens(globalsCSS));
     const responsiveRulesMap = new Map<string, string[]>();
 
-    // Insert nodes sequentially into parent
-    let currentIndex = input.insertIndex;
+    // Insert nodes sequentially into resolved parent
+    let currentIndex = initialIndex;
     for (const node of ingestedNodes) {
       const nodeDef = ingestedToNodeDef(node, typographyPresets, responsiveRulesMap);
-      targetCode = addNodeInCode(targetCode, input.parentId, nodeDef, currentIndex);
+      targetCode = addNodeInCode(targetCode, resolvedParentId, nodeDef, currentIndex, insertBeforeId);
       if (currentIndex !== undefined) {
         currentIndex++;
       }
     }
 
-    targetCode = ensureFlowChildOrder(targetCode, input.parentId);
+    targetCode = ensureFlowChildOrder(targetCode, resolvedParentId, needsResequence);
 
     // Wire submit handlers on any inserted forms and ensure the relay route exists
     const formIds = collectFormIds(ingestedNodes);
@@ -502,3 +571,78 @@ defaultRegistry.register(fragmentsInsertOperation);
 defaultRegistry.registerAlias('fragment.insert', 'fragments.insert');
 defaultRegistry.registerAlias('fragments.create', 'fragments.insert');
 defaultRegistry.registerAlias('sections.insertFragment', 'fragments.insert');
+
+export const fragmentsReplaceInputSchema = z.object({
+  targetFile: z.string().optional().describe('Target page file path (defaults to page.client.tsx or primary page)'),
+  filePath: z.string().optional().describe('Alias for targetFile'),
+  targetId: z.string().min(1).describe('Existing node data-id to atomically replace in place'),
+  fragment: z.string().min(1).describe('Replacement JSX fragment string (HTML tags and/or Design Components). Auto-healed on ingestion.'),
+});
+
+export const fragmentsReplaceOperation: Operation<
+  z.infer<typeof fragmentsReplaceInputSchema>,
+  {
+    rootId: string;
+    insertedIds: string[];
+    replacedId: string;
+    targetFile: string;
+    changes: FileChange[];
+  }
+> = {
+  name: 'fragments.replace',
+  description: 'Atomically replace an existing node (identified by targetId) in place with a new JSX fragment, preserving sibling position and cleaning up old node styles/hooks.',
+  category: 'fragments',
+  kind: 'mutation',
+  permit: 'write',
+  environment: 'headless',
+  ownerTask: 'T07',
+  inputSchema: fragmentsReplaceInputSchema,
+  async execute(snapshot, input, context) {
+    const targetFilePath = input.targetFile || input.filePath;
+    const { path, code: initialCode } = getTargetFile(snapshot, targetFilePath);
+    const existingNodes = parseJSXToNodes(initialCode);
+    const targetNode = existingNodes.get(input.targetId);
+
+    if (!targetNode) {
+      throw new Error(`TARGET_NOT_FOUND: Target node "${input.targetId}" not found in "${path}"`);
+    }
+
+    const parentId = targetNode.parentId;
+    if (!parentId || !existingNodes.has(parentId)) {
+      throw new Error(`PARENT_NOT_FOUND: Cannot replace root node "${input.targetId}" without a parent container in "${path}"`);
+    }
+
+    const insertResult = await fragmentsInsertOperation.execute(
+      snapshot,
+      {
+        targetFile: path,
+        parentId,
+        targetId: input.targetId,
+        where: 'before',
+        fragment: input.fragment,
+      },
+      context
+    );
+
+    const updatedChanges = insertResult.changes.map((change) => {
+      if (change.path !== path || change.content === null) return change;
+      let nextContent = removeNodeInCode(change.content, input.targetId);
+      nextContent = ensureFlowChildOrder(nextContent, parentId, true);
+      return {
+        ...change,
+        content: nextContent,
+      };
+    });
+
+    return {
+      rootId: insertResult.rootId,
+      insertedIds: insertResult.insertedIds,
+      replacedId: input.targetId,
+      targetFile: path,
+      changes: updatedChanges,
+    };
+  },
+};
+
+defaultRegistry.register(fragmentsReplaceOperation);
+defaultRegistry.registerAlias('fragment.replace', 'fragments.replace');

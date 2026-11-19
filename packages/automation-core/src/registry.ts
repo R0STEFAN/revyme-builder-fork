@@ -407,17 +407,213 @@ export const metaToolsOperation: Operation<
   },
 };
 
+const TASK_SCOPES = {
+  'quick-ui-insert': {
+    overview:
+      'Fast-path UI composition: insert a standalone section, card, button, navbar, or list directly into JSX via fragments.insert or fragments.replace in 2-3 tool calls without setting up tokens, presets, viewports, or Design Components.',
+    fastPathRule:
+      'FAST PATH (2-3 tool calls): Call fragments.insert (with parentId or targetId + where: "before"|"after"|"prepend"|"append"|"inside") or fragments.replace directly with raw inline JSX. SKIP tokens, typography presets, dimension presets, viewports, and Design Components unless explicitly requested. Native lists (ul/ol/li), standard CSS units (px, rem, em, %, clamp()), overflow: auto, and alignItems: baseline are accepted and auto-healed on ingestion.',
+    recommendedTools: [
+      'observe.selection',
+      'pages.list',
+      'nodes.get',
+      'fragments.insert',
+      'fragments.replace',
+      'observe.screenshot',
+    ],
+    recommendedWorkflow: [
+      '1. Locate target parentId or reference targetId (observe.selection or pages.list)',
+      '2. Insert or replace JSX directly using fragments.insert (with optional targetId + where) or fragments.replace',
+      '3. Optionally verify placement with observe.screenshot',
+    ],
+    recipes: [
+      {
+        title: 'Quick Section / Card / Button Insert (Fast-Path)',
+        steps: [
+          'observe.selection / pages.list: Pick target container or sibling nodeId (defaults to "root")',
+          'fragments.insert: Pass inline-styled HTML/JSX fragment directly (supports ul/ol/li, px/rem/%/clamp(), auto-heals flex/order/pins/img)',
+          'fragments.replace: Atomically swap an existing node in place when replacing a card or block',
+        ],
+      },
+    ],
+  },
+  'small-style-or-text-edit': {
+    overview:
+      'Targeted micro-edits on existing canvas nodes using styles.set, text.set, links.set, or fragments.replace.',
+    fastPathRule:
+      'MICRO-EDIT FAST PATH (1-2 tool calls): Target the exact data-id directly via styles.set or text.set. Do not recreate parent containers or alter global design tokens.',
+    recommendedTools: [
+      'observe.selection',
+      'nodes.get',
+      'styles.set',
+      'text.set',
+      'fragments.replace',
+      'nodes.remove',
+    ],
+    recommendedWorkflow: [
+      '1. Identify target nodeId (observe.selection or nodes.get)',
+      '2. Apply style or text update directly (styles.set / text.set)',
+    ],
+    recipes: [
+      {
+        title: 'Update Node Style or Copy',
+        steps: [
+          'nodes.get: Confirm current node styles and type',
+          'styles.set / text.set: Patch only changed properties (pass "" to remove a style property)',
+        ],
+      },
+    ],
+  },
+  'full-page-pipeline': {
+    overview:
+      'Revyme Automation v2 empowers CLI and MCP agents to author, inspect, and release complete Next.js landing pages headlessly with exact source parity.',
+    fastPathRule:
+      'FULL PAGE / SITE PIPELINE: Configure global design tokens, fonts, typography presets, pages, reusable Design Components, and responsive viewports before preflight.',
+    recommendedTools: [
+      'tokens.set',
+      'fonts.import',
+      'typography.set',
+      'pages.create',
+      'fragments.insert',
+      'components.extract',
+      'variants.create',
+      'viewports.setOverride',
+      'metadata.update',
+      'publish.preflight',
+    ],
+    recommendedWorkflow: [
+      '1. doctor: Verify environment, dependencies, and project scope',
+      '2. meta.index: Discover available tools for the domain',
+      '3. meta.tools: Inspect exact JSON schemas and parameter examples',
+      '4. plan: Construct or review intended atomic mutations',
+      '5. commit: Commit verified byte changes through the durable revision service',
+      '6. observe/verify: Check rendering, layout overflow, and visual evidence',
+    ],
+    recipes: [
+      {
+        title: 'Bootstrap Landing Page',
+        steps: [
+          'tokens.set: Configure brand tokens and color palette',
+          'fonts.import: Preload Google or workspace typography',
+          'pages.create: Create root layout and landing page route',
+          'catalog.place: Place Navbar, Hero, and Sections from built-ins',
+          'forms.set: Connect contact form with accessible inputs and destination',
+          'metadata.update: Set SEO title, description, favicon, and social cards',
+        ],
+      },
+    ],
+  },
+  'cms-and-dynamic-data': {
+    overview:
+      'Author structured CMS collections, API collections, forms, and localized content with native builder bindings.',
+    fastPathRule:
+      'CMS & DATA WORKFLOW: Define schema & fields first, seed items, bind collection lists/fields, or wire accessible forms with destinations.',
+    recommendedTools: [
+      'cms.schema.create',
+      'cms.field.add',
+      'cms.items.create',
+      'cms.list.create',
+      'cms.field.bind',
+      'forms.create',
+      'forms.destination.set',
+      'locales.add',
+      'translations.set',
+    ],
+    recommendedWorkflow: [
+      '1. Create schema & fields (cms.schema.create / cms.field.add)',
+      '2. Seed items (cms.items.create)',
+      '3. Bind list & fields onto canvas nodes (cms.list.create / cms.field.bind)',
+    ],
+    recipes: [
+      {
+        title: 'Create Collection & Bind List',
+        steps: [
+          'cms.schema.create + cms.field.add: Define content model',
+          'cms.items.create: Populate initial entries',
+          'cms.list.create + cms.field.bind: Render bound items visually',
+        ],
+      },
+    ],
+  },
+  'motion-and-interactions': {
+    overview:
+      'Add declarative Framer Motion animations, split-text effects, overlays, smooth scrolling, and page interactions.',
+    fastPathRule:
+      'MOTION & INTERACTIONS: Always author entrance, scroll, hover, and text effects via motion.*/textEffects.*/siteEffects.* tools — CSS transitions on JSX nodes are stripped automatically.',
+    recommendedTools: [
+      'motion.set',
+      'motion.preset.apply',
+      'textEffects.set',
+      'overlays.create',
+      'siteEffects.smoothScroll.set',
+      'siteEffects.cursor.set',
+      'pageInteractions.add',
+    ],
+    recommendedWorkflow: [
+      '1. Select target nodeId on canvas',
+      '2. Apply entrance/scroll/hover animation (motion.set or motion.preset.apply) or split-text effect (textEffects.set)',
+      '3. Verify effect runtime state with verify.effect',
+    ],
+    recipes: [
+      {
+        title: 'Animate Section Reveal & Split Heading',
+        steps: [
+          'textEffects.set: Configure word/character reveal on primary headline',
+          'motion.preset.apply: Attach staggered in-view reveal to cards',
+          'verify.effect: Confirm @revyme/runtime animation metadata is valid',
+        ],
+      },
+    ],
+  },
+  'read-only-audit': {
+    overview:
+      'Inspect live project structure, DOM layout geometry, visual screenshots, accessibility, SEO metadata, and preflight readiness.',
+    fastPathRule:
+      'READ-ONLY AUDIT: Inspect using observe.* / seo.audit / diagnostics.projectCheck / publish.preflight without mutating source files unless fixes are requested.',
+    recommendedTools: [
+      'pages.list',
+      'observe.selection',
+      'observe.layout',
+      'observe.audit',
+      'observe.screenshot',
+      'seo.audit',
+      'diagnostics.projectCheck',
+      'publish.preflight',
+    ],
+    recommendedWorkflow: [
+      '1. Inventory routes and active selection (pages.list / observe.selection)',
+      '2. Inspect layout, visual composition, and diagnostics (observe.layout / observe.audit / observe.screenshot)',
+      '3. Validate SEO & production readiness (seo.audit / publish.preflight)',
+    ],
+    recipes: [
+      {
+        title: 'Pre-Publish Site Audit',
+        steps: [
+          'observe.audit + observe.screenshot: Check visual layout and responsive overflow',
+          'seo.audit: Verify metadata, robots, and sitemap coverage',
+          'publish.preflight: Run final readiness checks',
+        ],
+      },
+    ],
+  },
+} as const;
+
+export type GuideTaskScope = keyof typeof TASK_SCOPES;
+
 export const metaGuideOperation: Operation<
-  { topic?: string },
+  { topic?: string; taskScope?: GuideTaskScope },
   {
     topic: string;
+    taskScope: GuideTaskScope;
+    fastPathRule: string;
+    recommendedTools: readonly string[];
     overview: string;
-    recommendedWorkflow: string[];
-    recipes: Array<{ title: string; steps: string[] }>;
+    recommendedWorkflow: readonly string[];
+    recipes: ReadonlyArray<{ title: string; steps: readonly string[] }>;
   }
 > = {
   name: 'meta.guide',
-  description: 'Task-oriented guidance, bootstrapping instructions, and domain recipes',
+  description: 'Task-oriented guidance, taskScope routing (including quick-ui-insert fast path), and domain recipes',
   category: 'meta',
   kind: 'read',
   permit: 'read',
@@ -425,33 +621,29 @@ export const metaGuideOperation: Operation<
   ownerTask: 'T01',
   inputSchema: z.object({
     topic: z.string().optional().default('general'),
+    taskScope: z
+      .enum([
+        'quick-ui-insert',
+        'small-style-or-text-edit',
+        'full-page-pipeline',
+        'cms-and-dynamic-data',
+        'motion-and-interactions',
+        'read-only-audit',
+      ])
+      .optional()
+      .describe('Filter guidance by task complexity so simple UI requests take the 2-3 call Fast-Path instead of the full site pipeline'),
   }),
   async execute(_snapshot, input, _context) {
+    const resolvedScope: GuideTaskScope = input.taskScope ?? 'full-page-pipeline';
+    const guide = TASK_SCOPES[resolvedScope];
     return {
       topic: input.topic ?? 'general',
-      overview:
-        'Revyme Automation v2 empowers CLI and MCP agents to author, inspect, and release complete Next.js landing pages headlessly with exact source parity.',
-      recommendedWorkflow: [
-        '1. doctor: Verify environment, dependencies, and project scope',
-        '2. meta.index: Discover available tools for the domain',
-        '3. meta.tools: Inspect exact JSON schemas and parameter examples',
-        '4. plan: Construct or review intended atomic mutations',
-        '5. commit: Commit verified byte changes through the durable revision service',
-        '6. observe/verify: Check rendering, layout overflow, and visual evidence',
-      ],
-      recipes: [
-        {
-          title: 'Bootstrap Landing Page',
-          steps: [
-            'tokens.set: Configure brand tokens and color palette',
-            'fonts.import: Preload Google or workspace typography',
-            'pages.create: Create root layout and landing page route',
-            'catalog.place: Place Navbar, Hero, and Sections from built-ins',
-            'forms.set: Connect contact form with accessible inputs and destination',
-            'metadata.update: Set SEO title, description, favicon, and social cards',
-          ],
-        },
-      ],
+      taskScope: resolvedScope,
+      fastPathRule: guide.fastPathRule,
+      recommendedTools: guide.recommendedTools,
+      overview: guide.overview,
+      recommendedWorkflow: guide.recommendedWorkflow,
+      recipes: guide.recipes,
     };
   },
 };

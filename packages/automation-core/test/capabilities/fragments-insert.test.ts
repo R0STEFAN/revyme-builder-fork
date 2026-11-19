@@ -432,4 +432,127 @@ export default function Button({
     const violations = checkFile(updatedCode, { kind: 'page' });
     expect(violations).toEqual([]);
   });
+
+  it('supports targetId + where (before, after, prepend) placement with synchronized flex order', async () => {
+    files.set(
+      'app/page.client.tsx',
+      `'use client';
+import React from 'react';
+export default function Page() {
+  return (
+    <div data-id="root" data-name="Page" style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '100%' }}>
+      <header data-id="header-1" style={{ position: 'relative', flex: '0 0 auto', order: '0' }}>
+        <h1 data-id="title-1" style={{ position: 'relative' }}>Original Title</h1>
+      </header>
+    </div>
+  );
+}
+`
+    );
+
+    const insertOp = defaultRegistry.get('fragments.insert')!;
+
+    // Seed two sibling blocks inside root
+    const seedRes = await insertOp.execute(snapshot, {
+      parentId: 'root',
+      fragment: `
+        <section style={{ padding: '24px' }}><p>First</p></section>
+        <section style={{ padding: '24px' }}><p>Third</p></section>
+      `,
+    }, context);
+    applyChanges(seedRes.changes);
+
+    const firstId = seedRes.insertedIds[0];
+
+    // Insert "Middle" right after first section
+    const afterRes = await insertOp.execute(snapshot, {
+      targetId: firstId,
+      where: 'after',
+      fragment: `<section style={{ padding: '24px' }}><p>Middle</p></section>`,
+    }, context);
+    applyChanges(afterRes.changes);
+    const middleId = afterRes.rootId;
+
+    // Insert "Banner" right before first section
+    const beforeRes = await insertOp.execute(snapshot, {
+      targetId: firstId,
+      where: 'before',
+      fragment: `<div style={{ padding: '16px' }}><p>Top Banner</p></div>`,
+    }, context);
+    applyChanges(beforeRes.changes);
+    const bannerId = beforeRes.rootId;
+
+    // Prepend badge inside middle section
+    const prependRes = await insertOp.execute(snapshot, {
+      targetId: middleId,
+      where: 'prepend',
+      fragment: `<span>Badge</span>`,
+    }, context);
+    applyChanges(prependRes.changes);
+    const badgeId = prependRes.rootId;
+
+    const nodes = parseJSXToNodes(files.get('app/page.client.tsx')!);
+    const thirdId = seedRes.insertedIds[2];
+    expect(nodes.get('root')?.children).toEqual(['header-1', bannerId, firstId, middleId, thirdId]);
+    expect(nodes.get('header-1')?.styles.order).toBe('0');
+    expect(nodes.get(bannerId)?.styles.order).toBe('1');
+    expect(nodes.get(firstId)?.styles.order).toBe('2');
+    expect(nodes.get(middleId)?.styles.order).toBe('3');
+    expect(nodes.get(thirdId)?.styles.order).toBe('4');
+    expect(nodes.get(middleId)?.children[0]).toBe(badgeId);
+  });
+
+  it('atomically replaces an existing node in place via fragments.replace', async () => {
+    files.set(
+      'app/page.client.tsx',
+      `'use client';
+import React from 'react';
+export default function Page() {
+  return (
+    <div data-id="root" data-name="Page" style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '100%' }}>
+      <header data-id="header-1" style={{ position: 'relative', flex: '0 0 auto', order: '0' }}>
+        <h1 data-id="title-1" style={{ position: 'relative' }}>Original Title</h1>
+      </header>
+    </div>
+  );
+}
+`
+    );
+
+    const insertOp = defaultRegistry.get('fragments.insert')!;
+    const replaceOp = defaultRegistry.get('fragments.replace')!;
+
+    const seedRes = await insertOp.execute(snapshot, {
+      parentId: 'root',
+      fragment: `
+        <section style={{ padding: '24px' }}><p>Hero</p></section>
+        <section style={{ padding: '24px' }}><p>Old Pricing</p></section>
+        <footer style={{ padding: '24px' }}><p>Footer</p></footer>
+      `,
+    }, context);
+    applyChanges(seedRes.changes);
+
+    const nodesBefore = parseJSXToNodes(files.get('app/page.client.tsx')!);
+    const rootChildrenBefore = nodesBefore.get('root')!.children;
+    expect(rootChildrenBefore).toHaveLength(4);
+    const [existingHeaderId, heroId, oldPricingId, footerId] = rootChildrenBefore;
+
+    const replaceRes = await replaceOp.execute(snapshot, {
+      targetId: oldPricingId,
+      fragment: `<section style={{ padding: '32px', backgroundColor: '#111827' }}><h2 style={{ color: '#ffffff' }}>New Pricing</h2></section>`,
+    }, context);
+    applyChanges(replaceRes.changes);
+
+    const updatedCode = files.get('app/page.client.tsx')!;
+    const nodesAfter = parseJSXToNodes(updatedCode);
+    expect(nodesAfter.has(oldPricingId)).toBe(false);
+    expect(replaceRes.replacedId).toBe(oldPricingId);
+    expect(nodesAfter.get('root')?.children).toEqual([existingHeaderId, heroId, replaceRes.rootId, footerId]);
+    expect(nodesAfter.get(existingHeaderId)?.styles.order).toBe('0');
+    expect(nodesAfter.get(heroId)?.styles.order).toBe('1');
+    expect(nodesAfter.get(replaceRes.rootId)?.styles.order).toBe('2');
+    expect(nodesAfter.get(footerId)?.styles.order).toBe('3');
+    expect(updatedCode).not.toContain('Old Pricing');
+    expect(updatedCode).toContain('New Pricing');
+  });
 });
