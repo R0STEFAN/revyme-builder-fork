@@ -151,10 +151,19 @@ export async function prepareOperation(
     if (candidate && Array.isArray(candidate.changes)) {
       const normalized = normalizeCandidateChanges(snapshot, candidate.changes);
       candidate.changes = normalized.changes;
-      candidate.issues = [...(candidate.issues ?? []), ...normalized.issues];
+      // SpacingControl & Oracle natively support rem/em/%/clamp(), so un-lowered rem/em without
+      // an explicit root/element font context is non-blocking during prepareOperation.
+      const nonBlockingUnitContextCodes = new Set([
+        'MISSING_ROOT_FONT_CONTEXT',
+        'MISSING_ELEMENT_FONT_CONTEXT',
+      ]);
+      candidate.issues = [
+        ...(candidate.issues ?? []),
+        ...normalized.issues.filter((issue) => !nonBlockingUnitContextCodes.has(issue.code)),
+      ];
       candidate.normalizations = [...(candidate.normalizations ?? []), ...normalized.normalizations];
       if (candidate.planHash) candidate.planHash = calculatePlanHash(candidate.scope, candidate.baseRevision, candidate.operationId, candidate.changes, candidate);
-      context.trace('operation:normalize', { name: operationName, files: normalized.changes.length, issues: normalized.issues.length });
+      context.trace('operation:normalize', { name: operationName, files: normalized.changes.length, issues: candidate.issues.length });
     }
     context.trace('operation:success', { name: operationName });
     return {

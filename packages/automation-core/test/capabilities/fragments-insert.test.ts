@@ -2,6 +2,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { defaultRegistry } from '../../src/registry';
 import type { Snapshot, OperationContext, FileChange } from '../../src/contracts';
+import { prepareOperation } from '../../src/session';
+import { createPlan } from '../../src/plan';
+import { validatePlan } from '../../src/validate';
 import { parseJSXToNodes } from '@/code/parsing/parser';
 import { checkFile } from '@/code/oracle/check-file';
 import '../../src/operations/fragments';
@@ -600,5 +603,34 @@ export default function Page() {
 
     const violations = checkFile(updatedCode, { kind: 'page' });
     expect(violations).toEqual([]);
+  });
+
+  it('commits rem, em, and clamp() spacing cleanly via prepareOperation + validatePlan without rootFontSize config', async () => {
+    const bareSnapshot: Snapshot = {
+      ...snapshot,
+      config: {},
+    };
+    const prep = await prepareOperation(
+      bareSnapshot,
+      'fragments.insert',
+      {
+        parentId: 'root',
+        fragment:
+          '<section style={{ padding: "3rem 1.5rem", borderRadius: "1rem", marginTop: "2em", gap: "clamp(12px, 2vw, 24px)" }}><p>Fluid spacing</p></section>',
+      },
+      context
+    );
+    expect(prep.ok).toBe(true);
+    const prepData = prep.data as any;
+    const plan = createPlan({
+      scope: bareSnapshot.scope,
+      baseRevision: bareSnapshot.revision,
+      operationId: 'op-rem-spacing',
+      changes: prepData.changes,
+      normalizations: prepData.normalizations,
+      issues: prepData.issues,
+    });
+    const validation = validatePlan(bareSnapshot, plan);
+    expect(validation).toEqual({ ok: true, issues: [] });
   });
 });

@@ -2,7 +2,7 @@ import { parse } from '@babel/parser';
 import { createHash } from 'node:crypto';
 import type { FileChange, Snapshot, Issue, Normalization } from '../contracts';
 import { isCodeComponentSource } from '@/code/oracle/checks/shared';
-import { SPACING_PX_KEYS } from '@/code/oracle/checks/style-object';
+import { SPACING_PX_KEYS, validateSpacingString } from '@/code/oracle/checks/style-object';
 import { applyRuntimeGuarantees } from '@/code/generation/runtime-guarantees';
 import { autoInjectMissingDataIds } from '@/code/parsing/heal-data-ids';
 import { healMotionTags } from '@/code/parsing/heal-motion-tags';
@@ -44,7 +44,9 @@ export function normalizeCandidateChanges(snapshot: Snapshot, changes: FileChang
           const target = `${change.path}:${value.loc?.start.line ?? 1}:${key}`;
           // Only literal length lists can be lowered without changing expression semantics.
           if (!value.value.trim().split(/\s+/).every((part: string) => /^-?(?:\d*\.)?\d+(?:px|rem|em)?$/.test(part) || (key.startsWith('margin') && part === 'auto'))) {
-            issues.push({ code: 'AMBIGUOUS_UNIT_EXPRESSION', path: [change.path, key], message: `Cannot normalize ${key} without resolving its expression`, source: { file: change.path, line: value.loc?.start.line ?? 1 } });
+            if (validateSpacingString(value.value, key) !== null) {
+              issues.push({ code: 'AMBIGUOUS_UNIT_EXPRESSION', path: [change.path, key], message: `Cannot normalize ${key} without resolving its expression`, source: { file: change.path, line: value.loc?.start.line ?? 1 } });
+            }
             continue;
           }
           if (/\d+em\b/.test(value.value) && (elementFontSize === undefined || props.some((p: any) => p.type === 'SpreadElement' || p.computed))) {
