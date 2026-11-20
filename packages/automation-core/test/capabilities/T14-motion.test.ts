@@ -402,7 +402,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     applyChanges(mutableFiles, scrollSetRes.changes);
     snapshot = createMockSnapshot(Object.fromEntries(mutableFiles));
     expect(snapshot.files.has('app/smooth-scroll.ts')).toBe(true);
-    expect(snapshot.files.get('app/smooth-scroll-controller.tsx')).toContain('@smooth-scroll v1');
+    expect(snapshot.files.get('app/smooth-scroll-controller.tsx')).toContain('@smooth-scroll v2');
     expect(snapshot.files.get('app/layout.tsx')).toContain('<SmoothScroll />');
 
     const scrollGet = await siteEffectsSmoothScrollGetOperation.execute(snapshot, { route: '/' }, mockContext);

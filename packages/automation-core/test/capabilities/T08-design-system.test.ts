@@ -546,7 +546,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       snapshot,
       {
         family: 'Playfair Display',
-        weights: ['400', '700', '900'], // '900' is not supported by Playfair Display in catalog
+        weights: ['400', '700', '300'], // '300' is not supported by Playfair Display in catalog
       },
       mockContext,
     );
