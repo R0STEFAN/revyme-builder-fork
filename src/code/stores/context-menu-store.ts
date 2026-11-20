@@ -2,12 +2,7 @@
 
 import { atom } from 'jotai';
 import { BORDER_INLINE_KEYS } from '@/editor/ui/border-utils';
-import {
-  parseShadowEntries,
-  formatShadowEntries,
-  mergeFilterWithDropShadows,
-  extractNonShadowFilter,
-} from '@/editor/ui/shadow-utils';
+import { mergeStyleLayers, SHORTHAND_LONGHANDS } from '@/shared/css-utils';
 import {
   MOTION_TRANSFORM_PROPS,
   MOTION_VISUAL_TRANSFORM_PROPS,
@@ -69,8 +64,6 @@ export const EXCLUDED_STYLE_KEYS = new Set([
   'height',
   'order',
   'zIndex',
-  'gridColumn',
-  'gridRow',
   'gridArea',
   // Transform & motion transform props travel via transformCSS
   'transform',
@@ -132,7 +125,7 @@ export function extractVisualTransformCSS(styles: Record<string, string> | undef
   return '';
 }
 
-/** Extract all transferable visual & typography styles from a node's styles */
+/** Extract transferable styles, including grid child spans. */
 export function extractCopyableStyles(styles: Record<string, string> | undefined): Record<string, string> {
   if (!styles) return {};
   const result: Record<string, string> = {};
@@ -144,11 +137,11 @@ export function extractCopyableStyles(styles: Record<string, string> | undefined
   return result;
 }
 
-/** Prepare payload for pasting styles, applying full-clear contracts for fills, borders, shadows, and transform format */
+/** Replace transferable styles and convert the border and transform representations. */
 export function prepareStylesForPaste(
   copied: CopiedElementStyles | Record<string, string>,
   targetStyles?: Record<string, string>,
-  opts?: { isMotionTarget?: boolean; isVariant?: boolean },
+  opts?: { isMotionTarget?: boolean; isVariant?: boolean; fallbackStyles?: Record<string, string> },
 ): Record<string, string> {
   const copiedStyles = ('styles' in copied && typeof copied.styles === 'object' && copied.styles !== null)
     ? copied.styles
@@ -160,18 +153,9 @@ export function prepareStylesForPaste(
 
   const result: Record<string, string> = { ...copiedStyles };
 
-  // 1. Fill layer conflict resolution
-  const hasCopiedFill = 'backgroundColor' in copiedStyles || 'background' in copiedStyles || 'backgroundImage' in copiedStyles;
-  if (hasCopiedFill && targetStyles) {
-    if ('backgroundImage' in targetStyles && !('backgroundImage' in copiedStyles)) {
-      result.backgroundImage = '';
-    }
-    if ('background' in targetStyles && !('background' in copiedStyles)) {
-      result.background = '';
-    }
-    if ('backgroundColor' in targetStyles && !('backgroundColor' in copiedStyles)) {
-      result.backgroundColor = '';
-    }
+  const previousStyles = { ...opts?.fallbackStyles, ...targetStyles };
+  for (const key of Object.keys(extractCopyableStyles(previousStyles))) {
+    if (!(key in copiedStyles)) result[key] = '';
   }
 
   // 2. Border Full-Clear Contract
@@ -214,27 +198,10 @@ export function prepareStylesForPaste(
     }
   }
 
-  // 3. Shadow Full-Clear Contract & Merging
+  // 3. A variant needs an explicit neutral shadow to mask its default.
   const sourceHasShadow = hasShadow ?? hasAnyShadow(copiedStyles);
-  if (!sourceHasShadow) {
-    if (targetStyles?.boxShadow) {
-      result.boxShadow = opts?.isVariant ? 'none' : '';
-    }
-    if (targetStyles?.filter && /drop-shadow\(/i.test(targetStyles.filter)) {
-      result.filter = extractNonShadowFilter(targetStyles.filter);
-    }
-  } else {
-    if (!('boxShadow' in copiedStyles) && targetStyles?.boxShadow) {
-      result.boxShadow = opts?.isVariant ? 'none' : '';
-    }
-    const copiedDropShadow = copiedStyles.filter
-      ? formatShadowEntries(parseShadowEntries('', copiedStyles.filter)).dropShadowFilter
-      : '';
-    if (copiedDropShadow) {
-      result.filter = mergeFilterWithDropShadows(targetStyles?.filter ?? '', copiedDropShadow);
-    } else if (targetStyles?.filter && /drop-shadow\(/i.test(targetStyles.filter)) {
-      result.filter = extractNonShadowFilter(targetStyles.filter);
-    }
+  if (!sourceHasShadow && opts?.isVariant && targetStyles?.boxShadow) {
+    result.boxShadow = 'none';
   }
 
   // 4. Transform format conversion
@@ -257,6 +224,20 @@ export function prepareStylesForPaste(
         }
       }
     }
+  } else if (extractVisualTransformCSS(targetStyles)) {
+    if (targetStyles?.transform) result.transform = '';
+    for (const key of MOTION_VISUAL_TRANSFORM_PROPS) {
+      if (targetStyles?.[key] !== undefined) result[key] = '';
+    }
+  }
+
+  // Clearing a scoped declaration alone exposes the old base value again.
+  const superseded = new Set(Object.keys(copiedStyles).flatMap(key => SHORTHAND_LONGHANDS[key] ?? []));
+  for (const [key, value] of Object.entries(result)) {
+    if (value !== '' || !opts?.fallbackStyles?.[key]) continue;
+    if (superseded.has(key) || (copiedStyles.background && key.startsWith('background'))) continue;
+    if (MOTION_VISUAL_TRANSFORM_PROPS.has(key)) result[key] = key.startsWith('scale') ? '1' : '0';
+    else if (!MOTION_TRANSFORM_PROPS.has(key)) result[key] = 'unset';
   }
 
   return result;
@@ -264,24 +245,21 @@ export function prepareStylesForPaste(
 
 /** Resolve effective styles for a node considering active variant overrides */
 export function resolveEffectiveStyles(
-  node: { styles?: Record<string, string>; motionVariants?: Record<string, Record<string, string>> | null } | null | undefined,
+  node: {
+    styles?: Record<string, string>;
+    motionVariants?: Record<string, Record<string, string>> | null;
+    conditionalStyles?: Record<string, Record<string, string>> | null;
+  } | null | undefined,
   activeVariant?: string | null,
 ): Record<string, string> {
   if (!node) return {};
-  let result = { ...(node.styles ?? {}) };
-  if (node.motionVariants) {
-    const defaultEntry = node.motionVariants['default'];
-    if (defaultEntry && Object.keys(defaultEntry).length > 0) {
-      result = { ...result, ...defaultEntry };
-    }
-    if (activeVariant && activeVariant !== 'default' && node.motionVariants[activeVariant]) {
-      const variantStyles = node.motionVariants[activeVariant];
-      if (variantStyles && Object.keys(variantStyles).length > 0) {
-        result = { ...result, ...variantStyles };
-      }
-    }
+  const conditional: Record<string, string> = {};
+  for (const [key, branches] of Object.entries(node.conditionalStyles ?? {})) {
+    const value = branches[activeVariant ?? 'default'] ?? branches.default;
+    if (value !== undefined) conditional[key] = value;
   }
-  return result;
+  const variant = activeVariant && activeVariant !== 'default' ? node.motionVariants?.[activeVariant] : undefined;
+  return mergeStyleLayers(node.styles ?? {}, conditional, node.motionVariants?.default, variant);
 }
 
 /** Set to a nodeId to open the Make Component name modal for it (Ctrl+Alt+K).

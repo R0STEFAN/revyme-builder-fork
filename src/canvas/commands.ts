@@ -4,7 +4,7 @@
 
 import { CanvasNode, extractStyleCSS } from '@/code/parsing/parser';
 import { unfoldFlowStyles } from './unfold-flow-sizing';
-import { TRANSPARENT_FILL } from '@/shared/css-utils';
+import { mergeStyleLayers, TRANSPARENT_FILL } from '@/shared/css-utils';
 import { getDefaultStore } from 'jotai';
 import {
   removeNode, updateNodeStyles, isPrimaryViewport, getInteractingViewport,
@@ -20,6 +20,7 @@ import { parseIconSetConfig } from '@/code/icons/icon-set-config';
 import { removeIconFromSet } from '@/code/icons/icon-set-ops';
 import { projectFS } from '@/code/project/project-fs';
 import { getViewportWidths, interactingViewportIdAtom, viewportsConfigAtom } from '@/code/stores/viewport-store';
+import { containerOverridesAtom, getOverridesAtWidth } from '@/code/stores/container-query-store';
 import { isViewerMode } from '@/code/stores/viewer-mode-store';
 import { refusedByCollaboratorLock } from './collab/collab-locks';
 import { parseCanvasConfig, updateCanvasConfigInCode } from '@/code/project/canvas-config';
@@ -1562,9 +1563,16 @@ export function duplicateSelection(opts: {
 
 // ─── Copy / Paste Element Styles ──────────────────────────────────────────
 
+function mergeClipboardViewportStyles(
+  styles: Record<string, string>,
+  overrides: Map<string, string>,
+): Record<string, string> {
+  return mergeStyleLayers(styles, Object.fromEntries(overrides));
+}
+
 /**
  * Copy visual styles of a node into the element styles clipboard.
- * Snapshots inline styles, overlay border (::after rule), visual transform,
+ * Snapshots styles at the active viewport or variant, overlay border, visual transform,
  * and records whether the node has active borders or shadows (for full-clear contract).
  */
 export function copyElementStylesCommand(targetId?: string | null): boolean {
@@ -1585,17 +1593,17 @@ export function copyElementStylesCommand(targetId?: string | null): boolean {
   const code = projectFS.readFile(activeFilePath) ?? '';
   const borderOverlayCSS = extractBorderAfterRuleBody(extractStyleCSS(code), idToCopy, overlayVariant);
 
-  const effectiveStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
+  let effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
+  const viewport = store.get(viewportsConfigAtom).find(v => v.id === interactingVp);
+  if (!isComp && viewport && !viewport.isPrimary) {
+    const overrides = getOverridesAtWidth(store.get(containerOverridesAtom), idToCopy, viewport.width);
+    effectiveStyles = mergeClipboardViewportStyles(effectiveStyles, overrides);
+  }
   const transformCSS = extractVisualTransformCSS(effectiveStyles);
   const stylesToCopy = extractCopyableStyles(effectiveStyles);
 
   const hasBorder = hasAnyBorder(effectiveStyles, borderOverlayCSS);
   const hasShadow = hasAnyShadow(effectiveStyles);
-
-  if (Object.keys(stylesToCopy).length === 0 && !borderOverlayCSS && !transformCSS) {
-    toast.info('No copyable styles on selected element');
-    return false;
-  }
 
   const payload: CopiedElementStyles = {
     styles: stylesToCopy,
@@ -1622,9 +1630,8 @@ export function copyElementStylesCommand(targetId?: string | null): boolean {
 
 /**
  * Paste copied element styles onto target node(s).
- * Applies scoped variant routing, clears conflicting fill layers, applies full-clear
- * contract for borders & shadows, recreates/removes ::after border overlay, and converts
- * transform format to motion props or CSS transform matching the target.
+ * Replaces transferable styles in the active scope, updates the ::after border
+ * overlay, and converts transforms to the target's format.
  */
 export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl?: HTMLElement | null): boolean {
   const store = getDefaultStore();
@@ -1648,22 +1655,28 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
   const activeFilePath = store.get(activeFilePathAtom) || getActiveFilePath();
   const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
   const viewports = store.get(viewportsConfigAtom);
-  const vpWidth = viewports.find(v => v.id === interactingVp)?.width ?? 1440;
+  const viewport = viewports.find(v => v.id === interactingVp);
+  const vpWidth = viewport?.width ?? 1440;
   setStyleContext(activeFilePath, interactingVp, vpWidth);
 
   const isComp = isComponentFilePath(activeFilePath);
   const targetVariant = isComp && !isPrimaryViewport(interactingVp) ? interactingVp : null;
+  const responsiveOverrides = !isComp && viewport && !viewport.isPrimary ? store.get(containerOverridesAtom) : null;
   const effectiveContentEl = contentEl || getContentRoot() || document.body;
   const snapshot = getNodesSnapshot();
 
   for (const id of effectiveTargetIds) {
     const targetNode = snapshot.get(id);
-    const effectiveTargetStyles = resolveEffectiveStyles(targetNode as any, interactingVp);
+    const baseStyles = resolveEffectiveStyles(targetNode);
+    const effectiveTargetStyles = responsiveOverrides
+      ? mergeClipboardViewportStyles(baseStyles, getOverridesAtWidth(responsiveOverrides, id, vpWidth))
+      : resolveEffectiveStyles(targetNode, interactingVp);
     const isMotionTarget = isMotionTransformTarget({ isComponentFile: isComp, node: targetNode });
 
     const payload = prepareStylesForPaste(copied, effectiveTargetStyles, {
       isMotionTarget,
       isVariant: !!targetVariant,
+      fallbackStyles: responsiveOverrides || targetVariant ? baseStyles : undefined,
     });
     updateNodeStyles({ id, styles: payload, contentEl: effectiveContentEl });
 

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { getDefaultStore } from 'jotai';
+import { updateNodeInCode } from '@/code/generation/generator-crud';
+import { extractStyleCSS, parseJSXToNodes } from '@/code/parsing/parser';
+import { updateContainerQueryStyle } from '@/code/generation/generator-styles';
+import { parseContainerRules } from './container-query-store';
 import {
   contextMenuAtom,
   copiedElementStylesAtom,
@@ -10,6 +14,64 @@ import {
 } from './context-menu-store';
 
 describe('context-menu-store style copying', () => {
+  it.each([
+    ['div', { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', gridColumn: 'span 5', padding: '12px', borderRadius: '8px' },
+      { display: 'flex', flexDirection: 'column', gridColumn: 'span 1', paddingLeft: '40px', borderTopLeftRadius: '32px', opacity: '0.4' }],
+    ['p', { fontSize: 'clamp(1rem, 2vw, 2rem)', color: '#222222', fontWeight: '700', lineHeight: '1.4' },
+      { fontSize: '12px', color: '#ffffff', fontStyle: 'italic', letterSpacing: '2px', textDecoration: 'underline' }],
+    ['img', { objectFit: 'cover', borderRadius: '10px', opacity: '0.8' },
+      { objectFit: 'contain', objectPosition: 'top', filter: 'blur(4px)', boxShadow: '0 0 3px black' }],
+    ['video', { objectFit: 'cover' }, { objectPosition: 'bottom', borderRadius: '12px' }],
+    ['svg', { fill: '#123456', strokeWidth: '2px' }, { fill: '#dddddd', stroke: '#000000', opacity: '0.5' }],
+    ['button', {}, { backgroundColor: 'red', cursor: 'pointer', transform: 'rotate(15deg)' }],
+  ] as const)('replaces transferable %s styles through a JSX round trip', (tag, source, target) => {
+    const code = `export default function Page() {
+      return <div data-id="root">
+        <${tag} data-id="source" style={${JSON.stringify(source)}} />
+        <${tag} data-id="target" style={${JSON.stringify({ ...target, width: '220px' })}} />
+      </div>;
+    }`;
+    const nodes = parseJSXToNodes(code);
+    const sourceStyles = nodes.get('source')!.styles;
+    const targetStyles = nodes.get('target')!.styles;
+    const payload = prepareStylesForPaste({
+      sourceNodeId: 'source',
+      styles: extractCopyableStyles(sourceStyles),
+    }, targetStyles);
+    const result = parseJSXToNodes(updateNodeInCode(code, 'target', payload)).get('target')!.styles;
+    expect(result).toEqual({ width: '220px', ...source });
+  });
+
+  it('replaces styles in the active breakpoint while preserving base styles', () => {
+    const code = `export default function Page() {
+      return <div data-id="root"><p data-id="target" style={{ opacity: '0.5', gridColumn: 'span 1' }} /></div>;
+    }`;
+    const base = parseJSXToNodes(code).get('target')!.styles;
+    const withOverride = updateContainerQueryStyle(code, 'target', 768, { gridColumn: 'span 2', letterSpacing: '2px' });
+    const payload = prepareStylesForPaste({ gridColumn: 'span 5' }, {
+      ...base, gridColumn: 'span 2', letterSpacing: '2px',
+    }, { fallbackStyles: base });
+    const result = updateContainerQueryStyle(withOverride, 'target', 768, payload);
+    expect(parseJSXToNodes(result).get('target')!.styles).toEqual(base);
+    expect(Object.fromEntries(parseContainerRules(extractStyleCSS(result)).get(768)!.get('target')!))
+      .toEqual({ 'grid-column': 'span 5', opacity: 'unset' });
+  });
+
+  it('reads grid placement from the current component variant', () => {
+    const node = {
+      styles: { gridColumn: 'span 1' },
+      conditionalStyles: { gridColumn: { default: 'span 1', compact: 'span 5' } },
+    };
+    expect(resolveEffectiveStyles(node).gridColumn).toBe('span 1');
+    expect(resolveEffectiveStyles(node, 'compact').gridColumn).toBe('span 5');
+  });
+
+  it('lets pasted shorthands win over inherited longhands', () => {
+    const target = { paddingLeft: '24px', backgroundColor: 'blue' };
+    expect(prepareStylesForPaste({ padding: '8px', background: 'red' }, target, { fallbackStyles: target }))
+      .toEqual({ padding: '8px', background: 'red', paddingLeft: '', backgroundColor: '' });
+  });
+
   it('extractCopyableStyles excludes position and dimensions', () => {
     const sourceStyles: Record<string, string> = {
       position: 'absolute',
@@ -21,10 +83,10 @@ describe('context-menu-store style copying', () => {
       height: '100px',
       order: '1',
       zIndex: '10',
-      gridColumn: 'span 2',
-      gridRow: '1',
       gridArea: 'main',
       // Transferable styles:
+      gridColumn: 'span 5',
+      gridRow: 'span 2',
       backgroundColor: '#ff0000',
       color: '#ffffff',
       fontSize: '16px',
@@ -44,6 +106,8 @@ describe('context-menu-store style copying', () => {
     }
 
     expect(extracted).toEqual({
+      gridColumn: 'span 5',
+      gridRow: 'span 2',
       backgroundColor: '#ff0000',
       color: '#ffffff',
       fontSize: '16px',
@@ -54,6 +118,10 @@ describe('context-menu-store style copying', () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+    });
+    expect(prepareStylesForPaste(extracted, { gridColumn: 'span 1', gridRow: 'span 1' })).toMatchObject({
+      gridColumn: 'span 5',
+      gridRow: 'span 2',
     });
   });
 
@@ -181,8 +249,7 @@ describe('context-menu-store style copying', () => {
 
     const prepared = prepareStylesForPaste(copiedWithoutShadow, targetWithShadow);
     expect(prepared.boxShadow).toBe('');
-    // Drop shadow is stripped, but blur is preserved!
-    expect(prepared.filter).toBe('blur(4px)');
+    expect(prepared.filter).toBe('');
   });
 
   it('prepareStylesForPaste sets position relative and clears inline keys for overlay border', () => {
