@@ -7,6 +7,10 @@ import {
   ErrorCode,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { createRequire as createNodeRequire } from 'node:module';
 import { z } from 'zod';
 import { defaultRegistry, createIdFactory } from '@revyme/automation-core';
 import type { OperationContext, Scope } from '@revyme/automation-core';
@@ -14,14 +18,51 @@ import type { AutomationClient } from './client';
 import type { ProjectConfig } from './config';
 
 const DEFAULT_MCP_BRIDGE_URL = 'http://127.0.0.1:8082';
+const DEFAULT_PREVIEW_URL = 'http://localhost:5175';
+const DEFAULT_BUILDER_URL = 'http://localhost:3333';
 
-async function captureHeadlessScreenshot({
+function sanitizeFileSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'item';
+}
+
+async function probeReachableUrl(candidateUrls: string[]): Promise<string | null> {
+  for (const candidate of candidateUrls) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1_500);
+    try {
+      const res = await fetch(candidate, { method: 'GET', signal: controller.signal });
+      if (res.ok) return candidate;
+    } catch {
+      // Try next candidate URL
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+
+async function defaultLaunchPlaywrightBrowser(): Promise<any | null> {
+  const localRequire = createNodeRequire(import.meta.url);
+  for (const modName of ['playwright', '@playwright/test']) {
+    try {
+      const pw = localRequire(modName);
+      if (pw?.chromium) {
+        return await pw.chromium.launch({ headless: true });
+      }
+    } catch {
+      // Try next Playwright package
+    }
+  }
+  return null;
+}
+
+export async function captureHeadlessScreenshot({
   projectId,
   viewport,
   nodeId,
   format,
   pixelRatio,
-  backgroundColor,
+  launchBrowser,
 }: {
   projectId?: string;
   viewport?: string;
@@ -29,86 +70,126 @@ async function captureHeadlessScreenshot({
   format?: 'png' | 'jpeg';
   pixelRatio?: number;
   backgroundColor?: string;
+  launchBrowser?: () => Promise<any>;
 }): Promise<any> {
-  if (!projectId) return null;
   const startTime = Date.now();
-  let chromium: any;
-  try {
-    const pw = require('playwright');
-    chromium = pw.chromium;
-  } catch {
-    try {
-      const pw = require('@playwright/test');
-      chromium = pw.chromium;
-    } catch {
-      return null;
-    }
+  if (!projectId) {
+    return {
+      available: false,
+      status: 'unavailable',
+      reason: 'HEADLESS_CAPTURE_FAILED',
+      note: 'Project ID is required for headless screenshot capture.',
+      waitedMs: 0,
+    };
   }
 
-  if (!chromium) return null;
+  const vpName = viewport || 'desktop';
+  const vpConfig: { width: number; height: number; prefix: string } = {
+    mobile: { width: 390, height: 844, prefix: 'mobile-' },
+    tablet: { width: 810, height: 1080, prefix: 'tablet-' },
+    desktop: { width: 1200, height: 900, prefix: '' },
+  }[vpName] || { width: 1200, height: 900, prefix: '' };
+
+  const previewBase = (process.env.REVYME_PREVIEW_URL || DEFAULT_PREVIEW_URL).replace(/\/+$/, '');
+  const builderBase = (process.env.REVYME_BUILDER_URL || DEFAULT_BUILDER_URL).replace(/\/+$/, '');
+  const encodedId = encodeURIComponent(projectId);
+  const targetUrl = await probeReachableUrl([
+    `${previewBase}/preview/${encodedId}`,
+    `${builderBase}/builder/${encodedId}`,
+  ]);
+
+  if (!targetUrl) {
+    return {
+      available: false,
+      status: 'unavailable',
+      reason: 'HEADLESS_CAPTURE_FAILED',
+      note: 'No reachable preview or builder server found for headless capture.',
+      waitedMs: Date.now() - startTime,
+    };
+  }
 
   let browser: any;
   try {
-    browser = await chromium.launch({ headless: true });
-    const vpConfig: { width: number; height: number; prefix: string } = {
-      mobile: { width: 390, height: 844, prefix: 'mobile-' },
-      tablet: { width: 810, height: 1080, prefix: 'tablet-' },
-      desktop: { width: 1440, height: 900, prefix: '' },
-    }[viewport || 'desktop'] || { width: 1440, height: 900, prefix: '' };
+    browser = launchBrowser ? await launchBrowser() : await defaultLaunchPlaywrightBrowser();
+    if (!browser) {
+      return {
+        available: false,
+        status: 'unavailable',
+        reason: 'HEADLESS_CAPTURE_FAILED',
+        note: 'Playwright browser runtime is unavailable for headless capture.',
+        waitedMs: Date.now() - startTime,
+      };
+    }
 
     const page = await browser.newPage({
       viewport: { width: vpConfig.width, height: vpConfig.height },
       deviceScaleFactor: pixelRatio || 1,
     });
-
-    const builderBase = (process.env.REVYME_BUILDER_URL || 'http://localhost:3333').replace(/\/+$/, '');
-    const targetUrl = `${builderBase}/builder/${projectId}`;
-
-    await page.goto(targetUrl, { waitUntil: 'load', timeout: 15_000 });
-    await page.waitForFunction(() => !!(window as any).__canvasBridge, { timeout: 10_000 }).catch(() => {});
-    await page.waitForTimeout(500);
-
-    const targetNode = nodeId || 'root';
-    const targetPrefix = vpConfig.prefix;
-
-    const dataUrl = await page.evaluate(async (opts: any) => {
-      const bridge = (window as any).__canvasBridge;
-      if (bridge && typeof bridge.captureElement === 'function') {
-        return await bridge.captureElement(opts.targetNode, opts.targetPrefix, {
-          format: opts.format || 'png',
-          pixelRatio: opts.pixelRatio || 1,
-          backgroundColor: opts.backgroundColor,
-        });
-      }
-      return null;
-    }, { targetNode, targetPrefix, format, pixelRatio, backgroundColor });
-
-    if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
-      const base64Data = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      return {
-        available: true,
-        status: 'ready',
-        dataUrl,
-        bytes: buffer.length,
-        width: vpConfig.width,
-        height: vpConfig.height,
-        dimensions: { width: vpConfig.width, height: vpConfig.height },
-        waitedMs: Date.now() - startTime,
-        source: 'headless-chromium',
-        note: 'Captured autonomously via headless Chromium engine',
-      };
+    if (typeof page.setViewportSize === 'function') {
+      await page.setViewportSize({ width: vpConfig.width, height: vpConfig.height });
     }
 
-    return null;
-  } catch {
-    return null;
+    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 15_000 });
+    await page.evaluate(() => (document as any).fonts?.ready).catch(() => {});
+    if (typeof page.waitForFunction === 'function') {
+      await page
+        .waitForFunction(
+          () => Array.from(document.querySelectorAll('img')).every((img: HTMLImageElement) => img.complete),
+          { timeout: 4_000 }
+        )
+        .catch(() => {});
+    }
+
+    const targetNode = nodeId || 'root';
+    const imgType = format === 'jpeg' ? 'jpeg' : 'png';
+    const ext = imgType === 'jpeg' ? 'jpg' : 'png';
+    const mime = imgType === 'jpeg' ? 'image/jpeg' : 'image/png';
+
+    const rawShot =
+      targetNode === 'root'
+        ? await page.screenshot({ type: imgType, fullPage: true })
+        : await page.locator(`[data-id="${targetNode}"]`).first().screenshot({ type: imgType });
+
+    const buffer = Buffer.isBuffer(rawShot) ? rawShot : Buffer.from(rawShot);
+    const screenshotDir = path.join(os.tmpdir(), 'revyme-screenshots');
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    const outPath = path.join(
+      screenshotDir,
+      `${sanitizeFileSegment(projectId)}-${sanitizeFileSegment(vpName)}-${sanitizeFileSegment(targetNode)}.${ext}`
+    );
+    fs.writeFileSync(outPath, buffer);
+
+    const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+    return {
+      available: true,
+      status: 'ready',
+      filePath: outPath,
+      dataUrl,
+      bytes: buffer.length,
+      width: vpConfig.width,
+      height: vpConfig.height,
+      dimensions: { width: vpConfig.width, height: vpConfig.height },
+      waitedMs: Date.now() - startTime,
+      source: 'headless-chromium',
+      note: 'Captured autonomously via headless Chromium engine',
+    };
+  } catch (err: any) {
+    return {
+      available: false,
+      status: 'unavailable',
+      reason: 'HEADLESS_CAPTURE_FAILED',
+      note: err?.message || 'Headless capture failed',
+      waitedMs: Date.now() - startTime,
+    };
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
 }
 
-export function createBridgeScreenshotService(customUrl?: string) {
+export function createBridgeScreenshotService(
+  customUrl?: string,
+  deps?: { launchBrowser?: () => Promise<any> }
+) {
   const bridgeUrl = (
     customUrl ||
     process.env.REVYME_MCP_BRIDGE_URL ||
@@ -118,8 +199,8 @@ export function createBridgeScreenshotService(customUrl?: string) {
 
   return {
     async captureScreenshot({ snapshot, revision, filePath: requestedFilePath, viewport, nodeId, format, pixelRatio, backgroundColor, headless }: any) {
-      const clientPage = [...snapshot.files.keys()].find((path: string) =>
-        path.endsWith('/page.client.tsx') || path === 'page.client.tsx' || path.endsWith('page.client.tsx')
+      const clientPage = [...snapshot.files.keys()].find((filePathKey: string) =>
+        filePathKey.endsWith('/page.client.tsx') || filePathKey === 'page.client.tsx' || filePathKey.endsWith('page.client.tsx')
       );
       const filePath = requestedFilePath || clientPage || snapshot.scope.filePath;
       if (!filePath) {
@@ -144,8 +225,9 @@ export function createBridgeScreenshotService(customUrl?: string) {
           format,
           pixelRatio,
           backgroundColor,
+          launchBrowser: deps?.launchBrowser,
         });
-        if (headlessResult && headlessResult.available) {
+        if (headlessResult?.available) {
           return headlessResult;
         }
       }
@@ -176,6 +258,18 @@ export function createBridgeScreenshotService(customUrl?: string) {
         if (!response.ok) {
           const payload = await response.json().catch(() => null) as { error?: string } | null;
           if (payload?.error?.startsWith('No editor tab connected')) {
+            const headlessFallback = await captureHeadlessScreenshot({
+              projectId: snapshot.scope.projectId,
+              viewport,
+              nodeId,
+              format,
+              pixelRatio,
+              backgroundColor,
+              launchBrowser: deps?.launchBrowser,
+            });
+            if (headlessFallback?.available) {
+              return headlessFallback;
+            }
             return {
               available: false,
               status: 'unavailable',
@@ -190,8 +284,13 @@ export function createBridgeScreenshotService(customUrl?: string) {
         if (!payload.ok) throw new Error(payload.error || 'Screenshot bridge returned an empty response');
         return payload.result;
       } catch (err: any) {
-        // If aborted (timed out because browser tab was throttled in background), attempt headless capture!
-        if (err?.name === 'AbortError' || err?.message?.includes('aborted') || err?.code === 'ECONNREFUSED') {
+        const errCode = err?.code || err?.cause?.code;
+        if (
+          err?.name === 'AbortError' ||
+          err?.message?.includes('aborted') ||
+          errCode === 'ECONNREFUSED' ||
+          err?.message?.includes('ECONNREFUSED')
+        ) {
           const headlessFallback = await captureHeadlessScreenshot({
             projectId: snapshot.scope.projectId,
             viewport,
@@ -199,11 +298,19 @@ export function createBridgeScreenshotService(customUrl?: string) {
             format,
             pixelRatio,
             backgroundColor,
+            launchBrowser: deps?.launchBrowser,
           });
 
-          if (headlessFallback && headlessFallback.available) {
+          if (headlessFallback?.available) {
             return headlessFallback;
           }
+          return headlessFallback || {
+            available: false,
+            status: 'unavailable',
+            reason: 'HEADLESS_CAPTURE_FAILED',
+            note: err?.message || 'Headless capture failed',
+            waitedMs: 0,
+          };
         }
         throw err;
       } finally {
@@ -474,18 +581,77 @@ export function createMcpServer(options: McpServerOptions): Server {
       context,
     });
 
-    return {
-      isError: !result.ok,
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    return formatMcpToolResult(toolName, result);
   });
 
   return server;
+}
+
+function extractImageBlocksFromEntry(entry: any, seenData: Set<string>): Array<{ type: 'image'; mimeType: string; data: string }> {
+  const dataUrl = entry?.dataUrl;
+  if (typeof dataUrl !== 'string') return [];
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return [];
+  const mimeType = match[1];
+  const data = match[2];
+  if (seenData.has(data)) return [];
+  seenData.add(data);
+  return [{ type: 'image', mimeType, data }];
+}
+
+function sanitizeScreenshotEntry(entry: any): any {
+  if (!entry || typeof entry !== 'object') return entry;
+  const shouldStrip = Boolean(entry.filePath) || (typeof entry.dataUrl === 'string' && entry.dataUrl.length > 512);
+  if (!shouldStrip) return entry;
+  const { dataUrl: _omitted, ...rest } = entry;
+  return rest;
+}
+
+export function formatMcpToolResult(toolName: string, result: any): {
+  isError: boolean;
+  content: Array<{ type: 'text'; text: string } | { type: 'image'; mimeType: string; data: string }>;
+} {
+  if (toolName === 'observe.screenshot' && result?.ok && result?.data) {
+    const seenData = new Set<string>();
+    const imageBlocks: Array<{ type: 'image'; mimeType: string; data: string }> = [];
+    const data = result.data;
+
+    if (data.primary) imageBlocks.push(...extractImageBlocksFromEntry(data.primary, seenData));
+    if (Array.isArray(data.captures)) {
+      for (const item of data.captures) imageBlocks.push(...extractImageBlocksFromEntry(item, seenData));
+    }
+    if (Array.isArray(data.results)) {
+      for (const item of data.results) imageBlocks.push(...extractImageBlocksFromEntry(item, seenData));
+    }
+
+    const sanitizedResult = {
+      ...result,
+      data: {
+        ...data,
+        ...(data.primary ? { primary: sanitizeScreenshotEntry(data.primary) } : {}),
+        ...(Array.isArray(data.captures) ? { captures: data.captures.map(sanitizeScreenshotEntry) } : {}),
+        ...(Array.isArray(data.results) ? { results: data.results.map(sanitizeScreenshotEntry) } : {}),
+      },
+    };
+
+    return {
+      isError: !result.ok,
+      content: [
+        { type: 'text', text: JSON.stringify(sanitizedResult, null, 2) },
+        ...imageBlocks,
+      ],
+    };
+  }
+
+  return {
+    isError: !result?.ok,
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
 }
 
 export async function startStdioServer(options: McpServerOptions): Promise<Server> {
