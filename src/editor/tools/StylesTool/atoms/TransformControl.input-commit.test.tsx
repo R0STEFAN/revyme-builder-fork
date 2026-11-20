@@ -47,7 +47,7 @@ vi.mock('../../../controls', async (importOriginal) => {
     ...actual,
     ControlActionRow: ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick}>{children}</button>,
     ControlLabel: () => null,
-    RemoveButton: () => null,
+    RemoveButton: ({ onClick }: { onClick: (e: any) => void }) => <span title="Remove Transform" onClick={(e) => { e.stopPropagation(); onClick(e); }}>&times;</span>,
     ToolSlider: () => <div />,
     ToolSegmentedControl: () => <div />,
   };
@@ -138,5 +138,35 @@ describe('TransformControl input commits', () => {
     const updatedInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
     expect(updatedInput.disabled).toBe(false);
     expect(updatedInput.value).toBe('-20%');
+  });
+
+  it('uses CSS transform string (preserving translate and clearing transform+transformStyle) in scrollStop mode even on motion nodes', () => {
+    const onChange = vi.fn();
+    state.context = {
+      value: 'translateY(-4px)',
+      onChange,
+      onChangeLive: state.onChangeLive,
+      onChangeMultiple: state.onChangeMultiple,
+      node: { id: 'motion-page-node', type: 'section', isMotionElement: true },
+      allProps: { transform: 'translateY(-4px)' },
+      mode: 'scrollStop',
+    } as any;
+
+    render(<TransformControl mode="scrollStop" />);
+
+    expect(screen.getByText('translateY(-4px)')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('translateY(-4px)'));
+    const rotateInput = screen.getAllByRole('textbox')[2];
+    fireEvent.focus(rotateInput);
+    fireEvent.change(rotateInput, { target: { value: '15' } });
+    fireEvent.keyDown(rotateInput, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('rotate(15deg)'));
+    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('translateY(-4px)'));
+    expect(state.onChangeMultiple).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTitle('Remove Transform'));
+    expect(state.onChangeMultiple).toHaveBeenCalledWith({ transform: '', transformStyle: '' });
   });
 });

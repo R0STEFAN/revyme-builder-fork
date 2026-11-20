@@ -120,7 +120,7 @@ function BorderEditorPanel({ styles: s, nodeId, onChangeMultiple, onChangeMultip
   const isScrollMode = controlMode !== 'direct';
 
   // ─── Read border state from ::after rule OR inline styles ──────────────
-  const afterBodyRaw = extractBorderAfterRuleBody(extractStyleCSS(code), nodeId, overlayVariant);
+  const afterBodyRaw = isScrollMode ? null : extractBorderAfterRuleBody(extractStyleCSS(code), nodeId, overlayVariant);
   // Variable-backed overlay (component masters): resolve `var(--rvb-*)` against
   // the TILE's effective styles (inline ⊕ variant entry) so the panel shows this
   // variant's own border. See ui/border-overlay-vars.ts.
@@ -247,7 +247,7 @@ function BorderEditorPanel({ styles: s, nodeId, onChangeMultiple, onChangeMultip
       forSelectionTargets(nodeId, (tid) => injectCanvasCSS(borderOverlaySelector(tid, overlayVariant), afterCSS));
       trace.action('border-panel:write-overlay', { nodeId, width: state.top.width });
     } else {
-      if (isOverlayFromCode || renderMode === 'overlay') {
+      if (!isScrollMode && (isOverlayFromCode || renderMode === 'overlay')) {
         if (varBorderMode) removeOverlayBorderVars();
         else {
           expediteStableAtomSync();
@@ -566,7 +566,7 @@ function BorderAtom() {
   const btnRef = useRef<HTMLSpanElement>(null);
 
   // ─── Read border state for preview ─────────────────────────────────────
-  const afterBodyRaw = extractBorderAfterRuleBody(extractStyleCSS(code), nodeId, overlayVariant);
+  const afterBodyRaw = isScrollMode ? null : extractBorderAfterRuleBody(extractStyleCSS(code), nodeId, overlayVariant);
   // Variable-backed overlay (component masters): resolve `var(--rvb-*)` against
   // the TILE's effective styles (inline ⊕ variant entry) so the panel shows this
   // variant's own border. See ui/border-overlay-vars.ts.
@@ -717,7 +717,7 @@ function BorderAtom() {
       forSelectionTargets(nodeId, (tid) => injectCanvasCSS(borderOverlaySelector(tid, overlayVariant), afterCSS));
       trace.action('border:write-overlay', { nodeId, width: state.top.width });
     } else {
-      if (isOverlayFromCode || renderMode === 'overlay') {
+      if (!isScrollMode && (isOverlayFromCode || renderMode === 'overlay')) {
         if (varBorderMode) removeOverlayBorderVars();
         else {
           expediteStableAtomSync();
@@ -749,11 +749,13 @@ function BorderAtom() {
     const clear: Record<string, string> = {};
     for (const key of BORDER_INLINE_KEYS) clear[key] = '';
     onChangeMultiple(clear);
-    if (varBorderMode) removeOverlayBorderVars();
-    else {
-      expediteStableAtomSync();
-      forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid, variant: overlayVariant }));
-      forSelectionTargets(nodeId, (tid) => removeCanvasCSS(borderOverlaySelector(tid, overlayVariant)));
+    if (!isScrollMode) {
+      if (varBorderMode) removeOverlayBorderVars();
+      else {
+        expediteStableAtomSync();
+        forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'removeBorderOverlay', nodeId: tid, variant: overlayVariant }));
+        forSelectionTargets(nodeId, (tid) => removeCanvasCSS(borderOverlaySelector(tid, overlayVariant)));
+      }
     }
     setLocalState(null);
     setLocalGradient(null);

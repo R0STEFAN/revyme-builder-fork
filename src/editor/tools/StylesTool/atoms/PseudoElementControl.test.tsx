@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import React from 'react';
+import { extractNonShadowFilter } from '../../../ui/shadow-utils';
 
 const state = vi.hoisted(() => ({
   node: {
@@ -47,15 +48,159 @@ vi.mock('../../../controls/multi-select-targets', () => ({
   selectionTargetIds: (nodeId: string) => [nodeId],
 }));
 vi.mock('./OpacityControl', () => ({ OpacityControl: () => <div>OpacityControl</div> }));
-vi.mock('./RadiusControl', () => ({ RadiusControl: () => <div>RadiusControl</div> }));
-vi.mock('./ClipPathControl', () => ({ ClipPathControl: () => <div>ClipPathControl</div> }));
-vi.mock('./FillControl', () => ({ FillControl: () => <div>FillControl</div> }));
-vi.mock('./FilterControl', () => ({ FilterControl: () => <div>FilterControl</div> }));
-vi.mock('./ShadowControl', () => ({ ShadowControl: () => <div>ShadowControl</div> }));
-vi.mock('./BorderControl', () => ({ BorderControl: () => <div>BorderControl</div> }));
-vi.mock('./MaskControl', () => ({ MaskControl: () => <div>MaskControl</div> }));
-vi.mock('./TransformControl', () => ({ TransformControl: () => <div>TransformControl</div> }));
-vi.mock('../../TextStyleTool/atoms/ShadowControl', () => ({ ShadowControl: () => <div>TextShadowControl</div> }));
+vi.mock('./RadiusControl', () => ({
+  RadiusControl: (props: any) => (
+    <div>
+      <span>RadiusControl</span>
+      <button
+        type="button"
+        onClick={() =>
+          props.onStopChange?.({
+            ...props.stopProps,
+            borderRadius: '',
+            borderTopLeftRadius: '12px',
+            borderTopRightRadius: '12px',
+            borderBottomRightRadius: '4px',
+            borderBottomLeftRadius: '4px',
+          })
+        }
+      >
+        Split Radius (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./ClipPathControl', () => ({
+  ClipPathControl: (props: any) => (
+    <div>
+      <span>ClipPathControl</span>
+      <button type="button" onClick={() => props.onStopChange?.({ ...props.stopProps, clipPath: '' })}>
+        Clear Clip Path (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./FillControl', () => ({
+  FillControl: (props: any) => (
+    <div>
+      <span>FillControl</span>
+      <button
+        type="button"
+        onClick={() =>
+          props.onStopChange?.({
+            ...props.stopProps,
+            backgroundColor: '',
+            background: '',
+            backgroundImage: '',
+            backgroundSize: '',
+            backgroundPosition: '',
+            backgroundRepeat: '',
+            backgroundAttachment: '',
+            backgroundBlendMode: '',
+          })
+        }
+      >
+        Clear Fill (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./FilterControl', () => ({
+  FilterControl: (props: any) => (
+    <div>
+      <span>FilterControl</span>
+      <button type="button" onClick={() => props.onStopChange?.({ ...props.stopProps, filter: '' })}>
+        Clear Filter (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./ShadowControl', () => ({
+  ShadowControl: (props: any) => (
+    <div>
+      <span>ShadowControl</span>
+      <button
+        type="button"
+        onClick={() =>
+          props.onStopChange?.({
+            ...props.stopProps,
+            boxShadow: '',
+            filter: extractNonShadowFilter(props.stopProps?.filter || ''),
+          })
+        }
+      >
+        Clear Shadow (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./BorderControl', () => ({
+  BorderControl: (props: any) => (
+    <div>
+      <span>BorderControl</span>
+      <button
+        type="button"
+        onClick={() =>
+          props.onStopChange?.({
+            ...props.stopProps,
+            border: '',
+            borderWidth: '',
+            borderStyle: '',
+            borderColor: '',
+          })
+        }
+      >
+        Clear Border (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./MaskControl', () => ({
+  MaskControl: (props: any) => (
+    <div>
+      <span>MaskControl</span>
+      <button
+        type="button"
+        onClick={() =>
+          props.onStopChange?.({
+            ...props.stopProps,
+            maskImage: '',
+            WebkitMaskImage: '',
+            mask: '',
+            WebkitMask: '',
+            maskComposite: '',
+            WebkitMaskComposite: '',
+          })
+        }
+      >
+        Clear Mask (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./TransformControl', () => ({
+  TransformControl: (props: any) => (
+    <div>
+      <span>TransformControl</span>
+      <button
+        type="button"
+        onClick={() => props.onStopChange?.({ ...props.stopProps, transform: '', transformStyle: '' })}
+      >
+        Clear Transform (mock)
+      </button>
+    </div>
+  ),
+}));
+vi.mock('../../TextStyleTool/atoms/ShadowControl', () => ({
+  ShadowControl: (props: any) => (
+    <div>
+      <span>TextShadowControl</span>
+      <button type="button" onClick={() => props.onChange?.('none')}>
+        Clear Text Shadow (mock)
+      </button>
+    </div>
+  ),
+}));
 
 import { PseudoElementControl } from './PseudoElementControl';
 
@@ -251,5 +396,198 @@ describe('PseudoElementControl — visual CSS states & pseudo-elements', () => {
       '[data-id="btn-1"]:hover',
       expect.stringContaining('0.05s')
     );
+  });
+
+  it('removes Border Radius (both uniform and split 4-corner overrides) and restores it to + Add Property', () => {
+    vi.useFakeTimers();
+    state.pseudoMap = new Map([
+      ['btn-1', { hover: { backgroundColor: '#111111' } }],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /1 style/i }));
+
+    // Add Border Radius via + Add Property
+    fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+    fireEvent.click(screen.getByRole('button', { name: /border radius/i }));
+
+    expect(screen.getByText('RadiusControl')).toBeTruthy();
+
+    // Split into 4 individual corner longhands (clears borderRadius shorthand to '')
+    fireEvent.click(screen.getByRole('button', { name: /split radius \(mock\)/i }));
+    expect(screen.getByText('RadiusControl')).toBeTruthy();
+
+    // Remove Border Radius via outer Remove button
+    const removeRadiusBtn = screen.getByTitle('Remove Border Radius');
+    fireEvent.click(removeRadiusBtn);
+
+    expect(screen.queryByText('RadiusControl')).toBeNull();
+    act(() => { vi.advanceTimersByTime(450); });
+    expect(state.queueMutation).toHaveBeenCalledWith({
+      type: 'updatePseudoStyle',
+      nodeId: 'btn-1',
+      pseudo: 'hover',
+      styles: { backgroundColor: '#111111' },
+    });
+
+    // Verify Border Radius is available again under + Add Property
+    fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+    expect(screen.getByRole('button', { name: /border radius/i })).toBeTruthy();
+  });
+
+  it('removes Opacity via Remove Opacity button and clears preview CSS when empty', () => {
+    vi.useFakeTimers();
+    state.pseudoMap = new Map([
+      ['btn-1', { hover: { opacity: '0.85' } }],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /1 style/i }));
+
+    expect(screen.getByText('OpacityControl')).toBeTruthy();
+    fireEvent.click(screen.getByTitle('Remove Opacity'));
+
+    expect(screen.queryByText('OpacityControl')).toBeNull();
+    expect(state.removeCanvasCSS).toHaveBeenCalledWith('[data-id="btn-1"]:hover');
+    act(() => { vi.advanceTimersByTime(450); });
+    expect(state.queueMutation).toHaveBeenCalledWith({
+      type: 'updatePseudoStyle',
+      nodeId: 'btn-1',
+      pseudo: 'hover',
+      styles: {},
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+    expect(screen.getByRole('button', { name: /opacity/i })).toBeTruthy();
+  });
+
+  it('removes freshly added neutral/empty atoms via outer Remove button and returns them to + Add Property', () => {
+    state.pseudoMap = new Map([
+      ['btn-1', { hover: { opacity: '0.85' } }],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /1 style/i }));
+
+    const neutralProperties = [
+      { menu: /^Background$/i, text: 'FillControl', title: 'Remove Background' },
+      { menu: /^Border$/i, text: 'BorderControl', title: 'Remove Border' },
+      { menu: /^Shadow$/i, text: 'ShadowControl', title: 'Remove Shadow' },
+      { menu: /^Filter$/i, text: 'FilterControl', title: 'Remove Filter' },
+      { menu: /^Clip Path$/i, text: 'ClipPathControl', title: 'Remove Clip Path' },
+      { menu: /^Mask$/i, text: 'MaskControl', title: 'Remove Mask' },
+      { menu: /^Transform$/i, text: 'TransformControl', title: 'Remove Transform' },
+      { menu: /Text Shadow$/i, text: 'TextShadowControl', title: 'Remove Text Shadow' },
+    ];
+
+    for (const item of neutralProperties) {
+      fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+      fireEvent.click(screen.getByRole('button', { name: item.menu }));
+      expect(screen.getByText(item.text)).toBeTruthy();
+
+      const removeBtn = screen.getByTitle(item.title);
+      fireEvent.click(removeBtn);
+      expect(screen.queryByText(item.text)).toBeNull();
+    }
+  });
+
+  it('strips empty keys when active built-in atoms clear themselves and avoids duplicate outer Remove button', () => {
+    state.pseudoMap = new Map([
+      [
+        'btn-1',
+        {
+          hover: {
+            backgroundColor: '#ffffff',
+            border: '1px solid #000000',
+            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
+            filter: 'blur(4px)',
+            clipPath: 'circle(50% at 50% 50%)',
+            maskImage: 'linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 100%)',
+            transform: 'translateY(-4px)',
+            textShadow: '0px 2px 4px rgba(0, 0, 0, 0.4)',
+          },
+        },
+      ],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /8 styles/i }));
+
+    // None of these active atoms should render a duplicate outer Remove button
+    for (const label of ['Background', 'Border', 'Shadow', 'Filter', 'Clip Path', 'Mask', 'Transform', 'Text Shadow']) {
+      expect(screen.queryByTitle(`Remove ${label}`)).toBeNull();
+    }
+
+    const activeClearCases = [
+      { btn: 'Clear Fill (mock)', text: 'FillControl', menu: /^Background$/i },
+      { btn: 'Clear Border (mock)', text: 'BorderControl', menu: /^Border$/i },
+      { btn: 'Clear Shadow (mock)', text: 'ShadowControl', menu: /^Shadow$/i },
+      { btn: 'Clear Filter (mock)', text: 'FilterControl', menu: /^Filter$/i },
+      { btn: 'Clear Clip Path (mock)', text: 'ClipPathControl', menu: /^Clip Path$/i },
+      { btn: 'Clear Mask (mock)', text: 'MaskControl', menu: /^Mask$/i },
+      { btn: 'Clear Transform (mock)', text: 'TransformControl', menu: /^Transform$/i },
+      { btn: 'Clear Text Shadow (mock)', text: 'TextShadowControl', menu: /Text Shadow$/i },
+    ];
+
+    for (const c of activeClearCases) {
+      fireEvent.click(screen.getByRole('button', { name: c.btn }));
+      expect(screen.queryByText(c.text)).toBeNull();
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+    for (const c of activeClearCases) {
+      expect(screen.getByRole('button', { name: c.menu })).toBeTruthy();
+    }
+  });
+
+  it('handles drop-shadow in filter without spawning a phantom Filter row', () => {
+    state.pseudoMap = new Map([
+      [
+        'btn-1',
+        {
+          hover: {
+            filter: 'drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.25))',
+          },
+        },
+      ],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /1 style/i }));
+
+    expect(screen.getByText('ShadowControl')).toBeTruthy();
+    expect(screen.queryByText('FilterControl')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Shadow (mock)' }));
+    expect(screen.queryByText('ShadowControl')).toBeNull();
+    expect(screen.queryByText('FilterControl')).toBeNull();
+  });
+
+  it('keeps zIndex unitless on slider updates and removes it via Remove Z-Index', () => {
+    state.pseudoMap = new Map([
+      ['btn-1', { hover: { opacity: '0.9' } }],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /1 style/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ add property/i }));
+    fireEvent.click(screen.getByRole('button', { name: /z-index/i }));
+
+    const slider = screen.getByRole('slider');
+    state.injectCanvasCSS.mockClear();
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+
+    expect(state.injectCanvasCSS).toHaveBeenCalledWith(
+      '[data-id="btn-1"]:hover',
+      expect.stringContaining('z-index: 2 !important')
+    );
+    expect(state.injectCanvasCSS).not.toHaveBeenCalledWith(
+      '[data-id="btn-1"]:hover',
+      expect.stringContaining('2px')
+    );
+
+    fireEvent.click(screen.getByTitle('Remove Z-Index'));
+    expect(screen.queryByTitle('Remove Z-Index')).toBeNull();
   });
 });

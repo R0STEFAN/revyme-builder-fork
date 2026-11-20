@@ -233,7 +233,7 @@ function TransformAtom() {
   // Writing to a viewport `@media` rule (page replica) or a variant object
   // rather than the node's base style — see `setField`.
   const isScopedWrite = isReplica || isComponentVariantViewport;
-  const isMotion = mode !== 'variableDefault' && (isComponentFilePath(activeFile)
+  const isMotion = mode === 'direct' && (isComponentFilePath(activeFile)
     || !!node?.isMotionElement
     || !!node?.motionVariants || !!(node as any)?.motionVariantsRef
     || !!(node as any)?.attrs?.['data-overlay']);
@@ -256,8 +256,8 @@ function TransformAtom() {
 
   const motionHasTransform = !!(t.translateX || t.translateY || t.rotateZ || t.rotateX || t.rotateY || t.skewX || t.skewY
     || t.scaleX !== 1 || t.scaleY !== 1 || t.perspective);
-  // `visibleValue` ignores translate*() — see stripTranslates comment.
-  const visibleValue = stripTranslates(value);
+  // `visibleValue` ignores translate*() in direct mode — see stripTranslates comment.
+  const visibleValue = mode === 'direct' ? stripTranslates(value) : (value || '');
   const hasTransform = isMotion ? motionHasTransform : (!!visibleValue && visibleValue !== 'none');
 
   // Plain elements: rebuild the combined CSS `transform`. Motion elements: each
@@ -360,8 +360,10 @@ function TransformAtom() {
           const handleRemove = () => {
             if (isMotion) {
               onChangeMultiple({ x: '', y: '', rotate: '', rotateX: '', rotateY: '', skewX: '', skewY: '', scaleX: '', scaleY: '', scale: '', transformPerspective: '' });
-            } else {
+            } else if (mode === 'direct') {
               onChange(extractTranslates(value));
+            } else {
+              onChangeMultiple({ transform: '', transformStyle: '' });
             }
           };
           return (

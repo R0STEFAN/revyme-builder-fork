@@ -39,6 +39,13 @@ import { BorderControl } from './BorderControl';
 import { MaskControl } from './MaskControl';
 import { TransformControl } from './TransformControl';
 import { ShadowControl as TextShadowControl } from '../../TextStyleTool/atoms/ShadowControl';
+import { extractNonShadowFilter, parseShadowEntries } from '../../../ui/shadow-utils';
+import { parseClipPath } from '@/shared/clippath-utils';
+import { parseMaskEntries } from '@/shared/mask-utils';
+import { parseBorderState, isGradientBorder } from '../../../ui/border-utils';
+import { isTransparentColor } from './fill-clear';
+import { isMultiLayerBackground } from '../../../ui/background-layer-utils';
+import { parseTextShadowEntries } from '../../TextStyleTool/text-helpers';
 import { getPropertyIcon, PseudoIcon, TransitionIcon } from '@/design-system/PropertyIcons';
 import type { AtomProps } from '../../../controls/unified/types';
 import type { ComponentType } from 'react';
@@ -58,20 +65,46 @@ const ADDABLE_STYLE_ATOMS: { key: string; label: string; Atom: ComponentType<Ato
   { key: 'transform', label: 'Transform', Atom: TransformControl },
 ];
 
-const SUB_PROPERTY_MAP: Record<string, string> = {
-  borderWidth: 'border', borderStyle: 'border', borderColor: 'border',
-  borderTopWidth: 'border', borderTopStyle: 'border', borderTopColor: 'border',
-  borderRightWidth: 'border', borderRightStyle: 'border', borderRightColor: 'border',
-  borderBottomWidth: 'border', borderBottomStyle: 'border', borderBottomColor: 'border',
-  borderLeftWidth: 'border', borderLeftStyle: 'border', borderLeftColor: 'border',
-  WebkitMaskImage: 'maskImage', mask: 'maskImage', WebkitMask: 'maskImage',
-  background: 'backgroundColor', backgroundImage: 'backgroundColor',
+const ATOM_PROPERTY_KEYS: Record<string, readonly string[]> = {
+  backgroundColor: [
+    'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
+    'backgroundPosition', 'backgroundRepeat', 'backgroundAttachment', 'backgroundBlendMode',
+  ],
+  opacity: ['opacity'],
+  borderRadius: [
+    'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
+    'borderBottomRightRadius', 'borderBottomLeftRadius',
+  ],
+  clipPath: ['clipPath'],
+  filter: ['filter'],
+  boxShadow: ['boxShadow'],
+  border: [
+    'border', 'borderWidth', 'borderStyle', 'borderColor',
+    'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+    'borderTopWidth', 'borderTopStyle', 'borderTopColor',
+    'borderRightWidth', 'borderRightStyle', 'borderRightColor',
+    'borderBottomWidth', 'borderBottomStyle', 'borderBottomColor',
+    'borderLeftWidth', 'borderLeftStyle', 'borderLeftColor',
+    'borderImage', 'borderImageSource', 'borderImageSlice',
+  ],
+  maskImage: [
+    'maskImage', 'WebkitMaskImage', 'mask', 'WebkitMask',
+    'maskComposite', 'WebkitMaskComposite', 'maskSize', 'maskPosition', 'maskRepeat',
+  ],
+  transform: ['transform', 'transformStyle'],
 };
+
+const SUB_PROPERTY_MAP: Record<string, string> = {};
+for (const [primary, keys] of Object.entries(ATOM_PROPERTY_KEYS)) {
+  for (const key of keys) {
+    if (key !== primary) SUB_PROPERTY_MAP[key] = primary;
+  }
+}
 
 // ─── Raw-value properties (slider+input, select, color, or text) ─────────
 
 type RawPropType = 'numeric' | 'color' | 'text' | 'select' | 'dimension';
-interface RawPropDef { key: string; label: string; type: RawPropType; min?: number; max?: number; step?: number; defaultValue: string; options?: { value: string; label: string }[] }
+interface RawPropDef { key: string; label: string; type: RawPropType; min?: number; max?: number; step?: number; unitless?: boolean; defaultValue: string; options?: { value: string; label: string }[] }
 
 const POSITION_OPTIONS = [
   { value: 'absolute', label: 'Absolute' },
@@ -127,7 +160,7 @@ const RAW_PROPS: RawPropDef[] = [
   { key: 'width', label: 'Width', type: 'dimension', defaultValue: '100%' },
   { key: 'height', label: 'Height', type: 'dimension', defaultValue: '100%' },
   { key: 'color', label: 'Color', type: 'color', defaultValue: '#ffffff' },
-  { key: 'zIndex', label: 'Z-Index', type: 'numeric', min: -10, max: 100, step: 1, defaultValue: '1' },
+  { key: 'zIndex', label: 'Z-Index', type: 'numeric', min: -10, max: 100, step: 1, unitless: true, defaultValue: '1' },
   { key: 'mixBlendMode', label: 'Blend Mode', type: 'select', defaultValue: 'normal', options: BLEND_MODE_OPTIONS },
   { key: 'pointerEvents', label: 'Pointer Events', type: 'select', defaultValue: 'none', options: POINTER_EVENTS_OPTIONS },
   { key: 'fontSize', label: 'Font Size', type: 'numeric', min: 0, max: 200, step: 1, defaultValue: '16px' },
@@ -216,6 +249,85 @@ function normalizeTextShadow(raw: string): string {
   if (!m) return raw;
   const x = m[1], y = m[2], blur = m[3] || '0', color = m[4];
   return `${x}px ${y}px ${blur}px ${color}`;
+}
+
+/** Return a copy of styles dropping any undefined or empty-string (`''`) entries. */
+export function cleanPseudoStyles(raw: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v !== undefined && v !== '') out[k] = v;
+  }
+  return out;
+}
+
+/** True when the atom renders its own interactive × clear affordance in its current state. */
+export function atomHasBuiltInRemove(key: string, styles: Record<string, string>): boolean {
+  switch (key) {
+    case 'opacity':
+    case 'borderRadius':
+      return false;
+    case 'backgroundColor': {
+      const bgColor = styles.backgroundColor || '';
+      const bgImage = styles.backgroundImage || '';
+      const bg = styles.background || '';
+      const hasSolidColor = !!bgColor && !isTransparentColor(bgColor) && bgColor.trim().toLowerCase() !== 'none';
+      const hasGradient = bg.includes('gradient') || bgImage.includes('gradient');
+      const hasImage = bgImage.includes('url(') || bg.includes('url(');
+      const hasPresetVar = /^var\(\s*--[^)\s,]+\s*\)$/.test(bgColor.trim()) || /^var\(\s*--[^)\s,]+\s*\)$/.test(bgImage.trim());
+      return hasSolidColor || hasGradient || hasImage || hasPresetVar || isMultiLayerBackground(styles);
+    }
+    case 'border': {
+      if (isGradientBorder(styles)) return true;
+      const borderState = parseBorderState(styles);
+      return borderState.top.width > 0 || borderState.right.width > 0 ||
+        borderState.bottom.width > 0 || borderState.left.width > 0;
+    }
+    case 'boxShadow':
+      return parseShadowEntries(styles.boxShadow || '', styles.filter || '').length > 0;
+    case 'filter':
+      return !!extractNonShadowFilter(styles.filter || '');
+    case 'clipPath':
+      return !!parseClipPath(styles.clipPath || '');
+    case 'maskImage': {
+      const maskImageVal = styles.maskImage || styles.WebkitMaskImage || '';
+      const maskCompositeVal = styles.maskComposite || styles.WebkitMaskComposite || '';
+      const maskShorthandVal = styles.mask || styles.WebkitMask || '';
+      const entries = maskImageVal
+        ? parseMaskEntries(maskImageVal, maskCompositeVal || undefined)
+        : parseMaskEntries(maskShorthandVal);
+      return entries.length > 0;
+    }
+    case 'transform': {
+      const t = (styles.transform || '').trim();
+      return !!t && t !== 'none';
+    }
+    case 'textShadow':
+      return parseTextShadowEntries(normalizeTextShadow(styles.textShadow || 'none')).length > 0;
+    default:
+      return false;
+  }
+}
+
+function RemovablePseudoRow({
+  showRemove,
+  label,
+  onRemove,
+  children,
+}: {
+  showRemove: boolean;
+  label: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  if (!showRemove) return <>{children}</>;
+  return (
+    <div className="flex items-start w-full">
+      <div className="flex-1 min-w-0">{children}</div>
+      <div className="h-[var(--control-height)] flex items-center shrink-0">
+        <RemoveButton onClick={onRemove} title={`Remove ${label}`} />
+      </div>
+    </div>
+  );
 }
 
 // ─── Animation editor panel ────────────────────────────────────────────────
@@ -314,7 +426,7 @@ function AnimationRow({ value, onChange, onRemove }: {
       <ControlLabel label="Animation" property="" plain />
       <ControlActionRow onClick={handleClick}>
         <span className="truncate flex-1">{summary}</span>
-        <RemoveButton onClick={(e) => { e.stopPropagation(); onRemove(); }} />
+        <RemoveButton onClick={(e) => { e.stopPropagation(); onRemove(); }} title="Remove Animation" />
       </ControlActionRow>
     </div>
   );
@@ -434,7 +546,7 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
         <div className="w-full">
           <ControlActionRow onClick={undefined}>
             <ColorInput value={value} onChange={onChange} />
-            <RemoveButton onClick={onRemove} />
+            <RemoveButton onClick={onRemove} title={`Remove ${def.label}`} />
           </ControlActionRow>
         </div>
       </div>
@@ -449,7 +561,7 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
           <div className="flex-1">
             <ToolSelect value={value} onChange={onChange} options={def.options} />
           </div>
-          <RemoveButton onClick={onRemove} />
+          <RemoveButton onClick={onRemove} title={`Remove ${def.label}`} />
         </div>
       </div>
     );
@@ -483,7 +595,7 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
               options={DIMENSION_UNIT_OPTIONS}
             />
           </div>
-          <RemoveButton onClick={onRemove} />
+          <RemoveButton onClick={onRemove} title={`Remove ${def.label}`} />
         </div>
       </div>
     );
@@ -495,9 +607,9 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
         <ControlLabel label={def.label} property="" plain />
         <div className="flex items-center gap-1 w-full">
           <ToolSlider value={parseNum(value)} min={def.min ?? -500} max={def.max ?? 500} step={def.step ?? 1}
-            onChange={(v) => onChange(`${v}${unit || 'px'}`)} />
+            onChange={(v) => onChange(def.unitless ? String(v) : `${v}${unit || 'px'}`)} />
           <ToolInput value={value} onChange={onChange} />
-          <RemoveButton onClick={onRemove} />
+          <RemoveButton onClick={onRemove} title={`Remove ${def.label}`} />
         </div>
       </div>
     );
@@ -510,7 +622,7 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
         <div className="flex-1">
           <ToolInput value={value} onChange={onChange} />
         </div>
-        <RemoveButton onClick={onRemove} />
+        <RemoveButton onClick={onRemove} title={`Remove ${def.label}`} />
       </div>
     </div>
   );
@@ -526,7 +638,7 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   const popPanel = popupCtx?.popPanel;
   const interactive = isInteractivePseudo(pseudo);
   const [previewOnCanvas, setPreviewOnCanvas] = useState(interactive);
-  const [localStyles, setLocalStyles] = useState<Record<string, string>>(() => ({ ...styles }));
+  const [localStyles, setLocalStyles] = useState<Record<string, string>>(() => cleanPseudoStyles(styles));
   const localRef = useRef(localStyles);
   localRef.current = localStyles;
   const nodeIdRef = useRef(nodeId);
@@ -545,7 +657,7 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
     if (stylesSig === prevStylesSigRef.current) return;
     prevStylesSigRef.current = stylesSig;
     if (selfWriteRef.current > 0) { selfWriteRef.current--; return; }
-    setLocalStyles({ ...styles });
+    setLocalStyles(cleanPseudoStyles(styles));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stylesSig]);
 
@@ -608,9 +720,37 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   }, [doWrite]);
 
   const handleChange = useCallback((newStyles: Record<string, string>) => {
-    setLocalStyles(newStyles);
-    scheduleWrite(newStyles);
+    const cleaned = cleanPseudoStyles(newStyles);
+    localRef.current = cleaned;
+    setLocalStyles(cleaned);
+    scheduleWrite(cleaned);
   }, [scheduleWrite]);
+
+  const removeAtomProperty = useCallback((primaryKey: string) => {
+    const updated = { ...localRef.current };
+    if (primaryKey === 'boxShadow') {
+      delete updated.boxShadow;
+      if (updated.filter) updated.filter = extractNonShadowFilter(updated.filter);
+    } else if (primaryKey === 'filter') {
+      if (updated.filter) {
+        updated.filter = updated.filter.match(/drop-shadow\([^)]*(?:\([^)]*\)[^)]*)*\)/gi)?.join(' ') || '';
+      } else {
+        delete updated.filter;
+      }
+    } else if (primaryKey === 'textShadow') {
+      delete updated.textShadow;
+    } else {
+      for (const k of ATOM_PROPERTY_KEYS[primaryKey] ?? [primaryKey]) {
+        delete updated[k];
+      }
+    }
+    handleChange(updated);
+    trace.action('pseudo-editor:remove-property', {
+      nodeId: nodeIdRef.current,
+      pseudo: pseudoRef.current,
+      property: primaryKey,
+    });
+  }, [handleChange]);
 
   // Mode props for ToolAtom controls — route through stopProps/onStopChange
   const mp: AtomProps = { mode: 'scrollStop' as const, stopProps: localStyles, onStopChange: handleChange };
@@ -619,6 +759,16 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   const allKeys = new Set(Object.keys(localStyles));
   for (const key of [...allKeys]) {
     if (SUB_PROPERTY_MAP[key]) allKeys.add(SUB_PROPERTY_MAP[key]);
+  }
+  if (localStyles.filter) {
+    const hasDropShadow = /drop-shadow\(/i.test(localStyles.filter);
+    const hasNonShadow = !!extractNonShadowFilter(localStyles.filter);
+    if (hasDropShadow) {
+      allKeys.add('boxShadow');
+      if (!hasNonShadow && localStyles.filter.trim() !== 'none') {
+        allKeys.delete('filter');
+      }
+    }
   }
   const activeAtomKeys = [...allKeys].filter(k => ADDABLE_STYLE_ATOMS.some(a => a.key === k));
   const activeRawProps = RAW_PROPS.filter(p => allKeys.has(p.key));
@@ -669,10 +819,24 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
 
       {/* Text Shadow — standalone control, renders its own label + row */}
       {hasTextShadow && (
-        <TextShadowControl
-          value={normalizeTextShadow(localStyles.textShadow || 'none')}
-          onChange={(v) => handleChange({ ...localRef.current, textShadow: v })}
-        />
+        <RemovablePseudoRow
+          showRemove={!atomHasBuiltInRemove('textShadow', localStyles)}
+          label="Text Shadow"
+          onRemove={() => removeAtomProperty('textShadow')}
+        >
+          <TextShadowControl
+            value={normalizeTextShadow(localStyles.textShadow || 'none')}
+            onChange={(v) => {
+              const updated = { ...localRef.current };
+              if (!v || v.trim() === '' || v.trim() === 'none') {
+                delete updated.textShadow;
+              } else {
+                updated.textShadow = v;
+              }
+              handleChange(updated);
+            }}
+          />
+        </RemovablePseudoRow>
       )}
 
       {/* Animation — keyframe selector + timing controls */}
@@ -706,7 +870,16 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
       {activeAtomKeys.map(key => {
         const entry = ADDABLE_STYLE_ATOMS.find(a => a.key === key);
         if (!entry) return null;
-        return <entry.Atom key={key} {...mp} />;
+        return (
+          <RemovablePseudoRow
+            key={key}
+            showRemove={!atomHasBuiltInRemove(key, localStyles)}
+            label={entry.label}
+            onRemove={() => removeAtomProperty(key)}
+          >
+            <entry.Atom {...mp} />
+          </RemovablePseudoRow>
+        );
       })}
 
       {/* Add Property button — same width pattern as other rows.

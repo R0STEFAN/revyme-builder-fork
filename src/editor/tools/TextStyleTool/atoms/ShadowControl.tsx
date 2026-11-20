@@ -169,6 +169,10 @@ function ShadowInner() {
 export function ShadowControl({ value, onChange }: ShadowControlProps = {}) {
   const [localShadow, setLocalShadow] = useState(value || 'none');
 
+  useEffect(() => {
+    if (value !== undefined) setLocalShadow(value || 'none');
+  }, [value]);
+
   if (value !== undefined && onChange !== undefined) {
     const handleCommit = (v: string) => {
       setLocalShadow(v);

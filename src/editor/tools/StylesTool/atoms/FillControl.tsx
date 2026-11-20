@@ -10,6 +10,7 @@ import { UnifiedControlProvider, useControlContext, useControlContextOptional, S
 import { UsedByRow } from '../../../controls/unified/UsedByRow';
 import { VariableBoundPill, LegacyVariableBoundPill } from '../../../controls/VariableBoundPill';
 import { useControlOptional } from '../../../controls/ControlProvider';
+import { useHoistMenuItem } from '../../../controls/hoist-context';
 import { CmsBoundPill, CmsMissingPill, cmsOrphanInScope } from '../../../controls/CmsBoundPill';
 import type { MenuItem } from '../../../controls/control-menu-items';
 import { createDefaultGradient, formatGradient } from '@/shared/gradient-utils';
@@ -1295,7 +1296,9 @@ function FillAtom() {
   // (which means "inherit default" there) — see fill-clear.ts.
   const isVariantTile = useAtomValue(isComponentVariantViewportAtom);
   const activeVariant = useAtomValue(activeComponentVariantAtom);
-  const onNonDefaultVariant = !!isVariantTile && !!activeVariant && activeVariant !== 'default';
+  const onNonDefaultVariant = mode === 'direct' && !!isVariantTile && !!activeVariant && activeVariant !== 'default';
+  const ovHoist = useHoistMenuItem();
+  const labelPlain = mode !== 'direct' && !ovHoist;
   // Locale `:lang()` overrides on the fill → blue Locale pill (Phase 4).
   const fillLocaleOverrides = useLocaleStyleOverrides('backgroundColor', node?.id ?? null);
   // Active file code — used to read a bound Fill variable's @propMeta TYPE so an
@@ -1648,6 +1651,7 @@ function FillAtom() {
         <ControlLabel
           label="Fill"
           property="backgroundColor"
+          plain={labelPlain}
           hideCreateVariable
           extraMenuItems={fillExtraMenuItems}
         />
