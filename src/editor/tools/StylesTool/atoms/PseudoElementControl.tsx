@@ -1,4 +1,5 @@
-// PseudoElementControl.tsx — Visual editor for ::before and ::after pseudo-element CSS rules.
+// PseudoElementControl.tsx — Visual editor for CSS pseudo-states (:hover, :active, :focus-visible,
+// custom single-node selectors) and pseudo-elements (::before, ::after, ::placeholder).
 // Row style matches Border/Filter/Shadow: ControlLabel + ControlActionRow with summary + RemoveButton.
 // Inner editor reuses real ToolAtom controls via MotionPropsEditor pattern (stopProps + onStopChange).
 // Live preview via injectCanvasCSS. Writes via queueMutation({ type: 'updatePseudoStyle' }).
@@ -11,12 +12,20 @@ import ToolPopup, { useToolPopupOptional } from '../../../ui/ToolPopup';
 import { useControl } from '../../../controls/ControlProvider';
 import { pseudoStylesAtom } from '@/code/stores/pseudo-store';
 import { keyframeNamesAtom } from '@/code/stores/animation-store';
+import {
+  BUILTIN_PSEUDO_ELEMENTS,
+  BUILTIN_PSEUDO_STATES,
+  normalizePseudoKind,
+  type PseudoKind,
+} from '@/code/parsing/pseudo-parser';
+import type { CanvasNode } from '@/code/parsing/parser';
 import { forSelectionTargets, selectionTargetIds } from '../../../controls/multi-select-targets';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { injectCanvasCSS, removeCanvasCSS } from '@/canvas/node-ops';
 import { toKebab } from '@/shared/css-utils';
 import {
   parseAnimationShorthand, formatAnimationShorthand, animationSummary,
+  parseTransitionShorthand, formatTransitionShorthand, transitionSummary, createDefaultTransition,
   CSS_EASING_OPTIONS, CSS_DIRECTION_OPTIONS, CSS_FILL_OPTIONS, CSS_ITERATION_OPTIONS,
 } from '@/shared/animation-utils';
 import { trace } from '@/shared/debug-trace';
@@ -126,6 +135,60 @@ const RAW_PROPS: RawPropDef[] = [
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+export function formatPseudoLabel(pseudo: PseudoKind): string {
+  if (pseudo === 'before' || pseudo === 'after' || pseudo === 'placeholder') {
+    return `::${pseudo}`;
+  }
+  if (pseudo.startsWith('custom:')) {
+    return pseudo.slice('custom:'.length);
+  }
+  return `:${pseudo}`;
+}
+
+export function isInteractivePseudo(pseudo: PseudoKind): boolean {
+  return pseudo !== 'before' && pseudo !== 'after' && pseudo !== 'placeholder';
+}
+
+export function formatCanvasRuleSelector(nodeId: string, pseudo: PseudoKind): string {
+  if (pseudo === 'before' || pseudo === 'after' || pseudo === 'placeholder') {
+    return `[data-id="${nodeId}"]::${pseudo}`;
+  }
+  if (pseudo.startsWith('custom:')) {
+    return `[data-id="${nodeId}"]${pseudo.slice('custom:'.length)}`;
+  }
+  return `[data-id="${nodeId}"]:${pseudo}`;
+}
+
+export function formatCanvasPreviewSelector(nodeId: string): string {
+  // Doubled same-node attribute selector increases specificity without colliding
+  // with any base `[data-id="..."]` rule during removeCanvasCSS cleanup.
+  return `[data-id="${nodeId}"][data-id="${nodeId}"]`;
+}
+
+export function isFormControlOwnedPseudo(
+  node: Pick<CanvasNode, 'type' | 'attrs'> | null | undefined,
+  pseudo: PseudoKind,
+): boolean {
+  if (!node) return false;
+  const tag = node.type;
+  const inputType = String(node.attrs?.type ?? 'text');
+  const isControl =
+    (tag === 'input' || tag === 'textarea' || tag === 'select') &&
+    !['submit', 'button', 'reset', 'hidden'].includes(inputType);
+  const isBoolean = tag === 'input' && (inputType === 'checkbox' || inputType === 'radio');
+  return (isControl && pseudo === 'focus') || (isBoolean && pseudo === 'checked');
+}
+
+function starterStylesForPseudo(pseudo: PseudoKind): Record<string, string> {
+  if (pseudo === 'before' || pseudo === 'after') {
+    return { content: "''", position: 'absolute', inset: '0', pointerEvents: 'none' };
+  }
+  if (pseudo === 'placeholder') {
+    return { color: '#888888' };
+  }
+  return { opacity: '0.85' };
+}
 
 function stylesToCSS(styles: Record<string, string>): string {
   return Object.entries(styles)
@@ -250,6 +313,100 @@ function AnimationRow({ value, onChange, onRemove }: {
   );
 }
 
+// ─── Transition editor panel ───────────────────────────────────────────────
+
+const TRANSITION_PROPERTY_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'background-color', label: 'Background' },
+  { value: 'color', label: 'Color' },
+  { value: 'transform', label: 'Transform' },
+  { value: 'opacity', label: 'Opacity' },
+  { value: 'border-color', label: 'Border Color' },
+  { value: 'box-shadow', label: 'Shadow' },
+  { value: 'filter', label: 'Filter' },
+];
+
+const EDITORIAL_BEZIER = 'cubic-bezier(0.77, 0, 0.175, 1)';
+const TRANSITION_EASING_OPTIONS = CSS_EASING_OPTIONS.some((o) => o.value === EDITORIAL_BEZIER)
+  ? CSS_EASING_OPTIONS
+  : [...CSS_EASING_OPTIONS, { value: EDITORIAL_BEZIER, label: 'Editorial (0.77, 0, 0.175, 1)' }];
+
+function TransitionEditorPanel({ initialValue, onCommit }: { initialValue: string; onCommit: (v: string) => void }) {
+  const parsed = parseTransitionShorthand(initialValue);
+  const initial = parsed[0] || createDefaultTransition();
+  const [vals, setVals] = useState(initial);
+
+  const propOptions = TRANSITION_PROPERTY_OPTIONS.some((o) => o.value === vals.property)
+    ? TRANSITION_PROPERTY_OPTIONS
+    : [...TRANSITION_PROPERTY_OPTIONS, { value: vals.property, label: vals.property }];
+
+  const easingOptions = TRANSITION_EASING_OPTIONS.some((o) => o.value === vals.easing)
+    ? TRANSITION_EASING_OPTIONS
+    : [...TRANSITION_EASING_OPTIONS, { value: vals.easing, label: vals.easing }];
+
+  const update = (patch: Partial<typeof vals>) => {
+    const next = { ...vals, ...patch };
+    setVals(next);
+    onCommit(formatTransitionShorthand([next]));
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <ControlLabel label="Property" property="" plain />
+        <div className="w-full">
+          <ToolSelect value={vals.property} onChange={(v) => update({ property: v })} options={propOptions} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <ControlLabel label="Duration" property="" plain />
+        <div className="flex items-center gap-1 w-full">
+          <ToolSlider value={vals.duration} min={0} max={5} step={0.05} onChange={(v) => update({ duration: v })} />
+          <ToolInput value={`${vals.duration}s`} onChange={(v) => update({ duration: parseFloat(v) || 0 })} step={0.05} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <ControlLabel label="Easing" property="" plain />
+        <div className="w-full">
+          <ToolSelect value={vals.easing} onChange={(v) => update({ easing: v })} options={easingOptions} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <ControlLabel label="Delay" property="" plain />
+        <div className="flex items-center gap-1 w-full">
+          <ToolSlider value={vals.delay} min={0} max={5} step={0.05} onChange={(v) => update({ delay: v })} />
+          <ToolInput value={`${vals.delay}s`} onChange={(v) => update({ delay: parseFloat(v) || 0 })} step={0.05} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Transition row — shows shorthand summary, opens editor panel */
+function TransitionRow({ value, onChange, onRemove }: {
+  value: string; onChange: (v: string) => void; onRemove: () => void;
+}) {
+  const popupCtx = useToolPopupOptional();
+  const parsed = parseTransitionShorthand(value);
+  const summary = parsed.length > 0 ? transitionSummary(parsed) : (value || 'None');
+
+  const handleClick = () => {
+    if (popupCtx?.pushPanel) {
+      popupCtx.pushPanel('Transition', <TransitionEditorPanel initialValue={value} onCommit={onChange} />);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between w-full">
+      <ControlLabel label="Transition" property="" plain />
+      <ControlActionRow onClick={handleClick}>
+        <span className="truncate flex-1">{summary}</span>
+        <RemoveButton onClick={(e) => { e.stopPropagation(); onRemove(); }} />
+      </ControlActionRow>
+    </div>
+  );
+}
+
 // ─── Raw property row — renders slider+input for numeric, ColorInput for color, ToolInput for text
 
 function RawPropertyRow({ def, value, onChange, onRemove }: {
@@ -349,14 +506,20 @@ function RawPropertyRow({ def, value, onChange, onRemove }: {
 // ─── PseudoEditor (inside ToolPopup) ────────────────────────────────────────
 
 function PseudoEditor({ nodeId, pseudo, styles }: {
-  nodeId: string; pseudo: 'before' | 'after'; styles: Record<string, string>;
+  nodeId: string; pseudo: PseudoKind; styles: Record<string, string>;
 }) {
   const popupCtx = useToolPopupOptional();
   const pushPanel = popupCtx?.pushPanel;
   const popPanel = popupCtx?.popPanel;
+  const interactive = isInteractivePseudo(pseudo);
+  const [previewOnCanvas, setPreviewOnCanvas] = useState(interactive);
   const [localStyles, setLocalStyles] = useState<Record<string, string>>(() => ({ ...styles }));
   const localRef = useRef(localStyles);
   localRef.current = localStyles;
+  const nodeIdRef = useRef(nodeId);
+  nodeIdRef.current = nodeId;
+  const pseudoRef = useRef(pseudo);
+  pseudoRef.current = pseudo;
   const writeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // External re-seed (undo/redo while the pseudo editor is open). Own
@@ -375,35 +538,56 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
 
   trace.fn('PseudoEditor:render', { nodeId, pseudo, propCount: Object.keys(localStyles).length });
 
-  // Live preview via injectCanvasCSS
-  useEffect(() => {
-    const css = stylesToCSS(localRef.current);
-    const targets = selectionTargetIds(nodeId);
-    if (css) for (const tid of targets) injectCanvasCSS(`[data-id="${tid}"]::${pseudo}`, css);
-    return () => {
-      for (const tid of targets) removeCanvasCSS(`[data-id="${tid}"]::${pseudo}`);
-      if (writeTimerRef.current !== null) {
-        clearTimeout(writeTimerRef.current);
-        writeTimerRef.current = null;
-        doWrite(localRef.current);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const css = stylesToCSS(localStyles);
-    if (css) forSelectionTargets(nodeId, (tid) => injectCanvasCSS(`[data-id="${tid}"]::${pseudo}`, css));
-  }, [localStyles, nodeId, pseudo]);
-
   const doWrite = useCallback((s: Record<string, string>) => {
     const filtered: Record<string, string> = {};
     for (const [k, v] of Object.entries(s)) { if (v) filtered[k] = v; }
     expediteStableAtomSync();
     // Multi-selection: the same pseudo styles land on every selected node.
-    forSelectionTargets(nodeId, (tid) => queueMutation({ type: 'updatePseudoStyle', nodeId: tid, pseudo, styles: filtered }));
-    trace.action('pseudo-editor:write', { nodeId, pseudo, propCount: Object.keys(filtered).length });
-  }, [nodeId, pseudo]);
+    forSelectionTargets(nodeIdRef.current, (tid) =>
+      queueMutation({ type: 'updatePseudoStyle', nodeId: tid, pseudo: pseudoRef.current, styles: filtered })
+    );
+    trace.action('pseudo-editor:write', {
+      nodeId: nodeIdRef.current,
+      pseudo: pseudoRef.current,
+      propCount: Object.keys(filtered).length,
+    });
+  }, []);
+  const doWriteRef = useRef(doWrite);
+  doWriteRef.current = doWrite;
+
+  // Flush pending debounced writes and strip canvas CSS overrides on unmount.
+  useEffect(() => {
+    const targets = selectionTargetIds(nodeIdRef.current);
+    const activePseudo = pseudoRef.current;
+    return () => {
+      for (const tid of targets) {
+        removeCanvasCSS(formatCanvasRuleSelector(tid, activePseudo));
+        removeCanvasCSS(formatCanvasPreviewSelector(tid));
+      }
+      if (writeTimerRef.current !== null) {
+        clearTimeout(writeTimerRef.current);
+        writeTimerRef.current = null;
+        doWriteRef.current(localRef.current);
+      }
+    };
+  }, []);
+
+  // Live preview via injectCanvasCSS (plus forced preview on the element when toggled on).
+  useEffect(() => {
+    const css = stylesToCSS(localStyles);
+    forSelectionTargets(nodeId, (tid) => {
+      const ruleSel = formatCanvasRuleSelector(tid, pseudo);
+      const previewSel = formatCanvasPreviewSelector(tid);
+      if (css) injectCanvasCSS(ruleSel, css);
+      else removeCanvasCSS(ruleSel);
+
+      if (interactive && previewOnCanvas && css) {
+        injectCanvasCSS(previewSel, css);
+      } else {
+        removeCanvasCSS(previewSel);
+      }
+    });
+  }, [localStyles, nodeId, pseudo, interactive, previewOnCanvas]);
 
   const scheduleWrite = useCallback((s: Record<string, string>) => {
     if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
@@ -427,15 +611,33 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   const activeRawProps = RAW_PROPS.filter(p => allKeys.has(p.key));
   const hasTextShadow = allKeys.has('textShadow');
   const hasAnimation = allKeys.has('animation');
+  const hasTransition = allKeys.has('transition');
 
   // Available to add
   const availableAtoms = ADDABLE_STYLE_ATOMS.filter(a => !allKeys.has(a.key));
   const availableRaw = RAW_PROPS.filter(p => !allKeys.has(p.key));
   const canAddTextShadow = !hasTextShadow;
   const canAddAnimation = !hasAnimation;
+  const canAddTransition = !hasTransition;
 
   return (
     <div className="flex flex-col gap-2">
+      {interactive && (
+        <button
+          type="button"
+          aria-pressed={previewOnCanvas}
+          onClick={() => setPreviewOnCanvas((v) => !v)}
+          className={`w-full h-[var(--control-height)] flex items-center justify-between px-2 text-xs cut-corners cut-border border cursor-pointer transition-colors ${
+            previewOnCanvas
+              ? 'bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)] [--cut-border-color:var(--accent)]'
+              : 'bg-[var(--grid-line)] text-[var(--text-secondary)] border-[var(--control-border)] [--cut-border-color:var(--control-border)]'
+          }`}
+        >
+          <span>Preview on canvas</span>
+          <span className="font-mono text-[10px]">{previewOnCanvas ? 'ON' : 'OFF'}</span>
+        </button>
+      )}
+
       {/* Raw value properties — slider+input, color, or text rows */}
       {activeRawProps.map((def) => (
         <RawPropertyRow
@@ -473,6 +675,20 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
         />
       )}
 
+      {/* Transition — property + duration + easing controls */}
+      {hasTransition && (
+        <TransitionRow
+          value={localStyles.transition || 'all 0.25s ease'}
+          onChange={(v) => handleChange({ ...localRef.current, transition: v })}
+          onRemove={() => {
+            const updated = { ...localRef.current };
+            delete updated.transition;
+            handleChange(updated);
+            trace.action('pseudo-editor:remove-property', { nodeId, pseudo, property: 'transition' });
+          }}
+        />
+      )}
+
       {/* ToolAtom-backed properties — reuse centralized controls */}
       {activeAtomKeys.map(key => {
         const entry = ADDABLE_STYLE_ATOMS.find(a => a.key === key);
@@ -484,7 +700,7 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
           Empty ControlLabel claims the chevron-gutter space so the right
           column lines up; `<div className="w-full">` wrapper makes the
           button fill the column instead of shrinking to content. */}
-      {(availableAtoms.length > 0 || availableRaw.length > 0 || canAddTextShadow || canAddAnimation) && (
+      {(availableAtoms.length > 0 || availableRaw.length > 0 || canAddTextShadow || canAddAnimation || canAddTransition) && (
         <div className="flex items-center justify-between w-full">
           <ControlLabel label="" property="" plain />
           <div className="w-full">
@@ -527,6 +743,21 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
                     Animation
                   </button>
                 )}
+                {canAddTransition && (
+                  <button
+                    onClick={() => {
+                      handleChange({
+                        ...localRef.current,
+                        transition: formatTransitionShorthand([createDefaultTransition()]),
+                      });
+                      popPanel?.();
+                      trace.action('pseudo-editor:add-property', { nodeId, pseudo, property: 'transition' });
+                    }}
+                    className="w-full h-[var(--control-height)] shrink-0 flex items-center gap-2 px-2 bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] cut-corners cut-border hover:[--cut-border-color:var(--control-border-hover)] cursor-pointer transition-colors text-xs text-[var(--text-primary)]">
+                    {(() => { const I = getPropertyIcon('transition'); return <I width={20} height={20} className="shrink-0" />; })()}
+                    Transition
+                  </button>
+                )}
                 {availableAtoms.map(({ key, label }) => (
                   <button key={key}
                     onClick={() => {
@@ -558,21 +789,17 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   );
 }
 
-// ─── Pseudo entry row inside the popup (::before or ::after) ───────────────
+// ─── Pseudo entry row inside the popup ──────────────────────────────────────
 
 function PseudoEntryRow({ nodeId, pseudo, styles, pushPanel }: {
-  nodeId: string; pseudo: 'before' | 'after'; styles: Record<string, string> | undefined;
+  nodeId: string; pseudo: PseudoKind; styles: Record<string, string> | undefined;
   pushPanel: (title: string, content: React.ReactNode) => void;
 }) {
   const hasStyles = !!styles && Object.keys(styles).length > 0;
+  const label = formatPseudoLabel(pseudo);
 
   const handleAdd = () => {
-    const defaults: Record<string, string> = {
-      content: "''",
-      position: 'absolute',
-      inset: '0',
-      pointerEvents: 'none',
-    };
+    const defaults = starterStylesForPseudo(pseudo);
     expediteStableAtomSync();
     queueMutation({ type: 'updatePseudoStyle', nodeId, pseudo, styles: defaults });
     trace.action('pseudo-entry:add', { nodeId, pseudo });
@@ -582,13 +809,14 @@ function PseudoEntryRow({ nodeId, pseudo, styles, pushPanel }: {
     e.stopPropagation();
     expediteStableAtomSync();
     queueMutation({ type: 'removePseudo', nodeId, pseudo });
-    removeCanvasCSS(`[data-id="${nodeId}"]::${pseudo}`);
+    removeCanvasCSS(formatCanvasRuleSelector(nodeId, pseudo));
+    removeCanvasCSS(formatCanvasPreviewSelector(nodeId));
     trace.action('pseudo-entry:remove', { nodeId, pseudo });
   };
 
   const openEditor = () => {
     if (hasStyles) {
-      pushPanel(`::${pseudo}`, <PseudoEditor nodeId={nodeId} pseudo={pseudo} styles={styles!} />);
+      pushPanel(label, <PseudoEditor nodeId={nodeId} pseudo={pseudo} styles={styles!} />);
     } else {
       handleAdd();
     }
@@ -596,7 +824,7 @@ function PseudoEntryRow({ nodeId, pseudo, styles, pushPanel }: {
 
   return (
     <SingleEntryRow
-      label={`::${pseudo}`} property="" plain
+      label={label} property="" plain
       hasValue={hasStyles}
       onOpen={openEditor}
       EmptyIcon={PseudoIcon}
@@ -608,48 +836,164 @@ function PseudoEntryRow({ nodeId, pseudo, styles, pushPanel }: {
 
 // ─── Main popup content ────────────────────────────────────────────────────
 
-function PseudoPopupContent({ nodeId }: { nodeId: string }) {
+const ALL_BUILTIN_PSEUDO_KINDS: PseudoKind[] = [
+  ...BUILTIN_PSEUDO_STATES,
+  ...BUILTIN_PSEUDO_ELEMENTS,
+];
+
+function PseudoPopupContent({ node }: { node: Pick<CanvasNode, 'id' | 'type' | 'attrs'> }) {
   const pseudoStyles = useAtomValue(pseudoStylesAtom);
   const popupCtx = useToolPopupOptional();
-  const nodeStyles = pseudoStyles.get(nodeId);
+  const [customInput, setCustomInput] = useState('');
+  const [customError, setCustomError] = useState<string | null>(null);
+  const nodeId = node.id;
+  const nodeStyles = pseudoStyles.get(nodeId) ?? {};
 
   if (!popupCtx?.pushPanel) return null;
 
+  const activeEntries = (Object.entries(nodeStyles) as Array<[PseudoKind, Record<string, string> | undefined]>)
+    .filter(([kind, vals]) => !isFormControlOwnedPseudo(node, kind) && !!vals && Object.keys(vals).length > 0);
+
+  const activeSet = new Set(activeEntries.map(([k]) => k));
+  const addableBuiltins = ALL_BUILTIN_PSEUDO_KINDS.filter(
+    (k) => !isFormControlOwnedPseudo(node, k) && !activeSet.has(k),
+  );
+
+  const handleQuickAdd = (kind: PseudoKind) => {
+    const defaults = starterStylesForPseudo(kind);
+    expediteStableAtomSync();
+    forSelectionTargets(nodeId, (tid) =>
+      queueMutation({ type: 'updatePseudoStyle', nodeId: tid, pseudo: kind, styles: defaults })
+    );
+    trace.action('pseudo-popup:quick-add', { nodeId, pseudo: kind });
+  };
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = customInput.trim();
+    if (!raw) return;
+
+    const normalized = normalizePseudoKind(raw);
+    if (!normalized) {
+      setCustomError(
+        'Invalid state selector. Use a single-node pseudo or attribute (e.g. :nth-child(odd), [aria-expanded="true"]).'
+      );
+      return;
+    }
+    if (isFormControlOwnedPseudo(node, normalized)) {
+      setCustomError(`${formatPseudoLabel(normalized)} is managed by the Form State control above.`);
+      return;
+    }
+    setCustomError(null);
+    setCustomInput('');
+    handleQuickAdd(normalized);
+  };
+
   return (
     <div className="flex flex-col gap-2">
-      <PseudoEntryRow nodeId={nodeId} pseudo="before" styles={nodeStyles?.before} pushPanel={popupCtx.pushPanel} />
-      <PseudoEntryRow nodeId={nodeId} pseudo="after" styles={nodeStyles?.after} pushPanel={popupCtx.pushPanel} />
+      {activeEntries.map(([kind, styles]) => (
+        <PseudoEntryRow
+          key={kind}
+          nodeId={nodeId}
+          pseudo={kind}
+          styles={styles}
+          pushPanel={popupCtx.pushPanel}
+        />
+      ))}
+
+      {addableBuiltins.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1">
+          {addableBuiltins.map((kind) => {
+            const label = formatPseudoLabel(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => handleQuickAdd(kind)}
+                className="px-2 py-1 text-[11px] bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] cut-corners cut-border cursor-pointer text-[var(--text-primary)] transition-colors"
+              >
+                + {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <form onSubmit={handleCustomSubmit} className="flex flex-col gap-1 pt-1 border-t border-[var(--border-light)]">
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => {
+              setCustomInput(e.target.value);
+              if (customError) setCustomError(null);
+            }}
+            placeholder=':nth-child(odd) or [aria-expanded="true"]'
+            className="flex-1 min-w-0 h-[var(--control-height)] px-2 text-xs bg-[var(--grid-line)] border border-[var(--control-border)] text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] cut-corners outline-none"
+          />
+          <button
+            type="submit"
+            className="h-[var(--control-height)] px-2 text-xs bg-[var(--grid-line)] border border-[var(--control-border)] hover:border-[var(--control-border-hover)] text-[var(--text-primary)] cut-corners cursor-pointer shrink-0"
+          >
+            Add State
+          </button>
+        </div>
+        {customError && (
+          <div role="alert" className="text-[11px] text-red-500 leading-snug">
+            {customError}
+          </div>
+        )}
+      </form>
+
+      <p className="text-[10px] leading-snug text-[var(--text-secondary)] pt-1 border-t border-[var(--border-light)]">
+        Use States for single-node CSS states. For parent-hover affecting child elements, extract a Design Component with Hover variants.
+      </p>
     </div>
   );
 }
 
 // ─── Main export ────────────────────────────────────────────────────────────
 
-/** Single "Pseudo Styles" row → opens popup with ::before / ::after entries that slide into editors. */
-export function PseudoElementControl() {
+/** Single "States & Pseudo" row → opens popup with CSS states & ::before / ::after editors. */
+export function PseudoElementControl({ openSignal = 0 }: { openSignal?: number } = {}) {
   const { node } = useControl();
   const pseudoStyles = useAtomValue(pseudoStylesAtom);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(openSignal > 0);
   const btnRef = useRef<HTMLSpanElement>(null);
+  const prevNodeIdRef = useRef<string | null>(node?.id ?? null);
+
+  useEffect(() => {
+    if (openSignal > 0) setIsOpen(true);
+  }, [openSignal]);
+
+  useEffect(() => {
+    const nextId = node?.id ?? null;
+    if (prevNodeIdRef.current !== null && prevNodeIdRef.current !== nextId && !(openSignal > 0)) {
+      setIsOpen(false);
+    }
+    prevNodeIdRef.current = nextId;
+  }, [node?.id, openSignal]);
 
   if (!node) return null;
 
   const nodeId = node.id;
   const nodeStyles = pseudoStyles.get(nodeId);
-  const hasBefore = !!nodeStyles?.before && Object.keys(nodeStyles.before).length > 0;
-  const hasAfter = !!nodeStyles?.after && Object.keys(nodeStyles.after).length > 0;
-  const hasAny = hasBefore || hasAfter;
-
+  const visibleEntries = nodeStyles
+    ? (Object.entries(nodeStyles) as Array<[PseudoKind, Record<string, string> | undefined]>).filter(
+        ([kind, vals]) => !isFormControlOwnedPseudo(node, kind) && !!vals && Object.keys(vals).length > 0,
+      )
+    : [];
+  const hasAny = visibleEntries.length > 0;
   const summary = hasAny
-    ? [hasBefore && '::before', hasAfter && '::after'].filter(Boolean).join(', ')
+    ? visibleEntries.map(([kind]) => formatPseudoLabel(kind)).join(', ')
     : '';
 
-  trace.fn('PseudoElementControl:render', { nodeId, hasBefore, hasAfter });
+  trace.fn('PseudoElementControl:render', { nodeId, activeCount: visibleEntries.length });
 
   return (
     <>
       <SingleEntryRow
-        label="Pseudo" property="" plain
+        label="States" property="" plain
         hasValue={hasAny}
         onOpen={() => setIsOpen(!isOpen)}
         anchorRef={btnRef}
@@ -657,8 +1001,8 @@ export function PseudoElementControl() {
         renderPreview={() => <span className="truncate flex-1">{summary}</span>}
       />
 
-      <ToolPopup isOpen={isOpen} onClose={() => setIsOpen(false)} title="Pseudo Styles" anchorRef={btnRef}>
-        <PseudoPopupContent nodeId={nodeId} />
+      <ToolPopup isOpen={isOpen} onClose={() => setIsOpen(false)} title="States & Pseudo" anchorRef={btnRef}>
+        <PseudoPopupContent node={node} />
       </ToolPopup>
     </>
   );

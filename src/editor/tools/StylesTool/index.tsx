@@ -25,10 +25,11 @@ import {
   OverflowControl, OverflowXControl, OverflowYControl, OpacityControl, HideControl,
   BorderControl, ShadowControl, MaskControl,
   ClipPathControl, TransformControl, FilterControl, BackdropFilterControl, ZIndexControl,
-  VariantTransitionControl, PseudoElementControl,
+  VariantTransitionControl,
   PointerEventsControl, UserSelectControl, BackfaceControl, MixBlendModeControl, FormStateControl,
   GroupFillControl, RotateControl,
 } from './atoms';
+import { PseudoElementControl, isFormControlOwnedPseudo } from './atoms/PseudoElementControl';
 import { DYNAMIC_STYLES, type DynamicStyleSpec } from './dynamic-styles';
 
 // ─── StylesTool ────────────────────────────────────────────────────────────
@@ -132,9 +133,22 @@ export default function StylesTool() {
     return set;
   }, [hasStyleAnywhere, isText]);
 
-  // Pseudo: detected via the pseudo-rules atom, which already keys by
-  // node id. Either ::before or ::after counts.
-  const hasPseudo = !!(node && pseudoStyles.get(node.id));
+  // Pseudo: detected via the pseudo-rules atom, excluding :focus/:checked on editable
+  // form controls (which FormStateControl renders directly).
+  const [forceShowPseudo, setForceShowPseudo] = useState(false);
+  const [openPseudoSignal, setOpenPseudoSignal] = useState(0);
+  useEffect(() => {
+    setForceShowPseudo(false);
+  }, [node?.id]);
+
+  const rawPseudo = node ? pseudoStyles.get(node.id) : undefined;
+  const hasPseudo = !!(
+    node &&
+    rawPseudo &&
+    Object.entries(rawPseudo).some(
+      ([kind, vals]) => !isFormControlOwnedPseudo(node, kind as any) && !!vals && Object.keys(vals).length > 0
+    )
+  );
 
   // ─── +-dropdown picker ────────────────────────────────────────────────
   // Positioned via plain absolute (right-0 + top-full) inside a relative
@@ -170,10 +184,9 @@ export default function StylesTool() {
     }),
     [visibleIds, isText, isComponentInstance, isVectorSet],
   );
-  // Component instances also don't get the Pseudo-element entry — pseudo
-  // rules attach to the master's children, not the wrapper. Hide it from
-  // the + when an instance is selected.
-  const showPseudoEntry = !isComponentInstance && !isVectorSet && !hasPseudo;
+  // Component instances don't get the States & Pseudo entry — pseudo rules
+  // attach to the master's children, not the wrapper.
+  const showPseudoEntry = !isComponentInstance && !isVectorSet && !hasPseudo && !forceShowPseudo;
   const showAddButton = addableSpecs.length > 0 || showPseudoEntry;
 
   // Measure on open: pick up/down by available space (the Styles + sits low in a
@@ -197,24 +210,12 @@ export default function StylesTool() {
     [updateMultipleStyles],
   );
 
-  // Pseudo entry triggers the PseudoElementControl's own popup — but we
-  // need to ensure the row is visible first. Easiest: write a no-op
-  // ::before rule. The pseudo control then shows the row with that rule
-  // and the user can configure it from there.
+  // Opens the States & Pseudo row and its popup without injecting unwanted rules first.
   const handleAddPseudo = useCallback(() => {
     if (!node) return;
     trace.action('styles-tool:add-pseudo', { nodeId: node.id });
-    // Mutation: updatePseudoStyle with an empty content rule so the row
-    // appears. The PseudoElementControl picks up the new rule via
-    // pseudoStylesAtom on the next flush.
-    import('@/code/mutation/mutation-queue').then(({ queueMutation }) => {
-      queueMutation({
-        type: 'updatePseudoStyle',
-        nodeId: node.id,
-        pseudo: 'before',
-        styles: { content: '""' },
-      });
-    });
+    setForceShowPseudo(true);
+    setOpenPseudoSignal((n) => n + 1);
     setPickerOpen(false);
   }, [node]);
 
@@ -285,7 +286,7 @@ export default function StylesTool() {
                     className="group flex items-center mx-1.5 px-2.5 py-1.5 cut-corners w-[calc(100%-12px)] text-left cursor-pointer whitespace-nowrap hover:bg-[var(--accent)] transition-colors"
                   >
                     <span className="text-xs font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-fg)]">
-                      Pseudo Element
+                      States & Pseudo
                     </span>
                   </button>
                 )}
@@ -370,7 +371,7 @@ export default function StylesTool() {
           {visibleIds.has('zIndex') && <ZIndexControl />}
           {visibleIds.has('pointerEvents') && <PointerEventsControl />}
           {visibleIds.has('userSelect') && <UserSelectControl />}
-          {hasPseudo && <PseudoElementControl />}
+          {(hasPseudo || forceShowPseudo) && <PseudoElementControl openSignal={openPseudoSignal} />}
         </>
       )}
     </ToolSection>
