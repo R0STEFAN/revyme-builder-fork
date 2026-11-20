@@ -84,6 +84,44 @@ export const fontsCatalogOperation: Operation<
 };
 
 // 2. fonts.import
+interface FontWeightTuple {
+  ital: 0 | 1;
+  weight: string;
+}
+
+function parseRequestedWeightTuples(weights?: string[]): FontWeightTuple[] {
+  if (!weights || weights.length === 0) {
+    return [
+      { ital: 0, weight: '400' },
+      { ital: 0, weight: '600' },
+      { ital: 0, weight: '700' },
+    ];
+  }
+
+  const parsed: FontWeightTuple[] = [];
+  for (const raw of weights) {
+    const w = String(raw).trim().toLowerCase();
+    if (!w) continue;
+    if (w === 'italic') {
+      parsed.push({ ital: 1, weight: '400' });
+    } else if (w === 'regular' || w === 'normal') {
+      parsed.push({ ital: 0, weight: '400' });
+    } else {
+      const mItal = /^(\d{3})(?:italic|i)$/.exec(w);
+      const mAxis = /^([01]),(\d{3})$/.exec(w);
+      const mPlain = /^(\d{3})$/.exec(w);
+      if (mItal) {
+        parsed.push({ ital: 1, weight: mItal[1] });
+      } else if (mAxis) {
+        parsed.push({ ital: Number(mAxis[1]) as 0 | 1, weight: mAxis[2] });
+      } else if (mPlain) {
+        parsed.push({ ital: 0, weight: mPlain[1] });
+      }
+    }
+  }
+  return parsed.length > 0 ? parsed : [{ ital: 0, weight: '400' }];
+}
+
 export const fontsImportOperation: Operation<
   {
     family: string;
@@ -116,9 +154,38 @@ export const fontsImportOperation: Operation<
     const cleanFamily = input.family.trim().replace(/['"]/g, '');
     let css = snapshot.files.get(targetFile) ?? '';
 
-    const validWeights = getSupportedWeightsForFont(cleanFamily, input.weights) || ['400', '600', '700'];
-    const wghtStr = validWeights.join(';');
-    const urlFamily = `family=${cleanFamily.replace(/ /g, '+')}:wght@${wghtStr}`;
+    const requestedTuples = parseRequestedWeightTuples(input.weights);
+    const numericCandidates = Array.from(new Set(requestedTuples.map((t) => t.weight)));
+    const supportedNumeric = getSupportedWeightsForFont(cleanFamily, numericCandidates);
+    const allowedSet = supportedNumeric ? new Set(supportedNumeric) : null;
+
+    let filteredTuples = allowedSet
+      ? requestedTuples.filter((t) => allowedSet.has(t.weight))
+      : requestedTuples;
+    if (filteredTuples.length === 0) {
+      filteredTuples = (supportedNumeric || ['400', '600', '700']).map((w) => ({
+        ital: 0 as const,
+        weight: w,
+      }));
+    }
+
+    const dedupedMap = new Map<string, FontWeightTuple>();
+    for (const tuple of filteredTuples) {
+      dedupedMap.set(`${tuple.ital},${tuple.weight}`, tuple);
+    }
+    const tuples = Array.from(dedupedMap.values()).sort(
+      (a, b) => a.ital - b.ital || Number(a.weight) - Number(b.weight)
+    );
+
+    const hasItalic = tuples.some((t) => t.ital === 1);
+    const urlFamilyName = cleanFamily.replace(/ /g, '+');
+    const urlFamily = hasItalic
+      ? `family=${urlFamilyName}:ital,wght@${tuples.map((t) => `${t.ital},${t.weight}`).join(';')}`
+      : `family=${urlFamilyName}:wght@${tuples.map((t) => t.weight).join(';')}`;
+    const importedWeights = hasItalic
+      ? tuples.map((t) => (t.ital === 1 ? `${t.weight}italic` : t.weight))
+      : tuples.map((t) => t.weight);
+
     const display = input.display || 'swap';
     const importUrl = `https://fonts.googleapis.com/css2?${urlFamily}&display=${display}`;
     const importLine = `@import url('${importUrl}');`;
@@ -129,7 +196,6 @@ export const fontsImportOperation: Operation<
       return '';
     });
 
-    const urlFamilyName = cleanFamily.replace(/ /g, '+');
     const remainingImportLines = existingImportLines.filter(
       (line) => !line.includes(urlFamilyName) && !line.includes(cleanFamily)
     );
@@ -146,7 +212,7 @@ export const fontsImportOperation: Operation<
         },
       ],
       family: cleanFamily,
-      importedWeights: validWeights,
+      importedWeights,
       importUrl,
     };
   },

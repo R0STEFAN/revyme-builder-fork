@@ -73,6 +73,44 @@ const INLINE_TEXT_RUN_TAGS = new Set([
   'br',
 ]);
 
+const INLINE_TEXT_HOST_TAGS = new Set([
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'p', 'span', 'a', 'li', 'label', 'button',
+  'blockquote', 'figcaption', 'strong', 'em',
+]);
+
+function isInlineSiblingElement(node: any): boolean {
+  if (!node || node.type !== 'JSXElement') return false;
+  const name = node.openingElement?.name;
+  let tag = '';
+  if (name?.type === 'JSXIdentifier') {
+    tag = name.name;
+  } else if (name?.type === 'JSXMemberExpression' && name.property?.name) {
+    tag = name.property.name;
+  }
+  const base = tag.replace(/^motion\./, '').toLowerCase();
+  return INLINE_TEXT_RUN_TAGS.has(base) || base === 'a' || base === 'code';
+}
+
+function extractMixedChildText(
+  raw: string,
+  preserveInlineWhitespace: boolean,
+  prevSibling: any,
+  nextSibling: any,
+): string {
+  if (!preserveInlineWhitespace) return raw.trim();
+  const collapsed = raw.replace(/\s+/g, ' ');
+  const hasPrevInline = isInlineSiblingElement(prevSibling);
+  const hasNextInline = isInlineSiblingElement(nextSibling);
+  if (collapsed.trim() === '') {
+    return hasPrevInline && hasNextInline ? ' ' : '';
+  }
+  let text = collapsed;
+  if (!hasPrevInline) text = text.replace(/^\s+/, '');
+  if (!hasNextInline) text = text.replace(/\s+$/, '');
+  return text;
+}
+
 function collectNodesFromBabel(
   node: any,
   idManager: IdManager,
@@ -215,9 +253,19 @@ function convertBabelJSX(
         }
       }
     } else {
-      for (const child of node.children) {
+      const baseHostTag = tagName.replace(/^motion\./, '').toLowerCase();
+      const preserveInlineWhitespace = INLINE_TEXT_HOST_TAGS.has(baseHostTag);
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        const prevSibling = i > 0 ? node.children[i - 1] : null;
+        const nextSibling = i + 1 < node.children.length ? node.children[i + 1] : null;
         if (child.type === 'JSXText') {
-          const text = child.value.trim();
+          const text = extractMixedChildText(
+            child.value,
+            preserveInlineWhitespace,
+            prevSibling,
+            nextSibling,
+          );
           if (text) {
             const { id: spanId } = idManager.ensureNodeId(undefined, 'span', reporter);
             children.push({
@@ -230,7 +278,12 @@ function convertBabelJSX(
           child.type === 'JSXExpressionContainer' &&
           child.expression?.type === 'StringLiteral'
         ) {
-          const text = child.expression.value.trim();
+          const text = extractMixedChildText(
+            child.expression.value,
+            preserveInlineWhitespace,
+            prevSibling,
+            nextSibling,
+          );
           if (text) {
             const { id: spanId } = idManager.ensureNodeId(undefined, 'span', reporter);
             children.push({
