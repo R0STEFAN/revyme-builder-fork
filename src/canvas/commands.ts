@@ -3,6 +3,7 @@
 // Each command composes low-level operations from node-ops.ts.
 
 import { CanvasNode, extractStyleCSS } from '@/code/parsing/parser';
+import { BUILTIN_PSEUDO_ELEMENTS, parsePseudoRules, type PseudoKind, type PseudoStyles } from '@/code/parsing/pseudo-parser';
 import { unfoldFlowStyles } from './unfold-flow-sizing';
 import { mergeStyleLayers, TRANSPARENT_FILL } from '@/shared/css-utils';
 import { getDefaultStore } from 'jotai';
@@ -53,6 +54,7 @@ import { transformManager } from './transform';
 import { trace } from '@/shared/debug-trace';
 import { copyNodes, getClipboardData, setClipboardData } from '@/code/features/paste-engine';
 import { executePaste } from '@/code/features/paste-engine/execute-from-ui';
+import { expediteStableAtomSync } from '@/canvas/hooks/useStableAtomSync';
 
 // ─── Selection Navigation ───────────────────────────────────────────────────
 
@@ -1563,6 +1565,18 @@ export function duplicateSelection(opts: {
 
 // ─── Copy / Paste Element Styles ──────────────────────────────────────────
 
+// Pseudo-elements have separate owners, including ::after border overlays.
+const pseudoElements = new Set<PseudoKind>(BUILTIN_PSEUDO_ELEMENTS);
+
+function clipboardStates(rules: PseudoStyles | undefined): PseudoStyles {
+  const states: PseudoStyles = {};
+  for (const [kind, styles] of Object.entries(rules ?? {})) {
+    const pseudo = kind as PseudoKind;
+    if (!pseudoElements.has(pseudo)) states[pseudo] = styles;
+  }
+  return states;
+}
+
 function mergeClipboardViewportStyles(
   styles: Record<string, string>,
   overrides: Map<string, string>,
@@ -1590,8 +1604,9 @@ export function copyElementStylesCommand(targetId?: string | null): boolean {
   const overlayVariant = isComp && interactingVp && !isPrimaryViewport(interactingVp) ? interactingVp : null;
 
   flushNow();
-  const code = projectFS.readFile(activeFilePath) ?? '';
-  const borderOverlayCSS = extractBorderAfterRuleBody(extractStyleCSS(code), idToCopy, overlayVariant);
+  const css = extractStyleCSS(projectFS.readFile(activeFilePath) ?? '');
+  const borderOverlayCSS = extractBorderAfterRuleBody(css, idToCopy, overlayVariant);
+  const states = clipboardStates(parsePseudoRules(css).get(idToCopy));
 
   let effectiveStyles = resolveEffectiveStyles(targetNode, interactingVp);
   const viewport = store.get(viewportsConfigAtom).find(v => v.id === interactingVp);
@@ -1607,6 +1622,7 @@ export function copyElementStylesCommand(targetId?: string | null): boolean {
 
   const payload: CopiedElementStyles = {
     styles: stylesToCopy,
+    states,
     sourceNodeId: idToCopy,
     sourceNodeName: targetNode.name || targetNode.type,
     borderOverlayCSS,
@@ -1652,6 +1668,7 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
     return false;
   }
 
+  if (copied.states) flushNow();
   const activeFilePath = store.get(activeFilePathAtom) || getActiveFilePath();
   const interactingVp = store.get(interactingViewportIdAtom) || 'desktop';
   const viewports = store.get(viewportsConfigAtom);
@@ -1664,6 +1681,8 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
   const responsiveOverrides = !isComp && viewport && !viewport.isPrimary ? store.get(containerOverridesAtom) : null;
   const effectiveContentEl = contentEl || getContentRoot() || document.body;
   const snapshot = getNodesSnapshot();
+  const currentPseudoRules = copied.states && parsePseudoRules(extractStyleCSS(projectFS.readFile(activeFilePath) ?? ''));
+  let changedStates = false;
 
   for (const id of effectiveTargetIds) {
     const targetNode = snapshot.get(id);
@@ -1680,6 +1699,17 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
     });
     updateNodeStyles({ id, styles: payload, contentEl: effectiveContentEl });
 
+    if (copied.states) {
+      const targetStates = clipboardStates(currentPseudoRules?.get(id));
+      const kinds = new Set(Object.keys({ ...targetStates, ...copied.states }) as PseudoKind[]);
+      for (const pseudo of kinds) {
+        const styles = copied.states[pseudo];
+        if (styles) queueMutation({ type: 'updatePseudoStyle', nodeId: id, pseudo, styles });
+        else queueMutation({ type: 'removePseudo', nodeId: id, pseudo });
+        changedStates = true;
+      }
+    }
+
     // Border overlay transfer: recreate if copied, or remove if copied has inline border or no border
     if (copied.borderOverlayCSS) {
       queueMutation({ type: 'updateBorderOverlay', nodeId: id, afterCSS: copied.borderOverlayCSS, variant: targetVariant });
@@ -1690,6 +1720,7 @@ export function pasteElementStylesCommand(targetIds?: string[] | null, contentEl
     }
   }
 
+  if (changedStates) expediteStableAtomSync();
   flushNow();
   const count = effectiveTargetIds.length;
   toast.success(`Pasted styles to ${count > 1 ? `${count} elements` : 'element'}`);

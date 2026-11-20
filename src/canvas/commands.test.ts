@@ -15,6 +15,8 @@ import {
   toggleVisibility,
   wrapInFrame,
   wrapInLayout,
+  copyElementStylesCommand,
+  pasteElementStylesCommand,
 } from './commands';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -182,6 +184,7 @@ vi.mock('./node-ops', async (importOriginal) => {
     ...actual,
     removeNode: vi.fn(),
     updateNodeStyles: vi.fn(),
+    removeCanvasCSS: vi.fn(),
     isPrimaryViewport: vi.fn((vpId: string) => vpId === 'desktop' || vpId === 'default'),
     getInteractingViewport: vi.fn(() => ({ vpId: 'desktop', vpWidth: 1440 })),
     // Border widths for the absolute-child origin. Unbordered by default.
@@ -190,14 +193,57 @@ vi.mock('./node-ops', async (importOriginal) => {
 });
 
 // Mock viewport-store for getViewportWidths
-vi.mock('@/code/stores/viewport-store', () => ({
+vi.mock('@/code/stores/viewport-store', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/code/stores/viewport-store')>(),
   getViewportWidths: vi.fn(() => ({ desktop: 1440, tablet: 768, mobile: 375 })),
 }));
 
 // Mock mutation queue for queueMutation
 vi.mock('@/code/mutation/mutation-queue', () => ({
   queueMutation: vi.fn(),
+  flushNow: vi.fn(),
 }));
+
+it('copies CSS states to the new node, replaces existing state styles and clears target-only states', async () => {
+  const { getDefaultStore } = await import('jotai');
+  const { copiedElementStylesAtom } = await import('@/code/stores/context-menu-store');
+  const { activeFilePathAtom } = await import('@/code/project/active-file-store');
+  const { projectFS, projectVersionAtom } = await import('@/code/project/project-fs');
+  const { queueMutation } = await import('@/code/mutation/mutation-queue');
+  const store = getDefaultStore();
+  const originalClipboard = store.get(copiedElementStylesAtom);
+  const code = `export default function Page() {
+    return <div data-id="root">
+      <div data-id="source" /><div data-id="target" />
+      <style>{\`
+        [data-id="source"]:hover { color: red; transition: color 200ms; }
+        [data-id="source"]:focus-visible { opacity: 0.8; }
+        [data-id="source"]::after { content: 'source'; }
+        [data-id="target"]:hover { background-color: blue; }
+        [data-id="target"]:active { opacity: 0.4; }
+      \`}</style>
+    </div>;
+  }`;
+  const filePath = store.get(activeFilePathAtom);
+  const readFile = vi.spyOn(projectFS, 'readFile').mockImplementation(path => path === filePath ? code : null);
+  try {
+    store.set(projectVersionAtom, version => version + 1);
+    vi.mocked(queueMutation).mockClear();
+    expect(copyElementStylesCommand('source')).toBe(true);
+    expect(pasteElementStylesCommand(['target'], document.createElement('div'))).toBe(true);
+    const stateMutations = vi.mocked(queueMutation).mock.calls.map(([mutation]) => mutation)
+      .filter(mutation => mutation.type === 'updatePseudoStyle' || mutation.type === 'removePseudo');
+    expect(stateMutations).toEqual([
+      { type: 'updatePseudoStyle', nodeId: 'target', pseudo: 'hover', styles: { color: 'red', transition: 'color 200ms' } },
+      { type: 'removePseudo', nodeId: 'target', pseudo: 'active' },
+      { type: 'updatePseudoStyle', nodeId: 'target', pseudo: 'focus-visible', styles: { opacity: '0.8' } },
+    ]);
+  } finally {
+    readFile.mockRestore();
+    store.set(projectVersionAtom, version => version + 1);
+    store.set(copiedElementStylesAtom, originalClipboard);
+  }
+});
 
 // Live canvas rects for the flow→absolute bake. Empty by default, so every
 // pre-existing test keeps exercising the UNMEASURABLE fallback (a real path:

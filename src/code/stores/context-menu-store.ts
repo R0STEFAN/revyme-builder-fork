@@ -1,6 +1,7 @@
 // context-menu-store.ts — Context menu + rename state.
 
 import { atom } from 'jotai';
+import type { PseudoStyles } from '@/code/parsing/pseudo-parser';
 import { BORDER_INLINE_KEYS } from '@/editor/ui/border-utils';
 import { mergeStyleLayers, SHORTHAND_LONGHANDS } from '@/shared/css-utils';
 import {
@@ -38,6 +39,7 @@ export const renamingNodeIdAtom = atom<string | null>(null);
 
 export interface CopiedElementStyles {
   styles: Record<string, string>;
+  states?: PseudoStyles;
   sourceNodeId: string;
   sourceNodeName?: string;
   /** Border ::after overlay rule body when the source border renders in overlay mode (solid or gradient). */
