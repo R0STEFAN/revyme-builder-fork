@@ -44,6 +44,7 @@ export const motionSetOperation: Operation<
     prop: 'initial' | 'animate' | 'whileHover' | 'whileTap' | 'whileInView' | 'exit' | 'transition';
     values: Record<string, string>;
     variantState?: 'current' | 'initial';
+    viewportOnce?: boolean;
   },
   {
     changes: FileChange[];
@@ -62,6 +63,7 @@ export const motionSetOperation: Operation<
     prop: z.enum(['initial', 'animate', 'whileHover', 'whileTap', 'whileInView', 'exit', 'transition']),
     values: z.record(z.string(), z.string()),
     variantState: z.enum(['current', 'initial']).optional().describe('Bind animate/initial to the connected design-component variant state instead of an object target'),
+    viewportOnce: z.boolean().optional().describe('Automatically inject viewport={{ once: true }} when prop="whileInView" (defaults to true)'),
   }),
   async execute(snapshot, input) {
     let code = snapshot.files.get(input.targetFile);
@@ -78,7 +80,7 @@ export const motionSetOperation: Operation<
       }
       code = updateMotionVariantStateInCode(code, input.nodeId, input.variantState);
     } else {
-      code = updateMotionPropInCode(code, input.nodeId, input.prop, input.values);
+      code = updateMotionPropInCode(code, input.nodeId, input.prop, input.values, false, input.viewportOnce !== false);
     }
 
     return {

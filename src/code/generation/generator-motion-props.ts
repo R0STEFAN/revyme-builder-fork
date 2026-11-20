@@ -34,6 +34,7 @@ export function updateMotionPropInCode(
   propName: string,
   props: Record<string, string>,
   componentPassthrough = false,
+  autoViewportOnce = true,
 ): string {
   trace.fn('generator.updateMotionPropInCode', { nodeId, propName, props });
 
@@ -73,7 +74,7 @@ export function updateMotionPropInCode(
     const converted = convertToMotionLinkInCode(code, nodeId);
     if (converted !== code) {
       trace.action('generator:link-to-motionlink-for-motion-prop', { nodeId, propName });
-      return updateMotionPropInCode(converted, nodeId, propName, effectiveProps);
+      return updateMotionPropInCode(converted, nodeId, propName, effectiveProps, componentPassthrough, autoViewportOnce);
     }
   }
 
@@ -204,6 +205,10 @@ export function updateMotionPropInCode(
   // transformTemplate so motion doesn't drop it. See the helper's header.
   if (propName === 'initial' || propName === 'whileInView' || propName === 'animate') {
     result = ensureTransformTemplateInCode(result, nodeId);
+  }
+
+  if (propName === 'whileInView' && autoViewportOnce && !findMotionPropExpr(result, nodeId, 'viewport')) {
+    result = updateMotionPropInCode(result, nodeId, 'viewport', { once: 'true' }, componentPassthrough, false);
   }
 
   return result;
