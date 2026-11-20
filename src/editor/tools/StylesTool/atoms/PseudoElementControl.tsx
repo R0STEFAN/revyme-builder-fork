@@ -220,6 +220,13 @@ function normalizeTextShadow(raw: string): string {
 
 // ─── Animation editor panel ────────────────────────────────────────────────
 
+function parseSecondsInput(raw: string): number {
+  const trimmed = raw.trim();
+  const n = parseFloat(trimmed) || 0;
+  const seconds = /ms$/i.test(trimmed) ? n / 1000 : n;
+  return Math.max(0, Math.round(seconds * 1000) / 1000);
+}
+
 function AnimationEditorPanel({ initialValue, onCommit }: { initialValue: string; onCommit: (v: string) => void }) {
   const keyframeNames = useAtomValue(keyframeNamesAtom);
   const parsed = parseAnimationShorthand(initialValue);
@@ -250,7 +257,7 @@ function AnimationEditorPanel({ initialValue, onCommit }: { initialValue: string
         <ControlLabel label="Duration" property="" plain />
         <div className="flex items-center gap-1 w-full">
           <ToolSlider value={vals.duration} min={0} max={10} step={0.1} onChange={(v) => update({ duration: v })} />
-          <ToolInput value={`${vals.duration}s`} onChange={(v) => update({ duration: parseFloat(v) || 0 })} step={0.1} />
+          <ToolInput value={String(vals.duration)} onChange={(v) => update({ duration: parseSecondsInput(v) })} step={0.1} min={0} max={10} chevronLabel="s" />
         </div>
       </div>
       <div className="flex items-center justify-between">
@@ -263,7 +270,7 @@ function AnimationEditorPanel({ initialValue, onCommit }: { initialValue: string
         <ControlLabel label="Delay" property="" plain />
         <div className="flex items-center gap-1 w-full">
           <ToolSlider value={vals.delay} min={0} max={5} step={0.1} onChange={(v) => update({ delay: v })} />
-          <ToolInput value={`${vals.delay}s`} onChange={(v) => update({ delay: parseFloat(v) || 0 })} step={0.1} />
+          <ToolInput value={String(vals.delay)} onChange={(v) => update({ delay: parseSecondsInput(v) })} step={0.1} min={0} max={5} chevronLabel="s" />
         </div>
       </div>
       <div className="flex items-center justify-between">
@@ -362,7 +369,7 @@ function TransitionEditorPanel({ initialValue, onCommit }: { initialValue: strin
         <ControlLabel label="Duration" property="" plain />
         <div className="flex items-center gap-1 w-full">
           <ToolSlider value={vals.duration} min={0} max={5} step={0.05} onChange={(v) => update({ duration: v })} />
-          <ToolInput value={`${vals.duration}s`} onChange={(v) => update({ duration: parseFloat(v) || 0 })} step={0.05} />
+          <ToolInput value={String(vals.duration)} onChange={(v) => update({ duration: parseSecondsInput(v) })} step={0.05} min={0} max={5} chevronLabel="s" />
         </div>
       </div>
       <div className="flex items-center justify-between">
@@ -375,7 +382,7 @@ function TransitionEditorPanel({ initialValue, onCommit }: { initialValue: strin
         <ControlLabel label="Delay" property="" plain />
         <div className="flex items-center gap-1 w-full">
           <ToolSlider value={vals.delay} min={0} max={5} step={0.05} onChange={(v) => update({ delay: v })} />
-          <ToolInput value={`${vals.delay}s`} onChange={(v) => update({ delay: parseFloat(v) || 0 })} step={0.05} />
+          <ToolInput value={String(vals.delay)} onChange={(v) => update({ delay: parseSecondsInput(v) })} step={0.05} min={0} max={5} chevronLabel="s" />
         </div>
       </div>
     </div>

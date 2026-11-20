@@ -227,5 +227,29 @@ describe('PseudoElementControl — visual CSS states & pseudo-elements', () => {
     );
     expect(screen.getByText('Duration')).toBeTruthy();
     expect(screen.getByText('Easing')).toBeTruthy();
+    expect(screen.getByText('Delay')).toBeTruthy();
+
+    // Both Duration and Delay expose 's' chevron labels and numeric up/down chevron buttons
+    expect(screen.getAllByText('s').length).toBeGreaterThanOrEqual(2);
+    const chevronButtons = document.querySelectorAll('button.group\\/chevron');
+    expect(chevronButtons.length).toBe(4);
+
+    // Stepping Duration up via its up chevron updates CSS transition (0.3s -> 0.35s)
+    state.injectCanvasCSS.mockClear();
+    fireEvent.mouseDown(chevronButtons[0], { clientY: 100 });
+    fireEvent.mouseUp(document);
+    expect(state.injectCanvasCSS).toHaveBeenCalledWith(
+      '[data-id="btn-1"]:hover',
+      expect.stringContaining('transition: all 0.35s')
+    );
+
+    // Stepping Delay up via its up chevron updates CSS transition (delay 0s -> 0.05s)
+    state.injectCanvasCSS.mockClear();
+    fireEvent.mouseDown(chevronButtons[2], { clientY: 100 });
+    fireEvent.mouseUp(document);
+    expect(state.injectCanvasCSS).toHaveBeenCalledWith(
+      '[data-id="btn-1"]:hover',
+      expect.stringContaining('0.05s')
+    );
   });
 });

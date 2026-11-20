@@ -58,7 +58,7 @@ export function roundLengthForDisplay(v: string): string {
 
 /** Parse "300px" → { num: 300, unit: "px" } */
 function parseNumeric(v: string): { num: number; unit: string } | null {
-  const match = v.match(/^(-?[\d.]+)(px|%|em|rem|vh|vw|svh|svw|dvh|dvw|lvh|lvw|deg|fr|)?$/i);
+  const match = v.match(/^(-?[\d.]+)(px|%|em|rem|vh|vw|svh|svw|dvh|dvw|lvh|lvw|deg|fr|ms|s|)?$/i);
   if (!match) return null;
   return { num: parseFloat(match[1]), unit: match[2]?.toLowerCase() || '' };
 }
