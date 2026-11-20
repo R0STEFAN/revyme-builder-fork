@@ -30,19 +30,19 @@ describe('aspectLockOnPatch', () => {
   const size = { width: 240, height: 64 };
   it('writes the Fit spelling, never a literal auto', () => {
     expect(aspectLockOnPatch({ width: '240px', height: '64px' }, size))
-      .toEqual({ aspectRatio: '3.75000 / 1', height: 'min-content' });
+      .toEqual({ aspectRatio: '3.75000 / 1', height: 'fit-content' });
   });
   it('keeps an existing Fit side as the free one', () => {
     expect(aspectLockOnPatch({ width: 'min-content', height: '64px' }, size))
-      .toEqual({ aspectRatio: '3.75000 / 1', width: 'min-content' });
+      .toEqual({ aspectRatio: '3.75000 / 1', width: 'fit-content' });
     expect(aspectLockOnPatch({ width: '240px', height: 'auto' }, size))
-      .toEqual({ aspectRatio: '3.75000 / 1', height: 'min-content' });
+      .toEqual({ aspectRatio: '3.75000 / 1', height: 'fit-content' });
   });
   it('lets a % side keep control', () => {
     expect(aspectLockOnPatch({ width: '240px', height: '50%' }, size))
-      .toEqual({ aspectRatio: '3.75000 / 1', width: 'min-content' });
+      .toEqual({ aspectRatio: '3.75000 / 1', width: 'fit-content' });
     expect(aspectLockOnPatch({ width: '50%', height: '64px' }, size))
-      .toEqual({ aspectRatio: '3.75000 / 1', height: 'min-content' });
+      .toEqual({ aspectRatio: '3.75000 / 1', height: 'fit-content' });
   });
   it('is null without a measured size', () => {
     expect(aspectLockOnPatch({ width: '240px', height: '64px' }, { width: 0, height: 64 })).toBeNull();
@@ -96,25 +96,25 @@ describe('vector size (W×H px + lock)', () => {
 describe('lockedDimensionWrite', () => {
   it('the written side drives, the other goes Fit', () => {
     expect(lockedDimensionWrite('height', '100px', { width: '480px', height: 'min-content' }))
-      .toEqual({ height: '100px', width: 'min-content' });
+      .toEqual({ height: '100px', width: 'fit-content' });
   });
-  it('skips the other side when it already is the Fit spelling', () => {
-    expect(lockedDimensionWrite('width', '480px', { width: '240px', height: 'min-content' }))
+  it('skips the other side when it already uses the current Fit spelling', () => {
+    expect(lockedDimensionWrite('width', '480px', { width: '240px', height: 'fit-content' }))
       .toEqual({ width: '480px' });
   });
   it('respells a legacy literal auto on the other side', () => {
     expect(lockedDimensionWrite('width', '480px', { width: '240px', height: 'auto' }))
-      .toEqual({ width: '480px', height: 'min-content' });
+      .toEqual({ width: '480px', height: 'fit-content' });
   });
 });
 
 describe('lockedFitWrite', () => {
   const size = { width: 480, height: 128 };
   it('only the picked side when the other still drives', () => {
-    expect(lockedFitWrite('width', { width: '480px', height: '128px' }, size)).toEqual({ width: 'min-content' });
+    expect(lockedFitWrite('width', { width: '480px', height: '128px' }, size)).toEqual({ width: 'fit-content' });
   });
   it('the other side takes over at its rendered px when it was Fit', () => {
     expect(lockedFitWrite('width', { width: '480px', height: 'min-content' }, size))
-      .toEqual({ width: 'min-content', height: '128px' });
+      .toEqual({ width: 'fit-content', height: '128px' });
   });
 });

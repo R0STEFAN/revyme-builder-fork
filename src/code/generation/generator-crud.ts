@@ -4064,7 +4064,7 @@ export function removeNodeInCode(code: string, nodeId: string): string {
     if (openStart === -1) { searchFrom = idIdx + idPattern.length; continue; }
 
     const between = code.slice(openStart, idIdx);
-    if (between.includes('>')) {
+    if (findTagClose(code, openStart) < idIdx) {
       // idIdx is inside children/body (e.g. CSS text inside <style>), skip
       searchFrom = idIdx + idPattern.length;
       continue;

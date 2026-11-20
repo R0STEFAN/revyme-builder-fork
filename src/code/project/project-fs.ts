@@ -2166,12 +2166,6 @@ a {
   --typo-heading-size: 56px;
   --typo-heading-spacing: -1.5px;
   --typo-heading-line-height: 1.1;
-  --typo-heading-size-md: 40px;
-  --typo-heading-spacing-md: -1px;
-  --typo-heading-line-height-md: 1.15;
-  --typo-heading-size-sm: 32px;
-  --typo-heading-spacing-sm: -0.5px;
-  --typo-heading-line-height-sm: 1.2;
   --typo-heading-min-default: 1200;
   --typo-heading-min-md: 600;
   --typo-body-font: 'Inter', sans-serif;
@@ -2183,10 +2177,6 @@ a {
   --typo-body-size: 16px;
   --typo-body-spacing: 0px;
   --typo-body-line-height: 1.7;
-  --typo-body-size-md: 15px;
-  --typo-body-line-height-md: 1.6;
-  --typo-body-size-sm: 14px;
-  --typo-body-line-height-sm: 1.5;
   --typo-body-min-default: 1200;
   --typo-body-min-md: 600;
 

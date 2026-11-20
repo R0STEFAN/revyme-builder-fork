@@ -17,11 +17,11 @@ test('a wrong EFFECT is caught', async () => {
 });
 test('preflight rejects an invalid line height before writing source', async () => {
   const r = await runCase({ id: 'layout/y', domain: 'layout', status: 'supported', feature: 'y', ask: 'y',
-    calls: [{ tool: 'set_styles', args: { node_id: 'hero-title', styles: { lineHeight: '24px' } } }], expect: () => {} });
-  expect(r.ok).toBe(false); expect(r.failures.join(' ')).toMatch(/lineHeight must be a unitless multiplier/);
+    calls: [{ tool: 'set_styles', args: { node_id: 'hero-title', styles: { lineHeight: 'garbage' } } }], expect: () => {} });
+  expect(r.ok).toBe(false); expect(r.failures.join(' ')).toMatch(/lineHeight|line height/i);
 });
 test('the harness does not attribute an existing violation to an unrelated edit', async () => {
-  const invalid = FIXTURE_FILES[HOME].replace("lineHeight: '1.1'", "lineHeight: '24px'");
+  const invalid = FIXTURE_FILES[HOME].replace("lineHeight: '1.1'", "lineHeight: 'garbage'");
   const r = await runCase({ id: 'layout/oracle', domain: 'layout', status: 'supported', feature: 'oracle', ask: 'change background',
     files: { [HOME]: invalid }, calls: [{ tool: 'set_styles', args: { node_id: 'hero', styles: { backgroundColor: '#111111' } } }], expect: () => {} });
   expect(r.ok).toBe(true);

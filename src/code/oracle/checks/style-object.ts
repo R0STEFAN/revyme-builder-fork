@@ -200,13 +200,9 @@ function checkStyleObject(
         continue;
       }
     }
-    // lineHeight must be a UNITLESS ratio ('1.2') or 'normal' — NEVER px (or
-    // any length unit). A px line-height is frozen: change the font size (or
-    // a responsive tier changes it) and the px leading no longer fits — lines
-    // overlap or gap out (hard user rule 2026-07-21). Unitless scales with
-    // the font automatically. Figma's CSS export emits px and
-    // '110% /* 79.2px */' comment debris — convert both: ratio = lineHeightPx
-    // / fontSizePx, e.g. fontSize 40 + lineHeight '48px' → lineHeight: '1.2'.
+    // Accept clean CSS line-height values, including lengths and percentages.
+    // Reject malformed strings and Figma-style comment debris, which the
+    // editor cannot round-trip as a single value.
     if (key === 'lineHeight' && t.isStringLiteral(prop.value)) {
       const lhVal = prop.value.value.trim();
       if (!isValidLineHeightString(lhVal)) {

@@ -84,7 +84,7 @@ describe('T19 Challenger 2: Adversarial Tests for Submit Buttons, Select Carets,
       const spinnerMaster = projectFS.readFile('components/Spinner.tsx');
       expect(formSubmitMaster).not.toBeNull();
       expect(spinnerMaster).not.toBeNull();
-      expect(formSubmitMaster).toContain("/* @formsubmit-gen v3 */");
+      expect(formSubmitMaster).toContain("/* @formsubmit-gen v4 */");
       expect(formSubmitMaster).toContain("function FormSubmit(");
       expect(formSubmitMaster).toContain("export default withResponsiveProps(FormSubmit)");
     });
@@ -271,7 +271,7 @@ export default function DeepPage() {
       // 1. First injection
       await formsSelectCaretSetOperation.execute(
         snap,
-        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caret1 },
+        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caret1, icon: 'chevron-down', color: '#111111' },
         context,
       );
 
@@ -323,7 +323,7 @@ export default function DeepPage() {
 
       await formsSelectCaretSetOperation.execute(
         snap,
-        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caretCSS },
+        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caretCSS, icon: 'chevron-down', color: '#111111' },
         context,
       );
 
@@ -364,13 +364,13 @@ export default function StyledPage() {
       // Add caret to sel-1 and sel-2
       await formsSelectCaretSetOperation.execute(
         snap,
-        { filePath: 'app/styled/page.client.tsx', nodeId: 'sel-1', cssBody: 'background: red;' },
+        { filePath: 'app/styled/page.client.tsx', nodeId: 'sel-1', cssBody: 'background: red;', icon: 'chevron-down', color: '#111111' },
         context,
       );
 
       await formsSelectCaretSetOperation.execute(
         snap,
-        { filePath: 'app/styled/page.client.tsx', nodeId: 'sel-2', cssBody: 'background: blue;' },
+        { filePath: 'app/styled/page.client.tsx', nodeId: 'sel-2', cssBody: 'background: blue;', icon: 'chevron-down', color: '#111111' },
         context,
       );
 
@@ -420,7 +420,7 @@ export default function StyledPage() {
 
       await formsSelectCaretSetOperation.execute(
         snap,
-        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caretCSS },
+        { filePath: 'app/page.client.tsx', nodeId: selectId, cssBody: caretCSS, icon: 'chevron-down', color: '#111111' },
         context,
       );
 
@@ -720,6 +720,8 @@ export default function RawPage() {
           filePath: 'app/page.client.tsx',
           nodeId: selectField.controlId!,
           cssBody: 'background-position: right 14px center;',
+          icon: 'chevron-down',
+          color: '#111111',
         },
         context,
       );

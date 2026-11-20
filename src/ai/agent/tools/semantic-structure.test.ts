@@ -185,9 +185,9 @@ describe('semantic structure tools', () => {
     expect(queueMutation).not.toHaveBeenCalled();
   });
 
-  it('add_node rejects unsupported tags like ul or table', async () => {
+  it('add_node rejects unsupported tags like table', async () => {
     const ctx = makeCtx();
-    const result = await addNodeTool.execute({ parent_id: 'p1', tag: 'ul' }, ctx);
+    const result = await addNodeTool.execute({ parent_id: 'p1', tag: 'table' }, ctx);
     expect(result.isError).toBe(true);
     expect(JSON.parse((result.content[0] as any).text).error).toContain('is not supported by Revyme visual engine');
     expect(queueMutation).not.toHaveBeenCalled();

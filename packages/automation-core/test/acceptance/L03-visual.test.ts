@@ -106,6 +106,7 @@ function GlowSensor(props: {
   intensity?: number;
   glowColor?: string;
   animated?: boolean;
+  style?: React.CSSProperties;
 }) {
   return (
     <div
@@ -115,6 +116,7 @@ function GlowSensor(props: {
         background: '#121216',
         border: \`1px solid \${props.glowColor ?? '#8b5cf6'}\`,
         boxShadow: \`0 0 \${props.intensity ?? 80}px \${props.glowColor ?? '#8b5cf6'}33\`,
+        ...props.style,
       }}
     >
       <h3 style={{ margin: 0, fontSize: '20px', color: '#fff' }}>{props.headline ?? 'Glow Sensor'}</h3>

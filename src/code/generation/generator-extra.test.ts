@@ -32,6 +32,14 @@ import { syncViewportWidths } from '../stores/viewport-store';
 // ─── removeNodeInCode ────────────────────────────────────────────────────────
 
 describe('removeNodeInCode', () => {
+  test('removes a form with an arrow handler before its data-id', () => {
+    const code = `<div data-id="root"><form onSubmit={async (e) => { e.preventDefault(); }} data-id="form"><input data-id="field" /></form><p data-id="keep">Keep</p></div>`;
+    const result = removeNodeInCode(code, 'form');
+    expect(result).not.toContain('data-id="form"');
+    expect(result).not.toContain('data-id="field"');
+    expect(result).toContain('data-id="keep"');
+  });
+
   test('removes a simple element with text', () => {
     const code = `<div data-id="root" style={{position: 'relative'}}>
   <div data-id="x" style={{width: '100px', height: '50px'}}>text</div>

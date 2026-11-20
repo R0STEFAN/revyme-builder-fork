@@ -30,11 +30,11 @@ export const heroEditorial: SectionBlueprint = {
   }}></div>
   <div data-id="hfr-content" data-name="Content" style={{
     position: 'relative', order: '0', flex: '0 0 auto',
-    width: '100%', height: 'min-content',
+    width: '100%', height: 'auto',
     display: 'flex', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: '48px', flexWrap: 'wrap'
   }}>
     <div data-id="hfr-main" data-name="Main" style={{
-      position: 'relative', order: '0', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '0', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start'
     }}>
       <p data-id="hfr-eyebrow" data-name="Eyebrow" style={{
@@ -54,12 +54,12 @@ export const heroEditorial: SectionBlueprint = {
       }}>We design calm, durable places — and carry them from first sketch to final brick.</p>
       <div data-id="hfr-stats" data-name="Stats" style={{
         position: 'relative', order: '3', flex: '0 0 auto',
-        width: 'min-content', height: 'min-content', marginTop: '34px',
+        width: 'min-content', height: 'auto', marginTop: '34px',
         display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'flex-start', gap: '52px'
       }}>
         <div data-id="hfr-stat-1" data-name="Stat 1" style={{
           position: 'relative', order: '0', flex: '0 0 auto',
-          width: 'min-content', height: 'min-content',
+          width: 'min-content', height: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: '6px'
         }}>
           <p data-id="hfr-stat-1-value" data-name="Value" style={{
@@ -75,7 +75,7 @@ export const heroEditorial: SectionBlueprint = {
         </div>
         <div data-id="hfr-stat-2" data-name="Stat 2" style={{
           position: 'relative', order: '1', flex: '0 0 auto',
-          width: 'min-content', height: 'min-content',
+          width: 'min-content', height: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: '6px'
         }}>
           <p data-id="hfr-stat-2-value" data-name="Value" style={{
@@ -91,7 +91,7 @@ export const heroEditorial: SectionBlueprint = {
         </div>
         <div data-id="hfr-stat-3" data-name="Stat 3" style={{
           position: 'relative', order: '2', flex: '0 0 auto',
-          width: 'min-content', height: 'min-content',
+          width: 'min-content', height: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: '6px'
         }}>
           <p data-id="hfr-stat-3-value" data-name="Value" style={{
@@ -109,7 +109,7 @@ export const heroEditorial: SectionBlueprint = {
     </div>
     <div data-id="hfr-aside" data-name="Aside" style={{
       position: 'relative', order: '1', flex: '0 0 auto',
-      width: '380px', height: 'min-content',
+      width: '380px', height: 'auto',
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'
     }}>
       <p data-id="hfr-aside-text" data-name="Aside text" style={{

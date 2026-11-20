@@ -110,6 +110,10 @@ class FakeBridge implements CanvasBridge {
     return { renderSeq: 1, projectVersion: this.epochVersion ?? readProjectVersion() };
   }
 
+  getCurrentTransform(): { x: number; y: number; scale: number } {
+    return { x: 0, y: 0, scale: 1 };
+  }
+
   private key(nodeId: string, vpId: string): string {
     return `${vpId && vpId !== 'desktop' ? vpId + '-' : ''}:${nodeId}`;
   }

@@ -93,7 +93,7 @@ function ${FORMSUBMIT_COMPONENT_NAME}({ style, label = 'Submit', initialVariant 
       onTap={() => setVariant(variant === 'default-pressed' ? 'default-hover' : variant)}
       style={{
       width: '200px',
-      height: 'min-content',
+      height: 'auto',
       padding: '12px 24px',
       borderRadius: '8px',
       border: 'none',

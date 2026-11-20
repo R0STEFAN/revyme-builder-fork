@@ -85,8 +85,8 @@ describe('T20 Challenger 3: Empirical Verification of Challenger 1 Defect Fixes 
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function SizeWidgetA(props: { label?: string }) {
-  return <div>{props.label}</div>;
+function SizeWidgetA(props: { label?: string; style?: React.CSSProperties }) {
+  return <div style={props.style}>{props.label}</div>;
 }
 
 export default withResponsiveProps(SizeWidgetA);
@@ -133,8 +133,8 @@ export default withResponsiveProps(SizeWidgetA);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function DoubleQuoteWidget(props: { title?: string }) {
-  return <h1>{props.title}</h1>;
+function DoubleQuoteWidget(props: { title?: string; style?: React.CSSProperties }) {
+  return <h1 style={props.style}>{props.title}</h1>;
 }
 
 export default withResponsiveProps(DoubleQuoteWidget);
@@ -170,8 +170,8 @@ export default withResponsiveProps(DoubleQuoteWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function NoSemiWidget(props: { label?: string }) {
-  return <div>{props.label}</div>;
+function NoSemiWidget(props: { label?: string; style?: React.CSSProperties }) {
+  return <div style={props.style}>{props.label}</div>;
 }
 
 export default withResponsiveProps(NoSemiWidget);
@@ -199,7 +199,7 @@ export default withResponsiveProps(NoSemiWidget);
 
     it('handles CRLF line breaks with use client directive', async () => {
       const snap = createMockSnapshot({});
-      const rawCode = `'use client';\r\n/** @controls {\r\n  "label": { "type": "text", "label": "Label", "default": "CRLF" }\r\n} */\r\nimport React from 'react';\r\nimport { withResponsiveProps } from '@revyme/runtime';\r\n\r\nfunction CrlfWidget(props: { label?: string }) {\r\n  return <div>{props.label}</div>;\r\n}\r\n\r\nexport default withResponsiveProps(CrlfWidget);\r\n`;
+      const rawCode = `'use client';\r\n/** @controls {\r\n  "label": { "type": "text", "label": "Label", "default": "CRLF" }\r\n} */\r\nimport React from 'react';\r\nimport { withResponsiveProps } from '@revyme/runtime';\r\n\r\nfunction CrlfWidget(props: { label?: string; style?: React.CSSProperties }) {\r\n  return <div style={props.style}>{props.label}</div>;\r\n}\r\n\r\nexport default withResponsiveProps(CrlfWidget);\r\n`;
 
       const result = await codeComponentsCreateOperation.execute(
         snap,
@@ -228,8 +228,8 @@ export default withResponsiveProps(NoSemiWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function AutoDirectiveWidget(props: { label?: string }) {
-  return <div>{props.label}</div>;
+function AutoDirectiveWidget(props: { label?: string; style?: React.CSSProperties }) {
+  return <div style={props.style}>{props.label}</div>;
 }
 
 export default withResponsiveProps(AutoDirectiveWidget);
@@ -266,8 +266,8 @@ export default withResponsiveProps(AutoDirectiveWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function PartialWidget(props: { label?: string }) {
-  return <div>{props.label}</div>;
+function PartialWidget(props: { label?: string; style?: React.CSSProperties }) {
+  return <div style={props.style}>{props.label}</div>;
 }
 
 export default withResponsiveProps(PartialWidget);
@@ -304,7 +304,7 @@ export default withResponsiveProps(PartialWidget);
 /** @controls { "msg": { "type": "text", "label": "Msg", "default": "hi" } } */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
-function Comp() { return <div>hi</div>; }
+function Comp({ style }: { style?: React.CSSProperties }) { return <div style={style}>hi</div>; }
 export default withResponsiveProps(Comp);
 `;
 
@@ -429,9 +429,9 @@ export default withResponsiveProps(Comp);
           snap,
           {
             files: [
-              { path: 'components/ValidA.tsx', code: '// valid code A' },
+              { path: 'lib/ValidA.ts', code: '// valid code A' },
               { path: 'node_modules/hack.js', code: '// backdoor' },
-              { path: 'components/ValidB.tsx', code: '// valid code B' },
+              { path: 'lib/ValidB.ts', code: '// valid code B' },
             ],
           },
           context,
@@ -439,8 +439,8 @@ export default withResponsiveProps(Comp);
       ).rejects.toThrow(/PROTECTED_PATH/);
 
       // Verify zero files written
-      expect(projectFS.readFile('components/ValidA.tsx')).toBeNull();
-      expect(projectFS.readFile('components/ValidB.tsx')).toBeNull();
+      expect(projectFS.readFile('lib/ValidA.ts')).toBeNull();
+      expect(projectFS.readFile('lib/ValidB.ts')).toBeNull();
       expect(projectFS.readFile('node_modules/hack.js')).toBeNull();
     });
 
@@ -453,7 +453,7 @@ export default withResponsiveProps(Comp);
 /** @controls { "msg": { "type": "text", "label": "Msg", "default": "hi" } } */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
-function Header() { return <div>hi</div>; }
+function Header({ style }: { style?: React.CSSProperties }) { return <div style={style}>hi</div>; }
 export default withResponsiveProps(Header);
 `;
 

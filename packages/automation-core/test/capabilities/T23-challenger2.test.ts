@@ -523,23 +523,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       expect(res.passed).toBe(true);
     });
 
-    it('demonstrates standard mode allows root layout server metadata as non-fatal warnings while strict mode elevates dialect violations', async () => {
+    it('keeps root layout server metadata outside page Oracle checks in both modes', async () => {
       const snapshot = createAdversarialSnapshot({
         'app/layout.tsx': CLEAN_LAYOUT,
         'app/page.client.tsx': CLEAN_PAGE,
       });
 
-      // Standard mode: passes with non-fatal Oracle warnings for root layout Next.js conventions
+      // The root server layout is validated by metadata checks, not the page Oracle.
       const standardRes = await publishPreflightOperation.execute(snapshot, { strict: false }, context);
       expect(standardRes.passed).toBe(true);
       const layoutOracleWarn = standardRes.checks.find((c) => c.name === 'oracle.app/layout.tsx');
-      expect(layoutOracleWarn?.status).toBe('warn');
+      expect(layoutOracleWarn).toBeUndefined();
 
-      // Strict mode: root layout template dialect warnings become fatal
       const strictRes = await publishPreflightOperation.execute(snapshot, { strict: true }, context);
-      expect(strictRes.passed).toBe(false);
+      expect(strictRes.passed).toBe(true);
       const layoutOracleFail = strictRes.checks.find((c) => c.name === 'oracle.app/layout.tsx');
-      expect(layoutOracleFail?.status).toBe('fail');
+      expect(layoutOracleFail).toBeUndefined();
     });
   });
 

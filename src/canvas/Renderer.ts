@@ -1431,7 +1431,9 @@ export function renderNodes(
       if (isComponentMaster && variantName !== undefined) {
         const rwv = resolveVariantStyles(rootNode, variantName, tileWidth).width ?? rootNode.styles?.width;
         masterFitWidth = isFitSize(rwv);
-        masterHugWidth = !rwv || isFitSize(rwv);
+        // `fit-content` and legacy `auto` need max-content on the zero-width
+        // artboard; an explicit `min-content` or `max-content` is intentional.
+        masterHugWidth = !rwv || rwv === 'auto' || rwv === 'fit-content';
       }
       // Viewport-drag pin: while THIS tile's width is being dragged, its
       // container queries are silenced (containerType normal) so foreign

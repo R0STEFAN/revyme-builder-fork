@@ -85,7 +85,7 @@ export default function ExploitWidget() { return <div>{execSync('id')}</div>; }
 /** @controls { "t": { "type": "text", "label": "T", "default": "val" } } */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
-function SizeWidget() { return <div>Size</div>; }
+function SizeWidget({ style }: { style?: React.CSSProperties }) { return <div style={style}>Size</div>; }
 export default withResponsiveProps(SizeWidget);
 `;
       // When defaultWidth and defaultHeight are passed as input parameters,
@@ -110,7 +110,7 @@ export default withResponsiveProps(SizeWidget);
 /** @controls { "t": { "type": "text", "label": "T", "default": "val" } } */
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
-function SizeWidget() { return <div>Size</div>; }
+function SizeWidget({ style }: { style?: React.CSSProperties }) { return <div style={style}>Size</div>; }
 export default withResponsiveProps(SizeWidget);
 `;
       const res = await codeComponentsCreateOperation.execute(
@@ -133,8 +133,8 @@ export default withResponsiveProps(SizeWidget);
       const initialA = 'export default function A() { return <div>A</div>; }';
       const initialB = 'export default function B() { return <div>B</div>; }';
       const snap = createSnapshot({ projectId: 'test-p', branchId: 'main' }, 0, {
-        'components/A.tsx': initialA,
-        'components/B.tsx': initialB,
+        'lib/A.tsx': initialA,
+        'lib/B.tsx': initialB,
       });
 
       const hashA = sha256(initialA);
@@ -145,10 +145,10 @@ export default withResponsiveProps(SizeWidget);
           snap,
           {
             files: [
-              { path: 'components/A.tsx', code: 'export default function A() { return <div>A-MUTATED</div>; }', baseHash: hashA },
-              { path: 'components/NewFile.tsx', code: 'export default function New() { return <div>NEW</div>; }' },
-              { path: 'components/B.tsx', code: 'export default function B() { return <div>B-MUTATED</div>; }', baseHash: fakeHashB },
-              { path: 'components/AnotherNew.tsx', code: 'export default function Another() { return <div>ANOTHER</div>; }' },
+              { path: 'lib/A.tsx', code: 'export default function A() { return <div>A-MUTATED</div>; }', baseHash: hashA },
+              { path: 'lib/NewFile.tsx', code: 'export default function New() { return <div>NEW</div>; }' },
+              { path: 'lib/B.tsx', code: 'export default function B() { return <div>B-MUTATED</div>; }', baseHash: fakeHashB },
+              { path: 'lib/AnotherNew.tsx', code: 'export default function Another() { return <div>ANOTHER</div>; }' },
             ],
           },
           context,
@@ -156,10 +156,10 @@ export default withResponsiveProps(SizeWidget);
       ).rejects.toThrow(/CAS_CONFLICT/);
 
       // Verify zero files were created or mutated
-      expect(projectFS.readFile('components/A.tsx')).toBe(initialA);
-      expect(projectFS.readFile('components/B.tsx')).toBe(initialB);
-      expect(projectFS.readFile('components/NewFile.tsx')).toBeNull();
-      expect(projectFS.readFile('components/AnotherNew.tsx')).toBeNull();
+      expect(projectFS.readFile('lib/A.tsx')).toBe(initialA);
+      expect(projectFS.readFile('lib/B.tsx')).toBe(initialB);
+      expect(projectFS.readFile('lib/NewFile.tsx')).toBeNull();
+      expect(projectFS.readFile('lib/AnotherNew.tsx')).toBeNull();
     });
 
     it('rejects path traversal attempts with null bytes, backslashes, and dot-dots', async () => {

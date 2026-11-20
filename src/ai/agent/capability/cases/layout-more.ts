@@ -140,7 +140,7 @@ export const LAYOUT_MORE_CASES: CapabilityCase[] = [
     feature: 'Fit / hug content',
     ask: 'make the first card hug its content',
     calls: [{ tool: 'set_size_units', args: { node_id: 'card-1', width: 'fit', height: 'fit' } }],
-    expect: (w) => { const s = w.node('card-1').styles; must(s.width === 'min-content' && s.height === 'min-content', JSON.stringify(s)); },
+    expect: (w) => { const s = w.node('card-1').styles; must(s.width === 'fit-content' && s.height === 'fit-content', JSON.stringify(s)); },
   },
   {
     id: 'layout/grid', domain: 'layout', status: 'supported',

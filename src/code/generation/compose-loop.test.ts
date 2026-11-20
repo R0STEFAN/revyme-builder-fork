@@ -39,7 +39,7 @@ describe('Loop (data-loop carrier) × everything', () => {
     expect(parseJSX(out)).not.toBeNull();
     expect(out).toMatch(/boxLoopRotate = useMotionValue\(0\)/);
     expect(out).toMatch(/const boxLoopInView = useInView\(boxRef\)/);  // reuses appear ref, Pause default
-    expect(out).toMatch(/useEffect\(\(\) => \{ if \(boxLoopInView\) \{ const _c = animate\(boxLoopRotate, 360, \{ duration: 2, repeat: Infinity, ease: 'linear' \}\); return \(\) => _c\.stop\(\); \} \}, \[boxLoopInView\]\)/);
+    expect(out).toMatch(/if \(boxLoopReducedMotion\) \{ boxLoopRotate\.set\(0\); return; \} if \(boxLoopInView\) \{ const _c = animate\(boxLoopRotate, 360, \{ duration: 2, repeat: Infinity, ease: 'linear' \}\); return \(\) => _c\.stop\(\); \} \}, \[boxLoopInView, boxLoopReducedMotion\]\)/);
     // appear reveal never inherits the loop's repeat (separate carriers now)
     expect(out).not.toMatch(/animate\(boxAppear, 1, \{[^}]*repeat/);
     // hover rotate folds ADDITIVELY into the loop rotate
@@ -96,7 +96,7 @@ export default function Page() {
     const playLoop = FULL.replace(LOOP(''), LOOP(',"offscreen":"play"'));
     const out = composeAllScrollAppearConflicts(playLoop);
     expect(parseJSX(out)).not.toBeNull();
-    expect(out).toMatch(/useEffect\(\(\) => \{ const _c = animate\(boxLoopRotate, 360,[\s\S]*?\}, \[\]\)/);
+    expect(out).toMatch(/if \(boxLoopReducedMotion\) \{ boxLoopRotate\.set\(0\); return; \} const _c = animate\(boxLoopRotate, 360,[\s\S]*?\}, \[boxLoopReducedMotion\]\)/);
     expect(out).not.toContain('boxLoopInView');
     const back = decomposeAllScrollConflicts(out);
     expect(back).toMatch(/data-loop='[^']*"offscreen":"play"/);

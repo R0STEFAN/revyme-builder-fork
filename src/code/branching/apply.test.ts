@@ -98,12 +98,12 @@ describe('applyBranch — validation + undo', () => {
   it('refuses a merge that fails the oracle gate; main intact', () => {
     expect(projectFS.createBranch('agent-a')).toBeNull();
     projectFS.switchBranch('agent-a');
-    // Strip the data-id: MISSING_DATA_ID bounces at the gate.
+    // The unpositioned child is rejected after its data-id is stripped.
     projectFS.writeFile('app/page.client.tsx', BASE.replace(' data-id="a"', ''));
     projectFS.switchBranch('main');
     const r = applyBranch('agent-a');
     expect(r.status).toBe('refused');
-    expect(r.reason).toContain('MISSING_DATA_ID');
+    expect(r.reason).toContain('NO_LAYOUT_PARENT_RELATIVE_CHILD');
     expect(projectFS.readFile('app/page.client.tsx')).toBe(BASE);
   });
 

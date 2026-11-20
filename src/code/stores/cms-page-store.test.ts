@@ -91,7 +91,7 @@ describe('getItemSlug', () => {
 });
 
 describe('activePreviewSlugAtom and activePreviewItemAtom with API collections', () => {
-  it('resolves preview slug and preview item for API collections lacking _slug', () => {
+  it('resolves normalized title slugs and preview items for API collections lacking _slug', () => {
     const store = createStore();
     const detailCode = `/** @cmsPage { "collection": "works", "kind": "detail" } */
 export default function Page() { return <div />; }`;
@@ -106,19 +106,19 @@ export default function Page() { return <div />; }`;
     store.set(activeFilePathAtom, filePath);
     store.set(projectVersionAtom, (v) => v + 1);
 
-    // Should default to first item's slug/id ('101') instead of returning null
-    expect(store.get(activePreviewSlugAtom)).toBe('101');
-    expect(store.get(activePreviewItemAtom)).toEqual(items[0]);
+    // Collection data generates a readable _slug from the title before previewing.
+    expect(store.get(activePreviewSlugAtom)).toBe('first-tattoo');
+    expect(store.get(activePreviewItemAtom)).toMatchObject(items[0]);
 
     // Should switch preview item when user picks a different item
-    const nextMap = new Map([[filePath, '102']]);
+    const nextMap = new Map([[filePath, 'second-tattoo']]);
     store.set(previewSlugByFileAtom, nextMap);
-    expect(store.get(activePreviewSlugAtom)).toBe('102');
-    expect(store.get(activePreviewItemAtom)).toEqual(items[1]);
+    expect(store.get(activePreviewSlugAtom)).toBe('second-tattoo');
+    expect(store.get(activePreviewItemAtom)).toMatchObject(items[1]);
 
     // Even if an unknown slug is passed, it falls back to items[0] instead of null
     const unknownMap = new Map([[filePath, 'non-existent']]);
     store.set(previewSlugByFileAtom, unknownMap);
-    expect(store.get(activePreviewItemAtom)).toEqual(items[0]);
+    expect(store.get(activePreviewItemAtom)).toMatchObject(items[0]);
   });
 });

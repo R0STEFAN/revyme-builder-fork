@@ -85,6 +85,12 @@ describe('component master tile — a hugging root', () => {
     expect(el.style.containerType).toBe('normal');
   });
 
+  it('the current Fit spelling hugs its natural width on the master artboard', () => {
+    const el = renderTile(master("position: 'absolute', width: 'fit-content'"));
+    expect(el.style.width).toBe('max-content');
+    expect(el.style.containerType).toBe('normal');
+  });
+
   it('an in-flow hugging root gets the same treatment — the tile is absolute either way', () => {
     // `position: absolute` is stamped on every tile regardless of what the root
     // authored, so the zero-width containing block clamps a relative root too.

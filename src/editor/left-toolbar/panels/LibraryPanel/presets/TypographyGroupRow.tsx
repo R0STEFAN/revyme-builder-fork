@@ -54,10 +54,10 @@ export function TypographyGroupRow({ group, isEditing, isRenaming, onStartRename
   const fontSize = getTypoTokenValue(group, 'size')?.trim();
   const hasUsage = usages.length > 0;
   const rightSlot = (hasUsage || fontSize) ? (
-    <div className="flex items-center gap-1.5 shrink-0">
+    <div className="flex items-center gap-1.5 shrink-0 min-w-0 max-w-[40%]">
       <UsageBadge count={usages.length} usages={usages} />
       {fontSize && (
-        <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] select-none pointer-events-none">
+        <span className="min-w-0 truncate text-[11px] font-mono tabular-nums text-[var(--text-tertiary)] select-none" title={fontSize}>
           {fontSize}
         </span>
       )}

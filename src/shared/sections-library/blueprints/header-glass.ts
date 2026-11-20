@@ -13,12 +13,12 @@ export const headerGlass: SectionBlueprint = {
   canvasSize: { width: '1280px', height: '96px' },
   source: `<div data-id="section-header-glass" data-name="Header — Glass" style={{
   position: 'relative', order: '0', flex: '0 0 auto',
-  width: '100%', height: 'min-content', padding: '16px 72px',
+  width: '100%', height: 'auto', padding: '16px 72px',
   display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'
 }}>
   <div data-id="hgl-bar" data-name="Bar" style={{
     position: 'relative', order: '0', flex: '0 0 auto',
-    width: '100%', height: 'min-content', padding: '10px 12px 10px 20px',
+    width: '100%', height: 'auto', padding: '10px 12px 10px 20px',
     backgroundColor: 'rgba(255, 255, 255, 0.55)', borderRadius: '34px',
     border: '1px solid rgba(255, 255, 255, 0.9)',
     backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -26,7 +26,7 @@ export const headerGlass: SectionBlueprint = {
     display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: '16px'
   }}>
     <div data-id="hgl-logo" data-name="Logo" style={{
-      position: 'relative', order: '0', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '0', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: '9px'
     }}>
       <svg data-id="hgl-logo-mark" data-name="Mark" viewBox="0 0 22 22" preserveAspectRatio="none" style={{ position: 'relative', order: '0', flex: '0 0 auto', width: '22px', height: '22px', overflow: 'visible' }}>
@@ -39,7 +39,7 @@ export const headerGlass: SectionBlueprint = {
       }}>Northwind</p>
     </div>
     <div data-id="hgl-links" data-name="Links" style={{
-      position: 'relative', order: '1', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '1', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '28px'
     }}>
       <p data-id="hgl-link-product" data-name="Product" style={{
@@ -64,12 +64,12 @@ export const headerGlass: SectionBlueprint = {
       }}>Support</p>
     </div>
     <div data-id="hgl-cta-zone" data-name="Actions" style={{
-      position: 'relative', order: '2', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '2', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end'
     }}>
       <div data-id="hgl-cta" data-name="Get started" style={{
         position: 'relative', order: '0', flex: '0 0 auto',
-        width: 'min-content', height: 'min-content', padding: '11px 20px',
+        width: 'min-content', height: 'auto', padding: '11px 20px',
         backgroundColor: '#14191F', borderRadius: '100px',
         display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
       }}>

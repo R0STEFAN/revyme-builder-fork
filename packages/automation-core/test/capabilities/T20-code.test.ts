@@ -199,9 +199,10 @@ function InteractiveWidget(props: {
   active?: boolean;
   accentColor?: string;
   variant?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div style={{ padding: '16px', background: props.accentColor ?? '#0070f3' }}>
+    <div style={{ padding: '16px', background: props.accentColor ?? '#0070f3', ...props.style }}>
       <h3>{props.title ?? 'Interactive Card'}</h3>
       <p>Count: {props.count ?? 0}</p>
     </div>
@@ -339,8 +340,8 @@ export default withResponsiveProps(InteractiveWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function SizeWidget(props: { label?: string }) {
-  return <div>{props.label}</div>;
+function SizeWidget(props: { label?: string; style?: React.CSSProperties }) {
+  return <div style={props.style}>{props.label}</div>;
 }
 
 export default withResponsiveProps(SizeWidget);
@@ -553,8 +554,8 @@ export default withResponsiveProps(Card);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function Card(props: { title?: string }) {
-  return <div data-id="c1">{props.title ?? 'New'}</div>;
+function Card(props: { title?: string; style?: React.CSSProperties }) {
+  return <div data-id="c1" style={props.style}>{props.title ?? 'New'}</div>;
 }
 
 export default withResponsiveProps(Card);
@@ -568,8 +569,8 @@ export default withResponsiveProps(Card);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function Badge(props: { text?: string }) {
-  return <span data-id="b1">{props.text ?? 'Badge'}</span>;
+function Badge(props: { text?: string; style?: React.CSSProperties }) {
+  return <span data-id="b1" style={props.style}>{props.text ?? 'Badge'}</span>;
 }
 
 export default withResponsiveProps(Badge);

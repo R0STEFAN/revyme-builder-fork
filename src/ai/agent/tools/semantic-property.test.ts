@@ -110,16 +110,18 @@ describe('semantic property tools', () => {
     expect(queueMutation).not.toHaveBeenCalled();
   });
 
-  it('set_styles rejects non-px spacing units like rem', async () => {
+  it('set_styles accepts rem spacing values', async () => {
     const ctx = makeCtx();
     const result = await setStylesTool.execute(
       { node_id: 'box', styles: { padding: '2rem' } },
       ctx,
     );
-    expect(result.isError).toBe(true);
-    const err = JSON.parse((result.content[0] as any).text).error;
-    expect(err).toContain('must be in pixels');
-    expect(queueMutation).not.toHaveBeenCalled();
+    expect(result.isError).toBeUndefined();
+    expect(JSON.parse((result.content[0] as any).text)).toEqual({ applied: 1, viewport: null });
+    expect(queueMutation).toHaveBeenCalledWith(
+      { type: 'updateStyles', nodeId: 'box', styles: { padding: '2rem' } },
+      { author: 'agent', file: 'app/page.client.tsx', branchId: 'main' },
+    );
   });
 
   it('set_styles validates responsive dimension token category and base fallback before queuing', async () => {

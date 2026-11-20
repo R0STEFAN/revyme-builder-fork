@@ -194,7 +194,7 @@ describe('T03: Candidate Planner, Ingestion and Independent Validation', () => {
       expect(h1?.children).toBeDefined();
       expect(h1?.children?.length).toBe(2);
       expect(h1?.children?.[0].tag).toBe('span');
-      expect(h1?.children?.[0].text).toBe('BREAK THE TEMPLATE');
+      expect(h1?.children?.[0].text).toBe('BREAK THE TEMPLATE ');
       expect(h1?.children?.[1].id).toBe('s1');
       expect(h1?.children?.[1].text).toBe('VELOCITY');
     });

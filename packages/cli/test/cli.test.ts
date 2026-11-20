@@ -195,10 +195,10 @@ describe('T05: Revyme CLI Command Line Interface', () => {
 
       expect(code).toBe(0);
       expect(execute).toHaveBeenCalledWith(
-        { projectId: 'test-project', branchId: 'main' },
+        { projectId: 'test-project', branchId: 'main', filePath: 'components/SiteNavbar.tsx' },
         'diagnostics.projectCheck',
         { strict: true, targetFile: 'components/SiteNavbar.tsx' },
-        expect.objectContaining({ dryRun: false }),
+        expect.objectContaining({ dryRun: false, context: expect.any(Object) }),
       );
 
       execute.mockClear();

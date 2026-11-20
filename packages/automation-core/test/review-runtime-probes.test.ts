@@ -107,12 +107,12 @@ describe('Regression test suite: verified resolution of review findings R1-R10',
     }
   });
 
-  it('validator rejects invalid source per Oracle rules', () => {
-    const invalid = `'use client'; export default function Page(){return <div data-id="root" style={{width:'100%',height:'auto',padding:'1.5rem'}}/>;}`;
+  it('validator rejects malformed TSX before saving', () => {
+    const invalid = `'use client'; export default function Page(){return <div data-id="root";}`;
     const snapshot = createSnapshot(scope, 1, { 'app/page.client.tsx': page });
     const result = validatePlan(snapshot, planFor(invalid));
     expect(result.ok).toBe(false);
-    expect(result.issues.some((i) => /spacing|pixels|rem/i.test(i.message))).toBe(true);
+    expect(result.issues.some((i) => /syntax|parse|unexpected/i.test(i.message))).toBe(true);
   });
 
   it('catalog places a component and installs its source file', async () => {

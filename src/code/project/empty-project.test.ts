@@ -25,6 +25,7 @@
 import { DEFAULT_BREAKPOINT_STARTS } from '@/shared/constants';
 import { describe, expect, it } from 'vitest';
 import { createEmptyProject } from './project-fs';
+import { parsePresetTokens } from '../generation/preset-gen';
 
 describe('createEmptyProject', () => {
   const files = createEmptyProject();
@@ -94,6 +95,17 @@ describe('createEmptyProject', () => {
 
   it('globals.css is seeded and non-empty', () => {
     expect(files.get('app/globals.css')!.length).toBeGreaterThan(0);
+  });
+
+  it('lets the base heading and body typography values flow to smaller viewports until overridden', () => {
+    const tokens = parsePresetTokens(files.get('app/globals.css')!);
+    for (const group of ['heading', 'body']) {
+      expect(tokens.find(token => token.name === `typo-${group}-size`)).toBeDefined();
+      for (const property of ['size', 'spacing', 'line-height']) {
+        expect(tokens.find(token => token.name === `typo-${group}-${property}-md`)).toBeUndefined();
+        expect(tokens.find(token => token.name === `typo-${group}-${property}-sm`)).toBeUndefined();
+      }
+    }
   });
 
   describe('app/page.tsx (server wrapper)', () => {

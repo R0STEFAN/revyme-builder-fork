@@ -14,7 +14,7 @@ export const headerEditorial: SectionBlueprint = {
   canvasSize: { width: '1280px', height: '88px' },
   source: `<div data-id="section-header-editorial" data-name="Header — Editorial" style={{
   position: 'relative', order: '0', flex: '0 0 auto',
-  width: '100%', height: 'min-content', backgroundColor: '#050505',
+  width: '100%', height: 'auto', backgroundColor: '#050505',
   display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'
 }}>
   <div data-id="hed-bar" data-name="Bar" style={{
@@ -23,7 +23,7 @@ export const headerEditorial: SectionBlueprint = {
     display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: '16px'
   }}>
     <div data-id="hed-logo" data-name="Logo" style={{
-      position: 'relative', order: '0', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '0', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: '10px'
     }}>
       <svg data-id="hed-logo-mark" data-name="Mark" viewBox="0 0 26 26" preserveAspectRatio="none" style={{ position: 'relative', order: '0', flex: '0 0 auto', width: '26px', height: '26px', overflow: 'visible' }}>
@@ -36,7 +36,7 @@ export const headerEditorial: SectionBlueprint = {
       }}>Atelier</p>
     </div>
     <div data-id="hed-links" data-name="Links" style={{
-      position: 'relative', order: '1', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '1', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '44px'
     }}>
       <p data-id="hed-link-work" data-name="Work" style={{
@@ -61,12 +61,12 @@ export const headerEditorial: SectionBlueprint = {
       }}>Contact</p>
     </div>
     <div data-id="hed-cta-zone" data-name="Actions" style={{
-      position: 'relative', order: '2', flex: '1 0 0px', height: 'min-content',
+      position: 'relative', order: '2', flex: '1 0 0px', height: 'auto',
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end'
     }}>
       <div data-id="hed-cta" data-name="Start a project" style={{
         position: 'relative', order: '0', flex: '0 0 auto',
-        width: 'min-content', height: 'min-content', padding: '12px 22px',
+        width: 'min-content', height: 'auto', padding: '12px 22px',
         backgroundColor: '#ffffff', borderRadius: '999px',
         display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
       }}>

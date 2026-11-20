@@ -44,7 +44,10 @@ describe('canUseFill', () => {
   test('flex row + height = yes (cross-axis fill)', () => expect(canUseFill('flex', 'row', 'height')).toBe(true));
   test('flex column + height = yes', () => expect(canUseFill('flex', 'column', 'height')).toBe(true));
   test('flex column + width = yes (cross-axis fill)', () => expect(canUseFill('flex', 'column', 'width')).toBe(true));
-  test('grid = no', () => expect(canUseFill('grid', '', 'width')).toBe(false));
+  test('grid children can fill either axis', () => {
+    expect(canUseFill('grid', '', 'width')).toBe(true);
+    expect(canUseFill('grid', '', 'height')).toBe(true);
+  });
   test('none = no', () => expect(canUseFill('none', '', 'width')).toBe(false));
 });
 

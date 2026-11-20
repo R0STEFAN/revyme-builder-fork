@@ -36,9 +36,9 @@ const VALID_COMPONENT_CODE = `'use client';
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function ValidWidget(props: { label?: string; count?: number }) {
+function ValidWidget(props: { label?: string; count?: number; style?: React.CSSProperties }) {
   return (
-    <div style={{ padding: '16px' }}>
+    <div style={{ padding: '16px', ...props.style }}>
       <span>{props.label ?? 'Click Me'}: {props.count ?? 0}</span>
     </div>
   );
@@ -427,8 +427,8 @@ export default withResponsiveProps(DifferentFunctionName);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function DimensionBugWidget() {
-  return <div>Test</div>;
+function DimensionBugWidget({ style }: { style?: React.CSSProperties }) {
+  return <div style={style}>Test</div>;
 }
 
 export default withResponsiveProps(DimensionBugWidget);
@@ -736,7 +736,7 @@ export default withResponsiveProps(DimensionBugWidget);
                 },
                 {
                   path: 'components/Broken.tsx',
-                  code: `'use client';\nexport default function Broken() { return <div >>>> broken syntax; }`,
+                  code: `'use client';\n/** @controls {} */\nexport default function Broken() { return <div >>>> broken syntax; }`,
                 },
               ],
             },
@@ -791,8 +791,8 @@ export default withResponsiveProps(DimensionBugWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function SecondWidget(props: { active?: boolean }) {
-  return <div style={{ opacity: props.active ? 1 : 0.5 }}>Second</div>;
+function SecondWidget(props: { active?: boolean; style?: React.CSSProperties }) {
+  return <div style={{ opacity: props.active ? 1 : 0.5, ...props.style }}>Second</div>;
 }
 
 export default withResponsiveProps(SecondWidget);
@@ -835,9 +835,9 @@ export default withResponsiveProps(SecondWidget);
 import React from 'react';
 import { withResponsiveProps } from '@revyme/runtime';
 
-function ImageWidget() {
+function ImageWidget({ style }: { style?: React.CSSProperties }) {
   return (
-    <div data-id="img-root" style={{ width: '400px', height: '300px' }}>
+    <div data-id="img-root" style={{ width: '400px', height: '300px', ...style }}>
       <img data-id="img-hero" src="/assets/hero.jpg" alt="Hero" style={{ width: '100%', height: '100%' }} />
     </div>
   );

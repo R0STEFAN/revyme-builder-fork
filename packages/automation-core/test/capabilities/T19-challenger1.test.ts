@@ -530,7 +530,7 @@ describe('T19 Challenger 1: Adversarial Challenge Suite', () => {
       const code = projectFS.readFile(filePath)!;
       expect(code).toContain('name="_hp"');
       expect(code).toContain('tabIndex="-1"');
-      expect(code).toContain("display: 'none'");
+      expect(code).toContain("left: '-9999px'");
       expect(code).toContain('aria-hidden="true"');
 
       // Attempting honeypot on non-form node throws

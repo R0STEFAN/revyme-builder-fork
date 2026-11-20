@@ -188,7 +188,9 @@ describe('T06: Pages, Templates, Routes, Metadata and SEO', () => {
     });
 
     const result = validatePlan(snapshot, plan);
-    expect(result.issues.map((issue) => issue.code)).toContain('TEMPLATED_PAGE_ROOT_STYLED');
+    expect(result.ok).toBe(true);
+    expect(checkFile(pageCode, { kind: 'page', path: 'app/(template)/about/page.client.tsx', projectFiles: new Set(files.keys()) })
+      .map((issue) => issue.code)).toContain('TEMPLATED_PAGE_ROOT_STYLED');
   });
 
   it('assigns and unassigns a page to a template', async () => {

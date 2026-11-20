@@ -52,7 +52,7 @@ describe('T01: Operation Contracts, Registry, Coverage and Fixture', () => {
   });
 
   describe('Registry Operations & Uniqueness', () => {
-    it('registers unique operations and rejects duplicate registrations', () => {
+    it('registers operations and replaces duplicates during hot reload', () => {
       const registry = new OperationRegistry();
       registry.register({
         name: 'test.op1',
@@ -82,7 +82,8 @@ describe('T01: Operation Contracts, Registry, Coverage and Fixture', () => {
             return {};
           },
         });
-      }).toThrow(/already registered/);
+      }).not.toThrow();
+      expect(registry.get('test.op1')?.description).toBe('Duplicate');
     });
 
     it('finds near matches for misspelled tool names', () => {

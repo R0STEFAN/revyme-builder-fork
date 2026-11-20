@@ -14,7 +14,7 @@ export const heroTypewall: SectionBlueprint = {
   canvasSize: { width: '1280px', height: '640px' },
   source: `<div data-id="section-hero-typewall" data-name="Hero — Type Wall" style={{
   position: 'relative', order: '0', flex: '0 0 auto',
-  width: '100%', height: 'min-content', backgroundColor: '#F2F1ED',
+  width: '100%', height: 'auto', backgroundColor: '#F2F1ED',
   display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
   padding: '128px 40px 56px 40px'
 }}>
@@ -25,7 +25,7 @@ export const heroTypewall: SectionBlueprint = {
   }}>PRACTICAL MAGIC.</p>
   <div data-id="htw-meta" data-name="Meta" style={{
     position: 'relative', order: '1', flex: '0 0 auto',
-    width: '100%', height: 'min-content', marginTop: '64px',
+    width: '100%', height: 'auto', marginTop: '64px',
     display: 'flex', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: '32px'
   }}>
     <p data-id="htw-meta-positioning" data-name="Positioning" style={{
@@ -41,18 +41,18 @@ export const heroTypewall: SectionBlueprint = {
   </div>
   <div data-id="htw-ledger" data-name="Ledger" style={{
     position: 'relative', order: '2', flex: '0 0 auto',
-    width: '100%', height: 'min-content', marginTop: '44px',
+    width: '100%', height: 'auto', marginTop: '44px',
     display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'
   }}>
     <div data-id="htw-row-1" data-name="Row 1" style={{
       position: 'relative', order: '0', flex: '0 0 auto',
-      width: '100%', height: 'min-content', padding: '13px 0px 11px 0px',
+      width: '100%', height: 'auto', padding: '13px 0px 11px 0px',
       borderTop: '1px solid #0C0C0C',
       display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
     }}>
       <div data-id="htw-row-1-left" data-name="Left cell" style={{
         position: 'relative', order: '0', flex: '0 0 auto',
-        width: '50.77%', height: 'min-content',
+        width: '50.77%', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-1-left-label" data-name="Label" style={{
@@ -62,7 +62,7 @@ export const heroTypewall: SectionBlueprint = {
         }}>Brand systems</p>
       </div>
       <div data-id="htw-row-1-right" data-name="Right cell" style={{
-        position: 'relative', order: '1', flex: '1 0 0px', height: 'min-content',
+        position: 'relative', order: '1', flex: '1 0 0px', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-1-right-label" data-name="Label" style={{
@@ -74,13 +74,13 @@ export const heroTypewall: SectionBlueprint = {
     </div>
     <div data-id="htw-row-2" data-name="Row 2" style={{
       position: 'relative', order: '1', flex: '0 0 auto',
-      width: '100%', height: 'min-content', padding: '13px 0px 11px 0px',
+      width: '100%', height: 'auto', padding: '13px 0px 11px 0px',
       borderTop: '1px solid #0C0C0C',
       display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
     }}>
       <div data-id="htw-row-2-left" data-name="Left cell" style={{
         position: 'relative', order: '0', flex: '0 0 auto',
-        width: '50.77%', height: 'min-content',
+        width: '50.77%', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-2-left-label" data-name="Label" style={{
@@ -90,7 +90,7 @@ export const heroTypewall: SectionBlueprint = {
         }}>Digital product</p>
       </div>
       <div data-id="htw-row-2-right" data-name="Right cell" style={{
-        position: 'relative', order: '1', flex: '1 0 0px', height: 'min-content',
+        position: 'relative', order: '1', flex: '1 0 0px', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-2-right-label" data-name="Label" style={{
@@ -102,13 +102,13 @@ export const heroTypewall: SectionBlueprint = {
     </div>
     <div data-id="htw-row-3" data-name="Row 3" style={{
       position: 'relative', order: '2', flex: '0 0 auto',
-      width: '100%', height: 'min-content', padding: '13px 0px 11px 0px',
+      width: '100%', height: 'auto', padding: '13px 0px 11px 0px',
       borderTop: '1px solid #0C0C0C', borderBottom: '1px solid #0C0C0C',
       display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
     }}>
       <div data-id="htw-row-3-left" data-name="Left cell" style={{
         position: 'relative', order: '0', flex: '0 0 auto',
-        width: '50.77%', height: 'min-content',
+        width: '50.77%', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-3-left-label" data-name="Label" style={{
@@ -118,7 +118,7 @@ export const heroTypewall: SectionBlueprint = {
         }}>Spaces</p>
       </div>
       <div data-id="htw-row-3-right" data-name="Right cell" style={{
-        position: 'relative', order: '1', flex: '1 0 0px', height: 'min-content',
+        position: 'relative', order: '1', flex: '1 0 0px', height: 'auto',
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-start'
       }}>
         <p data-id="htw-row-3-right-label" data-name="Label" style={{

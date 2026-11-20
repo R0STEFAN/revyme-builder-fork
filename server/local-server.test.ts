@@ -182,7 +182,7 @@ describe('LocalServerManager', () => {
 
       try {
         const files: Record<string, string> = {
-          'app/page.tsx': 'export default () => <div>Hello</div>;',
+          'app/page.tsx': 'export default () => <img src="/api/uploads/sample-image.webp" alt="Sample" />;',
         };
         const targetDir = manager.exportProject('test-uploads-sync', files);
 
@@ -216,10 +216,10 @@ describe('LocalServerManager', () => {
 
       try {
         const files: Record<string, string> = {
-          'app/page.tsx': 'export default () => <div>Hello</div>;',
+          'app/page.tsx': 'export default () => <div><img src="/api/uploads/banner.png" alt="Banner" /><img src="/api/uploads/corrupt.jpg" alt="Corrupt" /></div>;',
         };
         const targetDir = manager.exportProject('test-opt-sync', files);
-        await manager.syncUploads(targetDir);
+        await manager.syncUploads(targetDir, undefined, undefined, 'test-opt-sync', files);
 
         const pubUploads = path.join(targetDir, 'public', 'uploads');
         expect(fs.existsSync(path.join(pubUploads, 'banner.png'))).toBe(true);

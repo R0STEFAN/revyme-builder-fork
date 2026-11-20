@@ -737,7 +737,7 @@ describe('characterization: scroll-linked animation', () => {
     expect(withSpeed).toMatchInlineSnapshot(`
       "'use client';
       import React from 'react';
-      import { motion } from 'framer-motion';
+      import { motion, useScroll, useTransform } from 'framer-motion';
 
       export default function Page() {
         const { scrollY: frameXSpeedScroll } = useScroll();
@@ -754,7 +754,7 @@ describe('characterization: scroll-linked animation', () => {
     expect(removeScrollSpeedFromCode(withSpeed, 'frame-x')).toMatchInlineSnapshot(`
       "'use client';
       import React from 'react';
-      import { motion } from 'framer-motion';
+      import { motion, useScroll, useTransform } from 'framer-motion';
 
       export default function Page() {
           return (
