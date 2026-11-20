@@ -12,6 +12,7 @@ import { escapeRegExp } from '@/shared/regex-utils';
 import { scopeVariantConstsReadingProps } from './variant-const-scope';
 import { CSS_LAYOUT_DEFAULTS, PROJECTION_STYLE_PROPS } from '@/shared/constants';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { BUILTIN_PSEUDO_ELEMENTS, type PseudoKind } from '@/code/parsing/pseudo-parser';
 import { cssTransformToMotionProps, MOTION_TRANSFORM_PROPS, MOTION_VISUAL_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { removeAxisTranslate } from '@/shared/position-utils';
 import { parseJSX } from '@/code/parsing/ast-utils';
@@ -1524,38 +1525,7 @@ export function removeBorderOverlayStyle(code: string, nodeId: string, variant?:
  */
 export function updateHoverStyleInCode(code: string, nodeId: string, styles: Record<string, string>): string {
   trace.fn('generator.updateHoverStyleInCode', { nodeId, styleCount: Object.keys(styles).length });
-
-  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
-  const blockMatch = styleBlockRegex.exec(code);
-  const selector = `[data-id="${nodeId}"]:hover`;
-  const selectorEsc = escapeRegExp(selector);
-
-  // Build CSS body from non-empty properties
-  const entries = Object.entries(styles).filter(([, v]) => v !== '');
-
-  // If no properties remain, remove the rule entirely
-  if (entries.length === 0) {
-    return removeHoverStyleInCode(code, nodeId);
-  }
-
-  const cssBody = entries.map(([k, v]) => `      ${toKebab(k)}: ${v} !important;`).join('\n');
-
-  let existingCSS = blockMatch ? blockMatch[2] : '';
-
-  // Replace existing :hover rule or append new one
-  const ruleRegex = new RegExp(`\\s*${selectorEsc}\\s*\\{[^}]*\\}`, 's');
-  if (ruleRegex.test(existingCSS)) {
-    existingCSS = existingCSS.replace(ruleRegex, `\n    ${selector} {\n${cssBody}\n    }`);
-  } else {
-    existingCSS += `\n    ${selector} {\n${cssBody}\n    }\n  `;
-  }
-
-  if (blockMatch) {
-    const [fullMatch, prefix, , suffix] = blockMatch;
-    return code.slice(0, blockMatch.index!) + prefix + existingCSS + suffix + code.slice(blockMatch.index! + fullMatch.length);
-  } else {
-    return createStyleBlockInCode(code, existingCSS);
-  }
+  return updatePseudoStyleInCode(code, nodeId, 'hover', styles);
 }
 
 /**
@@ -1595,42 +1565,27 @@ export function removeScopedChildRulesInCode(code: string, nodeId: string): stri
  */
 export function removeHoverStyleInCode(code: string, nodeId: string): string {
   trace.fn('generator.removeHoverStyleInCode', { nodeId });
-
-  const styleBlockRegex = /(<style\b[^>]*>\s*\{[`'])([\s\S]*?)([`']\}\s*<\/style>)/s;
-  const blockMatch = styleBlockRegex.exec(code);
-  if (!blockMatch) return code;
-
-  const selector = `[data-id="${nodeId}"]:hover`;
-  const selectorEsc = escapeRegExp(selector);
-  const ruleRegex = new RegExp(`\\s*${selectorEsc}\\s*\\{[^}]*\\}`, 's');
-
-  const newCSS = blockMatch[2].replace(ruleRegex, '');
-  const [fullMatch, prefix, , suffix] = blockMatch;
-  return code.slice(0, blockMatch.index!) + prefix + newCSS + suffix + code.slice(blockMatch.index! + fullMatch.length);
+  return removePseudoStyleInCode(code, nodeId, 'hover');
 }
 
 
-// ─── Pseudo Rules (::before / ::after / ::placeholder) ──────────────────────
+// ─── Pseudo Rules (::before / ::after / ::placeholder / states / custom) ─────
 
-/**
- * Write or update a ::before / ::after / ::placeholder CSS rule in the
- * <style> block. Mirrors updateHoverStyleInCode but for pseudo selectors
- * (`placeholder` styles a form control's placeholder text — the Input tool's
- * Placeholder Color; inline style objects can't reach it).
- * Creates the style block if it doesn't exist.
- * Each property gets !important. Empty string values are filtered out.
- * If no properties remain, the rule is removed entirely.
- */
+const PSEUDO_ELEMENT_KINDS = new Set<string>(BUILTIN_PSEUDO_ELEMENTS);
+
 /** The rule selector a pseudo kind writes: `::before` / `::after` /
- *  `::placeholder` are pseudo-ELEMENTS; `checked` and `focus` are the form
- *  control STATES (Checked / Focus rows in the Styles tool) — `:checked`,
- *  `:focus`. */
+ *  `::placeholder` are pseudo-ELEMENTS; built-in states (`:hover`, `:active`,
+ *  `:focus`, `:focus-visible`, `:focus-within`, `:disabled`, `:checked`) use `:`;
+ *  `custom:<suffix>` appends the validated node-scoped suffix directly. */
 export function pseudoSelector(nodeId: string, pseudo: PseudoRuleKind): string {
-  return pseudo === 'checked' || pseudo === 'focus'
-    ? `[data-id="${nodeId}"]:${pseudo}`
-    : `[data-id="${nodeId}"]::${pseudo}`;
+  if (pseudo.startsWith('custom:')) {
+    return `[data-id="${nodeId}"]${pseudo.slice('custom:'.length)}`;
+  }
+  return PSEUDO_ELEMENT_KINDS.has(pseudo)
+    ? `[data-id="${nodeId}"]::${pseudo}`
+    : `[data-id="${nodeId}"]:${pseudo}`;
 }
-export type PseudoRuleKind = 'before' | 'after' | 'placeholder' | 'checked' | 'focus';
+export type PseudoRuleKind = PseudoKind;
 
 export function updatePseudoStyleInCode(
   code: string, nodeId: string, pseudo: PseudoRuleKind, styles: Record<string, string>

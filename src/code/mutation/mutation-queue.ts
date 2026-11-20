@@ -76,6 +76,7 @@ import {
   healStrandedVariantShorthands,
   healShapeStringStyleAttrsInCode,
   normalizeResponsiveBandKeys,
+  type PseudoRuleKind,
 } from '../generation/generator-styles';
 import { setVariantVisibilityInCode } from '../generation/variant-visibility-gen';
 import {
@@ -669,11 +670,11 @@ export type Mutation =
   | { type: 'wrapFitText'; nodeId: string; viewBox: { width: number; height: number; fontSize: number; marginTop?: number }; width?: string }
   /** Unwrap a text element from its SVG foreignObject FIT wrapper */
   | { type: 'unwrapFitText'; nodeId: string }
-  // ─── Pseudo rules (::before / ::after / ::placeholder) ────────────────
-  /** Write or update a ::before/::after/::placeholder CSS rule in the <style> block */
-  | { type: 'updatePseudoStyle'; nodeId: string; pseudo: 'before' | 'after' | 'placeholder' | 'checked' | 'focus'; styles: Record<string, string> }
-  /** Remove a ::before/::after/::placeholder rule from the <style> block */
-  | { type: 'removePseudo'; nodeId: string; pseudo: 'before' | 'after' | 'placeholder' | 'checked' | 'focus' }
+  // ─── Pseudo rules (::before / ::after / ::placeholder / states / custom) ─
+  /** Write or update a pseudo-element or interactive state CSS rule in the <style> block */
+  | { type: 'updatePseudoStyle'; nodeId: string; pseudo: PseudoRuleKind; styles: Record<string, string> }
+  /** Remove a pseudo-element or interactive state rule from the <style> block */
+  | { type: 'removePseudo'; nodeId: string; pseudo: PseudoRuleKind }
   /** Write (raw declaration body) or remove (null) the select caret rule
    *  `select[data-id="…"] { … }` — the Input tool's Icon control. Lives in
    *  the <style> block so the node's inline backgroundImage stays the Fill

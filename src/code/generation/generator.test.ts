@@ -959,6 +959,24 @@ describe('updatePseudoStyleInCode', () => {
     const result = updatePseudoStyleInCode(CODE_WITH_STYLE, 'title', 'before', { animation: 'glitch 3s infinite linear alternate-reverse' });
     expect(result).toContain('animation: glitch 3s infinite linear alternate-reverse !important');
   });
+
+  test('writes and removes :active, :focus-visible, and custom node-scoped pseudo rules', () => {
+    const s1 = updatePseudoStyleInCode(CODE_NO_STYLE, 'title', 'focus-visible', { outline: '2px solid #111111' });
+    expect(s1).toContain('[data-id="title"]:focus-visible');
+    expect(s1).toContain('outline: 2px solid #111111 !important');
+
+    const s2 = updatePseudoStyleInCode(s1, 'title', 'custom::nth-child(odd)', { backgroundColor: '#ffffff' });
+    expect(s2).toContain('[data-id="title"]:nth-child(odd)');
+    expect(s2).toContain('background-color: #ffffff !important');
+
+    const s3 = updatePseudoStyleInCode(s2, 'title', 'hover', { color: '#b6b5b5' });
+    expect(s3).toContain('[data-id="title"]:hover');
+
+    const s4 = removePseudoStyleInCode(s3, 'title', 'focus-visible');
+    expect(s4).not.toContain(':focus-visible');
+    expect(s4).toContain('[data-id="title"]:nth-child(odd)');
+    expect(s4).toContain('[data-id="title"]:hover');
+  });
 });
 
 // ─── AST path: SpreadElement handling ───────────────────────────────────────
