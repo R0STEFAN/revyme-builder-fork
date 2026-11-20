@@ -18,6 +18,8 @@ import { containerOverridesAtom, getOverrideValue, hasOverrideAtWidth } from '@/
 import { findNodeComputedStyle, getInteractingViewport, forceCanvasRender, updateNodeStyles, getContentRoot } from '@/canvas/node-ops';
 import { trace } from '@/shared/debug-trace';
 import { isFitSize } from '@/shared/constants';
+import { presetTokensAtom } from '@/code/stores/preset-store';
+import { resolveTokenValue } from '@/code/project/preset-ops';
 
 /** Convert a font-size value to its visually-equivalent value in another
  *  unit. Without this, swapping the unit dropdown from `px` to `vw` keeps
@@ -265,7 +267,11 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
   // Only call useTextStyles when NOT in external mode (it requires ControlProvider)
   const text = isExternal ? null : useTextStyles(); // eslint-disable-line react-hooks/rules-of-hooks
   const { value: textValue, isMixed } = isExternal ? { value: externalValue!, isMixed: false } : text!.get(property);
-  const value = isExternal ? externalValue! : textValue;
+  const presetTokens = useAtomValue(presetTokensAtom);
+  const presetSize = !isExternal && property === 'fontSize' && /^var\(\s*--typo-/.test(textValue)
+    ? resolveTokenValue(textValue, presetTokens)?.trim()
+    : undefined;
+  const value = presetSize ?? textValue;
   const registryDef = resolveControl(property);
 
   // Weight is family-dependent. The registry's list is a flat 100–900, so on
@@ -741,7 +747,7 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
           <div className="flex items-center gap-1 w-full">
             <div className="flex-1 min-w-0">
               <ToolInput
-                value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? '' : String(numValue)}
+                value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? (presetSize ? String(resolvedClampPx) : '') : String(numValue)}
                 onChange={commitFontSize}
                 onChangeLive={liveFontSize}
                 onCommit={commitFontSize}
