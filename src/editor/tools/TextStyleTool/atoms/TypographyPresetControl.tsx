@@ -110,15 +110,19 @@ function TypoPresetListPanel({ activeGroupName, onApply, onEdit, onCreate }: {
           >
             <TypoTagBadge tag={getTypoTag(g)} active={isActive} />
             <span
-              className="text-[11px] font-medium text-[var(--text-secondary)] truncate block flex-1"
+              className="text-[11px] font-medium text-[var(--text-secondary)] truncate block min-w-0 flex-1"
               style={{ fontFamily: `'${presetFontFamily(g)}', Inter, sans-serif` }}
+              title={g.label}
             >
               {g.label}
             </span>
             {/* Right slot: size/LH detail, swapped for an Edit button on hover. */}
-            <span className="relative shrink-0 flex items-center justify-end min-w-[56px]">
+            <span className="relative shrink-0 flex items-center justify-end min-w-[56px] max-w-[40%]">
               {detail && (
-                <span className="text-[10px] text-[var(--text-secondary)] group-hover:opacity-0 transition-opacity">
+                <span
+                  className="min-w-0 truncate text-[10px] text-[var(--text-secondary)] group-hover:opacity-0 transition-opacity"
+                  title={detail}
+                >
                   {detail}
                 </span>
               )}
