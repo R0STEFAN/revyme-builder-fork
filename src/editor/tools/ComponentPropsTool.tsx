@@ -40,6 +40,7 @@ import ObjectListControl from './ObjectListControl';
 import TransitionControl from './TransitionControl';
 import ExpressionBoundPill from '../controls/ExpressionBoundPill';
 import ExpressionEditorPopup from '../ui/ExpressionEditorPopup';
+import { TextPropertyControl } from './TextStyleTool/atoms/TextPropertyControl';
 import { modifyProjectFile } from '@/code/project/modify-file';
 import { renderCodeComponentDirect } from '@/canvas/CodeComponentHost';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
@@ -877,9 +878,10 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     // Typed component variables whose runtime value is a JS literal, not a string: a Toggle prop must be
     // `prop={true}` (the string "false" is truthy), a Number prop `prop={16}`. Write them as expressions.
     const propVarType = componentInfo?.props?.find(p => p.name === propName)?.varType;
+    const isFontSize = propVarType === 'fontSize' || propCSSMap.get(propName) === 'fontSize';
     const useExpression = (!!controlDef && (
       controlDef.type === 'slider' || controlDef.type === 'number' || controlDef.type === 'toggle'
-    )) || propVarType === 'toggle' || propVarType === 'number'
+    )) || propVarType === 'toggle' || (propVarType === 'number' && !isFontSize)
       || linkKindForExpr === 'newTab' || linkKindForExpr === 'smooth' || linkKindForExpr === 'params';
     const coercedValue = useExpression
       ? (value === 'true' ? true : value === 'false' ? false : /^-?\d+(\.\d+)?$/.test(value) ? parseFloat(value) : value)
@@ -1074,9 +1076,10 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     // Typed component variables whose runtime value is a JS literal, not a string: a Toggle prop must be
     // `prop={true}` (the string "false" is truthy), a Number prop `prop={16}`. Write them as expressions.
     const propVarType = componentInfo?.props?.find(p => p.name === propName)?.varType;
+    const isFontSize = propVarType === 'fontSize' || propCSSMap.get(propName) === 'fontSize';
     const useExpression = (!!controlDef && (
       controlDef.type === 'slider' || controlDef.type === 'number' || controlDef.type === 'toggle'
-    )) || propVarType === 'toggle' || propVarType === 'number'
+    )) || propVarType === 'toggle' || (propVarType === 'number' && !isFontSize)
       || linkKindForExpr === 'newTab' || linkKindForExpr === 'smooth' || linkKindForExpr === 'params';
 
     // A TRANSITION variable's value is a framer-motion OBJECT, not a string. The editor hands a JSON string
@@ -1205,7 +1208,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
     });
     if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
     commitTimerRef.current = setTimeout(flushCommits, 140);
-  }, [selectedId, activeFile, componentInfo, controlsMeta, isReplica, vpWidth, propLinkAttrMap, setCode, setVersion, previewProp, flushCommits, instanceTagName]);
+  }, [selectedId, activeFile, componentInfo, controlsMeta, isReplica, vpWidth, propCSSMap, propLinkAttrMap, setCode, setVersion, previewProp, flushCommits, instanceTagName]);
 
   // Write a prop value as a RAW JSX EXPRESSION (`prop={expr}`), not a string
   // literal. Used by the link control's Slug binding to set the per-row CMS
@@ -2472,7 +2475,7 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
               // false-positives on a CHAINED MotionConfig ternary (`…t2 : variant === 'v1' ? t1…` matches `t2` as
               // the cssProp for `t1`), returning a bogus non-registry cssProp → the curve picker turned into a raw
               // text input (the reported regression after per-variant chaining landed).
-              const cssProp = prop.varType === 'transition' ? 'transition' : propCSSMap.get(prop.name);
+              const cssProp = prop.varType === 'transition' ? 'transition' : propCSSMap.get(prop.name) ?? (prop.varType === 'fontSize' ? 'fontSize' : undefined);
               // While an editor (color picker, border panel, slider) is being
               // dragged, the persisted file write is debounced — `currentValues`
               // (parsed from the committed source) lags behind. `previewValues`
@@ -2871,6 +2874,20 @@ export default function ComponentPropsTool({ embedded = false }: { embedded?: bo
                     <div className="flex items-center justify-between w-full">
                       <ControlLabel label={prop.label || prop.name} property={cssProp ?? ''} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} subLabel={humanizeStylePropName(cssProp) ?? undefined} />
                       <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)} options={opts}><ToolSelect value={propValue} onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)} options={opts} /></LocalePropPillOr>
+                    </div>
+                  </HoistMenuItemProvider>
+                );
+              }
+              if (cssProp === 'fontSize') {
+                return (
+                  <HoistMenuItemProvider key={prop.name} item={hoistMenuItem}>
+                    <div className="flex items-start justify-between w-full">
+                      <ControlLabel label={prop.label || prop.name} property={cssProp} plain={false} hideLocalize extraMenuItems={localizeMenuItem(prop.name, propValue)} overridden={propOverridden || localePropOverride(prop.name).overridden} onResetOverride={localePropOverride(prop.name).reset ?? propResetOverride} />
+                      <LocalePropPillOr nodeId={selectedId} componentName={componentName!} prop={prop.name} propLabel={prop.label || prop.name} fallback={cleanPropFallback(propValue, prop.defaultValue)}>
+                        <TextPropertyControl property="fontSize" label="Font Size" value={propValue}
+                          onChange={(v) => handlePropChange(prop.name, v, prop.defaultValue)}
+                          onChangeLive={(v) => previewProp(prop.name, v)} hideLabel />
+                      </LocalePropPillOr>
                     </div>
                   </HoistMenuItemProvider>
                 );

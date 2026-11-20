@@ -29,3 +29,33 @@ describe('ComponentPropsTool selected import alias', () => {
     });
   }
 });
+
+it('edits a preset-backed font size on just the selected instance', async () => {
+  const code = `import Card from '@/components/Card';
+    export default function Page(){return <div data-id="root"><Card data-id="first" /><Card data-id="second" /></div>;}`;
+  const master = `/** @propMeta {"size":{"type":"number","label":"Font Size"}} */
+    export default function Card({ size = "var(--typo-heading-size)" }) {
+      return <p data-id="label" style={{ fontSize: size }}>Heading</p>;
+    }`;
+  resetProjectFS(new Map([
+    ['app/page.tsx', code],
+    ['app/globals.css', ':root { --typo-heading-size: clamp(4.375rem, 10.82vw, 11.25rem); }'],
+    ['components/Card.tsx', master],
+  ]));
+  const store = createStore();
+  store.set(activeFilePathAtom, 'app/page.tsx');
+  store.set(codeAtom, code);
+  store.set(stableCodeAtom, code);
+  store.set(selectedIdsAtom, ['first']);
+  const { getByDisplayValue, getByText } = render(<Provider store={store}><ComponentPropsTool /></Provider>);
+  expect(getByText('clamp')).toBeDefined();
+  expect(getByDisplayValue('10.82')).toBeDefined();
+  expect(getByDisplayValue('11.25')).toBeDefined();
+  const minimum = getByDisplayValue('4.375');
+  fireEvent.focus(minimum);
+  fireEvent.change(minimum, { target: { value: '5' } });
+  fireEvent.blur(minimum);
+  await waitFor(() => expect(projectFS.readFile('app/page.tsx')).toContain('size="clamp(5rem, 10.82vw, 11.25rem)"'));
+  expect(projectFS.readFile('app/page.tsx')).toContain('<Card data-id="second" />');
+  expect(projectFS.readFile('components/Card.tsx')).toBe(master);
+});

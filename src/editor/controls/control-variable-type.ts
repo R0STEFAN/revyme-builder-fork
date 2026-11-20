@@ -38,6 +38,7 @@ function specForPrimitive(type: PageVariableType, property: string): ControlVarS
 /** The variable-creation spec for a CSS-style control, or null when the property has no clean primitive
  *  type (border/shadow/transition/etc. fall back to the legacy string-style variable create path). */
 export function styleControlVariableSpec(property: string): ControlVarSpec | null {
+  if (property === 'fontSize') return { typeId: 'fontSize', literalKind: 'string' };
   const t = pageVariableTypeForProperty(property);
   return t ? specForPrimitive(t, property) : null;
 }

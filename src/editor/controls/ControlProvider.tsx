@@ -980,7 +980,10 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       queueMutation({ type: 'createTextVariable', nodeId: selectedId, propName, defaultValue: text, ...(formattedText ? { formatted: true } : {}) });
       return;
     }
-    const value = defaultValue ?? styles[property] ?? '';
+    const captured = defaultValue ?? styles[property] ?? '';
+    const value = property === 'fontSize' && /^-?\d*\.?\d+$/.test(captured.trim())
+      ? `${captured.trim()}px`
+      : captured;
     // Type-aware creation (the reference model): a single-number control mints a Number variable (raw numeric
     // literal default), a boolean control (Hide/Wrap) a Toggle variable (ternary binding), and color/
     // image/text get their typed @propMeta. Properties with no clean primitive (border/shadow/transition)
@@ -1001,6 +1004,10 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     const effectiveClearLonghands = clearLonghands ?? AUTO_CLEAR_LONGHANDS_BY_PROPERTY[property];
     trace.action('control:create-variable', { nodeId: selectedId, property, propName, defaultValue: value, clearLonghands: effectiveClearLonghands?.length ?? 0, literalKind: spec?.literalKind ?? 'string' });
     queueMutation({ type: 'createVariable', nodeId: selectedId, styleProperty: property, propName, defaultValue: value, clearLonghands: effectiveClearLonghands, literalKind: spec?.literalKind ?? 'string', varType: spec?.typeId });
+    if (isComponentFile && property === 'fontSize' && node?.motionVariants?.default?.fontSize !== undefined) {
+      // A stale Motion default would otherwise win over the new inline binding.
+      queueMutation({ type: 'setVariantInlineVariable', nodeId: selectedId, cssProp: property, propName, variantName: 'default', elseValue: value, defaultValue: value });
+    }
     // Seed a Number variable's slider knobs from the control registry (opacity → 0–1/0.01, gap → 0–200/1,
     // …) so its editor opens with sensible bounds instead of the generic 0–100. Defaults to a slider.
     if (spec?.typeId === 'number') {

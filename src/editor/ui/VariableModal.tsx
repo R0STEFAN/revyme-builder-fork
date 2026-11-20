@@ -52,6 +52,7 @@ import { parseVariantConfig, selectableVariants } from '@/code/variants/variant-
 import { parseJSX } from '@/code/parsing/ast-utils';
 import { resolveControl } from '../controls/control-registry';
 import { resolveVariableEditor } from '../controls/variable-editor-registry';
+import { TextPropertyControl } from '../tools/TextStyleTool/atoms/TextPropertyControl';
 import { UnifiedControlProvider } from '../controls/unified';
 import { ToolInput, ToolSlider, ToolSelect, ToolSegmentedControl, ControlActionRow, RemoveButton } from '../controls';
 import { pageVariablesAtom } from '@/code/stores/page-variables-store';
@@ -584,6 +585,7 @@ export default function VariableModal({
     return inferPropertyFromValue(def);
   }, [activeTypeDef, property, selectedVar, componentCode, existingVars, activeFile, resolveChildCode]);
   const registryDef = useMemo(() => resolveControl(effectiveProperty), [effectiveProperty]);
+  const useFontSizeEditor = isComponent && effectiveProperty === 'fontSize';
 
   // ─── Handlers ────────────────────────────────────────────────────────
   const handleSelectVar = useCallback((name: string) => {
@@ -833,7 +835,7 @@ export default function VariableModal({
     if (!selectedVar) return;
     if (isComponent) {
       expediteStableAtomSync();
-      queueMutation({ type: 'setComponentPropDefault', propName: selectedVar, newDefault: v, literalKind: activeTypeDef?.literalKind });
+      queueMutation({ type: 'setComponentPropDefault', propName: selectedVar, newDefault: v, literalKind: useFontSizeEditor ? 'string' : activeTypeDef?.literalKind });
       // A TEMPLATE/layout carries each variable as BOTH a function param (the runtime value) AND a
       // @pageVariables entry (the modal's list). setComponentPropDefault only touches the param, so the
       // two DIVERGE (param='variant-2', @pageVariables='default') — and the canvas can resolve the stale
@@ -853,7 +855,7 @@ export default function VariableModal({
     // until a page switch. setForceRender() tells onBeforeFlush to let the render through. See
     // CanvasRenderer.render()'s canvasUpdating skip + node-ops solo-replica-clear for the same pattern.
     setForceRender();
-  }, [selectedVar, isComponent, activeTypeDef, pageVariables]);
+  }, [selectedVar, isComponent, activeTypeDef, useFontSizeEditor, pageVariables]);
 
   const handleCreate = useCallback(() => {
     if (!isNameValid) return;
@@ -893,6 +895,10 @@ export default function VariableModal({
     // there's no CSS property to derive a control from.
     if (renderDefaultValue) {
       return renderDefaultValue(value, onChange);
+    }
+
+    if (useFontSizeEditor) {
+      return <TextPropertyControl property="fontSize" label="Font Size" value={value} onChange={onChange} onChangeLive={live} hideLabel />;
     }
 
     // Variant variable → the bound component's variant SELECT (not a bare text input).
@@ -1368,7 +1374,7 @@ export default function VariableModal({
                 )}
 
                 {/* Number knobs (Min / Max / Step / Unit / Control) — the reference ControlType.Number config. */}
-                {activeTypeDef?.id === 'number' && isComponent && (
+                {activeTypeDef?.id === 'number' && isComponent && !useFontSizeEditor && (
                   <NumberMetaConfig varName={selectedVarInfo.name} componentCode={componentCode} />
                 )}
               </div>

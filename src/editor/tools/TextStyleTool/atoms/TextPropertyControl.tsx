@@ -237,6 +237,7 @@ interface TextPropertyControlProps {
   onChange?: (value: string) => void;
   /** External onChangeLive (for preset editing mode) */
   onChangeLive?: (value: string) => void;
+  hideLabel?: boolean;
 }
 
 /**
@@ -262,13 +263,13 @@ function useWorkspaceWeightOptions(
   }, [property, familyValue, fonts]);
 }
 
-export function TextPropertyControl({ property, label, value: externalValue, onChange: externalOnChange, onChangeLive: externalOnChangeLive }: TextPropertyControlProps) {
+export function TextPropertyControl({ property, label, value: externalValue, onChange: externalOnChange, onChangeLive: externalOnChangeLive, hideLabel }: TextPropertyControlProps) {
   const isExternal = externalValue !== undefined && externalOnChange !== undefined;
   // Only call useTextStyles when NOT in external mode (it requires ControlProvider)
   const text = isExternal ? null : useTextStyles(); // eslint-disable-line react-hooks/rules-of-hooks
   const { value: textValue, isMixed } = isExternal ? { value: externalValue!, isMixed: false } : text!.get(property);
   const presetTokens = useAtomValue(presetTokensAtom);
-  const presetSize = !isExternal && property === 'fontSize' && /^var\(\s*--typo-/.test(textValue)
+  const presetSize = property === 'fontSize' && /^var\(\s*--/.test(textValue)
     ? resolveTokenValue(textValue, presetTokens)?.trim()
     : undefined;
   const value = presetSize ?? textValue;
@@ -299,7 +300,7 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     : (parentNode?.type === 'svg' && parentNode?.id?.endsWith('-svg')) ? parentNode
     : (parentNode?.type === 'foreignObject' && grandparentNode?.type === 'svg' && grandparentNode?.id?.endsWith('-svg')) ? grandparentNode
     : null;
-  const isFitMode = property === 'fontSize' && !!fitWrapperNode;
+  const isFitMode = !isExternal && property === 'fontSize' && !!fitWrapperNode;
   // FIT "Font Size" is DECOUPLED from the container width (design-tool parity). The
   // Size tool owns the SVG wrapper's `width` % (the div's width in its parent);
   // Font Size is the text's SCALE WITHIN that container — the reference applies
@@ -563,7 +564,7 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     };
 
     const handleUnitChange = (newUnit: string) => {
-      if (newUnit === currentUnit) return;
+      if (newUnit === currentUnit || (isExternal && newUnit === 'fit')) return;
 
       if (newUnit === 'clamp') {
         // Switch to clamp — use current value as the max, derive min and preferred
@@ -654,7 +655,7 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
       // not its stored width (where its range ends).
       const { vpId } = getInteractingViewport();
       const vpWidth = getDefaultStore().get(interactingViewportRenderWidthAtom);
-      const currentPx = resolveCurrentFontSizePx(selectedId ?? null, vpId, value, vpWidth);
+      const currentPx = resolveCurrentFontSizePx(isExternal ? null : selectedId ?? null, vpId, value, vpWidth);
       const converted = convertFontSizeUnit(currentPx, newUnit, vpWidth);
       const newValue = `${formatConvertedValue(converted)}${newUnit}`;
       trace.action('font-size:unit-swap', {
@@ -737,17 +738,17 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
     return (
       <div className="flex flex-col gap-2 w-full">
         <div className="flex items-center justify-between w-full">
-          <ControlLabel
+          {!hideLabel && <ControlLabel
             label={label}
             property={property}
             plain={isExternal && !fitScaleOverridden}
             overridden={isFitMode && fitScaleOverridden}
             onResetOverride={isFitMode && fitScaleOverridden ? resetFitScaleOverride : undefined}
-          />
+          />}
           <div className="flex items-center gap-1 w-full">
             <div className="flex-1 min-w-0">
               <ToolInput
-                value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? (presetSize ? String(resolvedClampPx) : '') : String(numValue)}
+                value={isMixed ? '' : isFitMode ? String(fitScalePct) : isClamp ? (presetSize || isExternal ? String(resolvedClampPx) : '') : String(numValue)}
                 onChange={commitFontSize}
                 onChangeLive={liveFontSize}
                 onCommit={commitFontSize}
@@ -759,13 +760,13 @@ export function TextPropertyControl({ property, label, value: externalValue, onC
               <ToolSelect
                 value={currentUnit}
                 onChange={handleUnitChange}
-                options={FONT_SIZE_UNITS}
+                options={isExternal ? FONT_SIZE_UNITS.filter(unit => unit.value !== 'fit') : FONT_SIZE_UNITS}
               />
             </div>
           </div>
         </div>
         {currentUnit === 'clamp' && (
-          <div className="flex flex-col gap-1.5 pl-[25%]">
+          <div className={`flex flex-col gap-1.5 ${hideLabel ? '' : 'pl-[25%]'}`}>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-[var(--text-secondary)] w-8 shrink-0">Min</span>
               <ToolInput

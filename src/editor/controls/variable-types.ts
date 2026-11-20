@@ -11,7 +11,7 @@ import type { VariableIconKey } from './VariableTypeIcon';
 export type VariableTypeId =
   | 'plainText' | 'formattedText' | 'number' | 'toggle' | 'option' | 'color'
   | 'date' | 'link' | 'image' | 'file' | 'event' | 'transition' | 'border' | 'shadow'
-  | 'componentCursor' | 'reference';
+  | 'componentCursor' | 'reference' | 'fontSize';
 
 type LiteralKind = 'string' | 'number' | 'boolean';
 type DefaultEditor = 'text' | 'textarea' | 'number' | 'toggle' | 'option' | 'style' | 'componentCursor' | 'none' | 'image';
@@ -44,6 +44,7 @@ export const VARIABLE_TYPES: VariableTypeDef[] = [
   { id: 'color',         label: 'Color',          iconKey: 'color',      literalKind: 'string',  defaultValue: '#000000',                       editor: 'style', controlProperty: 'backgroundColor' },
   { id: 'toggle',        label: 'Toggle',         iconKey: 'boolean',    literalKind: 'boolean', defaultValue: 'false',                         editor: 'toggle' },
   { id: 'number',        label: 'Number',         iconKey: 'number',     literalKind: 'number',  defaultValue: '0',                             editor: 'number' },
+  { id: 'fontSize',      label: 'Font Size',      iconKey: 'number',     literalKind: 'string',  defaultValue: '16px',                          editor: 'style', controlProperty: 'fontSize', pickable: false },
   { id: 'option',        label: 'Option',         iconKey: 'option',     literalKind: 'string',  defaultValue: '',                              editor: 'option' },
   { id: 'event',         label: 'Event',          iconKey: 'event',      literalKind: 'string',  defaultValue: '',                              editor: 'none' },
   { id: 'file',          label: 'File',           iconKey: 'file',       literalKind: 'string',  defaultValue: '',                              editor: 'text' },
