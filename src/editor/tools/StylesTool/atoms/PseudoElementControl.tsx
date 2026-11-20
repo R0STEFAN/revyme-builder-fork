@@ -39,7 +39,7 @@ import { BorderControl } from './BorderControl';
 import { MaskControl } from './MaskControl';
 import { TransformControl } from './TransformControl';
 import { ShadowControl as TextShadowControl } from '../../TextStyleTool/atoms/ShadowControl';
-import { getPropertyIcon, PseudoIcon } from '@/design-system/PropertyIcons';
+import { getPropertyIcon, PseudoIcon, TransitionIcon } from '@/design-system/PropertyIcons';
 import type { AtomProps } from '../../../controls/unified/types';
 import type { ComponentType } from 'react';
 import { expediteStableAtomSync } from '@/canvas/hooks/useStableAtomSync';
@@ -382,28 +382,34 @@ function TransitionEditorPanel({ initialValue, onCommit }: { initialValue: strin
   );
 }
 
-/** Transition row — shows shorthand summary, opens editor panel */
+/** Transition row — shows shorthand summary (or Add button when unset), opens editor panel */
 function TransitionRow({ value, onChange, onRemove }: {
   value: string; onChange: (v: string) => void; onRemove: () => void;
 }) {
   const popupCtx = useToolPopupOptional();
+  const hasValue = Boolean(value && value.trim() && value.trim() !== 'none');
   const parsed = parseTransitionShorthand(value);
   const summary = parsed.length > 0 ? transitionSummary(parsed) : (value || 'None');
 
-  const handleClick = () => {
+  const handleOpen = () => {
+    const seed = hasValue ? value : formatTransitionShorthand([createDefaultTransition()]);
+    if (!hasValue) {
+      onChange(seed);
+    }
     if (popupCtx?.pushPanel) {
-      popupCtx.pushPanel('Transition', <TransitionEditorPanel initialValue={value} onCommit={onChange} />);
+      popupCtx.pushPanel('Transition', <TransitionEditorPanel initialValue={seed} onCommit={onChange} />);
     }
   };
 
   return (
-    <div className="flex items-center justify-between w-full">
-      <ControlLabel label="Transition" property="" plain />
-      <ControlActionRow onClick={handleClick}>
-        <span className="truncate flex-1">{summary}</span>
-        <RemoveButton onClick={(e) => { e.stopPropagation(); onRemove(); }} />
-      </ControlActionRow>
-    </div>
+    <SingleEntryRow
+      label="Transition" property="" plain
+      hasValue={hasValue}
+      onOpen={handleOpen}
+      EmptyIcon={TransitionIcon}
+      renderPreview={() => <span className="truncate flex-1">{summary}</span>}
+      onRemove={hasValue ? (e) => { e.stopPropagation(); onRemove(); } : undefined}
+    />
   );
 }
 
@@ -618,7 +624,7 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
   const availableRaw = RAW_PROPS.filter(p => !allKeys.has(p.key));
   const canAddTextShadow = !hasTextShadow;
   const canAddAnimation = !hasAnimation;
-  const canAddTransition = !hasTransition;
+  const canAddTransition = !interactive && !hasTransition;
 
   return (
     <div className="flex flex-col gap-2">
@@ -675,10 +681,10 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
         />
       )}
 
-      {/* Transition — property + duration + easing controls */}
-      {hasTransition && (
+      {/* Transition — always visible for interactive states (:hover, :active, etc.) */}
+      {(interactive || hasTransition) && (
         <TransitionRow
-          value={localStyles.transition || 'all 0.25s ease'}
+          value={localStyles.transition || ''}
           onChange={(v) => handleChange({ ...localRef.current, transition: v })}
           onRemove={() => {
             const updated = { ...localRef.current };
@@ -707,6 +713,21 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
           <button onClick={() => {
             const addList = (
               <div className="flex flex-col gap-1 max-h-[320px] overflow-y-auto">
+                {canAddTransition && (
+                  <button
+                    onClick={() => {
+                      handleChange({
+                        ...localRef.current,
+                        transition: formatTransitionShorthand([createDefaultTransition()]),
+                      });
+                      popPanel?.();
+                      trace.action('pseudo-editor:add-property', { nodeId, pseudo, property: 'transition' });
+                    }}
+                    className="w-full h-[var(--control-height)] shrink-0 flex items-center gap-2 px-2 bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] cut-corners cut-border hover:[--cut-border-color:var(--control-border-hover)] cursor-pointer transition-colors text-xs text-[var(--text-primary)]">
+                    {(() => { const I = getPropertyIcon('transition'); return <I width={20} height={20} className="shrink-0" />; })()}
+                    Transition
+                  </button>
+                )}
                 {availableRaw.map(({ key, label, defaultValue }) => (
                   <button key={key}
                     onClick={() => {
@@ -741,21 +762,6 @@ function PseudoEditor({ nodeId, pseudo, styles }: {
                     className="w-full h-[var(--control-height)] shrink-0 flex items-center gap-2 px-2 bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] cut-corners cut-border hover:[--cut-border-color:var(--control-border-hover)] cursor-pointer transition-colors text-xs text-[var(--text-primary)]">
                     {(() => { const I = getPropertyIcon('animation'); return <I width={20} height={20} className="shrink-0" />; })()}
                     Animation
-                  </button>
-                )}
-                {canAddTransition && (
-                  <button
-                    onClick={() => {
-                      handleChange({
-                        ...localRef.current,
-                        transition: formatTransitionShorthand([createDefaultTransition()]),
-                      });
-                      popPanel?.();
-                      trace.action('pseudo-editor:add-property', { nodeId, pseudo, property: 'transition' });
-                    }}
-                    className="w-full h-[var(--control-height)] shrink-0 flex items-center gap-2 px-2 bg-[var(--grid-line)] border border-[var(--control-border)] [--cut-border-color:var(--control-border)] hover:border-[var(--control-border-hover)] cut-corners cut-border hover:[--cut-border-color:var(--control-border-hover)] cursor-pointer transition-colors text-xs text-[var(--text-primary)]">
-                    {(() => { const I = getPropertyIcon('transition'); return <I width={20} height={20} className="shrink-0" />; })()}
-                    Transition
                   </button>
                 )}
                 {availableAtoms.map(({ key, label }) => (

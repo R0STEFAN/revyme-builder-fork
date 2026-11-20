@@ -196,4 +196,36 @@ describe('PseudoElementControl — visual CSS states & pseudo-elements', () => {
     expect(screen.queryByRole('button', { name: /^\+?\s*:focus$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^\+?\s*:checked$/i })).toBeNull();
   });
+
+  it('always shows a Transition row inside interactive state editors (even before transition is added)', () => {
+    state.pseudoMap = new Map([
+      [
+        'btn-1',
+        {
+          hover: {
+            backgroundColor: '#111111',
+          },
+        },
+      ],
+    ]);
+
+    render(<PseudoElementControl openSignal={1} />);
+
+    // Open :hover editor (currently has only 1 style, no transition yet)
+    const hoverOpenBtn = screen.getByRole('button', { name: /1 style/i });
+    fireEvent.click(hoverOpenBtn);
+
+    // Transition row is immediately visible with an Add action button
+    expect(screen.getByText('Transition')).toBeTruthy();
+    const addTransitionBtn = screen.getByRole('button', { name: /^Add$/i });
+    fireEvent.click(addTransitionBtn);
+
+    // Clicking Add seeds a default transition in CSS preview and pushes the Transition panel
+    expect(state.injectCanvasCSS).toHaveBeenCalledWith(
+      '[data-id="btn-1"]:hover',
+      expect.stringContaining('transition: all 0.3s')
+    );
+    expect(screen.getByText('Duration')).toBeTruthy();
+    expect(screen.getByText('Easing')).toBeTruthy();
+  });
 });
