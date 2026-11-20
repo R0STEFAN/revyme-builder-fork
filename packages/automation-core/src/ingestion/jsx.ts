@@ -5,6 +5,7 @@ import { IdManager } from './ids';
 import type { IngestedNode } from './tree';
 import { normalizeStyles } from './styles';
 import type { UnitContext } from './units';
+import { healSvgSubtree } from './svg-heal';
 
 export function ingestJSXNodes(
   code: string,
@@ -247,17 +248,7 @@ function convertBabelJSX(
       }
     }
 
-    autoHealNodeAndSubtree(
-      id,
-      tagName,
-      normalizedStyles,
-      props,
-      textContent,
-      children,
-      reporter
-    );
-
-    return {
+    const nodeObj: IngestedNode = {
       id,
       tag: tagName,
       name: existingName,
@@ -266,6 +257,26 @@ function convertBabelJSX(
       text: textContent || undefined,
       children: children.length > 0 ? children : undefined,
     };
+
+    if (tagName.replace(/^motion\./, '').toLowerCase() === 'svg') {
+      healSvgSubtree(nodeObj, idManager, reporter);
+    }
+
+    const syncedProps = (nodeObj.props as Record<string, any>) ?? props;
+    autoHealNodeAndSubtree(
+      nodeObj.id,
+      nodeObj.tag,
+      normalizedStyles,
+      syncedProps,
+      textContent,
+      nodeObj.children ?? [],
+      reporter
+    );
+
+    nodeObj.styles = Object.keys(normalizedStyles).length > 0 ? normalizedStyles : undefined;
+    nodeObj.props = Object.keys(syncedProps).length > 0 ? syncedProps : undefined;
+
+    return nodeObj;
   }
 
   return null;
