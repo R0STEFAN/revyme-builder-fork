@@ -453,6 +453,56 @@ export default ProjectCard;
     expect(updated).not.toContain('<style>');
   });
 
+  it('writes and reads back :focus-visible, :hover, and validated custom pseudo states via styles.set / styles.get', async () => {
+    const stylesSetOp = defaultRegistry.get('styles.set')!;
+    const stylesGetOp = defaultRegistry.get('styles.get')!;
+    const stylesRemoveOp = defaultRegistry.get('styles.remove')!;
+
+    // 1. Set :focus-visible and [aria-expanded="true"] custom state
+    const focusRes = await stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      pseudo: ':focus-visible',
+      styles: { outline: '2px solid #111111' },
+    }, context);
+    applyChanges(focusRes.changes);
+
+    const customRes = await stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      pseudo: '[aria-expanded="true"]',
+      styles: { backgroundColor: '#f5f5f5' },
+    }, context);
+    applyChanges(customRes.changes);
+
+    // 2. Unsafe descendant/foreign selector in pseudo is rejected
+    await expect(stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      pseudo: ' .child',
+      styles: { color: '#ff0000' },
+    }, context)).rejects.toThrow();
+
+    // 3. styles.get returns pseudoStyles map alongside base styles
+    const readRes = await stylesGetOp.execute(snapshot, { nodeId: 'title-1' }, context) as {
+      nodeId: string;
+      styles: Record<string, string>;
+      pseudoStyles?: Record<string, Record<string, string>>;
+    };
+    expect(readRes.pseudoStyles?.['focus-visible']).toEqual({ outline: '2px solid #111111' });
+    expect(readRes.pseudoStyles?.['custom:[aria-expanded="true"]']).toEqual({ backgroundColor: '#f5f5f5' });
+
+    // 4. styles.remove can remove a custom pseudo property cleanly
+    const removeRes = await stylesRemoveOp.execute(snapshot, {
+      nodeId: 'title-1',
+      pseudo: '[aria-expanded="true"]',
+      properties: ['backgroundColor'],
+    }, context);
+    applyChanges(removeRes.changes);
+    const readAfterRemove = await stylesGetOp.execute(snapshot, { nodeId: 'title-1' }, context) as {
+      pseudoStyles?: Record<string, Record<string, string>>;
+    };
+    expect(readAfterRemove.pseudoStyles?.['custom:[aria-expanded="true"]']).toBeUndefined();
+    expect(readAfterRemove.pseudoStyles?.['focus-visible']).toEqual({ outline: '2px solid #111111' });
+  });
+
   it('updates text content without breaking inline JSX structure', async () => {
     const textGetOp = defaultRegistry.get('text.get')!;
     const textSetOp = defaultRegistry.get('text.set')!;

@@ -21,6 +21,7 @@ import { trace } from '@/shared/debug-trace';
 import { isSvgTag, isTextTag } from '@/shared/constants';
 import { formattedBranchesOfDangerAttr } from '@/shared/rich-message';
 import { parseJSXToNodes } from '@/code/parsing/parser';
+import { isValidCustomPseudoSuffix } from '@/code/parsing/pseudo-parser';
 import { cmsItemVarForPath } from './checks/cms-safe-text';
 import { parseComponentCursorCalls } from '@/code/parsing/cursor-parser';
 import { parseCodeComponentDefaultSize, parseComponentControlsMeta, hasComponentControls, CONTROL_TYPES } from '@/code/components/controls-parser';
@@ -196,7 +197,11 @@ function isEditorMediaStyleBlock(el: t.JSXElement): boolean {
       // border-overlay / pseudo-element / hover codegen shapes) or a
       // `:lang(xx) [data-id="…"]` locale override (i18n-gen).
       const sel = css.slice(i, open).trim();
-      if (!/^\[data-id="[^"]+"\](?:::?[a-z-]+(?:\([^)]*\))?)+$/.test(sel)
+      const customSuffixMatch = /^\[data-id="[^"]+"\](.+)$/.exec(sel);
+      const isSingleNodePseudo =
+        /^\[data-id="[^"]+"\](?:::?[a-z-]+(?:\([^)]*\))?)+$/.test(sel) ||
+        Boolean(customSuffixMatch && isValidCustomPseudoSuffix(customSuffixMatch[1]));
+      if (!isSingleNodePseudo
         && !/^:lang\([^)]+\)\s*\[data-id="[^"]+"\]$/.test(sel)
         // The PER-VARIANT border overlay, exactly as borderOverlaySelector
         // writes it (generator-styles updateBorderOverlayStyle, which also

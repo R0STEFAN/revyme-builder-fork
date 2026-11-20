@@ -1613,6 +1613,22 @@ describe('RAW_STYLE_TAG pseudo-overlay exemption', () => {
     const v = checkFile(wrap(`[data-id="a"] { color: red; }`), { kind: 'component' });
     expect(v.some((x) => x.code === 'RAW_STYLE_TAG')).toBe(true);
   });
+  it('allows :hover, :focus-visible, attribute selectors, and :nth-child on a single data-id', () => {
+    const v = checkFile(
+      wrap(`
+        [data-id="btn-1"]:hover { background: #111111; color: #ffffff; }
+        [data-id="btn-1"]:focus-visible { outline: 2px solid #000000; }
+        [data-id="btn-1"][aria-expanded="true"] { border-color: #333333; }
+        [data-id="btn-1"]:nth-child(2n) { opacity: 0.9; }
+      `),
+      { kind: 'component' }
+    );
+    expect(v.some((x) => x.code === 'RAW_STYLE_TAG')).toBe(false);
+  });
+  it('rejects descendant or foreign combinators in top-level data-id rules', () => {
+    const v = checkFile(wrap(`[data-id="btn-1"] .child { color: red; }`), { kind: 'component' });
+    expect(v.some((x) => x.code === 'RAW_STYLE_TAG')).toBe(true);
+  });
 });
 
 

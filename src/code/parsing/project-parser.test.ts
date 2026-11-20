@@ -1440,6 +1440,42 @@ export default function Page() {
     expect(root!.afterCSS).toContain('border: var(--zefzef)');
     expect(root!.afterCSS).toContain('z-index: 1');
   });
+
+  it('rewrites :hover and custom attribute rules in afterCSS with the prefixed instance id', () => {
+    const hoverComp = `'use client';
+import React from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+function HoverFrame({ style, initialVariant = 'default' }) {
+  return <LayoutGroup>
+    <motion.div layout={true} data-id="frame-x-1" data-name="Frame" style={{ position: 'relative', ...style }}>
+      <style>{\`
+        [data-id="frame-x-1"]:hover {
+          background-color: #111111;
+        }
+        [data-id="frame-x-1"][data-open="true"] {
+          opacity: 1;
+        }
+      \`}</style>
+    </motion.div>
+  </LayoutGroup>;
+}
+export default withResponsiveProps(HoverFrame);
+`;
+    const fs = new InMemoryProjectFS(new Map([
+      ['app/page.tsx', `import React from 'react';
+import HoverFrame from '@/components/HoverFrame';
+export default function Page() {
+  return <div data-id="root"><HoverFrame data-id="frame-x-1" /></div>;
+}`],
+      ['components/HoverFrame.tsx', hoverComp],
+    ]));
+    const nodes = parseProjectFile('app/page.tsx', fs);
+    const root = nodes.get('frame-x-1:frame-x-1');
+    expect(root?.afterCSS).toContain('[data-id="frame-x-1:frame-x-1"]:hover');
+    expect(root?.afterCSS).toContain('[data-id="frame-x-1:frame-x-1"][data-open="true"]');
+    expect(root?.afterCSS).not.toContain('[data-id="frame-x-1"]:hover');
+  });
 });
 
 describe('project-parser: per-variant variable on a component INSTANCE', () => {

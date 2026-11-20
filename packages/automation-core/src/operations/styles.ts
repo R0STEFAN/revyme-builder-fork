@@ -2,11 +2,11 @@
 import { z } from 'zod';
 import type { Operation, FileChange, Snapshot } from '../contracts';
 import { defaultRegistry } from '../registry';
-import { parseJSXToNodes, type CanvasNode } from '@/code/parsing/parser';
+import { parseJSXToNodes, extractStyleCSS, type CanvasNode } from '@/code/parsing/parser';
+import { normalizePseudoKind, parsePseudoRules, type PseudoStyles } from '@/code/parsing/pseudo-parser';
 import { parseVariantConfig } from '@/code/variants/variant-config';
 import { updateNodeInCode } from '@/code/generation/generator-crud';
 import {
-  updateHoverStyleInCode,
   updatePseudoStyleInCode,
   updateContainerQueryStyle,
   applyVariantStyleUpdateInCode,
@@ -97,6 +97,16 @@ function resolveBreakpointWidth(bp: string | number): number {
   return isNaN(parsed) ? 768 : parsed;
 }
 
+function resolveValidatedPseudo(rawPseudo: string): PseudoRuleKind {
+  const normalized = normalizePseudoKind(rawPseudo);
+  if (!normalized) {
+    throw new Error(
+      `INVALID_PSEUDO_SELECTOR: Unsafe or invalid pseudo state "${rawPseudo}". Use a built-in state (:hover, :active, :focus, :focus-visible, :focus-within, :disabled, :checked, ::before, ::after, ::placeholder) or a single-node pseudo/attribute suffix (e.g. [aria-expanded="true"], :nth-child(2n)).`
+    );
+  }
+  return normalized as PseudoRuleKind;
+}
+
 // 1. styles.get
 export const stylesGetOperation: Operation<
   { filePath?: string; nodeId: string; variantName?: string },
@@ -105,10 +115,11 @@ export const stylesGetOperation: Operation<
     styles: Record<string, string>;
     baseStyles?: Record<string, string>;
     variantStyles?: Record<string, Record<string, string>>;
+    pseudoStyles?: PseudoStyles;
   }
 > = {
   name: 'styles.get',
-  description: 'Get parsed inline and variant CSS styles for a node',
+  description: 'Get parsed inline, variant, and pseudo CSS styles for a node',
   category: 'styles',
   kind: 'read',
   permit: 'read',
@@ -129,6 +140,8 @@ export const stylesGetOperation: Operation<
     const baseStyles = node.styles || {};
     const variantStyles = mergeNodeVariantStyles(node);
     const hasVariantStyles = Object.keys(variantStyles).length > 0;
+    const pseudoStyles = parsePseudoRules(extractStyleCSS(code)).get(effectiveNodeId);
+    const hasPseudoStyles = Boolean(pseudoStyles && Object.keys(pseudoStyles).length > 0);
 
     if (input.variantName) {
       return {
@@ -140,6 +153,7 @@ export const stylesGetOperation: Operation<
         },
         baseStyles,
         ...(hasVariantStyles ? { variantStyles } : {}),
+        ...(hasPseudoStyles ? { pseudoStyles } : {}),
       };
     }
 
@@ -147,6 +161,7 @@ export const stylesGetOperation: Operation<
       nodeId: effectiveNodeId,
       styles: baseStyles,
       ...(hasVariantStyles ? { variantStyles } : {}),
+      ...(hasPseudoStyles ? { pseudoStyles } : {}),
     };
   },
 };
@@ -243,17 +258,8 @@ export const stylesSetOperation: Operation<
     if (input.variantName) {
       nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, normalizedStyles, input.variantName);
     } else if (input.pseudo) {
-      const cleanPseudo = input.pseudo.replace(/^:+/, '');
-      if (cleanPseudo === 'hover') {
-        nextCode = updateHoverStyleInCode(nextCode, effectiveNodeId, normalizedStyles);
-      } else {
-        nextCode = updatePseudoStyleInCode(
-          nextCode,
-          effectiveNodeId,
-          cleanPseudo as PseudoRuleKind,
-          normalizedStyles
-        );
-      }
+      const pseudoKind = resolveValidatedPseudo(input.pseudo);
+      nextCode = updatePseudoStyleInCode(nextCode, effectiveNodeId, pseudoKind, normalizedStyles);
     } else if (input.breakpoint) {
       const width = resolveBreakpointWidth(input.breakpoint);
       nextCode = updateContainerQueryStyle(nextCode, effectiveNodeId, width, normalizedStyles);
@@ -318,17 +324,8 @@ export const stylesRemoveOperation: Operation<
     if (input.variantName) {
       nextCode = applyVariantAwareStylesToCode(nextCode, effectiveNodeId, removalStyles, input.variantName);
     } else if (input.pseudo) {
-      const cleanPseudo = input.pseudo.replace(/^:+/, '');
-      if (cleanPseudo === 'hover') {
-        nextCode = updateHoverStyleInCode(nextCode, effectiveNodeId, removalStyles);
-      } else {
-        nextCode = updatePseudoStyleInCode(
-          nextCode,
-          effectiveNodeId,
-          cleanPseudo as PseudoRuleKind,
-          removalStyles
-        );
-      }
+      const pseudoKind = resolveValidatedPseudo(input.pseudo);
+      nextCode = updatePseudoStyleInCode(nextCode, effectiveNodeId, pseudoKind, removalStyles);
     } else if (input.breakpoint) {
       const width = resolveBreakpointWidth(input.breakpoint);
       nextCode = updateContainerQueryStyle(nextCode, effectiveNodeId, width, removalStyles);
