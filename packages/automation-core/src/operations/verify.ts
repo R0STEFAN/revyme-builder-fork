@@ -7,6 +7,8 @@ import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import { PHYSICS_PRESETS } from './motion';
 import { verifyEffect as runSharedVerifyEffect, type EffectVerdict } from '@/ai/agent/tools/verify-effect';
+import { extractStyleCSS } from '@/code/parsing/parser';
+import { parsePseudoRules } from '@/code/parsing/pseudo-parser';
 
 const traverse = (typeof _traverse === 'function' ? _traverse : (_traverse as any).default) as typeof _traverse;
 
@@ -56,6 +58,7 @@ export const motionAnalysisItemSchema = z.object({
   props: z.record(z.string(), z.string()),
   physics: motionPhysicsSchema.optional(),
   hasHover: z.boolean(),
+  hasCssHover: z.boolean().optional(),
   hasScrollTrigger: z.boolean(),
   hasSpringPhysics: z.boolean(),
 });
@@ -150,10 +153,12 @@ export const verifyEffectOperation: Operation<
       };
     }
 
-    // 2. Motion and Interactive AST Analysis
+    // 2. Motion and Interactive AST Analysis + CSS pseudo-state hover lookup
     const targetNodeIds = input.nodeIds ?? input.node_ids ?? (input.nodeId ? [input.nodeId] : undefined);
     const motionNodes: Record<string, z.infer<typeof motionAnalysisItemSchema>> = {};
     const motionWrappedComponents = new Set<string>();
+    const pseudoStylesMap = parsePseudoRules(extractStyleCSS(code));
+    let hasCssHoverAny = false;
 
     traverse(ast, {
       VariableDeclarator(pathNode) {
@@ -222,7 +227,10 @@ export const verifyEffectOperation: Operation<
           propsMap['animate'] &&
           /\bset[A-Z]\w*\s*\(/.test(`${propsMap['onHoverStart']} ${propsMap['onHoverEnd']}`)
         );
-        const hasHoverOnNode = Boolean(propsMap['whileHover'] || hasVariantHover);
+        const nodePseudo = dataId ? pseudoStylesMap.get(dataId) : undefined;
+        const hasCssHover = Boolean(nodePseudo?.hover && Object.keys(nodePseudo.hover).length > 0);
+        if (hasCssHover) hasCssHoverAny = true;
+        const hasHoverOnNode = Boolean(propsMap['whileHover'] || hasVariantHover || hasCssHover);
         if (hasHoverOnNode) hasHover = true;
         if (propsMap['whileTap']) hasTap = true;
         if (propsMap['whileInView'] || propsMap['data-scroll-fx']) hasScroll = true;
@@ -271,6 +279,7 @@ export const verifyEffectOperation: Operation<
           props: propsMap,
           physics: physicsInfo,
           hasHover: hasHoverOnNode,
+          ...(hasCssHover ? { hasCssHover: true } : {}),
           hasScrollTrigger: Boolean(propsMap['whileInView'] || propsMap['data-scroll-fx']),
           hasSpringPhysics: Boolean(physicsInfo),
         };
@@ -290,6 +299,8 @@ export const verifyEffectOperation: Operation<
         expected_count: expectedCount,
         expected_mechanism: expectedMechanism,
         key_texts: keyTexts,
+        ...(targetNodeIds && targetNodeIds.length > 0 ? { node_ids: targetNodeIds } : {}),
+        ...(input.checks ? { checks: input.checks as any } : {}),
       });
     } catch {
       // Shared scan fallback
@@ -300,6 +311,23 @@ export const verifyEffectOperation: Operation<
     const states: { label: string; state: MechanismState; fixHint?: string }[] = [];
     const missing: string[] = [];
 
+    const reqLower = input.request.toLowerCase();
+    const needsHover = input.effectType === 'hover' || reqLower.includes('hover');
+    const needsScroll = input.effectType === 'scroll' || reqLower.includes('scroll');
+    const needsSpring = input.effectType === 'spring' || reqLower.includes('spring');
+    const needsMotion = input.effectType === 'motion' || reqLower.includes('motion') || reqLower.includes('animate') || reqLower.includes('animation');
+
+    const cssHoverSatisfiesSharedMech = Boolean(
+      hasCssHoverAny &&
+      needsHover &&
+      !needsMotion &&
+      !needsSpring &&
+      !needsScroll &&
+      (!expectedMechanism || expectedMechanism.length === 0) &&
+      sharedVerdict &&
+      !sharedVerdict.checks.some((c) => c.required && !c.present && !c.state)
+    );
+
     if (sharedVerdict) {
       for (const c of sharedVerdict.checks) {
         checks.push({
@@ -308,26 +336,23 @@ export const verifyEffectOperation: Operation<
           filled: c.filled,
           count: c.count,
           required: c.required,
-          state: c.state,
+          state: cssHoverSatisfiesSharedMech && c.state && c.state !== 'wired' ? 'wired' : c.state,
         });
       }
       for (const s of sharedVerdict.states) {
         states.push({
           label: s.label,
-          state: s.state,
+          state: cssHoverSatisfiesSharedMech && s.state !== 'wired' ? 'wired' : s.state,
         });
       }
-      for (const m of sharedVerdict.missing) {
-        missing.push(m);
+      if (!cssHoverSatisfiesSharedMech) {
+        for (const m of sharedVerdict.missing) {
+          missing.push(m);
+        }
       }
     }
 
     // Add motion-specific checks
-    const reqLower = input.request.toLowerCase();
-    const needsHover = input.effectType === 'hover' || reqLower.includes('hover');
-    const needsScroll = input.effectType === 'scroll' || reqLower.includes('scroll');
-    const needsSpring = input.effectType === 'spring' || reqLower.includes('spring');
-    const needsMotion = input.effectType === 'motion' || reqLower.includes('motion') || reqLower.includes('animate') || reqLower.includes('animation');
 
     if (needsMotion) {
       const motionPresent = hasAnyMotionElement && hasMotionAnimation;
@@ -406,7 +431,7 @@ export const verifyEffectOperation: Operation<
 
     // Determine final satisfied verdict
     let satisfied = missing.length === 0;
-    if (sharedVerdict && !sharedVerdict.satisfied) {
+    if (sharedVerdict && !sharedVerdict.satisfied && !cssHoverSatisfiesSharedMech) {
       satisfied = false;
     }
 

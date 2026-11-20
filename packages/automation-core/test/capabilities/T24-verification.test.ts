@@ -938,6 +938,42 @@ export default function Button() {
       expect(result.checks.find((check) => check.label === 'hover-animation')?.state).toBe('wired');
     });
 
+    it('recognizes CSS :hover rules in <style> for hover-animation verification', async () => {
+      const cssHoverPage = `'use client';
+import React from 'react';
+export default function Page() {
+  return (
+    <div data-id="root" style={{ width: '100%' }}>
+      <style>{\`
+        [data-id="cta-1"]:hover {
+          background-color: #1e1e1e !important;
+          color: #ffffff !important;
+        }
+      \`}</style>
+      <button data-id="cta-1" type="button" style={{ backgroundColor: '#ffffff', color: '#111111' }}>
+        Contact
+      </button>
+    </div>
+  );
+}`;
+      const snapshot = createMockSnapshot({ 'app/page.client.tsx': cssHoverPage });
+      const result = await verifyEffectOperation.execute(
+        snapshot,
+        {
+          targetFile: 'app/page.client.tsx',
+          request: 'Verify button hover inversion',
+          nodeId: 'cta-1',
+          effectType: 'hover',
+        },
+        context
+      );
+
+      expect(result.satisfied).toBe(true);
+      expect(result.motionAnalysis?.['cta-1']?.hasHover).toBe(true);
+      expect(result.motionAnalysis?.['cta-1']?.hasCssHover).toBe(true);
+      expect(result.checks.find((check) => check.label === 'hover-animation')?.state).toBe('wired');
+    });
+
     it('recognizes custom motion.create wrappers as valid motion elements', async () => {
       const wrappedLinkCode = `'use client';
 import React, { useState } from 'react';
