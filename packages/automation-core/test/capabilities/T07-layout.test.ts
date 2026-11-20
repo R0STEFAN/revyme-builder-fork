@@ -501,6 +501,21 @@ export default ProjectCard;
     };
     expect(readAfterRemove.pseudoStyles?.['custom:[aria-expanded="true"]']).toBeUndefined();
     expect(readAfterRemove.pseudoStyles?.['focus-visible']).toEqual({ outline: '2px solid #111111' });
+
+    // 5. CSS transition inside pseudo rules (used by StylesTool TransitionRow) is preserved
+    const hoverRes = await stylesSetOp.execute(snapshot, {
+      nodeId: 'title-1',
+      pseudo: ':hover',
+      styles: { color: '#6366f1', transition: 'all 0.25s ease' },
+    }, context);
+    applyChanges(hoverRes.changes);
+    const readHover = await stylesGetOp.execute(snapshot, { nodeId: 'title-1' }, context) as {
+      pseudoStyles?: Record<string, Record<string, string>>;
+    };
+    expect(readHover.pseudoStyles?.hover).toEqual({
+      color: '#6366f1',
+      transition: 'all 0.25s ease',
+    });
   });
 
   it('updates text content without breaking inline JSX structure', async () => {

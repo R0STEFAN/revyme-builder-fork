@@ -250,7 +250,9 @@ export const stylesSetOperation: Operation<
   }),
   async execute(snapshot, input) {
     validateStylesNotForbiddenAuto(input.styles);
-    const normalizedStyles = normalizeStylePatch(input.styles);
+    const normalizedStyles = normalizeStylePatch(input.styles, {}, undefined, 'style', {
+      preserveTransitions: Boolean(input.pseudo),
+    });
     const { path, code } = getTargetFile(snapshot, input.filePath);
     const { effectiveNodeId } = resolveTargetNode(parseJSXToNodes(code), input.nodeId);
     let nextCode = code;

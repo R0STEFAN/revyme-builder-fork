@@ -104,7 +104,8 @@ export function normalizeStyles(
   styles: Record<string, string | number>,
   context: UnitContext = {},
   reporter?: IngestionReporter,
-  target = 'style'
+  target = 'style',
+  options?: { preserveTransitions?: boolean }
 ): Record<string, string | number> {
   const normalized: Record<string, string | number> = {};
   const explicitKeys = new Set(Object.keys(styles).map((k) => toCamelCase(k)));
@@ -123,8 +124,9 @@ export function normalizeStyles(
       continue;
     }
 
-    // Strip CSS transition* properties (Revyme uses Framer Motion / motion props)
-    if (/^transition(Property|Duration|Delay|TimingFunction)?$/.test(camelKey)) {
+    // Strip CSS transition* properties on inline styles (Revyme uses Framer Motion),
+    // but keep them when normalizing CSS pseudo-state rules (:hover, :active, etc.).
+    if (!options?.preserveTransitions && /^transition(Property|Duration|Delay|TimingFunction)?$/.test(camelKey)) {
       reporter?.recordNormalization(
         'STRIP_CSS_TRANSITION',
         `${target}.${camelKey}`,
@@ -300,7 +302,8 @@ export function normalizeStylePatch(
   styles: Record<string, string>,
   context: UnitContext = {},
   reporter?: IngestionReporter,
-  target = 'style'
+  target = 'style',
+  options?: { preserveTransitions?: boolean }
 ): Record<string, string> {
   const nonEmpty: Record<string, string | number> = {};
   const deletions: string[] = [];
@@ -314,7 +317,7 @@ export function normalizeStylePatch(
     }
   }
 
-  const normalized = normalizeStyles(nonEmpty, context, reporter, target);
+  const normalized = normalizeStyles(nonEmpty, context, reporter, target, options);
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(normalized)) {
     out[key] = String(value);
