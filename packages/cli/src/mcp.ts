@@ -375,6 +375,21 @@ export interface McpServerOptions {
   version?: string;
 }
 
+export function stripJsonSchemaMeta<T = unknown>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripJsonSchemaMeta(item)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k === '$schema') continue;
+      out[k] = stripJsonSchemaMeta(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 export function createMcpServer(options: McpServerOptions): Server {
   const { client, config } = options;
   const server = new Server(
@@ -400,7 +415,7 @@ export function createMcpServer(options: McpServerOptions): Server {
     const tools = pageOps.map((op) => {
       let schemaObj: Record<string, unknown> = { type: 'object', properties: {} };
       try {
-        const jsonSchema = z.toJSONSchema(op.inputSchema) as Record<string, unknown>;
+        const jsonSchema = stripJsonSchemaMeta(z.toJSONSchema(op.inputSchema)) as Record<string, unknown>;
         if (jsonSchema && jsonSchema.type === 'object') {
           schemaObj = jsonSchema;
         } else {
@@ -439,10 +454,10 @@ export function createMcpServer(options: McpServerOptions): Server {
       return {
         name: op.name,
         description: `[${op.name}] ${op.description} [Category: ${op.category}, Kind: ${op.kind}, Task: ${op.ownerTask}]`,
-        inputSchema: {
+        inputSchema: stripJsonSchemaMeta({
           ...schemaObj,
           properties,
-        },
+        }) as Record<string, unknown>,
       };
     });
 

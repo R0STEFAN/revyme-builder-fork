@@ -9,15 +9,21 @@ Use this skill whenever adding animations, scroll reveals, hover/tap motion stat
 
 ---
 
-## Core Invariant: Never Hand-Write CSS `transition*` in JSX
-Revyme renders interactive animations via **Framer Motion** and `@revyme/runtime`. CSS `transition` / `transitionDuration` strings on canvas JSX nodes are stripped during ingestion because they conflict with visual motion tooling and FLIP projections. Always use the motion MCP tools below.
+## Core Invariant & Hover/States Routing Matrix
+Revyme renders interactive physics via **Framer Motion** and `@revyme/runtime`, and renders node-scoped CSS pseudo-states via `<style>` rules (`styles.set({ pseudo })`). Inline JSX `transition*` strings are stripped during `fragments.insert` so they never fight Framer Motion or FLIP projections.
+
+| Need | Tooling & Target | Visual Editor Support |
+| :--- | :--- | :--- |
+| **Single-element CSS state** (`:hover`, `:active`, `:focus`, `:focus-visible`, `:focus-within`, `:disabled`, `:checked`, `::before`, `::after`, `::placeholder`, or validated node-scoped custom states like `[aria-expanded="true"]`, `:nth-child(odd)`) | `styles.set({ nodeId, pseudo, styles })` (put `transition` in the pseudo rule or pair with `motion.set`) | Fully editable in **StylesTool → States & Pseudo** (`Transition` + live `Preview on canvas`) |
+| **Spring / gesture physics on a single element** (`whileHover`, `whileTap`, `whileInView`) | `motion.set({ targetFile, nodeId, prop, values })` | Editable in **AnimationTool** (`whileInView` auto-wires `viewport={{ once: true }}`; pass `viewportOnce: false` only when intentionally repeating) |
+| **Parent-hover driving child elements** (hovering a card to zoom a nested image, reveal an overlay, or rotate a child icon) | `components.extract` + `variants.create` (`hover`) + `connections.create` (`whileHover`) | Full multi-element variant state machine. *If the user explicitly requests no Design Components, warn upfront that CSS-only single-node states cannot drive child elements in the visual builder without a component variant.* |
 
 ---
 
 ## 1. Node Motion (`motion.*`)
 - Inspect existing animation config: `motion.get`.
 - Apply a built-in motion preset: `motion.preset.apply`.
-- Author appear, loop, gesture (`hover` / `tap`), or scroll-linked motion props: `motion.set`.
+- Author appear, loop, gesture (`hover` / `tap`), or scroll-linked motion props: `motion.set` (`prop: 'whileInView'` automatically injects `viewport={{ once: true }}`).
 - Clear animation from a node: `motion.remove`.
 
 ## 2. Split-Text & Vector Sketch Effects (`textEffects.*`, `drawing.*`)

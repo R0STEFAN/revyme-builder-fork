@@ -62,6 +62,81 @@ function operationResultSummary(value: unknown): Record<string, unknown> | undef
   return Object.keys(summary).length > 0 ? summary : undefined;
 }
 
+function getByDotPath(root: unknown, segments: string[]): unknown {
+  let current = root;
+  for (const seg of segments) {
+    if (current === null || current === undefined) return undefined;
+    if (Array.isArray(current)) {
+      const idx = Number(seg);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= current.length) return undefined;
+      current = current[idx];
+    } else if (typeof current === 'object') {
+      current = (current as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
+function lookupReceiptPath(receipt: { result: Result<unknown> } | undefined, dotPath: string): unknown {
+  if (!receipt?.result) return undefined;
+  const segments = dotPath.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  if (segments.length === 0) return undefined;
+  const roots = [receipt.result.operationResult, receipt.result.data, receipt.result];
+  for (const root of roots) {
+    if (root === undefined || root === null) continue;
+    const found = getByDotPath(root, segments);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+export function resolveChainStepInput(
+  input: unknown,
+  receipts: Array<{ result: Result<unknown> }>
+): unknown {
+  if (typeof input === 'string') {
+    const exactMatch = /^\$(prev|steps\[(\d+)\])\.([a-zA-Z0-9_.\[\]]+)$/.exec(input);
+    if (exactMatch) {
+      const receipt =
+        exactMatch[1] === 'prev' ? receipts[receipts.length - 1] : receipts[Number(exactMatch[2])];
+      const resolved = lookupReceiptPath(receipt, exactMatch[3]);
+      return resolved !== undefined ? resolved : input;
+    }
+    return input.replace(
+      /\$(prev|steps\[(\d+)\])\.([a-zA-Z0-9_.\[\]]+)/g,
+      (full, target: string, idxStr: string | undefined, pathStr: string) => {
+        const receipt =
+          target === 'prev' ? receipts[receipts.length - 1] : receipts[Number(idxStr)];
+        const resolved = lookupReceiptPath(receipt, pathStr);
+        if (
+          typeof resolved === 'string' ||
+          typeof resolved === 'number' ||
+          typeof resolved === 'boolean'
+        ) {
+          return String(resolved);
+        }
+        return full;
+      }
+    );
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => resolveChainStepInput(item, receipts));
+  }
+
+  if (input && typeof input === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+      out[k] = resolveChainStepInput(v, receipts);
+    }
+    return out;
+  }
+
+  return input;
+}
+
 export interface ClientOptions {
   apiUrl: string;
   timeoutMs?: number;
@@ -271,7 +346,8 @@ export class AutomationClient {
       for (const [stepIndex, step] of steps.entries()) {
         if (options?.context?.signal?.aborted) return { ok: false, data: { completed: receipts.length, receipts }, error: { code: 'CANCELLED', message: 'Workflow cancelled', issues: [] }, meta };
         options?.context?.trace?.('workflow:step', { stepIndex, tool: step.tool, scope });
-        const result = await this.execute(scope, step.tool, step.input, options);
+        const resolvedInput = resolveChainStepInput(step.input, receipts) as Record<string, unknown>;
+        const result = await this.execute(scope, step.tool, resolvedInput, options);
         receipts.push({ stepIndex, tool: step.tool, status: result.ok ? 'ok' : 'failed', result });
         meta = { ...meta, ...result.meta, revision: Math.max(meta.revision, result.meta.revision),
           commitStatus: result.meta.commitStatus === 'unknown' ? 'unknown' : meta.commitStatus === 'committed' ? 'committed' : result.meta.commitStatus };

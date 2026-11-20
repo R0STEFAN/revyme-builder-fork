@@ -22,7 +22,7 @@ You operate a **Two-Phase Zero-Friction Pipeline** built around Revyme's **AST A
 
 ### A. What the Engine & AST Auto-Healer Handle Automatically
 When you insert pure JSX through `fragments.insert` or `fragments.replace`, `packages/automation-core` automatically normalizes it so valid JSX passes on the first call:
-1. **Automatic `data-id` & Structural Healing**: Every node receives a unique `data-id`. Pure wrapper `<div>`s containing direct text automatically heal to `<p>`. `<a>` with `href` becomes Next.js `<Link>`. `<form>` and `<input>` auto-wire `data-form` and `name`.
+1. **Automatic `data-id` & Structural Healing**: Every node receives a unique `data-id`. Pure wrapper `<div>`s containing direct text automatically heal to `<p>`. `<a>` with `href` becomes Next.js `<Link>`. `<form>` and `<input>` auto-wire `data-form` and `name`. Inline SVG primitives (`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polygon>`, `<polyline>`), wrapper paint props (`fill`/`stroke`), and multi-subpath stroke `<path>`s auto-heal into Oracle-compliant `<path>` / nested `<svg overflow="visible">` groups. Boundary spaces around mixed inline elements (`<h2>AND <span>silence</span> TAKES</h2>`) are preserved automatically.
 2. **Automatic Layout & Flex Invariants**: Frame tags (`div`, `section`, `header`, `footer`, `nav`, `ul`, `ol`, `li`, etc.) with children or padding gain `display: 'flex', flexDirection: 'column'` if `display` is omitted; flex/grid flow children receive `flex: '0 0 auto'` and sequential string `order`; flex-row `width: '100%'` children normalize to `flex: '1 0 0px'`.
 3. **Automatic Style Normalization**:
    - Inherited typography props (`color`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, etc.) on pure container wrappers cascade down to leaf text/control elements automatically.
@@ -38,7 +38,10 @@ When you insert pure JSX through `fragments.insert` or `fragments.replace`, `pac
 1. **Inline `style={{ ... }}` only**: Never use Tailwind `className="..."` utilities in canvas JSX — the visual canvas renders inline React style objects, not Tailwind CSS.
 2. **Never submit canvas pages via `codeFiles.submit`**: Always author/edit `page.client.tsx` and `LayoutClient.tsx` via `fragments.insert`, `fragments.replace`, `styles.set`, `text.set`, or `nodes.*` so the AST Auto-Healer runs. Reserve `codeComponents.create` / `codeFiles.submit` strictly for **`/** @controls */` Code Components** (`components/*.tsx` for Three.js, WebGL, Canvas shaders, interactive calculators).
 3. **Valid Media Sources**: Always use verified `https://...` URLs or project assets uploaded via `assets.upload` (`/api/uploads/...`). Never invent local `/images/...` paths.
-4. **Interactive Motion via Revyme Tools**: Because CSS `transition*` is stripped on ingestion, upgrade hover states, scroll reveals, kinetic typography, and smooth scroll in Phase 2 using `motion.*`, `textEffects.*`, `siteEffects.*`, or Design Component `variants.create`.
+4. **Interactive Motion & Hover/States Routing Matrix**: Inline JSX `transition*` is stripped on ingestion. Route interactivity deliberately in Phase 2:
+   - **Single-element CSS state** (`:hover`, `:active`, `:focus-visible`, `:disabled`, `::before`, `::after`, node-scoped custom suffixes): use `styles.set({ nodeId, pseudo })` — directly editable in **StylesTool → States & Pseudo** with `Transition` + live `Preview on canvas`.
+   - **Single-element spring physics / scroll reveals**: use `motion.set` / `motion.preset.apply` (`prop: 'whileInView'` auto-injects `viewport={{ once: true }}`; pass `viewportOnce: false` only when intentionally repeating), `textEffects.*`, or `siteEffects.*`.
+   - **Parent-hover driving child elements** (card hover scaling a nested image, revealing an overlay, rotating a child icon): use `components.extract` + `variants.create` (`hover`) + `connections.create` (`whileHover`). If the user forbids creating Design Components, warn upfront that single-node CSS states cannot drive child elements visually without a component variant.
 5. **Standard Responsive Viewports**: Desktop `1200px`, Tablet `810px`, Mobile `390px`.
 
 ---
