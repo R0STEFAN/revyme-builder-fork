@@ -9,6 +9,7 @@ import {
   unbindSrcExpressionInCode,
   unbindAriaLabelExpressionInCode,
 } from './expression-gen';
+import { parseJSXToNodes } from '../parsing/parser';
 
 describe('expression-gen', () => {
   const baseCode = `'use client';
@@ -25,6 +26,14 @@ export default function Page() {
 `;
 
   describe('bindTextExpressionInCode', () => {
+    it('keeps an edited quoted string as ordinary Content after parsing', () => {
+      const content = 'A "long" line\nwith \\ a path';
+      const result = bindTextExpressionInCode(baseCode, 'title', JSON.stringify(content));
+      const title = parseJSXToNodes(result).get('title');
+      expect(title?.textContent).toBe(content);
+      expect(title?.textExpression).toBeUndefined();
+    });
+
     it('replaces text content with expression', () => {
       const result = bindTextExpressionInCode(
         baseCode,

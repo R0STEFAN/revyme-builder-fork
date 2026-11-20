@@ -28,6 +28,7 @@ import { activePreviewSlugAtom, cmsPageMetaAtom } from '@/code/stores/cms-page-s
 import { setNodeOverride } from '@/code/project/locale-ops';
 import { commitTranslationText } from '@/code/project/translation-ops';
 import { resolveTranslatedContent } from './content-translation';
+import { toTextExpressionLiteral } from './content-expression';
 import { isPrimaryViewport } from '@/canvas/node-ops';
 import { queueMutation } from '@/code/mutation/mutation-queue';
 import { getContentRoot } from '@/canvas/node-ops';
@@ -554,7 +555,7 @@ export function ContentControl() {
             queueMutation({ type: 'bindTextExpression', nodeId: textNode.id, expression: expr });
           }
         }}
-        initialExpression=""
+        initialExpression={toTextExpressionLiteral(displayValue)}
         targetProperty="text"
         collectionSlug={cmsBinding?.slug}
         itemVar={cmsBinding?.itemVar}
