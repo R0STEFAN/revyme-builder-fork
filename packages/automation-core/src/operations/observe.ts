@@ -39,6 +39,42 @@ import {
 import { getDefaultStore } from 'jotai';
 import { selectedIdsAtom } from '@/code/stores/store';
 
+const SVG_CHILD_PRIMITIVE_TAGS = new Set([
+  'path',
+  'circle',
+  'rect',
+  'line',
+  'polygon',
+  'polyline',
+  'ellipse',
+  'g',
+  'defs',
+  'use',
+  'clippath',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+]);
+
+function stripSvgPrimitivesFromEpoch(
+  epoch: ObservationEpoch,
+  nodeMap: Map<string, CanvasNode>,
+): ObservationEpoch {
+  const isSvgPrimitive = (id: string): boolean => {
+    const tag = nodeMap.get(id)?.type?.toLowerCase();
+    return Boolean(tag && SVG_CHILD_PRIMITIVE_TAGS.has(tag));
+  };
+  const remaining = epoch.unmeasured.filter((id) => !isSvgPrimitive(id));
+  const removed = epoch.unmeasured.length - remaining.length;
+  if (removed === 0) return epoch;
+  return {
+    ...epoch,
+    total: Math.max(epoch.withRect, epoch.total - removed),
+    unmeasured: remaining,
+    unmeasuredTotal: Math.max(0, epoch.unmeasuredTotal - removed),
+  };
+}
+
 // ─── Helpers: Target File & Viewport Resolution ──────────────────────────────
 
 export function getTargetPageFile(snapshot: Snapshot, filePath?: string): { path: string; code: string } {
@@ -1565,6 +1601,17 @@ export const observeAuditOperation: Operation<
         renderedSnapshot.reason ||= 'The Builder audit bridge returned no measurement snapshot.';
       }
 
+      if (renderedSnapshot.epoch) {
+        renderedSnapshot.epoch = stripSvgPrimitivesFromEpoch(renderedSnapshot.epoch, nodeMap);
+        if (
+          renderedSnapshot.status === 'pending' &&
+          renderedSnapshot.nodes &&
+          observationStatusWithEpoch(vp, renderedSnapshot.epoch).status === 'ready'
+        ) {
+          renderedSnapshot.status = 'ready';
+        }
+      }
+
       if (renderedSnapshot.status !== 'ready' || !renderedSnapshot.nodes || !renderedSnapshot.epoch) {
         const status = renderedSnapshot.status === 'pending' ? 'pending' : 'unavailable';
         const reason = renderedSnapshot.reason || 'The Builder canvas has no fresh measurement for this viewport.';
@@ -1626,6 +1673,10 @@ export const observeAuditOperation: Operation<
       epochSnap = { nodes: renderedSnapshot.nodes, epoch: renderedSnapshot.epoch };
     } else {
       epochSnap = collectEpochSnapshot(nodeMap, vp.id);
+      epochSnap = {
+        ...epochSnap,
+        epoch: stripSvgPrimitivesFromEpoch(epochSnap.epoch, nodeMap),
+      };
     }
     const auditNodes = epochSnap.nodes.filter((auditNode) => {
       const node = nodeMap.get(auditNode.id);
