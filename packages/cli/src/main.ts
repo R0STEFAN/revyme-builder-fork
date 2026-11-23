@@ -1,6 +1,7 @@
 // packages/cli/src/main.ts
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { defaultRegistry } from '@revyme/automation-core';
@@ -457,7 +458,13 @@ EXAMPLES:
 }
 
 // Auto-run if executed directly as entrypoint
-if (import.meta.url === `file://${process.argv[1]}`) {
+const cliGlobal = globalThis as { __REVYME_CLI_RAN__?: boolean };
+if (
+  !cliGlobal.__REVYME_CLI_RAN__ &&
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  cliGlobal.__REVYME_CLI_RAN__ = true;
   runCli().then((code) => {
     if (code !== 0) process.exit(code);
   });

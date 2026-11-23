@@ -46,7 +46,7 @@ describe('T05: npm pack and standalone installed binary smoke', () => {
       // 5. Execute bin with plain node (no tsx, no vite)
       const binPath = path.join(packageDir, 'bin', 'revyme.mjs');
 
-      // Test --version
+      // Test --version via bin and via direct dist/main.js entrypoint (regression: no double runCli)
       const versionOutput = execSync(`node "${binPath}" --version`, {
         cwd: packageDir,
         encoding: 'utf8',
@@ -54,6 +54,13 @@ describe('T05: npm pack and standalone installed binary smoke', () => {
       const parsedVersion = JSON.parse(versionOutput);
       expect(parsedVersion.name).toBe('@revyme/cli');
       expect(parsedVersion.version).toBe('2.0.0');
+
+      const directDistVersion = execSync(`node "${path.join(packageDir, 'dist', 'main.js')}" --version`, {
+        cwd: packageDir,
+        encoding: 'utf8',
+      });
+      const parsedDirectVersion = JSON.parse(directDistVersion);
+      expect(parsedDirectVersion).toEqual(parsedVersion);
 
       // Test doctor
       const doctorOutput = execSync(`node "${binPath}" doctor`, {

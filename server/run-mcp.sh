@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-export REVYME_API_URL="http://localhost:3333"
-export REVYME_PROJECT_ID="proj-1792930233313-wjzr6r"
-export REVYME_BRANCH_ID="main"
-export REVYME_MCP_BRIDGE_URL="http://127.0.0.1:8082"
-cd "/home/rost/Документи/revyme/revyme-builder-fork"
+export REVYME_API_URL="${REVYME_API_URL:-http://localhost:3333}"
+export REVYME_PROJECT_ID="${REVYME_PROJECT_ID:-proj-1794658551528-jjgs43}"
+export REVYME_BRANCH_ID="${REVYME_BRANCH_ID:-main}"
+export REVYME_MCP_BRIDGE_URL="${REVYME_MCP_BRIDGE_URL:-http://127.0.0.1:8082}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$SCRIPT_DIR" || exit 1
 exec node packages/cli/dist/main.js mcp

@@ -6,7 +6,7 @@
         "packages/cli/dist/main.js",
         "mcp"
       ],
-      "cwd": "/home/rost/Документи/revyme/revyme-builder-fork"
+      "cwd": "/mnt/Data/revyme/revyme-builder-fork"
     }
   }
 }
