@@ -30,4 +30,28 @@
   per-step `projectId` видаляється зі step input перед виконанням.
 - **Відкат шкоди:** чужий проєкт `proj-1794658551528-jjgs43` відновлено через `history.undo({ projectId })` → `revision: 3490`, `undone: true`.
 - **Урок:** у batch завжди передавати `projectId` верхнім аргументом, а не всередині `operations[i].input`.
-- **Коміт:** див. git log — `fix(automation-core): reject cross-project steps in workflow.batch`
+- **Коміт:** `00b763fe fix(automation-core): reject cross-project steps in workflow.batch`
+
+### [MCP-003] `textEffects.remove` лишає висячий `import { RevymeSplitText } from '@revyme/runtime'`
+- **Що сталося:** після `textEffects.set` + `textEffects.remove` на h1, у `app/page.client.tsx`
+  залишився імпорт `RevymeSplitText` без жодного використання (`splitUsage: 0`).
+  `fragments.replace` і повторний set/remove імпорт не прибирають. Немає операції prune unused imports
+  для canvas-сторінок (`codeFiles.submit` для `page.client.tsx` forbidden).
+- **Вплив:** cosmetic — імпорт валідний, `diagnostics.projectCheck` clean, рендер не падає.
+- **Статус:** не фікситься (немає дозволеного write-шляху для page.client.tsx поза fragments/styles);
+  записано як відомий drift.
+- **Коміт:** — (journal only)
+
+### [MCP-004] `observe.screenshot` перший кадр після змін може бути порожнім (флейк capture)
+- **Що сталося:** одразу після мутацій `observe.screenshot` іноді повертає білий кадр (`waitedMs: 1` —
+  знімок до завершення рендеру). Повторний запит дає коректний кадр. `observe.layout` при цьому показує
+  всі 86 нод visible — тобто сторінка жива, це глюк capture, не рендера.
+- **Обхід:** завжди робити «прогрівальний» screenshot перед контрольним.
+- **Коміт:** — (journal only)
+
+### [MCP-005] Auto-Healer при `fragments.replace` h1/h2 з `<br/>` знову розмазує typography-пресет на дочірні span
+- **Що сталося:** після `fragments.replace(h1, '<h1>Structure<br/>…</h1>')` дочірні span отримали
+  `var(--typo-label-*)` (label-пресет замість наслідування від h1) — текст став дрібним.
+- **Обхід:** batch `styles.set` з `''` на ці span (`span-11, span-13, span-3, span-5, span-10, span-12`)
+  → span лишається з одним `position: 'relative'`, стилі наслідуються від h1/h2. rev 120, projectCheck clean.
+- **Коміт:** — (дані проєкту, не код)
