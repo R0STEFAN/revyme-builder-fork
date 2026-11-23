@@ -95,7 +95,22 @@ export const workflowBatchOperation: Operation<
       if (step.tool === 'workflow.chain' || step.tool === 'plans.commit' || operation?.environment === 'service') {
         throw new Error(`BATCH_SIDE_EFFECT_FORBIDDEN: ${step.tool} cannot run inside an atomic candidate batch`);
       }
-      const res = await prepareOperation(currentSnapshot, step.tool, step.input, context);
+      // Guard against silent cross-project writes: a per-step input.projectId
+      // is accepted by the MCP wrapper schema but the batch scope is fixed, so
+      // a mismatch used to be ignored and the whole batch landed on the wrong
+      // project. Reject it loudly instead; projectId belongs at the top level.
+      const stepProjectId =
+        step.input && typeof step.input.projectId === 'string'
+          ? step.input.projectId
+          : undefined;
+      if (stepProjectId && stepProjectId !== snapshot.scope.projectId) {
+        throw new Error(
+          `BATCH_PROJECT_MISMATCH: step ${i} (${step.tool}) targets project "${stepProjectId}" but the batch scope is "${snapshot.scope.projectId}". Pass projectId at the top level of workflow.batch instead.`
+        );
+      }
+      const stepInput = { ...step.input };
+      delete stepInput.projectId; // scope already carries the project id
+      const res = await prepareOperation(currentSnapshot, step.tool, stepInput, context);
 
       if (!res.ok) {
         issues.push({
