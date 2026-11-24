@@ -180,4 +180,114 @@ describe('buildMcpReference', () => {
     const json = formatMcpReference(ref);
     expect(JSON.parse(json)).toEqual(ref);
   });
+
+  it('includes hierarchy, inline styles, computed styles, rect, and non-main branch when present', () => {
+    const nodes = new Map<string, CanvasNode>([
+      ['pricing-card-1', createMockNode('pricing-card-1', {
+        name: 'Pro Card',
+        type: 'div',
+        parentId: 'pricing-grid',
+        children: ['title-1', 'cta-1'],
+        styles: {
+          display: 'flex',
+          border: '1px solid #334155',
+          padding: '24px',
+          removedProp: '',
+        },
+        isMotionElement: true,
+      })],
+      ['title-1', createMockNode('title-1', { name: 'Card Title', type: 'h3' })],
+      ['cta-1', createMockNode('cta-1', { name: 'cta-1', type: 'button' })],
+    ]);
+
+    const ref = buildMcpReference({
+      activeFilePath: 'app/page.client.tsx',
+      targetNodeId: 'pricing-card-1',
+      nodes,
+      interactingViewportId: 'desktop',
+      branchId: 'redesign-pricing',
+      getRect: () => ({ x: 100.4, y: 200.6, width: 360.2, height: 420.8 } as DOMRect),
+      getComputedStyles: () => ({
+        display: 'flex', // duplicate of inline style → omitted
+        boxShadow: 'none', // trivial default → omitted
+        borderRadius: '0px', // trivial default → omitted
+        backgroundColor: 'rgba(0, 0, 0, 0)', // transparent → omitted
+        color: 'rgb(248, 250, 252)',
+        fontSize: '16px',
+      }),
+    });
+
+    expect(ref).toEqual({
+      filePath: 'app/page.client.tsx',
+      branch: 'redesign-pricing',
+      nodeId: 'pricing-card-1',
+      name: 'Pro Card',
+      type: 'div',
+      viewport: 'desktop',
+      parentId: 'pricing-grid',
+      isMotionElement: true,
+      rect: { x: 100, y: 201, width: 360, height: 421 },
+      styles: {
+        display: 'flex',
+        border: '1px solid #334155',
+        padding: '24px',
+      },
+      computed: {
+        color: 'rgb(248, 250, 252)',
+        fontSize: '16px',
+      },
+      children: [
+        { nodeId: 'title-1', type: 'h3', name: 'Card Title' },
+        { nodeId: 'cta-1', type: 'button' },
+      ],
+    });
+  });
+
+  it('omits branch when main and caps children summary at 15 with childrenTotal', () => {
+    const children = Array.from({ length: 18 }, (_, i) => `c-${i}`);
+    const nodes = new Map<string, CanvasNode>([
+      ['grid', createMockNode('grid', { name: 'Grid', type: 'div', children })],
+      ...children.map((id) => [id, createMockNode(id, { name: id, type: 'div' })] as const),
+    ]);
+
+    const ref = buildMcpReference({
+      activeFilePath: 'app/page.client.tsx',
+      targetNodeId: 'grid',
+      nodes,
+      branchId: 'main',
+    });
+
+    expect(ref.branch).toBeUndefined();
+    expect(ref.children).toHaveLength(15);
+    expect(ref.childrenTotal).toBe(18);
+  });
+
+  it('captures insideComponentInstance and dynamic bindings', () => {
+    const nodes = new Map<string, CanvasNode>([
+      ['inst-title', createMockNode('inst-title', {
+        name: 'Title',
+        type: 'h2',
+        componentFile: 'components/Card.tsx',
+        componentInstanceId: 'card-1',
+        textContent: 'Starter',
+        textVariable: 'title',
+        translationKey: 'card-title',
+        styleVariables: { color: 'accentColor' },
+      })],
+    ]);
+
+    const ref = buildMcpReference({
+      activeFilePath: 'app/page.client.tsx',
+      targetNodeId: 'inst-title',
+      nodes,
+    });
+
+    expect(ref.insideComponentInstance).toBe(true);
+    expect(ref.componentFile).toBe('components/Card.tsx');
+    expect(ref.bindings).toEqual({
+      styleVariables: { color: 'accentColor' },
+      textVariable: 'title',
+      translationKey: 'card-title',
+    });
+  });
 });

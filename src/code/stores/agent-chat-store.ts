@@ -132,6 +132,8 @@ export const agentChangedFilesAtom = atom<AgentChangedFile[]>([]);
  */
 export const agentQueuedRequestAtom = atom<{ text: string; nonce: number } | null>(null);
 
+import type { McpChildSummary, McpNodeBindings, McpRect } from '@/canvas/ui/mcp-reference';
+
 export interface AgentAttachedNode {
   filePath: string;
   nodeId: string;
@@ -140,6 +142,18 @@ export interface AgentAttachedNode {
   textContent?: string;
   variant?: string;
   viewport?: string;
+  branch?: string;
+  parentId?: string;
+  componentFile?: string;
+  insideComponentInstance?: boolean;
+  isComponentRoot?: boolean;
+  isMotionElement?: boolean;
+  rect?: McpRect;
+  styles?: Record<string, string>;
+  computed?: Record<string, string>;
+  bindings?: McpNodeBindings;
+  children?: McpChildSummary[];
+  childrenTotal?: number;
 }
 
 /** An element on the canvas marked for the next agent prompt. */

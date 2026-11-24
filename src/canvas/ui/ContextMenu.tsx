@@ -20,7 +20,7 @@ import {
   copyElementStylesCommand, pasteElementStylesCommand,
   duplicateSelection,
 } from '../commands';
-import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext, forceCanvasRender, findNodeComputedStyle } from '../node-ops';
+import { getContentRoot, findNodeRect, parseRectCacheKey, updateNodeStyles, setStyleContext, forceCanvasRender, findNodeComputedStyle, findNodeComputedStyles } from '../node-ops';
 import { isTextTag } from '@/shared/constants';
 import { getCanvasBridge } from '../canvas-bridge';
 import { transformManager } from '../transform';
@@ -40,7 +40,7 @@ import { leftPanelAtom } from '@/code/stores/left-panel-store';
 import { getDefaultStore } from 'jotai';
 import { enterComponentFile } from '@/canvas/component-navigation';
 import { componentEditorFileAtom } from '@/code/stores/component-editor-store';
-import { projectVersionAtom } from '@/code/project/project-fs';
+import { projectFS, projectVersionAtom } from '@/code/project/project-fs';
 import { trace } from '@/shared/debug-trace';
 import NameInputModal from '@/editor/ui/NameInputModal';
 import { useSuppressCanvasHover, stopHoverProbe } from './useSuppressCanvasHover';
@@ -606,9 +606,10 @@ export default function ContextMenu() {
     close();
   };
 
-  const handleCopyToMCP = async () => {
+  const buildContextMcpRef = () => {
     const nodes = getNodesSnapshot();
-    const ref = buildMcpReference({
+    const vpForMeasure = menu.viewportId?.trim() || interactingVp || 'desktop';
+    return buildMcpReference({
       activeFilePath,
       targetNodeId: nodeId,
       selectedIds,
@@ -617,7 +618,14 @@ export default function ContextMenu() {
       viewportId: menu.viewportId,
       activeVariant,
       interactingViewportId: interactingVp,
+      branchId: projectFS.getActiveBranchId(),
+      getRect: (id) => findNodeRect(id, vpForMeasure),
+      getComputedStyles: (id, props) => findNodeComputedStyles(id, vpForMeasure, [...props]),
     });
+  };
+
+  const handleCopyToMCP = async () => {
+    const ref = buildContextMcpRef();
     const text = formatMcpReference(ref);
     trace.action('context-menu:copy-to-mcp', { ref });
     const ok = await copyTextToClipboard(text);
@@ -631,17 +639,7 @@ export default function ContextMenu() {
   };
 
   const handleCommentForAgent = () => {
-    const nodes = getNodesSnapshot();
-    const ref = buildMcpReference({
-      activeFilePath,
-      targetNodeId: nodeId,
-      selectedIds,
-      nodes,
-      viewportHeader: menu.viewportHeader,
-      viewportId: menu.viewportId,
-      activeVariant,
-      interactingViewportId: interactingVp,
-    });
+    const ref = buildContextMcpRef();
     const effectiveId = ref.nodeId || selectedIds[0] || nodeId;
     if (effectiveId) {
       getDefaultStore().set(agentCommentDialogAtom, {
@@ -660,6 +658,18 @@ export default function ContextMenu() {
           textContent: ref.textContent,
           variant: ref.variant,
           viewport: ref.viewport,
+          ...(ref.branch ? { branch: ref.branch } : {}),
+          ...(ref.parentId ? { parentId: ref.parentId } : {}),
+          ...(ref.componentFile ? { componentFile: ref.componentFile } : {}),
+          ...(ref.insideComponentInstance ? { insideComponentInstance: ref.insideComponentInstance } : {}),
+          ...(ref.isComponentRoot ? { isComponentRoot: ref.isComponentRoot } : {}),
+          ...(ref.isMotionElement ? { isMotionElement: ref.isMotionElement } : {}),
+          ...(ref.rect ? { rect: ref.rect } : {}),
+          ...(ref.styles ? { styles: ref.styles } : {}),
+          ...(ref.computed ? { computed: ref.computed } : {}),
+          ...(ref.bindings ? { bindings: ref.bindings } : {}),
+          ...(ref.children ? { children: ref.children } : {}),
+          ...(ref.childrenTotal !== undefined ? { childrenTotal: ref.childrenTotal } : {}),
         },
       });
     } else {

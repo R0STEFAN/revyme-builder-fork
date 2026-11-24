@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import type { AgentBlock, AgentTurnImage } from '@/code/stores/agent-chat-store';
+import type { AgentAttachedNode, AgentBlock, AgentTurnImage } from '@/code/stores/agent-chat-store';
 import {
   agentStatusAtom, agentErrorAtom, agentConversationAtom, agentStreamAtom,
   agentToolsAtom, agentBlocksAtom, agentReasoningAtom, agentChangedFilesAtom, effectiveAgentConfigAtom, agentEnginesAtom, agentServiceReachableAtom,
@@ -321,6 +321,26 @@ const COMPOSER_MAX_HEIGHT = 200;
  *  not only from the one that started the run. */
 let runAbort: AbortController | null = null;
 
+function formatAttachedContextLines(ref: AgentAttachedNode): string[] {
+  const lines: string[] = [];
+  if (ref.branch) lines.push(`- Branch: ${ref.branch}`);
+  if (ref.parentId) lines.push(`- Parent ID: ${ref.parentId}`);
+  if (ref.componentFile) lines.push(`- Component File: ${ref.componentFile}`);
+  if (ref.insideComponentInstance) lines.push(`- Inside Component Instance: true (edit component master to style internals)`);
+  if (ref.isComponentRoot) lines.push(`- Component Root: true`);
+  if (ref.isMotionElement) lines.push(`- Motion Element: true`);
+  if (ref.rect) lines.push(`- Rect (px): x=${ref.rect.x}, y=${ref.rect.y}, width=${ref.rect.width}, height=${ref.rect.height}`);
+  if (ref.styles && Object.keys(ref.styles).length > 0) lines.push(`- Inline Styles: ${JSON.stringify(ref.styles)}`);
+  if (ref.computed && Object.keys(ref.computed).length > 0) lines.push(`- Computed Styles: ${JSON.stringify(ref.computed)}`);
+  if (ref.bindings && Object.keys(ref.bindings).length > 0) lines.push(`- Bindings: ${JSON.stringify(ref.bindings)}`);
+  if (ref.children && ref.children.length > 0) {
+    const kids = ref.children.map((c) => `${c.nodeId} <${c.type}>`).join(', ');
+    const more = ref.childrenTotal && ref.childrenTotal > ref.children.length ? ` (+${ref.childrenTotal - ref.children.length} more)` : '';
+    lines.push(`- Children: ${kids}${more}`);
+  }
+  return lines;
+}
+
 export default function AgentChat() {
   const [status, setStatus] = useAtom(agentStatusAtom);
   const [error, setError] = useAtom(agentErrorAtom);
@@ -571,6 +591,7 @@ export default function AgentChat() {
         `- Node ID: ${t.nodeId}`,
         `- File: ${t.filePath}`,
         t.nodeType ? `- Tag: <${t.nodeType}>` : null,
+        ...formatAttachedContextLines(t.refData),
         `- Instruction: ${t.comment}`,
       ].filter(Boolean).join('\n')).join('\n\n');
 
@@ -595,6 +616,7 @@ export default function AgentChat() {
         attachedNode.textContent ? `- Content: "${attachedNode.textContent}"` : null,
         attachedNode.variant ? `- Variant: ${attachedNode.variant}` : null,
         attachedNode.viewport ? `- Viewport: ${attachedNode.viewport}` : null,
+        ...formatAttachedContextLines(attachedNode),
         '',
         `[User Instructions]`,
         text,

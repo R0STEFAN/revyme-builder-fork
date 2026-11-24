@@ -382,4 +382,35 @@ describe('attached canvas target', () => {
       expect(userTurn?.text).toContain('Make rounded with shadow');
     });
   });
+
+  it('includes enriched styles, rect, and bindings from attachedNode in prompt', async () => {
+    seed();
+    act(() => {
+      store.set(agentAttachedNodeAtom, {
+        filePath: 'app/page.client.tsx',
+        nodeId: 'card-1',
+        name: 'Pricing Card',
+        type: 'div',
+        parentId: 'pricing-grid',
+        rect: { x: 100, y: 200, width: 320, height: 400 },
+        styles: { border: '1px solid #333', padding: '24px' },
+        computed: { color: 'rgb(255, 255, 255)' },
+        bindings: { styleVariables: { backgroundColor: 'cardBg' } },
+      });
+    });
+    render(<AgentChat />);
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'remove border' } });
+    fireEvent.click(screen.getByLabelText('Send'));
+
+    await waitFor(() => {
+      const turns = store.get(agentConversationAtom);
+      const userTurn = [...turns].reverse().find((t) => t.role === 'user');
+      expect(userTurn?.text).toContain('- Parent ID: pricing-grid');
+      expect(userTurn?.text).toContain('- Rect (px): x=100, y=200, width=320, height=400');
+      expect(userTurn?.text).toContain('- Inline Styles: {"border":"1px solid #333","padding":"24px"}');
+      expect(userTurn?.text).toContain('- Computed Styles: {"color":"rgb(255, 255, 255)"}');
+      expect(userTurn?.text).toContain('- Bindings: {"styleVariables":{"backgroundColor":"cardBg"}}');
+    });
+  });
 });
