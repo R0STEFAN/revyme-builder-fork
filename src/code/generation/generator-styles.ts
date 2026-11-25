@@ -16,6 +16,7 @@ import { BUILTIN_PSEUDO_ELEMENTS, type PseudoKind } from '@/code/parsing/pseudo-
 import { cssTransformToMotionProps, MOTION_TRANSFORM_PROPS, MOTION_VISUAL_TRANSFORM_PROPS } from '@/shared/motion-transform';
 import { removeAxisTranslate } from '@/shared/position-utils';
 import { parseJSX } from '@/code/parsing/ast-utils';
+import { ensureFlipLayoutCounterScale } from './flip-layout-protection';
 import * as t from '@babel/types';
 import { parseExpression } from '@babel/parser';
 import _traverse from '@babel/traverse';
@@ -4284,8 +4285,10 @@ export function setConditionalStyleInCode(
     }
   }
 
-  // FLIP needs layout on the element.
+  // FLIP needs layout on the element, plus LayoutGroup + layout="position"
+  // counter-scaling on structural children inside scaling containers.
   result = ensureLayoutProp(result, nodeId);
+  result = ensureFlipLayoutCounterScale(result);
   return result;
 }
 

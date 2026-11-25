@@ -36,6 +36,7 @@
 // AnimatePresence + conditional, leaving the element rendered inline.
 
 import { parseJSX, findFirstElementByDataId } from '../parsing/ast-utils';
+import { ensureFlipLayoutCounterScale } from './flip-layout-protection';
 import _generate from '@babel/generator';
 import * as t from '@babel/types';
 import { trace } from '@/shared/debug-trace';
@@ -435,7 +436,9 @@ export function setVariantVisibilityInCode(
     }
     // Element is now (or already was) plain — no further changes.
     void wrappedTargetIdx;
-    return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
+    return ensureFlipLayoutCounterScale(
+      generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code,
+    );
   }
 
   ensureVisibilityMotionScaffold(target, ast);
@@ -504,7 +507,9 @@ export function setVariantVisibilityInCode(
     trace.action('generator:setVariantVisibility:update-condition', {
       nodeId, hiddenVariants,
     });
-    return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
+    return ensureFlipLayoutCounterScale(
+      generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code,
+    );
   }
 
   // Fresh wrap. Build:
@@ -534,5 +539,7 @@ export function setVariantVisibilityInCode(
   parent.children.splice(targetIdx, 1, wrapper);
   trace.action('generator:setVariantVisibility:wrap', { nodeId, hiddenVariants });
 
-  return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
+  return ensureFlipLayoutCounterScale(
+    generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code,
+  );
 }
