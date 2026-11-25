@@ -104,4 +104,34 @@ describe('LayerRow for Viewport Header', () => {
     fireEvent.click(eyeBtn);
     expect(onToggleVisibility).toHaveBeenCalledWith('', 'tablet');
   });
+
+  it('uses compact 16px per-depth indent and tight chevron-to-icon spacing', () => {
+    const node = {
+      ...dummyNode,
+      id: 'section-1',
+      type: 'section',
+      name: 'Section',
+      children: ['child-1'],
+    } as unknown as CanvasNode;
+
+    const { container } = render(
+      <LayerRow
+        {...defaultProps}
+        layer={{
+          id: 'desktop:section-1',
+          nodeId: 'section-1',
+          node,
+          depth: 2,
+          hasChildren: true,
+          isExpanded: true,
+          viewportId: 'desktop',
+        }}
+      />
+    );
+
+    const row = container.querySelector('[data-layer-id="desktop:section-1"]') as HTMLElement;
+    expect(row.style.paddingLeft).toBe('44px'); // 12 + 2 * 16
+    const cluster = container.querySelector('[data-testid="layer-leading-cluster"]') as HTMLElement;
+    expect(cluster.className).toContain('gap-0.5');
+  });
 });

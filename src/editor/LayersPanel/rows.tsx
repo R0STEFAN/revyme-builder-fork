@@ -700,17 +700,15 @@ export const LayerRow = React.memo(function LayerRow({
   let rowClass = 'flex items-center gap-2 py-2 transition-all duration-150 select-none relative z-[1]';
   if (isDragging) rowClass += ' opacity-40';
 
-  // Background style. 20 px indent step matches the Pages panel — each
-  // nested child's CHEVRON column lands directly under its parent's
-  // ICON column (standard). Parent row at depth 0 begins at
-  // `pl-3 (12 px)`; chevron (~14) + gap (~6) put the parent's icon
-  // at ~32 px, which is exactly `20 + 12` — depth-1's `paddingLeft`.
-  //
-  // Previous values: 24 px crept barely past parent's icon; 40 px
-  // shoved children way past parent's text. 20 px sits the alignment
-  // the user confirmed against the reference.
+  // Background style. 16 px indent step keeps nested subtrees compact while
+  // landing each child's CHEVRON column directly under its parent's ICON
+  // column: depth-0 starts at 12 px, chevron (14 px) + gap (2 px) put the
+  // parent's icon at 28 px, which matches depth-1's `12 + 16 = 28 px`.
+  const baseIndentPx = 12;
+  const indentStepPx = 16;
+  const dropLineLeftPx = `${baseIndentPx + indentStepPx + dropDepth * indentStepPx}px`;
   const s: React.CSSProperties = {
-    paddingLeft: `${12 + depth * 20}px`,
+    paddingLeft: `${baseIndentPx + depth * indentStepPx}px`,
     paddingRight: '8px',
     cursor: isDragging ? 'grabbing' : 'default',
     width: '100%',
@@ -833,14 +831,14 @@ export const LayerRow = React.memo(function LayerRow({
             orange for a map template, blue (`--accent`) otherwise. */}
         {isDragOver && dropPosition === 'before' && (
           <>
-            <div className="absolute top-0 right-0 h-0.5 z-50" style={{ left: `${32 + dropDepth * 16}px`, backgroundColor: selColor }} />
-            <div className="absolute w-2 h-2 bg-white rounded-full border-2 z-50" style={{ left: `${32 + dropDepth * 16}px`, top: '-3px', transform: 'translateX(-50%)', borderColor: selColor }} />
+            <div className="absolute top-0 right-0 h-0.5 z-50" style={{ left: dropLineLeftPx, backgroundColor: selColor }} />
+            <div className="absolute w-2 h-2 bg-white rounded-full border-2 z-50" style={{ left: dropLineLeftPx, top: '-3px', transform: 'translateX(-50%)', borderColor: selColor }} />
           </>
         )}
         {isDragOver && dropPosition === 'after' && (
           <>
-            <div className="absolute bottom-0 right-0 h-0.5 z-50" style={{ left: `${32 + dropDepth * 16}px`, backgroundColor: selColor }} />
-            <div className="absolute w-2 h-2 bg-white rounded-full border-2 z-50" style={{ left: `${32 + dropDepth * 16}px`, bottom: '-3px', transform: 'translateX(-50%)', borderColor: selColor }} />
+            <div className="absolute bottom-0 right-0 h-0.5 z-50" style={{ left: dropLineLeftPx, backgroundColor: selColor }} />
+            <div className="absolute w-2 h-2 bg-white rounded-full border-2 z-50" style={{ left: dropLineLeftPx, bottom: '-3px', transform: 'translateX(-50%)', borderColor: selColor }} />
           </>
         )}
         {isDragOver && dropPosition === 'inside' && (
@@ -869,13 +867,15 @@ export const LayerRow = React.memo(function LayerRow({
          *  Previously omitted; user reported that nested leaves landed
          *  flush against their parent's icon and asked for "one slot
          *  further" — adding the placeholder gives that slot back. */}
-        {/* Leading cluster (chevron + type icon). Clean hierarchy matching the row's indent. */}
-        <div className="flex items-center gap-2 shrink-0 relative z-10">
+        {/* Leading cluster (chevron + type icon). Tight 2px gap keeps chevron
+         *  next to its element icon and aligns child chevrons directly under
+         *  their parent's icon at 16px per depth level. */}
+        <div className="flex items-center gap-0.5 shrink-0 relative z-10" data-testid="layer-leading-cluster">
         {hasChildren ? (
           <button
             draggable={false}
             onClick={(e) => { e.stopPropagation(); onToggleExpand(id); }}
-            className="w-4 h-4 flex items-center justify-center rounded shrink-0 transition-colors hover:bg-[var(--bg-active)]"
+            className="w-3.5 h-4 flex items-center justify-center rounded shrink-0 transition-colors hover:bg-[var(--bg-active)]"
             style={{ color: isSelected ? `color-mix(in srgb, ${selFg} 72%, transparent)` : 'var(--text-secondary)' }}
           >
             {isExpanded ? (
@@ -885,7 +885,7 @@ export const LayerRow = React.memo(function LayerRow({
             )}
           </button>
         ) : (
-          <span className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span className="w-3.5 h-4 shrink-0" aria-hidden="true" />
         )}
 
         {/* Icon / preview — FIXED 18x18 box.
