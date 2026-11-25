@@ -165,6 +165,20 @@ describe('renameComponentVariableInCode', () => {
     expect(renameComponentVariableInCode(code, 'bd', 'bd')).toBe(code);
     expect(renameComponentVariableInCode(code, 'bd', 'style')).toBe(code);
   });
+
+  test('renames matching TS property in parameter type annotation and createVariableInCode adds missing TS prop', () => {
+    const code = `function Row({ style, p23 = "2026" }: { style?: React.CSSProperties; p23?: string; }) {
+  return <div data-id="root" style={{ ...style }}><p data-id="yr" style={{ color: '#ff3300' }}>{p23}</p></div>;
+}`;
+    const renamed = renameComponentVariableInCode(code, 'p23', 'year');
+    expect(renamed).toContain('year = "2026"');
+    expect(renamed).toContain('year?: string');
+    expect(renamed).not.toContain('p23');
+
+    const withColor = createVariableInCode(renamed, 'yr', 'color', 'yearColor', '#ff3300');
+    expect(withColor).toContain('yearColor = "#ff3300"');
+    expect(withColor).toContain('yearColor?: string');
+  });
 });
 
 describe('createTypedVariableInCode', () => {

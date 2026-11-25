@@ -935,6 +935,15 @@ export function renameComponentVariableInCode(code: string, oldName: string, new
             }
           }
         }
+        // Keep the TypeScript parameter type literal in sync with the renamed prop.
+        const typeAnn = (first as any)?.typeAnnotation;
+        if (t.isTSTypeAnnotation(typeAnn) && t.isTSTypeLiteral(typeAnn.typeAnnotation)) {
+          for (const m of typeAnn.typeAnnotation.members) {
+            if (t.isTSPropertySignature(m) && t.isIdentifier(m.key) && m.key.name === oldName) {
+              m.key = t.identifier(newName);
+            }
+          }
+        }
         renamed = true;
         path.stop();
       }
@@ -2499,6 +2508,28 @@ function addPropToParams(params: t.Node[], propName: string, defaultValue: strin
   // be last; a plain push emitted invalid `{ …, ...rest, newProp }` →
   // "Rest element must be last element", crashing every later parse/mutation).
   insertParamPropBeforeRest(target, newProp());
+
+  // Also declare the prop in any inline TS parameter type literal so downstream
+  // typechecks on component instances passing this prop stay valid.
+  const typeAnn = (firstParam as any)?.typeAnnotation;
+  if (t.isTSTypeAnnotation(typeAnn) && t.isTSTypeLiteral(typeAnn.typeAnnotation)) {
+    const members = typeAnn.typeAnnotation.members;
+    const exists = members.some((m: t.TSTypeElement) =>
+      t.isTSPropertySignature(m) && t.isIdentifier(m.key) && m.key.name === propName,
+    );
+    if (!exists) {
+      const tsType = literalKind === 'number'
+        ? t.tsNumberKeyword()
+        : literalKind === 'boolean'
+          ? t.tsBooleanKeyword()
+          : t.tsStringKeyword();
+      const sig = t.tsPropertySignature(t.identifier(propName), t.tsTypeAnnotation(tsType));
+      sig.optional = true;
+      const indexSigIdx = members.findIndex((m: t.TSTypeElement) => t.isTSIndexSignature(m));
+      if (indexSigIdx >= 0) members.splice(indexSigIdx, 0, sig);
+      else members.push(sig);
+    }
+  }
   return true;
 }
 

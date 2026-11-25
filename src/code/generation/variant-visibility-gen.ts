@@ -440,6 +440,43 @@ export function setVariantVisibilityInCode(
 
   ensureVisibilityMotionScaffold(target, ast);
 
+  // If the revealed child sits in normal layout flow (not an overlay/absolute/fixed),
+  // the component root needs `layout={true}` (VARIANT_REVEAL_ROOT_SHELL) so the
+  // container animates its height change via FLIP instead of snapping.
+  const targetStyleAttr = target.openingElement.attributes.find(
+    (a): a is t.JSXAttribute => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name, { name: 'style' }),
+  );
+  let targetOutOfFlow = target.openingElement.attributes.some(
+    (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name, { name: 'data-overlay' }),
+  );
+  if (!targetOutOfFlow && targetStyleAttr && t.isJSXExpressionContainer(targetStyleAttr.value) && t.isObjectExpression(targetStyleAttr.value.expression)) {
+    for (const p of targetStyleAttr.value.expression.properties) {
+      if (t.isObjectProperty(p) && t.isIdentifier(p.key, { name: 'position' }) && t.isStringLiteral(p.value)
+        && (p.value.value === 'absolute' || p.value.value === 'fixed')) {
+        targetOutOfFlow = true;
+      }
+    }
+  }
+  if (!targetOutOfFlow) {
+    let rootDone = false;
+    traverse(ast, {
+      JSXElement(p) {
+        if (rootDone) return;
+        const attrs = p.node.openingElement.attributes;
+        const hasStyleSpread = attrs.some((a) => {
+          if (!t.isJSXAttribute(a) || !t.isJSXIdentifier(a.name, { name: 'style' })) return false;
+          if (!t.isJSXExpressionContainer(a.value) || !t.isObjectExpression(a.value.expression)) return false;
+          return a.value.expression.properties.some((sp) => t.isSpreadElement(sp));
+        });
+        if (hasStyleSpread) {
+          rootDone = true;
+          ensureVisibilityMotionScaffold(p.node, ast);
+          p.stop();
+        }
+      },
+    });
+  }
+
   // ── Case 2: hiddenVariants non-empty → WRAP (or update existing wrap) ──
   ensureKeyProp(target);
   ensureExitProp(target);

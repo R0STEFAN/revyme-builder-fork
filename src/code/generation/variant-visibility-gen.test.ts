@@ -25,6 +25,17 @@ describe('setVariantVisibilityInCode', () => {
     expect(out).toContain('</motion.div>');
   });
 
+  it('adds layout={true} to component root when wrapping an in-flow child', () => {
+    const code = `import { motion } from 'framer-motion';
+function Row({ style, initialVariant = 'default' }) {
+  return <motion.div data-id="root" style={{ display: 'flex', flexDirection: 'column', ...style }}>
+    <div data-id="pill">Tag</div>
+  </motion.div>;
+}`;
+    const out = setVariantVisibilityInCode(code, 'pill', ['single'], ['default', 'single']);
+    expect(out).toMatch(/<motion\.div[^>]*data-id="root"[^>]*layout=\{true\}|<motion\.div[^>]*layout=\{true\}[^>]*data-id="root"/);
+  });
+
   it('wraps a plain element with AnimatePresence + conditional when hiding on one variant', () => {
     const code = COMPONENT_SHELL(`<motion.div data-id="child-1" />`);
     const out = setVariantVisibilityInCode(code, 'child-1', ['variant-1'], ['default', 'variant-1', 'variant-2']);
