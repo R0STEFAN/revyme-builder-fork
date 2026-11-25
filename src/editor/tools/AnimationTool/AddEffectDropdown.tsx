@@ -314,10 +314,9 @@ export default function AddEffectDropdown({ onAdd, existing, isTextNode, isSketc
   const visibleOptions = ADD_OPTIONS.filter(o =>
     !HIDDEN_ADD_TYPES.has(o.type) &&
     (!noGlide || (o.type !== 'glide' && o.type !== 'pageTransition' && o.type !== 'smoothScroll')) &&
-    // Glide is a CONTAINER effect (children glide when one resizes) — a text
-    // node has no element children, so the option never shows there
-    // (user decision 2026-08-18).
-    (o.type !== 'glide' || !isTextNode) &&
+    // Glide is a CONTAINER effect (children glide when one resizes) — text
+    // nodes and component instances have no direct element children on the page.
+    (o.type !== 'glide' || (!isTextNode && !isComponentInstance)) &&
     // Ticker loops a LAYOUT's children — only on a frame with a layout.
     (o.type !== 'ticker' || !!canTicker) &&
     (!glideOnly || o.type === 'glide' || o.type === 'pageTransition' || o.type === 'smoothScroll') &&

@@ -187,7 +187,7 @@ function topLevelElementChildren(region: string): Array<{ s: number; e: number }
 
 export function hasGlide(code: string, nodeId: string): boolean {
   const got = getOpeningTag(code, nodeId);
-  return !!got && /\sdata-glide='/.test(got.tag);
+  return !!got && /\sdata-glide=(?:'[^']*'|"[^"]*")/.test(got.tag);
 }
 
 export function getGlide(code: string, nodeId: string): GlideSpec | null {
@@ -221,10 +221,10 @@ function ensureGlideImports(code: string): string {
 function addNodeAttrs(code: string, nodeId: string, spec: GlideSpec, transBody: string): string {
   const got = getOpeningTag(code, nodeId);
   if (!got) return code;
-  const tag = got.tag
-    .replace(/\s*data-glide='[^']*'/g, '')
-    .replace(/\s*\blayout\b(=\{true\})?/g, '')
-    .replace(/\s*transition=\{[\s\S]*?\}\}/g, '');
+  let tag = got.tag
+    .replace(/\s*data-glide=(?:'[^']*'|"[^"]*")/g, '')
+    .replace(/\s*\blayout\b(=\{true\})?(?=[\s/>]|$)/g, '');
+  tag = stripBalancedAttr(tag, 'transition');
   const json = JSON.stringify(spec);
   const newTag = tag.replace(/^(<[a-zA-Z][\w.]*)/, `$1 layout transition={${transBody}} data-glide='${json}'`);
   return code.slice(0, got.tagStart) + newTag + code.slice(got.gt);
@@ -376,9 +376,9 @@ function cleanNodeTag(code: string, nodeId: string): string {
   // strip removed just the word and orphaned `={…}` → unparseable tag (the
   // Wisp prod heal, 2026-08-16). The old lazy transition regex could also
   // stop at an inner `}}` of a per-key transition object.
-  let tag = got.tag.replace(/\s*data-glide='[^']*'/g, '');
-  tag = tag.replace(/\s\blayout=\{true\}(?=[\s/>])/g, '');
-  tag = tag.replace(/\s\blayout(?=[\s/>])/g, '');
+  let tag = got.tag.replace(/\s*data-glide=(?:'[^']*'|"[^"]*")/g, '');
+  tag = tag.replace(/\s*\blayout=\{true\}(?=[\s/>]|$)/g, '');
+  tag = tag.replace(/\s*\blayout(?=[\s/>]|$)/g, '');
   tag = stripBalancedAttr(tag, 'transition');
   code = code.slice(0, got.tagStart) + tag + code.slice(got.gt);
 
@@ -446,6 +446,7 @@ function removeGlide(code: string, nodeId: string): string {
     code = code.slice(0, region.start) + inner + code.slice(region.end);
   }
   code = cleanNodeTag(code, nodeId);
+  code = sweepEmptyGlideWrappers(code);
   code = pruneUnusedLayoutGroupImport(code);
   trace.action('glide:remove', { nodeId });
   return code;
@@ -453,7 +454,7 @@ function removeGlide(code: string, nodeId: string): string {
 
 /** Remove only the named import Glide owns, and only when no JSX use remains. */
 function pruneUnusedLayoutGroupImport(code: string): string {
-  const imports = [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*(['"])framer-motion\2;?/g)];
+  const imports = [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*(['"])framer-motion\2;?(?:\r?\n)?/g)];
   for (const match of imports.reverse()) {
     const declaration = match[0];
     const start = match.index!;
@@ -464,8 +465,9 @@ function pruneUnusedLayoutGroupImport(code: string): string {
     if (/\bLayoutGroup\b/.test(withoutDeclaration)) continue;
 
     const remaining = specifiers.filter((specifier) => specifier !== 'LayoutGroup');
+    const trailingNewline = declaration.endsWith('\n') ? '\n' : '';
     const replacement = remaining.length
-      ? `import { ${remaining.join(', ')} } from ${match[2]}framer-motion${match[2]};`
+      ? `import { ${remaining.join(', ')} } from ${match[2]}framer-motion${match[2]};${trailingNewline}`
       : '';
     code = code.slice(0, start) + replacement + code.slice(start + declaration.length);
   }
@@ -477,7 +479,7 @@ function pruneUnusedLayoutGroupImport(code: string): string {
  *  (Make Component strips glide from the subtree it lifts into a master). */
 export function glidedNodeIds(code: string): string[] {
   const ids: string[] = [];
-  const re = /data-glide='/g;
+  const re = /data-glide=(?:'[^']*'|"[^"]*")/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code))) {
     const tagStart = code.lastIndexOf('<', m.index);

@@ -387,3 +387,53 @@ describe('syncEnclosingGlideItem and healGlideItemWrappers', () => {
   });
 });
 
+describe('removeGlide — zero leftover attributes or wrappers (MCP-011)', () => {
+  test('round-trips a container cleanly without leaving data-glide, layout, transition, or LayoutGroup', () => {
+    const PAGE = `import React from 'react';
+import ProjectRow from '@/components/ProjectRow';
+
+export default function Page() {
+  return <div data-id="list" style={{ display: 'flex', flexDirection: 'column' }}>
+    <ProjectRow data-id="row-1" style={{ order: '0', flex: '0 0 auto', width: '100%' }} />
+  </div>;
+}`;
+    const glided = setGlideInCode(PAGE, 'list', { transition: { type: 'spring', duration: '0.5', bounce: '0.25', delay: '0' } });
+    expect(glided).toContain("from 'framer-motion'");
+    const cleaned = setGlideInCode(glided, 'list', null);
+    expect(parses(cleaned)).toBe(true);
+    expect(cleaned).not.toContain('data-glide');
+    expect(cleaned).not.toContain('LayoutGroup');
+    expect(cleaned).not.toContain('<motion.');
+    expect(cleaned).not.toContain('transition=');
+    expect(cleaned).not.toMatch(/\blayout\b/);
+  });
+
+  test('strips double-quoted data-glide and trailing layout right before >', () => {
+    const DIRTY = `import React from 'react';
+import { motion } from 'framer-motion';
+export default function Page() {
+  return <motion.div transition={{ duration: 0.5 }} data-glide="{&quot;transition&quot;:{}}" data-id="x" layout><span data-id="c">Hi</span></motion.div>;
+}`;
+    const cleaned = setGlideInCode(DIRTY, 'x', null);
+    expect(parses(cleaned)).toBe(true);
+    expect(cleaned).toContain('<div data-id="x"><span data-id="c">Hi</span></div>');
+  });
+
+  test('strips Glide completely from a self-closing component instance', () => {
+    const PAGE = `import React from 'react';
+import ProjectRow from '@/components/ProjectRow';
+
+export default function Page() {
+  return <div data-id="list" style={{ display: 'flex', flexDirection: 'column' }}>
+    <ProjectRow data-id="row-1" style={{ order: '0', flex: '0 0 auto' }} />
+  </div>;
+}`;
+    const glided = setGlideInCode(PAGE, 'row-1', SPEC);
+    const cleaned = setGlideInCode(glided, 'row-1', null);
+    expect(parses(cleaned)).toBe(true);
+    expect(cleaned).not.toContain('data-glide');
+    expect(cleaned).not.toContain('transition=');
+    expect(cleaned).not.toMatch(/\blayout\b/);
+  });
+});
+

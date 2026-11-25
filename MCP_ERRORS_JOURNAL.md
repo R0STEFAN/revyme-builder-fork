@@ -86,4 +86,18 @@
 - **Що сталося:** після редагування `delay`/взаємодій на елементі `div-19` у `ProjectRow` зв'язки `default ⇄ default-hover` записалися з `sourceNode: 'div-19'`, тоді як `single-tag ⇄ single-tag-hover` лишилися без `sourceNode`. На сторінці `ProjectRow` почали спрацьовувати при наведенні «через один»: рядки `1` і `3` (`initialVariant="default"`) перестали розкриватися, а рядки `2` і `4` (`initialVariant="single-tag"`) продовжували працювати.
 - **Причина:** у `src/code/variants/connection-config.ts` групування `(sourceNode, trigger)` (`const key = `${c.sourceNode ?? ROOT_KEY}|${c.trigger}``) розносило `unset` і `sourceNode === rootId` в два окремі бакети для того самого DOM-тегу кореня (`div-19`). Перший бакет записував `onHoverStart` / `onHoverEnd` (лише для `single-tag`), а другий бакет на тому самому root-тезі зупинявся захистом від дублікатів в `insertPropAtTag` (`First writer wins`), мовчки відкидаючи переходи для `default`.
 - **Фікс:** у `generateConnectionCode` (`src/code/variants/connection-config.ts`) додано нормалізацію `const rootId = findVariantRootId(result)` та об'єднання `!c.sourceNode || (rootId && c.sourceNode === rootId)` в один `ROOT_KEY`-бакет, щоб усі root-зв'язки одного тригера завжди об'єднувалися в єдиний `onHoverStart` / `onHoverEnd` / `onTap` обробник. Додано регресійний тест у `src/code/variants/connection-config.test.ts` (`72/72` vitest, `tsc --noEmit` чистий), перезібрано `packages/cli/dist/main.js`.
+- **Коміт:** `7d968d48`
+
+### [MCP-011] Видалення Glide у UI / `glide-gen` могло залишати `layout`, `data-glide="..."`, порожні обгортки або скасовані `updateGlide` мутації ⚠️ (виправлено)
+- **Що сталося:** після застосування та видалення Glide у UI на рядках `ProjectRow` у коді `app/projects/page.client.tsx` залишалися атрибути `data-glide`, `layout`, `transition`, а також `AddEffectDropdown` дозволяв вішати Glide напряму на інстанси компонентів.
+- **Причина:**
+  1. У `src/code/generation/glide-gen.ts` (`cleanNodeTag`) перевірка `\s\blayout(?=[\s/>])` не спрацьовувала, якщо `layout` або `layout={true}` стояли в самому кінці відкриваючого тегу перед `>` (`getOpeningTag` обрізає тег до `>`), а `hasGlide`/`cleanNodeTag`/`glidedNodeIds` шукали лише одинарні лапки `data-glide='...'`.
+  2. У `removeGlide` не чистилися порожні `data-glide-item` обгортки (`sweepEmptyGlideWrappers`) і зайвий перенос рядка після видалення єдиного `import { LayoutGroup } from 'framer-motion';`.
+  3. У `src/code/mutation/mutation-queue.ts` `removeGlide` не скидав відкладену (`deferredAnim`) мутацію `updateGlide` для того самого `nodeId`.
+  4. У `src/editor/tools/AnimationTool/AddEffectDropdown.tsx` Glide помилково пропонувався на інстансах дизайн-компонентів (`isComponentInstance`), хоча інстанси на сторінці не мають дочірніх елементів.
+- **Фікс:**
+  - У [`glide-gen.ts`](src/code/generation/glide-gen.ts) оновлено регулярні вирази на `(?=[\s/>]|$)` та `data-glide=(?:'[^']*'|"[^"]*")`, збалансовану зачистку `transition`, `sweepEmptyGlideWrappers` і чисте прибирання порожнього рядка імпорту `LayoutGroup`.
+  - У [`mutation-queue.ts`](src/code/mutation/mutation-queue.ts) `removeGlide` тепер відфільтровує відкладені `updateGlide` для того ж `nodeId`.
+  - У [`AddEffectDropdown.tsx`](src/editor/tools/AnimationTool/AddEffectDropdown.tsx) Glide приховано для `isComponentInstance`.
+  - Додано 3 регресійні тести в [`glide-gen.test.ts`](src/code/generation/glide-gen.test.ts) (`76/76` vitest, `tsc --noEmit` чистий), перезібрано `packages/cli/dist/main.js`.
 - **Коміт:** буде зафіксовано локальним комітом одразу після верифікації.

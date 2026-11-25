@@ -3767,6 +3767,9 @@ function applyMutationCore(code: string, mutation: Mutation): string {
         return setGlideInCode(code, mutation.nodeId, mutation.spec);
 
       case 'removeGlide':
+        deferredAnim = deferredAnim.filter(
+          (d) => !(d.type === 'updateGlide' && d.nodeId === mutation.nodeId),
+        );
         return setGlideInCode(code, mutation.nodeId, null);
 
       case 'updateScrollFx':
