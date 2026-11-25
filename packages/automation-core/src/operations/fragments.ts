@@ -226,19 +226,21 @@ function ingestedToNodeDef(
     delete attrs['typography'];
 
     const cleanName = matchedPreset.name;
-    styles.fontFamily = `var(--typo-${cleanName}-font)`;
-    styles.fontSize = `var(--typo-${cleanName}-size)`;
-    styles.fontWeight = `var(--typo-${cleanName}-weight)`;
-    styles.color = `var(--typo-${cleanName}-color)`;
-    styles.lineHeight = `var(--typo-${cleanName}-line-height)`;
-    styles.letterSpacing = `var(--typo-${cleanName}-spacing)`;
-    styles.textTransform = `var(--typo-${cleanName}-transform)`;
-    styles.textDecoration = `var(--typo-${cleanName}-decoration)`;
-    styles.textShadow = `var(--typo-${cleanName}-shadow)`;
+    // Preserve explicit inline typography overrides (e.g. color: 'var(--color-accent)')
+    // when binding a preset via fontFamily token or preset="..." attribute.
+    if (!styles.fontFamily) styles.fontFamily = `var(--typo-${cleanName}-font)`;
+    if (!styles.fontSize) styles.fontSize = `var(--typo-${cleanName}-size)`;
+    if (!styles.fontWeight) styles.fontWeight = `var(--typo-${cleanName}-weight)`;
+    if (!styles.color) styles.color = `var(--typo-${cleanName}-color)`;
+    if (!styles.lineHeight) styles.lineHeight = `var(--typo-${cleanName}-line-height)`;
+    if (!styles.letterSpacing) styles.letterSpacing = `var(--typo-${cleanName}-spacing)`;
+    if (!styles.textTransform) styles.textTransform = `var(--typo-${cleanName}-transform)`;
+    if (!styles.textDecoration) styles.textDecoration = `var(--typo-${cleanName}-decoration)`;
+    if (!styles.textShadow) styles.textShadow = `var(--typo-${cleanName}-shadow)`;
 
     if (matchedPreset.values['stroke-width']) {
-      styles.WebkitTextStrokeWidth = `var(--typo-${cleanName}-stroke-width)`;
-      styles.WebkitTextStrokeColor = `var(--typo-${cleanName}-stroke-color)`;
+      if (!styles.WebkitTextStrokeWidth) styles.WebkitTextStrokeWidth = `var(--typo-${cleanName}-stroke-width)`;
+      if (!styles.WebkitTextStrokeColor) styles.WebkitTextStrokeColor = `var(--typo-${cleanName}-stroke-color)`;
       delete styles.WebkitTextStroke;
     }
 

@@ -55,3 +55,11 @@
 - **Обхід:** batch `styles.set` з `''` на ці span (`span-11, span-13, span-3, span-5, span-10, span-12`)
   → span лишається з одним `position: 'relative'`, стилі наслідуються від h1/h2. rev 120, projectCheck clean.
 - **Коміт:** — (дані проєкту, не код)
+
+## 2026-11-25 — Сесія: нова сторінка `/process` у проєкті `proj-1794658551528-jjgs43`
+
+### [MCP-006] `fragments.insert` перезаписував явні стилі (зокрема `color: 'var(--color-accent)'`) при матчингу typography-пресета ⚠️ (виправлено)
+- **Що сталося:** при вставці фрагмента через `fragments.insert` у `<span style={{ fontFamily: 'var(--typo-h2-fluid-font)', color: 'var(--color-accent)' }}>РЕЗУЛЬТАТУ</span>`, колір тексту перезаписався на `var(--typo-h2-fluid-color)` (`#09090b`), і слово стало чорним замість акцентного `#ff3300`.
+- **Причина:** у `packages/automation-core/src/operations/fragments.ts` (`ingestedToNodeDef`) після резолву пресета через `resolvePresetForNode` усі typography-властивості (`fontFamily`, `fontSize`, `fontWeight`, `color`, `lineHeight`, `letterSpacing`, `textTransform`, `textDecoration`, `textShadow`) безумовно присвоювались значеннями з `--typo-<name>-*`, затираючи будь-які явні override-стилі, передані у фрагменті.
+- **Фікс:** у `fragments.ts` додано перевірки `if (!styles.<prop>)` перед записом дефолтних `--typo-<name>-*` токенів, щоб заповнювати лише незадані властивості та зберігати явні override-и (як-от `color: 'var(--color-accent)'`). Додано регресійний тест у `packages/automation-core/test/capabilities/fragments-insert.test.ts`, перезібрано `packages/cli/dist/main.js`.
+- **Коміт:** буде зафіксовано локальним комітом одразу після верифікації.

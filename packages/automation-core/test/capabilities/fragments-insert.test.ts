@@ -353,6 +353,40 @@ export default function Button({
     expect(violations.filter((v) => v.tier === 3)).toHaveLength(0);
   });
 
+  it('preserves explicit color and typography overrides when binding a preset via --typo-* fontFamily', async () => {
+    files.set(
+      'app/globals.css',
+      `:root {
+  --color-accent: #ff3300;
+  --typo-h2-fluid-tag: h2;
+  --typo-h2-fluid-font: Compacta Mobsters, sans-serif;
+  --typo-h2-fluid-weight: 900;
+  --typo-h2-fluid-color: #09090b;
+  --typo-h2-fluid-transform: uppercase;
+  --typo-h2-fluid-size: clamp(3.4375rem, 8vw, 6.25rem);
+  --typo-h2-fluid-line-height: 0.92;
+}
+`
+    );
+
+    const fragment = `
+      <section data-id="sec-accent">
+        <span data-id="span-accent" style={{ fontFamily: 'var(--typo-h2-fluid-font)', fontSize: 'var(--typo-h2-fluid-size)', color: 'var(--color-accent)' }}>РЕЗУЛЬТАТУ</span>
+      </section>
+    `;
+
+    const op = defaultRegistry.get('fragments.insert')!;
+    const res = await op.execute(snapshot, { parentId: 'root', fragment }, context);
+    applyChanges(res.changes);
+
+    const nodes = parseJSXToNodes(files.get('app/page.client.tsx')!);
+    const spanNode = nodes.get('span-accent');
+    expect(spanNode).toBeDefined();
+    expect(spanNode?.styles.fontFamily).toBe('var(--typo-h2-fluid-font)');
+    expect(spanNode?.styles.color).toBe('var(--color-accent)');
+    expect(spanNode?.styles.fontWeight).toBe('var(--typo-h2-fluid-weight)');
+  });
+
   it('wires onSubmit, data-form destination, and input names when inserting forms', async () => {
     const fragment = `
       <form style={{ display: 'flex', gap: '8px' }}>
