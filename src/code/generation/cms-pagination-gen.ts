@@ -74,7 +74,7 @@ function ${LOADMORE_COMPONENT_NAME}({ style, initialVariant = 'default', onLoadM
       justifyContent: 'center',
       ...style
     }}>
-    <motion.p layout={true} data-id="loadmore-label" data-name="Text" style={{
+    <motion.p layout="position" data-id="loadmore-label" data-name="Text" style={{
         fontSize: '14px',
         whiteSpace: 'nowrap',
         color: '#ffffff',

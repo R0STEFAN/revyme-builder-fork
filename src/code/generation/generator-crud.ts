@@ -17,6 +17,7 @@ import { findVariantRootId } from '@/shared/variant-root';
 import { sweepEmptyGlideWrappers, syncEnclosingGlideItem } from './glide-gen';
 import { sweepEmptyTickerWrappers } from './ticker-gen';
 import { generate, findTagClose, findJSXDataIdIndex, quoteStyleValue, serializeJSXAttr, findMatchingCloseTagIndex, findStyleObjectEnd, ensureNamedImport } from './generator-utils';
+import { ensureFlipLayoutCounterScale, FLIP_LEAF_MOTION_TAGS } from './flip-layout-protection';
 import { moveNodeIntoParentFast } from './move-fast';
 import { clearContainerStylesForNode, removeHoverStyleInCode, removeBorderOverlayStyle, removePseudoStyleInCode, removeSelectCaretRuleInCode, removeScopedChildRulesInCode, findBandedOrderWidths, stripBandedOrderForNode } from './generator-styles';
 import { clearNodeScrollFx, ensureTransformTemplateInCode } from './generator-motion';
@@ -3434,8 +3435,9 @@ export function buildNodeJSX(node: AddNodeDef, isComponentFile: boolean, indent:
     && firstChar === firstChar.toUpperCase()
     && firstChar !== firstChar.toLowerCase();
   if (isComponentFile && !tag.startsWith('motion.') && !isComponentInstanceTag) {
+    const rawTag = tag;
     tag = `motion.${tag}`;
-    layoutAttr = ' layout={true}';
+    layoutAttr = FLIP_LEAF_MOTION_TAGS.has(rawTag) ? ' layout="position"' : ' layout={true}';
   } else if (motionPropsAttr && /^[a-z]/.test(tag) && !tag.startsWith('motion.')) {
     tag = `motion.${tag}`;
   }
@@ -3521,19 +3523,21 @@ export function addNodeInCode(
   const isComponentFile = !isContainerSetMaster
     && (code.includes('withResponsiveProps') || code.includes('variantConfig'));
   const jsxStr = buildNodeJSX(node, isComponentFile);
-  const ensureMotionImport = (nextCode: string) =>
-    isComponentFile && jsxStr.includes('<motion.')
+  const finalizeComponentInsert = (nextCode: string) => {
+    const withImport = isComponentFile && jsxStr.includes('<motion.')
       ? ensureNamedImport(nextCode, 'framer-motion', ['motion'])
       : nextCode;
+    return isComponentFile ? ensureFlipLayoutCounterScale(withImport) : withImport;
+  };
 
   // FAST PATH: append as last child (no index = append, no Babel needed)
   if (index === undefined && !insertBeforeId) {
     const fast = addNodeFast(code, parentId, jsxStr);
-    if (fast !== null) return ensureMotionImport(fast);
+    if (fast !== null) return finalizeComponentInsert(fast);
   }
 
   // SLOW PATH: full AST (for specific index insertion or when wrappers present)
-  return ensureMotionImport(addNodeAST(code, parentId, jsxStr, index, insertBeforeId));
+  return finalizeComponentInsert(addNodeAST(code, parentId, jsxStr, index, insertBeforeId));
 }
 
 /** Fast path: find parent's closing tag and insert JSX before it. O(1), no Babel. */

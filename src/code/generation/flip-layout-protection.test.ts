@@ -125,4 +125,54 @@ export default withResponsiveProps(Accordion);`;
     const noVariantConfig = PROJECT_ROW_FIXTURE.replace('export const variantConfig =', 'const unrelated =');
     expect(ensureFlipLayoutCounterScale(noVariantConfig)).toBe(noVariantConfig);
   });
+
+  it('upgrades a leaf element from layout="position" to layout={true} when width/height animates, and uses layout="position" for pure order changes', async () => {
+    const { setConditionalOrderInCode } = await import('./generator-styles');
+    const COMP = `'use client';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+/** @name "Row" */
+export const variantConfig = [{ name: 'default', isPrimary: true }, { name: 'alt' }];
+function Row({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return (
+    <LayoutGroup>
+      <motion.div layout={true} data-id="r" style={{ display: 'flex', flexDirection: 'row', ...style }}>
+        <motion.p layout="position" data-id="txt" style={{ position: 'relative', flex: '0 0 auto', order: '0' }}>Hi</motion.p>
+        <motion.span data-id="badge" style={{ position: 'relative', flex: '0 0 auto', order: '1' }}>New</motion.span>
+      </motion.div>
+    </LayoutGroup>
+  );
+}
+export default withResponsiveProps(Row);`;
+    const resized = setConditionalStyleInCode(COMP, 'txt', 'width', 'alt', '200px');
+    expect(resized).toMatch(/<motion\.p[^>]*data-id="txt"[^>]*layout=\{true\}|<motion\.p[^>]*layout=\{true\}[^>]*data-id="txt"/);
+    expect(resized).not.toMatch(/data-id="txt"[^>]*layout="position"/);
+
+    const reordered = setConditionalOrderInCode(COMP, 'badge', { default: 1, alt: 0 });
+    expect(reordered).toMatch(/data-id="badge"[^>]*layout="position"/);
+  });
+
+  it('addNodeInCode inserts leaf tags with layout="position" inside components', async () => {
+    const { addNodeInCode } = await import('./generator-crud');
+    const COMP = `'use client';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+/** @name "Card" */
+export const variantConfig = [{ name: 'default', isPrimary: true }];
+function Card({ style }: { style?: React.CSSProperties }) {
+  return (
+    <LayoutGroup>
+      <motion.div layout={true} data-id="card-root" style={{ display: 'flex', flexDirection: 'column', ...style }}></motion.div>
+    </LayoutGroup>
+  );
+}
+export default withResponsiveProps(Card);`;
+    const out = addNodeInCode(COMP, 'card-root', {
+      id: 'p-1',
+      type: 'p',
+      styles: { position: 'relative', order: '0', flex: '0 0 auto' },
+      textContent: 'Hello',
+    });
+    expect(out).toMatch(/<motion\.p\s+layout="position"\s+data-id="p-1"/);
+  });
 });

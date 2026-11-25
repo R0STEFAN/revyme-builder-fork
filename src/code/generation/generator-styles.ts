@@ -3557,7 +3557,7 @@ function updateVariantStyleInCodeInner(
     // Add layout prop when order changes — CSS order is not animatable,
     // framer-motion's layout prop enables smooth FLIP animations for reorder.
     if ('order' in styles) {
-      result = ensureLayoutProp(result, nodeId);
+      result = ensureLayoutProp(result, nodeId, Object.keys(styles).length === 1 ? 'position' : 'full');
     }
     return result;
   }
@@ -3589,7 +3589,7 @@ function updateVariantStyleInCodeInner(
       result = ensureTransformNeutralOnAllVariants(result, setProps);
     }
     if ('order' in styles) {
-      result = ensureLayoutProp(result, nodeId);
+      result = ensureLayoutProp(result, nodeId, 'position');
     }
     return result;
   }
@@ -3618,7 +3618,7 @@ function updateVariantStyleInCodeInner(
   }
   // Add layout prop when order changes
   if ('order' in styles) {
-    result = ensureLayoutProp(result, nodeId);
+    result = ensureLayoutProp(result, nodeId, Object.keys(styles).length === 1 ? 'position' : 'full');
   }
   return result;
 }
@@ -3783,7 +3783,11 @@ function writeInstanceConditionalStyles(
  * just delays the unmount needlessly. We only need `layout={true}` for
  * sibling FLIP, so dropped `layoutId` entirely.
  */
-function ensureLayoutProp(code: string, nodeId: string): string {
+function ensureLayoutProp(
+  code: string,
+  nodeId: string,
+  mode: 'full' | 'position' = 'full',
+): string {
   const idIdx = findJSXDataIdIndex(code, nodeId);
   if (idIdx === -1) return code;
   // Walk BACKWARD from `data-id` to find the start of the JSX tag
@@ -3802,11 +3806,23 @@ function ensureLayoutProp(code: string, nodeId: string): string {
   const tagName = tagMatch[1];
   if (!tagName.startsWith('motion.') && tagName !== 'MotionLink') return code;
 
+  // Upgrade `layout="position"` -> `layout={true}` when a resizing style property
+  // (`width`, `height`, `gap`, etc.) is animated on an element that originally
+  // only needed position tracking (such as a leaf text/image node).
+  if (mode === 'full') {
+    const posMatch = /\blayout=(?:"position"|'position')/.exec(fullTagSlice);
+    if (posMatch) {
+      const absStart = tagStart + posMatch.index;
+      return code.slice(0, absStart) + 'layout={true}' + code.slice(absStart + posMatch[0].length);
+    }
+  }
+
+  const desired = mode === 'position' ? 'layout="position"' : 'layout={true}';
   const idPattern = `data-id="${nodeId}"`;
   const insertAfter = idIdx + idPattern.length;
   let result = code;
   const propsToAdd: string[] = [];
-  if (!/\blayout\s*=/.test(fullTagSlice)) propsToAdd.push('layout={true}');
+  if (!/\blayout(?:\s*=|(?=[\s/>]|$))/.test(fullTagSlice)) propsToAdd.push(desired);
   // Intentionally NOT adding `layoutId` — see comment above.
   if (propsToAdd.length > 0) {
     result = result.slice(0, insertAfter) + ' ' + propsToAdd.join(' ') + result.slice(insertAfter);
@@ -4013,8 +4029,9 @@ export function setConditionalOrderInCode(
     }
   }
 
-  // Add layout={true} + layoutId for FLIP animation
-  result = ensureLayoutProp(result, nodeId);
+  // Reordering only changes slot position, not size — `layout="position"` prevents content scaling.
+  result = ensureLayoutProp(result, nodeId, 'position');
+  result = ensureFlipLayoutCounterScale(result);
 
   return result;
 }

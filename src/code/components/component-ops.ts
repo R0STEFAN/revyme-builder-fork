@@ -8,6 +8,7 @@
 import { collectPaginationHooks, paginatedContainerIds, pruneOrphanedPaginationHooks, paginationStateVar } from '../generation/cms-pagination-gen';
 import { insertConstIntoEnclosingFn, listConfigVar } from '../generation/cms-responsive-gen';
 import { findVariantRootId } from '@/shared/variant-root';
+import { ensureFlipLayoutCounterScale, FLIP_LEAF_MOTION_TAGS } from '../generation/flip-layout-protection';
 //
 // Uses Babel AST for reliable JSX extraction (no regex on JSX).
 
@@ -3101,6 +3102,18 @@ function motionLinkDeclBlock(finalJsx: string, carriedImports: string[], carried
   return block;
 }
 
+/** Assign default FLIP layout props across extracted component JSX: structural
+ *  containers get `layout={true}` so variant reflows animate; leaf content tags
+ *  (`p`, `span`, `h1`–`h6`, `img`, `svg`, etc.) get `layout="position"` so text
+ *  and media never stretch across aspect-ratio changes. */
+function applyDefaultComponentLayoutAttrs(jsx: string): string {
+  return jsx
+    .replace(/\s+layout=(?:\{true\}|"position"|'position')/g, '')
+    .replace(/<motion\.(\w+)(\s)/g, (_m, tag: string, ws: string) =>
+      `<motion.${tag} ${FLIP_LEAF_MOTION_TAGS.has(tag) ? 'layout="position"' : 'layout={true}'}${ws}`)
+    .replace(/<MotionLink(\s)/g, '<MotionLink layout={true}$1');
+}
+
 function buildComponentFile(name: string, displayName: string, jsx: string, carriedConsts: string[] = [], carriedImports: string[] = []): string {
   // Convert ALL elements to motion.* for layout FLIP animations between variants.
   // Every element needs to be a motion component so layout={true} works on it.
@@ -3142,15 +3155,9 @@ function buildComponentFile(name: string, displayName: string, jsx: string, carr
   // layout. The canvas Renderer folds the motion props back to CSS for tiles.
   styleSpreadJsx = normalizeInlineTransformsToMotionProps(styleSpreadJsx);
 
-  // Add layout={true} to ALL motion elements for FLIP animations between variants.
-  // STRIP any existing layout={true} first — extracting nodes that ALREADY live
-  // inside a component master (nested make-component) carries their layout attr
-  // along, and blindly prepending a second one corrupts the file with a duplicate
-  // JSX attribute that blocks every later mutation (live find 2026-07-13: nested
-  // cross component). Strip-then-add is idempotent.
-  styleSpreadJsx = styleSpreadJsx.replace(/\s+layout=\{true\}/g, '');
-  styleSpreadJsx = styleSpreadJsx.replace(/<motion\.(\w+)(\s)/g, '<motion.$1 layout={true}$2');
-  styleSpreadJsx = styleSpreadJsx.replace(/<MotionLink(\s)/g, '<MotionLink layout={true}$1');
+  // Add layout={true} to containers and layout="position" to leaf content tags
+  // for crisp FLIP animations between variants (idempotent for nested extract).
+  styleSpreadJsx = applyDefaultComponentLayoutAttrs(styleSpreadJsx);
   // NOTE: the fixed/sticky-header fix (`layoutScroll` scroll-boundary on the root)
   // is NOT applied at creation — it's added on-demand by the reactive `updateStyles`
   // hook the moment an instance is actually set to position fixed/sticky (see
@@ -3313,12 +3320,8 @@ function buildMultiVariantComponentFile(
   // motion element. The canvas Renderer folds the motion props back to CSS.
   styleSpreadJsx = normalizeInlineTransformsToMotionProps(styleSpreadJsx);
 
-  // Add layout={true} to ALL motion elements for FLIP animations. Strip any
-  // existing layout attr first — nested make-component extracts subtrees that
-  // already carry it (see buildComponentFile) — so the add stays idempotent.
-  styleSpreadJsx = styleSpreadJsx.replace(/\s+layout=\{true\}/g, '');
-  styleSpreadJsx = styleSpreadJsx.replace(/<motion\.(\w+)(\s)/g, '<motion.$1 layout={true}$2');
-  styleSpreadJsx = styleSpreadJsx.replace(/<MotionLink(\s)/g, '<MotionLink layout={true}$1');
+  // Add layout={true} to containers and layout="position" to leaf content tags.
+  styleSpreadJsx = applyDefaultComponentLayoutAttrs(styleSpreadJsx);
   // NOTE: the fixed/sticky-header fix (`layoutScroll` on the root) is added on-demand
   // by the reactive `updateStyles` hook when an instance is set fixed/sticky — never
   // at creation — so relative components are created untouched. See
@@ -3515,6 +3518,7 @@ export function ensureLayoutRootOnComponentRoot(code: string): string {
     break;
   }
 
+  code = ensureFlipLayoutCounterScale(code);
   return code === original ? original : code;
 }
 

@@ -155,7 +155,7 @@ describe('buildLoadMoreComponentCode — the Load More component master', () => 
     // Frame+Text structure: a motion.div container with a motion.p text CHILD —
     // NOT a button with bare text (which doesn't resolve in the component pipeline).
     expect(code).toContain('<motion.div layout={true} data-id="loadmore-root"');
-    expect(code).toContain('<motion.p layout={true} data-id="loadmore-label"');
+    expect(code).toContain('<motion.p layout="position" data-id="loadmore-label"');
     expect(code).toMatch(/<motion\.p[\s\S]*?>\s*Load More\s*<\/motion\.p>/);
     expect(code).not.toContain('motion.button');
     // Fit sizing must be min-content (NOT auto) so the flex/layout container shrinks

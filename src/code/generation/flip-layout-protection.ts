@@ -34,10 +34,18 @@ function unwrapDefault<T>(mod: unknown): T {
 const traverse = unwrapDefault<typeof _traverse>(_traverse);
 const generate = unwrapDefault<typeof _generate>(_generate);
 
+/** Leaf content HTML tags whose own text/glyphs/media should track position
+ *  without FLIP-stretching across aspect-ratio changes (`layout="position"`). */
+export const FLIP_LEAF_MOTION_TAGS = new Set([
+  'p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'label', 'img', 'svg', 'blockquote', 'code', 'figcaption',
+  'small', 'strong', 'em',
+]);
+
 const PROMOTABLE_HTML_TAGS = new Set([
   'div', 'section', 'article', 'header', 'footer', 'main', 'nav', 'aside',
-  'p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'img', 'button', 'ul', 'ol', 'li', 'figure', 'figcaption', 'label',
+  'button', 'ul', 'ol', 'li', 'figure',
+  ...FLIP_LEAF_MOTION_TAGS,
 ]);
 
 const PASSTHROUGH_WRAPPERS = new Set(['AnimatePresence', 'LayoutGroup', 'MotionConfig']);
@@ -185,10 +193,20 @@ function hasLayoutGroupAncestorOrSelf(el: t.JSXElement, rootId: string): boolean
 function promoteToLayoutPosition(el: t.JSXElement): boolean {
   const info = getElementTagInfo(el);
   if (!info) return false;
-  if (SVG_TAGS.has(info.base)) return false;
-  if (!PROMOTABLE_HTML_TAGS.has(info.base)) return false;
+  if (SVG_TAGS.has(info.base) && info.raw !== 'motion.svg') return false;
   if (getLayoutAttr(el)) return false;
   if (hasConditionalSizeStyle(el)) return false;
+
+  // MotionLink already wraps next/link with motion capabilities — it only needs
+  // `layout="position"` without prefixing `motion.`.
+  if (!info.isMotion && info.base === 'MotionLink') {
+    el.openingElement.attributes.push(
+      t.jsxAttribute(t.jsxIdentifier('layout'), t.stringLiteral('position')),
+    );
+    return true;
+  }
+
+  if (!PROMOTABLE_HTML_TAGS.has(info.base)) return false;
 
   if (!info.isMotion) {
     const motionName = t.jsxMemberExpression(t.jsxIdentifier('motion'), t.jsxIdentifier(info.base));

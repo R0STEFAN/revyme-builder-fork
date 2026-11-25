@@ -106,4 +106,15 @@
 - **Що сталося:** на сторінці `app/projects/page.client.tsx` при увімкненому Glide на `root` (`div-18`), коли розкривалася картка `ProjectRow` усередині `section-11` (`Archive Table Section`), обгортка `section-11` (`<motion.div data-glide-item layout>`) отримувала FLIP `scaleY`, через що нерухома шапка таблиці `div-12` (`Table Header Wrap`, висота `29px`) викривлялась і сплющувалась по вертикалі.
 - **Причина:** у `src/code/generation/glide-gen.ts` (`applyGlide` і `addNodeAttrs`) і сама обгортка `<motion.div data-glide-item>`, і батьківський контейнер отримували повний `layout` (`layout={true}` — масштабування розмірів) замість `layout="position"`. Через це при зміні висоти будь-якого елемента всередині секції Framer Motion масштабував усю секцію разом із нерухомими заголовками/текстом усередині.
 - **Фікс:** у [`glide-gen.ts`](src/code/generation/glide-gen.ts) як `<motion.div data-glide-item>`, так і Glide-контейнер тепер емітять `layout="position"` (рух без масштабування `scaleX/scaleY`). Оновлено тести в [`glide-gen.test.ts`](src/code/generation/glide-gen.test.ts) (`169/169` vitest по 5 файлах, `tsc --noEmit` чистий), перезібрано `packages/cli/dist/main.js`.
-- **Коміт:** буде зафіксовано локальним комітом і відправлено одразу після оновлення сторінки.
+- **Коміт:** `59d55871`
+
+### [MCP-013] Листові контент-вузли, `order`-перевпорядкування та `Make Component` / `Add Node` отримували масштабуючий `layout={true}` замість `layout="position"` ⚠️ (виправлено)
+- **Що сталося / проблема:** у дизайн-компонентах і CMS-шаблоні `Load More` листові теги (`p`, `span`, `h1`–`h6`, `img`, `svg`, `label` тощо) та елементи зі змінним `order` безумовно отримували `layout={true}`, через що при зміні переносу рядка, тексту або пропорцій контейнера Framer Motion масштабував контент через `scaleX/scaleY`. Крім того, `MotionLink` і нові вузли після вставки не отримували контр-масштабування.
+- **Фікс:**
+  - У [`flip-layout-protection.ts`](src/code/generation/flip-layout-protection.ts) експортовано `FLIP_LEAF_MOTION_TAGS` і додано захист `MotionLink` у `promoteToLayoutPosition`.
+  - У [`component-ops.ts`](src/code/components/component-ops.ts) додано `applyDefaultComponentLayoutAttrs`: `Make Component` (single і multi-variant) дає листовим тегам `layout="position"`, а структурним контейнерам/`MotionLink` — `layout={true}`; у `ensureLayoutRootOnComponentRoot` (`fixed`/`sticky` навбари) викликається `ensureFlipLayoutCounterScale`.
+  - У [`generator-crud.ts`](src/code/generation/generator-crud.ts) `addNodeInCode` вставляє листові теги в компонентах із `layout="position"` і проганяє `ensureFlipLayoutCounterScale`.
+  - У [`generator-styles.ts`](src/code/generation/generator-styles.ts) `ensureLayoutProp` підтримує `mode: 'full' | 'position'`: чисті зміни `order` використовують `layout="position"`, `setConditionalOrderInCode` викликає `ensureFlipLayoutCounterScale`, а при подальшому ресайзі `width`/`height` `layout="position"` автоматично оновлюється до `layout={true}`.
+  - У [`cms-pagination-gen.ts`](src/code/generation/cms-pagination-gen.ts) `<motion.p data-id="loadmore-label">` переведено на `layout="position"`.
+  - Пройдено `564/564` тестів across 8 Vitest-файлів, `npx tsc --noEmit` (0 помилок), перезібрано CLI (`packages/cli/dist/main.js`).
+- **Коміт:** буде зафіксовано локальним комітом одразу після верифікації.
