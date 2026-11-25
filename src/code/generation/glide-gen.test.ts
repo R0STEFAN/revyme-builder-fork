@@ -58,7 +58,7 @@ describe('glide-gen — add', () => {
   test('each instance is wrapped in a motion.div data-glide-item carrying its order/flex', () => {
     expect((out.match(/data-glide-item/g) || []).length).toBe(2);
     // wrapper for faq-1 copies order '0'; faq-2 copies order '1'
-    expect(out).toMatch(/data-glide-item layout transition=\{\{[^{}]*\}\} style=\{\{ order: '0', flex: '0 0 auto', width: '100%' \}\}><FAQItem data-id="faq-1"/);
+    expect(out).toMatch(/data-glide-item layout="position" transition=\{\{[^{}]*\}\} style=\{\{ order: '0', flex: '0 0 auto', width: '100%' \}\}><FAQItem data-id="faq-1"/);
     expect(out).toMatch(/data-glide-item[^>]*order: '1'[^>]*><FAQItem data-id="faq-2"/);
   });
 
@@ -209,7 +209,7 @@ describe('glide-gen — wrapper width comes from the child STYLE, not data-* att
     expect(parses(out)).toBe(true);
     // the Header's wrapper must take width from its style ('100%'), NOT the media query
     expect(out).not.toMatch(/data-glide-item[^>]*width: 768px/);
-    expect(out).toMatch(/data-glide-item layout transition=\{\{[^{}]*\}\} style=\{\{ order: '0', flex: '0 0 auto', width: '100%' \}\}><Header/);
+    expect(out).toMatch(/data-glide-item layout="position" transition=\{\{[^{}]*\}\} style=\{\{ order: '0', flex: '0 0 auto', width: '100%' \}\}><Header/);
   });
 });
 

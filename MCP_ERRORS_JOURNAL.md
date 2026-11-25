@@ -100,4 +100,10 @@
   - У [`mutation-queue.ts`](src/code/mutation/mutation-queue.ts) `removeGlide` тепер відфільтровує відкладені `updateGlide` для того ж `nodeId`.
   - У [`AddEffectDropdown.tsx`](src/editor/tools/AnimationTool/AddEffectDropdown.tsx) Glide приховано для `isComponentInstance`.
   - Додано 3 регресійні тести в [`glide-gen.test.ts`](src/code/generation/glide-gen.test.ts) (`76/76` vitest, `tsc --noEmit` чистий), перезібрано `packages/cli/dist/main.js`.
-- **Коміт:** буде зафіксовано локальним комітом одразу після верифікації.
+- **Коміт:** `8c684540`
+
+### [MCP-012] Glide (`data-glide-item` і контейнер) використовував масштабуючий `layout` замість `layout="position"`, сплющуючи заголовки/сусідні блоки всередині секцій ⚠️ (виправлено)
+- **Що сталося:** на сторінці `app/projects/page.client.tsx` при увімкненому Glide на `root` (`div-18`), коли розкривалася картка `ProjectRow` усередині `section-11` (`Archive Table Section`), обгортка `section-11` (`<motion.div data-glide-item layout>`) отримувала FLIP `scaleY`, через що нерухома шапка таблиці `div-12` (`Table Header Wrap`, висота `29px`) викривлялась і сплющувалась по вертикалі.
+- **Причина:** у `src/code/generation/glide-gen.ts` (`applyGlide` і `addNodeAttrs`) і сама обгортка `<motion.div data-glide-item>`, і батьківський контейнер отримували повний `layout` (`layout={true}` — масштабування розмірів) замість `layout="position"`. Через це при зміні висоти будь-якого елемента всередині секції Framer Motion масштабував усю секцію разом із нерухомими заголовками/текстом усередині.
+- **Фікс:** у [`glide-gen.ts`](src/code/generation/glide-gen.ts) як `<motion.div data-glide-item>`, так і Glide-контейнер тепер емітять `layout="position"` (рух без масштабування `scaleX/scaleY`). Оновлено тести в [`glide-gen.test.ts`](src/code/generation/glide-gen.test.ts) (`169/169` vitest по 5 файлах, `tsc --noEmit` чистий), перезібрано `packages/cli/dist/main.js`.
+- **Коміт:** буде зафіксовано локальним комітом і відправлено одразу після оновлення сторінки.

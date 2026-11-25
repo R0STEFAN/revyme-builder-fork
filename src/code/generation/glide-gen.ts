@@ -223,10 +223,13 @@ function addNodeAttrs(code: string, nodeId: string, spec: GlideSpec, transBody: 
   if (!got) return code;
   let tag = got.tag
     .replace(/\s*data-glide=(?:'[^']*'|"[^"]*")/g, '')
-    .replace(/\s*\blayout\b(=\{true\})?(?=[\s/>]|$)/g, '');
+    .replace(/\s*\blayout(?:=(?:\{true\}|"position"|'position'))?(?=[\s/>]|$)/g, '');
   tag = stripBalancedAttr(tag, 'transition');
   const json = JSON.stringify(spec);
-  const newTag = tag.replace(/^(<[a-zA-Z][\w.]*)/, `$1 layout transition={${transBody}} data-glide='${json}'`);
+  // Use `layout="position"` so expanding children inside a glided section/page
+  // (e.g. a table header above an expanding card list) never receive FLIP scaleY
+  // distortion while siblings still glide smoothly into their new coordinates.
+  const newTag = tag.replace(/^(<[a-zA-Z][\w.]*)/, `$1 layout="position" transition={${transBody}} data-glide='${json}'`);
   return code.slice(0, got.tagStart) + newTag + code.slice(got.gt);
 }
 
@@ -282,7 +285,7 @@ function applyGlide(code: string, nodeId: string, spec: GlideSpec): string {
       const display = wrapperVisibility(sb);
       if (display) styleParts.push(`display: ${display}`);
       const wrapper =
-        `<motion.div data-glide-item layout transition={${transBody}} style={{ ${styleParts.join(', ')} }}>` +
+        `<motion.div data-glide-item layout="position" transition={${transBody}} style={{ ${styleParts.join(', ')} }}>` +
         childText + `</motion.div>`;
       inner = inner.slice(0, s) + wrapper + inner.slice(e);
     }
@@ -377,8 +380,7 @@ function cleanNodeTag(code: string, nodeId: string): string {
   // Wisp prod heal, 2026-08-16). The old lazy transition regex could also
   // stop at an inner `}}` of a per-key transition object.
   let tag = got.tag.replace(/\s*data-glide=(?:'[^']*'|"[^"]*")/g, '');
-  tag = tag.replace(/\s*\blayout=\{true\}(?=[\s/>]|$)/g, '');
-  tag = tag.replace(/\s*\blayout(?=[\s/>]|$)/g, '');
+  tag = tag.replace(/\s*\blayout(?:=(?:\{true\}|"position"|'position'))?(?=[\s/>]|$)/g, '');
   tag = stripBalancedAttr(tag, 'transition');
   code = code.slice(0, got.tagStart) + tag + code.slice(got.gt);
 
