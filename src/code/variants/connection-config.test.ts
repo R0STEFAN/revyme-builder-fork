@@ -370,6 +370,45 @@ export default withResponsiveProps(Auto);
     const updated = projectFS.readFile(FILE)!;
     expect(countOccurrences(updated, 'onViewportEnter')).toBe(1);
   });
+
+  test('merges unset-sourceNode connections with root-id sourceNode connections into ONE handler', () => {
+    const HOVER_COMP = `import React from 'react';
+import { motion, LayoutGroup } from 'framer-motion';
+import { withResponsiveProps } from '@revyme/runtime';
+
+const variantConfig = [
+  { name: 'default', label: 'Default', x: 0, y: 0, isPrimary: true },
+  { name: 'default-hover', label: 'Hover', x: 0, y: 300 },
+  { name: 'single-tag', label: 'Single', x: 0, y: 600 },
+  { name: 'single-tag-hover', label: 'Single Hover', x: 0, y: 900 },
+];
+
+const connections = [
+  { from: 'single-tag', to: 'single-tag-hover', trigger: 'mouseEnter' },
+  { from: 'single-tag-hover', to: 'single-tag', trigger: 'mouseLeave' },
+  { from: 'default', to: 'default-hover', trigger: 'mouseEnter', sourceNode: 'row-root' },
+];
+
+function Row({ style, initialVariant = 'default' }: { style?: React.CSSProperties; initialVariant?: string }) {
+  return (
+    <LayoutGroup>
+      <motion.div data-id="row-root" style={{ position: 'relative', ...style }}>
+        <p data-id="title">Title</p>
+      </motion.div>
+    </LayoutGroup>
+  );
+}
+
+export default withResponsiveProps(Row);
+`;
+    resetProjectFS(new Map([['components/Row.tsx', HOVER_COMP]]));
+    addConnection('components/Row.tsx', 'default-hover', 'default', 'mouseLeave', undefined, 'row-root');
+    const updated = projectFS.readFile('components/Row.tsx')!;
+    expect(countOccurrences(updated, 'onHoverStart')).toBe(1);
+    expect(countOccurrences(updated, 'onHoverEnd')).toBe(1);
+    expect(updated).toContain("variant === 'single-tag' ? 'single-tag-hover' : variant === 'default' ? 'default-hover'");
+    expect(updated).toContain("variant === 'single-tag-hover' ? 'single-tag' : variant === 'default-hover' ? 'default'");
+  });
 });
 
 describe('removeConnection — precise identity (same variant pair, multiple sources)', () => {

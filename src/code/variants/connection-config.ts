@@ -724,12 +724,16 @@ ${inViewConns.length ? `
   // accumulating leftovers from earlier codegen runs.
   result = stripAllEventHandlers(result);
 
-  // Group by (sourceNode, trigger). The "(no sourceNode)" bucket goes
-  // on the root motion tag.
+  // Group by (sourceNode, trigger). Treat both unset `sourceNode` and a
+  // `sourceNode` equal to the component's own root id as the ROOT bucket so
+  // mixed root/root-id connections combine into one handler instead of
+  // colliding at `insertPropAtTag`'s duplicate guard and dropping branches.
   const ROOT_KEY = '__ROOT__';
+  const rootId = findVariantRootId(result);
   const groups = new Map<string, Connection[]>();
   for (const c of connections) {
-    const key = `${c.sourceNode ?? ROOT_KEY}|${c.trigger}`;
+    const effectiveSource = (!c.sourceNode || (rootId && c.sourceNode === rootId)) ? ROOT_KEY : c.sourceNode;
+    const key = `${effectiveSource}|${c.trigger}`;
     let bucket = groups.get(key);
     if (!bucket) { bucket = []; groups.set(key, bucket); }
     bucket.push(c);
