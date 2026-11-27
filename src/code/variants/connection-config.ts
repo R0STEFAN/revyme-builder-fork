@@ -11,7 +11,7 @@ import { findVariantRootId } from '@/shared/variant-root';
 import { projectFS } from '@/code/project/project-fs';
 import { isIndexInsideSlotConst } from '@/code/generation/slot-ops';
 import { ensureVariantListWiring, ensureInitialVariantParam } from '@/code/generation/generator-styles';
-import { stripAllTagAttrsBalanced, findBalancedBraceEnd, ensureNamedImport } from '@/code/generation/generator-utils';
+import { stripAllTagAttrsBalanced, findBalancedBraceEnd, ensureNamedImport, isIndexInsideMotionLinkDecl } from '@/code/generation/generator-utils';
 import { ensureMotionTag } from '@/code/generation/generator-motion-scroll';
 import { extractImports, resolveImportPath } from '@/code/components/import-resolver';
 import { forwardEventPropsToComponentRoot } from './event-prop-forwarding';
@@ -679,7 +679,7 @@ ${inViewConns.length ? `
     // defined`. Skip them entirely — framer-motion's parent→child variant
     // propagation handles slot-rendered children at runtime when there's
     // a containing motion context.
-    if (isIndexInsideSlotConst(result, tagStartIdx)) { isFirstTag = false; continue; }
+    if (isIndexInsideSlotConst(result, tagStartIdx) || isIndexInsideMotionLinkDecl(result, tagStartIdx)) { isFirstTag = false; continue; }
     if (!hasVariants && !isFirstTag) continue;
     isFirstTag = false;
     const closeLen = isSelfClose ? 2 : 1;

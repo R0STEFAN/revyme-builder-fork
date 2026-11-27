@@ -8,7 +8,7 @@ import { parseJSX, findFirstElementByDataId, findAttribute, traverse } from '../
 import { SVG_SHAPE_TAGS } from '@/shared/constants';
 import { trace } from '@/shared/debug-trace';
 import { translateShapeGeometry, translatePathD } from '@/shared/svg-geometry';
-import { generate, findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findSubtreeRange, ensureNamedImport } from './generator-utils';
+import { generate, findTagClose, findJSXDataIdIndex, findMatchingCloseTagIndex, findSubtreeRange, ensureNamedImport, findMotionLinkForwardRefSpan } from './generator-utils';
 import { escapeRegExp } from '@/shared/regex-utils';
 
 // ─── Variant Style Update ───────────────────────────────────────────────────
@@ -319,15 +319,18 @@ export function ensureCanonicalMotionLinkDecl(code: string): string {
     trace.action('generator.upgrade-motionlink-const', {});
     return code.replace(MOTION_LINK_DECL_LEGACY_LINE_RE, MOTION_LINK_DECL);
   }
-  // A DRIFTED wrapper — the canonical shape mutated by some other pass (live
-  // find 2026-08-26: the data-id healer stamped an id into the wrapper's
-  // internal <Link> before it learned the declaration exemption). Normalize
-  // the whole statement back to canonical; the declaration is scaffolding,
-  // nothing user-authored lives in it.
-  const wrapperLine = code.match(/const\s+MotionLink\s*=\s*motion\.create\(React\.forwardRef[^\n]*;/);
-  if (wrapperLine && wrapperLine[0] !== MOTION_LINK_DECL) {
-    trace.action('generator.normalize-motionlink-const', {});
-    return code.replace(wrapperLine[0], MOTION_LINK_DECL);
+  // A DRIFTED wrapper — the canonical shape mutated by some other pass (e.g.
+  // a multiline Babel/Prettier reformat, data-id stamper, or variant wiring
+  // injecting `animate={['default', initialVariant]}`). Normalize the whole
+  // statement back to canonical using brace/paren-balanced span scanning so
+  // multiline drifted wrappers are caught as well as single-line ones.
+  const span = findMotionLinkForwardRefSpan(code);
+  if (span) {
+    const existing = code.slice(span.start, span.end + 1);
+    if (existing !== MOTION_LINK_DECL) {
+      trace.action('generator.normalize-motionlink-const', {});
+      return code.slice(0, span.start) + MOTION_LINK_DECL + code.slice(span.end + 1);
+    }
   }
   if (!MOTION_LINK_DECL_ANY_RE.test(code)) return injectMotionLinkConst(code);
   return code;

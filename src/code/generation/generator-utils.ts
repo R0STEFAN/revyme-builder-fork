@@ -595,39 +595,62 @@ export function isInCanvasNodes(code: string, tagStart: number): boolean {
  * top-level `;` while respecting brace/paren/bracket/string depth, and
  * check whether `idx` falls inside the range.
  */
-export function isIndexInsideSlotConst(code: string, idx: number): boolean {
-  const re = /\bconst\s+cn_\w+\s*=/g;
+/** Locate `[start, end]` spans of declarations matching `declHeadRe` (inclusive of top-level `;`). */
+export function findConstDeclSpan(code: string, declHeadRe: RegExp): { start: number; end: number } | null {
+  const flags = declHeadRe.flags.replace(/g/g, '');
+  const m = new RegExp(declHeadRe.source, flags).exec(code);
+  if (!m) return null;
+  const eqIdx = code.indexOf('=', m.index);
+  let i = eqIdx !== -1 && eqIdx < m.index + m[0].length ? eqIdx + 1 : m.index + m[0].length;
+  let brace = 0, paren = 0, bracket = 0;
+  let stringChar: string | null = null;
+  while (i < code.length) {
+    const ch = code[i];
+    if (stringChar) {
+      if (ch === '\\') { i += 2; continue; }
+      if (ch === stringChar) stringChar = null;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { stringChar = ch; i++; continue; }
+    if (ch === '{') { brace++; i++; continue; }
+    if (ch === '}') { brace--; i++; continue; }
+    if (ch === '(') { paren++; i++; continue; }
+    if (ch === ')') { paren--; i++; continue; }
+    if (ch === '[') { bracket++; i++; continue; }
+    if (ch === ']') { bracket--; i++; continue; }
+    if (ch === ';' && brace === 0 && paren === 0 && bracket === 0) {
+      return { start: m.index, end: i };
+    }
+    i++;
+  }
+  return { start: m.index, end: code.length - 1 };
+}
+
+function isIndexInsideDeclPattern(code: string, idx: number, declHeadRe: RegExp): boolean {
+  const re = new RegExp(declHeadRe.source, 'g');
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
-    const start = m.index;
-    if (start > idx) return false;
-    // Find the end of this declaration (top-level `;`).
-    let i = m.index + m[0].length;
-    let brace = 0, paren = 0, bracket = 0;
-    let stringChar: string | null = null;
-    let end = -1;
-    while (i < code.length) {
-      const ch = code[i];
-      if (stringChar) {
-        if (ch === '\\') { i += 2; continue; }
-        if (ch === stringChar) stringChar = null;
-        i++;
-        continue;
-      }
-      if (ch === '"' || ch === "'" || ch === '`') { stringChar = ch; i++; continue; }
-      if (ch === '{') { brace++; i++; continue; }
-      if (ch === '}') { brace--; i++; continue; }
-      if (ch === '(') { paren++; i++; continue; }
-      if (ch === ')') { paren--; i++; continue; }
-      if (ch === '[') { bracket++; i++; continue; }
-      if (ch === ']') { bracket--; i++; continue; }
-      if (ch === ';' && brace === 0 && paren === 0 && bracket === 0) { end = i; break; }
-      i++;
-    }
-    if (end === -1) end = code.length;
-    if (idx >= start && idx <= end) return true;
+    if (m.index > idx) return false;
+    const span = findConstDeclSpan(code.slice(m.index), new RegExp('^' + declHeadRe.source));
+    const end = span ? m.index + span.end : code.length;
+    if (idx >= m.index && idx <= end) return true;
   }
   return false;
+}
+
+export function isIndexInsideSlotConst(code: string, idx: number): boolean {
+  return isIndexInsideDeclPattern(code, idx, /\bconst\s+cn_\w+\s*=/);
+}
+
+/** Span of a module-scope `const MotionLink = motion.create(React.forwardRef...);` wrapper (single or multiline). */
+export function findMotionLinkForwardRefSpan(code: string): { start: number; end: number } | null {
+  return findConstDeclSpan(code, /\bconst\s+MotionLink\s*=\s*motion\.create\(\s*React\.forwardRef\b/);
+}
+
+/** True when `idx` falls anywhere inside `const MotionLink = motion.create(...)`. */
+export function isIndexInsideMotionLinkDecl(code: string, idx: number): boolean {
+  return isIndexInsideDeclPattern(code, idx, /\bconst\s+MotionLink\s*=\s*motion\.create\(/);
 }
 
 /** MODULE-SCOPE JSX — a node that CANNOT hold React hooks: it lives either in

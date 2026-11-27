@@ -122,6 +122,11 @@ export function healMotionTags(code: string): { code: string; healedCount: numbe
       const tagName = opening.name.name;
       if (!/^[a-z]/.test(tagName) || NON_MOTION_TAGS.has(tagName)) return;
 
+      // Never convert fallback tags inside the module-scope MotionLinkBase wrapper.
+      if (path.findParent((p) => p.isFunction() && t.isIdentifier((p.node as t.FunctionDeclaration | t.FunctionExpression).id, { name: 'MotionLinkBase' }))) {
+        return;
+      }
+
       const attrs = opening.attributes;
 
       // Find data-id if present

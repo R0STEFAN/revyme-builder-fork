@@ -23,7 +23,7 @@ import * as t from '@babel/types';
 import { generateNodeId } from '@/shared/id-utils';
 import { parseJSX, traverse } from '@/code/parsing/ast-utils';
 import { needsDataId, jsxTagName } from '@/code/oracle/checks/shared';
-import { findTagClose } from '@/code/generation/generator-utils';
+import { findTagClose, isIndexInsideMotionLinkDecl } from '@/code/generation/generator-utils';
 import { trace } from '@/shared/debug-trace';
 import { PARSER_TRANSPARENT_TAGS } from './transparent-tags';
 
@@ -65,16 +65,11 @@ export function healMissingInstanceDataIds(code: string): { code: string; healed
       continue;
     }
     // The MotionLink declaration renders `<Link>`/`<div>` in its own body —
-    // module scaffolding, never node-bearing. Stamping a data-id into it
-    // (2026-08-26) mutated the canonical declaration line. The declaration
-    // is single-line by construction, so "the tag's line starts the decl"
-    // is a precise skip.
-    {
-      const lineStart = out.lastIndexOf('\n', tagStart) + 1;
-      if (/^\s*const\s+MotionLink\s*=\s*motion\.create\(/.test(out.slice(lineStart, tagStart))) {
-        searchFrom = tagStart + 1 + tagName.length;
-        continue;
-      }
+    // module scaffolding, never node-bearing. Skip both single-line and
+    // multiline `const MotionLink = motion.create(...)` wrappers.
+    if (isIndexInsideMotionLinkDecl(out, tagStart)) {
+      searchFrom = tagStart + 1 + tagName.length;
+      continue;
     }
     const tagEnd = findTagClose(out, tagStart);
     if (tagEnd === -1) { searchFrom = tagStart + 1 + tagName.length; continue; }

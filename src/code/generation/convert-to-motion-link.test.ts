@@ -201,4 +201,32 @@ export default Card;`;
     expect(ensureCanonicalMotionLinkDecl(drifted)).toContain(MOTION_LINK_DECL);
     expect(ensureCanonicalMotionLinkDecl(drifted)).not.toContain('Link-stray-1');
   });
+
+  test('multiline drifted MotionLinkBase wrapper (with stray data-id and animate/initialVariant) heals and stays protected', async () => {
+    const { healMissingInstanceDataIds } = await import('../parsing/heal-data-ids');
+    const { healMotionTags } = await import('../parsing/heal-motion-tags');
+    const { ensureCanonicalMotionLinkDecl } = await import('./generator-attrs');
+    const multilineBroken = `'use client';
+import React from 'react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+const MotionLink = motion.create(React.forwardRef(function MotionLinkBase({
+  href,
+  ...props
+}: any, ref: any) {
+  return href ? <Link data-id="Link-mwnrb9he-1" ref={ref} href={href} {...props} /> : <motion.div ref={ref} {...props} style={{
+    ...props.style,
+  }} layout={true} animate={['default', initialVariant]} />;
+}));
+function Card({ initialVariant = 'default' }: { initialVariant?: string }) {
+  return <MotionLink data-id="lnk" href="/a">Go</MotionLink>;
+}
+export default Card;`;
+    expect(healMissingInstanceDataIds(multilineBroken).healed).toBe(0);
+    expect(healMotionTags(multilineBroken.replace('<motion.div', '<div').replace('layout={true} animate={[\'default\', initialVariant]} ', '')).healedCount).toBe(0);
+    const healed = ensureCanonicalMotionLinkDecl(multilineBroken);
+    expect(healed).toContain(MOTION_LINK_DECL);
+    expect(healed).not.toContain('Link-mwnrb9he-1');
+    expect(healed).not.toContain("animate={['default', initialVariant]}");
+  });
 });
