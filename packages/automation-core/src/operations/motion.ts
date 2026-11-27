@@ -7,6 +7,7 @@ import {
   updateMotionVariantStateInCode,
   removeMotionPropFromCode,
 } from '@/code/generation/generator-motion-props';
+import { updateVariantEntryTransition } from '@/code/generation/generator-motion-transition';
 import {
   getScrollFx,
   setScrollFxInCode,
@@ -43,6 +44,7 @@ export const motionSetOperation: Operation<
     nodeId: string;
     prop: 'initial' | 'animate' | 'whileHover' | 'whileTap' | 'whileInView' | 'exit' | 'transition';
     values: Record<string, string>;
+    variantName?: string;
     variantState?: 'current' | 'initial';
     viewportOnce?: boolean;
   },
@@ -62,6 +64,7 @@ export const motionSetOperation: Operation<
     nodeId: z.string().min(1),
     prop: z.enum(['initial', 'animate', 'whileHover', 'whileTap', 'whileInView', 'exit', 'transition']),
     values: z.record(z.string(), z.string()),
+    variantName: z.string().min(1).optional().describe('Target variant name when writing a per-variant transition inside variants[variantName]'),
     variantState: z.enum(['current', 'initial']).optional().describe('Bind animate/initial to the connected design-component variant state instead of an object target'),
     viewportOnce: z.boolean().optional().describe('Automatically inject viewport={{ once: true }} when prop="whileInView" (defaults to true)'),
   }),
@@ -71,7 +74,12 @@ export const motionSetOperation: Operation<
       throw new Error(`FILE_NOT_FOUND: Target file "${input.targetFile}" not found`);
     }
 
-    if (input.variantState) {
+    if (input.variantName) {
+      if (input.prop !== 'transition') {
+        throw new Error('INVALID_VARIANT_MOTION_PROP: variantName is only supported with prop="transition".');
+      }
+      code = updateVariantEntryTransition(code, input.nodeId, input.variantName, input.values);
+    } else if (input.variantState) {
       const validBinding =
         (input.prop === 'animate' && input.variantState === 'current') ||
         (input.prop === 'initial' && input.variantState === 'initial');
